@@ -1,0 +1,63 @@
+{
+  "$comment": "Recorded from api.github.com for the public repository skillcdn/skillcdn without credentials, then trimmed to the fields the adapter reads plus a few it must ignore. No tokens, no private data.",
+  "commit": "0e169f0cf93f93478cf2634eb8082d4e933afde7",
+  "blob": {
+    "path": "skills/single-skill/SKILL.md",
+    "sha": "577357fd39a650219eb0249670ce0e82e7355238"
+  },
+  "responses": {
+    "GET /repos/skillcdn/skillcdn": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "etag": "W/\"4be27c767e71dde45977963d6e23baf29b413d920cb0847f2cd764eea48aee55\""
+      },
+      "body": "{\"id\":1379202123,\"name\":\"skillcdn\",\"full_name\":\"skillcdn/skillcdn\",\"private\":false,\"visibility\":\"public\",\"default_branch\":\"main\",\"description\":null,\"fork\":false,\"archived\":false,\"owner\":{\"login\":\"skillcdn\",\"id\":331879177,\"type\":\"Organization\",\"site_admin\":false}}"
+    },
+    "GET /repos/skillcdn/does-not-exist": {
+      "status": 404,
+      "headers": {
+        "content-type": "application/json; charset=utf-8"
+      },
+      "body": "{\"message\":\"Not Found\",\"documentation_url\":\"https://docs.github.com/rest/repos/repos#get-a-repository\",\"status\":\"404\"}"
+    },
+    "GET /repos/skillcdn/skillcdn/commits/HEAD": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/vnd.github.sha; charset=utf-8",
+        "etag": "\"6957cea1f161e5e18dd64f9cd5613404fd20045b\""
+      },
+      "body": "6957cea1f161e5e18dd64f9cd5613404fd20045b"
+    },
+    "GET /repos/skillcdn/skillcdn/commits/0e169f0cf93f93478cf2634eb8082d4e933afde7": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/vnd.github.sha; charset=utf-8",
+        "etag": "\"0e169f0cf93f93478cf2634eb8082d4e933afde7\""
+      },
+      "body": "0e169f0cf93f93478cf2634eb8082d4e933afde7"
+    },
+    "GET /repos/skillcdn/skillcdn/commits/no-such-ref": {
+      "status": 422,
+      "headers": {
+        "content-type": "application/json; charset=utf-8"
+      },
+      "body": "{\"message\":\"No commit found for SHA: no-such-ref\",\"documentation_url\":\"https://docs.github.com/rest/commits/commits#get-a-commit\",\"status\":\"422\"}"
+    },
+    "GET /repos/skillcdn/skillcdn/git/trees/0e169f0cf93f93478cf2634eb8082d4e933afde7?recursive=1": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "etag": "W/\"a0094ac79d251f2b5253a84c2f3a2d17bd467a57d939bd77a77532aa7e9ae629\""
+      },
+      "body": "{\"sha\":\"0e169f0cf93f93478cf2634eb8082d4e933afde7\",\"truncated\":false,\"tree\":[{\"path\":\"skills\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"2cbda3147cee73f6ead1c9d6bc6eb184793d2a23\"},{\"path\":\"skills/README.md\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"f767c441d929765bee1e8852b99a7498821eed7a\",\"size\":1241},{\"path\":\"skills/hostile\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"eb2c3cf4bbd90215a836a20f8ccc3f90aeb81838\"},{\"path\":\"skills/hostile/README.md\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"005189968e6502e2b21533a9ae28b74ddf7116cf\",\"size\":257},{\"path\":\"skills/hostile/skills\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"31788662551b0ae95a835a86fd3a21fc5a822825\"},{\"path\":\"skills/hostile/skills/Loud_Name\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"1965891e4f2b7768c0327f4f0b19755eef29064a\"},{\"path\":\"skills/hostile/skills/Loud_Name/SKILL.md\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"3af4dfd00c0eeb7ecd14fa3ff0111a6c057cf1d4\",\"size\":310},{\"path\":\"skills/hostile/skills/alias-bomb\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"c97002e8b4e92747f59b0c939dfa5bd20c8dd123\"},{\"path\":\"skills/hostile/skills/alias-bomb/SKILL.md\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"d281d0d686a54a47d6e1c7a4242bbafcc0472571\",\"size\":224},{\"path\":\"skills/hostile/skills/bad-yaml\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"962603ce97548ad8f65217b1e34f3ac4e1fafc03\"},{\"path\":\"skills/hostile/skills/bad-yaml/SKILL.md\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"f869a493304d9a23537a84fea5ed52dbd6103e6a\",\"size\":84},{\"path\":\"skills/hostile/skills/missing-description\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"df6c5267a27862a1779da675774a005f27b1231f\"},{\"path\":\"skills/hostile/skills/missing-description/SKILL.md\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"7bb26508022d27ff5484bc9b0d26b6c4ce514563\",\"size\":56},{\"path\":\"skills/hostile/skills/no-front-matter\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"11a37ea40c4bac1fdb0027715f32752262f23ed6\"},{\"path\":\"skills/hostile/skills/no-front-matter/SKILL.md\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"d1bf58f75188d1370f8ad4f9ec7b8edf4d3653f3\",\"size\":66},{\"path\":\"skills/hostile/skills/tagged\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"0660b3c854b1cff54f8f7b959f1c752e8f1c9e37\"},{\"path\":\"skills/hostile/skills/tagged/SKILL.md\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"504016414f473c7b490e48238258aa9e16a4013e\",\"size\":61},{\"path\":\"skills/hostile/skills/unterminated\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"c231f603596209338a0cceed8300e7091e355fa8\"},{\"path\":\"skills/hostile/skills/unterminated/SKILL.md\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"051c0cefa039a0f61b446768b92d58e671cdeef8\",\"size\":83},{\"path\":\"skills/hostile/skills/valid-neighbor\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"f1f6df443c65676a2bc370665f64af27cbbe21a8\"},{\"path\":\"skills/hostile/skills/valid-neighbor/SKILL.md\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"0c5fa4029fe2b3e08d6a806953117ee80800a4f0\",\"size\":136},{\"path\":\"skills/multi-skill\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"b702e9d43ac5ed25be98a39e40f70f0fabec86da\"},{\"path\":\"skills/multi-skill/README.md\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"3b58cf45ebadbe949834e352beb01e99a6bc1f70\",\"size\":230},{\"path\":\"skills/multi-skill/docs\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"585d007d0cc372975ee9aca5c0a35ce17814ec1f\"},{\"path\":\"skills/multi-skill/docs/getting-started.md\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"d14892df7217015c69ad72ac3210811fee223e2d\",\"size\":345},{\"path\":\"skills/multi-skill/skills\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"86eff8fcbaf56b6039e9fe18b2d868d8078795d8\"},{\"path\":\"skills/multi-skill/skills/incident-review\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"a6054befd943799576fe5c11d8c3587b141a60aa\"},{\"path\":\"skills/multi-skill/skills/incident-review/SKILL.md\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"2e9f251b660d440c017f7d4c6785dbe2daa6ceb7\",\"size\":603},{\"path\":\"skills/multi-skill/skills/incident-review/assets\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"c05400c99cb4431bccea68abed3b584722a858dc\"},{\"path\":\"skills/multi-skill/skills/incident-review/assets/timeline.json\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"e935bb537107c7ad93b6aaedba4ea4fe1a500c26\",\"size\":117},{\"path\":\"skills/multi-skill/skills/incident-review/scripts\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"08ce2038cf044623ccf4a952e8399c2187684d68\"},{\"path\":\"skills/multi-skill/skills/incident-review/scripts/collect.sh\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"fdc62f84569cb74a79cdaf68f1b160c145091b7d\",\"size\":127},{\"path\":\"skills/multi-skill/skills/release-notes\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"6ecef0227c28d8afbbd913a17adac9126e0c9cc8\"},{\"path\":\"skills/multi-skill/skills/release-notes/SKILL.md\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"ee15132444f372a7f05cd5ecd5b407518ccfe306\",\"size\":525},{\"path\":\"skills/multi-skill/skills/release-notes/references\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"9e754f8a6caa53474a6cda3b6eeadce528e76c2b\"},{\"path\":\"skills/multi-skill/skills/release-notes/references/style.md\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"f87f3c5b8bfcb0bd1a128ee2f2727f84356aa76f\",\"size\":235},{\"path\":\"skills/single-skill\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"604de9f40370281d62e36ea45e5e357d80eb68b9\"},{\"path\":\"skills/single-skill/SKILL.md\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"577357fd39a650219eb0249670ce0e82e7355238\",\"size\":686},{\"path\":\"skills/single-skill/references\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"64d3ee3d9a7dcca72419f73141e51557cfe16b45\"},{\"path\":\"skills/single-skill/references/checklist.md\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"76420e3748ed56119938bda8080472c46881aaf8\",\"size\":260}]}"
+    },
+    "GET /repos/skillcdn/skillcdn/git/blobs/577357fd39a650219eb0249670ce0e82e7355238": {
+      "status": 200,
+      "headers": {
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body": "---\nname: commit-messages\ndescription: Writes commit messages in the Conventional Commits style. Use when the user asks for a commit message or wants to review one.\nlicense: Apache-2.0\nmetadata:\n  author: skillcdn-fixtures\n  version: \"1.0\"\n---\n# Commit messages\n\nWrite the summary line first: `type(scope): summary`, imperative mood, 72 characters or fewer.\n\n1. Pick the type from the change itself: `feat`, `fix`, `docs`, `refactor`, `test`, `build`, `ci` or `chore`.\n2. Name the scope after the part of the codebase that changed.\n3. Use the body to say why the change was made, not what the diff already shows.\n\nBefore you finish, go through [the checklist](references/checklist.md).\n"
+    }
+  }
+}
