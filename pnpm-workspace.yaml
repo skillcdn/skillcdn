@@ -4,7 +4,7 @@ packages:
 
 # One version per shared tool. Workspace packages reference these as "catalog:".
 catalog:
-  "@types/node": ^24.13.0
+  "@types/node": ^26.6.1
   typescript: ^7.0.2
   vitest: ^5.0.1
   zod: ^4.6.5
