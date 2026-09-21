@@ -55,6 +55,56 @@ describe("loadConfig", () => {
     expect(config.indexing.waitMs).toBe(0);
   });
 
+  it("trusts no proxy unless told to", () => {
+    expect(loadConfig({ DATABASE_URL }, noFiles).http).toMatchObject({
+      keepAliveMs: 65_000,
+      requestTimeoutMs: 60_000,
+      accessLog: true,
+      trustedProxies: [],
+      clientIpHeader: "x-forwarded-for",
+      requestIdHeader: "x-request-id",
+    });
+  });
+
+  it("reads the reverse-proxy settings", () => {
+    const config = loadConfig(
+      {
+        DATABASE_URL,
+        TRUSTED_PROXIES: "127.0.0.1, 10.0.0.0/8,::1/128,",
+        CLIENT_IP_HEADER: "X-Real-IP",
+        REQUEST_ID_HEADER: "X-Trace-Id",
+        ACCESS_LOG: "false",
+        HTTP_KEEP_ALIVE_SECONDS: "620",
+      },
+      noFiles,
+    );
+    expect(config.http).toMatchObject({
+      keepAliveMs: 620_000,
+      accessLog: false,
+      clientIpHeader: "x-real-ip",
+      requestIdHeader: "x-trace-id",
+      trustedProxies: [
+        { address: "127.0.0.1", prefix: 32, family: "ipv4" },
+        { address: "10.0.0.0", prefix: 8, family: "ipv4" },
+        { address: "::1", prefix: 128, family: "ipv6" },
+      ],
+    });
+  });
+
+  it("rejects proxies that are not networks and headers that are not names", () => {
+    const error = problemsOf({
+      DATABASE_URL,
+      TRUSTED_PROXIES: "10.0.0.0/8, proxy.internal",
+      CLIENT_IP_HEADER: "x forwarded for",
+      ACCESS_LOG: "yes",
+    });
+    expect(error.problems.map((problem) => problem.split(":")[0]).sort()).toEqual([
+      "ACCESS_LOG",
+      "CLIENT_IP_HEADER",
+      "TRUSTED_PROXIES",
+    ]);
+  });
+
   it("reads secrets from files", () => {
     const files: Record<string, string> = {
       "/run/secrets/db": `${DATABASE_URL}\n`,

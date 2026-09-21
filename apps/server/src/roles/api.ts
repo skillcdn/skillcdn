@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { serve } from "@hono/node-server";
 import {
@@ -15,6 +16,8 @@ import type { Hono } from "hono";
 import { systemClock } from "../adapters/system-clock.js";
 import type { Config } from "../config/config.js";
 import { createApp } from "../http/app.js";
+import { createClientAddressResolver } from "../http/client-address.js";
+import type { AppEnv } from "../http/request-context.js";
 import { SnapshotService } from "../indexer/snapshot-service.js";
 import type { Logger } from "../logger.js";
 import { MountService } from "../mounts/mount-service.js";
@@ -33,11 +36,19 @@ export interface ApiPorts {
   readonly isShuttingDown: () => boolean;
 }
 
+export type ApiConfig = Pick<Config, "mounts" | "indexing"> & {
+  /** Left out, no proxy is trusted and every request is logged. */
+  readonly http?: Pick<
+    Config["http"],
+    "trustedProxies" | "clientIpHeader" | "requestIdHeader" | "accessLog"
+  >;
+};
+
 /** Wires the services of the `api` role to their ports. Tests call this with their own ports. */
 export function createApi(
-  config: Pick<Config, "mounts" | "indexing">,
+  config: ApiConfig,
   ports: ApiPorts,
-): { readonly app: Hono; readonly snapshots: SnapshotService } {
+): { readonly app: Hono<AppEnv>; readonly snapshots: SnapshotService } {
   const { database, gitHost, clock, entitlements, usage, logger } = ports;
   const blobStore = createBlobStore(database);
   const limits: IndexLimits = config.indexing.limits;
@@ -69,6 +80,16 @@ export function createApi(
     snapshots,
     logger,
     isShuttingDown: ports.isShuttingDown,
+    requests: {
+      addresses: createClientAddressResolver({
+        trustedProxies: config.http?.trustedProxies ?? [],
+        header: config.http?.clientIpHeader ?? "x-forwarded-for",
+      }),
+      requestIdHeader: config.http?.requestIdHeader ?? "x-request-id",
+      accessLog: config.http?.accessLog ?? true,
+      newRequestId: randomUUID,
+      now: () => performance.now(),
+    },
     tools: {
       database,
       blobStore,
@@ -111,7 +132,18 @@ export async function runApi(config: Config, logger: Logger): Promise<void> {
     isShuttingDown: () => shuttingDown,
   });
 
-  const server = serve({ fetch: app.fetch, hostname: config.http.host, port: config.http.port });
+  const server = serve({
+    fetch: app.fetch,
+    hostname: config.http.host,
+    port: config.http.port,
+    serverOptions: {
+      // A proxy in front reuses idle connections. If this side closes them first, the proxy
+      // now and then sends a request into a connection that is already gone.
+      keepAliveTimeout: config.http.keepAliveMs,
+      requestTimeout: config.http.requestTimeoutMs,
+      headersTimeout: Math.min(config.http.requestTimeoutMs, 60_000),
+    },
+  });
   await new Promise<void>((resolve, reject) => {
     server.once("listening", resolve);
     server.once("error", reject);

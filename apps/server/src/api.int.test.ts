@@ -10,6 +10,8 @@ import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillc
 import type { Hono } from "hono";
 import { pino } from "pino";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { parseCidr } from "./http/client-address.js";
+import type { AppEnv } from "./http/request-context.js";
 import type { SnapshotService } from "./indexer/snapshot-service.js";
 import { createApi } from "./roles/api.js";
 import { createFixtureHost, type FixtureHost, fixtureCommits } from "./testing/fixture-host.js";
@@ -27,8 +29,10 @@ afterAll(async () => {
 });
 
 interface Harness {
-  readonly app: Hono;
+  readonly app: Hono<AppEnv>;
   readonly host: FixtureHost;
+  /** Access-log lines and everything else the server logged, as parsed JSON. */
+  readonly logs: Record<string, unknown>[];
   readonly snapshots: SnapshotService;
   readonly usage: UsageEvent[];
   connect(address: string): Promise<Client>;
@@ -36,13 +40,26 @@ interface Harness {
 }
 
 function harness(
-  options: { indexWaitMs?: number; entitlements?: Entitlements; host?: FixtureHost } = {},
+  options: {
+    indexWaitMs?: number;
+    entitlements?: Entitlements;
+    host?: FixtureHost;
+    trustedProxies?: string[];
+    clientIpHeader?: string;
+  } = {},
 ): Harness {
   const host = options.host ?? createFixtureHost();
   const usage: UsageEvent[] = [];
+  const logs: Record<string, unknown>[] = [];
   const { app, snapshots } = createApi(
     {
       mounts: { repoTtlMs: 60_000, refTtlMs: 60_000 },
+      http: {
+        trustedProxies: (options.trustedProxies ?? []).flatMap((text) => parseCidr(text) ?? []),
+        clientIpHeader: options.clientIpHeader ?? "x-forwarded-for",
+        requestIdHeader: "x-request-id",
+        accessLog: true,
+      },
       indexing: {
         waitMs: options.indexWaitMs ?? 10_000,
         concurrency: 2,
@@ -63,7 +80,10 @@ function harness(
       clock: { now: () => new Date() },
       entitlements: options.entitlements ?? allowEverything,
       usage: { record: (event) => usage.push(event) },
-      logger: pino({ level: "silent" }),
+      logger: pino(
+        { level: "info" },
+        { write: (line: string) => logs.push(JSON.parse(line) as Record<string, unknown>) },
+      ),
       isShuttingDown: () => false,
     },
   );
@@ -72,6 +92,7 @@ function harness(
   return {
     app,
     host,
+    logs,
     snapshots,
     usage,
     request,
@@ -104,6 +125,65 @@ describe("process endpoints", () => {
     expect(ready.status).toBe(200);
     expect(await ready.json()).toEqual({ status: "ready" });
     expect((await request("/nothing-here")).status).toBe(404);
+  });
+});
+
+describe("behind a reverse proxy", () => {
+  /** What the Node adapter hands to the app: the socket the request arrived on. */
+  const from = (remoteAddress: string) => ({ incoming: { socket: { remoteAddress } } });
+  const accessLine = (logs: Record<string, unknown>[], path: string) =>
+    logs.find((line) => line.msg === "request" && line.path === path);
+
+  it("believes forwarding headers and request ids only from a trusted proxy", async () => {
+    const { app, logs } = harness({ trustedProxies: ["10.0.0.0/8"] });
+    const headers = { "x-forwarded-for": "198.51.100.7", "x-request-id": "edge-1234" };
+
+    const trusted = await app.request("/via-proxy", { headers }, from("10.1.2.3"));
+    expect(trusted.headers.get("x-request-id")).toBe("edge-1234");
+    expect(accessLine(logs, "/via-proxy")).toMatchObject({
+      requestId: "edge-1234",
+      clientAddress: "198.51.100.7",
+      method: "GET",
+      status: 404,
+    });
+
+    const direct = await app.request("/direct", { headers }, from("203.0.113.9"));
+    const generated = direct.headers.get("x-request-id");
+    expect(generated).toMatch(/^[0-9a-f-]{36}$/);
+    expect(accessLine(logs, "/direct")).toMatchObject({
+      requestId: generated,
+      clientAddress: "203.0.113.9",
+    });
+  });
+
+  it("reads the client address from the configured header", async () => {
+    const { app, logs } = harness({ trustedProxies: ["127.0.0.1"], clientIpHeader: "x-real-ip" });
+    await app.request("/real-ip", { headers: { "x-real-ip": "198.51.100.8" } }, from("127.0.0.1"));
+    expect(accessLine(logs, "/real-ip")).toMatchObject({ clientAddress: "198.51.100.8" });
+  });
+
+  it("logs the path without its query, and leaves probes out of the log", async () => {
+    const { app, logs } = harness();
+    await app.request("/somewhere?token=not-for-the-log", {}, from("203.0.113.9"));
+    await app.request("/healthz", {}, from("203.0.113.9"));
+    await app.request("/readyz", {}, from("203.0.113.9"));
+    expect(JSON.stringify(logs)).not.toContain("not-for-the-log");
+    expect(accessLine(logs, "/somewhere")).toBeDefined();
+    expect(logs.filter((line) => line.msg === "request")).toHaveLength(1);
+  });
+
+  it("gives MCP responses a request id too", async () => {
+    // A commit of its own: the first test to index the default one counts the host's calls.
+    const { request } = harness({ host: createFixtureHost("request-id") });
+    const response = await request(`/gh/acme/multi-skill@${fixtureCommits("request-id").main}`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }),
+    });
+    expect(response.headers.get("x-request-id")).toMatch(/^[0-9a-f-]{36}$/);
   });
 });
 

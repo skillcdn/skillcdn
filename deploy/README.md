@@ -30,6 +30,10 @@ The server is configured only through environment variables. [`.env.example`](..
 | `LOG_LEVEL` | all | no | no | Default `info`. |
 | `HOST`, `PORT` | `api` | no | no | Defaults `0.0.0.0` and `8080`. |
 | `SHUTDOWN_GRACE_SECONDS` | `api` | no | no | Default `20`. Keep the platform's stop timeout above it. |
+| `HTTP_KEEP_ALIVE_SECONDS`, `HTTP_REQUEST_TIMEOUT_SECONDS` | `api` | no | no | Defaults `65` and `60`. See [Behind a reverse proxy](#behind-a-reverse-proxy). |
+| `ACCESS_LOG` | `api` | no | no | Default `true`: one log line per request, probes excluded. |
+| `TRUSTED_PROXIES` | `api` | no | no | Addresses or CIDR networks whose forwarding headers are believed. Default: none. |
+| `CLIENT_IP_HEADER`, `REQUEST_ID_HEADER` | `api` | no | no | Defaults `x-forwarded-for` and `x-request-id`. Read only from trusted proxies. |
 | `DATABASE_URL` | all | yes | **yes** | PostgreSQL connection string. |
 | `DATABASE_POOL_MAX` | `api` | no | no | Default `10` connections per process. |
 | `GITHUB_API_URL` | `api`, `worker` | no | no | Default `https://api.github.com`. GitHub Enterprise Server: `https://<host>/api/v3`. |
@@ -42,6 +46,19 @@ The server is configured only through environment variables. [`.env.example`](..
 Invalid configuration stops the process with exit code `78` and a message that names the variable and the rule, never the value.
 
 Every secret `NAME` may instead be provided as `NAME_FILE`, a path to a file holding the value, so secret mounts work. Secrets are injected at runtime by the platform (for example a task definition that references a secret store). They are never build arguments, image layers or committed files.
+
+## Behind a reverse proxy
+
+The `api` role speaks plain HTTP and expects TLS, caching and per-client rate limiting to happen in front of it. What the server needs to know about that front:
+
+- **Who the proxies are.** List their addresses or networks in `TRUSTED_PROXIES`. Forwarding headers are believed only when the peer on the socket is on that list; from anyone else they are ignored, because anyone can send them. With `x-forwarded-for` the client is the nearest address in the chain that is not a trusted proxy. If your proxy passes the client address in a header of its own, name it in `CLIENT_IP_HEADER`; it is then read as a single address. Make sure the proxy overwrites that header instead of passing on what the client sent.
+- **Request ids.** A trusted proxy's id (`REQUEST_ID_HEADER`) is adopted; otherwise the server makes one. Either way it is in every log line of the request and in the `x-request-id` response header, so a report from a user can be matched to the logs.
+- **Idle connections.** Keep `HTTP_KEEP_ALIVE_SECONDS` above the idle timeout of the proxy. When the server closes an idle connection first, the proxy occasionally sends a request into it and answers its client with a gateway error.
+- **Slow answers.** A tool call may wait up to `INDEX_WAIT_MS` for an index. The proxy's response timeout has to be longer than that.
+- **Streaming.** MCP responses may be event streams. Do not buffer or transform `text/event-stream` responses.
+- **Probes.** `GET /healthz` and `GET /readyz` are not written to the access log.
+
+The access log is one JSON line per request: request id, method, path without its query string, status, duration until the response started, client address and user agent.
 
 ## Building a release
 

@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import * as z from "zod";
+import { type Cidr, parseCidr } from "../http/client-address.js";
 
 // The only module that reads the environment. Contract: .env.example and deploy/README.md.
 
@@ -8,6 +9,39 @@ const SECRET_NAMES = ["DATABASE_URL", "GITHUB_TOKEN"] as const;
 const integer = (fallback: number, min: number, max: number) =>
   z.coerce.number().int().min(min).max(max).default(fallback);
 
+const flag = (fallback: boolean) =>
+  z
+    .enum(["true", "false"])
+    .default(fallback ? "true" : "false")
+    .transform((value) => value === "true");
+
+const headerName = (fallback: string) =>
+  z
+    .string()
+    .regex(/^[A-Za-z0-9-]{1,64}$/, "must be a header name")
+    .default(fallback)
+    .transform((value) => value.toLowerCase());
+
+/** A comma-separated list of networks in CIDR notation; a bare address means just that address. */
+const cidrList = z
+  .string()
+  .default("")
+  .transform((value, context) => {
+    const networks: Cidr[] = [];
+    for (const entry of value.split(",").filter((part) => part.trim().length > 0)) {
+      const parsed = parseCidr(entry);
+      if (parsed === undefined) {
+        context.addIssue({
+          code: "custom",
+          message: "must be a list of addresses or CIDR networks",
+        });
+        return z.NEVER;
+      }
+      networks.push(parsed);
+    }
+    return networks;
+  });
+
 const environmentSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("production"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
@@ -15,6 +49,13 @@ const environmentSchema = z.object({
   HOST: z.string().min(1).default("0.0.0.0"),
   PORT: integer(8080, 1, 65_535),
   SHUTDOWN_GRACE_SECONDS: integer(20, 1, 600),
+  HTTP_KEEP_ALIVE_SECONDS: integer(65, 1, 3600),
+  HTTP_REQUEST_TIMEOUT_SECONDS: integer(60, 1, 3600),
+  ACCESS_LOG: flag(true),
+
+  TRUSTED_PROXIES: cidrList,
+  CLIENT_IP_HEADER: headerName("x-forwarded-for"),
+  REQUEST_ID_HEADER: headerName("x-request-id"),
 
   DATABASE_URL: z.string().regex(/^postgres(ql)?:\/\//, "must be a postgres:// connection string"),
   DATABASE_POOL_MAX: integer(10, 1, 200),
@@ -43,6 +84,17 @@ export interface Config {
     readonly host: string;
     readonly port: number;
     readonly shutdownGraceMs: number;
+    /** How long an idle connection is kept open. Must outlast the idle timeout of a proxy in front. */
+    readonly keepAliveMs: number;
+    /** How long a client may take to send one complete request. */
+    readonly requestTimeoutMs: number;
+    readonly accessLog: boolean;
+    /** Peers whose forwarding headers are believed. Empty: nobody's are. */
+    readonly trustedProxies: readonly Cidr[];
+    /** Lowercase name of the header in which a trusted proxy passes the client address. */
+    readonly clientIpHeader: string;
+    /** Lowercase name of the header in which a trusted proxy passes its request id. */
+    readonly requestIdHeader: string;
   };
   readonly database: {
     readonly url: string;
@@ -147,6 +199,12 @@ export function loadConfig(
       host: env.HOST,
       port: env.PORT,
       shutdownGraceMs: env.SHUTDOWN_GRACE_SECONDS * 1000,
+      keepAliveMs: env.HTTP_KEEP_ALIVE_SECONDS * 1000,
+      requestTimeoutMs: env.HTTP_REQUEST_TIMEOUT_SECONDS * 1000,
+      accessLog: env.ACCESS_LOG,
+      trustedProxies: env.TRUSTED_PROXIES,
+      clientIpHeader: env.CLIENT_IP_HEADER,
+      requestIdHeader: env.REQUEST_ID_HEADER,
     },
     database: { url: env.DATABASE_URL, poolMax: env.DATABASE_POOL_MAX },
     github: { apiUrl: env.GITHUB_API_URL, token: env.GITHUB_TOKEN },

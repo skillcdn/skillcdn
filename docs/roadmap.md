@@ -18,7 +18,7 @@ Goal: an MCP client connects to `/gh/<owner>/<repo>` for a public GitHub reposit
 - [x] `server`: configuration module; `migrate` role; `api` role with `/healthz`, `/readyz` and the anonymous MCP endpoint; lazy indexing on first request
 - [x] `skills/`: reference skill repos used as fixtures
 - [x] End-to-end, scripted: the MCP client SDK against a locally running `api` and the live GitHub API, plus the same path in CI against fixtures (`apps/server/src/api.int.test.ts`)
-- [ ] Ready to run behind a reverse proxy: client address taken from a trusted proxy only, request ids and an access log, keep-alive and timeouts that suit a load balancer. Publishing and deployment are not part of this repository ([ADR-0008](adr/0008-repository-ends-at-an-image-that-builds.md)).
+- [x] Ready to run behind a reverse proxy: client address taken from a trusted proxy only, request ids and an access log, keep-alive and timeouts that suit a load balancer. Publishing and deployment are not part of this repository ([ADR-0008](adr/0008-repository-ends-at-an-image-that-builds.md)).
 - [ ] First hosted staging deployment. Nothing to build here; it marks when the milestone is really over.
 
 Design points to settle during this milestone (record the outcome in the spec or an ADR):
