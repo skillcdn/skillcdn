@@ -1,0 +1,17 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# One version per shared tool. Workspace packages reference these as "catalog:".
+catalog:
+  "@types/node": ^24.13.0
+  typescript: ^7.0.2
+  vitest: ^5.0.1
+
+# Supply-chain guard: never resolve a version published less than 3 days ago (minutes).
+# For an urgent security fix, list the package under minimumReleaseAgeExclude in the same PR.
+minimumReleaseAge: 4320
+
+# Dependency install scripts run only for packages approved here (`pnpm approve-builds`).
+allowBuilds:
+  esbuild: true

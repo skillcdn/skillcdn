@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output and caches
+dist/
+*.tsbuildinfo
+.turbo/
+coverage/
+
+# Secrets: real values never enter git. `.env.example` is the only env file tracked.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+.aws/
+secrets/
+
+# Infrastructure state. Infra lives outside this repo; guard against accidents anyway.
+*.tfstate
+*.tfstate.*
+*.tfvars
+.terraform/
+cdk.out/
+
+# Local data (compose volumes, scratch files)
+.data/
+tmp/
+
+# Logs
+*.log
+
+# Editors and OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Agent tooling: personal overrides stay local
+.claude/settings.local.json
+.claude/worktrees/
+CLAUDE.local.md

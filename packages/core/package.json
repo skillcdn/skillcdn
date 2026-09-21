@@ -1,0 +1,28 @@
+{
+  "name": "@skillcdn/core",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Pure domain logic: address scheme, skill-repo convention, permission rules, tool contracts, ports.",
+  "license": "FSL-1.1-ALv2",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\""
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

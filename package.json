@@ -1,0 +1,36 @@
+{
+  "name": "skillcdn",
+  "version": "0.0.0",
+  "private": true,
+  "description": "SkillCDN turns any git repository into an MCP server.",
+  "license": "FSL-1.1-ALv2",
+  "type": "module",
+  "packageManager": "pnpm@12.4.2",
+  "engines": {
+    "node": ">=24",
+    "pnpm": ">=12.4.0"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "^24.11.0",
+      "onFail": "download"
+    }
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "check": "biome ci . && turbo run build typecheck test",
+    "dev": "turbo run dev dev:tsc",
+    "dev:tsc": "tsc -b --watch --preserveWatchOutput",
+    "clean": "turbo run clean"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.13",
+    "turbo": "^2.10.13",
+    "typescript": "catalog:"
+  }
+}

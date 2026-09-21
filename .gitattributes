@@ -1,0 +1,9 @@
+# LF everywhere so Windows, macOS, Linux and CI produce identical files (and Docker images).
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff2 binary
+
+pnpm-lock.yaml linguist-generated=true

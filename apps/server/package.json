@@ -1,0 +1,29 @@
+{
+  "name": "@skillcdn/server",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The single deployable. One build, several process roles: api, worker, migrate.",
+  "license": "FSL-1.1-ALv2",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "dev": "node --watch --enable-source-maps dist/main.js api",
+    "start": "node --enable-source-maps dist/main.js",
+    "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\""
+  },
+  "dependencies": {
+    "@skillcdn/core": "workspace:*",
+    "@skillcdn/db": "workspace:*",
+    "@skillcdn/github": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
