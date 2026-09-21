@@ -28,7 +28,7 @@ Product shape
 
 Public repository hygiene
 
-7. **This repository is public; operations are not.** Never commit cloud account ids, ARNs, hostnames, IPs, DNS or CDN configuration, capacity or cost figures, production tuning values (rate limits, TTLs, abuse thresholds), customer names, incident details or runbooks. Code ships generic defaults; production values arrive through environment configuration.
+7. **This repository is public; operations are not.** Never commit cloud account ids, ARNs, hostnames, IPs, DNS or CDN configuration, capacity or cost figures, production tuning values (rate limits, TTLs, abuse thresholds), customer names, incident details or runbooks, and do not say where any of that is kept. Code ships generic defaults; production values arrive through environment configuration.
 8. **Do not name other products** as inspiration or comparison in code, docs, commits or PRs. Describe what we do on its own terms. Naming something we interoperate with (a git host, an MCP client, a spec we follow) is fine.
 9. **Everything committed is in English** (code, comments, docs, commit messages, PR text), whatever language the conversation is in.
 

@@ -20,4 +20,4 @@ The hand-off between the two is narrow and documented in [`deploy/README.md`](..
 - Anyone can build and run the full product from this repository alone.
 - Changes that add account identifiers, hostnames, capacity or cost figures, plan names or pricing logic are not acceptable, whatever the justification.
 - Workflows take every account-specific value from GitHub variables, authenticate with short-lived OIDC credentials and mask identifiers in logs.
-- Some knowledge deliberately has no home here. It belongs in the private operations repository or in maintainers' private notes.
+- Some knowledge deliberately has no home here.

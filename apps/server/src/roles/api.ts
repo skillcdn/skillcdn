@@ -103,7 +103,7 @@ export async function runApi(config: Config, logger: Logger): Promise<void> {
       token: async () => config.github.token,
     }),
     clock: systemClock,
-    // Ports with a default implementation. A build that layers private packages on top of this
+    // Ports with a default implementation. A build that layers its own packages on top of this
     // image replaces them here; nothing else in the codebase knows about plans or billing.
     entitlements: allowEverything,
     usage: discardUsage,

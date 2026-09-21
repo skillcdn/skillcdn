@@ -133,7 +133,7 @@ The business model is not in this codebase. What the code provides is structure 
 - **Account** is the tenant unit and maps to a git-host organization or user, so the same model serves teams and individuals.
 - **`Entitlements` port:** answers "may this account do X, and within what limits". The default implementation allows everything. Enforcement points ask this port and never branch on a plan name.
 - **`UsageSink` port:** receives neutral usage events (what happened, for which account, how much). The default implementation discards them.
-- **Extension registry** at the composition root: a build may register alternative port implementations and additional routes, modules and jobs. Such builds layer private packages on top of this image; this repository has no knowledge of them.
+- **Extension registry** at the composition root: a build may register alternative port implementations and additional routes, modules and jobs. Such builds layer their own packages on top of this image; this repository has no knowledge of them.
 
 ## Delivery
 
