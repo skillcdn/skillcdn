@@ -17,12 +17,14 @@ Goal: an MCP client connects to `/gh/<owner>/<repo>` for a public GitHub reposit
 - [x] `db`: first schema (accounts, repos, ref resolution, index entries with full-text search), migration tooling, integration-test harness
 - [x] `server`: configuration module; `migrate` role; `api` role with `/healthz`, `/readyz` and the anonymous MCP endpoint; lazy indexing on first request
 - [x] `skills/`: reference skill repos used as fixtures
-- [ ] End-to-end check: add a public repo to an MCP client as a custom connector
-- [ ] First hosted staging deployment from a published image
+- [x] End-to-end, scripted: the MCP client SDK against a locally running `api` and the live GitHub API, plus the same path in CI against fixtures (`apps/server/src/api.int.test.ts`)
+- [ ] First hosted staging deployment from a published image. Before enabling publishing, make `release.yml` wait for a green CI run (see [deploy/README.md](../deploy/README.md)).
+- [ ] End-to-end, by hand: add a public repo to an MCP client as a custom connector. Needs a reachable URL, so it follows staging.
 
 Design points to settle during this milestone (record the outcome in the spec or an ADR):
 
 - Pinned commits that the host serves through a repository without being part of its history (see the open questions in the address spec).
+- Abuse controls for the anonymous endpoint. Today: request and index size limits, bounded indexing per process, a short in-process memory of names that do not exist. Missing: per-client rate limits and a negative cache shared between replicas.
 
 ## Next
 

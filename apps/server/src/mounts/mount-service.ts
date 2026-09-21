@@ -64,6 +64,8 @@ export interface MountServiceOptions {
   readonly staleGraceMs: number;
 }
 
+const MAX_REMEMBERED_MISSING = 10_000;
+
 function refNotFound(address: Address): MountError {
   const ref = address.ref?.kind === "name" ? address.ref.name : undefined;
   // The hint is derived from the address alone, so it says nothing about the repository.
@@ -97,6 +99,11 @@ export class MountService {
   readonly #options: MountServiceOptions;
   /** Collapses concurrent resolutions of one thing into one upstream call. */
   readonly #inFlight = new Map<string, Promise<unknown>>();
+  /**
+   * Names the host recently said do not exist, and until when that is believed. Asking again
+   * costs a request against the host's quota every time, and anyone can ask for any name.
+   */
+  readonly #missing = new Map<string, number>();
 
   constructor(options: MountServiceOptions) {
     this.#options = options;
@@ -147,6 +154,10 @@ export class MountService {
 
   async #resolveRepository(coordinates: RepoCoordinates): Promise<RepoRecord> {
     const { database, gitHost, clock, repoTtlMs, staleGraceMs } = this.#options;
+    const name = `${coordinates.host}/${coordinates.owner}/${coordinates.repo}`;
+    if ((this.#missing.get(name) ?? 0) > clock.now().getTime()) {
+      throw new MountError("repo_not_found", "The repository was not found.");
+    }
     const cached = await findRepoByAlias(database, coordinates);
     const age =
       cached === undefined ? undefined : clock.now().getTime() - cached.checkedAt.getTime();
@@ -164,6 +175,7 @@ export class MountService {
         if (cached !== undefined) {
           await deleteRepoAlias(database, coordinates);
         }
+        this.#rememberMissing(name, clock.now().getTime() + repoTtlMs);
         throw new MountError("repo_not_found", "The repository was not found.", { cause: error });
       }
       if (cached !== undefined && age !== undefined && age < repoTtlMs + staleGraceMs) {
@@ -204,6 +216,17 @@ export class MountService {
         return cached.commitSha;
       }
       throw hostUnavailable(error);
+    }
+  }
+
+  #rememberMissing(name: string, until: number): void {
+    this.#missing.delete(name);
+    this.#missing.set(name, until);
+    if (this.#missing.size > MAX_REMEMBERED_MISSING) {
+      const oldest = this.#missing.keys().next().value;
+      if (oldest !== undefined) {
+        this.#missing.delete(oldest);
+      }
     }
   }
 

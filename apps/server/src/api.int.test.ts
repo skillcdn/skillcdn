@@ -262,6 +262,15 @@ describe("addresses that cannot be served", () => {
     expect(await hidden.json()).toEqual(await missing.json());
   });
 
+  it("remembers that a name does not exist instead of asking the host every time", async () => {
+    const { request, host } = harness();
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const response = await request("/gh/acme/never-existed", { method: "POST", body: "{}" });
+      expect(response.status).toBe(404);
+    }
+    expect(host.calls.getRepository).toBe(1);
+  });
+
   it("rejects malformed addresses before touching the git host", async () => {
     const { request, host } = harness();
     for (const path of [
