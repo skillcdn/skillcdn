@@ -6,7 +6,7 @@ Everything needed to build the image and hand it to whatever runs it. This direc
 |---|---|
 | [`Dockerfile`](Dockerfile) | The one multi-stage image. Roles `api`, `worker` and `migrate` are selected by the container command. |
 | [`compose.dev.yaml`](compose.dev.yaml) | Local development dependencies (PostgreSQL 18). Not a production topology. |
-| [`../.github/workflows/ci.yml`](../.github/workflows/ci.yml) | Lint, build, typecheck, tests (integration tests run against a PostgreSQL service container), secret scan and an image build on every change. |
+| [`../.github/workflows/ci.yml`](../.github/workflows/ci.yml) | Lint, build, typecheck, tests (integration tests run against a PostgreSQL service container), secret scan, and an image build that is then exercised: exit codes, `migrate`, readiness, non-root user, clean shutdown. |
 | [`../.github/workflows/release.yml`](../.github/workflows/release.yml) | Builds the image and pushes it to Amazon ECR through GitHub OIDC. |
 
 A compose bundle and install script for self-hosting are planned ([roadmap](../docs/roadmap.md)).
@@ -29,9 +29,18 @@ The server is configured only through environment variables. [`.env.example`](..
 |---|---|---|---|---|
 | `NODE_ENV` | all | no | no | The image sets `production`. |
 | `LOG_LEVEL` | all | no | no | Default `info`. |
-| `PORT` | `api` | no | no | Default `8080`. |
+| `HOST`, `PORT` | `api` | no | no | Defaults `0.0.0.0` and `8080`. |
+| `SHUTDOWN_GRACE_SECONDS` | `api` | no | no | Default `20`. Keep the platform's stop timeout above it. |
 | `DATABASE_URL` | all | yes | **yes** | PostgreSQL connection string. |
-| `GITHUB_TOKEN` | `api`, `worker` | no | **yes** | Optional. Raises the GitHub rate limit for public-repo reads. No scopes needed. |
+| `DATABASE_POOL_MAX` | `api` | no | no | Default `10` connections per process. |
+| `GITHUB_API_URL` | `api`, `worker` | no | no | Default `https://api.github.com`. GitHub Enterprise Server: `https://<host>/api/v3`. |
+| `GITHUB_TOKEN` | `api`, `worker` | no | **yes** | Optional, no scopes needed. Raises the GitHub rate limit for public-repo reads; without it the anonymous limit applies to the whole deployment. |
+| `REPO_TTL_SECONDS`, `REF_TTL_SECONDS` | `api` | no | no | How long repository facts and moving refs are trusted before revalidation. Default `60` each. |
+| `INDEX_WAIT_MS` | `api` | no | no | How long a tool call waits for a new commit's index. Default `20000`. |
+| `INDEX_CONCURRENCY`, `INDEX_LEASE_SECONDS` | `api`, `worker` | no | no | Commits indexed at once per process, and the lifetime of an indexing claim. |
+| `INDEX_MAX_*`, `READ_MAX_FILE_BYTES` | `api`, `worker` | no | no | Limits on the work one repository may cause; see [`.env.example`](../.env.example). |
+
+Invalid configuration stops the process with exit code `78` and a message that names the variable and the rule, never the value.
 
 Every secret `NAME` may instead be provided as `NAME_FILE`, a path to a file holding the value, so secret mounts work. Secrets are injected at runtime by the platform (for example a task definition that references a secret store). They are never build arguments, image layers or committed files.
 

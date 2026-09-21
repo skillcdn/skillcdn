@@ -60,7 +60,7 @@ Process contract: `GET /healthz` reports liveness, `GET /readyz` reports readine
 
 ## Request paths
 
-**Public repo.** Parse the address (`core`), resolve the ref to a commit through the git host (briefly cached, invalidated by webhooks), and answer tool calls from the index for that `(repo, commit)`. The first request for an unseen commit triggers indexing. The index is shared by every user of that repo.
+**Public repo.** Parse the address (`core`), resolve the repository and the ref to a commit (from the database while fresh, from the git host otherwise; later invalidated by webhooks), and answer tool calls from the index for that `(repo, commit)`. An unknown repository or ref is a `404` at connect time. The first request for an unseen commit starts indexing in the background; `find` and `get` wait for it within a budget and otherwise say that indexing is still running, while `read_file` answers from the commit's tree without waiting ([specs/tools.md](specs/tools.md), [ADR-0007](adr/0007-snapshot-rows-coordinate-indexing.md)). The index is shared by every user of that repo.
 
 **Private repo.** An org admin installs the GitHub App on selected repos (contents and metadata, read-only). A user connects through MCP OAuth; we hand off to the git host's login and keep the resulting user token server-side, issuing our own token to the agent. On every request we ask the git host whether this user can see this repo and cache the boolean for a short time; membership, team and visibility webhooks invalidate it. Indexing always uses the installation token. Headless agents use a **project token**: repo-scoped, read-only, expiring, revocable.
 
@@ -75,7 +75,7 @@ PostgreSQL is the only stateful dependency and plays four roles: content index w
 - **Installation**, **project token** (stored as a hash), **git-host user token** (encrypted at rest), **permission cache** `(user, repo) → boolean` with an expiry.
 - **Jobs**, owned by the queue library in its own schema.
 
-Identifiers are UUIDv7; timestamps are `timestamptz`. File bodies that do not belong in rows go to the blob cache under their git blob hash, which deduplicates across commits, refs and forks.
+Identifiers are UUIDv7; timestamps are `timestamptz`. File bodies are stored under their git blob hash, which deduplicates across commits, refs and forks, and means a new commit only fetches what changed. The blob-store port has a PostgreSQL implementation today, which keeps the smallest install at one dependency; bodies that do not belong in rows move to the S3 implementation of the same port.
 
 ## Stack
 
@@ -84,10 +84,10 @@ Identifiers are UUIDv7; timestamps are `timestamptz`. File bodies that do not be
 | Runtime | Node.js 24 LTS, TypeScript 7, ESM only. pnpm pins both itself and the Node.js runtime in the lockfile. |
 | Monorepo | pnpm workspaces with a catalog, Turborepo, TypeScript project references. Packages compile to `dist/`. |
 | HTTP | Hono on the Node.js adapter. |
-| MCP | The official MCP TypeScript SDK over Streamable HTTP in stateless mode, so no session affinity is needed. |
+| MCP | The official MCP TypeScript SDK, v2, over Streamable HTTP. One server instance per request, no sessions, so no affinity is needed ([ADR-0006](adr/0006-mcp-sdk-v2-per-request-servers.md)). |
 | Validation | Zod at every boundary. |
 | Database | PostgreSQL 18: `tsvector` + GIN full-text search, JSONB, native `uuidv7()`; pgvector later. |
-| Data access | Drizzle ORM on the `pg` driver; migrations are generated, reviewed SQL files. |
+| Data access | Drizzle ORM on the `pg` driver; migrations are generated, reviewed SQL files. The ORM never leaves `packages/db`. |
 | Jobs | pg-boss. Retries, deduplication keys and schedules without a separate broker. |
 | Blob storage | S3 API: Amazon S3 when hosted, MinIO or local disk when self-hosted. |
 | Logging | pino, JSON to stdout. |

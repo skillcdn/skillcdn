@@ -19,3 +19,5 @@ One short file per decision that has lasting consequences and that a future cont
 | [0003](0003-one-image-several-roles.md) | One deployable with `api`, `worker` and `migrate` roles | Accepted |
 | [0004](0004-postgresql-only-state.md) | PostgreSQL as the only stateful dependency | Accepted |
 | [0005](0005-public-repository-private-operations.md) | What lives in this repository and what does not | Accepted |
+| [0006](0006-mcp-sdk-v2-per-request-servers.md) | MCP SDK v2, one server instance per request | Accepted |
+| [0007](0007-snapshot-rows-coordinate-indexing.md) | Snapshot rows coordinate indexing; the api role indexes lazily | Accepted |

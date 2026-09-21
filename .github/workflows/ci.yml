@@ -74,6 +74,24 @@ jobs:
     name: Image build (no push)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    # The image is exercised against a real database: packaging mistakes (a missing migrations
+    # folder, a dependency that did not make it into the image) only show up there.
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: skillcdn
+          POSTGRES_PASSWORD: skillcdn-dev-only
+          POSTGRES_DB: skillcdn
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U skillcdn -d skillcdn"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DATABASE_URL: postgres://skillcdn:skillcdn-dev-only@127.0.0.1:5432/skillcdn
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -88,10 +106,26 @@ jobs:
           tags: skillcdn:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: Smoke test (an unknown role must exit 64)
+      - name: Exit codes (64 for an unknown role, 78 for invalid configuration)
         run: |
           set +e
           docker run --rm skillcdn:ci not-a-role
-          code=$?
+          usage=$?
+          docker run --rm skillcdn:ci api
+          config=$?
           set -e
-          test "$code" -eq 64
+          test "$usage" -eq 64
+          test "$config" -eq 78
+      - name: Migrate, serve, become ready, shut down cleanly
+        run: |
+          docker run --rm --network host -e DATABASE_URL skillcdn:ci migrate
+          docker run -d --name api --network host -e DATABASE_URL skillcdn:ci api
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/readyz; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8080/readyz
+          test "$(docker exec api id -u)" -ne 0
+          docker stop --time 30 api
+          test "$(docker inspect --format '{{.State.ExitCode}}' api)" -eq 0
+          docker logs api
