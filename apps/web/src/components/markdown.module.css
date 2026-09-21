@@ -1,0 +1,134 @@
+/* Typography for rendered repository content. Element selectors on purpose: the markup comes
+   from Markdown, not from our components. */
+
+.prose {
+  max-width: var(--width-prose);
+  overflow-wrap: anywhere;
+}
+
+.prose > * + * {
+  margin-top: var(--space-4);
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4 {
+  margin-top: var(--space-6);
+}
+
+.prose > :first-child {
+  margin-top: 0;
+}
+
+.prose h1 {
+  font-size: var(--text-2xl);
+}
+
+.prose h2 {
+  padding-bottom: var(--space-2);
+  border-bottom: var(--border);
+  font-size: var(--text-xl);
+}
+
+.prose h3 {
+  font-size: var(--text-lg);
+}
+
+.prose h4 {
+  font-size: var(--text-md);
+}
+
+.prose ul,
+.prose ol {
+  padding-left: var(--space-5);
+}
+
+.prose ul {
+  list-style: disc;
+}
+
+.prose ol {
+  list-style: decimal;
+}
+
+.prose li + li {
+  margin-top: var(--space-1);
+}
+
+.prose li > ul,
+.prose li > ol {
+  margin-top: var(--space-1);
+}
+
+.prose blockquote {
+  margin: 0;
+  margin-top: var(--space-4);
+  padding-left: var(--space-4);
+  border-left: 3px solid var(--color-border-strong);
+  color: var(--color-text-muted);
+}
+
+.prose code {
+  padding: 0.1em 0.35em;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-inset);
+}
+
+.prose pre {
+  padding: var(--space-4);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-inset);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  overflow-x: auto;
+}
+
+.prose pre code {
+  padding: 0;
+  background: none;
+  font-size: inherit;
+}
+
+.prose hr {
+  height: 1px;
+  border: 0;
+  background: var(--color-border);
+}
+
+.prose table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  font-size: var(--text-sm);
+}
+
+.prose th,
+.prose td {
+  padding: var(--space-2) var(--space-3);
+  border: var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.prose th {
+  background: var(--color-bg-subtle);
+  font-weight: var(--weight-bold);
+}
+
+/* Task lists: the checkbox is the marker. The class comes from the Markdown renderer. */
+.prose :global(.task-list-item) {
+  list-style: none;
+}
+
+.prose input[type="checkbox"] {
+  margin-right: var(--space-2);
+}
+
+.image {
+  color: var(--color-text-faint);
+  font-size: var(--text-sm);
+  font-style: italic;
+}

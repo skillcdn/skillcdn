@@ -1,0 +1,33 @@
+.list {
+  display: flex;
+  gap: var(--space-5);
+  border-bottom: var(--border);
+  overflow-x: auto;
+}
+
+.tab,
+.activeTab {
+  margin-bottom: -1px;
+  padding: var(--space-3) 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+  transition: color var(--transition);
+}
+
+.tab:hover {
+  color: var(--color-text);
+}
+
+.activeTab {
+  border-bottom-color: var(--color-accent);
+  color: var(--color-text);
+}
+
+.panel {
+  padding-top: var(--space-5);
+}

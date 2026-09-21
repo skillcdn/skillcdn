@@ -1,4 +1,6 @@
-import * as z from "zod";
+// The mini build of zod: these schemas also run in the browser, where the full build would be most
+// of what a visitor downloads.
+import * as z from "zod/mini";
 import { type Address, formatAddress, GIT_HOST_KEYS } from "../address.js";
 
 // Contract: docs/specs/rest.md. The server builds these shapes; clients parse with these schemas.
@@ -26,6 +28,8 @@ export function restPath(
   return `${REST_ROUTES[operation]}${formatAddress(address)}`;
 }
 
+const count = z.int().check(z.nonnegative());
+
 const indexing = z.object({ status: z.literal("indexing") });
 const failed = z.object({ status: z.literal("failed"), errorCode: z.string() });
 
@@ -46,8 +50,8 @@ export const restSkillSummarySchema = z.object({
 
 export const restDocumentSummarySchema = z.object({
   path: z.string(),
-  title: z.string().nullable(),
-  summary: z.string().nullable(),
+  title: z.nullable(z.string()),
+  summary: z.nullable(z.string()),
 });
 
 export const restDiagnosticSchema = z.object({
@@ -59,7 +63,7 @@ export const restDiagnosticSchema = z.object({
 export const restMountSchema = z.object({
   address: z.string(),
   repository: restRepositorySchema,
-  ref: z.string().nullable(),
+  ref: z.nullable(z.string()),
   pinned: z.boolean(),
   commit: z.string(),
   path: z.string(),
@@ -68,8 +72,8 @@ export const restMountSchema = z.object({
     z.object({
       status: z.literal("ready"),
       truncated: z.boolean(),
-      skillCount: z.number().int().nonnegative(),
-      documentCount: z.number().int().nonnegative(),
+      skillCount: count,
+      documentCount: count,
       skills: z.array(restSkillSummarySchema),
       documents: z.array(restDocumentSummarySchema),
       diagnostics: z.array(restDiagnosticSchema),
@@ -89,15 +93,15 @@ export const restFindItemSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("document"),
     path: z.string(),
-    title: z.string().nullable(),
-    summary: z.string().nullable(),
+    title: z.nullable(z.string()),
+    summary: z.nullable(z.string()),
   }),
 ]);
 
 export const restFindSchema = z.discriminatedUnion("status", [
   z.object({
     status: z.literal("ready"),
-    query: z.string().nullable(),
+    query: z.nullable(z.string()),
     items: z.array(restFindItemSchema),
   }),
   indexing,
@@ -111,9 +115,9 @@ export const restSkillSchema = z.discriminatedUnion("status", [
       name: z.string(),
       directory: z.string(),
       description: z.string(),
-      license: z.string().nullable(),
-      compatibility: z.string().nullable(),
-      allowedTools: z.string().nullable(),
+      license: z.nullable(z.string()),
+      compatibility: z.nullable(z.string()),
+      allowedTools: z.nullable(z.string()),
       metadata: z.record(z.string(), z.string()),
       body: z.string(),
       files: z.array(z.string()),
@@ -128,9 +132,9 @@ export const restSkillSchema = z.discriminatedUnion("status", [
 export const restFileSchema = z.object({
   path: z.string(),
   content: z.string(),
-  offset: z.number().int().nonnegative(),
-  nextOffset: z.number().int().nonnegative().nullable(),
-  totalLength: z.number().int().nonnegative(),
+  offset: count,
+  nextOffset: z.nullable(count),
+  totalLength: count,
 });
 
 export const restFeaturedSchema = z.object({
@@ -139,7 +143,7 @@ export const restFeaturedSchema = z.object({
       address: z.string(),
       repository: restRepositorySchema,
       status: z.enum(["ready", "indexing", "failed"]),
-      skillCount: z.number().int().nonnegative().nullable(),
+      skillCount: z.nullable(count),
       skills: z.array(z.string()),
     }),
   ),
@@ -150,7 +154,7 @@ export const restErrorSchema = z.object({
     code: z.string(),
     message: z.string(),
     /** With `skill.ambiguous`: the directories to choose from. */
-    directories: z.array(z.string()).optional(),
+    directories: z.optional(z.array(z.string())),
   }),
 });
 

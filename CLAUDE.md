@@ -37,7 +37,7 @@ Public repository hygiene
 ```
 apps/
   server/     the single deployable; roles: api | worker | migrate        (Node 24)
-  web/        optional web UI; talks to the api over REST only            (planned)
+  web/        optional web UI: landing and explorer; REST only, prerendered per language
 packages/
   core/       pure domain logic and ports; no I/O, no Node APIs
   db/         PostgreSQL schema, migrations, query layer
@@ -62,7 +62,8 @@ Run everything from the repository root through pnpm. Do not use `npm`, `npx` or
 | One test file | `pnpm --filter @skillcdn/core exec vitest run src/address.test.ts` (build upstream packages first) |
 | Lint and format | `pnpm lint` · `pnpm lint:fix` |
 | No control or invisible characters in tracked files (part of `pnpm check`) | `pnpm check:text` |
-| Watch mode | `pnpm dev` |
+| Watch mode (server) | `pnpm dev` |
+| The web UI on its own, against fixtures (no database, no server) | `pnpm dev:web` · against a running server: `pnpm dev:web:api` |
 | Local PostgreSQL | `docker compose -f deploy/compose.dev.yaml up -d` |
 | New migration | `pnpm --filter @skillcdn/db run generate -- --name <what-changed>` |
 | Run the server | `pnpm --filter @skillcdn/server run start migrate`, then `pnpm dev` (reads `.env`) |

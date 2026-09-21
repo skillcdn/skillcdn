@@ -4,6 +4,7 @@ node_modules/
 
 # Build output and caches
 dist/
+dist-ssr/
 *.tsbuildinfo
 .turbo/
 coverage/

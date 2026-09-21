@@ -1,0 +1,158 @@
+import { type Address, formatAddress, type RestMount } from "@skillcdn/core";
+import { api } from "../api/client.js";
+import { useResource } from "../api/use-resource.js";
+import { ConnectPanel } from "../components/connect-panel.js";
+import { ErrorCallout } from "../components/error-callout.js";
+import { Badge, Callout, Container, Skeleton, Spinner } from "../components/ui.js";
+import { useI18n } from "../i18n/index.js";
+import type { MountView } from "../router.js";
+import styles from "./mount.module.css";
+import { MountFile } from "./mount-file.js";
+import { MountOverview } from "./mount-overview.js";
+import { MountSkill } from "./mount-skill.js";
+
+function MountHeader(props: { readonly address: Address; readonly mount: RestMount | undefined }) {
+  const { t } = useI18n();
+  const { address, mount } = props;
+  const name =
+    mount === undefined
+      ? `${address.owner}/${address.repo}`
+      : `${mount.repository.owner}/${mount.repository.name}`;
+  const hostUrl =
+    mount === undefined
+      ? undefined
+      : `https://github.com/${mount.repository.owner}/${mount.repository.name}/tree/${mount.commit}${
+          mount.path === "" ? "" : `/${mount.path}`
+        }`;
+
+  return (
+    <header className={styles.header}>
+      <p className={styles.kicker}>{t.mount.repository}</p>
+      <h1 className={styles.title}>{name}</h1>
+      {mount !== undefined && (
+        <ul className={styles.facts}>
+          <li>
+            {mount.pinned ? (
+              <Badge tone="success">{t.mount.pinned}</Badge>
+            ) : (
+              <Badge tone="accent">
+                {mount.ref ?? `${mount.repository.defaultBranch} · ${t.mount.defaultBranch}`}
+              </Badge>
+            )}
+          </li>
+          <li className={styles.fact}>
+            <span className={styles.factLabel}>{t.mount.commit}</span>
+            <code>{mount.commit.slice(0, 7)}</code>
+          </li>
+          {mount.path !== "" && (
+            <li className={styles.fact}>
+              <span className={styles.factLabel}>{t.mount.path}</span>
+              <code>{mount.path}</code>
+            </li>
+          )}
+          {!mount.verified && (
+            <li>
+              <Badge tone="warning" title={t.mount.unverifiedHint}>
+                {t.mount.unverified}
+              </Badge>
+            </li>
+          )}
+          {hostUrl !== undefined && (
+            <li>
+              <a
+                className={styles.hostLink}
+                href={hostUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {t.mount.viewOnHost}
+              </a>
+            </li>
+          )}
+        </ul>
+      )}
+    </header>
+  );
+}
+
+function MountBody(props: {
+  readonly address: Address;
+  readonly view: MountView;
+  readonly mount: RestMount;
+  readonly stalled: boolean;
+}) {
+  const { t } = useI18n();
+  const { address, view, mount } = props;
+
+  // A file can be read while the index is still being built; everything else needs the index.
+  if (view.kind === "file") {
+    return <MountFile address={address} path={view.path} />;
+  }
+  if (mount.index.status === "indexing") {
+    return (
+      <Callout
+        title={t.mount.indexing.title}
+        action={props.stalled ? undefined : <Spinner label={t.common.loading} />}
+      >
+        {props.stalled ? t.mount.indexing.slow : t.mount.indexing.body}
+      </Callout>
+    );
+  }
+  if (mount.index.status === "failed") {
+    return (
+      <Callout tone="warning" title={t.mount.failed.title}>
+        {t.mount.failed.body(mount.index.errorCode)}
+      </Callout>
+    );
+  }
+  return view.kind === "skill" ? (
+    <MountSkill address={address} name={view.name} />
+  ) : (
+    <MountOverview address={address} index={mount.index} query={view.query} />
+  );
+}
+
+/** The explorer view of one address: what it serves, and how to connect an agent to it. */
+export function MountPage(props: {
+  readonly origin: string;
+  readonly address: Address;
+  readonly view: MountView;
+}) {
+  const { t } = useI18n();
+  const { address, view } = props;
+  const mount = useResource(
+    formatAddress(address),
+    (signal) => api.mount(address, signal),
+    (value) => value.index.status === "indexing",
+  );
+
+  return (
+    <Container className={styles.page}>
+      <MountHeader address={address} mount={mount.state === "ready" ? mount.value : undefined} />
+      <div className={styles.columns}>
+        <div className={styles.content}>
+          {mount.state === "loading" && <Skeleton lines={6} label={t.common.loading} />}
+          {mount.state === "error" && <ErrorCallout error={mount.error} onRetry={mount.reload} />}
+          {mount.state === "ready" && (
+            <>
+              {mount.value.index.status === "ready" && mount.value.index.truncated && (
+                <Callout tone="warning">{t.mount.truncated}</Callout>
+              )}
+              <MountBody
+                address={address}
+                view={view}
+                mount={mount.value}
+                stalled={mount.stalled}
+              />
+            </>
+          )}
+        </div>
+        {mount.state !== "error" && (
+          <aside className={styles.aside}>
+            <ConnectPanel origin={props.origin} address={address} />
+          </aside>
+        )}
+      </div>
+    </Container>
+  );
+}

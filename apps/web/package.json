@@ -1,0 +1,32 @@
+{
+  "name": "@skillcdn/web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The web UI: landing page and explorer. Static files, prerendered per language.",
+  "license": "FSL-1.1-ALv2",
+  "type": "module",
+  "scripts": {
+    "build": "vite build && vite build --ssr src/entry-server.tsx --outDir dist-ssr && node scripts/prerender.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "dev": "vite",
+    "dev:api": "vite --mode api",
+    "clean": "node -e \"for (const d of ['dist','dist-ssr']) fs.rmSync(d,{recursive:true,force:true})\""
+  },
+  "dependencies": {
+    "@skillcdn/core": "workspace:*",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^6.0.0",
+    "typescript": "catalog:",
+    "vite": "^8.0.0",
+    "vitest": "catalog:"
+  }
+}

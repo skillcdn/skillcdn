@@ -1,0 +1,73 @@
+.page {
+  padding-block: var(--space-8);
+}
+
+.title {
+  font-size: var(--text-2xl);
+}
+
+.lead {
+  max-width: var(--width-prose);
+  margin-top: var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--text-lg);
+}
+
+.form {
+  max-width: 44rem;
+  margin-top: var(--space-6);
+}
+
+.featured {
+  margin-top: var(--space-8);
+}
+
+.heading {
+  margin-bottom: var(--space-4);
+  font-size: var(--text-lg);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: var(--space-4);
+}
+
+.card {
+  display: grid;
+  gap: var(--space-2);
+  height: 100%;
+  padding: var(--space-4);
+  border: var(--border);
+  border-radius: var(--radius-lg);
+  color: var(--color-text);
+  text-decoration: none;
+  transition: border-color var(--transition);
+}
+
+.card:hover {
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+
+.cardTitle {
+  font-weight: var(--weight-bold);
+  overflow-wrap: anywhere;
+}
+
+.cardAddress {
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+.cardMeta:empty {
+  display: none;
+}
+
+.cardSkills {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}

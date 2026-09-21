@@ -1,0 +1,21 @@
+# apps/web: rules
+
+Read the root [`CLAUDE.md`](../../CLAUDE.md) and this workspace's [`README.md`](README.md) first.
+
+- **Ask before changing the look.** Visual direction, colors, the symbol and what the landing page says were decided with the maintainers (restrained developer tool, one blue accent, light and dark, placeholder symbol). Restyle within that; ask before leaving it.
+- **Tokens only.** No raw color, font stack or pixel size in a component's CSS: add or reuse a token in `src/styles/tokens.css`. The social-preview card is the one exception, because it is a picture.
+- **Every word goes through the language packs.** No user-visible string in a component. English is the source of truth; keep `ko.ts` in step in the same change, in natural Korean. The development-only pages are the exception. Language packs are the one place where committed text is not English.
+- **Copy says what exists.** No prices or plans, no comparisons with other products, no promises about features that are not built. Naming an MCP client we work with is fine.
+- **Same paths in every language.** The language is the `lang` query parameter; links inside the app go through `Link`, which keeps it. Never negotiate the language on the server or from `Accept-Language` (ADR-0009).
+- **Pages that should be found are prerendered.** A new static page is added to `STATIC_PAGES` in `src/entry-server.tsx` and gets a head in `src/seo/head.ts`. Whatever renders on the server must render the same in the browser: no `window`, `Date.now()` or storage during render; read them in effects.
+- **Repository content is hostile.** It reaches the DOM only through `components/markdown.tsx` or as text. Never `dangerouslySetInnerHTML`, never an `<img>` or `<iframe>` whose source comes from a repository.
+- **No inline `style` attributes and no inline scripts**: the server sends a content security policy that forbids them.
+- **The REST API is the only backend.** Responses are parsed with the schemas from `@skillcdn/core`. When the contract changes, `dev/fixtures.ts` changes with it; `dev/fixture-api.test.ts` fails until it does.
+- **New runtime dependencies need a reason** in the commit message, like everywhere else. The main bundle is what every visitor downloads: what only the explorer needs is loaded with it (`lazy` in `src/app.tsx`).
+
+## Gotchas
+
+- Biome rewrites `import "./x.css"` to `./x.js` (`useImportExtensions`). Style sheets that are imported for their side effect carry a `biome-ignore` for that; CSS modules are not affected.
+- Adjacent expressions in JSX (`{host}{path}`) become separate text nodes with a comment between them in prerendered HTML. Write one template string when the text must be searchable as a whole.
+- `light-dark()` needs `color-scheme` on the root, which `tokens.css` sets. A forced theme is `data-theme` on `<html>`, written by `public/boot.js` before the first paint.
+- Headless Chrome will not make a window narrower than about 500 px; to check a phone width, load the page in a 390 px wide iframe.

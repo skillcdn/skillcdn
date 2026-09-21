@@ -1,17 +1,62 @@
-# apps/web (planned)
+# @skillcdn/web
 
-The optional web UI: landing page, explorer over the public index, git-host login, repo connection. Planned stack: Vite + React + TypeScript.
+The web UI: a landing page and an explorer that shows what an agent gets from an address. English and Korean. Vite, React and plain CSS; the build is static files, prerendered once per language ([ADR-0009](../../docs/adr/0009-web-ui-prerendered-per-language.md)).
 
-**Status:** not started. It is scaffolded when its roadmap item begins, so no unused dependencies sit in the workspace until then. The first version is the landing page and the explorer; login and repo connection arrive with private-repository support ([roadmap](../../docs/roadmap.md)).
+It is optional. A deployment without it is still a complete MCP and REST server, and the UI uses nothing but the public [REST API](../../docs/specs/rest.md).
 
-**Before building anything here, ask the maintainers about design and branding**: logo, colors, typography, tone, languages, what the landing page says. The brand is not part of what this repository licenses ([TRADEMARKS.md](../../TRADEMARKS.md)), and it is not something to improvise. Do not pick a component library's default look or invent a logo to get started.
+## Run it
 
-## Constraints that already hold
+You need git and [pnpm](https://pnpm.io/installation) (`winget install pnpm.pnpm` on Windows, `brew install pnpm` on macOS). pnpm fetches the right Node.js by itself. No container runtime, no database, no server and no token are involved.
 
-- **Optional.** A deployment with no web UI must work. Nothing in `apps/server` may depend on this workspace.
-- **REST only.** The UI talks to the `api` role over its public REST surface. It may import types and the address parser from `@skillcdn/core`, and nothing else from the workspace.
-- **Static output.** The build is plain static files that the `api` role or any static host can serve.
-- **No secrets in the client.** Everything in a browser bundle is public, including every `VITE_*` variable.
-- **No business model in the UI code** either: plans, prices and checkout do not live in this repository (root `CLAUDE.md`, rule 6).
+```sh
+git clone https://github.com/skillcdn/skillcdn.git
+cd skillcdn
+pnpm install
+pnpm dev:web          # http://localhost:5173
+```
 
-When scaffolding: add `package.json` as `@skillcdn/web`, follow the script names of the other workspaces (`build`, `typecheck`, `test`, `dev`), add this workspace to the repository map in the root `CLAUDE.md` and to `docs/architecture.md`, and add a `CLAUDE.md` here.
+The development server answers the REST API from fixtures (`dev/fixtures.ts`), so every page works and every state can be reached:
+
+- **<http://localhost:5173/dev/states>** lists every state of every page (loading, indexing, empty, errors, long texts, a partial index) and shows every building block on one page.
+- Add `?lang=ko` to any URL for Korean. Without it the page follows the browser's language once, then what you picked.
+- The theme button in the header cycles system, light, dark.
+
+To look at real repositories instead, run the server (see [`apps/server`](../server/README.md)) and start the UI with `pnpm dev:web:api`. It proxies to `http://127.0.0.1:8080`; to use another server, put `SKILLCDN_API_URL=https://...` into `apps/web/.env.local`.
+
+## Where the design lives
+
+| To change... | Edit |
+|---|---|
+| Colors, fonts, sizes, spacing, radii, light and dark | [`src/styles/tokens.css`](src/styles/tokens.css). Every value the UI uses is a token; components contain no raw colors or font stacks. Colors are `light-dark(<light>, <dark>)` pairs. |
+| Document defaults (headings, links, focus ring) | [`src/styles/base.css`](src/styles/base.css) |
+| A building block (button, badge, callout, tabs, code block, address form) | `src/components/<name>.tsx` with its styles next to it in `<name>.module.css` |
+| A page | `src/pages/`: `landing`, `explore`, `mount*` (the explorer view of an address), `simple` (not found, bad address) |
+| How rendered Markdown from repositories looks | [`src/components/markdown.module.css`](src/components/markdown.module.css) |
+| Words | [`src/i18n/messages/en.ts`](src/i18n/messages/en.ts) and [`ko.ts`](src/i18n/messages/ko.ts). English is the source; the Korean pack must have the same shape, and a test checks it. |
+| The symbol and the favicon | [`public/brand/symbol.svg`](public/brand/symbol.svg), [`public/favicon.svg`](public/favicon.svg), and the inline copy in `src/components/layout.tsx`. They are placeholders until there is a logo. |
+| Social-preview images | `public/og/og-<language>.png`, 1200 x 630. Replace the files, or restyle `src/pages/og-card.tsx` and take new screenshots of `/dev/og` and `/dev/og?lang=ko` in a 1200 x 630 window. |
+
+Styles are CSS modules: a class is local to its component, so renaming or restyling one cannot break another. Breakpoints are `40rem`, `52rem` and `60rem`.
+
+## How it is built
+
+`pnpm --filter @skillcdn/web run build` does three things: the client bundle, a bundle of `src/entry-server.tsx` that can render pages to HTML, and `scripts/prerender.mjs`, which writes into `dist/`:
+
+- every static page once per language (`index.html`, `index.ko.html`, `explore/index.html`, ...), with its title, description, canonical and `hreflang` links, social-preview tags and structured data already in the HTML, because most crawlers do not run scripts;
+- a shell for pages that depend on data (the explorer view), which render in the browser and are marked `noindex`;
+- `llms.txt` per language;
+- `routes.json`, which tells whatever serves `dist/` which file answers which URL in which language.
+
+Languages share their paths; `?lang=ko` selects Korean and no parameter means English. Pages carry a placeholder instead of the public origin, which the server fills in, so one build works on any domain. For a plain static host, build with `SKILLCDN_PUBLIC_URL=https://your.host` and the origin is written into the files; such a host serves the default language only.
+
+## Adding a language
+
+A pack in `src/i18n/messages/`, an entry in `src/i18n/languages.ts` and in `src/i18n/index.ts`, the code in the list in `public/boot.js`, and `public/og/og-<language>.png`. Tests fail until they all agree.
+
+## Constraints
+
+- **REST only.** The UI may import types, schemas and the address parser from `@skillcdn/core`, and nothing else from the workspace.
+- **Repository content is untrusted.** Markdown is rendered as React elements, never as HTML. Raw HTML stays text, links go to `http(s)`, `mailto` or another file of the same mount, and images are never loaded, because loading one tells a third party who is reading.
+- **No inline scripts or styles**, so the pages work under a strict content security policy.
+- **No secrets in the client.** Everything in a browser bundle is public.
+- **No business model in the UI**: no plans, prices or checkout (root `CLAUDE.md`, rule 6).

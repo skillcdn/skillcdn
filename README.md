@@ -73,7 +73,7 @@ TypeScript monorepo: pnpm workspaces, Turborepo, Node.js 24, PostgreSQL 18.
 ```
 apps/
   server/     the single deployable; roles: api | worker | migrate     Hono + MCP SDK
-  web/        optional web UI over the REST API (planned)               Vite + React
+  web/        optional web UI: landing page and explorer              Vite + React
 packages/
   core/       address parser, skill-repo convention, permission rules, tool contracts, ports   pure TS
   db/         schema, migrations, query layer                           Drizzle + PostgreSQL

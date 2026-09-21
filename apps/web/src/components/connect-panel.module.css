@@ -1,0 +1,27 @@
+.panel {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border: var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg);
+}
+
+.title {
+  font-size: var(--text-lg);
+}
+
+.lead,
+.hint {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.lead {
+  margin-top: var(--space-1);
+}
+
+.stack {
+  display: grid;
+  gap: var(--space-3);
+}

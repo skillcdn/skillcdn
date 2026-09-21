@@ -1,0 +1,151 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+.skip {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: 20;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  transform: translateY(-200%);
+}
+
+.skip:focus {
+  transform: none;
+  color: var(--color-accent-contrast);
+}
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  border-bottom: var(--border);
+  background: color-mix(in srgb, var(--color-bg) 88%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  width: 100%;
+  max-width: var(--width-page);
+  height: 3.75rem;
+  margin-inline: auto;
+  padding-inline: var(--space-5);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  letter-spacing: -0.02em;
+  text-decoration: none;
+}
+
+.brand:hover {
+  color: var(--color-text);
+}
+
+.symbol {
+  flex: none;
+  color: var(--color-accent);
+}
+
+.nav {
+  display: flex;
+  gap: var(--space-5);
+  margin-right: auto;
+  font-size: var(--text-sm);
+}
+
+.nav a {
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+
+.nav a:hover {
+  color: var(--color-text);
+}
+
+.controls {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.main {
+  flex: 1;
+}
+
+.footer {
+  border-top: var(--border);
+  background: var(--color-bg-subtle);
+}
+
+.footerInner {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-5);
+  width: 100%;
+  max-width: var(--width-page);
+  margin-inline: auto;
+  padding: var(--space-6) var(--space-5);
+}
+
+.footerBrand {
+  font-weight: var(--weight-bold);
+}
+
+.footerText {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.footerLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  font-size: var(--text-sm);
+}
+
+.footerLinks a {
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+
+.footerLinks a:hover {
+  color: var(--color-text);
+  text-decoration: underline;
+}
+
+@media (max-width: 40rem) {
+  .bar {
+    gap: var(--space-3);
+    padding-inline: var(--space-4);
+  }
+
+  .nav {
+    gap: var(--space-3);
+  }
+
+  /* Links that leave the site are in the footer as well; the header keeps what navigates it. */
+  .nav a:not(:first-child) {
+    display: none;
+  }
+
+  .footerInner {
+    padding-inline: var(--space-4);
+  }
+}

@@ -36,7 +36,7 @@ Four properties shape everything else:
 | `packages/db` | PostgreSQL schema, migrations, query layer. | `core` |
 | `packages/github` | GitHub implementation of the git-host port: App auth, user tokens, contents, webhook verification. | `core` |
 | `apps/server` | Composition root: configuration, HTTP and MCP surface, jobs, adapter wiring. | `core`, `db`, `github` |
-| `apps/web` | Optional web UI. Talks to `api` over REST only. | `core` (types, address parsing) |
+| `apps/web` | Optional web UI: landing page and explorer, in several languages. Talks to `api` over REST only; builds to static files, prerendered per language ([ADR-0009](adr/0009-web-ui-prerendered-per-language.md)). | `core` (types, schemas, address parsing) |
 
 Where new things go:
 
@@ -92,7 +92,7 @@ Identifiers are UUIDv7; timestamps are `timestamptz`. File bodies are stored und
 | Blob storage | S3 API: Amazon S3 when hosted, MinIO or local disk when self-hosted. |
 | Logging | pino, JSON to stdout. |
 | Quality | Biome (lint and format), Vitest, gitleaks. |
-| Web | Vite + React (planned). |
+| Web | Vite + React, plain CSS with design tokens, no component library. Pages that should be found are prerendered once per language at build time. |
 | Delivery | One multi-stage Dockerfile (Debian slim, non-root, arm64 first). CI builds the image and exercises it on every change. Publishing and rollout happen outside this repository ([ADR-0008](adr/0008-repository-ends-at-an-image-that-builds.md)). |
 
 Libraries are added to `package.json` when first used; this table records the decision, not what is installed.

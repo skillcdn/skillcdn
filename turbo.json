@@ -24,6 +24,16 @@
       "cache": false,
       "persistent": true
     },
+    "@skillcdn/web#dev": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "persistent": true
+    },
+    "dev:api": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "persistent": true
+    },
     "//#dev:tsc": {
       "cache": false,
       "persistent": true

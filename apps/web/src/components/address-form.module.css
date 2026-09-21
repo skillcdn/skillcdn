@@ -1,0 +1,155 @@
+.wrapper {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.form {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.label {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.row {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.field {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  transition:
+    border-color var(--transition),
+    box-shadow var(--transition);
+}
+
+.field:focus-within {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-subtle);
+}
+
+.invalid {
+  border-color: var(--color-danger);
+}
+
+.prefix {
+  flex: none;
+  padding-left: var(--space-4);
+  color: var(--color-text-faint);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  height: 2.75rem;
+  padding: 0 var(--space-4) 0 0;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.input:focus-visible {
+  outline: none;
+}
+
+.input::placeholder {
+  color: var(--color-text-faint);
+}
+
+.submit {
+  min-height: 2.75rem;
+  padding-inline: var(--space-5);
+}
+
+.large .field {
+  font-size: var(--text-md);
+}
+
+.large .input,
+.large .submit {
+  height: 3.25rem;
+  min-height: 3.25rem;
+}
+
+.large .submit {
+  font-size: var(--text-md);
+}
+
+.hint,
+.error {
+  font-size: var(--text-sm);
+}
+
+.hint {
+  color: var(--color-text-muted);
+}
+
+.error {
+  color: var(--color-danger);
+}
+
+.examples {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.examplesLabel {
+  color: var(--color-text-muted);
+}
+
+.exampleList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.example {
+  display: inline-block;
+  padding: 0.15rem var(--space-3);
+  border: var(--border);
+  border-radius: 999px;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-decoration: none;
+  transition:
+    border-color var(--transition),
+    color var(--transition);
+}
+
+.example:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+@media (max-width: 40rem) {
+  .row {
+    flex-direction: column;
+  }
+
+  /* The host takes the room the input needs on a narrow screen; the label already says GitHub. */
+  .prefix {
+    display: none;
+  }
+
+  .input {
+    padding-left: var(--space-4);
+  }
+}
