@@ -61,6 +61,7 @@ Run everything from the repository root through pnpm. Do not use `npm`, `npx` or
 | One package | `pnpm turbo run test --filter=@skillcdn/core` |
 | One test file | `pnpm --filter @skillcdn/core exec vitest run src/address.test.ts` (build upstream packages first) |
 | Lint and format | `pnpm lint` · `pnpm lint:fix` |
+| No control or invisible characters in tracked files (part of `pnpm check`) | `pnpm check:text` |
 | Watch mode | `pnpm dev` |
 | Local PostgreSQL | `docker compose -f deploy/compose.dev.yaml up -d` |
 | New migration | `pnpm --filter @skillcdn/db run generate -- --name <what-changed>` |
@@ -145,5 +146,5 @@ Keep docs lean: current facts and decisions, not history or essays. Git history 
 
 - A system Node.js older than 24 is fine for pnpm scripts, which run on the pinned runtime, but `npm` and `npx` inside this repo refuse to run (`EBADDEVENGINES`). Use pnpm.
 - The anonymous GitHub API allows 60 requests per hour per IP address, and a local `api` shares that with everything else you do. Put a token without scopes in `.env` as `GITHUB_TOKEN`, and never in a test or a fixture.
-- If a tool writes source files for you, check what became of escape sequences such as `‮` or ` `: some tools decode them on the way, and an invisible character in a source file is exactly what the text-safety checks exist to catch. In tests, build such characters with `String.fromCodePoint`.
+- If a tool writes source files for you, check what became of escape sequences (a backslash followed by `u` and a code point, or by `0`): some tools decode them on the way, and an invisible character in a source file is exactly what the text-safety checks exist to catch. In tests, build such characters with `String.fromCodePoint`.
 - pnpm older than 12.4 is rejected (`ERR_PNPM_UNSUPPORTED_ENGINE`): older versions ignore the version pin and the supply-chain settings. Upgrade with `npm install -g pnpm@latest`; inside the repo pnpm then switches to the exact version in `packageManager`.

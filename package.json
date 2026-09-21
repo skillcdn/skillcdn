@@ -23,10 +23,11 @@
     "test": "turbo run test",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
-    "check": "biome ci . && turbo run build typecheck test",
+    "check": "biome ci . && node scripts/check-text-safety.mjs && turbo run build typecheck test",
     "dev": "turbo run dev dev:tsc",
     "dev:tsc": "tsc -b --watch --preserveWatchOutput",
-    "clean": "turbo run clean"
+    "clean": "turbo run clean",
+    "check:text": "node scripts/check-text-safety.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.13",
