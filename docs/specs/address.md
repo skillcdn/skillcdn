@@ -57,6 +57,10 @@ Parsing never consults the repository. An address means the same thing whatever 
 - **Repository identity.** After the first resolution a repository is identified by the host's immutable numeric id. The `owner/repo` spelling is a lookup alias that is re-pointed after a rename or a transfer, so an index survives both and a recycled name never inherits another repository's index.
 - The parser is pure and total: every input yields either a parsed address or a typed error. It never throws on hostile input and never touches the network.
 
+## In a browser
+
+The same URL answers people. When the deployment serves the web UI, a `GET` whose `Accept` header asks for `text/html` gets the explorer view of the address; every other request on the path is MCP ([ADR-0009](../adr/0009-web-ui-prerendered-per-language.md)). Query parameters are not part of an address: `lang` selects the language of the UI and means nothing to MCP.
+
 ## Open questions
 
 - **Commits that do not belong to the repository.** Some hosts serve a commit through a repository even when it only exists in a fork of it. A pinned address could then show someone else's content under the repository's name. Candidate: accept a pinned commit only when it is reachable from a branch or tag of the repository, and say so in the result otherwise.
