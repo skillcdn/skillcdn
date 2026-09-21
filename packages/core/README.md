@@ -2,7 +2,7 @@
 
 Pure domain logic. No I/O, no Node.js APIs, no workspace dependencies: it runs unchanged in the server, in tests and in a browser.
 
-**Status:** empty entry point. First content arrives in milestone 1 ([roadmap](../../docs/roadmap.md)).
+**Status:** the address scheme is implemented; the rest arrives during milestone 1 ([roadmap](../../docs/roadmap.md)).
 
 ## What belongs here
 
@@ -21,7 +21,17 @@ Network calls, SQL, file access, environment variables, logging setup, HTTP type
 ## Usage
 
 ```ts
-import { /* named exports */ } from "@skillcdn/core";
+import { formatAddress, parseAddress } from "@skillcdn/core";
+
+const parsed = parseAddress("/gh/acme/skills@v1.2.0/marketing");
+if (parsed.ok) {
+  parsed.value.ref; // { kind: "name", name: "v1.2.0" }
+  formatAddress(parsed.value); // the canonical spelling
+} else {
+  parsed.error.code; // a stable, typed reason
+}
 ```
+
+Parsers return a `Result` and never throw. A `RepoPath` can only come from `parseRepoPath`, so a function that takes one does not need to think about traversal.
 
 Everything public is exported from `src/index.ts`. There are no deep imports.

@@ -10,7 +10,7 @@ What exists, what is being built, what comes next. Update this file in the same 
 
 Goal: an MCP client connects to `/gh/<owner>/<repo>` for a public GitHub repository and can `find`, `get` and `read_file`.
 
-- [ ] `core`: address parser per [specs/address.md](specs/address.md), with hostile-input tests
+- [x] `core`: address parser per [specs/address.md](specs/address.md), with hostile-input tests
 - [ ] `core`: skill-repo convention parser per [specs/skill-repo.md](specs/skill-repo.md) (front-matter, single- and multi-skill layouts)
 - [ ] `core`: ports for git host, blob store, clock, `Entitlements`, `UsageSink`; tool contracts per [specs/tools.md](specs/tools.md)
 - [ ] `github`: public-repo adapter (ref resolution, tree, blobs) with conditional requests and an optional token
@@ -23,8 +23,6 @@ Goal: an MCP client connects to `/gh/<owner>/<repo>` for a public GitHub reposit
 Design points to settle during this milestone (record the outcome in the spec or an ADR):
 
 - How the first request behaves while a commit is still being indexed.
-- Ref-versus-path ambiguity in addresses (see the open questions in the address spec).
-- The canonical cache key for a repo, given renames, transfers and case-insensitive names.
 - MCP SDK major version to build on.
 
 ## Next
