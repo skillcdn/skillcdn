@@ -1,0 +1,21 @@
+# Architecture Decision Records
+
+One short file per decision that has lasting consequences and that a future contributor might reasonably want to undo: a dependency the system is built around, a boundary between packages, a data-model choice, a security rule, a break in a public contract.
+
+## Rules
+
+- Copy [`0000-template.md`](0000-template.md) to `NNNN-short-title.md` using the next free number.
+- Keep it under a page: context, decision, consequences. No essays.
+- An accepted ADR is never edited, apart from its status line. To change course, write a new ADR and mark the old one `Superseded by ADR-NNNN`.
+- If two changes take the same number, the one that lands second renumbers.
+- This repository is public: no business reasoning, no operations details, no comparisons with other products.
+
+## Index
+
+| ADR | Decision | Status |
+|---|---|---|
+| [0001](0001-license-and-trademarks.md) | FSL-1.1-ALv2 license, separate trademark policy | Accepted |
+| [0002](0002-toolchain.md) | Node.js 24, pnpm-pinned toolchain, compiled TypeScript packages | Accepted |
+| [0003](0003-one-image-several-roles.md) | One deployable with `api`, `worker` and `migrate` roles | Accepted |
+| [0004](0004-postgresql-only-state.md) | PostgreSQL as the only stateful dependency | Accepted |
+| [0005](0005-public-repository-private-operations.md) | What lives in this repository and what does not | Accepted |
