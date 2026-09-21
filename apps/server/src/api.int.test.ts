@@ -1,22 +1,9 @@
-import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
-import {
-  allowEverything,
-  type Entitlements,
-  INDEXING_NOTICE,
-  PROVENANCE_NOTICE,
-  type UsageEvent,
-} from "@skillcdn/core";
+import type { Client } from "@modelcontextprotocol/client";
+import { INDEXING_NOTICE, PROVENANCE_NOTICE } from "@skillcdn/core";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
-import type { Hono } from "hono";
-import { pino } from "pino";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { parseCidr } from "./http/client-address.js";
-import type { AppEnv } from "./http/request-context.js";
-import type { SnapshotService } from "./indexer/snapshot-service.js";
-import { createApi } from "./roles/api.js";
-import { createFixtureHost, type FixtureHost, fixtureCommits } from "./testing/fixture-host.js";
-
-const BASE_URL = "http://skillcdn.test";
+import { createFixtureHost, fixtureCommits } from "./testing/fixture-host.js";
+import { createHarness, type HarnessOptions } from "./testing/harness.js";
 
 let testDatabase: TestDatabase;
 
@@ -28,85 +15,7 @@ afterAll(async () => {
   await testDatabase?.drop();
 });
 
-interface Harness {
-  readonly app: Hono<AppEnv>;
-  readonly host: FixtureHost;
-  /** Access-log lines and everything else the server logged, as parsed JSON. */
-  readonly logs: Record<string, unknown>[];
-  readonly snapshots: SnapshotService;
-  readonly usage: UsageEvent[];
-  connect(address: string): Promise<Client>;
-  request(path: string, init?: RequestInit): Promise<Response>;
-}
-
-function harness(
-  options: {
-    indexWaitMs?: number;
-    entitlements?: Entitlements;
-    host?: FixtureHost;
-    trustedProxies?: string[];
-    clientIpHeader?: string;
-  } = {},
-): Harness {
-  const host = options.host ?? createFixtureHost();
-  const usage: UsageEvent[] = [];
-  const logs: Record<string, unknown>[] = [];
-  const { app, snapshots } = createApi(
-    {
-      mounts: { repoTtlMs: 60_000, refTtlMs: 60_000 },
-      http: {
-        trustedProxies: (options.trustedProxies ?? []).flatMap((text) => parseCidr(text) ?? []),
-        clientIpHeader: options.clientIpHeader ?? "x-forwarded-for",
-        requestIdHeader: "x-request-id",
-        accessLog: true,
-      },
-      indexing: {
-        waitMs: options.indexWaitMs ?? 10_000,
-        concurrency: 2,
-        leaseMs: 60_000,
-        limits: {
-          maxTreeEntries: 1000,
-          maxIndexedFiles: 100,
-          maxIndexedFileBytes: 262_144,
-          maxIndexedTotalBytes: 1_048_576,
-          maxReadableFileBytes: 4096,
-          maxArchiveBytes: 10_000_000,
-        },
-      },
-    },
-    {
-      database: testDatabase.database,
-      gitHost: host,
-      clock: { now: () => new Date() },
-      entitlements: options.entitlements ?? allowEverything,
-      usage: { record: (event) => usage.push(event) },
-      logger: pino(
-        { level: "info" },
-        { write: (line: string) => logs.push(JSON.parse(line) as Record<string, unknown>) },
-      ),
-      isShuttingDown: () => false,
-    },
-  );
-  const request = async (path: string, init?: RequestInit) =>
-    app.fetch(new Request(`${BASE_URL}${path}`, init));
-  return {
-    app,
-    host,
-    logs,
-    snapshots,
-    usage,
-    request,
-    async connect(address) {
-      const client = new Client({ name: "skillcdn-test", version: "0.0.0" });
-      await client.connect(
-        new StreamableHTTPClientTransport(new URL(`${BASE_URL}${address}`), {
-          fetch: async (input, init) => app.fetch(new Request(input, init)),
-        }),
-      );
-      return client;
-    },
-  };
-}
+const harness = (options: HarnessOptions = {}) => createHarness(testDatabase, options);
 
 async function call(client: Client, name: string, args: Record<string, unknown> = {}) {
   const result = await client.callTool({ name, arguments: args });

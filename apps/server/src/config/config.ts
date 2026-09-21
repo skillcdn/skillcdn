@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { type Address, parseAddress } from "@skillcdn/core";
 import * as z from "zod";
 import { type Cidr, parseCidr } from "../http/client-address.js";
 
@@ -42,6 +43,35 @@ const cidrList = z
     return networks;
   });
 
+const MAX_FEATURED_ADDRESSES = 24;
+
+/** A comma-separated list of addresses, as they would be written after the service host. */
+const addressList = z
+  .string()
+  .default("")
+  .transform((value, context) => {
+    const addresses: Address[] = [];
+    for (const entry of value.split(",").filter((part) => part.trim().length > 0)) {
+      const parsed = parseAddress(entry.trim());
+      if (!parsed.ok) {
+        context.addIssue({
+          code: "custom",
+          message: "must be a list of addresses such as /gh/owner/repo",
+        });
+        return z.NEVER;
+      }
+      addresses.push(parsed.value);
+    }
+    if (addresses.length > MAX_FEATURED_ADDRESSES) {
+      context.addIssue({
+        code: "custom",
+        message: `must list at most ${MAX_FEATURED_ADDRESSES} addresses`,
+      });
+      return z.NEVER;
+    }
+    return addresses;
+  });
+
 const environmentSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("production"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
@@ -62,6 +92,8 @@ const environmentSchema = z.object({
 
   GITHUB_API_URL: z.url({ protocol: /^https?$/ }).default("https://api.github.com"),
   GITHUB_TOKEN: z.string().min(1).optional(),
+
+  FEATURED_ADDRESSES: addressList,
 
   REPO_TTL_SECONDS: integer(60, 0, 86_400),
   REF_TTL_SECONDS: integer(60, 0, 86_400),
@@ -103,6 +135,10 @@ export interface Config {
   readonly github: {
     readonly apiUrl: string;
     readonly token: string | undefined;
+  };
+  readonly web: {
+    /** Addresses shown on the front page of the explorer. */
+    readonly featured: readonly Address[];
   };
   readonly mounts: {
     /** How long what the host said about a repository name is trusted. */
@@ -208,6 +244,7 @@ export function loadConfig(
     },
     database: { url: env.DATABASE_URL, poolMax: env.DATABASE_POOL_MAX },
     github: { apiUrl: env.GITHUB_API_URL, token: env.GITHUB_TOKEN },
+    web: { featured: env.FEATURED_ADDRESSES },
     mounts: { repoTtlMs: env.REPO_TTL_SECONDS * 1000, refTtlMs: env.REF_TTL_SECONDS * 1000 },
     indexing: {
       waitMs: env.INDEX_WAIT_MS,

@@ -105,6 +105,32 @@ describe("loadConfig", () => {
     ]);
   });
 
+  it("reads the featured addresses and rejects what is not an address", () => {
+    expect(loadConfig({ DATABASE_URL }, noFiles).web.featured).toEqual([]);
+    const config = loadConfig(
+      { DATABASE_URL, FEATURED_ADDRESSES: "/gh/Acme/skills, /gh/acme/docs@v2/guides," },
+      noFiles,
+    );
+    expect(config.web.featured).toMatchObject([
+      { host: "gh", owner: "acme", repo: "skills", path: "" },
+      {
+        host: "gh",
+        owner: "acme",
+        repo: "docs",
+        ref: { kind: "name", name: "v2" },
+        path: "guides",
+      },
+    ]);
+    expect(
+      problemsOf({ DATABASE_URL, FEATURED_ADDRESSES: "/gh/acme/skills,https://example.test/x" })
+        .problems,
+    ).toEqual(["FEATURED_ADDRESSES: must be a list of addresses such as /gh/owner/repo"]);
+    const tooMany = Array.from({ length: 25 }, (_, index) => `/gh/acme/repo-${index}`).join(",");
+    expect(problemsOf({ DATABASE_URL, FEATURED_ADDRESSES: tooMany }).problems).toEqual([
+      "FEATURED_ADDRESSES: must list at most 24 addresses",
+    ]);
+  });
+
   it("reads secrets from files", () => {
     const files: Record<string, string> = {
       "/run/secrets/db": `${DATABASE_URL}\n`,

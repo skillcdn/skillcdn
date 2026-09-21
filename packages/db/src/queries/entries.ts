@@ -1,5 +1,5 @@
 import type { RepoFileKind } from "@skillcdn/core";
-import { and, eq, ne, or, type SQL, sql } from "drizzle-orm";
+import { and, eq, ne, not, or, type SQL, sql } from "drizzle-orm";
 import { type Database, drizzleOf } from "../client.js";
 import { indexEntries, type SkillFrontMatter } from "../schema.js";
 import { SEARCH_CONFIG, type SnapshotScope } from "./snapshots.js";
@@ -78,19 +78,42 @@ export async function searchEntries(
     .limit(limit);
 }
 
-/** What a mount offers when nobody asked for anything in particular: skills first, then documents. */
+const IS_SKILL = eq(indexEntries.kind, "skill");
+
+/**
+ * What a mount offers when nobody asked for anything in particular: skills first, then documents.
+ * `only` narrows it to one of the two.
+ */
 export async function listEntries(
   database: Database,
   scope: SnapshotScope,
   mountPath: string,
   limit: number,
+  only?: "skills" | "documents",
 ): Promise<EntryRecord[]> {
+  const kind = only === undefined ? undefined : only === "skills" ? IS_SKILL : not(IS_SKILL);
   return drizzleOf(database)
     .select(entryColumns)
     .from(indexEntries)
-    .where(and(inSnapshot(scope), underPath(indexEntries.path, mountPath), FINDABLE))
+    .where(and(inSnapshot(scope), underPath(indexEntries.path, mountPath), FINDABLE, kind))
     .orderBy(sql`case when ${indexEntries.kind} = 'skill' then 0 else 1 end`, BY_PATH)
     .limit(limit);
+}
+
+/** How many skills and how many documents `listEntries` would return without a limit. */
+export async function countEntries(
+  database: Database,
+  scope: SnapshotScope,
+  mountPath: string,
+): Promise<{ readonly skills: number; readonly documents: number }> {
+  const [row] = await drizzleOf(database)
+    .select({
+      skills: sql<number>`count(*) filter (where ${IS_SKILL})::integer`,
+      documents: sql<number>`count(*) filter (where not ${IS_SKILL})::integer`,
+    })
+    .from(indexEntries)
+    .where(and(inSnapshot(scope), underPath(indexEntries.path, mountPath), FINDABLE));
+  return { skills: row?.skills ?? 0, documents: row?.documents ?? 0 };
 }
 
 /**

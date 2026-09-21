@@ -21,6 +21,7 @@ The REST API shows a person what an agent gets from an address. It is anonymous 
 | 404 | `mount.ref_not_found` | The ref does not exist in the repository. |
 | 403 | `mount.not_allowed` | The deployment does not serve this repository. |
 | 503 | `mount.rate_limited`, `mount.unavailable` | The git host cannot be asked right now. `retry-after` is set when known. |
+| 503 | `skill.unavailable` | The skill is indexed but its content cannot be read right now. |
 | 404 | `skill.not_found`, `file.not_found` | Nothing by that name or at that path in the mount. |
 | 409 | `skill.ambiguous` | Several skills share the name; `error.directories` lists them. |
 | 413 | `file.too_large` | The file is over the readable size limit. |

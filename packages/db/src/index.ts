@@ -3,6 +3,7 @@ export { createDatabase, type Database, type DatabaseOptions } from "./client.js
 export { getSchemaStatus, migrateDatabase, type SchemaStatus } from "./migrate.js";
 export { createBlobStore } from "./queries/blobs.js";
 export {
+  countEntries,
   type EntryRecord,
   findSkills,
   getEntry,

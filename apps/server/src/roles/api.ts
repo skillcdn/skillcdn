@@ -20,6 +20,7 @@ import { createClientAddressResolver } from "../http/client-address.js";
 import type { AppEnv } from "../http/request-context.js";
 import { SnapshotService } from "../indexer/snapshot-service.js";
 import type { Logger } from "../logger.js";
+import { MountReader } from "../mounts/mount-reader.js";
 import { MountService } from "../mounts/mount-service.js";
 import { SERVER_NAME, SERVER_VERSION } from "../version.js";
 
@@ -37,6 +38,8 @@ export interface ApiPorts {
 }
 
 export type ApiConfig = Pick<Config, "mounts" | "indexing"> & {
+  /** Left out, the explorer features nothing. */
+  readonly web?: Pick<Config["web"], "featured">;
   /** Left out, no proxy is trusted and every request is logged. */
   readonly http?: Pick<
     Config["http"],
@@ -74,10 +77,14 @@ export function createApi(
     leaseMs: config.indexing.leaseMs,
   });
 
+  const reader = new MountReader({ database, blobStore, gitHost, snapshots, limits });
+
   const app = createApp({
     database,
     mounts,
     snapshots,
+    reader,
+    featured: config.web?.featured ?? [],
     logger,
     isShuttingDown: ports.isShuttingDown,
     requests: {
@@ -90,17 +97,7 @@ export function createApi(
       newRequestId: randomUUID,
       now: () => performance.now(),
     },
-    tools: {
-      database,
-      blobStore,
-      gitHost,
-      snapshots,
-      usage,
-      clock,
-      logger,
-      limits,
-      indexWaitMs: config.indexing.waitMs,
-    },
+    tools: { reader, usage, clock, logger, indexWaitMs: config.indexing.waitMs },
   });
   return { app, snapshots };
 }

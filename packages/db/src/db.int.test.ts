@@ -2,6 +2,7 @@ import type { HostRepository } from "@skillcdn/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   claimSnapshot,
+  countEntries,
   createBlobStore,
   type Database,
   deleteRepoAlias,
@@ -368,6 +369,25 @@ describe("search", () => {
       "docs_extra/100%_notes.md",
       "skills/release-notes/references/style.md",
     ]);
+  });
+
+  it("lists and counts skills and documents separately, inside the mounted path", async () => {
+    const skills = await listEntries(database, scope, "", 10, "skills");
+    expect(skills.map((result) => result.path)).toEqual([
+      "skills/incident-review/SKILL.md",
+      "skills/release-notes/SKILL.md",
+    ]);
+    const documents = await listEntries(database, scope, "", 2, "documents");
+    expect(documents.map((result) => result.path)).toEqual([
+      "docs/releasing.md",
+      "docs_extra/100%_notes.md",
+    ]);
+    expect(await countEntries(database, scope, "")).toEqual({ skills: 2, documents: 3 });
+    expect(await countEntries(database, scope, "skills/release-notes")).toEqual({
+      skills: 1,
+      documents: 1,
+    });
+    expect(await countEntries(database, scope, "nowhere")).toEqual({ skills: 0, documents: 0 });
   });
 
   it("finds a skill by name, by name in another case, and by directory", async () => {
