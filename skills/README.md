@@ -2,7 +2,11 @@
 
 Reference skill repositories that follow the [skill-repo convention](../docs/specs/skill-repo.md). They are **product content**: fixtures for tests and examples for documentation. They are not tooling for the agents that work on this codebase; that lives under `.claude/`.
 
-**Status:** empty. The first fixtures arrive with the convention parser in milestone 1.
+| Directory | What it is |
+|---|---|
+| `single-skill/` | One `SKILL.md` at the repository root, with a reference document. |
+| `multi-skill/` | Two skills under `skills/`, plus ordinary documents, a JSON asset and a script that is only ever read. |
+| `hostile/` | Broken manifests next to a valid one. Each broken skill is skipped and reported; the rest is still served. |
 
 ## Rules
 

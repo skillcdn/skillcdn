@@ -2,7 +2,7 @@
 
 Pure domain logic. No I/O, no Node.js APIs, no workspace dependencies: it runs unchanged in the server, in tests and in a browser.
 
-**Status:** the address scheme is implemented; the rest arrives during milestone 1 ([roadmap](../../docs/roadmap.md)).
+**Status:** the address scheme and the skill-repo convention are implemented; tool contracts and ports arrive next ([roadmap](../../docs/roadmap.md)).
 
 ## What belongs here
 
