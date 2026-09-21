@@ -2,27 +2,53 @@
 
 PostgreSQL schema, migrations and the query layer. PostgreSQL is the only stateful dependency of the product ([ADR-0004](../../docs/adr/0004-postgresql-only-state.md)).
 
-**Status:** empty entry point. The first schema arrives in milestone 1 ([roadmap](../../docs/roadmap.md)).
+**Status:** the schema for serving public repositories: repositories, ref cache, per-commit index with full-text search, and a content-addressed body store.
 
-## Planned layout
+## Layout
 
 ```
 src/
-  schema/        Drizzle table definitions
+  schema.ts      Drizzle table definitions (one file: drizzle-kit reads it directly)
+  client.ts      pool construction from a connection string passed in by the caller
+  migrate.ts     applies migrations; reports whether the schema is current
   queries/       typed query functions, the only public way to reach the data
-  client.ts      pool and client construction from a connection string passed in by the caller
-  migrate.ts     applies migrations; used by the server's migrate role
+  testing.ts     per-file throwaway databases for integration tests (`@skillcdn/db/testing`)
 migrations/      generated SQL, committed, shipped inside the package
 ```
 
-## Local database
+Other workspaces hold an opaque `Database` and call the exported functions. They never see the ORM or SQL.
+
+## Working on the schema
 
 ```sh
-docker compose -f deploy/compose.dev.yaml up -d
+docker compose -f deploy/compose.dev.yaml up -d      # PostgreSQL 18 on 127.0.0.1:5432
+# edit src/schema.ts, then:
+pnpm --filter @skillcdn/db run generate -- --name <what-changed>
+# review the SQL in migrations/, run the tests, commit schema and migration together
 ```
 
-PostgreSQL 18 on `127.0.0.1:5432`. The connection string is in [`.env.example`](../../.env.example).
+Integration tests (`*.int.test.ts`) create a database per test file, apply the real migrations and drop it afterwards. They connect to the compose database unless `TEST_DATABASE_URL` points elsewhere, and they fail, not skip, when no server answers.
 
 ## Data model
 
-_Not defined yet. Document tables, keys and indexes here in the same change that adds them. The conceptual entities are listed in [architecture.md](../../docs/architecture.md#data-and-storage)._
+Primary keys are `uuid DEFAULT uuidv7()` and timestamps are `timestamptz`, with one exception noted below. Tenant-scoped tables carry `account_id`, and every query on them takes the account.
+
+| Table | What a row is | Keys and indexes |
+|---|---|---|
+| `accounts` | An organization or user on a git host: the tenant unit. | unique `(host, host_account_id)` |
+| `repos` | A repository, identified by the host's immutable id, so renames and transfers keep their index. Holds what the host last reported: name, default branch, visibility. | unique `(host, host_repo_id)`; `account_id` |
+| `repo_aliases` | An `owner/name` spelling from an address (lowercase) and the repository it currently names, with `checked_at` for the freshness of that fact. A lookup index read before the account is known, so it is not tenant-scoped. | unique `(host, owner, name)`; `repo_id` |
+| `repo_refs` | Cache of a moving ref: `ref` (empty for the default branch) to `commit_sha`, with `checked_at`. | unique `(repo_id, ref)` |
+| `snapshots` | The index of one commit of one repository and how far building it has come: `status` (`pending`, `indexing`, `ready`, `failed`), `attempts`, `lease_expires_at`, `retry_at`, `error_code`, `truncated`, counters, `diagnostics` for the repository author. | unique `(repo_id, commit_sha)`; `account_id` |
+| `index_entries` | One file of a snapshot: `path`, `kind` (`skill`, `markdown`, `json`, `other`), `size`, `blob_sha`, the owning `skill_dir`, skill `name`, document `title`, `description`, skill `front_matter`, and the `search` vector (null when the file is listed but not searchable). **Immutable: inserted and deleted, never updated.** | unique `(snapshot_id, path)`; `(snapshot_id, kind)`; `(snapshot_id, skill_dir)`; GIN on `search`; `account_id` |
+| `blobs` | A UTF-8 file body keyed by its git blob hash. Content-addressed, so the hash is the primary key and one row serves every commit, ref and fork. Not tenant-scoped: a body is only ever read through an index entry the caller may see, never by a hash from user input. | primary key `sha` |
+
+How it behaves:
+
+- **Claiming a snapshot** is one atomic `UPDATE`: it succeeds for a `pending` row, for an `indexing` row whose lease expired, and for a `failed` row whose `retry_at` has passed. Exactly one process wins. The winner renews its lease while it works and releases the row on shutdown.
+- **Writing an index** replaces the entries and marks the snapshot `ready` in one transaction, so readers see no index or a complete one. It refuses when the caller no longer holds the snapshot.
+- **Search vector**: weight A for the skill name and the document title, B for the description, C for the words of the path, D for the first 200,000 characters of the body. The configuration is `english` for both indexing and querying; words in other languages are indexed as they are.
+- **Search** matches any word of the query and orders by rank, with skills boosted over plain documents. A query without usable words returns nothing. The mount path is matched with `starts_with`, so `%` and `_` in a path are ordinary characters. Result order uses the `C` collation and is the same on every database.
+- A transferred repository moves to its new account; snapshots written under the old account are no longer visible and the repository is indexed again.
+
+Not here yet: installations, tokens, the permission cache (private repositories) and the job queue's own schema.

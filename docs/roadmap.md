@@ -14,7 +14,7 @@ Goal: an MCP client connects to `/gh/<owner>/<repo>` for a public GitHub reposit
 - [x] `core`: skill-repo convention parser per [specs/skill-repo.md](specs/skill-repo.md) (front-matter, single- and multi-skill layouts)
 - [x] `core`: ports for git host, blob store, clock, `Entitlements`, `UsageSink`; tool contracts per [specs/tools.md](specs/tools.md)
 - [x] `github`: public-repo adapter (ref resolution, tree, blobs) with conditional requests and an optional token
-- [ ] `db`: first schema (accounts, repos, ref resolution, index entries with full-text search), migration tooling, integration-test harness
+- [x] `db`: first schema (accounts, repos, ref resolution, index entries with full-text search), migration tooling, integration-test harness
 - [ ] `server`: configuration module; `migrate` role; `api` role with `/healthz`, `/readyz` and the anonymous MCP endpoint; lazy indexing on first request
 - [x] `skills/`: reference skill repos used as fixtures
 - [ ] End-to-end check: add a public repo to an MCP client as a custom connector

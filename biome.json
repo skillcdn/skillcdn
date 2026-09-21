@@ -31,7 +31,9 @@
         "noUnusedVariables": "error",
         "useImportExtensions": {
           "level": "error",
-          "options": { "forceJsExtensions": true }
+          "options": {
+            "forceJsExtensions": true
+          }
         }
       },
       "style": {
@@ -54,7 +56,9 @@
       "includes": ["**/*.config.ts"],
       "linter": {
         "rules": {
-          "style": { "noDefaultExport": "off" }
+          "style": {
+            "noDefaultExport": "off"
+          }
         }
       }
     },
@@ -62,7 +66,19 @@
       "includes": ["apps/server/src/config/**"],
       "linter": {
         "rules": {
-          "style": { "noProcessEnv": "off" }
+          "style": {
+            "noProcessEnv": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/*.int.test.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noProcessEnv": "off"
+          }
         }
       }
     }

@@ -1,2 +1,40 @@
 // Public surface of @skillcdn/db. Other workspaces import from this entry point only.
-export {};
+export { createDatabase, type Database, type DatabaseOptions } from "./client.js";
+export { getSchemaStatus, migrateDatabase, type SchemaStatus } from "./migrate.js";
+export { createBlobStore } from "./queries/blobs.js";
+export {
+  type EntryRecord,
+  findSkills,
+  getEntry,
+  listEntries,
+  listSkillFiles,
+  searchEntries,
+} from "./queries/entries.js";
+export {
+  type CachedRef,
+  deleteRepoAlias,
+  findCachedRef,
+  findRepoByAlias,
+  type RepoAlias,
+  type RepoAliasRecord,
+  type RepoRecord,
+  type RepoScope,
+  saveCachedRef,
+  saveRepository,
+} from "./queries/repos.js";
+export {
+  claimSnapshot,
+  ensureSnapshot,
+  failSnapshot,
+  getSnapshot,
+  getSnapshotDiagnostics,
+  type NewIndexEntry,
+  releaseSnapshot,
+  renewSnapshotLease,
+  type SnapshotIndex,
+  type SnapshotRecord,
+  type SnapshotScope,
+  type SnapshotStatus,
+  writeSnapshotIndex,
+} from "./queries/snapshots.js";
+export type { SkillFrontMatter, SnapshotDiagnostic } from "./schema.js";

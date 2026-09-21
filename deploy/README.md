@@ -6,7 +6,7 @@ Everything needed to build the image and hand it to whatever runs it. This direc
 |---|---|
 | [`Dockerfile`](Dockerfile) | The one multi-stage image. Roles `api`, `worker` and `migrate` are selected by the container command. |
 | [`compose.dev.yaml`](compose.dev.yaml) | Local development dependencies (PostgreSQL 18). Not a production topology. |
-| [`../.github/workflows/ci.yml`](../.github/workflows/ci.yml) | Lint, build, typecheck, tests, secret scan and an image build on every change. |
+| [`../.github/workflows/ci.yml`](../.github/workflows/ci.yml) | Lint, build, typecheck, tests (integration tests run against a PostgreSQL service container), secret scan and an image build on every change. |
 | [`../.github/workflows/release.yml`](../.github/workflows/release.yml) | Builds the image and pushes it to Amazon ECR through GitHub OIDC. |
 
 A compose bundle and install script for self-hosting are planned ([roadmap](../docs/roadmap.md)).

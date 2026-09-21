@@ -16,7 +16,8 @@
     "test": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", "!**/*.md"],
-      "outputs": []
+      "outputs": [],
+      "passThroughEnv": ["TEST_DATABASE_URL"]
     },
     "dev": {
       "dependsOn": ["build"],

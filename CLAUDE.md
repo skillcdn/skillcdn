@@ -56,7 +56,7 @@ Run everything from the repository root through pnpm. Do not use `npm`, `npx` or
 | Task | Command |
 |---|---|
 | Install | `pnpm install` |
-| **Verify everything (run before every commit)** | `pnpm check` |
+| **Verify everything (run before every commit)** | `pnpm check` (needs the local PostgreSQL below) |
 | Build / typecheck / test | `pnpm build` · `pnpm typecheck` · `pnpm test` |
 | One package | `pnpm turbo run test --filter=@skillcdn/core` |
 | One test file | `pnpm --filter @skillcdn/core exec vitest run src/address.test.ts` (build upstream packages first) |
@@ -121,7 +121,7 @@ Keep docs lean: current facts and decisions, not history or essays. Git history 
 ## Testing
 
 - Vitest. Unit tests use no network and no database, and must be fast.
-- Integration tests run against real PostgreSQL (`deploy/compose.dev.yaml`). Never mock the database and never swap in another engine.
+- Integration tests run against real PostgreSQL (`deploy/compose.dev.yaml`, or wherever `TEST_DATABASE_URL` points). Each test file gets its own migrated database from `@skillcdn/db/testing`. Never mock the database and never swap in another engine. Without a server these tests fail; they do not skip.
 - Git-host calls are tested against recorded fixtures. CI makes no live calls to third parties.
 - Every parser needs hostile-input cases: traversal, oversized input, deep nesting, malformed encodings.
 
