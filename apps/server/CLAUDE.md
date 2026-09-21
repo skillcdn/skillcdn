@@ -15,4 +15,7 @@ Read the root [`CLAUDE.md`](../../CLAUDE.md) first. This workspace is the compos
 
 ## Gotchas
 
+- Integration tests in one file share a database, and the system is built to reuse what it knows: a repository is its host id, a commit is indexed once, a body is stored once per hash, a default branch is cached. A test that needs fresh state gives `createFixtureHost` a variant and addresses that variant's commit explicitly, and adds files of its own when it needs something to be fetched.
+- `snapshots.close()` aborts indexing and refuses new work; tests that only want to wait use `snapshots.idle()`.
+
 - `pnpm dev` runs the compiled output. If types look stale across packages, the root `dev:tsc` watcher is not running.

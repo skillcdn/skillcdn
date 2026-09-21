@@ -8,4 +8,5 @@ Read the root [`CLAUDE.md`](../../CLAUDE.md) first. This package is the product'
 - **Exported types are public contract.** Changing what `src/index.ts` exports for addresses, tool schemas or the skill-repo convention is a spec change: update `docs/specs/` in the same change, and keep it additive.
 - **Ports are small.** An interface describes what the domain needs, in domain terms. It never mirrors a vendor SDK.
 - **Runtime dependencies are nearly forbidden.** This package also ships to browsers. A new dependency here needs a stronger case than anywhere else.
+- **The YAML library resolves well-known tags (`!!timestamp`, `!!binary`, `!!set`) under every schema**, including `failsafe`. `parseFrontMatter` rejects tagged nodes for that reason; keep it that way when touching the parser options.
 - **Tests:** table-driven cases next to the code, and always a hostile-input group: traversal, oversized input, deep nesting, odd Unicode, malformed encodings.
