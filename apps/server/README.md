@@ -20,6 +20,24 @@ pnpm dev                                           # compiler in watch mode + ap
 
 Then add `http://127.0.0.1:8080/gh/<owner>/<repo>` to an MCP client, or look at `src/api.int.test.ts` for a scripted session.
 
+To see the web UI on top of this server, run `pnpm dev:web:api` next to it ([`apps/web`](../web/README.md)). Working on the UI alone needs none of this: `pnpm dev:web` runs it against fixtures.
+
+### Without a container runtime
+
+Docker is only the quickest way to get PostgreSQL. Any PostgreSQL 18 works; the server and the tests take a connection string and nothing else.
+
+```sh
+winget install PostgreSQL.PostgreSQL.18            # Windows
+brew install postgresql@18 && brew services start postgresql@18    # macOS
+```
+
+Create a role that may create databases (the integration tests make one per test file) and a database for development, then point `DATABASE_URL` in `.env` at it. When your role or password differs from the defaults in `.env.example`, set `TEST_DATABASE_URL` in your shell as well, so that `pnpm check` finds the server.
+
+```sql
+create role skillcdn login createdb password 'choose-one';
+create database skillcdn owner skillcdn;
+```
+
 ## Layout
 
 ```
