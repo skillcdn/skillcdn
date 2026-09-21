@@ -14,6 +14,7 @@ import type { AppEnv } from "../http/request-context.js";
 import type { WebBundle } from "../http/web.js";
 import type { SnapshotService } from "../indexer/snapshot-service.js";
 import { createApi } from "../roles/api.js";
+import type { UsageStats } from "../stats/usage-recorder.js";
 import { createFixtureHost, type FixtureHost } from "./fixture-host.js";
 
 // Test support: the `api` role wired to a fixture git host and a test database.
@@ -41,6 +42,8 @@ export interface HarnessOptions {
   readonly featured?: readonly string[];
   /** A loaded web build. Left out, the server has no UI. */
   readonly web?: WebBundle;
+  /** Left out, nothing is counted. */
+  readonly stats?: UsageStats;
 }
 
 function addressOf(text: string): Address {
@@ -91,6 +94,7 @@ export function createHarness(testDatabase: TestDatabase, options: HarnessOption
       ),
       isShuttingDown: () => false,
       web: options.web,
+      stats: options.stats,
     },
   );
   const request = async (path: string, init?: RequestInit) =>

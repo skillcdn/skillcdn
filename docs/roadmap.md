@@ -15,12 +15,13 @@ Goal: a person opens the service in a browser, understands what it does in their
 - [x] `web`: landing page and explorer, in English and Korean, prerendered per language with metadata, structured data, social-preview images and `llms.txt` ([ADR-0009](adr/0009-web-ui-prerendered-per-language.md)). Design decisions made with the maintainers: a restrained developer-tool look, one blue accent, light and dark, a placeholder symbol until there is a logo
 - [x] `server`: serves the web build when `WEB_ROOT` is set, answers browsers on addresses, generates `sitemap.xml` and `robots.txt` from `PUBLIC_URL`
 - [x] The UI runs on its own for whoever designs it: one command, fixture data for every state, no database, no server, no container runtime; Windows and macOS
-- [ ] Usage statistics, on the server side: counts per public repository and skill (connections, tool calls, skills loaded), aggregated per day in PostgreSQL, so that rankings on the landing page have history by the time they are built. Open: what can be counted about distinct clients without storing anything that identifies one. Statistics of private repositories are never public.
+- [x] Usage statistics, on the server side: counts per public repository and skill (connections, tool calls, skills loaded), aggregated per day in PostgreSQL, so that rankings on the landing page have history by the time they are built. Statistics of private repositories are never collected.
 
 Login and repository connection arrive with private repositories (item 3 below).
 
-Design points still open from milestone 1 (record the outcome in the spec or an ADR):
+Design points still open (record the outcome in the spec or an ADR):
 
+- What can be counted about distinct clients without storing anything that identifies one. Today a client that reconnects a hundred times counts a hundred connections, which a ranking has to allow for.
 - Pinned commits that the host serves through a repository without being part of its history (see the open questions in the address spec).
 - Abuse controls for the anonymous endpoints. The server bounds its own work: request and index size limits, bounded indexing per process, a short in-process memory of names that do not exist. Limiting requests per client is the job of whatever sits in front of the server. Still missing here: a negative cache shared between replicas.
 

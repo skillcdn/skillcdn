@@ -5,6 +5,7 @@ import {
   GitHostError,
   getTool,
   INDEXING_NOTICE,
+  joinRepoPath,
   readFileTool,
   renderFileResult,
   renderFindResult,
@@ -14,11 +15,14 @@ import {
 import type { Logger } from "../logger.js";
 import type { MountReader, NotReady } from "../mounts/mount-reader.js";
 import type { Mount } from "../mounts/mount-service.js";
+import type { UsageStats } from "../stats/usage-recorder.js";
 import { SERVER_NAME, SERVER_VERSION } from "../version.js";
 
 export interface ToolDependencies {
   readonly reader: MountReader;
   readonly usage: UsageSink;
+  /** Daily counts per public repository, for everyone to see. Not the same as `usage`. */
+  readonly stats: UsageStats;
   readonly clock: Clock;
   readonly logger: Logger;
   /** How long `find` and `get` wait for an index that is still being built. */
@@ -48,7 +52,7 @@ function notReady(outcome: NotReady): ToolReply {
 
 /** Builds the MCP server for one request: the fixed tool set, bound to one resolved mount. */
 export function createMountServer(mount: Mount, dependencies: ToolDependencies): McpServer {
-  const { reader, usage, clock, indexWaitMs } = dependencies;
+  const { reader, usage, stats, clock, indexWaitMs } = dependencies;
   const repository = `${mount.repo.repository.owner.login}/${mount.repo.repository.name}`;
   const log = dependencies.logger.child({
     repo: repository,
@@ -69,6 +73,7 @@ export function createMountServer(mount: Mount, dependencies: ToolDependencies):
         quantity: 1,
         unit: "call",
       });
+      stats.count(mount, "tool_call", tool);
       try {
         return await handler(input);
       } catch (error) {
@@ -89,6 +94,10 @@ export function createMountServer(mount: Mount, dependencies: ToolDependencies):
         "that a skill or a search result points to.",
     },
   );
+
+  // Requests share no session, so a connection is counted when a client says it has finished
+  // introducing itself, which it does once.
+  server.server.oninitialized = () => stats.count(mount, "connection");
 
   server.registerTool(
     findTool.name,
@@ -121,6 +130,12 @@ export function createMountServer(mount: Mount, dependencies: ToolDependencies):
       const name = JSON.stringify(input.name.trim());
       switch (lookup.kind) {
         case "found":
+          // Counted by where the skill lives in the repository, whatever directory was mounted.
+          stats.count(
+            mount,
+            "skill_load",
+            joinRepoPath(mount.address.path, lookup.skill.directory),
+          );
           return reply(renderSkillResult(lookup.skill));
         case "not_found":
           return problem(

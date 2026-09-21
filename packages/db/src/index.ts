@@ -38,4 +38,15 @@ export {
   type SnapshotStatus,
   writeSnapshotIndex,
 } from "./queries/snapshots.js";
+export {
+  addUsage,
+  getRepoUsage,
+  listTopRepositories,
+  type RepositoryUsage,
+  type UsageDay,
+  type UsageIncrement,
+  type UsageMetric,
+  type UsageTotal,
+  usageDayOf,
+} from "./queries/usage.js";
 export type { SkillFrontMatter, SnapshotDiagnostic } from "./schema.js";

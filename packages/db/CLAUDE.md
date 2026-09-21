@@ -4,7 +4,7 @@ Read the root [`CLAUDE.md`](../../CLAUDE.md) first. Mistakes here are the hardes
 
 ## Migrations
 
-- Change the schema in `src/schema.ts`, generate the migration with `pnpm --filter @skillcdn/db run generate -- --name <what-changed>`, review the SQL, and commit both. Never write to a database by hand.
+- Change the schema in `src/schema.ts`, generate the migration with `pnpm --filter @skillcdn/db run generate --name <what-changed>`, review the SQL, and commit both. Never write to a database by hand.
 - **Never edit a migration that has been pushed to `main`.** Fix forward with a new one.
 - **Expand, then contract.** Old and new versions of the server run side by side during a rollout, so every migration must work with the previous release's code. Add first; remove or rename in a later release, after no deployed code uses the old shape.
 - Be kind to a live database: build indexes `CONCURRENTLY`, avoid rewriting large tables, set a `lock_timeout`, and backfill in batches from a job, not inside a migration.

@@ -110,6 +110,9 @@ const environmentSchema = z.object({
     .transform((value) => new URL(value).origin)
     .optional(),
 
+  USAGE_STATS: flag(true),
+  USAGE_STATS_FLUSH_SECONDS: integer(15, 1, 3600),
+
   REPO_TTL_SECONDS: integer(60, 0, 86_400),
   REF_TTL_SECONDS: integer(60, 0, 86_400),
 
@@ -158,6 +161,12 @@ export interface Config {
     readonly publicUrl: string | undefined;
     /** Addresses shown on the front page of the explorer. */
     readonly featured: readonly Address[];
+  };
+  readonly stats: {
+    /** Count connections, tool calls and skill loads per public repository and day. */
+    readonly enabled: boolean;
+    /** How often a process writes what it counted. */
+    readonly flushMs: number;
   };
   readonly mounts: {
     /** How long what the host said about a repository name is trusted. */
@@ -264,6 +273,7 @@ export function loadConfig(
     database: { url: env.DATABASE_URL, poolMax: env.DATABASE_POOL_MAX },
     github: { apiUrl: env.GITHUB_API_URL, token: env.GITHUB_TOKEN },
     web: { root: env.WEB_ROOT, publicUrl: env.PUBLIC_URL, featured: env.FEATURED_ADDRESSES },
+    stats: { enabled: env.USAGE_STATS, flushMs: env.USAGE_STATS_FLUSH_SECONDS * 1000 },
     mounts: { repoTtlMs: env.REPO_TTL_SECONDS * 1000, refTtlMs: env.REF_TTL_SECONDS * 1000 },
     indexing: {
       waitMs: env.INDEX_WAIT_MS,

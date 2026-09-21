@@ -152,6 +152,14 @@ describe("loadConfig", () => {
     }
   });
 
+  it("counts usage unless told not to", () => {
+    expect(loadConfig({ DATABASE_URL }, noFiles).stats).toEqual({ enabled: true, flushMs: 15_000 });
+    expect(
+      loadConfig({ DATABASE_URL, USAGE_STATS: "false", USAGE_STATS_FLUSH_SECONDS: "60" }, noFiles)
+        .stats,
+    ).toEqual({ enabled: false, flushMs: 60_000 });
+  });
+
   it("reads secrets from files", () => {
     const files: Record<string, string> = {
       "/run/secrets/db": `${DATABASE_URL}\n`,

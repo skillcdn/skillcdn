@@ -4,6 +4,7 @@ import {
   boolean,
   check,
   customType,
+  date,
   index,
   integer,
   jsonb,
@@ -199,6 +200,39 @@ export const indexEntries = pgTable(
     index("index_entries_search_idx").using("gin", table.search),
     index("index_entries_account_idx").on(table.accountId),
     check("index_entries_kind_check", sql`${table.kind} in ('skill', 'markdown', 'json', 'other')`),
+  ],
+);
+
+/**
+ * How often something happened to a repository on one day (UTC): a counter per metric and
+ * subject, added to and never rewritten. Nothing here identifies a client.
+ */
+export const usageDaily = pgTable(
+  "usage_daily",
+  {
+    id: id(),
+    accountId: uuid()
+      .notNull()
+      .references(() => accounts.id),
+    repoId: uuid()
+      .notNull()
+      .references(() => repos.id, { onDelete: "cascade" }),
+    day: date({ mode: "string" }).notNull(),
+    metric: text({ enum: ["connection", "tool_call", "skill_load"] }).notNull(),
+    /** What the metric is about: the tool name, the skill directory, or empty. */
+    subject: text().notNull().default(""),
+    count: bigint({ mode: "number" }).notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: instant().notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("usage_daily_key").on(table.repoId, table.day, table.metric, table.subject),
+    index("usage_daily_day_metric_idx").on(table.day, table.metric),
+    index("usage_daily_account_idx").on(table.accountId),
+    check(
+      "usage_daily_metric_check",
+      sql`${table.metric} in ('connection', 'tool_call', 'skill_load')`,
+    ),
   ],
 );
 

@@ -2,7 +2,7 @@
 
 PostgreSQL schema, migrations and the query layer. PostgreSQL is the only stateful dependency of the product ([ADR-0004](../../docs/adr/0004-postgresql-only-state.md)).
 
-**Status:** the schema for serving public repositories: repositories, ref cache, per-commit index with full-text search, and a content-addressed body store.
+**Status:** the schema for serving public repositories: repositories, ref cache, per-commit index with full-text search, a content-addressed body store, and daily usage counters.
 
 ## Layout
 
@@ -23,7 +23,7 @@ Other workspaces hold an opaque `Database` and call the exported functions. They
 ```sh
 docker compose -f deploy/compose.dev.yaml up -d      # PostgreSQL 18 on 127.0.0.1:5432
 # edit src/schema.ts, then:
-pnpm --filter @skillcdn/db run generate -- --name <what-changed>
+pnpm --filter @skillcdn/db run generate --name <what-changed>
 # review the SQL in migrations/, run the tests, commit schema and migration together
 ```
 
@@ -41,6 +41,7 @@ Primary keys are `uuid DEFAULT uuidv7()` and timestamps are `timestamptz`, with 
 | `repo_refs` | Cache of a moving ref: `ref` (empty for the default branch) to `commit_sha`, with `checked_at`. | unique `(repo_id, ref)` |
 | `snapshots` | The index of one commit of one repository and how far building it has come: `status` (`pending`, `indexing`, `ready`, `failed`), `attempts`, `lease_expires_at`, `retry_at`, `error_code`, `truncated`, counters, `diagnostics` for the repository author. | unique `(repo_id, commit_sha)`; `account_id` |
 | `index_entries` | One file of a snapshot: `path`, `kind` (`skill`, `markdown`, `json`, `other`), `size`, `blob_sha`, the owning `skill_dir`, skill `name`, document `title`, `description`, skill `front_matter`, and the `search` vector (null when the file is listed but not searchable). **Immutable: inserted and deleted, never updated.** | unique `(snapshot_id, path)`; `(snapshot_id, kind)`; `(snapshot_id, skill_dir)`; GIN on `search`; `account_id` |
+| `usage_daily` | How often something happened to a repository on one UTC day: `metric` (`connection`, `tool_call`, `skill_load`), `subject` (the tool name, the skill directory, or empty) and `count`. Counters are only ever added to. Nothing in a row identifies a client. | unique `(repo_id, day, metric, subject)`; `(day, metric)`; `account_id` |
 | `blobs` | A UTF-8 file body keyed by its git blob hash. Content-addressed, so the hash is the primary key and one row serves every commit, ref and fork. Not tenant-scoped: a body is only ever read through an index entry the caller may see, never by a hash from user input. | primary key `sha` |
 
 How it behaves:
@@ -49,6 +50,7 @@ How it behaves:
 - **Writing an index** replaces the entries and marks the snapshot `ready` in one transaction, so readers see no index or a complete one. It refuses when the caller no longer holds the snapshot.
 - **Search vector**: weight A for the skill name and the document title, B for the description, C for the words of the path, D for the first 200,000 characters of the body. The configuration is `english` for both indexing and querying; words in other languages are indexed as they are.
 - **Search** matches any word of the query and orders by rank, with skills boosted over plain documents. A query without usable words returns nothing. The mount path is matched with `starts_with`, so `%` and `_` in a path are ordinary characters. Result order uses the `C` collation and is the same on every database.
+- **Usage counters** are written with an upsert that adds, so every process reports what it counted without knowing about the others. `getRepoUsage` is scoped to an account like everything else. `listTopRepositories` deliberately is not: it is what a public ranking is made of, and the rule that keeps it safe is in the query itself, which reads only repositories that are public right now. A repository that goes private drops out of it with all its history.
 - A transferred repository moves to its new account; snapshots written under the old account are no longer visible and the repository is indexed again.
 
 Not here yet: installations, tokens, the permission cache (private repositories) and the job queue's own schema.

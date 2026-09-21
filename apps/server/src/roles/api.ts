@@ -23,6 +23,7 @@ import { SnapshotService } from "../indexer/snapshot-service.js";
 import type { Logger } from "../logger.js";
 import { MountReader } from "../mounts/mount-reader.js";
 import { MountService } from "../mounts/mount-service.js";
+import { noUsageStats, UsageRecorder, type UsageStats } from "../stats/usage-recorder.js";
 import { SERVER_NAME, SERVER_VERSION } from "../version.js";
 
 /** How much older than its TTL a cached fact may be when the git host cannot be asked. */
@@ -38,6 +39,8 @@ export interface ApiPorts {
   readonly isShuttingDown: () => boolean;
   /** A loaded build of the web UI. Left out, the server is MCP and REST only. */
   readonly web?: WebBundle | undefined;
+  /** Left out, nothing is counted. */
+  readonly stats?: UsageStats | undefined;
 }
 
 export type ApiConfig = Pick<Config, "mounts" | "indexing"> & {
@@ -101,7 +104,14 @@ export function createApi(
       newRequestId: randomUUID,
       now: () => performance.now(),
     },
-    tools: { reader, usage, clock, logger, indexWaitMs: config.indexing.waitMs },
+    tools: {
+      reader,
+      usage,
+      stats: ports.stats ?? noUsageStats,
+      clock,
+      logger,
+      indexWaitMs: config.indexing.waitMs,
+    },
   });
   return { app, snapshots };
 }
@@ -130,9 +140,15 @@ export async function runApi(config: Config, logger: Logger): Promise<void> {
     logger.info({ publicUrl: config.web.publicUrl ?? "(per request)" }, "serving the web UI");
   }
 
+  const recorder = config.stats.enabled
+    ? new UsageRecorder({ database, clock: systemClock, logger })
+    : undefined;
+  recorder?.start(config.stats.flushMs);
+
   let shuttingDown = false;
   const { app, snapshots } = createApi(config, {
     web,
+    stats: recorder,
     database,
     gitHost: createGitHubHost({
       baseUrl: config.github.apiUrl,
@@ -196,6 +212,7 @@ export async function runApi(config: Config, logger: Logger): Promise<void> {
   });
 
   await snapshots.close();
+  await recorder?.close();
   await database.close();
   logger.info("shutdown complete");
 }

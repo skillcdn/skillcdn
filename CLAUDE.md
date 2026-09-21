@@ -65,7 +65,7 @@ Run everything from the repository root through pnpm. Do not use `npm`, `npx` or
 | Watch mode (server) | `pnpm dev` |
 | The web UI on its own, against fixtures (no database, no server) | `pnpm dev:web` · against a running server: `pnpm dev:web:api` |
 | Local PostgreSQL | `docker compose -f deploy/compose.dev.yaml up -d` |
-| New migration | `pnpm --filter @skillcdn/db run generate -- --name <what-changed>` |
+| New migration | `pnpm --filter @skillcdn/db run generate --name <what-changed>` |
 | Run the server | `pnpm --filter @skillcdn/server run start migrate`, then `pnpm dev` (reads `.env`) |
 
 Packages compile to `dist/` and consume each other's compiled output. Going through `turbo` builds upstream packages first; calling a package script directly can test against a stale `dist/`.
