@@ -126,6 +126,12 @@ jobs:
           done
           curl -fsS http://127.0.0.1:8080/readyz
           test "$(docker exec api id -u)" -ne 0
+          # The web UI ships in the image: a page per language, and the browser's half of an address.
+          curl -fsS -H 'accept: text/html' 'http://127.0.0.1:8080/' | grep -q '<html lang="en">'
+          curl -fsS -H 'accept: text/html' 'http://127.0.0.1:8080/?lang=ko' | grep -q '<html lang="ko">'
+          curl -fsS -H 'accept: text/html' 'http://127.0.0.1:8080/gh/skillcdn/skillcdn' | grep -q 'data-prerendered="shell"'
+          curl -fsS 'http://127.0.0.1:8080/sitemap.xml' | grep -q 'hreflang="ko"'
+          curl -fsS 'http://127.0.0.1:8080/api/v1/featured' | grep -q '"items"'
           docker stop --time 30 api
           test "$(docker inspect --format '{{.State.ExitCode}}' api)" -eq 0
           docker logs api

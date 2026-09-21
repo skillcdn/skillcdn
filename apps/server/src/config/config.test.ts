@@ -108,7 +108,7 @@ describe("loadConfig", () => {
   it("reads the featured addresses and rejects what is not an address", () => {
     expect(loadConfig({ DATABASE_URL }, noFiles).web.featured).toEqual([]);
     const config = loadConfig(
-      { DATABASE_URL, FEATURED_ADDRESSES: "/gh/Acme/skills, /gh/acme/docs@v2/guides," },
+      { DATABASE_URL, FEATURED_ADDRESSES: "/gh/Acme/skills, gh/acme/docs@v2/guides," },
       noFiles,
     );
     expect(config.web.featured).toMatchObject([
@@ -129,6 +129,27 @@ describe("loadConfig", () => {
     expect(problemsOf({ DATABASE_URL, FEATURED_ADDRESSES: tooMany }).problems).toEqual([
       "FEATURED_ADDRESSES: must list at most 24 addresses",
     ]);
+  });
+
+  it("reads where the web UI is and what the public origin is", () => {
+    expect(loadConfig({ DATABASE_URL }, noFiles).web).toMatchObject({
+      root: undefined,
+      publicUrl: undefined,
+    });
+    const config = loadConfig(
+      { DATABASE_URL, WEB_ROOT: "/app/web", PUBLIC_URL: "https://Skills.Example.com/" },
+      noFiles,
+    );
+    expect(config.web).toMatchObject({ root: "/app/web", publicUrl: "https://skills.example.com" });
+    for (const value of [
+      "skills.example.com",
+      "ftp://skills.example.com",
+      "https://skills.example.com/app",
+      "https://skills.example.com/?x=1",
+      "https://user@skills.example.com",
+    ]) {
+      expect(problemsOf({ DATABASE_URL, PUBLIC_URL: value }).problems, value).toHaveLength(1);
+    }
   });
 
   it("reads secrets from files", () => {

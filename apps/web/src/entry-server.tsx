@@ -5,6 +5,7 @@ import { messagesFor } from "./i18n/index.js";
 import {
   DEFAULT_LANGUAGE,
   LANGUAGE_INFO,
+  LANGUAGE_PARAM,
   LANGUAGES,
   type Language,
   withLanguage,
@@ -16,7 +17,7 @@ import { LINKS, ORIGIN_PLACEHOLDER } from "./site.js";
 // Build-time only: scripts/prerender.mjs imports the bundle made from this file and writes one
 // HTML file per page and language. Nothing here runs in a browser or in the server.
 
-export { DEFAULT_LANGUAGE, LANGUAGES, ORIGIN_PLACEHOLDER };
+export { DEFAULT_LANGUAGE, LANGUAGE_PARAM, LANGUAGES, ORIGIN_PLACEHOLDER };
 
 /** Pages that do not depend on data and are therefore prerendered completely. */
 export const STATIC_PAGES = [

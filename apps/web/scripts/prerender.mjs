@@ -15,6 +15,7 @@ const ssr = join(root, "dist-ssr");
 
 const {
   DEFAULT_LANGUAGE,
+  LANGUAGE_PARAM,
   LANGUAGES,
   ORIGIN_PLACEHOLDER,
   STATIC_PAGES,
@@ -107,6 +108,8 @@ write(
       version: 1,
       defaultLanguage: DEFAULT_LANGUAGE,
       languages: LANGUAGES,
+      languageParam: LANGUAGE_PARAM,
+      originPlaceholder: ORIGIN_PLACEHOLDER,
       routes,
       shell,
       notFound,

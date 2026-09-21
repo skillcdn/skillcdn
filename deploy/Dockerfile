@@ -25,7 +25,7 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm fetch
 
 COPY . .
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm install --frozen-lockfile --offline
-RUN pnpm turbo run build --filter=@skillcdn/server...
+RUN pnpm turbo run build --filter=@skillcdn/server... --filter=@skillcdn/web...
 
 # Self-contained production tree: built output plus production dependencies only.
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm --filter=@skillcdn/server --prod deploy /out
@@ -37,6 +37,9 @@ LABEL org.opencontainers.image.title="SkillCDN server" \
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build --chown=node:node /out ./
+# The web UI is static files next to the server. Unset WEB_ROOT to run without it.
+COPY --from=build --chown=node:node /repo/apps/web/dist ./web
+ENV WEB_ROOT=/app/web
 USER node
 EXPOSE 8080
 ENTRYPOINT ["node", "--enable-source-maps", "dist/main.js"]

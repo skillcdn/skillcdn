@@ -11,6 +11,7 @@ import { type Mount, MountError, type MountService } from "../mounts/mount-servi
 import type { ClientAddressResolver } from "./client-address.js";
 import { type AppEnv, requestContext } from "./request-context.js";
 import { registerRest } from "./rest.js";
+import { type WebBundle, type WebRequest, wantsHtml } from "./web.js";
 
 export interface AppDependencies {
   readonly database: Database;
@@ -20,6 +21,8 @@ export interface AppDependencies {
   readonly tools: ToolDependencies;
   /** Addresses shown on the front page of the explorer. */
   readonly featured: readonly Address[];
+  /** A build of the web UI to serve. Left out, the server is MCP and REST only. */
+  readonly web: WebBundle | undefined;
   readonly logger: Logger;
   readonly requests: {
     readonly addresses: ClientAddressResolver;
@@ -48,7 +51,12 @@ function errorBody(code: string, message: string) {
 }
 
 export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
-  const { database, mounts, snapshots, reader, tools, logger, isShuttingDown } = dependencies;
+  const { database, mounts, snapshots, reader, tools, logger, isShuttingDown, web } = dependencies;
+  const webRequestOf = (c: Context<AppEnv>): WebRequest => ({
+    method: c.req.method,
+    url: new URL(c.req.url),
+    headers: c.req.raw.headers,
+  });
   const app = new Hono<AppEnv>();
   app.use(requestContext({ logger, ...dependencies.requests }));
 
@@ -161,6 +169,11 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
       onError: (c) => c.json(errorBody("request.too_large", "The request body is too large."), 413),
     }),
     async (c) => {
+      // An address answers a browser with the explorer and everything else with MCP. The page
+      // asks the REST API for what it shows, so serving it resolves and indexes nothing.
+      if (web !== undefined && wantsHtml(webRequestOf(c))) {
+        return web.shell(webRequestOf(c));
+      }
       const mount = await mountAt(c, "");
       if (mount instanceof Response) {
         return mount;
@@ -173,7 +186,15 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
     },
   );
 
-  app.notFound((c) => c.json(errorBody("not_found", "There is nothing at this path."), 404));
+  if (web !== undefined) {
+    app.on(["GET", "HEAD"], "*", (c) => web.respond(webRequestOf(c)) ?? c.notFound());
+  }
+
+  app.notFound((c) =>
+    web !== undefined && wantsHtml(webRequestOf(c))
+      ? web.notFound(webRequestOf(c))
+      : c.json(errorBody("not_found", "There is nothing at this path."), 404),
+  );
   app.onError((error, c) => {
     logger.error({ err: error, requestId: c.get("requestId") }, "unhandled request error");
     return c.json(errorBody("internal", "The request could not be served."), 500);

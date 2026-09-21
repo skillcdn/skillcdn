@@ -11,6 +11,7 @@ import type { Hono } from "hono";
 import { pino } from "pino";
 import { parseCidr } from "../http/client-address.js";
 import type { AppEnv } from "../http/request-context.js";
+import type { WebBundle } from "../http/web.js";
 import type { SnapshotService } from "../indexer/snapshot-service.js";
 import { createApi } from "../roles/api.js";
 import { createFixtureHost, type FixtureHost } from "./fixture-host.js";
@@ -38,6 +39,8 @@ export interface HarnessOptions {
   readonly clientIpHeader?: string;
   /** Addresses for the front page of the explorer, as they are written in configuration. */
   readonly featured?: readonly string[];
+  /** A loaded web build. Left out, the server has no UI. */
+  readonly web?: WebBundle;
 }
 
 function addressOf(text: string): Address {
@@ -87,6 +90,7 @@ export function createHarness(testDatabase: TestDatabase, options: HarnessOption
         { write: (line: string) => logs.push(JSON.parse(line) as Record<string, unknown>) },
       ),
       isShuttingDown: () => false,
+      web: options.web,
     },
   );
   const request = async (path: string, init?: RequestInit) =>

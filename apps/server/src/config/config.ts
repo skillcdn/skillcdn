@@ -52,7 +52,9 @@ const addressList = z
   .transform((value, context) => {
     const addresses: Address[] = [];
     for (const entry of value.split(",").filter((part) => part.trim().length > 0)) {
-      const parsed = parseAddress(entry.trim());
+      // With or without the leading slash: some shells rewrite a value that starts with one.
+      const text = entry.trim();
+      const parsed = parseAddress(text.startsWith("/") ? text : `/${text}`);
       if (!parsed.ok) {
         context.addIssue({
           code: "custom",
@@ -94,6 +96,19 @@ const environmentSchema = z.object({
   GITHUB_TOKEN: z.string().min(1).optional(),
 
   FEATURED_ADDRESSES: addressList,
+  WEB_ROOT: z.string().min(1).optional(),
+  PUBLIC_URL: z
+    .url({ protocol: /^https?$/ })
+    .refine((value) => {
+      // Checks run even when an earlier one failed. What is not a URL was reported already.
+      if (!URL.canParse(value)) {
+        return true;
+      }
+      const url = new URL(value);
+      return url.pathname === "/" && url.search === "" && url.hash === "" && url.username === "";
+    }, "must be an origin such as https://skills.example.com, without a path")
+    .transform((value) => new URL(value).origin)
+    .optional(),
 
   REPO_TTL_SECONDS: integer(60, 0, 86_400),
   REF_TTL_SECONDS: integer(60, 0, 86_400),
@@ -137,6 +152,10 @@ export interface Config {
     readonly token: string | undefined;
   };
   readonly web: {
+    /** Directory of a web UI build to serve. Left out, there is no UI. */
+    readonly root: string | undefined;
+    /** The origin visitors use. Left out, pages are written for the origin of each request. */
+    readonly publicUrl: string | undefined;
     /** Addresses shown on the front page of the explorer. */
     readonly featured: readonly Address[];
   };
@@ -244,7 +263,7 @@ export function loadConfig(
     },
     database: { url: env.DATABASE_URL, poolMax: env.DATABASE_POOL_MAX },
     github: { apiUrl: env.GITHUB_API_URL, token: env.GITHUB_TOKEN },
-    web: { featured: env.FEATURED_ADDRESSES },
+    web: { root: env.WEB_ROOT, publicUrl: env.PUBLIC_URL, featured: env.FEATURED_ADDRESSES },
     mounts: { repoTtlMs: env.REPO_TTL_SECONDS * 1000, refTtlMs: env.REF_TTL_SECONDS * 1000 },
     indexing: {
       waitMs: env.INDEX_WAIT_MS,

@@ -106,6 +106,15 @@ describe("GET /api/v1/mounts/<address>", () => {
     const skipped = mount.index.diagnostics.map((diagnostic) => diagnostic.path);
     expect(skipped).toContain("skills/missing-description/SKILL.md");
     expect(skipped).toContain("skills/alias-bomb/SKILL.md");
+
+    // Inside a mounted directory: only what is in it, with paths relative to it.
+    const inside = restMountSchema.parse(
+      await (await h.request("/api/v1/mounts/gh/acme/hostile/skills/alias-bomb")).json(),
+    );
+    if (inside.index.status !== "ready") {
+      throw new Error("expected a ready index");
+    }
+    expect(inside.index.diagnostics.map((diagnostic) => diagnostic.path)).toEqual(["SKILL.md"]);
   });
 
   it("answers like the MCP endpoint when the address is wrong or names nothing", async () => {

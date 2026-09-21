@@ -32,6 +32,12 @@ async function run(role: Role): Promise<void> {
       process.exitCode = 70;
     }
   } catch (error) {
+    if (error instanceof ConfigError) {
+      // Settings that only a role can check, such as a directory it is pointed at.
+      process.stderr.write(`${error.message}\n`);
+      process.exitCode = 78;
+      return;
+    }
     logger.fatal({ err: error }, "fatal error");
     process.exitCode = 70;
   }

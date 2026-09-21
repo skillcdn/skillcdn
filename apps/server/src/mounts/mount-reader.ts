@@ -328,7 +328,11 @@ export class MountReader {
           const item = toFindItem(mount, row);
           return item?.kind === "document" ? [item] : [];
         }),
-        diagnostics,
+        // Findings about manifests outside the mounted directory are somebody else's.
+        diagnostics: diagnostics.flatMap((diagnostic) => {
+          const below = belowMount(mount, diagnostic.path);
+          return below === undefined ? [] : [{ ...diagnostic, path: below }];
+        }),
       },
     };
   }

@@ -60,7 +60,7 @@ What the address serves.
 
 - `address` is the canonical form. `ref` is `null` for the default branch. `pinned` is true for a full commit hash.
 - `skills` and `documents` list at most 200 entries each; the counts are complete.
-- `diagnostics` are the findings of the [convention parser](skill-repo.md) for the repository author: manifests that were skipped, and why. They cover the whole commit, not only the mounted path.
+- `diagnostics` are the findings of the [convention parser](skill-repo.md) for the repository author: manifests that were skipped, and why. Only manifests inside the mounted path are listed.
 - `truncated` is true when the repository was larger than the indexing limits.
 
 ### `GET /api/v1/find/<address>?query=&limit=`

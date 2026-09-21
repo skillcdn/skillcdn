@@ -38,6 +38,8 @@ The server is configured only through environment variables. [`.env.example`](..
 | `DATABASE_POOL_MAX` | `api` | no | no | Default `10` connections per process. |
 | `GITHUB_API_URL` | `api`, `worker` | no | no | Default `https://api.github.com`. GitHub Enterprise Server: `https://<host>/api/v3`. |
 | `GITHUB_TOKEN` | `api`, `worker` | no | **yes** | Optional, no scopes needed. Raises the GitHub rate limit for public-repo reads; without it the anonymous limit applies to the whole deployment. |
+| `WEB_ROOT` | `api` | no | no | Directory of a web UI build. The image sets `/app/web`; set it to an empty value to run without a UI. |
+| `PUBLIC_URL` | `api` | no | no | The origin visitors use, such as `https://skills.example.com`. Goes into canonical links, the sitemap and the URLs pages show. Without it the origin of each request is used, which is wrong behind a proxy that terminates TLS. |
 | `FEATURED_ADDRESSES` | `api` | no | no | Addresses shown on the front page of the explorer, comma-separated (`/gh/owner/repo`). At most 24. Default: none. |
 | `REPO_TTL_SECONDS`, `REF_TTL_SECONDS` | `api` | no | no | How long repository facts and moving refs are trusted before revalidation. Default `60` each. |
 | `INDEX_WAIT_MS` | `api` | no | no | How long a tool call waits for a new commit's index. Default `20000`. |
@@ -57,6 +59,7 @@ The `api` role speaks plain HTTP and expects TLS, caching and per-client rate li
 - **Idle connections.** Keep `HTTP_KEEP_ALIVE_SECONDS` above the idle timeout of the proxy. When the server closes an idle connection first, the proxy occasionally sends a request into it and answers its client with a gateway error.
 - **Slow answers.** A tool call may wait up to `INDEX_WAIT_MS` for an index. The proxy's response timeout has to be longer than that.
 - **Streaming.** MCP responses may be event streams. Do not buffer or transform `text/event-stream` responses.
+- **Pages.** With a web UI, set `PUBLIC_URL`. Every URL has exactly one representation (the language is the `lang` query parameter, never `Accept-Language`), so pages and files may be cached by URL, query string included. HTML asks to be revalidated; files under `/assets/` never change. On an address (`/gh/...`) the response depends on the request: a `GET` that accepts `text/html` gets a page, everything else is MCP. Do not cache that path.
 - **Probes.** `GET /healthz` and `GET /readyz` are not written to the access log.
 
 The access log is one JSON line per request: request id, method, path without its query string, status, duration until the response started, client address and user agent.

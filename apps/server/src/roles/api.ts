@@ -14,10 +14,11 @@ import { createBlobStore, createDatabase, type Database } from "@skillcdn/db";
 import { createGitHubHost } from "@skillcdn/github";
 import type { Hono } from "hono";
 import { systemClock } from "../adapters/system-clock.js";
-import type { Config } from "../config/config.js";
+import { type Config, ConfigError } from "../config/config.js";
 import { createApp } from "../http/app.js";
 import { createClientAddressResolver } from "../http/client-address.js";
 import type { AppEnv } from "../http/request-context.js";
+import { loadWebBundle, type WebBundle, WebBundleError } from "../http/web.js";
 import { SnapshotService } from "../indexer/snapshot-service.js";
 import type { Logger } from "../logger.js";
 import { MountReader } from "../mounts/mount-reader.js";
@@ -35,6 +36,8 @@ export interface ApiPorts {
   readonly usage: UsageSink;
   readonly logger: Logger;
   readonly isShuttingDown: () => boolean;
+  /** A loaded build of the web UI. Left out, the server is MCP and REST only. */
+  readonly web?: WebBundle | undefined;
 }
 
 export type ApiConfig = Pick<Config, "mounts" | "indexing"> & {
@@ -85,6 +88,7 @@ export function createApi(
     snapshots,
     reader,
     featured: config.web?.featured ?? [],
+    web: ports.web,
     logger,
     isShuttingDown: ports.isShuttingDown,
     requests: {
@@ -112,8 +116,23 @@ export async function runApi(config: Config, logger: Logger): Promise<void> {
     maxConnections: config.database.poolMax,
     applicationName: `${SERVER_NAME}-api`,
   });
+  let web: WebBundle | undefined;
+  if (config.web.root !== undefined) {
+    try {
+      web = await loadWebBundle(config.web.root, { publicUrl: config.web.publicUrl });
+    } catch (error) {
+      if (error instanceof WebBundleError) {
+        // A setting that points at the wrong place, not a failure of the process.
+        throw new ConfigError([`WEB_ROOT: ${error.message}`]);
+      }
+      throw error;
+    }
+    logger.info({ publicUrl: config.web.publicUrl ?? "(per request)" }, "serving the web UI");
+  }
+
   let shuttingDown = false;
   const { app, snapshots } = createApi(config, {
+    web,
     database,
     gitHost: createGitHubHost({
       baseUrl: config.github.apiUrl,
