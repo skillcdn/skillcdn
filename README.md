@@ -79,7 +79,7 @@ packages/
   db/         schema, migrations, query layer                           Drizzle + PostgreSQL
   github/     GitHub App, user-token and contents adapter               implements the git-host port
 skills/       reference skill repos used by tests and docs
-deploy/       Dockerfile, compose files, release notes for operators
+deploy/       Dockerfile, compose files, the contract for whoever operates the image
 docs/         architecture, specs, ADRs, roadmap
 ```
 

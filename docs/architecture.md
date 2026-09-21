@@ -93,7 +93,7 @@ Identifiers are UUIDv7; timestamps are `timestamptz`. File bodies are stored und
 | Logging | pino, JSON to stdout. |
 | Quality | Biome (lint and format), Vitest, gitleaks. |
 | Web | Vite + React (planned). |
-| Delivery | One multi-stage Dockerfile (Debian slim, non-root, arm64 first). GitHub Actions with OIDC into AWS; images in Amazon ECR. |
+| Delivery | One multi-stage Dockerfile (Debian slim, non-root, arm64 first). CI builds the image and exercises it on every change. Publishing and rollout happen outside this repository ([ADR-0008](adr/0008-repository-ends-at-an-image-that-builds.md)). |
 
 Libraries are added to `package.json` when first used; this table records the decision, not what is installed.
 
@@ -137,7 +137,7 @@ The business model is not in this codebase. What the code provides is structure 
 
 ## Delivery
 
-Trunk-based development. Maintainers currently push directly to `main`; a pull-request gate comes later. CI runs on every push: lint, build, typecheck, tests, secret scan, image build. Every push to `main` can publish an image tagged with its commit; version tags publish releases. Rolling an image out is owned by infrastructure outside this repository; [`deploy/README.md`](../deploy/README.md) defines the contract.
+Trunk-based development. Maintainers currently push directly to `main`; a pull-request gate comes later. CI runs on every push: lint, build, typecheck, tests, secret scan, and an image build that is then exercised. `main` is kept releasable: a deployment pins a green commit and builds the image from it. Publishing images and rolling them out happen outside this repository; [`deploy/README.md`](../deploy/README.md) defines the contract.
 
 Because old and new versions overlap during a rollout:
 

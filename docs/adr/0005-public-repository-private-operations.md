@@ -1,6 +1,6 @@
 # ADR-0005: What lives in this repository and what does not
 
-- Status: Accepted
+- Status: Superseded by [ADR-0008](0008-repository-ends-at-an-image-that-builds.md)
 - Date: 2026-09-21
 
 ## Context

@@ -4,7 +4,7 @@ What exists, what is being built, what comes next. Update this file in the same 
 
 ## Done
 
-- **Foundation.** Monorepo layout, pinned toolchain, lint, typecheck and test pipeline, CI, container image with role dispatch, release workflow to a container registry, license, contributor and agent documentation.
+- **Foundation.** Monorepo layout, pinned toolchain, lint, typecheck and test pipeline, CI, container image with role dispatch, license, contributor and agent documentation.
 
 ## Now: milestone 1, serve a public repository end to end
 
@@ -18,8 +18,8 @@ Goal: an MCP client connects to `/gh/<owner>/<repo>` for a public GitHub reposit
 - [x] `server`: configuration module; `migrate` role; `api` role with `/healthz`, `/readyz` and the anonymous MCP endpoint; lazy indexing on first request
 - [x] `skills/`: reference skill repos used as fixtures
 - [x] End-to-end, scripted: the MCP client SDK against a locally running `api` and the live GitHub API, plus the same path in CI against fixtures (`apps/server/src/api.int.test.ts`)
-- [ ] Ready to be deployed: `release.yml` waits for a green CI run before it publishes (see [deploy/README.md](../deploy/README.md)), and the server behaves behind a reverse proxy: client address taken from a trusted proxy only, request ids and an access log, keep-alive and timeouts that suit a load balancer.
-- [ ] First hosted staging deployment from a published image.
+- [ ] Ready to run behind a reverse proxy: client address taken from a trusted proxy only, request ids and an access log, keep-alive and timeouts that suit a load balancer. Publishing and deployment are not part of this repository ([ADR-0008](adr/0008-repository-ends-at-an-image-that-builds.md)).
+- [ ] First hosted staging deployment. Nothing to build here; it marks when the milestone is really over.
 
 Design points to settle during this milestone (record the outcome in the spec or an ADR):
 
@@ -28,14 +28,14 @@ Design points to settle during this milestone (record the outcome in the spec or
 
 ## Next
 
-1. `web`: landing and an explorer over the public index. Design and branding are settled with the maintainers before any of it is built. Login and repository connection arrive with item 4.
+1. `web`: landing and an explorer over the public index, with the REST surface they need. Design and branding are settled with the maintainers before any of it is built. Login and repository connection arrive with item 4. Usage statistics start here, on the server side: counts per public repository and skill (connections, tool calls, skills loaded), aggregated per day in PostgreSQL, so that rankings on the landing page have history by the time they are built. Open: what can be counted about distinct clients without storing anything that identifies one. Statistics of private repositories are never public.
 2. MCP in depth: connect real MCP clients, by hand, to a running server and improve what they show. Candidates, to be scoped when the work starts: what each client does with the tool set and the server instructions, result wording and ranking in `find`, snippets for documents without a description, browsing a directory, skills offered as MCP prompts and documents as MCP resources, a structured result form next to the text.
 3. User documentation: how to write a skill repository and how to use one from an agent. Written for repository authors and the people who use their repositories, not as a description of internals. One source: every topic lives in exactly one Markdown file in this repository, the published documentation is rendered from those files, and everything else links to them instead of repeating them. How it is published is decided when the work starts.
 4. GitHub App and MCP OAuth for private repos; permission cache and webhook invalidation; project tokens. Open: the permission cache TTL, and how aggressive invalidation must be for SSO-enforced orgs. Write `specs/permissions.md` first.
 5. `worker` role: webhook-driven and scheduled re-indexing.
 6. `intake`, and composed tools declared in Markdown or YAML.
-7. Self-hosted compose bundle; GitLab and Gitea adapters.
+7. Self-hosted compose bundle, with a published image for self-hosters; GitLab and Gitea adapters.
 
 ## Later, undecided
 
-Embedding search. A command-line client. A work-board module for parallel agents. Signed-commit verification for publishers. Aliases for verified publishers.
+Rankings on the landing page, fed by the usage statistics. Embedding search. A command-line client. A work-board module for parallel agents. Signed-commit verification for publishers. Aliases for verified publishers.

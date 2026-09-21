@@ -43,7 +43,7 @@ packages/
   db/         PostgreSQL schema, migrations, query layer
   github/     GitHub implementation of the git-host port
 skills/       reference skill repos: fixtures for tests and examples for docs (product content, not agent tooling)
-deploy/       Dockerfile, compose files, build and release notes
+deploy/       Dockerfile, compose files, the contract for whoever operates the image
 docs/         architecture, specs, ADRs, roadmap
 ```
 
@@ -102,7 +102,7 @@ Documentation is part of the change, not a follow-up. A future session starts wi
 | A decision future contributors might reasonably undo | new ADR in `docs/adr/` (never edit an accepted ADR; supersede it) |
 | Environment variables or configuration | config module, `.env.example`, the table in `deploy/README.md` |
 | Database schema | migration, `packages/db/README.md` data model |
-| Build, image, CI or release flow | `deploy/README.md` |
+| Build, image or CI | `deploy/README.md` |
 | A package's public surface or usage | that package's `README.md` |
 | A milestone item is started, finished or dropped | `docs/roadmap.md` |
 | You learned a durable gotcha the hard way | "Gotchas" in the nearest `CLAUDE.md` |
