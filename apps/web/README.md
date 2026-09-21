@@ -2,7 +2,9 @@
 
 The optional web UI: landing page, explorer over the public index, git-host login, repo connection. Planned stack: Vite + React + TypeScript.
 
-**Status:** not started. It is scaffolded when its roadmap item begins, so no unused dependencies sit in the workspace until then.
+**Status:** not started. It is scaffolded when its roadmap item begins, so no unused dependencies sit in the workspace until then. The first version is the landing page and the explorer; login and repo connection arrive with private-repository support ([roadmap](../../docs/roadmap.md)).
+
+**Before building anything here, ask the maintainers about design and branding**: logo, colors, typography, tone, languages, what the landing page says. The brand is not part of what this repository licenses ([TRADEMARKS.md](../../TRADEMARKS.md)), and it is not something to improvise. Do not pick a component library's default look or invent a logo to get started.
 
 ## Constraints that already hold
 

@@ -107,6 +107,8 @@ Documentation is part of the change, not a follow-up. A future session starts wi
 | A milestone item is started, finished or dropped | `docs/roadmap.md` |
 | You learned a durable gotcha the hard way | "Gotchas" in the nearest `CLAUDE.md` |
 
+One topic, one file. Link to where something is documented instead of restating it; the overview in the root `README.md` is the one deliberate summary. User documentation will be rendered from these same files, so a second copy of anything is a copy that goes stale.
+
 Keep docs lean: current facts and decisions, not history or essays. Git history is the changelog. Anything the team needs must live in the repo, not in chat or an agent's private memory. The reverse also holds: business reasoning, comparisons with other products and operations details belong in private notes, never here (rules 7 and 8).
 
 ## Conventions
