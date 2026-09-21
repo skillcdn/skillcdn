@@ -1,0 +1,90 @@
+name: Release image
+
+# Builds the server image and pushes it to Amazon ECR. Rolling the image out is not done here:
+# see deploy/README.md for the contract between this repository and the infrastructure that runs it.
+#
+# No long-lived cloud credentials exist anywhere. The job assumes an IAM role through GitHub OIDC,
+# and every account-specific value comes from GitHub variables, never from this file.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Build and push
+    # Inert until the repository variable PUBLISH_IMAGE is set to "true".
+    if: ${{ vars.PUBLISH_IMAGE == 'true' }}
+    runs-on: ${{ vars.IMAGE_RUNNER || 'ubuntu-24.04-arm' }}
+    timeout-minutes: 30
+    # Version tags publish through the protected "production" environment, everything else through "staging".
+    # The environment name is part of the OIDC subject, so each IAM role can trust exactly one environment.
+    environment: ${{ startsWith(github.ref, 'refs/tags/v') && 'production' || 'staging' }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: skillcdn-release-${{ github.run_id }}
+          # This repository is public: keep the account id (part of the registry host) out of the logs.
+          mask-aws-account-id: true
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
+
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ steps.ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}
+          tags: |
+            type=sha,format=long,prefix=sha-
+            type=semver,pattern={{version}}
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/Dockerfile
+          platforms: ${{ vars.IMAGE_PLATFORMS || 'linux/arm64' }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: true
+          sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Summary
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          {
+            echo "### Image published"
+            echo ""
+            echo "Digest: \`${DIGEST}\`"
+            echo ""
+            echo "Tags:"
+            # Tag names only; the registry host stays out of the summary.
+            while IFS= read -r ref; do
+              [ -n "$ref" ] && echo "- \`${ref##*:}\`"
+            done <<< "${TAGS}"
+          } >> "$GITHUB_STEP_SUMMARY"

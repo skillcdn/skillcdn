@@ -1,0 +1,27 @@
+# Local development dependencies only. This is not a production topology.
+#
+#   docker compose -f deploy/compose.dev.yaml up -d
+#
+# Ports bind to 127.0.0.1 so nothing is reachable from the network.
+# The credentials below are throwaway values for a local database and must never be reused.
+name: skillcdn-dev
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: skillcdn
+      POSTGRES_PASSWORD: skillcdn-dev-only
+      POSTGRES_DB: skillcdn
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U skillcdn -d skillcdn"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres-data:

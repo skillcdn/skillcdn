@@ -1,0 +1,40 @@
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    # Matches minimumReleaseAge in pnpm-workspace.yaml: never adopt a release younger than 3 days.
+    cooldown:
+      default-days: 3
+    open-pull-requests-limit: 5
+    groups:
+      toolchain:
+        patterns:
+          - "@biomejs/*"
+          - "turbo"
+          - "typescript"
+          - "vitest"
+          - "@types/*"
+      runtime-minor:
+        dependency-type: production
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directory: /deploy
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker-compose
+    directory: /deploy
+    schedule:
+      interval: weekly
