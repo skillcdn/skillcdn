@@ -42,7 +42,7 @@ Create directories when they get their first file. Do not add empty scaffolding.
 
 1. `http/app.ts` parses the URL path with `parseAddress` and answers `400` for a malformed address.
 2. `MountService` resolves the repository and the commit. Facts come from the database while they are fresh, from the git host otherwise, and from a slightly stale row when the host cannot be asked. Private, missing and forbidden repositories are one `404`.
-3. Indexing of that commit starts in the background if nobody has done it ([ADR-0007](../../docs/adr/0007-snapshot-rows-coordinate-indexing.md)).
+3. Indexing of that commit starts in the background if nobody has done it ([ADR-0007](../../docs/adr/0007-snapshot-rows-coordinate-indexing.md)). The indexer lists the tree, asks the blob store which bodies it lacks, and fetches those: through one archive download when there are several, per file otherwise. A body from the archive counts only when it hashes to what the tree says.
 4. The MCP handler builds a server for this one request, bound to the mount ([ADR-0006](../../docs/adr/0006-mcp-sdk-v2-per-request-servers.md)). `find` and `get` wait for the index within a budget; `read_file` never waits.
 
 ## Process contract

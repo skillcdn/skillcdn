@@ -30,6 +30,7 @@ const commit = await gitHost.resolveRef({ host: "gh", owner: "acme", repo: "skil
 - Every failure is a `GitHostError` with a `kind`: `not_found` (which also covers forbidden), `rate_limited` (with `retryAfterSeconds`), `transient` or `invalid`.
 - Repository facts and moving refs are revalidated with `If-None-Match`; a `304` does not count against the rate limit. The cache is in memory, bounded, and an optimization only.
 - Redirects are followed only within the configured origin, so credentials never leave it. Reply bodies are read up to a cap, whatever `content-length` claims.
+- `readArchive` is the optional bulk transport of the port: one request for the files of a commit. It streams the archive, keeps only the entries the caller asks for, counts bytes after decompression so that a small download cannot unpack into an unbounded one, and never writes to disk. The API redirects the download to another origin; only the origins in `downloadOrigins` are followed (by default the download host of github.com, and none for other installations), and they never receive the credential. Callers verify every body against the hash in the tree.
 - Transient failures are retried with jittered backoff. Rate limits are not retried here: the caller decides what to do with `retryAfterSeconds`.
 
 ## Fixtures

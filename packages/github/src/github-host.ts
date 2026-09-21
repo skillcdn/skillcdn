@@ -1,5 +1,9 @@
+import { Readable } from "node:stream";
+import { createGunzip } from "node:zlib";
 import {
   type AddressRef,
+  type ArchiveFile,
+  type ArchiveRequest,
   type GitHost,
   GitHostError,
   type HostRepository,
@@ -11,8 +15,11 @@ import {
 } from "@skillcdn/core";
 import * as z from "zod";
 import { type FetchLike, GitHubHttp, type TokenProvider } from "./http.js";
+import { readTar, TarError } from "./tar.js";
 
 export const GITHUB_API_BASE_URL = "https://api.github.com";
+/** Where github.com serves archives from. Other installations serve them from their own origin. */
+const GITHUB_DOWNLOAD_ORIGIN = "https://codeload.github.com";
 
 export interface GitHubHostOptions {
   /** Operator configuration. GitHub Enterprise Server uses `https://<host>/api/v3`. */
@@ -21,8 +28,15 @@ export interface GitHubHostOptions {
   readonly userAgent: string;
   /** Optional credential for public repositories: it only raises the rate limit. */
   readonly token?: TokenProvider;
+  /**
+   * Origins the API may redirect an archive download to, besides its own. Defaults to the
+   * download host of github.com when the base URL is github.com, and to none otherwise.
+   */
+  readonly downloadOrigins?: readonly string[];
   readonly fetch?: FetchLike;
   readonly timeoutMs?: number;
+  /** Ceiling for one archive download, from the first byte to the last. */
+  readonly downloadTimeoutMs?: number;
   readonly attempts?: number;
   readonly retryBaseDelayMs?: number;
   readonly maxCacheEntries?: number;
@@ -60,6 +74,21 @@ const treeSchema = z.object({
 });
 
 const SYMLINK_MODE = "120000";
+
+/** Ends quietly once `maxBytes` have passed: what came before is still good. */
+async function* upTo(
+  source: AsyncIterable<Uint8Array>,
+  maxBytes: number,
+): AsyncGenerator<Uint8Array> {
+  let total = 0;
+  for await (const chunk of source) {
+    total += chunk.byteLength;
+    if (total > maxBytes) {
+      return;
+    }
+    yield chunk;
+  }
+}
 
 function decodeJson<Schema extends z.ZodType>(body: Uint8Array, schema: Schema): z.infer<Schema> {
   let value: unknown;
@@ -105,8 +134,11 @@ function toTreeEntry(entry: z.infer<typeof treeSchema>["tree"][number]): TreeEnt
 
 /** The GitHub implementation of the git-host port, for repositories readable with one credential. */
 export function createGitHubHost(options: GitHubHostOptions): GitHost {
+  const baseUrl = options.baseUrl ?? GITHUB_API_BASE_URL;
   const http = new GitHubHttp({
-    baseUrl: options.baseUrl ?? GITHUB_API_BASE_URL,
+    baseUrl,
+    downloadOrigins:
+      options.downloadOrigins ?? (baseUrl === GITHUB_API_BASE_URL ? [GITHUB_DOWNLOAD_ORIGIN] : []),
     userAgent: options.userAgent,
     token: options.token,
     fetch: options.fetch ?? ((input, init) => fetch(input, init)),
@@ -194,6 +226,52 @@ export function createGitHubHost(options: GitHubHostOptions): GitHost {
         notFoundStatuses: [422],
       });
       return reply.body;
+    },
+
+    async *readArchive(
+      coordinates: RepoCoordinates,
+      commit: string,
+      request: ArchiveRequest,
+    ): AsyncGenerator<ArchiveFile> {
+      if (!isFullCommitHash(commit)) {
+        throw new GitHostError("invalid", "an archive is read by full commit hash");
+      }
+      const response = await http.open(`${repoPath(coordinates)}/tarball/${commit}`, {
+        accept: JSON_ACCEPT,
+        signal: AbortSignal.timeout(options.downloadTimeoutMs ?? 120_000),
+        notFoundStatuses: [409, 422],
+      });
+      if (response.body === null) {
+        return;
+      }
+      const unpacked = Readable.fromWeb(response.body).pipe(createGunzip());
+      try {
+        // Archive paths start with one directory named after the repository and the commit.
+        const files = readTar(upTo(unpacked, request.maxArchiveBytes), (tarPath, size) => {
+          const path = parseRepoPath(tarPath.slice(tarPath.indexOf("/") + 1));
+          return path.ok && path.value.length > 0 && request.wants(path.value, size);
+        });
+        for await (const file of files) {
+          const path = parseRepoPath(file.path.slice(file.path.indexOf("/") + 1));
+          if (path.ok) {
+            yield { path: path.value, bytes: file.bytes };
+          }
+        }
+      } catch (error) {
+        if (error instanceof GitHostError) {
+          throw error;
+        }
+        // A corrupt stream is the host's problem and not worth a retry; a broken connection is.
+        throw new GitHostError(
+          error instanceof TarError || (error as { code?: string }).code === "Z_DATA_ERROR"
+            ? "invalid"
+            : "transient",
+          "the archive could not be read",
+          { cause: error },
+        );
+      } finally {
+        unpacked.destroy();
+      }
     },
   };
 }

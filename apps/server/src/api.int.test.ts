@@ -53,6 +53,7 @@ function harness(
           maxIndexedFileBytes: 262_144,
           maxIndexedTotalBytes: 1_048_576,
           maxReadableFileBytes: 4096,
+          maxArchiveBytes: 10_000_000,
         },
       },
     },
@@ -163,7 +164,9 @@ describe("a multi-skill repository", () => {
     host.addFile("docs/long.md", new TextEncoder().encode(`# Long\n\n${"0123456789".repeat(200)}`));
     host.addFile("docs/huge.md", new Uint8Array(5000).fill(0x61));
     host.addFile("assets/logo.png", new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0, 1, 2, 0xff]));
-    const client = await harness({ host }).connect("/gh/acme/single-skill");
+    const client = await harness({ host }).connect(
+      `/gh/acme/single-skill@${fixtureCommits("paging").main}`,
+    );
 
     const first = await call(client, "read_file", { path: "docs/long.md", limit: 1000 });
     expect(first.text).toContain("characters 0 to 1000 of 2008");
@@ -328,6 +331,48 @@ describe("while a commit is being indexed", () => {
     await snapshots.idle();
     const late = await call(client, "find", { query: "fresh" });
     expect(late.text).toContain("document: docs/only-here.md - Only here");
+    await client.close();
+  });
+});
+
+describe("indexing through the archive transport", () => {
+  it("fetches a new commit in one request and checks every body against the tree", async () => {
+    const host = createFixtureHost("archive", {
+      archive: true,
+      archiveAlters: (path) => path === "notes/note-0.md",
+    });
+    // Bodies are content-addressed and other tests already stored the fixture files, so the
+    // commit needs files of its own for there to be anything to fetch.
+    for (let index = 0; index < 6; index += 1) {
+      const note = `# Archive note ${index}
+
+Only the archive test has this text: zeppelin ${index}.
+`;
+      host.addFile(`notes/note-${index}.md`, new TextEncoder().encode(note));
+    }
+    const { connect } = harness({ host });
+    // Pinned: the default branch of this repository is already cached at another test's commit.
+    const client = await connect(`/gh/acme/multi-skill@${fixtureCommits("archive").main}`);
+
+    const found = await call(client, "find", { query: "zeppelin" });
+    expect(found.text).toContain("6 results");
+    expect(host.calls.readArchive).toBe(1);
+    // Only the file whose archived copy did not match its hash went the slow way.
+    expect(host.calls.readBlob).toBe(1);
+
+    const altered = await call(client, "read_file", { path: "notes/note-0.md" });
+    expect(altered.text).toContain("zeppelin 0");
+    expect(altered.text).not.toContain("converted");
+    await client.close();
+  });
+
+  it("does not bother with an archive for a handful of files", async () => {
+    const host = createFixtureHost("archive-small", { archive: true });
+    const client = await harness({ host }).connect(
+      `/gh/acme/single-skill@${fixtureCommits("archive-small").main}`,
+    );
+    expect((await call(client, "get", { name: "commit-messages" })).isError).toBe(false);
+    expect(host.calls.readArchive).toBe(0);
     await client.close();
   });
 });

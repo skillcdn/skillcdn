@@ -111,7 +111,7 @@ Infrastructure-level caching, DNS, TLS and edge configuration are outside this r
 - **Immutable by construction.** Anything addressed by a commit hash never changes: index once per `(repo, commit)`, share it across all users, and send `Cache-Control: public, max-age=31536000, immutable` for cacheable reads of pinned public content.
 - **Moving refs** (branches, tags, the default branch) get a short TTL and revalidate with the commit hash as the `ETag`.
 - **Private responses** are always `Cache-Control: private, no-store`.
-- **Be cheap toward the git host.** Conditional requests, tree and blob APIs instead of per-file calls, webhooks instead of polling, backoff on rate limits.
+- **Be cheap toward the git host.** Conditional requests; one tree listing per commit; bodies fetched by content hash, so a new commit only costs what changed; one archive download instead of many per-file calls when a repository is new; webhooks instead of polling; backoff on rate limits. The host's request quota is the scarce resource, not bandwidth.
 - **Bound the work per repo.** Text formats only, with caps on file count and size. Caps are configuration with safe defaults.
 - **Stay small.** Stateless `api` and interruptible `worker` run on small arm64 instances and scale horizontally; one PostgreSQL covers search, queue and cache.
 - The server honors forwarding headers only from a configured trusted proxy.

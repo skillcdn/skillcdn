@@ -15,10 +15,13 @@ import {
   type TreeEntry,
 } from "@skillcdn/core";
 import type { NewIndexEntry, SnapshotDiagnostic, SnapshotIndex } from "@skillcdn/db";
+import { gitBlobHash } from "./git-hash.js";
 import { decodeText } from "./text.js";
 
 const MAX_DIAGNOSTICS = 50;
 const FETCH_CONCURRENCY = 8;
+/** With this many bodies to fetch, one archive request is cheaper than one request per file. */
+const ARCHIVE_THRESHOLD = 4;
 
 export interface BuildIndexOptions {
   readonly gitHost: GitHost;
@@ -106,6 +109,41 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
   const wanted = [...searchable.values()];
   const missing = await blobStore.missing(wanted.map(({ entry }) => entry.hash));
   const texts = new Map<string, string | undefined>();
+
+  // The archive is a transport, not a source of truth: it may convert line endings, expand
+  // keywords or leave files out. A body counts only when it hashes to what the tree says;
+  // everything else falls through to the per-file path below.
+  if (gitHost.readArchive !== undefined && missing.size >= ARCHIVE_THRESHOLD) {
+    const awaited = new Map(
+      wanted.filter(({ entry }) => missing.has(entry.hash)).map(({ entry }) => [entry.path, entry]),
+    );
+    try {
+      const archive = gitHost.readArchive(coordinates, commit, {
+        wants: (path, size) => awaited.has(path) && size <= limits.maxIndexedFileBytes,
+        maxArchiveBytes: limits.maxArchiveBytes,
+      });
+      for await (const file of archive) {
+        signal.throwIfAborted();
+        const entry = awaited.get(file.path);
+        if (entry === undefined || gitBlobHash(file.bytes) !== entry.hash) {
+          continue;
+        }
+        const text = decodeText(file.bytes);
+        if (text !== undefined) {
+          await blobStore.write(entry.hash, text);
+        }
+        texts.set(entry.hash, text);
+      }
+    } catch (error) {
+      // Without the archive the work is the same, only slower. A rate limit is different:
+      // asking again file by file would make it worse.
+      const recoverable = error instanceof GitHostError && error.kind !== "rate_limited";
+      if (signal.aborted || !recoverable) {
+        throw error;
+      }
+    }
+  }
+
   await forEachConcurrently(wanted, FETCH_CONCURRENCY, async ({ entry }) => {
     signal.throwIfAborted();
     if (texts.has(entry.hash)) {

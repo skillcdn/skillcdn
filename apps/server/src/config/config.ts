@@ -33,6 +33,7 @@ const environmentSchema = z.object({
   INDEX_MAX_FILE_BYTES: integer(262_144, 1024, 16_777_216),
   INDEX_MAX_TOTAL_BYTES: integer(33_554_432, 1024, 1_073_741_824),
   READ_MAX_FILE_BYTES: integer(1_048_576, 1024, 16_777_216),
+  INDEX_MAX_ARCHIVE_BYTES: integer(268_435_456, 1_048_576, 17_179_869_184),
 });
 
 export interface Config {
@@ -68,6 +69,7 @@ export interface Config {
       readonly maxIndexedFileBytes: number;
       readonly maxIndexedTotalBytes: number;
       readonly maxReadableFileBytes: number;
+      readonly maxArchiveBytes: number;
     };
   };
 }
@@ -159,6 +161,7 @@ export function loadConfig(
         maxIndexedFileBytes: env.INDEX_MAX_FILE_BYTES,
         maxIndexedTotalBytes: env.INDEX_MAX_TOTAL_BYTES,
         maxReadableFileBytes: env.READ_MAX_FILE_BYTES,
+        maxArchiveBytes: env.INDEX_MAX_ARCHIVE_BYTES,
       },
     },
   };

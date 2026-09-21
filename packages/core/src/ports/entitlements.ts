@@ -15,6 +15,8 @@ export interface IndexLimits {
   readonly maxIndexedTotalBytes: number;
   /** Size of a file served by `read_file`, in bytes. */
   readonly maxReadableFileBytes: number;
+  /** Unpacked size of a commit archive that the indexer is willing to read through, in bytes. */
+  readonly maxArchiveBytes: number;
 }
 
 export type EntitlementAction =

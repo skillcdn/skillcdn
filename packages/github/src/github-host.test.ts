@@ -1,8 +1,10 @@
 import { readFileSync } from "node:fs";
+import { gzipSync } from "node:zlib";
 import { GitHostError, type GitHostErrorKind, type RepoCoordinates } from "@skillcdn/core";
 import { describe, expect, it } from "vitest";
 import { createGitHubHost, type GitHubHostOptions } from "./github-host.js";
 import type { FetchLike } from "./http.js";
+import { tarArchive } from "./testing/tar-writer.js";
 
 interface RecordedResponse {
   readonly status: number;
@@ -351,5 +353,139 @@ describe("credentials", () => {
     await host(fetchLike).getRepository(repo);
     expect(seen.every((request) => request.headers.authorization === undefined)).toBe(true);
     expect(seen[0]?.headers["user-agent"]).toBe("skillcdn-test");
+  });
+});
+
+describe("readArchive", () => {
+  const ARCHIVE_PATH = `/repos/skillcdn/skillcdn/tarball/${fixture.commit}`;
+  const DOWNLOAD_ORIGIN = "https://downloads.github.test";
+
+  function archiveHost(
+    archive: Uint8Array,
+    options: { location?: string; downloadOrigins?: string[] } = {},
+  ) {
+    const seen: { url: string; authorization: string | undefined }[] = [];
+    const fetchLike: FetchLike = async (input, init) => {
+      const headers = init.headers as Record<string, string>;
+      seen.push({ url: input, authorization: headers.authorization });
+      if (new URL(input).pathname === ARCHIVE_PATH) {
+        return new Response(null, {
+          status: 302,
+          headers: { location: options.location ?? `${DOWNLOAD_ORIGIN}/archive?token=short-lived` },
+        });
+      }
+      return new Response(gzipSync(archive), { status: 200 });
+    };
+    const github = host(fetchLike, {
+      token: async () => "test-token",
+      downloadOrigins: options.downloadOrigins ?? [DOWNLOAD_ORIGIN],
+    });
+    return { github, seen };
+  }
+
+  async function collect(
+    github: ReturnType<typeof host>,
+    request: { wants?: (path: string, size: number) => boolean; maxArchiveBytes?: number } = {},
+  ): Promise<Record<string, string>> {
+    const files: Record<string, string> = {};
+    const archive = github.readArchive?.(repo, fixture.commit, {
+      wants: request.wants ?? (() => true),
+      maxArchiveBytes: request.maxArchiveBytes ?? 10_000_000,
+    });
+    if (archive === undefined) {
+      throw new Error("the adapter must offer an archive transport");
+    }
+    for await (const file of archive) {
+      files[file.path] = new TextDecoder().decode(file.bytes);
+    }
+    return files;
+  }
+
+  const sample = tarArchive([
+    {
+      type: "g",
+      path: "pax_global_header",
+      data: "52 comment=0123456789abcdef0123456789abcdef01234567\n",
+    },
+    { type: "5", path: "skillcdn-skillcdn-0e169f0/" },
+    { path: "skillcdn-skillcdn-0e169f0/README.md", data: "# Readme\n" },
+    { path: "skillcdn-skillcdn-0e169f0/skills/ads/SKILL.md", data: "---\nname: ads\n---\n" },
+    { path: "skillcdn-skillcdn-0e169f0/assets/logo.png", data: "not really a png" },
+    { path: "skillcdn-skillcdn-0e169f0/../outside.md", data: "traversal" },
+    { path: "top-level-file-without-a-directory", data: "stray" },
+  ]);
+
+  it("streams the wanted files with repository-relative paths", async () => {
+    const { github } = archiveHost(sample);
+    expect(await collect(github, { wants: (path) => path.endsWith(".md") })).toEqual({
+      "README.md": "# Readme\n",
+      "skills/ads/SKILL.md": "---\nname: ads\n---\n",
+    });
+  });
+
+  it("drops entries whose path is not a valid repository path", async () => {
+    const { github } = archiveHost(sample);
+    const files = await collect(github);
+    expect(Object.keys(files).sort()).toEqual([
+      "README.md",
+      "assets/logo.png",
+      "skills/ads/SKILL.md",
+      "top-level-file-without-a-directory",
+    ]);
+  });
+
+  it("sends the credential to the API and never to the download origin", async () => {
+    const { github, seen } = archiveHost(sample);
+    await collect(github);
+    expect(seen).toEqual([
+      { url: `${BASE_URL}${ARCHIVE_PATH}`, authorization: "Bearer test-token" },
+      { url: `${DOWNLOAD_ORIGIN}/archive?token=short-lived`, authorization: undefined },
+    ]);
+  });
+
+  it("refuses a download origin the operator did not allow, without leaking the target", async () => {
+    const elsewhere = archiveHost(sample, {
+      location: "https://attacker.test/archive?token=secret",
+    });
+    const error = await failureOf(collect(elsewhere.github));
+    expect(error.kind).toBe("invalid");
+    expect(`${error.message} ${String(error.cause)}`).not.toContain("attacker.test");
+    expect(elsewhere.seen).toHaveLength(1);
+
+    const plainHttp = archiveHost(sample, {
+      location: "http://downloads.github.test/archive",
+      downloadOrigins: ["http://downloads.github.test"],
+    });
+    expect((await failureOf(collect(plainHttp.github))).kind).toBe("invalid");
+  });
+
+  it("stops at the unpacked size limit, even when the download is tiny", async () => {
+    const bomb = tarArchive([
+      { path: "repo/first.md", data: "kept" },
+      { path: "repo/zeros.bin", data: new Uint8Array(5_000_000) },
+      { path: "repo/last.md", data: "never reached" },
+    ]);
+    expect(gzipSync(bomb).byteLength).toBeLessThan(20_000);
+    const { github } = archiveHost(bomb);
+    expect(await collect(github, { maxArchiveBytes: 100_000 })).toEqual({ "first.md": "kept" });
+  });
+
+  it("reports a corrupt archive as invalid", async () => {
+    const { github } = archiveHost(
+      new TextEncoder().encode("this is not a tar archive".repeat(40)),
+    );
+    expect((await failureOf(collect(github))).kind).toBe("invalid");
+
+    const notGzip: FetchLike = async (input) =>
+      new URL(input).pathname === ARCHIVE_PATH
+        ? new Response(null, { status: 302, headers: { location: `${DOWNLOAD_ORIGIN}/x` } })
+        : new Response("plain text, not gzip", { status: 200 });
+    const github2 = host(notGzip, { downloadOrigins: [DOWNLOAD_ORIGIN] });
+    expect((await failureOf(collect(github2))).kind).toBe("invalid");
+  });
+
+  it("maps a missing commit to not found", async () => {
+    const missing: FetchLike = async () => new Response("{}", { status: 404 });
+    expect((await failureOf(collect(host(missing)))).kind).toBe("not_found");
   });
 });

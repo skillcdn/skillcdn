@@ -43,6 +43,21 @@ export interface RepoTree {
   readonly truncated: boolean;
 }
 
+export interface ArchiveFile {
+  readonly path: RepoPath;
+  readonly bytes: Uint8Array;
+}
+
+export interface ArchiveRequest {
+  /** Asked for every regular file in the archive. Only accepted files are read into memory. */
+  readonly wants: (path: RepoPath, size: number) => boolean;
+  /**
+   * Stop after this many bytes of unpacked archive. The count is taken after decompression, so a
+   * small download that unpacks into something huge stops here too.
+   */
+  readonly maxArchiveBytes: number;
+}
+
 export type GitHostErrorKind =
   /** Missing, or not visible with the credentials in use. Callers must not tell the two apart. */
   | "not_found"
@@ -83,4 +98,17 @@ export interface GitHost {
 
   /** Reads a file by content hash. Rejects as `invalid` when it is larger than `maxBytes`. */
   readBlob(coordinates: RepoCoordinates, hash: string, maxBytes: number): Promise<Uint8Array>;
+
+  /**
+   * Optional bulk transport: the files of a commit in one request instead of one per file. It is
+   * an optimization and nothing more. An archive may leave files out, convert line endings or
+   * expand keywords, and it ends early at `maxArchiveBytes`, so callers check every file against
+   * the hash in the tree and fetch what is missing with {@link GitHost.readBlob}. Leaving the
+   * iteration early cancels the download.
+   */
+  readArchive?(
+    coordinates: RepoCoordinates,
+    commit: string,
+    request: ArchiveRequest,
+  ): AsyncIterable<ArchiveFile>;
 }

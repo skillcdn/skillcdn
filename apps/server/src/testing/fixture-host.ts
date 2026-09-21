@@ -65,7 +65,10 @@ function readFixture(name: string): FixtureFile[] {
 
 export interface FixtureHost extends GitHost {
   /** Calls per port method, to assert how often the host was asked. */
-  readonly calls: Record<"getRepository" | "resolveRef" | "getTree" | "readBlob", number>;
+  readonly calls: Record<
+    "getRepository" | "resolveRef" | "getTree" | "readBlob" | "readArchive",
+    number
+  >;
   /** Makes `getTree` wait until the returned function is called. */
   holdTrees(): () => void;
   /** Extra files that exist in every repository, for cases the committed fixtures do not cover. */
@@ -77,8 +80,16 @@ export interface FixtureHost extends GitHost {
  * private; everything else is missing. Every repository has the refs `main` (the default branch)
  * and `release/1.2`; see {@link fixtureCommits}.
  */
-export function createFixtureHost(variant = ""): FixtureHost {
-  const calls = { getRepository: 0, resolveRef: 0, getTree: 0, readBlob: 0 };
+export function createFixtureHost(
+  variant = "",
+  options: {
+    /** Offer the optional archive transport. */
+    readonly archive?: boolean;
+    /** Paths whose archived copy differs from the blob, as line-ending conversion would cause. */
+    readonly archiveAlters?: (path: string) => boolean;
+  } = {},
+): FixtureHost {
+  const calls = { getRepository: 0, resolveRef: 0, getTree: 0, readBlob: 0, readArchive: 0 };
   const extra: FixtureFile[] = [];
   let gate: Promise<void> = Promise.resolve();
   const known = new Set(readdirSync(FIXTURES_ROOT).filter((name) => !name.includes(".")));
@@ -165,5 +176,22 @@ export function createFixtureHost(variant = ""): FixtureHost {
       }
       return file.bytes;
     },
+
+    ...(options.archive === true
+      ? {
+          async *readArchive(coordinates, _commit, request) {
+            calls.readArchive += 1;
+            for (const file of filesOf(coordinates.repo)) {
+              if (request.wants(file.entry.path, file.entry.size)) {
+                const altered = options.archiveAlters?.(file.entry.path) === true;
+                yield {
+                  path: file.entry.path,
+                  bytes: altered ? new TextEncoder().encode("converted line endings") : file.bytes,
+                };
+              }
+            }
+          },
+        }
+      : {}),
   };
 }

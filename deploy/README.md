@@ -38,7 +38,7 @@ The server is configured only through environment variables. [`.env.example`](..
 | `REPO_TTL_SECONDS`, `REF_TTL_SECONDS` | `api` | no | no | How long repository facts and moving refs are trusted before revalidation. Default `60` each. |
 | `INDEX_WAIT_MS` | `api` | no | no | How long a tool call waits for a new commit's index. Default `20000`. |
 | `INDEX_CONCURRENCY`, `INDEX_LEASE_SECONDS` | `api`, `worker` | no | no | Commits indexed at once per process, and the lifetime of an indexing claim. |
-| `INDEX_MAX_*`, `READ_MAX_FILE_BYTES` | `api`, `worker` | no | no | Limits on the work one repository may cause; see [`.env.example`](../.env.example). |
+| `INDEX_MAX_*`, `READ_MAX_FILE_BYTES` | `api`, `worker` | no | no | Limits on the work one repository may cause, including the unpacked size of a commit archive; see [`.env.example`](../.env.example). |
 
 Invalid configuration stops the process with exit code `78` and a message that names the variable and the rule, never the value.
 

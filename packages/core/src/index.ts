@@ -34,6 +34,8 @@ export {
   type IndexLimits,
 } from "./ports/entitlements.js";
 export {
+  type ArchiveFile,
+  type ArchiveRequest,
   type GitHost,
   GitHostError,
   type GitHostErrorKind,
