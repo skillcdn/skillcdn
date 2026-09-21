@@ -59,5 +59,6 @@ Parsing never consults the repository. An address means the same thing whatever 
 
 ## Open questions
 
+- **Commits that do not belong to the repository.** Some hosts serve a commit through a repository even when it only exists in a fork of it. A pinned address could then show someone else's content under the repository's name. Candidate: accept a pinned commit only when it is reachable from a branch or tag of the repository, and say so in the result otherwise.
 - Fully qualified refs (`refs/tags/v1`, `heads/main`) are valid ref names and go to the host as they are. Whether the canonical form should fold them into the short name is undecided.
 - Commit hashes longer than 40 digits (SHA-256 repositories) are treated as ref names until a host adapter supports them.
