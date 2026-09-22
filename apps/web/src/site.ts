@@ -37,12 +37,12 @@ export const FEATURED_ADDRESSES = [
   "skillcdn/skillcdn@main/skills/hostile",
 ] as const;
 
-/** Addresses that exist and stay valid: the reference repositories of this project. */
-export const EXAMPLE_ADDRESSES = [
-  "skillcdn/skillcdn/skills/multi-skill",
-  "skillcdn/skillcdn/skills/single-skill",
-  "skillcdn/skillcdn@main/skills/hostile",
-] as const;
+/**
+ * Addresses to try under the field: the examples repository of this project, written in the
+ * SkillCDN Format (docs/specs/skill-repo.md) and kept working. The forms an address can take
+ * are taught by the table on the front page, not here.
+ */
+export const EXAMPLE_ADDRESSES = ["skillcdn/examples"] as const;
 
 /**
  * The origin to show in URLs a visitor copies. In the browser it comes from the meta tag the
