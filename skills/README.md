@@ -5,7 +5,7 @@ Reference skill repositories that the [SkillCDN Format](../docs/specs/skill-repo
 | Directory | What it is |
 |---|---|
 | `single-skill/` | One `SKILL.md` at the repository root, with a reference document. |
-| `multi-skill/` | Two skills under `skills/`, plus ordinary documents, a JSON asset and a script that is only ever read. |
+| `multi-skill/` | Two skills under `skills/`, a document in `docs/`, a JSON asset and a script that is only ever read, and a root README that is not served. |
 | `hostile/` | Broken manifests next to a valid one. Each broken skill is skipped and reported; the rest is still served. |
 | `with-manifest/` | A repository manifest (`SKILLCDN.md`) with a name, a description, one declared document directory and rules; a README, notes and a script that the manifest leaves out. |
 

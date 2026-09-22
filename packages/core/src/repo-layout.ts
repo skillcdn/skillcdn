@@ -86,6 +86,12 @@ export function repoManifestPath(directory: RepoPath): RepoPath {
   return joinRepoPath(directory, REPO_MANIFEST_FILE as RepoPath);
 }
 
+/**
+ * Where the documents are unless a manifest says otherwise: the conventional directory, at the
+ * root of the repository or next to the manifest.
+ */
+export const DEFAULT_DOCUMENT_DIRECTORIES: readonly RepoPath[] = ["docs" as RepoPath];
+
 /** What decides whether a file is served: the skills, and the manifests with what they declare. */
 export interface ServedScope {
   readonly skillDirectories: ReadonlySet<RepoPath>;
@@ -94,22 +100,28 @@ export interface ServedScope {
   readonly documentDirectories: ReadonlyMap<RepoPath, readonly RepoPath[]>;
 }
 
+/** Whether `path` is in `directory`; the root holds everything. */
+function isUnder(path: RepoPath, directory: RepoPath): boolean {
+  return directory === ROOT_PATH || path.startsWith(`${directory}/`);
+}
+
 /**
- * Whether a file is served. A file governed by no manifest (none in its directory or above)
- * always is. Under a manifest, only the files of skills, the files in the directories the
- * manifest declares, and the manifest itself are; the rest is neither listed, searched nor read.
+ * Whether a file is served. The files of a skill always are. Outside the skills, the manifest
+ * that governs the file (the nearest in its directory or above) decides: the manifest itself and
+ * the directories it declares are served, nothing else. Where no manifest governs, the repository
+ * is read as if its root declared the default directories: `docs`, and nothing else.
  */
 export function isServedPath(path: RepoPath, scope: ServedScope): boolean {
+  if (owningSkillDirectory(path, scope.skillDirectories) !== undefined) {
+    return true;
+  }
   const governing = nearestDirectoryAtOrAbove(parentDirectory(path), scope.manifestDirectories);
   if (governing === undefined) {
-    return true;
+    return DEFAULT_DOCUMENT_DIRECTORIES.some((directory) => isUnder(path, directory));
   }
   if (path === repoManifestPath(governing)) {
     return true;
   }
-  if (owningSkillDirectory(path, scope.skillDirectories) !== undefined) {
-    return true;
-  }
   const declared = scope.documentDirectories.get(governing) ?? [];
-  return declared.some((directory) => directory === ROOT_PATH || path.startsWith(`${directory}/`));
+  return declared.some((directory) => isUnder(path, directory));
 }

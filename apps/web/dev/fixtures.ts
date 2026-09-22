@@ -309,18 +309,19 @@ export const FIXTURE_REPOSITORIES: Readonly<Record<string, FixtureRepository>> =
     commit: "b7e1d2c3a4f5968778695a4b3c2d1e0f9a8b7c6d",
     state: "ready",
     skills: [],
+    // Without a manifest, the documents are what is in docs/.
     documents: [
-      { path: "README.md", title: "Handbook", summary: "How we work." },
+      { path: "docs/handbook.md", title: "Handbook", summary: "How we work." },
       {
-        path: "engineering/on-call.md",
+        path: "docs/engineering/on-call.md",
         title: "On call",
         summary: "What to do when the pager rings.",
       },
     ],
     diagnostics: [],
     files: {
-      "README.md": "# Handbook\n\nHow we work.\n",
-      "engineering/on-call.md": "# On call\n\nAcknowledge, assess, communicate.\n",
+      "docs/handbook.md": "# Handbook\n\nHow we work.\n",
+      "docs/engineering/on-call.md": "# On call\n\nAcknowledge, assess, communicate.\n",
     },
   },
   "demo/empty": {

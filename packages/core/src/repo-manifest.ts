@@ -5,6 +5,7 @@ import {
   readMetadata,
   requiredText,
 } from "./manifest-fields.js";
+import { DEFAULT_DOCUMENT_DIRECTORIES } from "./repo-layout.js";
 import { parseRepoPath, type RepoPath, ROOT_PATH } from "./repo-path.js";
 import { err, ok, type Result } from "./result.js";
 
@@ -23,7 +24,8 @@ export interface RepoManifest {
   readonly description: string;
   /**
    * Directories whose files are served, relative to the manifest's own directory; the root path
-   * stands for that directory itself. Nothing else outside the skills is.
+   * stands for that directory itself. The default directories when the field is absent, none
+   * when it is an empty sequence. Nothing else outside the skills is served.
    */
   readonly documents: readonly RepoPath[];
   readonly license: string | undefined;
@@ -117,12 +119,15 @@ export function parseRepoManifest(text: string): Result<ParsedRepoManifest, Repo
 }
 
 /**
- * The `documents` sequence: relative directories, `.` for the manifest's own directory. An entry
- * that is not a plain relative path is dropped and reported, never guessed at, so that a typo
- * cannot serve more than the author meant.
+ * The `documents` sequence: relative directories, `.` for the manifest's own directory; the
+ * default directories when the field is absent. An entry that is not a plain relative path is
+ * dropped and reported, never guessed at, so that a typo cannot serve more than the author meant.
  */
 function readDocuments(value: unknown, warnings: RepoManifestWarning[]): readonly RepoPath[] {
-  if (value === undefined || value === null) {
+  if (value === undefined) {
+    return DEFAULT_DOCUMENT_DIRECTORIES;
+  }
+  if (value === null) {
     return [];
   }
   if (!Array.isArray(value)) {

@@ -219,10 +219,13 @@ describe("GET /api/v1/find/<address>", () => {
       items: [
         expect.objectContaining({ kind: "skill", name: "incident-review" }),
         expect.objectContaining({ kind: "skill", name: "release-notes" }),
-        expect.objectContaining({ kind: "document", path: "README.md", skillDirectory: null }),
-        expect.objectContaining({ kind: "document", path: "docs/getting-started.md" }),
+        expect.objectContaining({
+          kind: "document",
+          path: "docs/getting-started.md",
+          skillDirectory: null,
+        }),
       ],
-      totals: { skills: 2, documents: 2 },
+      totals: { skills: 2, documents: 1 },
     });
 
     const search = restFindSchema.parse(

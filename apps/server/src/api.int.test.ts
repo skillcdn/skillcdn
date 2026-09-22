@@ -110,12 +110,12 @@ describe("a multi-skill repository", () => {
     expect(listing.text).toContain(
       `in Acme/multi-skill (commit ${fixtureCommits().main.slice(0, 7)})`,
     );
-    expect(listing.text).toContain("2 skills and 2 documents in Acme/multi-skill");
+    expect(listing.text).toContain("2 skills and 1 document in Acme/multi-skill");
     expect(listing.text).toContain("1. skill: incident-review (skills/incident-review)");
     expect(listing.text).toContain("2. skill: release-notes (skills/release-notes)");
     expect(listing.text).toContain("document: docs/getting-started.md - Getting started");
-    // README.md has no description of its own: its first paragraph stands in.
-    expect(listing.text).toContain("document: README.md - Team playbooks\n   A small multi-skill");
+    // The root README.md is for the git host: outside docs/, it is not served.
+    expect(listing.text).not.toContain("README.md");
     // A skill's own files come with the skill, not on their own.
     expect(listing.text).not.toContain("references/style.md");
     expect(listing.text).toContain(PROVENANCE_NOTICE);
@@ -254,10 +254,10 @@ describe("a multi-skill repository", () => {
 
     const root = await call(client, "read_file", { path: "." });
     expect(root.isError).toBe(false);
-    expect(root.text).toContain("Directory: the mounted root (3 entries)");
+    expect(root.text).toContain("Directory: the mounted root (2 entries)");
     expect(root.text).toContain("- docs/");
     expect(root.text).toContain("- skills/");
-    expect(root.text).toContain("- README.md (");
+    expect(root.text).not.toContain("README.md");
 
     const skill = await call(client, "read_file", { path: "skills/release-notes" });
     expect(skill.text).toContain("Directory: skills/release-notes/ (2 entries)");
@@ -279,13 +279,13 @@ describe("a multi-skill repository", () => {
     );
 
     const listing = await call(client, "find");
-    expect(listing.text).toContain("2 skills and 2 documents");
+    expect(listing.text).toContain("2 skills and 1 document");
     expect(listing.text).not.toContain(".draft.md");
     const search = await call(client, "find", { query: "draft agents" });
     expect(search.text).not.toContain(".draft.md");
 
     const root = await call(client, "read_file", { path: "." });
-    expect(root.text).toContain("(3 entries)");
+    expect(root.text).toContain("(2 entries)");
     expect(root.text).not.toContain(".editorconfig");
     expect(root.text).not.toContain(".github");
     const docs = await call(client, "read_file", { path: "docs" });
@@ -348,8 +348,12 @@ describe("other repository shapes", () => {
     expect(listing.text).toContain("skill: valid-neighbor (skills/valid-neighbor)");
     expect(listing.text).not.toContain("skill: alias-bomb");
     expect(listing.text).not.toContain("skill: tagged");
-    // A manifest that does not parse is still a document.
-    expect(listing.text).toContain("document: skills/no-front-matter/SKILL.md - No front-matter");
+    // A SKILL.md that cannot be read as a skill is no document of the mount, but it stays
+    // readable, so that the author can see what was found.
+    expect(listing.text).not.toContain("no-front-matter/SKILL.md");
+    const unread = await call(client, "read_file", { path: "skills/no-front-matter/SKILL.md" });
+    expect(unread.isError).toBe(false);
+    expect(unread.text).toContain("No front-matter");
 
     const loud = await call(client, "get", { name: "loud name" });
     expect(loud.isError).toBe(false);
@@ -563,7 +567,7 @@ describe("indexing through the archive transport", () => {
   it("fetches a new commit in one request and checks every body against the tree", async () => {
     const host = createFixtureHost("archive", {
       archive: true,
-      archiveAlters: (path) => path === "notes/note-0.md",
+      archiveAlters: (path) => path === "docs/notes/note-0.md",
     });
     // Bodies are content-addressed and other tests already stored the fixture files, so the
     // commit needs files of its own for there to be anything to fetch.
@@ -572,7 +576,7 @@ describe("indexing through the archive transport", () => {
 
 Only the archive test has this text: zeppelin ${index}.
 `;
-      host.addFile(`notes/note-${index}.md`, new TextEncoder().encode(note));
+      host.addFile(`docs/notes/note-${index}.md`, new TextEncoder().encode(note));
     }
     const { connect } = harness({ host });
     // Pinned: the default branch of this repository is already cached at another test's commit.
@@ -584,7 +588,7 @@ Only the archive test has this text: zeppelin ${index}.
     // Only the file whose archived copy did not match its hash went the slow way.
     expect(host.calls.readBlob).toBe(1);
 
-    const altered = await call(client, "read_file", { path: "notes/note-0.md" });
+    const altered = await call(client, "read_file", { path: "docs/notes/note-0.md" });
     expect(altered.text).toContain("zeppelin 0");
     expect(altered.text).not.toContain("converted");
     await client.close();

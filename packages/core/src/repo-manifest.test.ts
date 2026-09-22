@@ -55,8 +55,13 @@ describe("parseRepoManifest", () => {
   it("needs only a description", () => {
     const { manifest } = parsed("---\ndescription: Playbooks.\n---\n");
     expect(manifest.name).toBeUndefined();
-    expect(manifest.documents).toEqual([]);
+    expect(manifest.documents).toEqual(["docs"]);
     expect(manifest.body).toBe("");
+  });
+
+  it("serves docs unless told otherwise, and nothing when told so", () => {
+    expect(parsed("---\ndescription: D.\ndocuments: []\n---\n").manifest.documents).toEqual([]);
+    expect(parsed("---\ndescription: D.\ndocuments:\n---\n").manifest.documents).toEqual([]);
   });
 
   it("lets a dot stand for the manifest's own directory", () => {

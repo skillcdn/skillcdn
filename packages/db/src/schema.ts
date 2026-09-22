@@ -204,8 +204,9 @@ export const indexEntries = pgTable(
     /** Null for files that are listed but not searchable. */
     search: tsvector(),
     /**
-     * False for a file that a repository manifest leaves out: stored so that the tree is known,
-     * never listed, searched or read (docs/specs/skill-repo.md, "The repository manifest").
+     * False for a file the reading rules leave out, outside the skills and the document
+     * directories: stored so that the tree is known, never listed, searched or read
+     * (docs/specs/skill-repo.md).
      */
     visible: boolean().notNull().default(true),
     createdAt: createdAt(),

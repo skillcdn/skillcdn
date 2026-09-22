@@ -202,7 +202,7 @@ export interface NewIndexEntry {
   readonly frontMatter: SkillFrontMatter | undefined;
   /** Make the entry searchable: metadata always, plus the stored body of `blobSha` if there is one. */
   readonly searchable: boolean;
-  /** False for a file a repository manifest leaves out: known, never served. */
+  /** False for a file outside the skills and the document directories: known, never served. */
   readonly visible: boolean;
 }
 

@@ -536,7 +536,8 @@ export class MountReader {
     }
     // Hidden entries are never served, from the tree any more than from the index. Nor is what a
     // manifest leaves out: until the commit is indexed nothing has read the manifests, so under
-    // one only the skills and the manifests themselves are served, which fails closed.
+    // one only the skills and the manifests themselves are served, which fails closed. Where no
+    // manifest governs, the default directories are served, as always.
     const loading = this.#dependencies.gitHost
       .getTree(mount.coordinates, mount.commit)
       .then((tree) => {

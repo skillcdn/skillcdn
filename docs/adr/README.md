@@ -29,3 +29,4 @@ One short file per decision that has lasting consequences and that a future cont
 | [0013](0013-language-decided-in-the-browser-without-changing-the-url.md) | A URL without a language is shown in the visitor's language without the URL changing; `?lang=` forces one | Accepted |
 | [0014](0014-the-repository-manifest-decides-what-a-mount-serves.md) | `SKILLCDN.md` names and describes a repository, states the rules of its skills, and decides what a mount serves | Accepted |
 | [0015](0015-a-forced-language-holds-for-one-page.md) | A forced language holds for one page; links inside the app carry no language | Accepted |
+| [0016](0016-without-a-manifest-a-repository-serves-its-skills-and-docs.md) | Without a manifest, a repository serves its skills and `docs`; the reading rules are versioned | Accepted |

@@ -54,7 +54,7 @@ What the address serves.
     "skillCount": 2,
     "documentCount": 1,
     "skills": [{ "name": "ad-copy", "directory": "ad-copy", "description": "...", "warnings": [] }],
-    "documents": [{ "path": "README.md", "title": "Ads", "summary": "..." }],
+    "documents": [{ "path": "docs/ads.md", "title": "Ads", "summary": "..." }],
     "diagnostics": [{ "path": "broken/SKILL.md", "code": "missing_description", "message": "..." }]
   }
 }

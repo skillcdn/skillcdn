@@ -30,7 +30,7 @@ import { decodeText } from "./text.js";
  * is rebuilt when it is next asked for (`ensureSnapshot` in @skillcdn/db); without the bump, a
  * deployment keeps serving what the old rules produced until the repository moves on.
  */
-export const INDEX_VERSION = 1;
+export const INDEX_VERSION = 2;
 
 const MAX_DIAGNOSTICS = 50;
 const FETCH_CONCURRENCY = 8;
@@ -214,6 +214,8 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
   const manifests = new Map<RepoPath, NewIndexEntry>();
   const skills = new Map<RepoPath, NewIndexEntry>();
   const documents = new Map<RepoPath, NewIndexEntry>();
+  /** Skill manifests that could not be read as skills. */
+  const unreadSkills = new Set<RepoPath>();
   /** Per manifest directory, the document directories it declares. A broken one declares none. */
   const documentDirectories = new Map<RepoPath, readonly RepoPath[]>();
 
@@ -298,7 +300,9 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
       continue;
     }
     report(entry.path, parsed.error.code, parsed.error.message);
-    // A skill manifest that does not parse is still a readable, searchable document.
+    // A SKILL.md that cannot be read as a skill is a document: readable wherever it is, so that
+    // the author can see what was found, and listed and searched only where a document would be.
+    unreadSkills.add(entry.path);
     const summary = summarizeMarkdown(text);
     documents.set(entry.path, {
       ...base,
@@ -356,7 +360,9 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
     const skillDir = owningSkillDirectory(entry.path, skillDirectories);
     const visible = served(entry.path);
     if (indexed !== undefined) {
-      return { ...indexed, skillDir, visible };
+      return unreadSkills.has(entry.path)
+        ? { ...indexed, skillDir, visible: true, searchable: visible }
+        : { ...indexed, skillDir, visible };
     }
     return {
       path: entry.path,

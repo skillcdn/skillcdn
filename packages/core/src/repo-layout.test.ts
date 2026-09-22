@@ -73,16 +73,22 @@ describe("isServedPath", () => {
     expect(isServedPath(path(input), scope)).toBe(served);
   });
 
-  it("serves everything where no manifest governs", () => {
+  it("serves the skills and docs where no manifest governs", () => {
     const none: ServedScope = {
-      skillDirectories: new Set(),
+      skillDirectories: new Set([path("skills/ads")]),
       manifestDirectories: new Set([path("packages/a")]),
       documentDirectories: new Map([[path("packages/a"), []]]),
     };
-    expect(isServedPath(path("README.md"), none)).toBe(true);
-    expect(isServedPath(path("packages/b/notes.md"), none)).toBe(true);
+    expect(isServedPath(path("docs/guide.md"), none)).toBe(true);
+    expect(isServedPath(path("docs/deep/guide.md"), none)).toBe(true);
+    expect(isServedPath(path("skills/ads/references/style.md"), none)).toBe(true);
+    expect(isServedPath(path("README.md"), none)).toBe(false);
+    expect(isServedPath(path("docs.md"), none)).toBe(false);
+    expect(isServedPath(path("packages/b/notes.md"), none)).toBe(false);
+    expect(isServedPath(path("packages/b/docs/notes.md"), none)).toBe(false);
     // A manifest without document directories serves its skills and itself, nothing else.
     expect(isServedPath(path("packages/a/notes.md"), none)).toBe(false);
+    expect(isServedPath(path("packages/a/docs/notes.md"), none)).toBe(false);
     expect(isServedPath(path("packages/a/SKILLCDN.md"), none)).toBe(true);
   });
 
