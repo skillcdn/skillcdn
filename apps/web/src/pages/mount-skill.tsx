@@ -11,6 +11,12 @@ import { Link } from "../navigation.js";
 import { mountHref } from "../router.js";
 import styles from "./mount.module.css";
 
+/** The directory of a file of the mount; the root when the file is not in the mount. */
+function directoryOf(path: string | null): string {
+  const slash = path?.lastIndexOf("/") ?? -1;
+  return path === null || slash < 0 ? "" : path.slice(0, slash);
+}
+
 /** One skill as `get` returns it: front-matter, instructions and the files next to it. */
 export function MountSkill(props: {
   readonly address: Address;
@@ -109,6 +115,23 @@ export function MountSkill(props: {
             ))}
           </ul>
         </Callout>
+      )}
+
+      {skill.rules !== null && (
+        <section>
+          <h3 className={styles.subheading}>{t.skill.rules}</h3>
+          <p className={styles.note}>
+            {skill.rules.path === null ? t.skill.rulesAbove : t.skill.rulesSource(skill.rules.path)}
+          </p>
+          <div className={styles.document}>
+            <Markdown
+              source={skill.rules.body}
+              baseDirectory={directoryOf(skill.rules.path)}
+              fileHref={(path) => mountHref(address, { kind: "file", path })}
+            />
+          </div>
+          {skill.rules.truncated && <p className={styles.note}>{t.skill.rulesTruncated}</p>}
+        </section>
       )}
 
       <div className={styles.document}>

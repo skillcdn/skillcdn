@@ -17,10 +17,14 @@ import { MountSkill } from "./mount-skill.js";
 function MountHeader(props: { readonly address: Address; readonly mount: RestMount | undefined }) {
   const { t } = useI18n();
   const { address, mount } = props;
-  const name =
+  const repository =
     mount === undefined
       ? `${address.owner}/${address.repo}`
       : `${mount.repository.owner}/${mount.repository.name}`;
+  // A repository with a manifest goes by the name and the description it gives itself.
+  const manifest = mount?.index.status === "ready" ? mount.index.manifest : null;
+  const name = manifest?.name ?? repository;
+  const description = manifest?.description ?? mount?.repository.description;
   const hostUrl =
     mount === undefined
       ? undefined
@@ -56,13 +60,17 @@ function MountHeader(props: { readonly address: Address; readonly mount: RestMou
           </ul>
         )}
       </div>
-      {mount?.repository.description != null && (
-        <p className={styles.description}>{mount.repository.description}</p>
-      )}
+      {description != null && <p className={styles.description}>{description}</p>}
       {mount !== undefined && (
         <div className={styles.facts}>
           {/* A small label, then the value in the code face. */}
           <ul className={styles.factList}>
+            {name !== repository && (
+              <li className={styles.fact}>
+                <span className={styles.factLabel}>{t.mount.repository}</span>
+                <code>{repository}</code>
+              </li>
+            )}
             <li className={styles.fact}>
               <span className={styles.factLabel}>{t.mount.commit}</span>
               <code>{mount.commit.slice(0, 7)}</code>

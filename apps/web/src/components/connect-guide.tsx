@@ -1,14 +1,4 @@
-import {
-  type Address,
-  type CatalogState,
-  formatAddress,
-  type MountSummary,
-  parseRepoPath,
-  type RepoPath,
-  type RestMount,
-  ROOT_PATH,
-  renderInstructions,
-} from "@skillcdn/core";
+import { type Address, formatAddress, type RestMount } from "@skillcdn/core";
 import type { ReactNode } from "react";
 import { useI18n } from "../i18n/index.js";
 import { CodeBlock } from "./code-block.js";
@@ -17,15 +7,30 @@ import { Tabs } from "./tabs.js";
 import { cx } from "./ui.js";
 import ui from "./ui.module.css";
 
-/** A name an MCP client can show for the server: the mounted directory, else the repository. */
-export function serverNameOf(address: Address): string {
+/**
+ * A name an MCP client can show for the server: the name the repository gives itself in its
+ * manifest, else the mounted directory, else the repository; as a slug, since clients use it as
+ * a key.
+ */
+export function serverNameOf(address: Address, manifestName?: string | null): string {
   const last = address.path.split("/").at(-1);
-  const base = last === undefined || last === "" ? address.repo : last;
+  const base = manifestName ?? (last === undefined || last === "" ? address.repo : last);
   const name = base
     .toLowerCase()
     .replace(/[^a-z0-9_-]+/g, "-")
     .replace(/^-+|-+$/g, "");
   return name.length === 0 ? "skills" : name;
+}
+
+/** What to call the server when talking to the agent: the manifest's name, else the repository. */
+export function displayNameOf(address: Address, mount: RestMount | undefined): string {
+  const manifest = mount?.index.status === "ready" ? mount.index.manifest : undefined;
+  if (manifest?.name != null) {
+    return manifest.name;
+  }
+  return mount === undefined
+    ? `${address.owner}/${address.repo}`
+    : `${mount.repository.owner}/${mount.repository.name}`;
 }
 
 /** A link that opens the client with the server filled in. */
@@ -36,44 +41,6 @@ export function cursorInstallLink(name: string, url: string): string {
 
 export function vscodeInstallLink(name: string, url: string): string {
   return `vscode:mcp/install?${encodeURIComponent(JSON.stringify({ name, type: "http", url }))}`;
-}
-
-function repoPathOf(text: string): RepoPath | undefined {
-  if (text === "") {
-    return ROOT_PATH;
-  }
-  const parsed = parseRepoPath(text);
-  return parsed.ok ? parsed.value : undefined;
-}
-
-/** What the server tells an agent as it connects, from what the page already knows. */
-export function instructionsOf(address: Address, mount: RestMount): string {
-  const summary: MountSummary = {
-    repository: `${mount.repository.owner}/${mount.repository.name}`,
-    ref: mount.ref ?? undefined,
-    commit: mount.commit,
-    path: address.path,
-    verified: mount.verified,
-    truncated: mount.index.status === "ready" && mount.index.truncated,
-  };
-  const state: CatalogState =
-    mount.index.status === "ready"
-      ? {
-          status: "ready",
-          catalog: {
-            mount: summary,
-            skills: mount.index.skills.flatMap((skill) => {
-              const directory = repoPathOf(skill.directory);
-              return directory === undefined
-                ? []
-                : [{ name: skill.name, directory, description: skill.description }];
-            }),
-            skillCount: mount.index.skillCount,
-            documentCount: mount.index.documentCount,
-          },
-        }
-      : { status: mount.index.status, mount: summary };
-  return renderInstructions(state);
 }
 
 function Steps(props: {
@@ -106,18 +73,20 @@ function InstallLink(props: { readonly href: string; readonly label: string }) {
 
 /**
  * How to point an agent at this address: the endpoint, then the steps for each common client,
- * and what the agent is told when it connects.
+ * and what to say first. The server goes by the name the repository gives itself.
  */
 export function ConnectGuide(props: {
   readonly origin: string;
   readonly address: Address;
-  /** What the address serves, once known: the preview of the instructions comes from it. */
+  /** What the address serves, once known: the name comes from it. */
   readonly mount: RestMount | undefined;
 }) {
   const { t } = useI18n();
   const { origin, address, mount } = props;
   const url = `${origin}${formatAddress(address)}`;
-  const name = serverNameOf(address);
+  const manifest = mount?.index.status === "ready" ? mount.index.manifest : undefined;
+  const name = serverNameOf(address, manifest?.name);
+  const displayName = displayNameOf(address, mount);
   const c = t.connect.clients;
   const config = (shape: Record<string, unknown>) => JSON.stringify(shape, null, 2);
   const endpoint = <CodeBlock code={url} copy />;
@@ -289,14 +258,15 @@ export function ConnectGuide(props: {
       </div>
       <CodeBlock label={t.connect.endpoint} code={url} copy />
       <Tabs label={t.connect.clientsLabel} tabs={tabs} />
-      <p className={styles.hint}>{t.connect.nameHint(name)}</p>
-      {mount !== undefined && (
-        <details className={styles.preview}>
-          <summary className={styles.previewSummary}>{t.connect.preview.summary}</summary>
-          <p className={styles.hint}>{t.connect.preview.hint}</p>
-          <CodeBlock code={instructionsOf(address, mount)} />
-        </details>
-      )}
+      <p className={styles.hint}>
+        {manifest?.name != null ? t.connect.nameFromManifest(name) : t.connect.nameHint(name)}
+      </p>
+      <CodeBlock
+        label={t.connect.firstMessage.label}
+        code={t.connect.firstMessage.text(displayName)}
+        copy
+      />
+      <p className={styles.hint}>{t.connect.firstMessage.hint}</p>
     </section>
   );
 }

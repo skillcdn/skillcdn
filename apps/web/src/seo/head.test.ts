@@ -23,6 +23,7 @@ const MOUNT: RestMount = {
   index: {
     status: "ready",
     truncated: false,
+    manifest: null,
     skillCount: 2,
     documentCount: 1,
     skills: [
@@ -48,6 +49,7 @@ const SKILL: RestSkill = {
     files: [],
     filesTruncated: false,
     warnings: [],
+    rules: null,
   },
 };
 
@@ -101,6 +103,28 @@ describe("buildHead", () => {
       mount: { ...MOUNT, index: { status: "indexing" } },
     });
     expect(indexing.indexable).toBe(false);
+  });
+
+  it("names a repository as its manifest does, and describes it in its own words", () => {
+    if (MOUNT.index.status !== "ready") {
+      throw new Error("expected a ready fixture");
+    }
+    const mount = {
+      ...MOUNT,
+      index: {
+        ...MOUNT.index,
+        manifest: { path: "SKILLCDN.md", name: "Acme playbooks", description: "What Acme runs." },
+      },
+    };
+    const overview = buildHead(matchRoute("/gh/acme/skills", ""), "en", ORIGIN, { mount });
+    expect(overview.title).toBe("Acme playbooks | SkillCDN");
+    expect(overview.description).toBe("What Acme runs.");
+    expect(overview.jsonLd[0]?.name).toBe("Acme playbooks");
+    const skill = buildHead(matchRoute("/gh/acme/skills", "?skill=review"), "en", ORIGIN, {
+      mount,
+      skill: SKILL,
+    });
+    expect(skill.title).toBe("review · Acme playbooks | SkillCDN");
   });
 
   it("describes a repository and a skill from their data, per language, with one canonical URL", () => {

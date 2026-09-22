@@ -89,10 +89,14 @@ export const ko: Messages = {
     clientsLabel: "클라이언트",
     nameHint: (name: string) =>
       `클라이언트가 이름을 물으면 아무 이름이나 써도 됩니다. 예시에서는 “${name}”을 씁니다.`,
+    nameFromManifest: (name: string) =>
+      `클라이언트가 이름을 물으면 예시처럼 저장소가 스스로 정한 이름을 따서 “${name}”을 쓰세요. 다른 이름도 상관없습니다.`,
     add: (client: string) => `${client}에 추가`,
-    preview: {
-      summary: "연결될 때 에이전트가 전달받는 내용",
-      hint: "MCP 클라이언트가 모델에 그대로 건네는 서버 지시문입니다.",
+    firstMessage: {
+      label: "그다음 이렇게 말해 보세요",
+      text: (name: string) =>
+        `${name}에 어떤 스킬이 있는지 살펴보고, 지금 내가 하는 일에 맞는 스킬을 골라 줘.`,
+      hint: "요청에 서버 이름을 넣으면 에이전트가 어디를 봐야 할지 압니다. 그다음부터는 스킬 이름을 말하거나 필요한 일을 설명하면 됩니다.",
     },
     clients: {
       chatgpt: {
@@ -358,6 +362,12 @@ export const ko: Messages = {
     noFiles: "이 스킬에는 보조 파일이 없습니다.",
     warnings: "작성자를 위한 경고",
     root: "(저장소 루트)",
+    rules: "이 저장소의 모든 스킬에 적용되는 규칙",
+    rulesSource: (path: string) =>
+      `${path}에서 가져왔습니다. 에이전트는 스킬을 불러올 때마다 이 규칙을 함께 받습니다.`,
+    rulesAbove:
+      "마운트된 디렉터리 위에 있는 저장소 매니페스트에서 가져왔습니다. 에이전트는 스킬을 불러올 때마다 이 규칙을 함께 받습니다.",
+    rulesTruncated: "앞부분만 표시됩니다. 전체 내용은 매니페스트에 있습니다.",
   },
 
   file: {

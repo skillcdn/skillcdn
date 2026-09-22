@@ -18,7 +18,10 @@ import styles from "./states.module.css";
 const PAGES: readonly (readonly [string, string])[] = [
   ["/", "Landing"],
   ["/explore", "Explorer front page, with featured repositories in three states"],
-  ["/gh/acme/skills", "A repository with skills, documents, a skipped manifest and warnings"],
+  [
+    "/gh/acme/skills",
+    "A repository with a manifest (its own name, description and rules), skills, documents, a skipped skill and warnings",
+  ],
   ["/gh/acme/skills?q=review", "Search results"],
   ["/gh/acme/skills?q=nothing-matches-this", "Search without results"],
   ["/gh/acme/skills?skill=skills/release-notes", "A skill with metadata and files"],

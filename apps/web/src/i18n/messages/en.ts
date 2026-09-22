@@ -105,10 +105,14 @@ export const en = {
     clientsLabel: "Clients",
     nameHint: (name: string) =>
       `Where a client asks for a name, any name will do; the examples use “${name}”.`,
+    nameFromManifest: (name: string) =>
+      `Where a client asks for a name, the examples use “${name}”, after the name the repository gives itself. Any name will do.`,
     add: (client: string) => `Add to ${client}`,
-    preview: {
-      summary: "What the agent is told when it connects",
-      hint: "The server instructions, exactly as an MCP client hands them to the model.",
+    firstMessage: {
+      label: "Then say, for example",
+      text: (name: string) =>
+        `Look at what ${name} offers and tell me which of its skills fit what I am working on.`,
+      hint: "Name the server in your request, and the agent knows where to look. From then on, ask for a skill by name or describe what you need.",
     },
     clients: {
       chatgpt: {
@@ -374,6 +378,11 @@ export const en = {
     noFiles: "This skill has no supporting files.",
     warnings: "Warnings for the author",
     root: "(repository root)",
+    rules: "Rules for every skill in this repository",
+    rulesSource: (path: string) => `From ${path}. The agent receives them with every skill.`,
+    rulesAbove:
+      "From the repository's manifest, above the mounted directory. The agent receives them with every skill.",
+    rulesTruncated: "Only the beginning is shown here; the manifest has the whole text.",
   },
 
   file: {

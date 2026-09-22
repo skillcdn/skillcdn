@@ -33,7 +33,7 @@ function Featured() {
           <li key={item.address}>
             <Link className={styles.card} href={item.address}>
               <span className={styles.cardTitle}>
-                {item.repository.owner}/{item.repository.name}
+                {item.manifest?.name ?? `${item.repository.owner}/${item.repository.name}`}
               </span>
               <span className={styles.cardAddress}>{item.address}</span>
               <span className={styles.cardMeta}>

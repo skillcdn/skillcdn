@@ -85,10 +85,13 @@ function mountText(
   const t = messagesFor(language);
   const { address, view } = route;
   const mount = data?.mount;
+  const manifest = (mount?.index.status === "ready" ? mount.index.manifest : null) ?? null;
+  // A repository with a manifest goes by the name it gives itself.
   const repository =
-    mount === undefined
+    manifest?.name ??
+    (mount === undefined
       ? `${address.owner}/${address.repo}`
-      : `${mount.repository.owner}/${mount.repository.name}`;
+      : `${mount.repository.owner}/${mount.repository.name}`);
   if (view.kind === "skill") {
     const skill = data?.skill?.status === "ready" ? data.skill.skill : undefined;
     return {
@@ -111,14 +114,16 @@ function mountText(
     description:
       index === undefined
         ? t.meta.mount.description(repository)
-        : clip(
-            t.meta.mount.summary(
-              repository,
-              index.skillCount,
-              index.documentCount,
-              index.skills.slice(0, NAMED_SKILLS).map((skill) => skill.name),
+        : manifest !== null
+          ? clip(manifest.description)
+          : clip(
+              t.meta.mount.summary(
+                repository,
+                index.skillCount,
+                index.documentCount,
+                index.skills.slice(0, NAMED_SKILLS).map((skill) => skill.name),
+              ),
             ),
-          ),
   };
 }
 
@@ -184,12 +189,15 @@ export function buildHead(
   }
   if (route.name === "mount" && canonical !== undefined && data?.mount !== undefined) {
     const { repository } = data.mount;
+    const manifestName =
+      data.mount.index.status === "ready" ? data.mount.index.manifest?.name : undefined;
+    const repositoryName = manifestName ?? `${repository.owner}/${repository.name}`;
     const skill =
       route.view.kind === "skill" && data.skill?.status === "ready" ? data.skill.skill : undefined;
     jsonLd.push({
       "@context": "https://schema.org",
       "@type": skill === undefined ? "SoftwareSourceCode" : "TechArticle",
-      name: skill === undefined ? `${repository.owner}/${repository.name}` : skill.name,
+      name: skill === undefined ? repositoryName : skill.name,
       url: canonical,
       description: text.description,
       inLanguage,
@@ -198,7 +206,7 @@ export function buildHead(
         : {
             isPartOf: {
               "@type": "SoftwareSourceCode",
-              name: `${repository.owner}/${repository.name}`,
+              name: repositoryName,
             },
           }),
     });

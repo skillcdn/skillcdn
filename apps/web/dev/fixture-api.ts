@@ -130,6 +130,15 @@ function mountBody(
           : {
               status: "ready",
               truncated: repository.truncated === true,
+              manifest:
+                repository.manifest === undefined
+                  ? null
+                  : {
+                      // Above the mount when a sub-path is mounted, as the server would say.
+                      path: below(address.path, repository.manifest.path) ?? null,
+                      name: repository.manifest.name,
+                      description: repository.manifest.description,
+                    },
               skillCount: skills.length,
               documentCount: documents.length,
               skills: skills.slice(0, REST_MOUNT_LIST_LIMIT),
@@ -233,6 +242,14 @@ function skillAnswer(
       ...match.detail,
       directory: match.directory,
       files: match.detail.files.flatMap((file) => below(address.path, file) ?? []),
+      rules:
+        repository.manifest === undefined || repository.manifest.rules.length === 0
+          ? null
+          : {
+              path: below(address.path, repository.manifest.path) ?? null,
+              body: repository.manifest.rules,
+              truncated: false,
+            },
     },
   };
   return { status: 200, body };
@@ -331,6 +348,10 @@ function featuredBody(now: number): RestFeatured {
             defaultBranch: repository.defaultBranch,
             description: repository.description ?? null,
           },
+          manifest:
+            status === "ready" && repository.manifest !== undefined
+              ? { name: repository.manifest.name, description: repository.manifest.description }
+              : null,
           status,
           skillCount: status === "ready" ? repository.skills.length : null,
           skills:

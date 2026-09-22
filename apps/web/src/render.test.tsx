@@ -35,6 +35,7 @@ const MOUNT: RestMount = {
   index: {
     status: "ready",
     truncated: false,
+    manifest: null,
     skillCount: 1,
     documentCount: 1,
     skills: [
@@ -64,6 +65,7 @@ const SKILL: RestSkill = {
     files: ["review/SKILL.md"],
     filesTruncated: false,
     warnings: [],
+    rules: null,
   },
 };
 
@@ -189,9 +191,9 @@ describe("the page of an address", () => {
       expect(html).toContain(`>${client.label}<`);
     }
     expect(html).toContain(t.connect.clients.chatgpt.steps[0]);
-    expect(html).toContain(
-      "This server serves the skills and documents of the git repository Acme/skills",
-    );
+    // The guide says what to say first; it no longer previews the server instructions.
+    expect(html).toContain(t.connect.firstMessage.label);
+    expect(html).not.toContain("This server serves");
   });
 
   it("renders one skill with its instructions, and says so when the index is not there yet", () => {
