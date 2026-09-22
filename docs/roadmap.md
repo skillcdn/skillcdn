@@ -18,7 +18,7 @@ Goal: an agent that connects to an address knows what it got and uses it well, w
 - [x] `get` relays every front-matter field; `read_file` lists a directory
 - [x] Every skill is an MCP prompt; documents are not resources
 - [x] The MCP endpoint answers browsers on any origin, as the REST API does
-- [ ] The page of a repository leads with its name and description, then the steps to connect it to the common clients
+- [x] The page of a repository leads with its name and description, then the steps to connect it to the common clients, and shows what the agent is told when it connects
 - [ ] Connect real clients by hand, to a local server and to the hosted service, and fix what they show. Nothing in this repository can test that; it is done after every change to what a client sees.
 
 Design points still open (record the outcome in the spec or an ADR):

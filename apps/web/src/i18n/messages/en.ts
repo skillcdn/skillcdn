@@ -1,6 +1,14 @@
 // The English pack is the source: its shape is the type every other pack must have.
 // Copy states what the product does today. No prices, no plans, no comparisons.
 
+/** A fixed number of steps, so that a component can count on each one being there. */
+function fixed(a: string): readonly [string];
+function fixed(a: string, b: string): readonly [string, string];
+function fixed(a: string, b: string, c: string): readonly [string, string, string];
+function fixed(...items: readonly string[]): readonly string[] {
+  return items;
+}
+
 export const en = {
   meta: {
     siteName: "SkillCDN",
@@ -92,11 +100,72 @@ export const en = {
 
   connect: {
     title: "Connect an agent",
+    lead: "Add this address to your agent as an MCP server. The agent learns which skills the repository holds as it connects, loads one when it needs it, and reads the files the skill points to.",
     endpoint: "MCP endpoint",
-    lead: "Add this URL to any MCP client that supports the Streamable HTTP transport.",
-    claudeCode: "Claude Code",
-    json: "JSON config",
-    jsonHint: "Most clients read a config of this shape. The key is a name of your choice.",
+    clientsLabel: "Clients",
+    nameHint: (name: string) =>
+      `Where a client asks for a name, any name will do; the examples use “${name}”.`,
+    add: (client: string) => `Add to ${client}`,
+    preview: {
+      summary: "What the agent is told when it connects",
+      hint: "The server instructions, exactly as an MCP client hands them to the model.",
+    },
+    clients: {
+      chatgpt: {
+        label: "ChatGPT",
+        steps: fixed(
+          "Open Settings, then Connectors. Under Advanced settings, turn on Developer mode.",
+          "Choose Create, name the connector, paste the endpoint as the MCP server URL and select no authentication.",
+          "In a new chat, add the connector from the plus menu and ask for a skill by name.",
+        ),
+      },
+      claude: {
+        label: "Claude",
+        steps: fixed(
+          "In the web app or the desktop app, open Settings, then Connectors, and choose Add custom connector.",
+          "Name it and paste the endpoint as the URL.",
+          "In a chat, turn the connector on in the tools menu and ask for a skill by name.",
+        ),
+      },
+      claudeCode: {
+        label: "Claude Code",
+        steps: fixed(
+          "Run this in a terminal:",
+          "The skills appear as commands in the slash menu, and the agent finds and loads them by itself.",
+        ),
+      },
+      cursor: {
+        label: "Cursor",
+        steps: fixed(
+          "Click the button, or open Settings, then Tools & MCP, add a new MCP server and paste this configuration:",
+        ),
+      },
+      vscode: {
+        label: "VS Code",
+        steps: fixed(
+          "Click the button, or add the server to .vscode/mcp.json in your workspace:",
+          "Or from a terminal:",
+        ),
+      },
+      windsurf: {
+        label: "Windsurf",
+        steps: fixed("Open Settings, then MCP, and add this to your mcp_config.json:"),
+      },
+      codex: {
+        label: "Codex CLI",
+        steps: fixed("Run this in a terminal:"),
+      },
+      gemini: {
+        label: "Gemini CLI",
+        steps: fixed("Run this in a terminal:"),
+      },
+      other: {
+        label: "Other clients",
+        steps: fixed(
+          "Any client that supports the Streamable HTTP transport can add the endpoint. Most read a configuration of this shape; the key is a name of your choice:",
+        ),
+      },
+    },
   },
 
   landing: {
@@ -183,7 +252,7 @@ export const en = {
         {
           question: "Which agents can use it?",
           answer:
-            "Any MCP client that supports the Streamable HTTP transport. Claude Code, for example, connects with: claude mcp add --transport http <name> <url>.",
+            "Any MCP client that supports the Streamable HTTP transport. The page of a repository shows the steps for the common ones: ChatGPT, Claude, Claude Code, Cursor, VS Code, Windsurf, Codex CLI and Gemini CLI.",
         },
         {
           question: "Do I have to upload or register anything?",

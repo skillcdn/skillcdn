@@ -151,6 +151,20 @@ describe("the page of an address", () => {
     expect(html).not.toContain("<script>alert");
     // The browser continues with the origin the server rendered for.
     expect(html).toContain("skills.example/gh/acme/skills");
+    // The description of the repository, then how to connect an agent: the endpoint, the steps
+    // for the common clients, and what the agent is told when it connects.
+    const t = messagesFor("ko");
+    expect(html).toContain("Skills for the whole team.");
+    expect(html).toContain(t.connect.title);
+    expect(html.indexOf(t.connect.title)).toBeLessThan(html.indexOf(">review<"));
+    // One tab per client; the first tab's steps are in the HTML, the others render on a click.
+    for (const client of Object.values(t.connect.clients)) {
+      expect(html).toContain(`>${client.label}<`);
+    }
+    expect(html).toContain(t.connect.clients.chatgpt.steps[0]);
+    expect(html).toContain(
+      "This server serves the skills and documents of the git repository Acme/skills",
+    );
   });
 
   it("renders one skill with its instructions, and says so when the index is not there yet", () => {

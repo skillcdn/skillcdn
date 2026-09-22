@@ -43,7 +43,7 @@ describe("language packs", () => {
       }
     }
     // Names of products stay as they are in every language.
-    const names = new Set(["Claude Code"]);
+    const names = new Set(["Claude Code", "VS Code", "Codex CLI", "Gemini CLI"]);
     const english = new Set(
       stringsOf(messagesFor("en")).filter((text) => text.includes(" ") && !names.has(text)),
     );

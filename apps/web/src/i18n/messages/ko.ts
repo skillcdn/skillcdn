@@ -84,12 +84,72 @@ export const ko: Messages = {
 
   connect: {
     title: "에이전트 연결하기",
+    lead: "이 주소를 에이전트에 MCP 서버로 추가하세요. 에이전트는 연결되는 순간 이 저장소에 어떤 스킬이 있는지 알게 되고, 필요할 때 스킬을 불러와 스킬이 가리키는 파일을 읽습니다.",
     endpoint: "MCP 엔드포인트",
-    lead: "Streamable HTTP 전송을 지원하는 MCP 클라이언트라면 어디든 이 URL을 추가하면 됩니다.",
-    claudeCode: "Claude Code",
-    json: "JSON 설정",
-    jsonHint:
-      "대부분의 클라이언트가 이런 형태의 설정을 읽습니다. 키는 원하는 이름으로 정하면 됩니다.",
+    clientsLabel: "클라이언트",
+    nameHint: (name: string) =>
+      `클라이언트가 이름을 물으면 아무 이름이나 써도 됩니다. 예시에서는 “${name}”을 씁니다.`,
+    add: (client: string) => `${client}에 추가`,
+    preview: {
+      summary: "연결될 때 에이전트가 전달받는 내용",
+      hint: "MCP 클라이언트가 모델에 그대로 건네는 서버 지시문입니다.",
+    },
+    clients: {
+      chatgpt: {
+        label: "ChatGPT",
+        steps: [
+          "설정에서 커넥터(Connectors)를 연 뒤, 고급 설정에서 개발자 모드(Developer mode)를 켭니다.",
+          "만들기(Create)를 눌러 커넥터 이름을 정하고, MCP 서버 URL에 엔드포인트를 붙여 넣은 뒤 인증 없음을 선택합니다.",
+          "새 대화에서 더하기 메뉴로 커넥터를 추가하고, 스킬 이름을 말하며 요청합니다.",
+        ],
+      },
+      claude: {
+        label: "Claude",
+        steps: [
+          "웹 앱이나 데스크톱 앱의 설정에서 커넥터(Connectors)를 열고, 사용자 지정 커넥터 추가(Add custom connector)를 선택합니다.",
+          "이름을 정하고 URL에 엔드포인트를 붙여 넣습니다.",
+          "대화에서 도구 메뉴로 커넥터를 켜고, 스킬 이름을 말하며 요청합니다.",
+        ],
+      },
+      claudeCode: {
+        label: "Claude Code",
+        steps: [
+          "터미널에서 다음을 실행합니다:",
+          "스킬이 슬래시 메뉴의 명령으로 나타나고, 에이전트가 스스로 스킬을 찾아 불러옵니다.",
+        ],
+      },
+      cursor: {
+        label: "Cursor",
+        steps: [
+          "버튼을 누르거나, 설정에서 Tools & MCP를 열어 새 MCP 서버를 추가하고 이 설정을 붙여 넣습니다:",
+        ],
+      },
+      vscode: {
+        label: "VS Code",
+        steps: [
+          "버튼을 누르거나, 작업 공간의 .vscode/mcp.json에 서버를 추가합니다:",
+          "또는 터미널에서:",
+        ],
+      },
+      windsurf: {
+        label: "Windsurf",
+        steps: ["설정에서 MCP를 열고 mcp_config.json에 다음을 추가합니다:"],
+      },
+      codex: {
+        label: "Codex CLI",
+        steps: ["터미널에서 다음을 실행합니다:"],
+      },
+      gemini: {
+        label: "Gemini CLI",
+        steps: ["터미널에서 다음을 실행합니다:"],
+      },
+      other: {
+        label: "다른 클라이언트",
+        steps: [
+          "Streamable HTTP 전송을 지원하는 클라이언트라면 어디든 엔드포인트를 추가할 수 있습니다. 대부분 이런 형태의 설정을 읽으며, 키는 원하는 이름으로 정하면 됩니다:",
+        ],
+      },
+    },
   },
 
   landing: {
@@ -176,7 +236,7 @@ export const ko: Messages = {
         {
           question: "어떤 에이전트에서 쓸 수 있나요?",
           answer:
-            "Streamable HTTP 전송을 지원하는 MCP 클라이언트라면 모두 쓸 수 있습니다. 예를 들어 Claude Code에서는 claude mcp add --transport http <이름> <url> 명령으로 연결합니다.",
+            "Streamable HTTP 전송을 지원하는 MCP 클라이언트라면 모두 쓸 수 있습니다. 저장소 페이지에서 ChatGPT, Claude, Claude Code, Cursor, VS Code, Windsurf, Codex CLI, Gemini CLI의 연결 순서를 안내합니다.",
         },
         {
           question: "무언가를 업로드하거나 등록해야 하나요?",

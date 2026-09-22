@@ -31,7 +31,8 @@ To look at real repositories instead, the UI can run in front of a real server, 
 | Document defaults (headings, links, focus ring) | [`src/styles/base.css`](src/styles/base.css) |
 | A building block (button, badge, callout, tabs, code block, address form) | `src/components/<name>.tsx` with its styles next to it in `<name>.module.css` |
 | The clips beside "how it works" | `HOW_CLIPS` in [`src/site.ts`](src/site.ts), one per step, in the order of the steps. The files go under `public/`. A step without a clip shows an empty frame. |
-| A page | `src/pages/`: `landing`, `explore`, `mount*` (the explorer view of an address), `simple` (not found, bad address) |
+| A page | `src/pages/`: `landing`, `explore`, `mount*` (the page of an address: its name and description, how to connect an agent, then what it serves), `simple` (not found, bad address) |
+| The steps to connect each client | [`src/components/connect-guide.tsx`](src/components/connect-guide.tsx) builds the commands, the links and the configuration from the address; the words live under `connect` in the language packs. A new client is a tab there and its steps in every pack. |
 | How rendered Markdown from repositories looks | [`src/components/markdown.module.css`](src/components/markdown.module.css) |
 | Words | [`src/i18n/messages/en.ts`](src/i18n/messages/en.ts) and [`ko.ts`](src/i18n/messages/ko.ts). English is the source; the Korean pack must have the same shape, and a test checks it. |
 | The symbol and the favicon | [`public/brand/symbol.svg`](public/brand/symbol.svg), [`public/favicon.svg`](public/favicon.svg), and the inline copy in `src/components/layout.tsx`. They are placeholders until there is a logo. |

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api/client.js";
 import { resourceKeys } from "../api/keys.js";
 import { useResource } from "../api/use-resource.js";
-import { ConnectPanel } from "../components/connect-panel.js";
+import { ConnectGuide } from "../components/connect-guide.js";
 import { ErrorCallout } from "../components/error-callout.js";
 import { Badge, Callout, Container, Skeleton, Spinner } from "../components/ui.js";
 import { useI18n } from "../i18n/index.js";
@@ -147,34 +147,47 @@ export function MountPage(props: MountPageProps) {
     );
   }, [address, view, language, origin, loaded, skill]);
 
+  // Name and description, then how to connect an agent, then what it gets. A skill or a file
+  // is what the visitor came for, so on those views the guide follows the content instead.
+  const guide =
+    mount.state === "error" ? null : (
+      <ConnectGuide origin={origin} address={address} mount={loaded} />
+    );
+  const content = (
+    <div className={styles.content}>
+      {mount.state === "loading" && <Skeleton lines={6} label={t.common.loading} />}
+      {mount.state === "error" && <ErrorCallout error={mount.error} onRetry={mount.reload} />}
+      {mount.state === "ready" && (
+        <>
+          {mount.value.index.status === "ready" && mount.value.index.truncated && (
+            <Callout tone="warning">{t.mount.truncated}</Callout>
+          )}
+          <MountBody
+            address={address}
+            view={view}
+            mount={mount.value}
+            stalled={mount.stalled}
+            onSkill={setSkill}
+          />
+        </>
+      )}
+    </div>
+  );
+
   return (
     <Container className={styles.page}>
       <MountHeader address={address} mount={loaded} />
-      <div className={styles.columns}>
-        <div className={styles.content}>
-          {mount.state === "loading" && <Skeleton lines={6} label={t.common.loading} />}
-          {mount.state === "error" && <ErrorCallout error={mount.error} onRetry={mount.reload} />}
-          {mount.state === "ready" && (
-            <>
-              {mount.value.index.status === "ready" && mount.value.index.truncated && (
-                <Callout tone="warning">{t.mount.truncated}</Callout>
-              )}
-              <MountBody
-                address={address}
-                view={view}
-                mount={mount.value}
-                stalled={mount.stalled}
-                onSkill={setSkill}
-              />
-            </>
-          )}
-        </div>
-        {mount.state !== "error" && (
-          <aside className={styles.aside}>
-            <ConnectPanel origin={origin} address={address} />
-          </aside>
-        )}
-      </div>
+      {view.kind === "overview" ? (
+        <>
+          {guide}
+          {content}
+        </>
+      ) : (
+        <>
+          {content}
+          {guide}
+        </>
+      )}
     </Container>
   );
 }
