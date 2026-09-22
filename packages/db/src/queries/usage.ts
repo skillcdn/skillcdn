@@ -1,4 +1,4 @@
-import { and, between, desc, eq, lt, sql } from "drizzle-orm";
+import { and, between, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { type Database, drizzleOf } from "../client.js";
 import { accounts, repos, usageClientKeys, usageClients, usageDaily } from "../schema.js";
 import type { RepoScope } from "./repos.js";
@@ -211,6 +211,8 @@ export async function listTopRepositories(
     readonly from: UsageDay;
     readonly to: UsageDay;
     readonly limit: number;
+    /** Leave out repositories whose total is below this. */
+    readonly minimum?: number;
   },
 ): Promise<RepositoryUsage[]> {
   const total = sql<number>`sum(${usageDaily.count})::bigint`.mapWith(Number);
@@ -227,6 +229,7 @@ export async function listTopRepositories(
       ),
     )
     .groupBy(repos.id, repos.host, accounts.login, repos.name)
+    .having(options.minimum === undefined ? undefined : gte(total, options.minimum))
     .orderBy(desc(total), sql`${repos.name} collate "C"`)
     .limit(options.limit);
 }

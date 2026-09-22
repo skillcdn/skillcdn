@@ -1,6 +1,7 @@
-import { type Address, formatAddress, type RestFile } from "@skillcdn/core";
+import type { Address, RestFile } from "@skillcdn/core";
 import { useState } from "react";
 import { ApiError, api } from "../api/client.js";
+import { resourceKeys } from "../api/keys.js";
 import { useResource } from "../api/use-resource.js";
 import { CodeBlock } from "../components/code-block.js";
 import { ErrorCallout } from "../components/error-callout.js";
@@ -26,7 +27,7 @@ interface LaterPages {
 export function MountFile(props: { readonly address: Address; readonly path: string }) {
   const { t } = useI18n();
   const { address, path } = props;
-  const key = `${formatAddress(address)} file ${path}`;
+  const key = resourceKeys.file(address, path);
   const first = useResource(key, (signal) => api.file(address, path, 0, signal));
   const [later, setLater] = useState<LaterPages>({
     key,

@@ -3,11 +3,14 @@ import { createReadStream } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { Readable } from "node:stream";
+import { pathToFileURL } from "node:url";
 import * as z from "zod";
 
 // Serves a build of the web UI (ADR-0009). The server knows nothing about the UI: the build
 // brings a manifest that says which file answers which URL in which language, and everything
 // else in the directory is a static file. A deployment without a web build simply has no UI.
+// A build may also bring a module that renders the view of an address with its data, which the
+// server calls per request (ADR-0011); without it, addresses get the shell.
 
 const relativeFile = z
   .string()
@@ -47,6 +50,9 @@ const manifestSchema = z.object({
   /** The frame for pages that render in the browser. */
   shell: filesByLanguage,
   notFound: filesByLanguage,
+  /** A module that renders the view of an address, and the document it renders into. */
+  render: relativeFile.optional(),
+  template: relativeFile.optional(),
 });
 
 const MANIFEST_FILE = "routes.json";
@@ -114,11 +120,50 @@ export interface WebRequest {
   readonly headers: Headers;
 }
 
+/** An answer the page would otherwise ask the REST API for, given to it up front. */
+export type PageAnswer =
+  | { readonly ready: unknown }
+  | {
+      readonly error: {
+        readonly status: number;
+        readonly code: string;
+        readonly message: string;
+        readonly directories?: readonly string[];
+      };
+    };
+
+/** What the server knows about an address when a browser asks for its page. */
+export interface AddressData {
+  /** What the address serves, or why it does not. Left out for a path that is not an address. */
+  readonly mount?: PageAnswer;
+  /** The skill the URL asks for, when it asks for one. */
+  readonly skill?: PageAnswer;
+}
+
+/** The contract of the render module in a build, as the UI defines it. */
+interface RenderModule {
+  renderAddressPage(
+    template: string,
+    input: {
+      readonly language: string;
+      readonly origin: string;
+      readonly pathname: string;
+      readonly search: string;
+      readonly data: AddressData;
+    },
+  ): { readonly html: string; readonly indexable: boolean };
+}
+
 export interface WebBundle {
-  /** A page or a file of the build, the sitemap or robots.txt. `undefined`: not ours to answer. */
+  /** A page or a file of the build, or robots.txt. `undefined`: not ours to answer. */
   respond(request: WebRequest): Response | undefined;
-  /** The frame in which the browser renders a page that depends on data, such as an address. */
-  shell(request: WebRequest): Response;
+  /**
+   * The view of an address, rendered with what the server knows about it when the build can
+   * render, else the frame in which the browser renders it.
+   */
+  address(request: WebRequest, data: AddressData, status?: number): Response;
+  /** The sitemap: the indexable pages of the build, and these addresses, in every language. */
+  sitemap(request: WebRequest, addresses: readonly string[]): Response;
   /** The page for a URL that is nothing, with status 404. */
   notFound(request: WebRequest): Response;
 }
@@ -160,10 +205,34 @@ async function listFiles(root: string): Promise<string[]> {
   return found;
 }
 
+async function loadRenderModule(root: string, file: string): Promise<RenderModule> {
+  let loaded: unknown;
+  try {
+    loaded = await import(pathToFileURL(join(root, ...file.split("/"))).href);
+  } catch (error) {
+    throw new WebBundleError(
+      `the manifest names ${file} as the render module, which cannot be loaded`,
+      {
+        cause: error,
+      },
+    );
+  }
+  if (
+    typeof loaded !== "object" ||
+    loaded === null ||
+    !("renderAddressPage" in loaded) ||
+    typeof loaded.renderAddressPage !== "function"
+  ) {
+    throw new WebBundleError(`${file} does not export renderAddressPage`);
+  }
+  return loaded as RenderModule;
+}
+
 /**
  * Reads a web build from disk, once. Pages are kept in memory because the public origin is
  * written into them per request; files are streamed from disk. Throws when the directory is
- * not a web build.
+ * not a web build. The web root is code as much as content: the render module in it runs in
+ * this process, so only ever point the server at a build you made.
  */
 export async function loadWebBundle(
   root: string,
@@ -187,17 +256,19 @@ export async function loadWebBundle(
 
   /** Page files of the manifest, as text with placeholders. */
   const pages = new Map<string, string>();
-  const pageOf = async (file: string): Promise<void> => {
-    if (!pages.has(file)) {
+  const pageOf = async (file: string): Promise<string> => {
+    let found = pages.get(file);
+    if (found === undefined) {
       try {
-        const template = await readFile(join(root, ...file.split("/")), "utf8");
-        pages.set(file, template);
+        found = await readFile(join(root, ...file.split("/")), "utf8");
       } catch (error) {
         throw new WebBundleError(`the manifest names ${file}, which cannot be read`, {
           cause: error,
         });
       }
+      pages.set(file, found);
     }
+    return found;
   };
   for (const files of [manifest.shell, manifest.notFound, ...manifest.routes.map((r) => r.files)]) {
     for (const file of Object.values(files)) {
@@ -205,11 +276,32 @@ export async function loadWebBundle(
     }
   }
 
+  let renderer: { readonly module: RenderModule; readonly template: string } | undefined;
+  if (manifest.render !== undefined && manifest.template !== undefined) {
+    renderer = {
+      module: await loadRenderModule(root, manifest.render),
+      template: await pageOf(manifest.template),
+    };
+  } else if (manifest.render !== undefined || manifest.template !== undefined) {
+    throw new WebBundleError(
+      "the manifest names a render module without a template, or the reverse",
+    );
+  }
+  const renderDirectory = manifest.render?.split("/").slice(0, -1).join("/");
+
   // Everything else in the directory is a static file, except what only the manifest may serve:
-  // a page under its file name would be a second URL for the same content.
+  // a page under its file name would be a second URL for the same content, and the render
+  // module is for this process, not for browsers.
   const statics = new Map<string, StaticFile>();
   for (const relative of await listFiles(root)) {
-    if (relative === MANIFEST_FILE || pages.has(relative) || relative.endsWith(".html")) {
+    if (
+      relative === MANIFEST_FILE ||
+      pages.has(relative) ||
+      relative.endsWith(".html") ||
+      (renderDirectory !== undefined &&
+        renderDirectory !== "" &&
+        relative.startsWith(`${renderDirectory}/`))
+    ) {
       continue;
     }
     const file = join(root, ...relative.split("/"));
@@ -236,6 +328,10 @@ export async function loadWebBundle(
     (request.headers.get("if-none-match") ?? "")
       .split(",")
       .some((candidate) => candidate.trim() === etag);
+  const withOrigin = (text: string, origin: string): string =>
+    text
+      .replaceAll(originPlaceholder, origin)
+      .replaceAll(hostPlaceholder, origin.replace(/^https?:\/\//, ""));
 
   const text = (
     request: WebRequest,
@@ -251,30 +347,51 @@ export async function loadWebBundle(
     return new Response(request.method === "HEAD" ? null : body, { status, headers: all });
   };
 
+  const html = (
+    request: WebRequest,
+    body: string,
+    language: string,
+    status: number,
+    extra: Record<string, string> = {},
+  ): Response =>
+    text(
+      request,
+      body,
+      {
+        "content-type": HTML,
+        "content-language": language,
+        // One URL, one representation: a cache may keep it, but has to ask whether it changed.
+        "cache-control": "public, max-age=0, must-revalidate",
+        ...PAGE_HEADERS,
+        ...extra,
+      },
+      status,
+    );
+
   const page = (
     request: WebRequest,
     files: Record<string, string>,
     contentType: string,
     status = 200,
+    extra: Record<string, string> = {},
   ): Response => {
     const chosen = languageOf(request);
     const found = pages.get(files[chosen] ?? files[defaultLanguage] ?? "");
     if (found === undefined) {
       throw new WebBundleError("a page of the manifest was not loaded");
     }
-    const origin = originOf(request);
-    const body = found
-      .replaceAll(originPlaceholder, origin)
-      .replaceAll(hostPlaceholder, origin.replace(/^https?:\/\//, ""));
+    const body = withOrigin(found, originOf(request));
+    const language = files[chosen] === undefined ? defaultLanguage : chosen;
+    if (contentType === HTML) {
+      return html(request, body, language, status, extra);
+    }
     return text(
       request,
       body,
       {
         "content-type": contentType,
-        "content-language": files[chosen] === undefined ? defaultLanguage : chosen,
-        // One URL, one representation: a cache may keep it, but has to ask whether it changed.
+        "content-language": language,
         "cache-control": "public, max-age=0, must-revalidate",
-        ...(contentType === HTML ? PAGE_HEADERS : {}),
       },
       status,
     );
@@ -285,26 +402,36 @@ export async function loadWebBundle(
       ? `${origin}${path}`
       : `${origin}${path}?${languageParam}=${encodeURIComponent(code)}`;
 
-  const sitemap = (request: WebRequest): Response => {
+  const sitemapEntry = (origin: string, path: string, available: readonly string[]): string[] => {
+    const alternates = [
+      ...available.map((code) => [code, urlIn(origin, path, code)] as const),
+      ["x-default", urlIn(origin, path, defaultLanguage)] as const,
+    ]
+      .map(
+        ([code, href]) =>
+          `    <xhtml:link rel="alternate" hreflang="${escapeXml(code)}" href="${escapeXml(href)}"/>`,
+      )
+      .join("\n");
+    return available.map(
+      (code) =>
+        `  <url>\n    <loc>${escapeXml(urlIn(origin, path, code))}</loc>\n${alternates}\n  </url>`,
+    );
+  };
+
+  const sitemap = (request: WebRequest, addresses: readonly string[]): Response => {
     const origin = originOf(request);
-    const entries = manifest.routes
-      .filter((route) => route.indexable)
-      .flatMap((route) => {
-        const available = languages.filter((code) => route.files[code] !== undefined);
-        const alternates = [
-          ...available.map((code) => [code, urlIn(origin, route.path, code)] as const),
-          ["x-default", urlIn(origin, route.path, defaultLanguage)] as const,
-        ]
-          .map(
-            ([code, href]) =>
-              `    <xhtml:link rel="alternate" hreflang="${escapeXml(code)}" href="${escapeXml(href)}"/>`,
-          )
-          .join("\n");
-        return available.map(
-          (code) =>
-            `  <url>\n    <loc>${escapeXml(urlIn(origin, route.path, code))}</loc>\n${alternates}\n  </url>`,
-        );
-      });
+    const entries = [
+      ...manifest.routes
+        .filter((route) => route.indexable)
+        .flatMap((route) =>
+          sitemapEntry(
+            origin,
+            route.path,
+            languages.filter((code) => route.files[code] !== undefined),
+          ),
+        ),
+      ...addresses.flatMap((address) => sitemapEntry(origin, address, languages)),
+    ];
     return text(
       request,
       `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${entries.join("\n")}\n</urlset>\n`,
@@ -312,12 +439,10 @@ export async function loadWebBundle(
     );
   };
 
-  // Pages of addresses are rendered in the browser and ask the API for every visitor. A crawler
-  // walking them would have repositories indexed for nobody.
   const robots = (request: WebRequest): Response =>
     text(
       request,
-      `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /gh/\n\nSitemap: ${originOf(request)}/sitemap.xml\n`,
+      `User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: ${originOf(request)}/sitemap.xml\n`,
       { "content-type": "text/plain; charset=utf-8", "cache-control": "public, max-age=3600" },
     );
 
@@ -339,6 +464,9 @@ export async function loadWebBundle(
     return new Response(stream, { headers });
   };
 
+  // On an address the response depends on the Accept header: a page here, MCP otherwise.
+  const ADDRESS_HEADERS = { vary: "accept" };
+
   return {
     respond(request) {
       if (request.method !== "GET" && request.method !== "HEAD") {
@@ -355,12 +483,27 @@ export async function loadWebBundle(
       if (found !== undefined) {
         return file(request, found);
       }
-      if (path === "/sitemap.xml") {
-        return sitemap(request);
-      }
       return path === "/robots.txt" ? robots(request) : undefined;
     },
-    shell: (request) => page(request, manifest.shell, HTML),
+    address(request, data, status = 200) {
+      if (renderer === undefined) {
+        return page(request, manifest.shell, HTML, status, ADDRESS_HEADERS);
+      }
+      const origin = originOf(request);
+      const language = languageOf(request);
+      const rendered = renderer.module.renderAddressPage(renderer.template, {
+        language,
+        origin,
+        pathname: request.url.pathname,
+        search: request.url.search,
+        data,
+      });
+      if (typeof rendered !== "object" || rendered === null || typeof rendered.html !== "string") {
+        throw new WebBundleError("the render module did not return a page");
+      }
+      return html(request, withOrigin(rendered.html, origin), language, status, ADDRESS_HEADERS);
+    },
+    sitemap,
     notFound: (request) => page(request, manifest.notFound, HTML, 404),
   };
 }

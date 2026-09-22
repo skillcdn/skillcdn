@@ -1,4 +1,5 @@
-import { lazy, type ReactNode, Suspense, useEffect, useMemo } from "react";
+import { type ComponentType, lazy, type ReactNode, Suspense, useEffect, useMemo } from "react";
+import { type InitialData, InitialDataContext } from "./api/initial-data.js";
 import styles from "./app.module.css";
 import { Layout } from "./components/layout.js";
 import { Container, Skeleton } from "./components/ui.js";
@@ -7,13 +8,15 @@ import { languageOfSearch } from "./i18n/languages.js";
 import { type AppLocation, LocationProvider, useLocation } from "./navigation.js";
 import { ExplorePage } from "./pages/explore.js";
 import { LandingPage } from "./pages/landing.js";
+import type { MountPageProps } from "./pages/mount.js";
 import { BadAddressPage, NotFoundPage } from "./pages/simple.js";
 import { matchRoute, type Route } from "./router.js";
 import { applyHead, buildHead } from "./seo/head.js";
 
-// The explorer view brings the Markdown renderer with it. The front pages do not need it, and
-// the view is never prerendered, so it loads when someone opens an address.
-const MountPage = lazy(() =>
+// The explorer view brings the Markdown renderer with it. The front pages do not need it, so in
+// the browser it loads when someone opens an address. The server, which renders that view with
+// its data, passes the component in instead (entry-server.tsx).
+const LazyMountPage = lazy(() =>
   import("./pages/mount.js").then((module) => ({ default: module.MountPage })),
 );
 
@@ -35,9 +38,13 @@ export interface AppProps {
    * routes that depend on data is made this way.
    */
   readonly shell?: boolean;
+  /** Answers the page was rendered with on the server, by resource key. */
+  readonly initialData?: InitialData;
+  /** The explorer view, when it must render at once rather than load. */
+  readonly mountPage?: ComponentType<MountPageProps>;
 }
 
-function pageOf(route: Route, origin: string): ReactNode {
+function pageOf(route: Route, origin: string, MountPage: ComponentType<MountPageProps>): ReactNode {
   switch (route.name) {
     case "landing":
       return <LandingPage origin={origin} />;
@@ -56,15 +63,22 @@ function pageOf(route: Route, origin: string): ReactNode {
   }
 }
 
-function Routed(props: { readonly origin: string; readonly shell: boolean }) {
+function Routed(props: {
+  readonly origin: string;
+  readonly shell: boolean;
+  readonly mountPage: ComponentType<MountPageProps>;
+}) {
   const location = useLocation();
   const language = languageOfSearch(location.search);
   const i18n = useMemo(() => ({ language, t: messagesFor(language) }), [language]);
   const route = matchRoute(location.pathname, location.search, import.meta.env.DEV);
 
+  // The view of an address writes its own head once it knows what it shows (pages/mount.tsx).
   // biome-ignore lint/correctness/useExhaustiveDependencies: the route is a function of the location
   useEffect(() => {
-    applyHead(buildHead(route, language, props.origin));
+    if (route.name !== "mount") {
+      applyHead(buildHead(route, language, props.origin));
+    }
   }, [location.pathname, location.search, language, props.origin]);
 
   const placeholder = (
@@ -92,7 +106,7 @@ function Routed(props: { readonly origin: string; readonly shell: boolean }) {
         {props.shell ? (
           placeholder
         ) : (
-          <Suspense fallback={placeholder}>{pageOf(route, props.origin)}</Suspense>
+          <Suspense fallback={placeholder}>{pageOf(route, props.origin, props.mountPage)}</Suspense>
         )}
       </Layout>
     </I18nContext.Provider>
@@ -101,8 +115,14 @@ function Routed(props: { readonly origin: string; readonly shell: boolean }) {
 
 export function App(props: AppProps) {
   return (
-    <LocationProvider initial={props.initialLocation}>
-      <Routed origin={props.origin} shell={props.shell === true} />
-    </LocationProvider>
+    <InitialDataContext.Provider value={props.initialData ?? {}}>
+      <LocationProvider initial={props.initialLocation}>
+        <Routed
+          origin={props.origin}
+          shell={props.shell === true}
+          mountPage={props.mountPage ?? LazyMountPage}
+        />
+      </LocationProvider>
+    </InitialDataContext.Provider>
   );
 }

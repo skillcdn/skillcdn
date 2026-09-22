@@ -1,6 +1,12 @@
 import { createMcpHandler } from "@modelcontextprotocol/server";
-import { type Address, formatAddress, parseAddress } from "@skillcdn/core";
-import { type Database, getSchemaStatus } from "@skillcdn/db";
+import {
+  type Address,
+  formatAddress,
+  MAX_REPO_PATH_LENGTH,
+  parseAddress,
+  REST_MOUNT_LIST_LIMIT,
+} from "@skillcdn/core";
+import { type Database, getSchemaStatus, listTopRepositories, usageDayOf } from "@skillcdn/db";
 import { type Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type { SnapshotService } from "../indexer/snapshot-service.js";
@@ -10,8 +16,8 @@ import type { MountReader } from "../mounts/mount-reader.js";
 import { type Mount, MountError, type MountService } from "../mounts/mount-service.js";
 import type { ClientAddressResolver } from "./client-address.js";
 import { type AppEnv, requestContext } from "./request-context.js";
-import { registerRest } from "./rest.js";
-import { type WebBundle, type WebRequest, wantsHtml } from "./web.js";
+import { hostFailure, mountBody, registerRest, skillOutcome } from "./rest.js";
+import { type AddressData, type WebBundle, type WebRequest, wantsHtml } from "./web.js";
 
 export interface AppDependencies {
   readonly database: Database;
@@ -45,6 +51,17 @@ const STATUS_BY_REASON = {
   rate_limited: 503,
   unavailable: 503,
 } as const;
+
+/**
+ * What the sitemap lists besides the pages of the build: the featured addresses, and the
+ * repositories that the most distinct clients used lately. One client is not popularity, and
+ * would let anyone put a repository into the sitemap by asking for it once.
+ */
+const SITEMAP_DAYS = 30;
+const SITEMAP_TOP_REPOSITORIES = 500;
+const SITEMAP_MIN_CLIENTS = 2;
+const SITEMAP_CACHE_MS = 10 * 60_000;
+const DAY_MS = 86_400_000;
 
 function errorBody(code: string, message: string) {
   return { error: { code, message } };
@@ -162,6 +179,65 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
     now: dependencies.requests.now,
   });
 
+  /**
+   * The page of an address for a browser, rendered with what the address serves: the same
+   * answers the page would otherwise ask the REST API for, so that a crawler reads what a
+   * person sees. Serving the page resolves the address and starts indexing it, like the API.
+   */
+  const addressPage = async (c: Context<AppEnv>, bundle: WebBundle): Promise<Response> => {
+    const request = webRequestOf(c);
+    const parsed = parseAddress(request.url.pathname);
+    if (!parsed.ok) {
+      // The page explains what is wrong with the address; the status says it is nothing.
+      return bundle.address(request, {}, 404);
+    }
+    let mount: Mount;
+    try {
+      mount = await mounts.resolve(parsed.value);
+      startIndexing(mount);
+    } catch (error) {
+      if (error instanceof MountError) {
+        const status = STATUS_BY_REASON[error.reason];
+        return bundle.address(
+          request,
+          { mount: { error: { status, code: error.code, message: error.detail } } },
+          status,
+        );
+      }
+      throw error;
+    }
+    try {
+      const data: { mount: AddressData["mount"]; skill?: AddressData["skill"] } = {
+        mount: { ready: mountBody(mount, await reader.overview(mount, REST_MOUNT_LIST_LIMIT)) },
+      };
+      const wanted = request.url.searchParams.get("skill");
+      if (wanted !== null && wanted.length > 0 && wanted.length <= MAX_REPO_PATH_LENGTH) {
+        const outcome = skillOutcome(await reader.skill(mount, wanted, 0));
+        data.skill =
+          "body" in outcome
+            ? { ready: outcome.body }
+            : {
+                error: {
+                  status: outcome.failure.status,
+                  code: outcome.failure.code,
+                  message: outcome.failure.message,
+                  ...(outcome.failure.directories === undefined
+                    ? {}
+                    : { directories: outcome.failure.directories }),
+                },
+              };
+      }
+      return bundle.address(request, data);
+    } catch (error) {
+      const known = hostFailure(error);
+      if (known === undefined) {
+        throw error;
+      }
+      const { status, code, message } = known;
+      return bundle.address(request, { mount: { error: { status, code, message } } }, status);
+    }
+  };
+
   app.all(
     "/gh/*",
     bodyLimit({
@@ -169,10 +245,9 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
       onError: (c) => c.json(errorBody("request.too_large", "The request body is too large."), 413),
     }),
     async (c) => {
-      // An address answers a browser with the explorer and everything else with MCP. The page
-      // asks the REST API for what it shows, so serving it resolves and indexes nothing.
+      // An address answers a browser with the explorer and everything else with MCP.
       if (web !== undefined && wantsHtml(webRequestOf(c))) {
-        return web.shell(webRequestOf(c));
+        return addressPage(c, web);
       }
       const mount = await mountAt(c, "");
       if (mount instanceof Response) {
@@ -192,7 +267,43 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
   );
 
   if (web !== undefined) {
-    app.on(["GET", "HEAD"], "*", (c) => web.respond(webRequestOf(c)) ?? c.notFound());
+    const bundle = web;
+    let listed: { readonly until: number; readonly addresses: Promise<string[]> } | undefined;
+
+    /** The addresses the sitemap lists: featured ones, then the popular ones, without repeats. */
+    const listedAddresses = async (): Promise<string[]> => {
+      const paths = new Set(dependencies.featured.map(formatAddress));
+      try {
+        const now = tools.clock.now();
+        const top = await listTopRepositories(database, {
+          metric: "client",
+          from: usageDayOf(new Date(now.getTime() - SITEMAP_DAYS * DAY_MS)),
+          to: usageDayOf(now),
+          limit: SITEMAP_TOP_REPOSITORIES,
+          minimum: SITEMAP_MIN_CLIENTS,
+        });
+        for (const repository of top) {
+          const parsed = parseAddress(`/${repository.host}/${repository.owner}/${repository.name}`);
+          if (parsed.ok) {
+            paths.add(formatAddress(parsed.value));
+          }
+        }
+      } catch (error) {
+        logger.warn({ err: error }, "popular repositories could not be listed for the sitemap");
+      }
+      return [...paths];
+    };
+
+    app.get("/sitemap.xml", async (c) => {
+      const now = dependencies.requests.now();
+      if (listed === undefined || listed.until <= now) {
+        const addresses = listedAddresses();
+        listed = { until: now + SITEMAP_CACHE_MS, addresses };
+      }
+      return bundle.sitemap(webRequestOf(c), await listed.addresses);
+    });
+
+    app.on(["GET", "HEAD"], "*", (c) => bundle.respond(webRequestOf(c)) ?? c.notFound());
   }
 
   app.notFound((c) =>

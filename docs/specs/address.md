@@ -59,7 +59,7 @@ Parsing never consults the repository. An address means the same thing whatever 
 
 ## In a browser
 
-The same URL answers people. When the deployment serves the web UI, a `GET` whose `Accept` header asks for `text/html` gets the explorer view of the address; every other request on the path is MCP ([ADR-0009](../adr/0009-web-ui-prerendered-per-language.md)). Query parameters are not part of an address: `lang` selects the language of the UI and means nothing to MCP.
+The same URL answers people. When the deployment serves the web UI, a `GET` whose `Accept` header asks for `text/html` gets the explorer view of the address, rendered with what the address serves; every other request on the path is MCP ([ADR-0009](../adr/0009-web-ui-prerendered-per-language.md), [ADR-0011](../adr/0011-address-pages-rendered-on-the-server.md)). Query parameters are not part of an address: `lang` selects the language of the UI, `skill`, `file` and `q` select a view, and none of them means anything to MCP. Search engines may index the view of an address without a ref and the view of one of its skills; a page at a ref, a file and a search say `noindex`.
 
 ## Open questions
 

@@ -48,7 +48,8 @@ src/
   roles/         api.ts (composition root, HTTP server, shutdown) and migrate.ts
   http/          Hono app: /healthz, /readyz, the route that turns a URL into a mount, the REST API,
                  what every request gets (id, client address, access log), and web.ts, which serves
-                 a build of the web UI from its manifest (pages per language, files, sitemap, robots)
+                 a build of the web UI from its manifest (pages per language, files, sitemap, robots),
+                 and the page of an address through the build's render module
   mcp/           the per-request MCP server and the tool handlers (contracts come from @skillcdn/core)
   mounts/        address -> repository and commit, through the database first and the git host second;
                  MountReader answers questions about a mount as data, for MCP and REST alike
@@ -80,5 +81,5 @@ Create directories when they get their first file. Do not add empty scaffolding.
 - Unit tests next to the code.
 - `src/api.int.test.ts` runs the real app against real PostgreSQL with the MCP client SDK and a git host backed by [`skills/`](../../skills/). It covers both protocol eras, sub-path mounts, hostile repositories, the indexing budget and the error surface. It needs the compose database, like the `db` integration tests.
 - `src/rest.int.test.ts` does the same for the REST API and parses every response with the schemas in `@skillcdn/core`, which are what the web UI parses with.
-- `src/web.int.test.ts` and `src/http/web.test.ts` cover serving a web build: language variants, the public origin, caching, the content security policy, the sitemap, and an address answering a browser with a page and everyone else with MCP. They use a small fake build (`src/testing/web-build.ts`), not `apps/web`.
+- `src/web.int.test.ts` and `src/http/web.test.ts` cover serving a web build: language variants, the public origin, caching, the content security policy, the sitemap with its featured and popular repositories, and an address answering a browser with a rendered page and everyone else with MCP. They use a small fake build with a fake render module (`src/testing/web-build.ts`), not `apps/web`.
 - `src/testing/harness.ts` wires the app for all of them. Every test file has a database of its own; tests inside a file share it.

@@ -18,6 +18,24 @@ export const en = {
       title: (repository: string) => `${repository} | SkillCDN`,
       description: (repository: string) =>
         `The skills and documents that ${repository} serves to agents through SkillCDN.`,
+      /** With the index at hand: what is there, and the first few skills by name. */
+      summary: (
+        repository: string,
+        skills: number,
+        documents: number,
+        names: readonly string[],
+      ) => {
+        const counted = `${skills === 1 ? "1 skill" : `${skills} skills`} and ${
+          documents === 1 ? "1 document" : `${documents} documents`
+        }`;
+        return names.length === 0
+          ? `${repository} serves ${counted} to AI agents over MCP through SkillCDN.`
+          : `${repository} serves ${counted} to AI agents over MCP through SkillCDN: ${names.join(", ")}.`;
+      },
+      skillTitle: (skill: string, repository: string) => `${skill} · ${repository} | SkillCDN`,
+      skillDescription: (skill: string, repository: string, description: string) =>
+        `${skill}, a skill for AI agents in ${repository}: ${description}`,
+      fileTitle: (path: string, repository: string) => `${path} · ${repository} | SkillCDN`,
     },
     notFound: {
       title: "Page not found | SkillCDN",

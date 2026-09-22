@@ -1,17 +1,20 @@
 // The last step of the build. Renders every static page once per language into dist/, plus the
 // shell for pages that render in the browser, llms.txt, and routes.json: the manifest that tells
-// whatever serves dist/ which file answers which URL in which language (ADR-0009).
+// whatever serves dist/ which file answers which URL in which language (ADR-0009). The bundle that
+// renders pages stays in dist/render/ with the document template, so that the server can render
+// the view of an address with its data (ADR-0011).
 //
 // Pages carry a placeholder instead of the public origin; the server fills it in. For a plain
 // static host, set SKILLCDN_PUBLIC_URL when building and the origin is written into the files.
-import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const dist = join(root, "dist");
-const ssr = join(root, "dist-ssr");
+const RENDER_MODULE = "render/entry-server.js";
+const TEMPLATE_FILE = "template.html";
 
 const {
   DEFAULT_LANGUAGE,
@@ -19,18 +22,16 @@ const {
   LANGUAGES,
   ORIGIN_PLACEHOLDER,
   STATIC_PAGES,
+  TEMPLATE_MARKERS,
+  renderDocument,
   renderLlmsTxt,
   renderNotFound,
   renderPage,
   renderShell,
-} = await import(pathToFileURL(join(ssr, "entry-server.js")).href);
+} = await import(pathToFileURL(join(dist, RENDER_MODULE)).href);
 
 const template = readFileSync(join(dist, "index.html"), "utf8");
-for (const marker of [
-  '<html lang="en">',
-  "<!--app-head-->",
-  '<div id="root"><!--app-html--></div>',
-]) {
+for (const marker of Object.values(TEMPLATE_MARKERS)) {
   if (!template.includes(marker)) {
     throw new Error(`index.html lost the marker ${marker}`);
   }
@@ -56,21 +57,13 @@ function write(file, content) {
   writeFileSync(target, withOrigin(content));
 }
 
-function writePage(file, page) {
-  write(
-    file,
-    template
-      .replace('<html lang="en">', `<html lang="${page.htmlLang}">`)
-      .replace("<!--app-head-->", page.head)
-      .replace(
-        '<div id="root"><!--app-html--></div>',
-        `<div id="root" data-prerendered="${page.routeName}">${page.body}</div>`,
-      ),
-  );
-}
+const writePage = (file, page) => write(file, renderDocument(template, page));
 
 const byLanguage = (fileOf) =>
   Object.fromEntries(LANGUAGES.map((language) => [language, fileOf(language)]));
+
+// The template, kept with its markers, is what the server renders address pages into.
+write(TEMPLATE_FILE, template);
 
 const routes = [];
 for (const page of STATIC_PAGES) {
@@ -113,13 +106,14 @@ write(
       routes,
       shell,
       notFound,
+      render: RENDER_MODULE,
+      template: TEMPLATE_FILE,
     },
     null,
     2,
   )}\n`,
 );
 
-rmSync(ssr, { recursive: true, force: true });
 process.stdout.write(
   `prerendered ${routes.length} routes in ${LANGUAGES.length} languages (${LANGUAGES.join(", ")})\n`,
 );

@@ -1,6 +1,5 @@
 import {
   type Address,
-  formatAddress,
   REST_MOUNT_LIST_LIMIT,
   type RestDocumentSummary,
   type RestMount,
@@ -8,6 +7,7 @@ import {
 } from "@skillcdn/core";
 import { type FormEvent, useState } from "react";
 import { api } from "../api/client.js";
+import { resourceKeys } from "../api/keys.js";
 import { useResource } from "../api/use-resource.js";
 import { ErrorCallout } from "../components/error-callout.js";
 import { Tabs } from "../components/tabs.js";
@@ -73,7 +73,7 @@ function SearchResults(props: { readonly address: Address; readonly query: strin
   const { t } = useI18n();
   const { address, query } = props;
   const found = useResource(
-    `${formatAddress(address)} find ${query}`,
+    resourceKeys.find(address, query),
     (signal) => api.find(address, query, signal),
     (value) => value.status === "indexing",
   );

@@ -1,3 +1,4 @@
+import { addUsage, findRepoByAlias, usageDayOf } from "@skillcdn/db";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadWebBundle, type WebBundle } from "./http/web.js";
@@ -23,6 +24,16 @@ afterAll(async () => {
   await testDatabase?.drop();
 });
 
+/** What the fake render module was given, read back from the page. */
+async function inputOf(page: Response): Promise<Record<string, unknown>> {
+  const html = await page.text();
+  const match = /<pre id="input">(.*?)<\/pre>/s.exec(html);
+  if (match?.[1] === undefined) {
+    throw new Error(`not a rendered address page: ${html.slice(0, 200)}`);
+  }
+  return JSON.parse(match[1]) as Record<string, unknown>;
+}
+
 describe("a server with a web build", () => {
   it("serves its pages, in the language the URL asks for", async () => {
     const h = createHarness(testDatabase, { web });
@@ -40,18 +51,45 @@ describe("a server with a web build", () => {
     expect((await h.request("/", { method: "HEAD" })).status).toBe(200);
   });
 
-  it("answers a browser on an address with the explorer, and everyone else with MCP", async () => {
+  it("answers a browser on an address with the page of what it serves, and everyone else with MCP", async () => {
     const host = createFixtureHost("web-negotiation");
     const h = createHarness(testDatabase, { web, host });
-    const address = `/gh/acme/multi-skill@${fixtureCommits("web-negotiation").main}`;
+    const commit = fixtureCommits("web-negotiation").main;
+    const address = `/gh/acme/multi-skill@${commit}/skills`;
 
-    const page = await h.request(`${address}?lang=ko`, { headers: BROWSER });
-    expect(page.status).toBe(200);
-    expect(await page.text()).toContain("Shell in Korean");
-    // Even an address that names nothing gets the page: the page is what explains it.
-    expect((await h.request("/gh/acme/no-such-repo", { headers: BROWSER })).status).toBe(200);
-    // Serving the page asked the git host nothing and indexed nothing.
-    expect(host.calls).toMatchObject({ getRepository: 0, resolveRef: 0, getTree: 0 });
+    // The first look starts indexing, like the API does, and says so.
+    const first = await h.request(`${address}?lang=ko`, { headers: BROWSER });
+    expect(first.status).toBe(200);
+    expect(first.headers.get("content-type")).toBe("text/html; charset=utf-8");
+    expect(first.headers.get("vary")).toBe("accept");
+    const started = await inputOf(first);
+    expect(started).toMatchObject({
+      language: "ko",
+      origin: "https://skills.example",
+      pathname: address,
+      search: "?lang=ko",
+      data: { mount: { ready: { address, index: { status: "indexing" } } } },
+    });
+    expect(host.calls.getRepository).toBe(1);
+    await h.snapshots.idle();
+
+    // With the index there, the page carries what the address serves, and the skill it asks for.
+    const done = await inputOf(
+      await h.request(`${address}?skill=release-notes`, { headers: BROWSER }),
+    );
+    expect(done).toMatchObject({
+      language: "en",
+      data: {
+        mount: { ready: { index: { status: "ready", skillCount: 2 } } },
+        skill: { ready: { status: "ready", skill: { name: "release-notes" } } },
+      },
+    });
+    const missingSkill = await inputOf(
+      await h.request(`${address}?skill=no-such-skill`, { headers: BROWSER }),
+    );
+    expect(missingSkill.data).toMatchObject({
+      skill: { error: { status: 404, code: "skill.not_found" } },
+    });
 
     const ping = await h.request(address, {
       method: "POST",
@@ -60,12 +98,76 @@ describe("a server with a web build", () => {
     });
     expect(ping.status).toBe(200);
     expect(ping.headers.get("content-type")).not.toContain("text/html");
-    expect(host.calls.getRepository).toBe(1);
 
     // A GET that does not ask for HTML is MCP's to answer, as it was without a web build.
     const stream = await h.request(address, { headers: { accept: "text/event-stream" } });
     expect(stream.headers.get("content-type") ?? "").not.toContain("text/html");
+  });
+
+  it("gives a browser the page, with the status, for an address that is nothing", async () => {
+    const h = createHarness(testDatabase, { web });
+    // A repository that does not exist, and an address that is not one: the page explains both.
+    const missing = await h.request("/gh/acme/no-such-repo", { headers: BROWSER });
+    expect(missing.status).toBe(404);
+    expect(missing.headers.get("content-type")).toBe("text/html; charset=utf-8");
+    expect((await inputOf(missing)).data).toEqual({
+      mount: { error: { status: 404, code: "mount.repo_not_found", message: expect.any(String) } },
+    });
+    const bad = await h.request("/gh/acme", { headers: BROWSER });
+    expect(bad.status).toBe(404);
+    expect((await inputOf(bad)).data).toEqual({});
+  });
+
+  it("lists the featured and the popular repositories in the sitemap", async () => {
+    const host = createFixtureHost("web-sitemap");
+    const h = createHarness(testDatabase, {
+      web,
+      host,
+      featured: ["/gh/acme/multi-skill/skills"],
+    });
+    // Make the repositories known, then give one of them enough distinct clients to count.
+    await h.request(`/gh/acme/multi-skill@${fixtureCommits("web-sitemap").main}`, {
+      headers: BROWSER,
+    });
+    await h.request(`/gh/acme/single-skill@${fixtureCommits("web-sitemap").main}`, {
+      headers: BROWSER,
+    });
     await h.snapshots.idle();
+    const day = usageDayOf(new Date());
+    for (const [name, count] of [
+      ["multi-skill", 3],
+      ["single-skill", 1],
+    ] as const) {
+      const repo = await findRepoByAlias(testDatabase.database, {
+        host: "gh",
+        owner: "acme",
+        repo: name,
+      });
+      if (repo === undefined) {
+        throw new Error(`${name} was not saved`);
+      }
+      await addUsage(
+        testDatabase.database,
+        [
+          {
+            scope: { accountId: repo.accountId, repoId: repo.id },
+            day,
+            metric: "client",
+            subject: "",
+            count,
+          },
+        ],
+        new Date(),
+      );
+    }
+
+    const xml = await (await h.request("/sitemap.xml")).text();
+    expect(xml).toContain("<loc>https://skills.example/gh/acme/multi-skill/skills</loc>");
+    expect(xml).toContain("<loc>https://skills.example/gh/acme/multi-skill</loc>");
+    expect(xml).toContain("<loc>https://skills.example/gh/acme/multi-skill?lang=ko</loc>");
+    // One client is not popularity.
+    expect(xml).not.toContain("single-skill");
+    expect((await h.request("/robots.txt")).status).toBe(200);
   });
 
   it("answers what is nothing with a page for browsers and with JSON for everyone else", async () => {
@@ -81,6 +183,7 @@ describe("a server with a web build", () => {
     });
     expect((await h.request("/routes.json")).status).toBe(404);
     expect((await h.request("/index.html")).status).toBe(404);
+    expect((await h.request("/render/entry-server.js")).status).toBe(404);
   });
 
   it("leaves the API and the probes as they are", async () => {
@@ -92,6 +195,21 @@ describe("a server with a web build", () => {
     expect(missing.status).toBe(404);
     expect(missing.headers.get("content-type")).toContain("application/json");
     expect((await h.request("/api/v1/nothing", { headers: BROWSER })).status).toBe(404);
+  });
+});
+
+describe("a server with a web build that cannot render", () => {
+  it("gives browsers the frame on an address, which asks the API for the rest", async () => {
+    const plain = createWebBuild(undefined, { render: false });
+    const bundle = await loadWebBundle(plain.root, { publicUrl: "https://skills.example" });
+    const host = createFixtureHost("web-shell");
+    const h = createHarness(testDatabase, { web: bundle, host });
+    const page = await h.request("/gh/acme/multi-skill?lang=ko", { headers: BROWSER });
+    expect(page.status).toBe(200);
+    expect(await page.text()).toContain("Shell in Korean");
+    expect((await h.request("/gh/acme/no-such-repo", { headers: BROWSER })).status).toBe(404);
+    await h.snapshots.idle();
+    plain.remove();
   });
 });
 

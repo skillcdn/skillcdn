@@ -1,5 +1,7 @@
-import { type Address, formatAddress } from "@skillcdn/core";
+import type { Address, RestSkill } from "@skillcdn/core";
+import { useEffect } from "react";
 import { api } from "../api/client.js";
+import { resourceKeys } from "../api/keys.js";
 import { useResource } from "../api/use-resource.js";
 import { ErrorCallout } from "../components/error-callout.js";
 import { Markdown } from "../components/markdown.js";
@@ -10,14 +12,24 @@ import { mountHref } from "../router.js";
 import styles from "./mount.module.css";
 
 /** One skill as `get` returns it: front-matter, instructions and the files next to it. */
-export function MountSkill(props: { readonly address: Address; readonly name: string }) {
+export function MountSkill(props: {
+  readonly address: Address;
+  readonly name: string;
+  /** Told what was loaded, or that nothing is, so that the page can say so in its head. */
+  readonly onLoaded?: (skill: RestSkill | undefined) => void;
+}) {
   const { t } = useI18n();
-  const { address, name } = props;
+  const { address, name, onLoaded } = props;
   const answer = useResource(
-    `${formatAddress(address)} skill ${name}`,
+    resourceKeys.skill(address, name),
     (signal) => api.skill(address, name, signal),
     (value) => value.status === "indexing",
   );
+  const loaded =
+    answer.state === "ready" && answer.value.status === "ready" ? answer.value : undefined;
+  useEffect(() => {
+    onLoaded?.(loaded);
+  }, [onLoaded, loaded]);
   const back = (
     <p>
       <Link className={styles.back} href={mountHref(address)}>

@@ -1,6 +1,6 @@
 # ADR-0009: The web UI is prerendered per language and served by the `api` role
 
-- Status: Accepted
+- Status: Accepted; the shell for address pages in point 1 is amended by ADR-0011
 - Date: 2026-09-22
 
 ## Context

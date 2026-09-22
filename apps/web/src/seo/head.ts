@@ -1,3 +1,4 @@
+import type { RestMount, RestSkill } from "@skillcdn/core";
 import { messagesFor } from "../i18n/index.js";
 import {
   DEFAULT_LANGUAGE,
@@ -6,7 +7,7 @@ import {
   type Language,
   withLanguage,
 } from "../i18n/languages.js";
-import { PATHS, type Route } from "../router.js";
+import { mountHref, PATHS, type Route } from "../router.js";
 import { LINKS } from "../site.js";
 
 // What a crawler reads before it reads the page: title, description, which URL is canonical,
@@ -17,7 +18,7 @@ export interface PageHead {
   readonly language: Language;
   readonly title: string;
   readonly description: string;
-  /** Pages that depend on a repository are not for search indexes (ADR-0009). */
+  /** Whether search engines may index this URL. Pages without their data yet are not. */
   readonly indexable: boolean;
   /** Absolute URL of this page in this language. Only indexable pages have one. */
   readonly canonical: string | undefined;
@@ -27,35 +28,120 @@ export interface PageHead {
   readonly jsonLd: readonly Record<string, unknown>[];
 }
 
-export const OG_IMAGE_SIZE = { width: 1200, height: 630 } as const;
-
-/** The path of a route that exists once per language, without a language. */
-export function indexablePathOf(route: Route): string | undefined {
-  return route.name === "landing"
-    ? PATHS.landing
-    : route.name === "explore"
-      ? PATHS.explore
-      : undefined;
+/** What a page of an address knows about it, once loaded. */
+export interface PageData {
+  readonly mount?: RestMount | undefined;
+  readonly skill?: RestSkill | undefined;
 }
 
-export function buildHead(route: Route, language: Language, origin: string): PageHead {
+export const OG_IMAGE_SIZE = { width: 1200, height: 630 } as const;
+
+/** Search snippets are cut around here; the description says the most in its first words. */
+const MAX_DESCRIPTION_LENGTH = 200;
+/** How many skill names a repository's description lists. */
+const NAMED_SKILLS = 8;
+
+function clip(text: string): string {
+  const flat = text.replace(/\s+/g, " ").trim();
+  return flat.length <= MAX_DESCRIPTION_LENGTH
+    ? flat
+    : `${flat.slice(0, MAX_DESCRIPTION_LENGTH - 1).trimEnd()}…`;
+}
+
+/**
+ * The path of a page that search engines may index, without a language, or `undefined`. Static
+ * pages always are. The view of an address is when it is the living address (no ref, which would
+ * be a snapshot of the same page) and its data was there to render: the overview or one skill.
+ */
+function indexablePathOf(route: Route, data: PageData | undefined): string | undefined {
+  switch (route.name) {
+    case "landing":
+      return PATHS.landing;
+    case "explore":
+      return PATHS.explore;
+    case "mount": {
+      const { address, view } = route;
+      if (address.ref !== undefined || data?.mount?.index.status !== "ready") {
+        return undefined;
+      }
+      if (view.kind === "overview" && view.query === undefined) {
+        return mountHref(address, view);
+      }
+      if (view.kind === "skill" && data.skill?.status === "ready") {
+        return mountHref(address, view);
+      }
+      return undefined;
+    }
+    default:
+      return undefined;
+  }
+}
+
+function mountText(
+  route: Extract<Route, { name: "mount" }>,
+  language: Language,
+  data: PageData | undefined,
+): { readonly title: string; readonly description: string } {
   const t = messagesFor(language);
-  const path = indexablePathOf(route);
+  const { address, view } = route;
+  const mount = data?.mount;
+  const repository =
+    mount === undefined
+      ? `${address.owner}/${address.repo}`
+      : `${mount.repository.owner}/${mount.repository.name}`;
+  if (view.kind === "skill") {
+    const skill = data?.skill?.status === "ready" ? data.skill.skill : undefined;
+    return {
+      title: t.meta.mount.skillTitle(skill?.name ?? view.name, repository),
+      description:
+        skill === undefined
+          ? t.meta.mount.description(repository)
+          : clip(t.meta.mount.skillDescription(skill.name, repository, skill.description)),
+    };
+  }
+  if (view.kind === "file") {
+    return {
+      title: t.meta.mount.fileTitle(view.path, repository),
+      description: t.meta.mount.description(repository),
+    };
+  }
+  const index = mount?.index.status === "ready" ? mount.index : undefined;
+  return {
+    title: t.meta.mount.title(repository),
+    description:
+      index === undefined
+        ? t.meta.mount.description(repository)
+        : clip(
+            t.meta.mount.summary(
+              repository,
+              index.skillCount,
+              index.documentCount,
+              index.skills.slice(0, NAMED_SKILLS).map((skill) => skill.name),
+            ),
+          ),
+  };
+}
+
+export function buildHead(
+  route: Route,
+  language: Language,
+  origin: string,
+  data?: PageData,
+): PageHead {
+  const t = messagesFor(language);
+  const path = indexablePathOf(route, data);
   const urlIn = (code: Language) =>
     path === undefined ? undefined : `${origin}${withLanguage(path, code)}`;
   const canonical = urlIn(language);
+  const inLanguage = LANGUAGE_INFO[language].htmlLang;
 
-  const repository = route.name === "mount" ? `${route.address.owner}/${route.address.repo}` : "";
   const text =
     route.name === "landing"
       ? t.meta.landing
       : route.name === "explore"
         ? t.meta.explore
         : route.name === "mount"
-          ? {
-              title: t.meta.mount.title(repository),
-              description: t.meta.mount.description(repository),
-            }
+          ? mountText(route, language, data)
           : route.name === "states" || route.name === "og-card"
             ? { title: t.meta.siteName, description: "" }
             : route.name === "bad-address"
@@ -64,7 +150,6 @@ export function buildHead(route: Route, language: Language, origin: string): Pag
 
   const jsonLd: Record<string, unknown>[] = [];
   if (route.name === "landing" && canonical !== undefined) {
-    const inLanguage = LANGUAGE_INFO[language].htmlLang;
     jsonLd.push(
       {
         "@context": "https://schema.org",
@@ -96,6 +181,27 @@ export function buildHead(route: Route, language: Language, origin: string): Pag
         })),
       },
     );
+  }
+  if (route.name === "mount" && canonical !== undefined && data?.mount !== undefined) {
+    const { repository } = data.mount;
+    const skill =
+      route.view.kind === "skill" && data.skill?.status === "ready" ? data.skill.skill : undefined;
+    jsonLd.push({
+      "@context": "https://schema.org",
+      "@type": skill === undefined ? "SoftwareSourceCode" : "TechArticle",
+      name: skill === undefined ? `${repository.owner}/${repository.name}` : skill.name,
+      url: canonical,
+      description: text.description,
+      inLanguage,
+      ...(skill === undefined
+        ? { codeRepository: `https://github.com/${repository.owner}/${repository.name}` }
+        : {
+            isPartOf: {
+              "@type": "SoftwareSourceCode",
+              name: `${repository.owner}/${repository.name}`,
+            },
+          }),
+    });
   }
 
   return {

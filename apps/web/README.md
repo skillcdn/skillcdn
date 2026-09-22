@@ -1,6 +1,6 @@
 # @skillcdn/web
 
-The web UI: a landing page and an explorer that shows what an agent gets from an address. English and Korean. Vite, React and plain CSS; the build is static files, prerendered once per language ([ADR-0009](../../docs/adr/0009-web-ui-prerendered-per-language.md)).
+The web UI: a landing page and an explorer that shows what an agent gets from an address. English and Korean. Vite, React and plain CSS; the build is static files, prerendered once per language ([ADR-0009](../../docs/adr/0009-web-ui-prerendered-per-language.md)), plus a module the server uses to render the page of an address with its data ([ADR-0011](../../docs/adr/0011-address-pages-rendered-on-the-server.md)).
 
 It is optional. A deployment without it is still a complete MCP and REST server, and the UI uses nothing but the public [REST API](../../docs/specs/rest.md).
 
@@ -40,12 +40,15 @@ Styles are CSS modules: a class is local to its component, so renaming or restyl
 
 ## How it is built
 
-`pnpm --filter @skillcdn/web run build` does three things: the client bundle, a bundle of `src/entry-server.tsx` that can render pages to HTML, and `scripts/prerender.mjs`, which writes into `dist/`:
+`pnpm --filter @skillcdn/web run build` does three things: the client bundle, a self-contained bundle of `src/entry-server.tsx` that renders pages to HTML (`dist/render/entry-server.js`), and `scripts/prerender.mjs`, which writes into `dist/`:
 
 - every static page once per language (`index.html`, `index.ko.html`, `explore/index.html`, ...), with its title, description, canonical and `hreflang` links, social-preview tags and structured data already in the HTML, because most crawlers do not run scripts;
-- a shell for pages that depend on data (the explorer view), which render in the browser and are marked `noindex`;
+- a shell for pages that depend on data, for a host that cannot render them;
+- `template.html`, the document that pages are rendered into, kept for the server;
 - `llms.txt` per language;
-- `routes.json`, which tells whatever serves `dist/` which file answers which URL in which language.
+- `routes.json`, which tells whatever serves `dist/` which file answers which URL in which language, and names the render module.
+
+The explorer view of an address is rendered by the server per request: it calls `renderAddressPage` from the render module with the language, the origin, the URL and the answers the page would ask the REST API for, and the page carries those answers in a JSON element (`#skillcdn-data`) so that the browser hydrates instead of loading them again (`src/api/initial-data.ts`, `src/api/use-resource.ts`). The head of that page (`src/seo/head.ts`) says whether it may be indexed: the overview of an address without a ref and one skill are; a ref, a file, a search or an index that is not ready are not.
 
 Languages share their paths; `?lang=ko` selects Korean and no parameter means English. Pages carry a placeholder instead of the public origin, which the server fills in, so one build works on any domain. For a plain static host, build with `SKILLCDN_PUBLIC_URL=https://your.host` and the origin is written into the files; such a host serves the default language only.
 
@@ -55,7 +58,7 @@ A pack in `src/i18n/messages/`, an entry in `src/i18n/languages.ts` and in `src/
 
 ## Constraints
 
-- **REST only.** The UI may import types, schemas and the address parser from `@skillcdn/core`, and nothing else from the workspace.
+- **REST only.** The UI may import types, schemas and the address parser from `@skillcdn/core`, and nothing else from the workspace. The render module is the one thing the server calls, and it takes plain data.
 - **Repository content is untrusted.** Markdown is rendered as React elements, never as HTML. Raw HTML stays text, links go to `http(s)`, `mailto` or another file of the same mount, and images are never loaded, because loading one tells a third party who is reading.
 - **No inline scripts or styles**, so the pages work under a strict content security policy.
 - **No secrets in the client.** Everything in a browser bundle is public.

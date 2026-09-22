@@ -30,7 +30,7 @@ function fixtureApi(): Plugin {
 
 // `vite` serves the UI against fixtures. `vite --mode api` proxies to a real server instead:
 // http://127.0.0.1:8080, or SKILLCDN_API_URL from apps/web/.env.local.
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, isSsrBuild }) => {
   const env = loadEnv(mode, process.cwd(), "SKILLCDN_");
   const apiUrl = mode === "api" ? (env.SKILLCDN_API_URL ?? "http://127.0.0.1:8080") : undefined;
 
@@ -56,10 +56,18 @@ export default defineConfig(({ mode }) => {
             },
           }),
     },
+    // The files of public/ belong to the client build; the render bundle is only code.
+    publicDir: isSsrBuild === true ? false : "public",
     build: {
-      // The prerender step reads this build and writes next to it.
-      emptyOutDir: true,
-      sourcemap: true,
+      // The client build starts the output directory; the render bundle is written into it next
+      // and must not empty it. The prerender step then reads both.
+      emptyOutDir: isSsrBuild !== true,
+      sourcemap: isSsrBuild !== true,
+    },
+    ssr: {
+      // The render bundle is loaded by the server, which has none of this workspace's
+      // dependencies: everything it needs is bundled in, apart from Node's own modules.
+      noExternal: true,
     },
   };
 });

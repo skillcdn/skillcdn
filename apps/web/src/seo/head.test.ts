@@ -1,9 +1,49 @@
+import type { RestMount, RestSkill } from "@skillcdn/core";
 import { describe, expect, it } from "vitest";
 import { LANGUAGES } from "../i18n/languages.js";
 import { matchRoute } from "../router.js";
 import { buildHead, renderHead } from "./head.js";
 
 const ORIGIN = "https://skills.example";
+
+const MOUNT: RestMount = {
+  address: "/gh/acme/skills",
+  repository: { host: "gh", owner: "Acme", name: "skills", defaultBranch: "main" },
+  ref: null,
+  pinned: false,
+  commit: "a".repeat(40),
+  path: "",
+  verified: false,
+  index: {
+    status: "ready",
+    truncated: false,
+    skillCount: 2,
+    documentCount: 1,
+    skills: [
+      { name: "review", directory: "review", description: "Reviews a change.", warnings: [] },
+      { name: "release", directory: "release", description: "Writes notes.", warnings: [] },
+    ],
+    documents: [{ path: "README.md", title: "Skills", summary: null }],
+    diagnostics: [],
+  },
+};
+
+const SKILL: RestSkill = {
+  status: "ready",
+  skill: {
+    name: "review",
+    directory: "review",
+    description: "Reviews a change for the things a linter cannot see.",
+    license: null,
+    compatibility: null,
+    allowedTools: null,
+    metadata: {},
+    body: "# Review",
+    files: [],
+    filesTruncated: false,
+    warnings: [],
+  },
+};
 
 describe("buildHead", () => {
   it("gives an indexable page one canonical URL per language, and tells each about the others", () => {
@@ -41,7 +81,7 @@ describe("buildHead", () => {
     expect(buildHead(matchRoute("/explore", ""), "en", ORIGIN).jsonLd).toEqual([]);
   });
 
-  it("keeps pages that depend on a repository out of search indexes", () => {
+  it("keeps pages of an address out of search indexes until their data is there", () => {
     for (const path of ["/gh/acme/skills", "/gh/acme/skills.git", "/nothing-here"]) {
       const head = buildHead(matchRoute(path, ""), "en", ORIGIN);
       expect(head.indexable, path).toBe(false);
@@ -51,6 +91,64 @@ describe("buildHead", () => {
     expect(buildHead(matchRoute("/gh/acme/skills", ""), "ko", ORIGIN).title).toContain(
       "acme/skills",
     );
+    const indexing = buildHead(matchRoute("/gh/acme/skills", ""), "en", ORIGIN, {
+      mount: { ...MOUNT, index: { status: "indexing" } },
+    });
+    expect(indexing.indexable).toBe(false);
+  });
+
+  it("describes a repository and a skill from their data, per language, with one canonical URL", () => {
+    const overview = buildHead(matchRoute("/gh/acme/skills", "?lang=ko"), "ko", ORIGIN, {
+      mount: MOUNT,
+    });
+    expect(overview.indexable).toBe(true);
+    expect(overview.canonical).toBe("https://skills.example/gh/acme/skills?lang=ko");
+    expect(overview.alternates).toEqual([
+      { hreflang: "en", href: "https://skills.example/gh/acme/skills" },
+      { hreflang: "ko", href: "https://skills.example/gh/acme/skills?lang=ko" },
+      { hreflang: "x-default", href: "https://skills.example/gh/acme/skills" },
+    ]);
+    expect(overview.title).toContain("Acme/skills");
+    expect(overview.description).toContain("review, release");
+    expect(overview.jsonLd.map((data) => data["@type"])).toEqual(["SoftwareSourceCode"]);
+
+    const skill = buildHead(matchRoute("/gh/acme/skills", "?skill=review"), "en", ORIGIN, {
+      mount: MOUNT,
+      skill: SKILL,
+    });
+    expect(skill.indexable).toBe(true);
+    expect(skill.canonical).toBe("https://skills.example/gh/acme/skills?skill=review");
+    expect(skill.alternates[1]).toEqual({
+      hreflang: "ko",
+      href: "https://skills.example/gh/acme/skills?skill=review&lang=ko",
+    });
+    expect(skill.title).toBe("review · Acme/skills | SkillCDN");
+    expect(skill.description).toContain("Reviews a change for the things a linter cannot see.");
+    expect(skill.jsonLd.map((data) => data["@type"])).toEqual(["TechArticle"]);
+    // A skill the address does not have is no page to index.
+    expect(
+      buildHead(matchRoute("/gh/acme/skills", "?skill=other"), "en", ORIGIN, { mount: MOUNT })
+        .indexable,
+    ).toBe(false);
+  });
+
+  it("leaves snapshots, files and searches to the living page", () => {
+    const pinned = buildHead(matchRoute("/gh/acme/skills@v1", ""), "en", ORIGIN, {
+      mount: { ...MOUNT, ref: "v1" },
+    });
+    expect(pinned.indexable).toBe(false);
+    expect(pinned.title).toContain("Acme/skills");
+    for (const search of ["?file=README.md", "?q=review"]) {
+      const head = buildHead(matchRoute("/gh/acme/skills", search), "en", ORIGIN, {
+        mount: MOUNT,
+      });
+      expect(head.indexable, search).toBe(false);
+      expect(head.canonical, search).toBeUndefined();
+    }
+    expect(
+      buildHead(matchRoute("/gh/acme/skills", "?file=README.md"), "en", ORIGIN, { mount: MOUNT })
+        .title,
+    ).toBe("README.md · Acme/skills | SkillCDN");
   });
 });
 

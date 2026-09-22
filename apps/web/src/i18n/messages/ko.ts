@@ -20,6 +20,14 @@ export const ko: Messages = {
       title: (repository: string) => `${repository} | SkillCDN`,
       description: (repository: string) =>
         `${repository} 저장소가 SkillCDN을 통해 에이전트에 제공하는 스킬과 문서입니다.`,
+      summary: (repository: string, skills: number, documents: number, names: readonly string[]) =>
+        names.length === 0
+          ? `${repository} 저장소가 SkillCDN을 통해 MCP로 AI 에이전트에 제공하는 스킬 ${skills}개와 문서 ${documents}개입니다.`
+          : `${repository} 저장소가 SkillCDN을 통해 MCP로 AI 에이전트에 제공하는 스킬 ${skills}개와 문서 ${documents}개: ${names.join(", ")}.`,
+      skillTitle: (skill: string, repository: string) => `${skill} · ${repository} | SkillCDN`,
+      skillDescription: (skill: string, repository: string, description: string) =>
+        `${repository} 저장소의 AI 에이전트용 스킬 ${skill}: ${description}`,
+      fileTitle: (path: string, repository: string) => `${path} · ${repository} | SkillCDN`,
     },
     notFound: {
       title: "페이지를 찾을 수 없습니다 | SkillCDN",

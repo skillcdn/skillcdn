@@ -235,5 +235,14 @@ describe("listTopRepositories", () => {
         limit: 1,
       }),
     ).toHaveLength(1);
+    expect(
+      await listTopRepositories(database, {
+        metric: "connection",
+        from: "2026-05-01",
+        to: "2026-05-31",
+        limit: 10,
+        minimum: 10,
+      }),
+    ).toEqual([expect.objectContaining({ name: "Busy" })]);
   });
 });

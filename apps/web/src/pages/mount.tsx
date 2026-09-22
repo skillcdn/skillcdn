@@ -1,11 +1,14 @@
-import { type Address, formatAddress, type RestMount } from "@skillcdn/core";
+import type { Address, RestMount, RestSkill } from "@skillcdn/core";
+import { useEffect, useState } from "react";
 import { api } from "../api/client.js";
+import { resourceKeys } from "../api/keys.js";
 import { useResource } from "../api/use-resource.js";
 import { ConnectPanel } from "../components/connect-panel.js";
 import { ErrorCallout } from "../components/error-callout.js";
 import { Badge, Callout, Container, Skeleton, Spinner } from "../components/ui.js";
 import { useI18n } from "../i18n/index.js";
 import type { MountView } from "../router.js";
+import { applyHead, buildHead } from "../seo/head.js";
 import styles from "./mount.module.css";
 import { MountFile } from "./mount-file.js";
 import { MountOverview } from "./mount-overview.js";
@@ -80,6 +83,7 @@ function MountBody(props: {
   readonly view: MountView;
   readonly mount: RestMount;
   readonly stalled: boolean;
+  readonly onSkill: (skill: RestSkill | undefined) => void;
 }) {
   const { t } = useI18n();
   const { address, view, mount } = props;
@@ -106,29 +110,43 @@ function MountBody(props: {
     );
   }
   return view.kind === "skill" ? (
-    <MountSkill address={address} name={view.name} />
+    <MountSkill address={address} name={view.name} onLoaded={props.onSkill} />
   ) : (
     <MountOverview address={address} index={mount.index} query={view.query} />
   );
 }
 
-/** The explorer view of one address: what it serves, and how to connect an agent to it. */
-export function MountPage(props: {
+export interface MountPageProps {
   readonly origin: string;
   readonly address: Address;
   readonly view: MountView;
-}) {
-  const { t } = useI18n();
-  const { address, view } = props;
+}
+
+/** The explorer view of one address: what it serves, and how to connect an agent to it. */
+export function MountPage(props: MountPageProps) {
+  const { t, language } = useI18n();
+  const { address, view, origin } = props;
   const mount = useResource(
-    formatAddress(address),
+    resourceKeys.mount(address),
     (signal) => api.mount(address, signal),
     (value) => value.index.status === "indexing",
   );
+  const [skill, setSkill] = useState<RestSkill | undefined>(undefined);
+  const loaded = mount.state === "ready" ? mount.value : undefined;
+
+  // The head says what this view shows, once it knows: the same head the server writes.
+  useEffect(() => {
+    applyHead(
+      buildHead({ name: "mount", address, view }, language, origin, {
+        mount: loaded,
+        skill: view.kind === "skill" ? skill : undefined,
+      }),
+    );
+  }, [address, view, language, origin, loaded, skill]);
 
   return (
     <Container className={styles.page}>
-      <MountHeader address={address} mount={mount.state === "ready" ? mount.value : undefined} />
+      <MountHeader address={address} mount={loaded} />
       <div className={styles.columns}>
         <div className={styles.content}>
           {mount.state === "loading" && <Skeleton lines={6} label={t.common.loading} />}
@@ -143,13 +161,14 @@ export function MountPage(props: {
                 view={view}
                 mount={mount.value}
                 stalled={mount.stalled}
+                onSkill={setSkill}
               />
             </>
           )}
         </div>
         {mount.state !== "error" && (
           <aside className={styles.aside}>
-            <ConnectPanel origin={props.origin} address={address} />
+            <ConnectPanel origin={origin} address={address} />
           </aside>
         )}
       </div>

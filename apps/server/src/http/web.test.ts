@@ -93,13 +93,66 @@ describe("pages", () => {
     expect(await head.text()).toBe("");
   });
 
-  it("include the frame for addresses and the page for what is missing", async () => {
-    const shell = web.shell(request("/gh/acme/skills?lang=ko"));
-    expect(shell.status).toBe(200);
-    expect(await shell.text()).toContain("Shell in Korean");
+  it("include the page for what is missing", async () => {
     const missing = web.notFound(request("/nothing"));
     expect(missing.status).toBe(404);
     expect(await missing.text()).toContain("Not found");
+  });
+});
+
+describe("the page of an address", () => {
+  const mount = { address: "/gh/acme/skills", index: { status: "ready" } };
+
+  it("is rendered by the build's module with what the server knows, in the language asked", async () => {
+    const page = web.address(request("/gh/acme/skills?skill=review&lang=ko"), {
+      mount: { ready: mount },
+      skill: { error: { status: 404, code: "skill.not_found", message: "No such skill." } },
+    });
+    expect(page.status).toBe(200);
+    expect(page.headers.get("content-type")).toBe("text/html; charset=utf-8");
+    expect(page.headers.get("content-language")).toBe("ko");
+    expect(page.headers.get("content-security-policy")).toContain("script-src 'self'");
+    // The same URL answers MCP clients with something else entirely.
+    expect(page.headers.get("vary")).toBe("accept");
+    const html = await page.text();
+    expect(html).toContain('<html lang="ko">');
+    expect(html).toContain("<title>Rendered /gh/acme/skills</title>");
+    const input = JSON.parse(/<pre id="input">(.*?)<\/pre>/s.exec(html)?.[1] ?? "{}");
+    expect(input).toEqual({
+      language: "ko",
+      origin: "https://skills.example",
+      pathname: "/gh/acme/skills",
+      search: "?skill=review&lang=ko",
+      data: {
+        mount: { ready: mount },
+        skill: { error: { status: 404, code: "skill.not_found", message: "No such skill." } },
+      },
+    });
+    // The template's placeholder is filled in like everywhere else.
+    expect(html).toContain('<meta name="skillcdn-origin" content="https://skills.example">');
+  });
+
+  it("carries the status the server gives it, and nothing when there is nothing to know", async () => {
+    const missing = web.address(
+      request("/gh/acme/none"),
+      { mount: { error: { status: 404, code: "mount.repo_not_found", message: "Nothing." } } },
+      404,
+    );
+    expect(missing.status).toBe(404);
+    expect(await missing.text()).toContain("mount.repo_not_found");
+    const bad = web.address(request("/gh/acme"), {}, 404);
+    expect(bad.status).toBe(404);
+    expect(await bad.text()).toContain('"data":{}');
+  });
+
+  it("is the frame for the browser to fill when the build cannot render", async () => {
+    const plain = createWebBuild(WEB_BUILD_MANIFEST, { render: false });
+    const bundle = await loadWebBundle(plain.root, { publicUrl: "https://skills.example" });
+    const shell = bundle.address(request("/gh/acme/skills?lang=ko"), { mount: { ready: mount } });
+    expect(shell.status).toBe(200);
+    expect(shell.headers.get("vary")).toBe("accept");
+    expect(await shell.text()).toContain("Shell in Korean");
+    plain.remove();
   });
 });
 
@@ -122,6 +175,8 @@ describe("files", () => {
   it("do not include the manifest, pages under their file names, or anything outside", () => {
     for (const path of [
       "/routes.json",
+      "/template.html",
+      "/render/entry-server.js",
       "/index.html",
       "/index.ko.html",
       "/404.html",
@@ -140,25 +195,31 @@ describe("files", () => {
 });
 
 describe("what crawlers ask for", () => {
-  it("is a sitemap of the indexable pages in every language, each pointing at the others", async () => {
-    const xml = await answer("/sitemap.xml").text();
-    expect(xml.match(/<url>/g)).toHaveLength(4);
+  it("is a sitemap of the indexable pages and the given addresses in every language, each pointing at the others", async () => {
+    const xml = await web.sitemap(request("/sitemap.xml"), ["/gh/acme/skills"]).text();
+    expect(xml.match(/<url>/g)).toHaveLength(6);
     expect(xml).toContain("<loc>https://skills.example/</loc>");
     expect(xml).toContain("<loc>https://skills.example/?lang=ko</loc>");
     expect(xml).toContain("<loc>https://skills.example/explore?lang=ko</loc>");
+    expect(xml).toContain("<loc>https://skills.example/gh/acme/skills?lang=ko</loc>");
     expect(xml).toContain(
       '<xhtml:link rel="alternate" hreflang="ko" href="https://skills.example/explore?lang=ko"/>',
     );
     expect(xml).toContain(
       '<xhtml:link rel="alternate" hreflang="x-default" href="https://skills.example/"/>',
     );
+    expect(xml).toContain(
+      '<xhtml:link rel="alternate" hreflang="x-default" href="https://skills.example/gh/acme/skills"/>',
+    );
     expect(xml).not.toContain("llms.txt");
+    expect(web.respond(request("/sitemap.xml"))).toBeUndefined();
   });
 
-  it("is a robots.txt that keeps crawlers away from what costs work", async () => {
+  it("is a robots.txt that keeps crawlers away from the API and nothing else", async () => {
     const robots = await answer("/robots.txt").text();
-    expect(robots).toContain("Disallow: /gh/");
+    expect(robots).toContain("Allow: /");
     expect(robots).toContain("Disallow: /api/");
+    expect(robots).not.toContain("Disallow: /gh/");
     expect(robots).toContain("Sitemap: https://skills.example/sitemap.xml");
   });
 });
@@ -173,6 +234,25 @@ describe("loadWebBundle", () => {
     await expect(
       loadWebBundle("/this/directory/does/not/exist", { publicUrl: undefined }),
     ).rejects.toBeInstanceOf(WebBundleError);
+  });
+
+  it("refuses a render module that cannot be loaded, or one without a template", async () => {
+    const broken = createWebBuild();
+    broken.write("render/entry-server.js", "export const nothing = 1;\n");
+    await expect(loadWebBundle(broken.root, { publicUrl: undefined })).rejects.toThrow(
+      /renderAddressPage/,
+    );
+    broken.remove();
+    const halved = createWebBuild(
+      { ...WEB_BUILD_MANIFEST, render: "render/entry-server.js" },
+      {
+        render: false,
+      },
+    );
+    await expect(loadWebBundle(halved.root, { publicUrl: undefined })).rejects.toBeInstanceOf(
+      WebBundleError,
+    );
+    halved.remove();
   });
 
   it("refuses a manifest that points outside the directory or at nothing", async () => {

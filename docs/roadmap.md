@@ -17,6 +17,7 @@ Goal: a person opens the service in a browser, understands what it does in their
 - [x] The UI runs on its own for whoever designs it: one command, fixture data for every state, no database, no server, no container runtime; Windows and macOS
 - [x] Usage statistics, on the server side: counts per public repository and skill (connections, tool calls, skills loaded), aggregated per day in PostgreSQL, so that rankings on the landing page have history by the time they are built. Statistics of private repositories are never collected.
 - [x] Distinct clients per repository and day, counted without storing anything that identifies one ([ADR-0010](adr/0010-distinct-clients-by-daily-keyed-hash.md)). Clients are told apart by address until MCP OAuth gives them an account.
+- [x] Repository pages rendered on the server with their data, indexable, with the featured and the popular repositories in the sitemap ([ADR-0011](adr/0011-address-pages-rendered-on-the-server.md))
 
 Login and repository connection arrive with private repositories (item 3 below).
 

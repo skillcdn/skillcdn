@@ -36,20 +36,64 @@ export const WEB_BUILD_MANIFEST = {
   notFound: { en: "not-found.html", ko: "not-found.ko.html" },
 };
 
+export const RENDER_MODULE = "render/entry-server.js";
+export const TEMPLATE_FILE = "template.html";
+
+/**
+ * A render module as the UI would build it, reduced to what a test can read back: the page
+ * repeats the input it was rendered with, and says it is indexable when the index was there.
+ */
+const RENDER_MODULE_SOURCE = `
+export function renderAddressPage(template, input) {
+  const json = JSON.stringify(input).replaceAll("<", "\\\\u003c");
+  const ready = input.data.mount !== undefined && input.data.mount.ready !== undefined;
+  const html = template
+    .replace('<html lang="en">', '<html lang="' + input.language + '">')
+    .replace("<!--app-html-->", '<pre id="input">' + json + "</pre>")
+    .replace("<!--app-head-->", "<title>Rendered " + input.pathname + "</title>");
+  return { html, indexable: ready && input.data.mount.ready.index.status === "ready" };
+}
+`;
+
+const TEMPLATE_SOURCE =
+  '<!doctype html><html lang="en"><head><!--app-head-->' +
+  `<meta name="skillcdn-origin" content="${ORIGIN_PLACEHOLDER}"></head>` +
+  '<body><div id="root"><!--app-html--></div></body></html>';
+
 export interface WebBuildFixture {
   readonly root: string;
   write(file: string, content: string): void;
   remove(): void;
 }
 
-export function createWebBuild(manifest: unknown = WEB_BUILD_MANIFEST): WebBuildFixture {
+export interface WebBuildOptions {
+  /** Whether the build brings a render module for address pages. Default: it does. */
+  readonly render?: boolean;
+}
+
+export function createWebBuild(
+  manifest: unknown = WEB_BUILD_MANIFEST,
+  options: WebBuildOptions = {},
+): WebBuildFixture {
   const root = mkdtempSync(join(tmpdir(), "skillcdn-web-"));
   const write = (file: string, content: string): void => {
     const target = join(root, ...file.split("/"));
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, content);
   };
-  write("routes.json", JSON.stringify(manifest));
+  const render = options.render ?? true;
+  write(
+    "routes.json",
+    JSON.stringify(
+      render && typeof manifest === "object" && manifest !== null
+        ? { ...manifest, render: RENDER_MODULE, template: TEMPLATE_FILE }
+        : manifest,
+    ),
+  );
+  if (render) {
+    write(RENDER_MODULE, RENDER_MODULE_SOURCE);
+    write(TEMPLATE_FILE, TEMPLATE_SOURCE);
+  }
   write("index.html", page("en", "Front page"));
   write("index.ko.html", page("ko", "Front page in Korean"));
   write("explore/index.html", page("en", "Explore"));
