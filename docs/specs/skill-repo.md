@@ -94,7 +94,7 @@ A file named exactly `SKILLCDN.md` is to a repository what `SKILL.md` is to a sk
 name: SkillCDN examples
 description: Example skills and document sets, served live through SkillCDN. Use to see how a skill that drives a given tool is written.
 documents:
-  - documents
+  - docs
 license: MIT
 metadata:
   author: skillcdn
