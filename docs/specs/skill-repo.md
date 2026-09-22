@@ -21,7 +21,7 @@ repo/
 - A repo without any skill manifest still works, as a document-reading endpoint: `find` and `read_file` only.
 - **Repositories declare; they never ship code that we execute.** Composition ("take this input, call these tools in this order") will be declared in Markdown or YAML. Scripts in a repo are files like any other: readable, never run. `allowed-tools` is passed through as text and grants nothing.
 - Indexed content: skill manifests, Markdown (`.md`, `.markdown`, `.mdx`) and small JSON. Every other file is listed and can be read, but is not searched. Binary and oversized files are skipped. Limits are configuration with safe defaults.
-- A plain Markdown document is listed under its front-matter `title` and `description` when it has them, otherwise under its first level-one heading.
+- A plain Markdown document is listed under its front-matter `title` and `description` when it has them; otherwise its title is its first level-one heading, and its description is the first paragraph after that heading (or the first paragraph of the document when there is no heading), shortened to 200 characters. Links become their text; badges, images, lists, quotes, tables and code are skipped on the way.
 - Repos where the GitHub App is installed are **verified**. Responses from unverified repos carry a provenance warning.
 
 ## Front-matter
