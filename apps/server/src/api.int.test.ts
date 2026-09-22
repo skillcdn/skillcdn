@@ -222,6 +222,33 @@ describe("a multi-skill repository", () => {
     await client.close();
   });
 
+  it("offers every skill as a prompt", async () => {
+    const h = harness();
+    const first = await h.connect("/gh/acme/multi-skill");
+    await call(first, "find");
+    await first.close();
+
+    // The list is what the index knows when the client connects.
+    const client = await h.connect("/gh/acme/multi-skill");
+    const listed = await client.listPrompts();
+    expect(listed.prompts.map((prompt) => [prompt.name, prompt.title])).toEqual([
+      ["incident-review", "incident-review"],
+      ["release-notes", "release-notes"],
+    ]);
+    expect(listed.prompts[1]?.description).toContain("Drafts release notes");
+
+    const prompt = await client.getPrompt({ name: "release-notes" });
+    expect(prompt.description).toContain("Drafts release notes");
+    const [message] = prompt.messages;
+    expect(message?.role).toBe("user");
+    const text = message?.content.type === "text" ? message.content.text : "";
+    expect(text).toContain("Skill: release-notes");
+    expect(text).toContain("- skills/release-notes/references/style.md");
+    expect(text).toContain("Group them into");
+    expect(h.usage.filter((event) => event.subject === "prompt")).toHaveLength(1);
+    await client.close();
+  });
+
   it("lists a directory through read_file", async () => {
     const client = await harness().connect("/gh/acme/multi-skill");
 

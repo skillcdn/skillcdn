@@ -45,6 +45,12 @@ A client learns three things about a mount before it calls a tool, so that a mod
 - **The description of `find`** names the skills as well, for clients that show no instructions.
 - **The server info** carries the address as its title and the page of the address as its website, for clients that show where a server comes from.
 
+## Skills as prompts
+
+Every skill of a mount is also an MCP prompt: named after the skill (after its directory, with `-` for `/`, when several skills share a name), titled with the skill's name, described by its description, and without arguments. Asking for the prompt returns what `get` returns, as one user message. A client that turns prompts into commands thus lets a person call a skill up by name, without the model having to find it first. The list is what the index knows when the client connects; a client that connected while the commit was being indexed sees no prompts until it connects again.
+
+Documents are not offered as MCP resources: `find` and `read_file` reach them, and a repository may hold hundreds of them.
+
 ## While a commit is being indexed
 
 The first request for a commit starts indexing in the background; connecting to the endpoint already does, before any tool is called.

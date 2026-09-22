@@ -49,6 +49,8 @@ Headless agents get a **project token**: repo-scoped, read-only, expiring, revoc
 | `intake` | *(later)* walk a non-expert through the questions a skill declares |
 | `describe` / `run` | *(later)* composed tools declared in Markdown or YAML |
 
+Every skill is also offered as an MCP prompt, so that a client which turns prompts into commands lets a person call a skill up by name; and the server tells the agent which skills a repository holds as soon as it connects.
+
 The repo declares things; it never ships code that we execute. This is a deliberate security boundary: SkillCDN runs no third-party code, on the server or on the user's machine.
 
 Specifications: [address scheme](docs/specs/address.md) · [skill-repo convention](docs/specs/skill-repo.md) · [tools](docs/specs/tools.md).

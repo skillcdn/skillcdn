@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import {
+  type CatalogSkill,
   type Clock,
   describeFindTool,
   findTool,
@@ -54,6 +55,12 @@ function notReady(outcome: NotReady): ToolReply {
   return problem(
     `This commit could not be indexed (${outcome.errorCode}). It is retried automatically; try again later. read_file still works.`,
   );
+}
+
+/** A prompt is named after its skill; skills that share a name are named after their directory. */
+function promptNameOf(skill: CatalogSkill, skills: readonly CatalogSkill[]): string {
+  const shared = skills.some((other) => other !== skill && other.name === skill.name);
+  return shared && skill.directory.length > 0 ? skill.directory.replaceAll("/", "-") : skill.name;
 }
 
 /** How a client may show the server: the repository, then the ref and the path when there are any. */
@@ -117,7 +124,9 @@ export async function createMountServer(
       description: `The skills and documents of ${repository}, served over MCP by SkillCDN.`,
       websiteUrl: `${request.origin}${formatAddress(mount.address)}`,
     },
-    { instructions: renderInstructions(catalog) },
+    // Prompts are declared even while the index is being built, so that every client sees the
+    // same shape of server; the list is empty until then.
+    { capabilities: { prompts: {} }, instructions: renderInstructions(catalog) },
   );
 
   // Requests share no session, so a connection is counted when a client says it has finished
@@ -210,6 +219,60 @@ export async function createMountServer(
       }
     }),
   );
+
+  // Every skill is also a prompt, so that a person can call one up by name in a client that
+  // turns prompts into commands. The list is what the index knows as the client connects.
+  if (catalog.status === "ready") {
+    const { skills } = catalog.catalog;
+    const taken = new Set<string>();
+    for (const skill of skills) {
+      const name = promptNameOf(skill, skills);
+      if (taken.has(name)) {
+        continue;
+      }
+      taken.add(name);
+      const wanted = skill.directory.length === 0 ? skill.name : skill.directory;
+      server.registerPrompt(
+        name,
+        { title: skill.name, description: skill.description },
+        async () => {
+          usage.record({
+            type: "tool_call",
+            at: clock.now(),
+            hostAccountId: mount.repo.repository.owner.hostAccountId,
+            hostRepoId: mount.repo.repository.hostRepoId,
+            subject: "prompt",
+            quantity: 1,
+            unit: "call",
+          });
+          stats.count(mount, "tool_call", "prompt");
+          let text: string;
+          try {
+            const answer = await reader.skill(mount, wanted, indexWaitMs);
+            if (answer.status !== "ready") {
+              text = notReady(answer).content[0]?.text ?? INDEXING_NOTICE;
+            } else if (answer.lookup.kind !== "found") {
+              text = `The skill ${skill.name} is not available right now. Call get with the name ${JSON.stringify(wanted)} to load it.`;
+            } else {
+              stats.count(
+                mount,
+                "skill_load",
+                joinRepoPath(mount.address.path, answer.lookup.skill.directory),
+              );
+              text = renderSkillResult(answer.lookup.skill);
+            }
+          } catch (error) {
+            log.error({ err: error, prompt: name }, "prompt failed");
+            text = "The skill could not be loaded on the server side. Try again later.";
+          }
+          return {
+            description: skill.description,
+            messages: [{ role: "user", content: { type: "text", text } }],
+          };
+        },
+      );
+    }
+  }
 
   return server;
 }
