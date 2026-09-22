@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ConfigError, loadConfig } from "./config.js";
+import { ConfigError, HOSTED_ORIGIN, loadConfig } from "./config.js";
 
 const DATABASE_URL = "postgres://user:not-a-real-password@db.internal:5432/skillcdn";
 const noFiles = (): string => {
@@ -134,8 +134,11 @@ describe("loadConfig", () => {
   it("reads where the web UI is and what the public origin is", () => {
     expect(loadConfig({ DATABASE_URL }, noFiles).web).toMatchObject({
       root: undefined,
-      publicUrl: undefined,
+      publicUrl: HOSTED_ORIGIN,
     });
+    expect(loadConfig({ DATABASE_URL, NODE_ENV: "development" }, noFiles).web.publicUrl).toBe(
+      undefined,
+    );
     const config = loadConfig(
       { DATABASE_URL, WEB_ROOT: "/app/web", PUBLIC_URL: "https://Skills.Example.com/" },
       noFiles,

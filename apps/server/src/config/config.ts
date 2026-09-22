@@ -74,6 +74,9 @@ const addressList = z
     return addresses;
   });
 
+/** The origin of the hosted service: what pages describe themselves as when nothing is configured. */
+export const HOSTED_ORIGIN = "https://skillcdn.ai";
+
 const environmentSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("production"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
@@ -172,7 +175,7 @@ export interface Config {
   readonly web: {
     /** Directory of a web UI build to serve. Left out, there is no UI. */
     readonly root: string | undefined;
-    /** The origin visitors use. Left out, pages are written for the origin of each request. */
+    /** The origin visitors use. Unset: the hosted origin in production, else the origin of each request. */
     readonly publicUrl: string | undefined;
     /** Addresses shown on the front page of the explorer. */
     readonly featured: readonly Address[];
@@ -291,7 +294,9 @@ export function loadConfig(
     github: { apiUrl: env.GITHUB_API_URL, token: env.GITHUB_TOKEN },
     web: {
       root: env.WEB_ROOT,
-      publicUrl: env.PUBLIC_URL,
+      // The image describes its pages as the hosted service unless told otherwise; while
+      // developing, pages are written for whatever origin the request came in on.
+      publicUrl: env.PUBLIC_URL ?? (env.NODE_ENV === "production" ? HOSTED_ORIGIN : undefined),
       featured: env.FEATURED_ADDRESSES,
       tags: {
         googleSiteVerification: env.GOOGLE_SITE_VERIFICATION,
