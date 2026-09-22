@@ -24,9 +24,28 @@ afterAll(async () => {
 const harness = (options: HarnessOptions = {}) => createHarness(testDatabase, options);
 
 /** Asks once so that indexing starts, waits until it is done, and leaves the index ready. */
+/**
+ * Asks for the address until its index is there. Waiting for the service to go idle is not
+ * enough on a slow machine: the request that starts indexing can answer before the job is on
+ * the books, and then there is nothing to wait for yet.
+ */
 async function indexed(h: Harness, address: string): Promise<void> {
-  expect((await h.request(`/api/v1/mounts${address}`)).status).toBe(200);
-  await h.snapshots.idle();
+  const deadline = Date.now() + 20_000;
+  let status = "unknown";
+  while (Date.now() < deadline) {
+    const response = await h.request(`/api/v1/mounts${address}`);
+    expect(response.status).toBe(200);
+    status = restMountSchema.parse(await response.json()).index.status;
+    if (status === "ready") {
+      return;
+    }
+    await h.snapshots.idle();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  const events = h.logs
+    .filter((line) => String(line.msg).includes("index"))
+    .map((line) => JSON.stringify(line));
+  throw new Error(`${address} is still ${status} after 20 s:\n${events.join("\n")}`);
 }
 
 async function errorOf(response: Response) {
