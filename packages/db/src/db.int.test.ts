@@ -387,11 +387,20 @@ describe("search", () => {
       "docs/releasing.md",
       "docs_extra/100%_notes.md",
     ]);
-    expect(await countEntries(database, scope, "")).toEqual({ skills: 2, documents: 3 });
+    // A skill's own files are not documents of the mount: they come with the skill.
+    const standalone = await listEntries(database, scope, "", 10, "documents_outside_skills");
+    expect(standalone.map((result) => result.path)).toEqual([
+      "docs/releasing.md",
+      "docs_extra/100%_notes.md",
+    ]);
+    expect(await countEntries(database, scope, "")).toEqual({ skills: 2, documents: 2 });
     expect(await countEntries(database, scope, "skills/release-notes")).toEqual({
       skills: 1,
-      documents: 1,
+      documents: 0,
     });
+    expect(
+      await listEntries(database, scope, "skills/release-notes", 10, "documents_outside_skills"),
+    ).toEqual([]);
     expect(await countEntries(database, scope, "nowhere")).toEqual({ skills: 0, documents: 0 });
   });
 

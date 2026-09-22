@@ -290,8 +290,10 @@ export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies):
                       path: item.path,
                       title: item.title ?? null,
                       summary: item.summary ?? null,
+                      skillDirectory: item.skillDirectory ?? null,
                     },
               ),
+              totals: found.result.totals ?? null,
             };
       return c.json(body);
     } catch (error) {

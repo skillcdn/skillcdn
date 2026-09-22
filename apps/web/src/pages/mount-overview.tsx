@@ -51,8 +51,11 @@ function SkillItem(props: { readonly address: Address; readonly skill: RestSkill
 function DocumentItem(props: {
   readonly address: Address;
   readonly document: RestDocumentSummary;
+  /** The skill the document belongs to, when a search turned up one of a skill's own files. */
+  readonly skillDirectory?: string | null;
 }) {
-  const { document } = props;
+  const { t } = useI18n();
+  const { document, skillDirectory } = props;
   return (
     <li>
       <Link
@@ -61,6 +64,9 @@ function DocumentItem(props: {
       >
         <span className={styles.itemHead}>
           <span className={styles.itemTitle}>{document.title ?? document.path}</span>
+          {skillDirectory != null && (
+            <Badge tone="accent">{t.mount.partOfSkill(skillDirectory)}</Badge>
+          )}
         </span>
         {document.summary !== null && <span className={styles.itemBody}>{document.summary}</span>}
         <span className={styles.itemPath}>{document.path}</span>
@@ -102,7 +108,12 @@ function SearchResults(props: { readonly address: Address; readonly query: strin
                 skill={{ ...item, warnings: [] }}
               />
             ) : (
-              <DocumentItem key={`document ${item.path}`} address={address} document={item} />
+              <DocumentItem
+                key={`document ${item.path}`}
+                address={address}
+                document={item}
+                skillDirectory={item.skillDirectory}
+              />
             ),
           )}
         </ol>

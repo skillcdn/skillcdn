@@ -129,40 +129,99 @@ describe("rendering", () => {
           path: path("docs/getting-started.md"),
           title: "Getting started",
           summary: undefined,
+          skillDirectory: undefined,
+        },
+        {
+          kind: "document",
+          path: path("skills/release-notes/references/style.md"),
+          title: "Style guide",
+          summary: "Lead with the benefit.",
+          skillDirectory: path("skills/release-notes"),
         },
       ],
+      totals: undefined,
     });
     expect(text).toBe(
       [
-        '2 results for "release" in acme/skills@main (commit 0123456):',
+        '3 results for "release" in acme/skills@main (commit 0123456):',
         "",
         "1. skill: release-notes (skills/release-notes)",
         "   Drafts release notes.",
         "2. document: docs/getting-started.md - Getting started",
+        "3. document: skills/release-notes/references/style.md - Style guide",
+        "   Lead with the benefit.",
+        "   Belongs to the skill at skills/release-notes; get loads that skill with its files.",
         "",
         'Next: get {"name": "<skill name>"} loads a skill; read_file {"path": "<path>"} reads a document.',
       ].join("\n"),
     );
   });
 
+  it("lists what a mount has, with the totals and what was left out", () => {
+    const skill = (name: string) => ({
+      kind: "skill" as const,
+      name,
+      directory: path(`skills/${name}`),
+      description: `About ${name}.`,
+    });
+    const text = renderFindResult({
+      mount,
+      query: undefined,
+      items: [
+        skill("a"),
+        skill("b"),
+        {
+          kind: "document",
+          path: path("README.md"),
+          title: "Skills",
+          summary: undefined,
+          skillDirectory: undefined,
+        },
+      ],
+      totals: { skills: 3, documents: 5 },
+    });
+    expect(text).toContain("3 skills and 5 documents in acme/skills@main (commit 0123456):");
+    expect(text).toContain("1 more skills are not listed here; search for them with find.");
+    expect(text).toContain("4 more documents are not listed here");
+    expect(text).toContain("3. document: README.md - Skills");
+    const complete = renderFindResult({
+      mount,
+      query: undefined,
+      items: [skill("a")],
+      totals: { skills: 1, documents: 0 },
+    });
+    expect(complete).toContain("1 skill and 0 documents in");
+    expect(complete).not.toContain("not listed");
+  });
+
   it("explains an empty result and an empty listing", () => {
-    expect(renderFindResult({ mount, query: "zebra", items: [] })).toContain(
+    expect(renderFindResult({ mount, query: "zebra", items: [], totals: undefined })).toContain(
       'No results for "zebra"',
     );
-    expect(renderFindResult({ mount, query: undefined, items: [] })).toContain(
-      "Nothing is indexed",
-    );
+    expect(
+      renderFindResult({
+        mount,
+        query: undefined,
+        items: [],
+        totals: { skills: 0, documents: 0 },
+      }),
+    ).toContain("Nothing is indexed");
   });
 
   it("adds the provenance notice for unverified repositories and the truncation notice", () => {
     const unverified = { ...mount, verified: false, truncated: true, path: path("skills") };
-    const text = renderFindResult({ mount: unverified, query: undefined, items: [] });
+    const text = renderFindResult({
+      mount: unverified,
+      query: undefined,
+      items: [],
+      totals: undefined,
+    });
     expect(text).toContain(PROVENANCE_NOTICE);
     expect(text).toContain("larger than the indexing limits");
     expect(text).toContain("under skills)");
-    expect(renderFindResult({ mount, query: undefined, items: [] })).not.toContain(
-      PROVENANCE_NOTICE,
-    );
+    expect(
+      renderFindResult({ mount, query: undefined, items: [], totals: undefined }),
+    ).not.toContain(PROVENANCE_NOTICE);
   });
 
   it("renders a skill with its supporting files ahead of the instructions", () => {

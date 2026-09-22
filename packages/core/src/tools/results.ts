@@ -26,12 +26,16 @@ export type FindItem =
       readonly path: RepoPath;
       readonly title: string | undefined;
       readonly summary: string | undefined;
+      /** The directory of the skill the document belongs to, when it belongs to one in the mount. */
+      readonly skillDirectory: RepoPath | undefined;
     };
 
 export interface FindResult {
   readonly mount: MountSummary;
   readonly query: string | undefined;
   readonly items: readonly FindItem[];
+  /** Without a query: how many skills, and how many documents outside the skills, the mount has. */
+  readonly totals: { readonly skills: number; readonly documents: number } | undefined;
 }
 
 export interface SkillResult {

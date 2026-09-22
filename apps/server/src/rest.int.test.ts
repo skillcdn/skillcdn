@@ -96,7 +96,9 @@ describe("GET /api/v1/mounts/<address>", () => {
       throw new Error("expected a ready index");
     }
     expect(sub.index.skills.map((skill) => skill.directory)).toEqual([""]);
-    expect(sub.index.documents.map((document) => document.path)).toEqual(["references/style.md"]);
+    // The mount is one skill, so its files are the skill's, not documents of the mount.
+    expect(sub.index.documents).toEqual([]);
+    expect(sub.index.documentCount).toBe(0);
   });
 
   it("tells the author which manifests were skipped, and why", async () => {
@@ -154,13 +156,17 @@ describe("GET /api/v1/find/<address>", () => {
     const listing = restFindSchema.parse(
       await (await h.request("/api/v1/find/gh/acme/multi-skill?limit=2")).json(),
     );
+    // Every skill, then up to `limit` documents outside the skills.
     expect(listing).toEqual({
       status: "ready",
       query: null,
       items: [
         expect.objectContaining({ kind: "skill", name: "incident-review" }),
         expect.objectContaining({ kind: "skill", name: "release-notes" }),
+        expect.objectContaining({ kind: "document", path: "README.md", skillDirectory: null }),
+        expect.objectContaining({ kind: "document", path: "docs/getting-started.md" }),
       ],
+      totals: { skills: 2, documents: 2 },
     });
 
     const search = restFindSchema.parse(

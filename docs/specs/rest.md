@@ -61,20 +61,23 @@ What the address serves.
 
 - `address` is the canonical form. `ref` is `null` for the default branch. `pinned` is true for a full commit hash.
 - `repository.description` is what the host shows as the description of the repository, on one line, or `null`.
-- `skills` and `documents` list at most 200 entries each; the counts are complete.
+- `skills` and `documents` list at most 200 entries each; the counts are complete. `documents` are the Markdown and JSON files that do not belong to a skill; a skill's own files are listed by the skills endpoint.
 - `diagnostics` are the findings of the [convention parser](skill-repo.md) for the repository author: manifests that were skipped, and why. Only manifests inside the mounted path are listed.
 - `truncated` is true when the repository was larger than the indexing limits.
 
 ### `GET /api/v1/find/<address>?query=&limit=`
 
-The `find` tool. `query` is optional (at most 500 characters; blank lists what is available, skills first); `limit` is 1 to 25, default 10.
+The `find` tool. `query` is optional (at most 500 characters); `limit` is 1 to 25, default 10. Without a query the answer lists every skill (up to 100), then up to `limit` documents that do not belong to a skill, and `totals` says how many of each there are; with a query, `totals` is `null` and `limit` bounds the results.
 
 ```json
 { "status": "ready", "query": "blameless review", "items": [
   { "kind": "skill", "name": "incident-review", "directory": "skills/incident-review", "description": "..." },
-  { "kind": "document", "path": "docs/getting-started.md", "title": "Getting started", "summary": "..." }
-] }
+  { "kind": "document", "path": "docs/getting-started.md", "title": "Getting started", "summary": "...", "skillDirectory": null },
+  { "kind": "document", "path": "skills/incident-review/assets/timeline.json", "title": null, "summary": null, "skillDirectory": "skills/incident-review" }
+], "totals": null }
 ```
+
+`skillDirectory` names the skill a document belongs to, when it belongs to one inside the mount.
 
 ### `GET /api/v1/skills/<address>?name=`
 

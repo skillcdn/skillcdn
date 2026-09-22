@@ -110,13 +110,22 @@ describe("a multi-skill repository", () => {
     expect(listing.text).toContain(
       `in Acme/multi-skill (commit ${fixtureCommits().main.slice(0, 7)})`,
     );
+    expect(listing.text).toContain("2 skills and 2 documents in Acme/multi-skill");
     expect(listing.text).toContain("1. skill: incident-review (skills/incident-review)");
     expect(listing.text).toContain("2. skill: release-notes (skills/release-notes)");
     expect(listing.text).toContain("document: docs/getting-started.md - Getting started");
+    // README.md has no description of its own: its first paragraph stands in.
+    expect(listing.text).toContain("document: README.md - Team playbooks\n   A small multi-skill");
+    // A skill's own files come with the skill, not on their own.
+    expect(listing.text).not.toContain("references/style.md");
     expect(listing.text).toContain(PROVENANCE_NOTICE);
 
     const search = await call(client, "find", { query: "how do I run a blameless review?" });
     expect(search.text).toContain("1. skill: incident-review");
+
+    const fragment = await call(client, "find", { query: "style guide" });
+    expect(fragment.text).toContain("skills/release-notes/references/style.md");
+    expect(fragment.text).toContain("Belongs to the skill at skills/release-notes");
 
     const skill = await call(client, "get", { name: "release-notes" });
     expect(skill.isError).toBe(false);
@@ -143,7 +152,7 @@ describe("a multi-skill repository", () => {
     expect(host.calls.getTree).toBe(1);
     expect(
       usage.filter((event) => event.type === "tool_call").map((event) => event.subject),
-    ).toEqual(["find", "find", "get", "get", "read_file", "read_file"]);
+    ).toEqual(["find", "find", "find", "get", "get", "read_file", "read_file"]);
     expect(usage.some((event) => event.type === "index_completed")).toBe(true);
     await client.close();
   });
@@ -183,8 +192,10 @@ describe("a multi-skill repository", () => {
 
     const listing = await call(client, "find");
     expect(listing.text).toContain("under skills/release-notes");
+    expect(listing.text).toContain("1 skill and 0 documents in");
     expect(listing.text).toContain("1. skill: release-notes (.)");
-    expect(listing.text).toContain("document: references/style.md");
+    // The mount is one skill: its files come with the skill, not as documents of the mount.
+    expect(listing.text).not.toContain("document: references/style.md");
     expect(listing.text).not.toContain("incident-review");
 
     expect((await call(client, "get", { name: "release-notes" })).text).toContain(

@@ -38,12 +38,31 @@ function joinSections(sections: readonly (string | undefined)[]): string {
   return sections.filter((section) => section !== undefined && section.length > 0).join("\n\n");
 }
 
+const plural = (count: number, noun: string): string => `${count} ${noun}${count === 1 ? "" : "s"}`;
+
 export function renderFindResult(result: FindResult): string {
   const where = describeMount(result.mount);
   const count = result.items.length;
+  const skillsListed = result.items.filter((item) => item.kind === "skill").length;
+  const documentsListed = count - skillsListed;
+  const more: string[] = [];
   let heading: string;
   if (result.query === undefined) {
-    heading = count === 0 ? `Nothing is indexed in ${where}.` : `${count} available in ${where}:`;
+    const totals = result.totals ?? { skills: skillsListed, documents: documentsListed };
+    heading =
+      count === 0
+        ? `Nothing is indexed in ${where}.`
+        : `${plural(totals.skills, "skill")} and ${plural(totals.documents, "document")} in ${where}:`;
+    if (totals.skills > skillsListed) {
+      more.push(
+        `${totals.skills - skillsListed} more skills are not listed here; search for them with find.`,
+      );
+    }
+    if (totals.documents > documentsListed) {
+      more.push(
+        `${totals.documents - documentsListed} more documents are not listed here; search for them with find, or raise the limit.`,
+      );
+    }
   } else if (count === 0) {
     heading =
       `No results for ${JSON.stringify(result.query)} in ${where}. ` +
@@ -59,14 +78,24 @@ export function renderFindResult(result: FindResult): string {
     }
     const title = item.title === undefined ? "" : ` - ${item.title}`;
     const summary = item.summary === undefined ? "" : `\n   ${item.summary}`;
-    return `${number} document: ${item.path}${title}${summary}`;
+    const owner =
+      item.skillDirectory === undefined
+        ? ""
+        : `\n   Belongs to the skill at ${item.skillDirectory}; get loads that skill with its files.`;
+    return `${number} document: ${item.path}${title}${summary}${owner}`;
   });
 
   const next =
     count === 0
       ? undefined
       : 'Next: get {"name": "<skill name>"} loads a skill; read_file {"path": "<path>"} reads a document.';
-  return joinSections([heading, items.join("\n"), next, notices(result.mount).join("\n")]);
+  return joinSections([
+    heading,
+    items.join("\n"),
+    more.join("\n"),
+    next,
+    notices(result.mount).join("\n"),
+  ]);
 }
 
 export function renderSkillResult(result: SkillResult): string {

@@ -80,7 +80,8 @@ describe("the fixture API", () => {
       throw new Error("expected a ready index");
     }
     expect(mount.index.skills.map((skill) => skill.directory)).toEqual([""]);
-    expect(mount.index.documents.map((document) => document.path)).toContain("references/style.md");
+    // The mount is one skill: its files belong to the skill and are not documents of the mount.
+    expect(mount.index.documents).toEqual([]);
   });
 
   it("pages a long file and moves from indexing to ready", () => {

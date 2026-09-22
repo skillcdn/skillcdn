@@ -265,6 +265,7 @@ export const ko: Messages = {
       none: "일치하는 항목이 없습니다. find는 검색어의 단어 중 하나라도 일치하면 결과로 돌려줍니다.",
     },
     kinds: { skill: "스킬", document: "문서" },
+    partOfSkill: (directory: string) => `${directory} 스킬에 속한 파일`,
   },
 
   skill: {

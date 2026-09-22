@@ -5,6 +5,8 @@ import { MAX_REPO_PATH_LENGTH } from "../repo-path.js";
 
 export const FIND_DEFAULT_LIMIT = 10;
 export const FIND_MAX_LIMIT = 25;
+/** A listing names every skill, up to this many; a repository with more is searched instead. */
+export const FIND_LIST_SKILLS_MAX = 100;
 export const MAX_QUERY_LENGTH = 500;
 export const READ_FILE_DEFAULT_LIMIT = 40_000;
 export const READ_FILE_MAX_LIMIT = 100_000;
@@ -14,14 +16,18 @@ export const findInputSchema = z.object({
     .string()
     .max(MAX_QUERY_LENGTH)
     .optional()
-    .describe("Keywords or a question. Omit it to list the skills that are available."),
+    .describe(
+      "Keywords or a question. Omit it to list every skill, then the documents outside the skills.",
+    ),
   limit: z
     .number()
     .int()
     .min(1)
     .max(FIND_MAX_LIMIT)
     .optional()
-    .describe(`Maximum number of results. Default ${FIND_DEFAULT_LIMIT}.`),
+    .describe(
+      `Maximum number of results. Default ${FIND_DEFAULT_LIMIT}. Without a query it bounds the documents only; every skill is listed.`,
+    ),
 });
 export type FindInput = z.infer<typeof findInputSchema>;
 
@@ -67,7 +73,8 @@ export const findTool: ToolContract<typeof findInputSchema> = {
   description:
     "Search the skills and documents of the mounted repository. Skills match on their name and " +
     "description, documents on their text; the best matches come first. Call it without a query " +
-    "to list what is available. Then load a skill with get, or read a document with read_file.",
+    "to list what is available: every skill, then the documents that do not belong to a skill. " +
+    "Then load a skill with get, or read a document with read_file.",
   inputSchema: findInputSchema,
 };
 

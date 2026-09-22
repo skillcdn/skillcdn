@@ -1,6 +1,7 @@
 import {
   type BlobStore,
   FIND_DEFAULT_LIMIT,
+  FIND_LIST_SKILLS_MAX,
   type FileResult,
   type FindItem,
   type FindResult,
@@ -131,16 +132,29 @@ export class MountReader {
     const trimmed = input.query?.trim();
     const query = trimmed === undefined || trimmed.length === 0 ? undefined : trimmed;
     const limit = input.limit ?? FIND_DEFAULT_LIMIT;
-    const rows =
-      query === undefined
-        ? await listEntries(database, scope, mount.address.path, limit)
-        : await searchEntries(database, scope, mount.address.path, query, limit);
+    const path = mount.address.path;
+    let rows: EntryRecord[];
+    let totals: FindResult["totals"];
+    if (query === undefined) {
+      // A listing names every skill: a skill's own files are reached through the skill.
+      const [skills, documents, counts] = await Promise.all([
+        listEntries(database, scope, path, FIND_LIST_SKILLS_MAX, "skills"),
+        listEntries(database, scope, path, limit, "documents_outside_skills"),
+        countEntries(database, scope, path),
+      ]);
+      rows = [...skills, ...documents];
+      totals = counts;
+    } else {
+      rows = await searchEntries(database, scope, path, query, limit);
+      totals = undefined;
+    }
     return {
       status: "ready",
       result: {
         mount: this.summary(mount, outcome.snapshot),
         query,
         items: rows.map((row) => toFindItem(mount, row)).filter((item) => item !== undefined),
+        totals,
       },
     };
   }
@@ -302,7 +316,7 @@ export class MountReader {
     const [counts, skills, documents, diagnostics] = await Promise.all([
       countEntries(database, scope, path),
       listEntries(database, scope, path, listLimit, "skills"),
-      listEntries(database, scope, path, listLimit, "documents"),
+      listEntries(database, scope, path, listLimit, "documents_outside_skills"),
       getSnapshotDiagnostics(database, scope),
     ]);
     return {
@@ -379,5 +393,6 @@ function toFindItem(mount: Mount, row: EntryRecord): FindItem | undefined {
         path,
         title: row.title ?? undefined,
         summary: row.description ?? undefined,
+        skillDirectory: belowMount(mount, row.skillDir),
       };
 }

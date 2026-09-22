@@ -97,6 +97,8 @@ export const restFindItemSchema = z.discriminatedUnion("kind", [
     path: z.string(),
     title: z.nullable(z.string()),
     summary: z.nullable(z.string()),
+    /** The directory of the skill the document belongs to, or `null`. */
+    skillDirectory: z.nullable(z.string()),
   }),
 ]);
 
@@ -105,6 +107,8 @@ export const restFindSchema = z.discriminatedUnion("status", [
     status: z.literal("ready"),
     query: z.nullable(z.string()),
     items: z.array(restFindItemSchema),
+    /** Without a query: how many skills, and how many documents outside the skills, there are. */
+    totals: z.nullable(z.object({ skills: count, documents: count })),
   }),
   indexing,
   failed,

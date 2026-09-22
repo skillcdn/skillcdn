@@ -272,6 +272,7 @@ export const en = {
       none: "Nothing matches. find matches when any word of the query matches.",
     },
     kinds: { skill: "Skill", document: "Document" },
+    partOfSkill: (directory: string) => `Part of the skill at ${directory}`,
   },
 
   skill: {

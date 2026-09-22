@@ -101,7 +101,11 @@ function mountBody(
   });
   const documents = repository.documents.flatMap((document) => {
     const path = below(address.path, document.path);
-    return path === undefined || path === "" ? [] : [{ ...document, path }];
+    return path === undefined ||
+      path === "" ||
+      skillOwning(address, repository, document.path) !== null
+      ? []
+      : [{ ...document, path }];
   });
   const ref = address.ref;
   return {
@@ -135,6 +139,15 @@ function mountBody(
   };
 }
 
+/** The directory, relative to the mount, of the skill a file belongs to; `null` when none does. */
+function skillOwning(address: Address, repository: FixtureRepository, path: string): string | null {
+  const owner = repository.skills.find(
+    (detail) => detail.directory !== "" && path.startsWith(`${detail.directory}/`),
+  );
+  const directory = owner === undefined ? undefined : below(address.path, owner.directory);
+  return directory ?? null;
+}
+
 function findBody(
   address: Address,
   repository: FixtureRepository,
@@ -149,21 +162,48 @@ function findBody(
   const matches = (text: string) =>
     words.length === 0 || words.some((word) => text.toLowerCase().includes(word));
 
-  const items: RestFindItem[] = [];
+  const skills: RestFindItem[] = [];
   for (const detail of repository.skills) {
     const directory = below(address.path, detail.directory);
     if (directory !== undefined && matches(`${detail.name} ${detail.description} ${detail.body}`)) {
-      items.push({ kind: "skill", name: detail.name, directory, description: detail.description });
+      skills.push({ kind: "skill", name: detail.name, directory, description: detail.description });
     }
   }
+  const documents: RestFindItem[] = [];
   for (const document of repository.documents) {
     const path = below(address.path, document.path);
     const text = `${document.path} ${document.title ?? ""} ${document.summary ?? ""}`;
-    if (path !== undefined && path !== "" && matches(text)) {
-      items.push({ kind: "document", path, title: document.title, summary: document.summary });
+    const owner = skillOwning(address, repository, document.path);
+    // A listing leaves a skill's own files to the skill.
+    if (
+      path !== undefined &&
+      path !== "" &&
+      matches(text) &&
+      (words.length > 0 || owner === null)
+    ) {
+      documents.push({
+        kind: "document",
+        path,
+        title: document.title,
+        summary: document.summary,
+        skillDirectory: owner,
+      });
     }
   }
-  return { status: "ready", query: query === "" ? null : query, items: items.slice(0, limit) };
+  if (words.length === 0) {
+    return {
+      status: "ready",
+      query: null,
+      items: [...skills, ...documents.slice(0, limit)],
+      totals: { skills: skills.length, documents: documents.length },
+    };
+  }
+  return {
+    status: "ready",
+    query,
+    items: [...skills, ...documents].slice(0, limit),
+    totals: null,
+  };
 }
 
 function skillAnswer(

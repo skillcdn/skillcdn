@@ -80,18 +80,40 @@ export async function searchEntries(
 
 const IS_SKILL = eq(indexEntries.kind, "skill");
 
+/** Files that belong to a skill inside the mount: they are listed with the skill, not on their own. */
+function ownedBySkillIn(mountPath: string): SQL {
+  const inMount =
+    mountPath.length === 0
+      ? sql`true`
+      : sql`(${indexEntries.skillDir} = ${mountPath} or starts_with(${indexEntries.skillDir}, ${`${mountPath}/`}))`;
+  return sql`(${indexEntries.skillDir} is not null and ${inMount})`;
+}
+
+/**
+ * What to list: skills, every document, or only the documents that do not belong to a skill
+ * inside the mount.
+ */
+export type EntryListing = "skills" | "documents" | "documents_outside_skills";
+
 /**
  * What a mount offers when nobody asked for anything in particular: skills first, then documents.
- * `only` narrows it to one of the two.
+ * `only` narrows it.
  */
 export async function listEntries(
   database: Database,
   scope: SnapshotScope,
   mountPath: string,
   limit: number,
-  only?: "skills" | "documents",
+  only?: EntryListing,
 ): Promise<EntryRecord[]> {
-  const kind = only === undefined ? undefined : only === "skills" ? IS_SKILL : not(IS_SKILL);
+  const kind =
+    only === undefined
+      ? undefined
+      : only === "skills"
+        ? IS_SKILL
+        : only === "documents"
+          ? not(IS_SKILL)
+          : and(not(IS_SKILL), not(ownedBySkillIn(mountPath)));
   return drizzleOf(database)
     .select(entryColumns)
     .from(indexEntries)
@@ -100,7 +122,10 @@ export async function listEntries(
     .limit(limit);
 }
 
-/** How many skills and how many documents `listEntries` would return without a limit. */
+/**
+ * How many skills, and how many documents outside the skills, `listEntries` would return without
+ * a limit.
+ */
 export async function countEntries(
   database: Database,
   scope: SnapshotScope,
@@ -109,7 +134,7 @@ export async function countEntries(
   const [row] = await drizzleOf(database)
     .select({
       skills: sql<number>`count(*) filter (where ${IS_SKILL})::integer`,
-      documents: sql<number>`count(*) filter (where not ${IS_SKILL})::integer`,
+      documents: sql<number>`count(*) filter (where not ${IS_SKILL} and not ${ownedBySkillIn(mountPath)})::integer`,
     })
     .from(indexEntries)
     .where(and(inSnapshot(scope), underPath(indexEntries.path, mountPath), FINDABLE));

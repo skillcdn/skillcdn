@@ -17,8 +17,8 @@ Most MCP clients do not load tools lazily, so SkillCDN does not expose one tool 
 
 | Tool | Argument | Rule |
 |---|---|---|
-| `find` | `query` | Optional text, at most 500 characters. Omitted or blank: list what is available, skills first. |
-| | `limit` | Optional integer, 1 to 25. Default 10. |
+| `find` | `query` | Optional text, at most 500 characters. Omitted or blank: list what is available, every skill (up to 100) first, then the documents that do not belong to a skill. |
+| | `limit` | Optional integer, 1 to 25. Default 10. Without a query it bounds the documents only; every skill is listed. |
 | `get` | `name` | Required. The skill name as `find` returns it, or the path of the skill directory. When several skills share the name, the answer lists their directories and asks for one. |
 | `read_file` | `path` | Required. Relative to the mounted root. Validated like an address path: no `..`, no backslashes, no control characters. |
 | | `offset` | Optional character offset. Default 0. |
@@ -31,6 +31,7 @@ All three tools are read-only and idempotent.
 - A result is **text written for a model**: a short header from SkillCDN (what was found, which repository, ref and commit it came from, what to call next), then the repository content. There is no structured output yet. Clients differ in whether they hand a model the text or the structured form, and every client handles text; a structured form can be added later without breaking anyone.
 - Every path in a result is relative to the mounted root, so it can be passed straight to `read_file`.
 - `find` ranks skills above plain documents and matches a skill on its name and description before its body. A query matches when any of its words match; ranking decides the order. A document is listed with its title and its description, which for a document without one is the first paragraph of its body ([convention](skill-repo.md)).
+- A listing (`find` without a query) says how many skills and documents there are, names every skill, and then only the documents outside the skills: a skill's own files are reached through the skill. When a search turns up a file that belongs to a skill, the result says which skill, so that the model loads the skill rather than a fragment of it.
 - `get` lists the supporting files of the skill so the model knows what it can read next, and relays the author-facing warnings from the [convention parser](skill-repo.md).
 - `read_file` serves UTF-8 text only and pages long files. A page never splits a character, and says where the next page starts. It serves any text file in the mount, not only the searchable ones.
 - A problem the model can fix (unknown skill, unknown path, a binary or oversized file) is a tool result marked as an error, with a hint. It is not a protocol error.
