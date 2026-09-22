@@ -63,7 +63,7 @@ Run everything from the repository root through pnpm. Do not use `npm`, `npx` or
 | Lint and format | `pnpm lint` · `pnpm lint:fix` |
 | No control or invisible characters in tracked files (part of `pnpm check`) | `pnpm check:text` |
 | Watch mode (server) | `pnpm dev` |
-| The web UI on its own, against fixtures (no database, no server) | `pnpm dev:web` · against a running server: `pnpm dev:web:api` |
+| The web UI on its own, against fixtures (no database, no server) | `pnpm dev:web` · against a running server: `pnpm dev:web:api` · against the hosted service: `pnpm dev:web:live` |
 | Local PostgreSQL | `docker compose -f deploy/compose.dev.yaml up -d` |
 | New migration | `pnpm --filter @skillcdn/db run generate --name <what-changed>` |
 | Run the server | `pnpm --filter @skillcdn/server run start migrate`, then `pnpm dev` (reads `.env`) |

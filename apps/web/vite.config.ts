@@ -28,11 +28,20 @@ function fixtureApi(): Plugin {
   };
 }
 
-// `vite` serves the UI against fixtures. `vite --mode api` proxies to a real server instead:
-// http://127.0.0.1:11188, or SKILLCDN_API_URL from apps/web/.env.local.
+/** Where each mode sends the REST API and MCP, unless SKILLCDN_API_URL says otherwise. */
+const API_BY_MODE: Readonly<Record<string, string>> = {
+  // `vite --mode api`: a server on this machine.
+  api: "http://127.0.0.1:11188",
+  // `vite --mode live`: the hosted service, to work on the UI against what visitors see.
+  live: "https://skillcdn.ai",
+};
+
+// `vite` serves the UI against fixtures. The other modes proxy to a real server instead:
+// API_BY_MODE, or SKILLCDN_API_URL from apps/web/.env.local.
 export default defineConfig(({ mode, isSsrBuild }) => {
   const env = loadEnv(mode, process.cwd(), "SKILLCDN_");
-  const apiUrl = mode === "api" ? (env.SKILLCDN_API_URL ?? "http://127.0.0.1:11188") : undefined;
+  const defaultApi = API_BY_MODE[mode];
+  const apiUrl = defaultApi === undefined ? undefined : (env.SKILLCDN_API_URL ?? defaultApi);
 
   return {
     plugins: [react(), ...(apiUrl === undefined ? [fixtureApi()] : [])],

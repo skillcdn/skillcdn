@@ -20,7 +20,7 @@ The development server answers the REST API from fixtures (`dev/fixtures.ts`), s
 - **<http://localhost:5173/dev/states>** lists every state of every page (loading, indexing, empty, errors, long texts, a partial index) and shows every building block on one page.
 - Add `?lang=ko` to any URL for Korean. Without it the page follows the browser's language once, then what you picked.
 
-To look at real repositories instead, run the server (see [`apps/server`](../server/README.md)) and start the UI with `pnpm dev:web:api`. It proxies to `http://127.0.0.1:11188`; to use another server, put `SKILLCDN_API_URL=https://...` into `apps/web/.env.local`.
+To look at real repositories instead, the UI can run in front of a real server, which answers the REST API and MCP while the pages stay local: `pnpm dev:web:live` uses the hosted service at `https://skillcdn.ai`, and `pnpm dev:web:api` a server on this machine (see [`apps/server`](../server/README.md), `http://127.0.0.1:11188`). Either takes another server from `SKILLCDN_API_URL` in `apps/web/.env.local`. Fixtures remain the way to see every state, since a real server only shows the states its repositories are in.
 
 ## Where the design lives
 

@@ -27,6 +27,7 @@
     "dev": "turbo run dev dev:tsc --filter=!@skillcdn/web",
     "dev:web": "turbo run dev --filter=@skillcdn/web",
     "dev:web:api": "turbo run dev:api --filter=@skillcdn/web",
+    "dev:web:live": "turbo run dev:live --filter=@skillcdn/web",
     "dev:tsc": "tsc -b --watch --preserveWatchOutput",
     "clean": "turbo run clean",
     "check:text": "node scripts/check-text-safety.mjs"

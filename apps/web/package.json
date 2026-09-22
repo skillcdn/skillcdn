@@ -12,6 +12,7 @@
     "dev": "vite",
     "generate:fonts": "node scripts/generate-pretendard-css.mjs",
     "dev:api": "vite --mode api",
+    "dev:live": "vite --mode live",
     "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\""
   },
   "dependencies": {

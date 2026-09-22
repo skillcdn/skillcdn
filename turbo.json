@@ -34,6 +34,11 @@
       "cache": false,
       "persistent": true
     },
+    "dev:live": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "persistent": true
+    },
     "//#dev:tsc": {
       "cache": false,
       "persistent": true

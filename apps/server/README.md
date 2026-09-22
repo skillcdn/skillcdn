@@ -20,7 +20,7 @@ pnpm dev                                           # compiler in watch mode + ap
 
 Then add `http://127.0.0.1:11188/gh/<owner>/<repo>` to an MCP client, or look at `src/api.int.test.ts` for a scripted session.
 
-To see the web UI on top of this server, run `pnpm dev:web:api` next to it ([`apps/web`](../web/README.md)). Working on the UI alone needs none of this: `pnpm dev:web` runs it against fixtures.
+To see the web UI on top of this server, run `pnpm dev:web:api` next to it ([`apps/web`](../web/README.md)). Working on the UI alone needs none of this: `pnpm dev:web` runs it against fixtures, and `pnpm dev:web:live` against the hosted service.
 
 ### Without a container runtime
 
