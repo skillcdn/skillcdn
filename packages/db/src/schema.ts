@@ -139,6 +139,11 @@ export const snapshots = pgTable(
     indexedBytes: bigint({ mode: "number" }).notNull().default(0),
     /** Skipped manifests and similar findings for the repository author. Capped by the writer. */
     diagnostics: jsonb().$type<SnapshotDiagnostic[]>().notNull().default([]),
+    /**
+     * The version of the reading rules the index was written with; 0 before it is written. An
+     * index below the rules in force goes back to `pending` when it is next asked for.
+     */
+    indexVersion: integer().notNull().default(0),
     indexedAt: instant(),
     createdAt: createdAt(),
     updatedAt: instant().notNull().defaultNow(),

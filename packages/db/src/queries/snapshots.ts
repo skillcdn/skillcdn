@@ -1,5 +1,5 @@
 import type { RepoFileKind } from "@skillcdn/core";
-import { and, eq, lte, or, sql } from "drizzle-orm";
+import { and, eq, lt, lte, or, sql } from "drizzle-orm";
 import { type Database, drizzleOf } from "../client.js";
 import {
   indexEntries,
@@ -21,6 +21,8 @@ export interface SnapshotRecord {
   readonly truncated: boolean;
   readonly errorCode: string | null;
   readonly retryAt: Date | null;
+  /** The reading rules the index was written with; 0 until it is. See `ensureSnapshot`. */
+  readonly indexVersion: number;
 }
 
 export interface SnapshotScope {
@@ -38,38 +40,63 @@ const snapshotColumns = {
   truncated: snapshots.truncated,
   errorCode: snapshots.errorCode,
   retryAt: snapshots.retryAt,
+  indexVersion: snapshots.indexVersion,
 };
 
 function scoped(scope: SnapshotScope) {
   return and(eq(snapshots.id, scope.snapshotId), eq(snapshots.accountId, scope.accountId));
 }
 
-/** The snapshot row for a commit, created as `pending` when this is the first time it is seen. */
+/**
+ * The snapshot row for a commit, created as `pending` when this is the first time it is seen.
+ *
+ * What a commit serves is decided when it is indexed, so a change to the reading rules has to
+ * reach the commits indexed before it: a ready index written under a version below
+ * `indexVersion` goes back to `pending` here, for whoever asks next to claim and rebuild. Only a
+ * ready index is rebuilt: a failed one retries on its own schedule, and one being indexed is
+ * written by whoever holds it, with its version. Newer rules are never undone by older ones.
+ */
 export async function ensureSnapshot(
   database: Database,
   scope: RepoScope,
   commitSha: string,
+  indexVersion: number,
+  now: Date,
 ): Promise<SnapshotRecord> {
   const db = drizzleOf(database);
+  const ofCommit = and(
+    eq(snapshots.repoId, scope.repoId),
+    eq(snapshots.commitSha, commitSha),
+    eq(snapshots.accountId, scope.accountId),
+  );
+  const current = async (): Promise<SnapshotRecord> => {
+    const [row] = await db.select(snapshotColumns).from(snapshots).where(ofCommit).limit(1);
+    if (row === undefined) {
+      throw new Error("snapshot is missing right after it was ensured");
+    }
+    return row;
+  };
   await db
     .insert(snapshots)
     .values({ accountId: scope.accountId, repoId: scope.repoId, commitSha })
     .onConflictDoNothing({ target: [snapshots.repoId, snapshots.commitSha] });
-  const [row] = await db
-    .select(snapshotColumns)
-    .from(snapshots)
-    .where(
-      and(
-        eq(snapshots.repoId, scope.repoId),
-        eq(snapshots.commitSha, commitSha),
-        eq(snapshots.accountId, scope.accountId),
-      ),
-    )
-    .limit(1);
-  if (row === undefined) {
-    throw new Error("snapshot is missing right after it was ensured");
+  const row = await current();
+  if (row.status !== "ready" || row.indexVersion >= indexVersion) {
+    return row;
   }
-  return row;
+  const [rebuilt] = await db
+    .update(snapshots)
+    .set({
+      status: "pending",
+      leaseExpiresAt: null,
+      retryAt: null,
+      errorCode: null,
+      updatedAt: now,
+    })
+    .where(and(ofCommit, eq(snapshots.status, "ready"), lt(snapshots.indexVersion, indexVersion)))
+    .returning(snapshotColumns);
+  // Somebody else sent it back first, or claimed it already: whatever it is now.
+  return rebuilt ?? current();
 }
 
 export async function getSnapshot(
@@ -184,6 +211,8 @@ export interface SnapshotIndex {
   readonly truncated: boolean;
   readonly indexedBytes: number;
   readonly diagnostics: readonly SnapshotDiagnostic[];
+  /** The version of the reading rules that built it; see `ensureSnapshot`. */
+  readonly version: number;
 }
 
 /** The text-search configuration. Index and query must agree, so it is not configurable. */
@@ -249,6 +278,7 @@ export async function writeSnapshotIndex(
       .update(snapshots)
       .set({
         status: "ready",
+        indexVersion: index.version,
         truncated: index.truncated,
         fileCount: index.entries.length,
         indexedFileCount: index.entries.filter((entry) => entry.searchable).length,

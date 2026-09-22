@@ -21,7 +21,7 @@ import {
 } from "@skillcdn/db";
 import type { Logger } from "../logger.js";
 import type { Mount } from "../mounts/mount-service.js";
-import { buildSnapshotIndex } from "./build-index.js";
+import { buildSnapshotIndex, INDEX_VERSION } from "./build-index.js";
 
 export type SnapshotOutcome =
   | { readonly status: "ready"; readonly snapshot: SnapshotRecord }
@@ -127,6 +127,8 @@ export class SnapshotService {
       database,
       { accountId: mount.repo.accountId, repoId: mount.repo.id },
       mount.commit,
+      INDEX_VERSION,
+      clock.now(),
     );
     if (
       snapshot.status === "ready" ||

@@ -23,6 +23,15 @@ import type { NewIndexEntry, SnapshotDiagnostic, SnapshotIndex } from "@skillcdn
 import { gitBlobHash } from "./git-hash.js";
 import { decodeText } from "./text.js";
 
+/**
+ * The version of the reading rules: what is served, what is searched, how a document is
+ * summarized. Bump it when a change would make the index of a commit come out differently. The
+ * snapshot row keeps the version it was written with, and a commit indexed under an older one
+ * is rebuilt when it is next asked for (`ensureSnapshot` in @skillcdn/db); without the bump, a
+ * deployment keeps serving what the old rules produced until the repository moves on.
+ */
+export const INDEX_VERSION = 1;
+
 const MAX_DIAGNOSTICS = 50;
 const FETCH_CONCURRENCY = 8;
 /** With this many bodies to fetch, one archive request is cheaper than one request per file. */
@@ -364,5 +373,5 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
     };
   });
 
-  return { entries, truncated, indexedBytes, diagnostics };
+  return { entries, truncated, indexedBytes, diagnostics, version: INDEX_VERSION };
 }

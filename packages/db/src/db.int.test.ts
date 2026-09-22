@@ -67,6 +67,8 @@ async function readySnapshot(entries: NewIndexEntry[], bodies: Record<string, st
     database,
     { accountId: repo.accountId, repoId: repo.id },
     "a".repeat(40),
+    1,
+    T0,
   );
   const scope: SnapshotScope = { accountId: repo.accountId, snapshotId: snapshot.id };
   const store = createBlobStore(database);
@@ -78,7 +80,7 @@ async function readySnapshot(entries: NewIndexEntry[], bodies: Record<string, st
     await writeSnapshotIndex(
       database,
       scope,
-      { entries, truncated: false, indexedBytes: 0, diagnostics: [] },
+      { entries, truncated: false, indexedBytes: 0, diagnostics: [], version: 1 },
       T0,
     ),
   ).toBe(true);
@@ -190,8 +192,8 @@ describe("snapshot lifecycle", () => {
       T0,
     );
     const scope = { accountId: repo.accountId, repoId: repo.id };
-    const first = await ensureSnapshot(database, scope, "d".repeat(40));
-    const again = await ensureSnapshot(database, scope, "d".repeat(40));
+    const first = await ensureSnapshot(database, scope, "d".repeat(40), 1, T0);
+    const again = await ensureSnapshot(database, scope, "d".repeat(40), 1, T0);
     expect(again.id).toBe(first.id);
     expect(first).toMatchObject({ status: "pending", attempts: 0, truncated: false });
     return { accountId: repo.accountId, snapshotId: first.id };
@@ -242,7 +244,7 @@ describe("snapshot lifecycle", () => {
 
   it("refuses to write an index for a snapshot it no longer holds", async () => {
     const scope = await pendingSnapshot();
-    const index = { entries: [], truncated: false, indexedBytes: 0, diagnostics: [] };
+    const index = { entries: [], truncated: false, indexedBytes: 0, diagnostics: [], version: 1 };
     expect(await writeSnapshotIndex(database, scope, index, T0)).toBe(false);
     expect(await renewSnapshotLease(database, scope, T0, 60_000)).toBe(false);
 
@@ -258,14 +260,66 @@ describe("snapshot lifecycle", () => {
     await writeSnapshotIndex(
       database,
       scope,
-      { entries: [entry({ path: "a.md" })], truncated: true, indexedBytes: 10, diagnostics },
+      {
+        entries: [entry({ path: "a.md" })],
+        truncated: true,
+        indexedBytes: 10,
+        diagnostics,
+        version: 1,
+      },
       T0,
     );
-    expect(await getSnapshot(database, scope)).toMatchObject({ status: "ready", truncated: true });
+    expect(await getSnapshot(database, scope)).toMatchObject({
+      status: "ready",
+      truncated: true,
+      indexVersion: 1,
+    });
     expect(await getSnapshotDiagnostics(database, scope)).toEqual(diagnostics);
     expect(await getEntry(database, scope, "a.md")).toMatchObject({ path: "a.md" });
     // Once ready, nobody can claim it again.
     expect(await claimSnapshot(database, scope, minutes(60), 60_000)).toBeUndefined();
+  });
+
+  it("sends an index that older reading rules built back for a rebuild", async () => {
+    const repo = await saveRepository(
+      database,
+      { host: "gh", owner: "acme", repo: `rules${nextHostId}` },
+      hostRepository(),
+      T0,
+    );
+    const scope = { accountId: repo.accountId, repoId: repo.id };
+    const commit = "e".repeat(40);
+    const built = (version: number) => ({
+      entries: [],
+      truncated: false,
+      indexedBytes: 0,
+      diagnostics: [],
+      version,
+    });
+    const first = await ensureSnapshot(database, scope, commit, 1, T0);
+    const snapshot = { accountId: repo.accountId, snapshotId: first.id };
+    await claimSnapshot(database, snapshot, T0, 60_000);
+    await writeSnapshotIndex(database, snapshot, built(1), T0);
+    expect(await ensureSnapshot(database, scope, commit, 1, T0)).toMatchObject({
+      status: "ready",
+      indexVersion: 1,
+    });
+
+    // Newer rules: back to pending, for whoever asks next to claim.
+    expect(await ensureSnapshot(database, scope, commit, 2, minutes(1))).toMatchObject({
+      status: "pending",
+      indexVersion: 1,
+    });
+    expect(await claimSnapshot(database, snapshot, minutes(1), 60_000)).toMatchObject({
+      status: "indexing",
+      attempts: 2,
+    });
+    await writeSnapshotIndex(database, snapshot, built(2), minutes(1));
+    // Older rules never undo a newer index.
+    expect(await ensureSnapshot(database, scope, commit, 1, minutes(2))).toMatchObject({
+      status: "ready",
+      indexVersion: 2,
+    });
   });
 });
 

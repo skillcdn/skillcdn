@@ -1,0 +1,1 @@
+ALTER TABLE "snapshots" ADD COLUMN "index_version" integer DEFAULT 0 NOT NULL;
