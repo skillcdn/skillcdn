@@ -11,6 +11,7 @@ The REST API shows a person what an agent gets from an address. It is anonymous 
 - `<address>` is an address exactly as in the [address spec](address.md), for example `/api/v1/mounts/gh/acme/skills@v2/ads`. It is parsed from the raw path, so percent-escapes follow the address rules.
 - Paths inside responses are relative to the mounted root, like paths in tool results.
 - Responses are `cache-control: no-store` for now.
+- A page on any origin may call the API from a browser: responses say `access-control-allow-origin: *`, preflight `OPTIONS` requests are answered, no credentials are used or accepted, and `x-request-id` and `retry-after` are readable by the page.
 - Errors have one shape, shared with the MCP endpoint: `{ "error": { "code": "...", "message": "..." } }`.
 
 | Status | `code` | When |

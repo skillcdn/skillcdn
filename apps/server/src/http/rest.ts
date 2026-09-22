@@ -18,6 +18,7 @@ import {
   type RestSkill,
 } from "@skillcdn/core";
 import type { Context, Hono } from "hono";
+import { cors } from "hono/cors";
 import * as z from "zod";
 import type { Logger } from "../logger.js";
 import type { MountOverview, MountReader, NotReady, SkillLookup } from "../mounts/mount-reader.js";
@@ -199,6 +200,9 @@ export function hostFailure(error: unknown): RestFailure | undefined {
   return undefined;
 }
 
+/** How long a browser may remember the answer to a preflight request. */
+const CORS_MAX_AGE_SECONDS = 86_400;
+
 /** Registers the REST API of docs/specs/rest.md on the app. */
 export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies): void {
   const { reader, logger, mountAt, mountOf, featured, now } = dependencies;
@@ -232,6 +236,17 @@ export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies):
     return c.json(errorBody("internal", "The request could not be served."), 500);
   };
 
+  // The API is public and read-only, so a page on any origin may call it. No credentials are
+  // involved; the request id is exposed so that a report can be matched to the logs.
+  app.use(
+    "/api/*",
+    cors({
+      origin: "*",
+      allowMethods: ["GET", "HEAD", "OPTIONS"],
+      exposeHeaders: ["x-request-id", "retry-after"],
+      maxAge: CORS_MAX_AGE_SECONDS,
+    }),
+  );
   app.use("/api/*", async (c, next) => {
     await next();
     c.header("cache-control", "no-store");

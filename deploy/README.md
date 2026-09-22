@@ -62,6 +62,7 @@ The `api` role speaks plain HTTP and expects TLS, caching and per-client rate li
 - **Idle connections.** Keep `HTTP_KEEP_ALIVE_SECONDS` above the idle timeout of the proxy. When the server closes an idle connection first, the proxy occasionally sends a request into it and answers its client with a gateway error.
 - **Slow answers.** A tool call may wait up to `INDEX_WAIT_MS` for an index. The proxy's response timeout has to be longer than that.
 - **Streaming.** MCP responses may be event streams. Do not buffer or transform `text/event-stream` responses.
+- **Cross-origin calls.** The REST API under `/api/` answers browsers on any origin by itself: pass `OPTIONS` requests and `access-control-*` headers through. The MCP endpoint answers no other origin yet.
 - **Pages.** With a web UI, set `PUBLIC_URL`. Every URL has exactly one representation (the language is the `lang` query parameter, never `Accept-Language`), so pages and files may be cached by URL, query string included. HTML asks to be revalidated; files under `/assets/` never change. On an address (`/gh/...`) the response depends on the request: a `GET` that accepts `text/html` gets a page rendered with what the address serves, everything else is MCP. The page says `vary: accept` and asks to be revalidated; MCP responses say `no-store`. A cache that honors both may cache the path; one that ignores `Vary` must not.
 - **Probes.** `GET /healthz` and `GET /readyz` are not written to the access log.
 

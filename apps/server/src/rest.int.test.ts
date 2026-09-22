@@ -289,3 +289,29 @@ describe("GET /api/v1/featured", () => {
     expect(await response.json()).toEqual({ items: [] });
   });
 });
+
+describe("from a page on another origin", () => {
+  it("answers the preflight and lets any origin read the responses, without credentials", async () => {
+    const h = harness();
+    const origin = "http://localhost:5173";
+
+    const preflight = await h.request("/api/v1/featured", {
+      method: "OPTIONS",
+      headers: { origin, "access-control-request-method": "GET" },
+    });
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers.get("access-control-allow-origin")).toBe("*");
+    expect(preflight.headers.get("access-control-allow-methods")).toContain("GET");
+    expect(preflight.headers.get("access-control-max-age")).toBe("86400");
+
+    const response = await h.request("/api/v1/featured", { headers: { origin } });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("access-control-allow-origin")).toBe("*");
+    expect(response.headers.get("access-control-allow-credentials")).toBeNull();
+    expect(response.headers.get("access-control-expose-headers")).toContain("x-request-id");
+
+    // Only the API: nothing else on the server answers other origins.
+    const probe = await h.request("/healthz", { headers: { origin } });
+    expect(probe.headers.get("access-control-allow-origin")).toBeNull();
+  });
+});
