@@ -12,7 +12,7 @@ What exists, what is being built, what comes next. Update this file in the same 
 Goal: a person opens the service in a browser, understands what it does in their language, pastes an address and sees what an agent would get from it.
 
 - [x] REST API v1 per [specs/rest.md](specs/rest.md): what an address serves, `find`, one skill, one file, featured addresses
-- [x] `web`: landing page and explorer, in English and Korean, prerendered per language with metadata, structured data, social-preview images and `llms.txt` ([ADR-0009](adr/0009-web-ui-prerendered-per-language.md)). Design decisions made with the maintainers: a restrained developer-tool look, one blue accent, light and dark, a placeholder symbol until there is a logo
+- [x] `web`: landing page and explorer, in English and Korean, prerendered per language with metadata, structured data, social-preview images and `llms.txt` ([ADR-0009](adr/0009-web-ui-prerendered-per-language.md)). Design decisions made with the maintainers: a restrained developer-tool look, one blue accent, dark only, a placeholder symbol until there is a logo
 - [x] `server`: serves the web build when `WEB_ROOT` is set, answers browsers on addresses, generates `sitemap.xml` and `robots.txt` from `PUBLIC_URL`
 - [x] The UI runs on its own for whoever designs it: one command, fixture data for every state, no database, no server, no container runtime; Windows and macOS
 - [x] Usage statistics, on the server side: counts per public repository and skill (connections, tool calls, skills loaded), aggregated per day in PostgreSQL, so that rankings on the landing page have history by the time they are built. Statistics of private repositories are never collected.
