@@ -247,7 +247,8 @@ function fileAnswer(
   if (path === null || path === "" || path.split("/").includes("..")) {
     return problem(400, "request.invalid", "Missing or malformed query parameters: path.");
   }
-  const absolute = address.path === "" ? path : `${address.path}/${path}`;
+  const isRoot = path === "." || path === "/";
+  const absolute = isRoot ? address.path : address.path === "" ? path : `${address.path}/${path}`;
   const unreadable = repository.unreadable?.[absolute];
   if (unreadable === "file.too_large") {
     return problem(
@@ -259,13 +260,50 @@ function fileAnswer(
   if (unreadable === "file.not_text") {
     return problem(415, unreadable, "The file is not UTF-8 text.");
   }
-  const content = repository.files[absolute];
+  const content = isRoot ? undefined : repository.files[absolute];
   if (content === undefined) {
-    return problem(404, "file.not_found", "No file at that path in this mount.");
+    // A directory answers with what it contains, subdirectories first.
+    const prefix = absolute === "" ? "" : `${absolute}/`;
+    const children = new Map<string, { kind: "file" | "directory"; size: number | null }>();
+    for (const [file, text] of Object.entries(repository.files)) {
+      if (!file.startsWith(prefix)) {
+        continue;
+      }
+      const rest = file.slice(prefix.length);
+      const slash = rest.indexOf("/");
+      const name = slash < 0 ? rest : rest.slice(0, slash);
+      if (!children.has(name)) {
+        children.set(name, {
+          kind: slash < 0 ? "file" : "directory",
+          size: slash < 0 ? text.length : null,
+        });
+      }
+    }
+    if (children.size === 0) {
+      return problem(404, "file.not_found", "No file at that path in this mount.");
+    }
+    const entries = [...children]
+      .sort(
+        ([a, x], [b, y]) =>
+          Number(x.kind === "file") - Number(y.kind === "file") || (a < b ? -1 : 1),
+      )
+      .map(([name, child]) => ({
+        path: isRoot ? name : `${path}/${name}`,
+        kind: child.kind,
+        size: child.size,
+      }));
+    const body: RestFile = {
+      kind: "directory",
+      path: isRoot ? "" : path,
+      entries,
+      truncated: false,
+    };
+    return { status: 200, body };
   }
   const offset = Number(params.get("offset") ?? "0");
   const end = Math.min(offset + PAGE_LIMIT, content.length);
   const body: RestFile = {
+    kind: "file",
     path,
     content: content.slice(offset, end),
     offset,

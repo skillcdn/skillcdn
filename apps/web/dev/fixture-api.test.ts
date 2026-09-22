@@ -86,12 +86,27 @@ describe("the fixture API", () => {
 
   it("pages a long file and moves from indexing to ready", () => {
     const first = restFileSchema.parse(ask("/api/v1/files/gh/acme/skills?path=docs/long.md").body);
+    if (first.kind !== "file") {
+      throw new Error("expected a file");
+    }
     expect(first.nextOffset).toBe(first.content.length);
     const second = restFileSchema.parse(
       ask(`/api/v1/files/gh/acme/skills?path=docs/long.md&offset=${first.nextOffset}`).body,
     );
+    if (second.kind !== "file") {
+      throw new Error("expected a file");
+    }
     expect(second.nextOffset).toBeNull();
     expect(first.content.length + second.content.length).toBe(first.totalLength);
+
+    // A directory is listed, subdirectories first; the mounted root is ".".
+    const directory = restFileSchema.parse(ask("/api/v1/files/gh/acme/skills?path=docs").body);
+    if (directory.kind !== "directory") {
+      throw new Error("expected a directory");
+    }
+    expect(directory.entries.map((entry) => entry.path)).toContain("docs/long.md");
+    const root = restFileSchema.parse(ask("/api/v1/files/gh/acme/skills?path=.").body);
+    expect(root).toMatchObject({ kind: "directory", path: "" });
 
     resetFixtureState();
     const early = restMountSchema.parse(ask("/api/v1/mounts/gh/demo/slow", 1_000_000).body);

@@ -192,6 +192,61 @@ export async function listSkillFiles(
   return rows.map((row) => row.path);
 }
 
+export interface DirectoryListing {
+  readonly path: string;
+  readonly kind: "file" | "directory";
+  /** Bytes, for a file. */
+  readonly size: number | null;
+}
+
+/**
+ * The immediate entries of one directory of a snapshot: every file the tree had, searchable or
+ * not, and the subdirectories, which come first. `directory` is empty for the root.
+ */
+export async function listDirectory(
+  database: Database,
+  scope: SnapshotScope,
+  directory: string,
+  limit: number,
+): Promise<DirectoryListing[]> {
+  const prefix = directory.length === 0 ? "" : `${directory}/`;
+  const rest =
+    prefix.length === 0
+      ? sql`${indexEntries.path}`
+      : sql`substr(${indexEntries.path}, ${prefix.length + 1})`;
+  // The first segment below the directory names the child; a subquery makes it a column, so the
+  // grouping and the ordering can name it rather than repeat the expression.
+  const children = drizzleOf(database)
+    .select({
+      name: sql<string>`split_part(${rest}, '/', 1)`.as("name"),
+      isFile: sql<boolean>`position('/' in ${rest}) = 0`.as("is_file"),
+      size: indexEntries.size,
+    })
+    .from(indexEntries)
+    .where(
+      and(
+        inSnapshot(scope),
+        prefix.length === 0 ? undefined : sql`starts_with(${indexEntries.path}, ${prefix})`,
+      ),
+    )
+    .as("children");
+  const rows = await drizzleOf(database)
+    .select({
+      name: children.name,
+      isFile: sql<boolean>`bool_or(${children.isFile})`,
+      size: sql<number | null>`max(${children.size}) filter (where ${children.isFile})`,
+    })
+    .from(children)
+    .groupBy(children.name)
+    .orderBy(sql`bool_or(${children.isFile})`, sql`${children.name} collate "C"`)
+    .limit(limit);
+  return rows.map((row) => ({
+    path: `${prefix}${row.name}`,
+    kind: row.isFile ? "file" : "directory",
+    size: row.isFile ? row.size : null,
+  }));
+}
+
 export async function getEntry(
   database: Database,
   scope: SnapshotScope,

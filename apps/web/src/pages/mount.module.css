@@ -281,6 +281,18 @@
   overflow-wrap: anywhere;
 }
 
+.entry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.entrySize {
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+}
+
 .fileHeader {
   display: flex;
   flex-wrap: wrap;

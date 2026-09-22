@@ -351,9 +351,24 @@ export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies):
           );
         case "not_text":
           return c.json(errorBody("file.not_text", "The file is not UTF-8 text."), 415);
+        case "directory": {
+          const { directory } = lookup;
+          const body: RestFile = {
+            kind: "directory",
+            path: directory.path,
+            entries: directory.entries.map((entry) => ({
+              path: entry.path,
+              kind: entry.kind,
+              size: entry.size ?? null,
+            })),
+            truncated: directory.truncated,
+          };
+          return c.json(body);
+        }
         case "found": {
           const { file } = lookup;
           const body: RestFile = {
+            kind: "file",
             path: file.path,
             content: file.content,
             offset: file.offset,

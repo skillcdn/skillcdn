@@ -45,7 +45,7 @@ Headless agents get a **project token**: repo-scoped, read-only, expiring, revoc
 |---|---|
 | `find` | search over skill descriptions and documents in the mounted repo |
 | `get` | return a skill or playbook by name, with its front-matter and body |
-| `read_file` | read a file inside the mounted ref |
+| `read_file` | read a file, or list a directory, inside the mounted ref |
 | `intake` | *(later)* walk a non-expert through the questions a skill declares |
 | `describe` / `run` | *(later)* composed tools declared in Markdown or YAML |
 

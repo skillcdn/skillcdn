@@ -7,6 +7,7 @@ import {
   INDEXING_NOTICE,
   joinRepoPath,
   readFileTool,
+  renderDirectoryResult,
   renderFileResult,
   renderFindResult,
   renderSkillResult,
@@ -166,6 +167,8 @@ export function createMountServer(mount: Mount, dependencies: ToolDependencies):
       switch (lookup.kind) {
         case "found":
           return reply(renderFileResult(lookup.file));
+        case "directory":
+          return reply(renderDirectoryResult(lookup.directory));
         case "invalid_path":
           return problem(
             `Not a valid path: ${lookup.reason}. Paths are relative to the mounted root, for example skills/ads/SKILL.md.`,

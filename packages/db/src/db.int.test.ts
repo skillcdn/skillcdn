@@ -15,6 +15,7 @@ import {
   getSchemaStatus,
   getSnapshot,
   getSnapshotDiagnostics,
+  listDirectory,
   listEntries,
   listSkillFiles,
   migrateDatabase,
@@ -435,6 +436,24 @@ describe("search", () => {
     expect(
       await findSkills(database, scope, "docs", { name: "release-notes", directory: undefined }, 5),
     ).toEqual([]);
+  });
+
+  it("lists a directory: subdirectories first, then files with their sizes", async () => {
+    expect(await listDirectory(database, scope, "", 10)).toEqual([
+      { path: "docs", kind: "directory", size: null },
+      { path: "docs_extra", kind: "directory", size: null },
+      { path: "skills", kind: "directory", size: null },
+    ]);
+    const skill = await listDirectory(database, scope, "skills/release-notes", 10);
+    expect(skill.map((entry) => [entry.path, entry.kind])).toEqual([
+      ["skills/release-notes/references", "directory"],
+      ["skills/release-notes/scripts", "directory"],
+      ["skills/release-notes/SKILL.md", "file"],
+    ]);
+    expect(typeof skill[2]?.size).toBe("number");
+    expect(await listDirectory(database, scope, "skills/release-notes", 2)).toHaveLength(2);
+    expect(await listDirectory(database, scope, "nowhere", 10)).toEqual([]);
+    expect(await listDirectory(database, scope, "docs/releasing.md", 10)).toEqual([]);
   });
 
   it("lists the supporting files of a skill without its manifest", async () => {

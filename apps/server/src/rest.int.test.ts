@@ -241,16 +241,34 @@ describe("GET /api/v1/files/<address>", () => {
       await (await h.request(fileUrl("path=docs/long.md&limit=1000"))).json(),
     );
     expect(first).toMatchObject({
+      kind: "file",
       path: "docs/long.md",
       offset: 0,
       nextOffset: 1000,
       totalLength: 2008,
     });
+    if (first.kind !== "file") {
+      throw new Error("expected a file");
+    }
     expect(first.content).toHaveLength(1000);
     const second = restFileSchema.parse(
       await (await h.request(fileUrl("path=docs/long.md&offset=1000"))).json(),
     );
     expect(second).toMatchObject({ offset: 1000, nextOffset: null });
+
+    // A directory answers with its entries, from the tree while there is no index.
+    const directory = restFileSchema.parse(await (await h.request(fileUrl("path=docs"))).json());
+    expect(directory).toEqual({
+      kind: "directory",
+      path: "docs",
+      entries: [
+        { path: "docs/huge.md", kind: "file", size: 5000 },
+        { path: "docs/long.md", kind: "file", size: 2008 },
+      ],
+      truncated: false,
+    });
+    const root = restFileSchema.parse(await (await h.request(fileUrl("path=."))).json());
+    expect(root).toMatchObject({ kind: "directory", path: "" });
 
     for (const [query, status, code] of [
       ["path=docs/missing.md", 404, "file.not_found"],

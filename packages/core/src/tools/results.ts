@@ -64,6 +64,24 @@ export interface FileResult {
   readonly totalLength: number;
 }
 
+export interface DirectoryEntry {
+  /** Relative to the mounted root, like every path in a result. */
+  readonly path: RepoPath;
+  readonly kind: "file" | "directory";
+  /** Bytes, for a file. */
+  readonly size: number | undefined;
+}
+
+/** What `read_file` answers for a directory: its immediate entries, subdirectories first. */
+export interface DirectoryResult {
+  readonly mount: MountSummary;
+  /** Relative to the mounted root; empty for the root itself. */
+  readonly path: RepoPath;
+  readonly entries: readonly DirectoryEntry[];
+  /** True when the directory has more entries than were listed. */
+  readonly truncated: boolean;
+}
+
 /** A slice of `content` that never splits a surrogate pair. */
 export function pageOfText(
   content: string,

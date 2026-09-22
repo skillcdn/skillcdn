@@ -4,9 +4,12 @@ export { getSchemaStatus, migrateDatabase, type SchemaStatus } from "./migrate.j
 export { createBlobStore } from "./queries/blobs.js";
 export {
   countEntries,
+  type DirectoryListing,
+  type EntryListing,
   type EntryRecord,
   findSkills,
   getEntry,
+  listDirectory,
   listEntries,
   listSkillFiles,
   searchEntries,

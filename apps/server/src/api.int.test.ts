@@ -176,7 +176,7 @@ describe("a multi-skill repository", () => {
       ["docs/huge.md", "too large to read"],
       ["assets/logo.png", "not a UTF-8 text file"],
       ["docs/missing.md", "No file at docs/missing.md"],
-      ["docs", "No file at docs"],
+      ["nowhere", "No file at nowhere"],
       ["../single-skill/SKILL.md", "Not a valid path"],
       ["/etc/passwd", "Not a valid path"],
     ] as const) {
@@ -184,6 +184,25 @@ describe("a multi-skill repository", () => {
       expect(result.isError).toBe(true);
       expect(result.text).toContain(reason);
     }
+    await client.close();
+  });
+
+  it("lists a directory through read_file", async () => {
+    const client = await harness().connect("/gh/acme/multi-skill");
+
+    const root = await call(client, "read_file", { path: "." });
+    expect(root.isError).toBe(false);
+    expect(root.text).toContain("Directory: the mounted root (3 entries)");
+    expect(root.text).toContain("- docs/");
+    expect(root.text).toContain("- skills/");
+    expect(root.text).toContain("- README.md (");
+
+    const skill = await call(client, "read_file", { path: "skills/release-notes" });
+    expect(skill.text).toContain("Directory: skills/release-notes/ (2 entries)");
+    expect(skill.text).toContain("- skills/release-notes/references/");
+    expect(skill.text).toContain("- skills/release-notes/SKILL.md (");
+
+    expect((await call(client, "read_file", { path: "skills/nowhere" })).isError).toBe(true);
     await client.close();
   });
 

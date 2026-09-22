@@ -70,6 +70,7 @@ export {
   REST_MOUNT_LIST_LIMIT,
   REST_ROUTES,
   type RestDiagnostic,
+  type RestDirectoryEntry,
   type RestDocumentSummary,
   type RestError,
   type RestFeatured,
@@ -81,6 +82,7 @@ export {
   type RestSkill,
   type RestSkillSummary,
   restDiagnosticSchema,
+  restDirectoryEntrySchema,
   restDocumentSummarySchema,
   restErrorSchema,
   restFeaturedSchema,
@@ -131,11 +133,14 @@ export {
 export {
   INDEXING_NOTICE,
   PROVENANCE_NOTICE,
+  renderDirectoryResult,
   renderFileResult,
   renderFindResult,
   renderSkillResult,
 } from "./tools/render.js";
 export {
+  type DirectoryEntry,
+  type DirectoryResult,
   type FileResult,
   type FindItem,
   type FindResult,

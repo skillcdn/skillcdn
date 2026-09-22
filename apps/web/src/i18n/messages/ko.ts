@@ -289,6 +289,9 @@ export const ko: Messages = {
       `전체 ${total.toLocaleString("ko")}자 중 ${from.toLocaleString("ko")}~${to.toLocaleString("ko")}자`,
     more: "더 불러오기",
     imageOmitted: "이미지는 불러오지 않습니다",
+    directory: "디렉터리",
+    bytes: (count: number) => `${count.toLocaleString("ko")}바이트`,
+    directoryTruncated: "앞쪽 항목만 표시됩니다.",
   },
 
   errors: {

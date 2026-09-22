@@ -16,11 +16,43 @@ const MARKDOWN_FILE = /\.(md|markdown)$/i;
 /** YAML front-matter at the top of a file. It is shown as it is, not rendered as Markdown. */
 const FRONT_MATTER = /^---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/;
 
+type FilePage = Extract<RestFile, { kind: "file" }>;
+type DirectoryListing = Extract<RestFile, { kind: "directory" }>;
+
 interface LaterPages {
   readonly key: string;
-  readonly pages: readonly RestFile[];
+  readonly pages: readonly FilePage[];
   readonly loading: boolean;
   readonly error: ApiError | undefined;
+}
+
+/** A directory as `read_file` lists it: what it contains, subdirectories first. */
+function DirectoryView(props: { readonly address: Address; readonly listing: DirectoryListing }) {
+  const { t } = useI18n();
+  const { address, listing } = props;
+  return (
+    <section>
+      <header className={styles.fileHeader}>
+        <h2 className={styles.filePath}>
+          <span className={styles.kicker}>{t.file.directory}</span>{" "}
+          <code>{listing.path === "" ? t.skill.root : `${listing.path}/`}</code>
+        </h2>
+      </header>
+      <ul className={styles.files}>
+        {listing.entries.map((entry) => (
+          <li key={entry.path} className={styles.entry}>
+            <Link href={mountHref(address, { kind: "file", path: entry.path })}>
+              <code>{entry.kind === "directory" ? `${entry.path}/` : entry.path}</code>
+            </Link>
+            {entry.size !== null && (
+              <span className={styles.entrySize}>{t.file.bytes(entry.size)}</span>
+            )}
+          </li>
+        ))}
+      </ul>
+      {listing.truncated && <p className={styles.note}>{t.file.directoryTruncated}</p>}
+    </section>
+  );
 }
 
 /** One text file as `read_file` returns it, a page at a time. */
@@ -64,8 +96,18 @@ export function MountFile(props: { readonly address: Address; readonly path: str
     );
   }
 
-  const pages = [first.value, ...more.pages];
-  const last = pages.at(-1) ?? first.value;
+  const answer = first.value;
+  if (answer.kind === "directory") {
+    return (
+      <article className={styles.stack}>
+        {back}
+        <DirectoryView address={address} listing={answer} />
+      </article>
+    );
+  }
+
+  const pages = [answer, ...more.pages];
+  const last = pages.at(-1) ?? answer;
   const content = pages.map((page) => page.content).join("");
   const isMarkdown = MARKDOWN_FILE.test(path);
   const frontMatter = isMarkdown ? FRONT_MATTER.exec(content)?.[0] : undefined;
@@ -78,7 +120,16 @@ export function MountFile(props: { readonly address: Address; readonly path: str
     const offset = last.nextOffset;
     setLater({ ...more, loading: true, error: undefined });
     api.file(address, path, offset, new AbortController().signal).then(
-      (page) => setLater({ key, pages: [...more.pages, page], loading: false, error: undefined }),
+      (page) =>
+        setLater(
+          page.kind === "file"
+            ? { key, pages: [...more.pages, page], loading: false, error: undefined }
+            : {
+                ...more,
+                loading: false,
+                error: new ApiError(0, "invalid_response", "The server answered unexpectedly."),
+              },
+        ),
       (error: unknown) =>
         setLater({
           ...more,
@@ -133,7 +184,7 @@ export function MountFile(props: { readonly address: Address; readonly path: str
 
       {(last.nextOffset !== null || pages.length > 1) && (
         <p className={styles.note}>
-          {t.file.showing(first.value.offset, last.offset + last.content.length, last.totalLength)}
+          {t.file.showing(answer.offset, last.offset + last.content.length, last.totalLength)}
         </p>
       )}
       {more.error !== undefined && <ErrorCallout error={more.error} onRetry={loadMore} />}

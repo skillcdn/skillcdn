@@ -1,5 +1,6 @@
 import {
   type BlobStore,
+  type DirectoryResult,
   FIND_DEFAULT_LIMIT,
   FIND_LIST_SKILLS_MAX,
   type FileResult,
@@ -14,6 +15,7 @@ import {
   READ_FILE_DEFAULT_LIMIT,
   type RepoPath,
   type RepoTree,
+  ROOT_PATH,
   relativeRepoPath,
   type SkillResult,
   splitFrontMatter,
@@ -21,10 +23,12 @@ import {
 import {
   countEntries,
   type Database,
+  type DirectoryListing,
   type EntryRecord,
   findSkills,
   getEntry,
   getSnapshotDiagnostics,
+  listDirectory,
   listEntries,
   listSkillFiles,
   type SnapshotDiagnostic,
@@ -55,6 +59,8 @@ export type SkillLookup =
 
 export type FileLookup =
   | { readonly kind: "found"; readonly file: FileResult }
+  /** The path names a directory: its entries are the answer. */
+  | { readonly kind: "directory"; readonly directory: DirectoryResult }
   | { readonly kind: "invalid_path"; readonly reason: string }
   | { readonly kind: "not_found"; readonly path: RepoPath }
   | {
@@ -84,6 +90,7 @@ export interface MountOverview {
 const MAX_LISTED_SKILL_FILES = 50;
 const MAX_SUGGESTED_SKILLS = 20;
 const MAX_CACHED_TREES = 8;
+const MAX_DIRECTORY_ENTRIES = 200;
 
 /**
  * Answers questions about one resolved mount as data. The MCP tools render these answers as text
@@ -233,7 +240,10 @@ export class MountReader {
     };
   }
 
-  /** Reads a page of a text file. Never waits for the index: the commit's tree answers meanwhile. */
+  /**
+   * Reads a page of a text file, or lists a directory. Never waits for the index: the commit's
+   * tree answers meanwhile.
+   */
   async file(
     mount: Mount,
     input: {
@@ -244,35 +254,68 @@ export class MountReader {
   ): Promise<FileLookup> {
     const { database, blobStore, gitHost, snapshots } = this.#dependencies;
     const limits = { ...this.#dependencies.limits, ...mount.limits };
-    const relative = parseRepoPath(input.path);
-    if (!relative.ok || relative.value.length === 0) {
-      return {
-        kind: "invalid_path",
-        reason: relative.ok ? "the path is empty" : relative.error.message,
-      };
+    const wanted = input.path.trim();
+    let below: RepoPath;
+    if (wanted === "." || wanted === "/") {
+      // Nothing else can name the mounted root, since an empty path is not a path.
+      below = ROOT_PATH;
+    } else {
+      const parsed = parseRepoPath(wanted);
+      if (!parsed.ok || parsed.value.length === 0) {
+        return {
+          kind: "invalid_path",
+          reason: parsed.ok ? "the path is empty" : parsed.error.message,
+        };
+      }
+      below = parsed.value;
     }
-    const path = joinRepoPath(mount.address.path, relative.value);
+    const path = joinRepoPath(mount.address.path, below);
 
     const outcome = await snapshots.ready(mount, 0);
     let file: { readonly size: number; readonly hash: string } | undefined;
+    let children: readonly DirectoryListing[] = [];
     if (outcome.status === "ready") {
       const scope = { accountId: outcome.snapshot.accountId, snapshotId: outcome.snapshot.id };
-      const entry = await getEntry(database, scope, path);
+      const entry = below.length === 0 ? undefined : await getEntry(database, scope, path);
       file = entry === undefined ? undefined : { size: entry.size, hash: entry.blobSha };
+      if (file === undefined) {
+        children = await listDirectory(database, scope, path, MAX_DIRECTORY_ENTRIES + 1);
+      }
     } else {
       const tree = await this.#treeOf(mount);
-      const entry = tree.entries.find(
-        (candidate) => candidate.type === "file" && candidate.path === path,
-      );
+      const entry =
+        below.length === 0
+          ? undefined
+          : tree.entries.find((candidate) => candidate.type === "file" && candidate.path === path);
       file = entry === undefined ? undefined : { size: entry.size, hash: entry.hash };
+      if (file === undefined) {
+        children = directoryOfTree(tree, path, MAX_DIRECTORY_ENTRIES + 1);
+      }
     }
     if (file === undefined) {
-      return { kind: "not_found", path: relative.value };
+      const entries = children.flatMap((child) => {
+        const childPath = belowMount(mount, child.path);
+        return childPath === undefined
+          ? []
+          : [{ path: childPath, kind: child.kind, size: child.size ?? undefined }];
+      });
+      if (entries.length === 0) {
+        return { kind: "not_found", path: below };
+      }
+      return {
+        kind: "directory",
+        directory: {
+          mount: this.summary(mount, outcome.status === "ready" ? outcome.snapshot : undefined),
+          path: below,
+          entries: entries.slice(0, MAX_DIRECTORY_ENTRIES),
+          truncated: entries.length > MAX_DIRECTORY_ENTRIES,
+        },
+      };
     }
     if (file.size > limits.maxReadableFileBytes) {
       return {
         kind: "too_large",
-        path: relative.value,
+        path: below,
         size: file.size,
         limit: limits.maxReadableFileBytes,
       };
@@ -287,7 +330,7 @@ export class MountReader {
       );
       text = decodeText(bytes);
       if (text === undefined) {
-        return { kind: "not_text", path: relative.value };
+        return { kind: "not_text", path: below };
       }
       await blobStore.write(file.hash, text);
     }
@@ -295,7 +338,7 @@ export class MountReader {
       kind: "found",
       file: {
         mount: this.summary(mount, outcome.status === "ready" ? outcome.snapshot : undefined),
-        path: relative.value,
+        path: below,
         ...pageOfText(text, input.offset ?? 0, input.limit ?? READ_FILE_DEFAULT_LIMIT),
       },
     };
@@ -370,6 +413,32 @@ export class MountReader {
     }
     return loading;
   }
+}
+
+/** What `listDirectory` would answer, from the tree of a commit whose index is not ready. */
+function directoryOfTree(tree: RepoTree, directory: string, limit: number): DirectoryListing[] {
+  const prefix = directory.length === 0 ? "" : `${directory}/`;
+  const children = new Map<string, DirectoryListing>();
+  for (const entry of tree.entries) {
+    if (entry.type !== "file" || !entry.path.startsWith(prefix)) {
+      continue;
+    }
+    const rest = entry.path.slice(prefix.length);
+    const slash = rest.indexOf("/");
+    const name = slash < 0 ? rest : rest.slice(0, slash);
+    if (name.length > 0 && !children.has(name)) {
+      children.set(name, {
+        path: `${prefix}${name}`,
+        kind: slash < 0 ? "file" : "directory",
+        size: slash < 0 ? entry.size : null,
+      });
+    }
+  }
+  return [...children.values()]
+    .sort(
+      (a, b) => Number(a.kind === "file") - Number(b.kind === "file") || (a.path < b.path ? -1 : 1),
+    )
+    .slice(0, limit);
 }
 
 /** A path stored by the indexer, relative to the mounted root. */

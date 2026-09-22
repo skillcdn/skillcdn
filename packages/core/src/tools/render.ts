@@ -1,4 +1,10 @@
-import type { FileResult, FindResult, MountSummary, SkillResult } from "./results.js";
+import type {
+  DirectoryResult,
+  FileResult,
+  FindResult,
+  MountSummary,
+  SkillResult,
+} from "./results.js";
 
 // Tool results are text written for a model: a short header from us, then repository content.
 
@@ -38,7 +44,8 @@ function joinSections(sections: readonly (string | undefined)[]): string {
   return sections.filter((section) => section !== undefined && section.length > 0).join("\n\n");
 }
 
-const plural = (count: number, noun: string): string => `${count} ${noun}${count === 1 ? "" : "s"}`;
+const plural = (count: number, one: string, many = `${one}s`): string =>
+  `${count} ${count === 1 ? one : many}`;
 
 export function renderFindResult(result: FindResult): string {
   const where = describeMount(result.mount);
@@ -106,6 +113,12 @@ export function renderSkillResult(result: SkillResult): string {
     `Description: ${result.description}`,
     result.license === undefined ? undefined : `License: ${result.license}`,
     result.compatibility === undefined ? undefined : `Compatibility: ${result.compatibility}`,
+    result.allowedTools === undefined ? undefined : `Allowed tools: ${result.allowedTools}`,
+    Object.keys(result.metadata).length === 0
+      ? undefined
+      : `Metadata: ${Object.entries(result.metadata)
+          .map(([key, value]) => `${key}: ${value}`)
+          .join("; ")}`,
     `Relative paths in the instructions start at ${directory}.`,
   ].filter((line) => line !== undefined);
 
@@ -125,6 +138,28 @@ export function renderSkillResult(result: SkillResult): string {
     warnings,
     notices(result.mount).join("\n"),
     `--- instructions ---\n${result.body.trim()}`,
+  ]);
+}
+
+export function renderDirectoryResult(result: DirectoryResult): string {
+  const where = result.path.length === 0 ? "the mounted root" : `${result.path}/`;
+  const counted = plural(result.entries.length, "entry", "entries");
+  const header = [
+    `Directory: ${where} (${counted}${result.truncated ? ", more not listed" : ""})`,
+    `Source: ${describeMount(result.mount)}`,
+  ];
+  const entries = result.entries.map((entry) =>
+    entry.kind === "directory"
+      ? `- ${entry.path}/`
+      : `- ${entry.path}${entry.size === undefined ? "" : ` (${entry.size} bytes)`}`,
+  );
+  const next =
+    'Next: read_file {"path": "<path>"} reads a file or lists a directory; get {"name": "<skill name>"} loads a skill.';
+  return joinSections([
+    header.join("\n"),
+    entries.join("\n"),
+    next,
+    notices(result.mount).join("\n"),
   ]);
 }
 

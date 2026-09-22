@@ -135,13 +135,31 @@ export const restSkillSchema = z.discriminatedUnion("status", [
   failed,
 ]);
 
-export const restFileSchema = z.object({
+export const restDirectoryEntrySchema = z.object({
   path: z.string(),
-  content: z.string(),
-  offset: count,
-  nextOffset: z.nullable(count),
-  totalLength: count,
+  kind: z.enum(["file", "directory"]),
+  /** Bytes, for a file. */
+  size: z.nullable(count),
 });
+
+/** A page of a file, or the entries of a directory when the path names one. */
+export const restFileSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("file"),
+    path: z.string(),
+    content: z.string(),
+    offset: count,
+    nextOffset: z.nullable(count),
+    totalLength: count,
+  }),
+  z.object({
+    kind: z.literal("directory"),
+    /** Empty for the mounted root. */
+    path: z.string(),
+    entries: z.array(restDirectoryEntrySchema),
+    truncated: z.boolean(),
+  }),
+]);
 
 export const restFeaturedSchema = z.object({
   items: z.array(
@@ -172,6 +190,7 @@ export type RestMount = z.infer<typeof restMountSchema>;
 export type RestFindItem = z.infer<typeof restFindItemSchema>;
 export type RestFind = z.infer<typeof restFindSchema>;
 export type RestSkill = z.infer<typeof restSkillSchema>;
+export type RestDirectoryEntry = z.infer<typeof restDirectoryEntrySchema>;
 export type RestFile = z.infer<typeof restFileSchema>;
 export type RestFeatured = z.infer<typeof restFeaturedSchema>;
 export type RestError = z.infer<typeof restErrorSchema>;

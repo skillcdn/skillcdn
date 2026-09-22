@@ -9,7 +9,7 @@ Most MCP clients do not load tools lazily, so SkillCDN does not expose one tool 
 |---|---|---|
 | `find` | Natural-language or keyword search over skill descriptions and documents in the mounted repo. PostgreSQL full-text search first; embeddings later if needed. | 1 |
 | `get` | Return a skill or playbook by name, with its front-matter and body. | 1 |
-| `read_file` | Read a file inside the mounted ref and path. | 1 |
+| `read_file` | Read a file, or list a directory, inside the mounted ref and path. | 1 |
 | `intake` | Run the intake questions a skill declares, so a non-expert can be walked through it. | later |
 | `describe` / `run` | Schema and execution for composed tools declared in Markdown or YAML. | later |
 
@@ -20,7 +20,7 @@ Most MCP clients do not load tools lazily, so SkillCDN does not expose one tool 
 | `find` | `query` | Optional text, at most 500 characters. Omitted or blank: list what is available, every skill (up to 100) first, then the documents that do not belong to a skill. |
 | | `limit` | Optional integer, 1 to 25. Default 10. Without a query it bounds the documents only; every skill is listed. |
 | `get` | `name` | Required. The skill name as `find` returns it, or the path of the skill directory. When several skills share the name, the answer lists their directories and asks for one. |
-| `read_file` | `path` | Required. Relative to the mounted root. Validated like an address path: no `..`, no backslashes, no control characters. |
+| `read_file` | `path` | Required. Relative to the mounted root. Validated like an address path: no `..`, no backslashes, no control characters. The path of a directory lists what it contains; `.` names the mounted root. |
 | | `offset` | Optional character offset. Default 0. |
 | | `limit` | Optional number of characters, 1 to 100,000. Default 40,000. |
 
@@ -32,8 +32,8 @@ All three tools are read-only and idempotent.
 - Every path in a result is relative to the mounted root, so it can be passed straight to `read_file`.
 - `find` ranks skills above plain documents and matches a skill on its name and description before its body. A query matches when any of its words match; ranking decides the order. A document is listed with its title and its description, which for a document without one is the first paragraph of its body ([convention](skill-repo.md)).
 - A listing (`find` without a query) says how many skills and documents there are, names every skill, and then only the documents outside the skills: a skill's own files are reached through the skill. When a search turns up a file that belongs to a skill, the result says which skill, so that the model loads the skill rather than a fragment of it.
-- `get` lists the supporting files of the skill so the model knows what it can read next, and relays the author-facing warnings from the [convention parser](skill-repo.md).
-- `read_file` serves UTF-8 text only and pages long files. A page never splits a character, and says where the next page starts. It serves any text file in the mount, not only the searchable ones.
+- `get` lists the supporting files of the skill so the model knows what it can read next, relays every front-matter field the convention knows (license, compatibility, allowed tools, metadata), and the author-facing warnings from the [convention parser](skill-repo.md).
+- `read_file` serves UTF-8 text only and pages long files. A page never splits a character, and says where the next page starts. It serves any text file in the mount, not only the searchable ones. Given a directory, it lists the directory's entries, subdirectories first and files with their sizes, at most 200, so that a model can browse from where a skill or a document points without guessing paths.
 - A problem the model can fix (unknown skill, unknown path, a binary or oversized file) is a tool result marked as an error, with a hint. It is not a protocol error.
 - When the repository is larger than the indexing limits, results say that files are missing.
 

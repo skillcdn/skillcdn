@@ -28,6 +28,7 @@ const PAGES: readonly (readonly [string, string])[] = [
   ["/gh/acme/skills?file=docs/markdown-showcase.md", "Rendered Markdown: every element"],
   ["/gh/acme/skills?file=skills/release-notes/SKILL.md", "A manifest: front-matter, then Markdown"],
   ["/gh/acme/skills?file=docs/long.md", "A long file, read in pages"],
+  ["/gh/acme/skills?file=docs", "A directory, listed"],
   ["/gh/acme/skills?file=skills/release-notes/scripts/collect.sh", "A file that is not Markdown"],
   ["/gh/acme/skills?file=docs/huge.md", "A file that is too large"],
   ["/gh/acme/skills?file=assets/logo.png", "A file that is not text"],

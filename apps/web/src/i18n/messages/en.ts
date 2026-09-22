@@ -296,6 +296,9 @@ export const en = {
       `Characters ${from.toLocaleString("en")} to ${to.toLocaleString("en")} of ${total.toLocaleString("en")}`,
     more: "Load more",
     imageOmitted: "image not loaded",
+    directory: "Directory",
+    bytes: (count: number) => `${count.toLocaleString("en")} bytes`,
+    directoryTruncated: "Only the first entries are listed.",
   },
 
   errors: {

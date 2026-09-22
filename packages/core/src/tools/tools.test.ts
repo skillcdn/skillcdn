@@ -14,6 +14,7 @@ import {
 import {
   INDEXING_NOTICE,
   PROVENANCE_NOTICE,
+  renderDirectoryResult,
   renderFileResult,
   renderFindResult,
   renderSkillResult,
@@ -260,6 +261,57 @@ describe("rendering", () => {
         "Collect the changes.",
       ].join("\n"),
     );
+  });
+
+  it("relays the allowed tools and the metadata of a skill", () => {
+    const text = renderSkillResult({
+      mount,
+      name: "commit-messages",
+      directory: path(""),
+      description: "Writes commit messages.",
+      license: undefined,
+      compatibility: undefined,
+      allowedTools: "Read Bash",
+      metadata: { author: "acme", version: "1.0" },
+      body: "# Commit messages",
+      files: [],
+      filesTruncated: false,
+      warnings: [],
+    });
+    expect(text).toContain("Allowed tools: Read Bash");
+    expect(text).toContain("Metadata: author: acme; version: 1.0");
+    expect(text).toContain("Relative paths in the instructions start at the mounted root.");
+  });
+
+  it("lists a directory with what to read next", () => {
+    const text = renderDirectoryResult({
+      mount,
+      path: path("skills/release-notes"),
+      entries: [
+        { path: path("skills/release-notes/references"), kind: "directory", size: undefined },
+        { path: path("skills/release-notes/SKILL.md"), kind: "file", size: 512 },
+      ],
+      truncated: true,
+    });
+    expect(text).toBe(
+      [
+        "Directory: skills/release-notes/ (2 entries, more not listed)",
+        "Source: acme/skills@main (commit 0123456)",
+        "",
+        "- skills/release-notes/references/",
+        "- skills/release-notes/SKILL.md (512 bytes)",
+        "",
+        'Next: read_file {"path": "<path>"} reads a file or lists a directory; get {"name": "<skill name>"} loads a skill.',
+      ].join("\n"),
+    );
+    expect(
+      renderDirectoryResult({
+        mount,
+        path: path(""),
+        entries: [{ path: path("README.md"), kind: "file", size: 1 }],
+        truncated: false,
+      }),
+    ).toContain("Directory: the mounted root (1 entry)");
   });
 
   it("renders a page of a file with how to continue", () => {

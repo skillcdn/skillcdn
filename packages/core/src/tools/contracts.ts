@@ -46,7 +46,8 @@ export const readFileInputSchema = z.object({
     .min(1)
     .max(MAX_REPO_PATH_LENGTH)
     .describe(
-      "File path relative to the mounted root, for example skills/ads/references/guide.md.",
+      "A file or directory path relative to the mounted root, for example " +
+        'skills/ads/references/guide.md. A directory is listed; "." names the mounted root.',
     ),
   offset: z.number().int().min(0).optional().describe("Character offset to start from. Default 0."),
   limit: z
@@ -93,7 +94,8 @@ export const readFileTool: ToolContract<typeof readFileInputSchema> = {
   title: "Read a file",
   description:
     "Read a text file of the mounted repository by its path relative to the mounted root. Long " +
-    "files come in pages: pass the next offset from the previous page to continue.",
+    "files come in pages: pass the next offset from the previous page to continue. Given a " +
+    "directory, it lists what the directory contains.",
   inputSchema: readFileInputSchema,
 };
 

@@ -97,7 +97,16 @@ The `get` tool: one skill by name or by directory.
 The `read_file` tool: a page of a UTF-8 text file. `path` is relative to the mounted root; `offset` and `limit` are in characters (`limit` 1 to 100,000, default 40,000). It does not need the index.
 
 ```json
-{ "path": "docs/getting-started.md", "content": "...", "offset": 0, "nextOffset": null, "totalLength": 1234 }
+{ "kind": "file", "path": "docs/getting-started.md", "content": "...", "offset": 0, "nextOffset": null, "totalLength": 1234 }
+```
+
+When `path` names a directory (`.` is the mounted root), the answer is what it contains, subdirectories first, at most 200 entries:
+
+```json
+{ "kind": "directory", "path": "docs", "entries": [
+  { "path": "docs/images", "kind": "directory", "size": null },
+  { "path": "docs/getting-started.md", "kind": "file", "size": 1234 }
+], "truncated": false }
 ```
 
 ### `GET /api/v1/featured`
