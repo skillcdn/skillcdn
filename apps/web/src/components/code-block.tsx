@@ -5,7 +5,13 @@ import { Button } from "./ui.js";
 
 const COPIED_FOR_MS = 1600;
 
-export function CopyButton(props: { readonly text: string }) {
+export function CopyButton(props: {
+  readonly text: string;
+  /** What it says before it is pressed. The default is the bare word, for a code block's bar. */
+  readonly label?: string;
+  readonly variant?: "primary" | "secondary" | "ghost";
+  readonly size?: "md" | "sm";
+}) {
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
 
@@ -19,8 +25,8 @@ export function CopyButton(props: { readonly text: string }) {
 
   return (
     <Button
-      size="sm"
-      variant="ghost"
+      size={props.size ?? "sm"}
+      variant={props.variant ?? "ghost"}
       onClick={() => {
         // Without a secure context there is no clipboard; the text stays selectable.
         navigator.clipboard?.writeText(props.text).then(
@@ -29,7 +35,7 @@ export function CopyButton(props: { readonly text: string }) {
         );
       }}
     >
-      <span aria-live="polite">{copied ? t.common.copied : t.common.copy}</span>
+      <span aria-live="polite">{copied ? t.common.copied : (props.label ?? t.common.copy)}</span>
     </Button>
   );
 }

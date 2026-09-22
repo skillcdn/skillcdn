@@ -1,7 +1,7 @@
 import { type Address, formatAddress, type RestMount } from "@skillcdn/core";
 import type { ReactNode } from "react";
 import { useI18n } from "../i18n/index.js";
-import { CodeBlock } from "./code-block.js";
+import { CodeBlock, CopyButton } from "./code-block.js";
 import styles from "./connect-guide.module.css";
 import { Tabs } from "./tabs.js";
 import { cx } from "./ui.js";
@@ -49,12 +49,14 @@ function Steps(props: {
   return (
     <ol className={styles.steps}>
       {props.items.map((item) => (
-        // The list item keeps its marker; the grid inside it lays out the text and what follows.
+        // The list item keeps its marker. Inside, the words sit beside the picture of the screen
+        // they describe, and anything to copy runs the full width under both.
         <li key={item.text} className={styles.step}>
-          <div className={styles.stepBody}>
-            <span>{item.text}</span>
-            {item.extra}
+          <div className={styles.stepMain}>
+            <p className={styles.stepText}>{item.text}</p>
+            <span className={styles.stepShot} aria-hidden="true" />
           </div>
+          {item.extra}
         </li>
       ))}
     </ol>
@@ -72,8 +74,10 @@ function InstallLink(props: { readonly href: string; readonly label: string }) {
 }
 
 /**
- * How to point an agent at this address: the endpoint, then the steps for each common client,
- * and what to say first. The server goes by the name the repository gives itself.
+ * How to point an agent at this address: copy it, then the steps for each common client, and
+ * what to say first. The server goes by the name the repository gives itself. The address is
+ * shown once, in the step that copies it; a step that says "paste the address you copied" must
+ * not print it again.
  */
 export function ConnectGuide(props: {
   readonly origin: string;
@@ -89,8 +93,9 @@ export function ConnectGuide(props: {
   const displayName = displayNameOf(address, mount);
   const c = t.connect.clients;
   const config = (shape: Record<string, unknown>) => JSON.stringify(shape, null, 2);
-  const endpoint = <CodeBlock code={url} copy />;
 
+  // Apps first, then the tools that run in a terminal: a visitor who is not a developer
+  // should meet what they use before what they do not.
   const tabs = [
     {
       id: "chatgpt",
@@ -99,7 +104,7 @@ export function ConnectGuide(props: {
         <Steps
           items={[
             { text: c.chatgpt.steps[0] },
-            { text: c.chatgpt.steps[1], extra: endpoint },
+            { text: c.chatgpt.steps[1] },
             { text: c.chatgpt.steps[2] },
           ]}
         />
@@ -112,23 +117,8 @@ export function ConnectGuide(props: {
         <Steps
           items={[
             { text: c.claude.steps[0] },
-            { text: c.claude.steps[1], extra: endpoint },
+            { text: c.claude.steps[1] },
             { text: c.claude.steps[2] },
-          ]}
-        />
-      ),
-    },
-    {
-      id: "claude-code",
-      label: c.claudeCode.label,
-      content: (
-        <Steps
-          items={[
-            {
-              text: c.claudeCode.steps[0],
-              extra: <CodeBlock code={`claude mcp add --transport http ${name} ${url}`} copy />,
-            },
-            { text: c.claudeCode.steps[1] },
           ]}
         />
       ),
@@ -203,6 +193,21 @@ export function ConnectGuide(props: {
       ),
     },
     {
+      id: "claude-code",
+      label: c.claudeCode.label,
+      content: (
+        <Steps
+          items={[
+            {
+              text: c.claudeCode.steps[0],
+              extra: <CodeBlock code={`claude mcp add --transport http ${name} ${url}`} copy />,
+            },
+            { text: c.claudeCode.steps[1] },
+          ]}
+        />
+      ),
+    },
+    {
       id: "codex",
       label: c.codex.label,
       content: (
@@ -250,14 +255,37 @@ export function ConnectGuide(props: {
 
   return (
     <section className={styles.guide} aria-labelledby="connect-title">
-      <div className={styles.head}>
-        <h2 id="connect-title" className={styles.title}>
-          {t.connect.title}
-        </h2>
-        <p className={styles.lead}>{t.connect.lead}</p>
-      </div>
-      <CodeBlock label={t.connect.endpoint} code={url} copy />
-      <Tabs label={t.connect.clientsLabel} tabs={tabs} />
+      <h2 id="connect-title" className={styles.title}>
+        {t.connect.title}
+      </h2>
+      {/* Two things to do, in order. Someone who has never added an MCP server should get through
+          the page without having to know what one is. */}
+      <ol className={styles.phases}>
+        <li className={styles.phase}>
+          <p className={styles.phaseHead}>
+            <span className={styles.phaseNumber} aria-hidden="true">
+              1
+            </span>
+            <span className={styles.phaseTitle}>{t.connect.phases.copy}</span>
+          </p>
+          {/* One button, because copying is the only thing to do here. The address itself stays in
+              the page as text and shows when the button is pointed at or focused. */}
+          <p className={styles.copyAddress}>
+            <CopyButton text={url} label={t.connect.copyButton} variant="primary" size="md" />
+            <span className={styles.address}>{url}</span>
+          </p>
+        </li>
+        <li className={styles.phase}>
+          <p className={styles.phaseHead}>
+            <span className={styles.phaseNumber} aria-hidden="true">
+              2
+            </span>
+            <span className={styles.phaseTitle}>{t.connect.phases.pick}</span>
+          </p>
+          <p className={styles.hint}>{t.connect.pickHint}</p>
+          <Tabs label={t.connect.clientsLabel} tabs={tabs} variant="tiles" />
+        </li>
+      </ol>
       <p className={styles.hint}>
         {manifest?.name != null ? t.connect.nameFromManifest(name) : t.connect.nameHint(name)}
       </p>

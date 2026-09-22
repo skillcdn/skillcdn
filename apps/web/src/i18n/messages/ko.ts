@@ -84,13 +84,17 @@ export const ko: Messages = {
 
   connect: {
     title: "에이전트 연결하기",
-    lead: "이 주소를 에이전트에 MCP 서버로 추가하세요. 에이전트는 연결되는 순간 이 저장소에 어떤 스킬이 있는지 알게 되고, 필요할 때 스킬을 불러와 스킬이 가리키는 파일을 읽습니다.",
-    endpoint: "MCP 엔드포인트",
+    copyButton: "주소 복사하기",
+    phases: {
+      copy: "이 주소를 복사하세요",
+      pick: "쓰시는 앱을 열고 순서대로 따라 하세요",
+    },
+    pickHint: "쓰시는 앱을 고르세요. 목록에 없으면 “기타”를 고르시면 됩니다.",
     clientsLabel: "클라이언트",
     nameHint: (name: string) =>
-      `클라이언트가 이름을 물으면 아무 이름이나 써도 됩니다. 예시에서는 “${name}”을 씁니다.`,
+      `앱이 이름을 물어보면 아무 이름이나 써도 됩니다. 예시에서는 “${name}”을 씁니다.`,
     nameFromManifest: (name: string) =>
-      `클라이언트가 이름을 물으면 예시처럼 저장소가 스스로 정한 이름을 따서 “${name}”을 쓰세요. 다른 이름도 상관없습니다.`,
+      `앱이 이름을 물어보면 예시처럼 저장소가 스스로 정한 이름을 따서 “${name}”을 쓰세요. 다른 이름도 상관없습니다.`,
     add: (client: string) => `${client}에 추가`,
     firstMessage: {
       label: "그다음 이렇게 말해 보세요",
@@ -103,7 +107,7 @@ export const ko: Messages = {
         label: "ChatGPT",
         steps: [
           "설정에서 커넥터(Connectors)를 연 뒤, 고급 설정에서 개발자 모드(Developer mode)를 켭니다.",
-          "만들기(Create)를 눌러 커넥터 이름을 정하고, MCP 서버 URL에 엔드포인트를 붙여 넣은 뒤 인증 없음을 선택합니다.",
+          "만들기(Create)를 누르고 커넥터 이름을 정한 뒤, 복사한 주소를 MCP 서버 URL 칸에 붙여 넣고 인증은 “없음”으로 둡니다.",
           "새 대화에서 더하기 메뉴로 커넥터를 추가하고, 스킬 이름을 말하며 요청합니다.",
         ],
       },
@@ -111,15 +115,8 @@ export const ko: Messages = {
         label: "Claude",
         steps: [
           "웹 앱이나 데스크톱 앱의 설정에서 커넥터(Connectors)를 열고, 사용자 지정 커넥터 추가(Add custom connector)를 선택합니다.",
-          "이름을 정하고 URL에 엔드포인트를 붙여 넣습니다.",
+          "이름을 정하고, 복사한 주소를 URL 칸에 붙여 넣습니다.",
           "대화에서 도구 메뉴로 커넥터를 켜고, 스킬 이름을 말하며 요청합니다.",
-        ],
-      },
-      claudeCode: {
-        label: "Claude Code",
-        steps: [
-          "터미널에서 다음을 실행합니다:",
-          "스킬이 슬래시 메뉴의 명령으로 나타나고, 에이전트가 스스로 스킬을 찾아 불러옵니다.",
         ],
       },
       cursor: {
@@ -139,6 +136,13 @@ export const ko: Messages = {
         label: "Windsurf",
         steps: ["설정에서 MCP를 열고 mcp_config.json에 다음을 추가합니다:"],
       },
+      claudeCode: {
+        label: "Claude Code",
+        steps: [
+          "터미널에서 다음을 실행합니다:",
+          "스킬이 슬래시 메뉴의 명령으로 나타나고, 에이전트가 스스로 스킬을 찾아 불러옵니다.",
+        ],
+      },
       codex: {
         label: "Codex CLI",
         steps: ["터미널에서 다음을 실행합니다:"],
@@ -148,9 +152,9 @@ export const ko: Messages = {
         steps: ["터미널에서 다음을 실행합니다:"],
       },
       other: {
-        label: "다른 클라이언트",
+        label: "기타",
         steps: [
-          "Streamable HTTP 전송을 지원하는 클라이언트라면 어디든 엔드포인트를 추가할 수 있습니다. 대부분 이런 형태의 설정을 읽으며, 키는 원하는 이름으로 정하면 됩니다:",
+          "MCP 서버를 HTTP로 추가할 수 있는 앱이라면 어디든 이 주소를 쓸 수 있습니다. 대부분 이런 형태의 설정을 읽으며, 키는 원하는 이름으로 정하면 됩니다:",
         ],
       },
     },

@@ -100,13 +100,17 @@ export const en = {
 
   connect: {
     title: "Connect an agent",
-    lead: "Add this address to your agent as an MCP server. The agent learns which skills the repository holds as it connects, loads one when it needs it, and reads the files the skill points to.",
-    endpoint: "MCP endpoint",
+    copyButton: "Copy the address",
+    phases: {
+      copy: "Copy this address",
+      pick: "Open your app and follow the steps",
+    },
+    pickHint: "Choose the app you use. If it is not here, choose “Other”.",
     clientsLabel: "Clients",
     nameHint: (name: string) =>
-      `Where a client asks for a name, any name will do; the examples use “${name}”.`,
+      `Where an app asks for a name, any name will do; the examples use “${name}”.`,
     nameFromManifest: (name: string) =>
-      `Where a client asks for a name, the examples use “${name}”, after the name the repository gives itself. Any name will do.`,
+      `Where an app asks for a name, the examples use “${name}”, after the name the repository gives itself. Any name will do.`,
     add: (client: string) => `Add to ${client}`,
     firstMessage: {
       label: "Then say, for example",
@@ -119,7 +123,7 @@ export const en = {
         label: "ChatGPT",
         steps: fixed(
           "Open Settings, then Connectors. Under Advanced settings, turn on Developer mode.",
-          "Choose Create, name the connector, paste the endpoint as the MCP server URL and select no authentication.",
+          "Choose Create, name the connector, paste the address you copied as the MCP server URL, and leave authentication set to none.",
           "In a new chat, add the connector from the plus menu and ask for a skill by name.",
         ),
       },
@@ -127,15 +131,8 @@ export const en = {
         label: "Claude",
         steps: fixed(
           "In the web app or the desktop app, open Settings, then Connectors, and choose Add custom connector.",
-          "Name it and paste the endpoint as the URL.",
+          "Name it and paste the address you copied into the URL field.",
           "In a chat, turn the connector on in the tools menu and ask for a skill by name.",
-        ),
-      },
-      claudeCode: {
-        label: "Claude Code",
-        steps: fixed(
-          "Run this in a terminal:",
-          "The skills appear as commands in the slash menu, and the agent finds and loads them by itself.",
         ),
       },
       cursor: {
@@ -155,6 +152,13 @@ export const en = {
         label: "Windsurf",
         steps: fixed("Open Settings, then MCP, and add this to your mcp_config.json:"),
       },
+      claudeCode: {
+        label: "Claude Code",
+        steps: fixed(
+          "Run this in a terminal:",
+          "The skills appear as commands in the slash menu, and the agent finds and loads them by itself.",
+        ),
+      },
       codex: {
         label: "Codex CLI",
         steps: fixed("Run this in a terminal:"),
@@ -164,9 +168,9 @@ export const en = {
         steps: fixed("Run this in a terminal:"),
       },
       other: {
-        label: "Other clients",
+        label: "Other",
         steps: fixed(
-          "Any client that supports the Streamable HTTP transport can add the endpoint. Most read a configuration of this shape; the key is a name of your choice:",
+          "Any app that can add an MCP server over HTTP will take the address. Most read a configuration of this shape, where the key is a name of your choice:",
         ),
       },
     },

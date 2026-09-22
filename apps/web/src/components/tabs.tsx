@@ -8,8 +8,14 @@ export interface Tab {
 }
 
 /** Tabs per the ARIA pattern: arrow keys move between tabs, only the active tab is in tab order. */
-export function Tabs(props: { readonly label: string; readonly tabs: readonly Tab[] }) {
+export function Tabs(props: {
+  readonly label: string;
+  readonly tabs: readonly Tab[];
+  /** "tiles" stands each choice in a rounded square: a list picked by sight, not read through. */
+  readonly variant?: "underline" | "tiles";
+}) {
   const { tabs } = props;
+  const tiles = props.variant === "tiles";
   const baseId = useId();
   const [activeId, setActiveId] = useState(tabs[0]?.id);
   const buttons = useRef(new Map<string, HTMLButtonElement>());
@@ -34,7 +40,12 @@ export function Tabs(props: { readonly label: string; readonly tabs: readonly Ta
 
   return (
     <div>
-      <div className={styles.list} role="tablist" aria-label={props.label} onKeyDown={onKeyDown}>
+      <div
+        className={tiles ? styles.tiles : styles.list}
+        role="tablist"
+        aria-label={props.label}
+        onKeyDown={onKeyDown}
+      >
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -51,7 +62,15 @@ export function Tabs(props: { readonly label: string; readonly tabs: readonly Ta
             aria-selected={tab.id === active.id}
             aria-controls={`${baseId}-panel-${tab.id}`}
             tabIndex={tab.id === active.id ? 0 : -1}
-            className={tab.id === active.id ? styles.activeTab : styles.tab}
+            className={
+              tiles
+                ? tab.id === active.id
+                  ? styles.activeTile
+                  : styles.tile
+                : tab.id === active.id
+                  ? styles.activeTab
+                  : styles.tab
+            }
             onClick={() => setActiveId(tab.id)}
           >
             {tab.label}
