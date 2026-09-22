@@ -152,6 +152,30 @@ describe("loadConfig", () => {
     }
   });
 
+  it("takes the tags for search consoles and analytics, and refuses what is not one", () => {
+    expect(loadConfig({ DATABASE_URL }, noFiles).web.tags).toEqual({
+      googleSiteVerification: undefined,
+      googleAnalyticsId: undefined,
+    });
+    expect(
+      loadConfig(
+        {
+          DATABASE_URL,
+          GOOGLE_SITE_VERIFICATION: "abc_DEF-123",
+          GOOGLE_ANALYTICS_ID: "G-ABC123XYZ",
+        },
+        noFiles,
+      ).web.tags,
+    ).toEqual({ googleSiteVerification: "abc_DEF-123", googleAnalyticsId: "G-ABC123XYZ" });
+    for (const bad of [
+      { GOOGLE_SITE_VERIFICATION: '<meta content="x">' },
+      { GOOGLE_ANALYTICS_ID: "UA-12345-1" },
+      { GOOGLE_ANALYTICS_ID: "G-abc" },
+    ]) {
+      expect(() => loadConfig({ DATABASE_URL, ...bad }, noFiles)).toThrow(ConfigError);
+    }
+  });
+
   it("counts usage unless told not to", () => {
     expect(loadConfig({ DATABASE_URL }, noFiles).stats).toEqual({ enabled: true, flushMs: 15_000 });
     expect(

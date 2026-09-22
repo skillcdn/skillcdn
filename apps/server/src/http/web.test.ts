@@ -224,6 +224,43 @@ describe("what crawlers ask for", () => {
   });
 });
 
+describe("the tags an operator configures", () => {
+  it("go into the head of every page, with the policy widened for exactly them", async () => {
+    const tagged = await loadWebBundle(build.root, {
+      publicUrl: "https://skills.example",
+      tags: { googleSiteVerification: 'abc"><script>x</script>', googleAnalyticsId: "G-ABC123XYZ" },
+    });
+    const response = tagged.respond(request("/?lang=ko"));
+    const html = (await response?.text()) ?? "";
+    expect(html).toContain(
+      '<head>\n<meta name="google-site-verification" content="abc&quot;>&lt;script>x&lt;/script>">',
+    );
+    expect(html).toContain('src="https://www.googletagmanager.com/gtag/js?id=G-ABC123XYZ"');
+    expect(html).toContain('gtag("config","G-ABC123XYZ")');
+    const policy = response?.headers.get("content-security-policy") ?? "";
+    expect(policy).toMatch(
+      /script-src 'self' https:\/\/\*\.googletagmanager\.com 'sha256-[A-Za-z0-9+/=]+'/,
+    );
+    expect(policy).toContain("connect-src 'self' https://*.google-analytics.com");
+    expect(policy).not.toContain("unsafe");
+    // The page of an address is rendered into the same document, tags included.
+    const page = await tagged
+      .address(request("/gh/acme/skills"), { mount: { ready: { index: { status: "ready" } } } })
+      .text();
+    expect(page).toContain('<meta name="google-site-verification"');
+    expect(page).toContain("gtag/js?id=G-ABC123XYZ");
+    // Not into what is not a page.
+    expect(await tagged.respond(request("/llms.txt"))?.text()).not.toContain("gtag");
+  });
+
+  it("are absent, and so is the widening, when nothing is configured", async () => {
+    const html = await answer("/").text();
+    expect(html).not.toContain("gtag");
+    expect(html).not.toContain("google-site-verification");
+    expect(answer("/").headers.get("content-security-policy")).toContain("script-src 'self';");
+  });
+});
+
 describe("loadWebBundle", () => {
   it("refuses a directory that is not a web build", async () => {
     const empty = createWebBuild("not a manifest");

@@ -129,7 +129,10 @@ export async function runApi(config: Config, logger: Logger): Promise<void> {
   let web: WebBundle | undefined;
   if (config.web.root !== undefined) {
     try {
-      web = await loadWebBundle(config.web.root, { publicUrl: config.web.publicUrl });
+      web = await loadWebBundle(config.web.root, {
+        publicUrl: config.web.publicUrl,
+        tags: config.web.tags,
+      });
     } catch (error) {
       if (error instanceof WebBundleError) {
         // A setting that points at the wrong place, not a failure of the process.
@@ -137,7 +140,13 @@ export async function runApi(config: Config, logger: Logger): Promise<void> {
       }
       throw error;
     }
-    logger.info({ publicUrl: config.web.publicUrl ?? "(per request)" }, "serving the web UI");
+    logger.info(
+      {
+        publicUrl: config.web.publicUrl ?? "(per request)",
+        analytics: config.web.tags.googleAnalyticsId !== undefined,
+      },
+      "serving the web UI",
+    );
   }
 
   const recorder = config.stats.enabled

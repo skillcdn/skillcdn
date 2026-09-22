@@ -77,27 +77,80 @@ const CONTENT_TYPES: Readonly<Record<string, string>> = {
   ".woff2": "font/woff2",
 };
 
+/** Tags an operator adds to every page: a search console's proof of ownership, analytics. */
+export interface PageTags {
+  readonly googleSiteVerification?: string | undefined;
+  readonly googleAnalyticsId?: string | undefined;
+}
+
+/** Where the analytics script comes from and talks to, as its documentation lists them. */
+const ANALYTICS_SOURCES = {
+  script: ["https://*.googletagmanager.com"],
+  images: ["https://*.google-analytics.com", "https://*.googletagmanager.com"],
+  connections: [
+    "https://*.google-analytics.com",
+    "https://*.analytics.google.com",
+    "https://*.googletagmanager.com",
+  ],
+} as const;
+
+const escapeAttribute = (text: string): string =>
+  text.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;");
+
 /**
  * Pages render repository content, which is untrusted. Nothing inline runs, nothing loads from
- * elsewhere, and nobody frames the page.
+ * elsewhere, and nobody frames the page. With analytics configured, the one inline script that
+ * starts it is allowed by its hash, and its sources by name.
  */
-const PAGE_HEADERS: Readonly<Record<string, string>> = {
-  "content-security-policy": [
-    "default-src 'self'",
-    "script-src 'self'",
-    "style-src 'self'",
-    "img-src 'self' data:",
-    "font-src 'self'",
-    "connect-src 'self'",
-    "object-src 'none'",
-    "base-uri 'none'",
-    "form-action 'self'",
-    "frame-ancestors 'none'",
-  ].join("; "),
-  "referrer-policy": "strict-origin-when-cross-origin",
-  "x-frame-options": "DENY",
-  "cross-origin-opener-policy": "same-origin",
-};
+function pageHeaders(tags: PageTags, inlineScripts: readonly string[]): Record<string, string> {
+  const analytics = tags.googleAnalyticsId !== undefined;
+  const hashes = inlineScripts.map(
+    (script) => `'sha256-${createHash("sha256").update(script).digest("base64")}'`,
+  );
+  const sources = (own: string, more: readonly string[]) =>
+    analytics ? [own, ...more].join(" ") : own;
+  return {
+    "content-security-policy": [
+      "default-src 'self'",
+      `script-src ${sources("'self'", [...ANALYTICS_SOURCES.script, ...hashes])}`,
+      "style-src 'self'",
+      `img-src ${sources("'self' data:", ANALYTICS_SOURCES.images)}`,
+      "font-src 'self'",
+      `connect-src ${sources("'self'", ANALYTICS_SOURCES.connections)}`,
+      "object-src 'none'",
+      "base-uri 'none'",
+      "form-action 'self'",
+      "frame-ancestors 'none'",
+    ].join("; "),
+    "referrer-policy": "strict-origin-when-cross-origin",
+    "x-frame-options": "DENY",
+    "cross-origin-opener-policy": "same-origin",
+  };
+}
+
+/** The elements the tags become, and the inline scripts among them, for the policy. */
+function headTags(tags: PageTags): { readonly html: string; readonly inlineScripts: string[] } {
+  const elements: string[] = [];
+  const inlineScripts: string[] = [];
+  if (tags.googleSiteVerification !== undefined) {
+    elements.push(
+      `<meta name="google-site-verification" content="${escapeAttribute(tags.googleSiteVerification)}">`,
+    );
+  }
+  if (tags.googleAnalyticsId !== undefined) {
+    const id = tags.googleAnalyticsId;
+    // The bootstrap the analytics documentation gives, as one line so that its hash is stable.
+    const bootstrap = `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config",${JSON.stringify(id)})`;
+    inlineScripts.push(bootstrap);
+    elements.push(
+      `<script async src="https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(id)}"></script>`,
+      `<script>${bootstrap}</script>`,
+    );
+  }
+  return { html: elements.join("\n"), inlineScripts };
+}
+
+const HEAD_OPEN = /<head(\s[^>]*)?>/i;
 
 export class WebBundleError extends Error {
   constructor(message: string, options?: { readonly cause?: unknown }) {
@@ -236,8 +289,10 @@ async function loadRenderModule(root: string, file: string): Promise<RenderModul
  */
 export async function loadWebBundle(
   root: string,
-  options: { readonly publicUrl: string | undefined },
+  options: { readonly publicUrl: string | undefined; readonly tags?: PageTags },
 ): Promise<WebBundle> {
+  const tags = headTags(options.tags ?? {});
+  const PAGE_HEADERS = pageHeaders(options.tags ?? {}, tags.inlineScripts);
   let manifest: z.infer<typeof manifestSchema>;
   try {
     manifest = manifestSchema.parse(JSON.parse(await readFile(join(root, MANIFEST_FILE), "utf8")));
@@ -254,7 +309,7 @@ export async function loadWebBundle(
     }
   }
 
-  /** Page files of the manifest, as text with placeholders. */
+  /** Page files of the manifest, as text with placeholders, and with the operator's tags. */
   const pages = new Map<string, string>();
   const pageOf = async (file: string): Promise<string> => {
     let found = pages.get(file);
@@ -265,6 +320,14 @@ export async function loadWebBundle(
         throw new WebBundleError(`the manifest names ${file}, which cannot be read`, {
           cause: error,
         });
+      }
+      if (tags.html !== "" && file.endsWith(".html")) {
+        const opened = HEAD_OPEN.exec(found);
+        if (opened === null) {
+          throw new WebBundleError(`${file} has no head element to put the tags in`);
+        }
+        const at = opened.index + opened[0].length;
+        found = `${found.slice(0, at)}\n${tags.html}${found.slice(at)}`;
       }
       pages.set(file, found);
     }

@@ -109,6 +109,14 @@ const environmentSchema = z.object({
     }, "must be an origin such as https://skills.example.com, without a path")
     .transform((value) => new URL(value).origin)
     .optional(),
+  GOOGLE_SITE_VERIFICATION: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{1,100}$/, "must be the content of the verification meta tag")
+    .optional(),
+  GOOGLE_ANALYTICS_ID: z
+    .string()
+    .regex(/^G-[A-Z0-9]{4,20}$/, "must be a measurement id such as G-XXXXXXXXXX")
+    .optional(),
 
   USAGE_STATS: flag(true),
   USAGE_STATS_FLUSH_SECONDS: integer(15, 1, 3600),
@@ -126,6 +134,13 @@ const environmentSchema = z.object({
   READ_MAX_FILE_BYTES: integer(1_048_576, 1024, 16_777_216),
   INDEX_MAX_ARCHIVE_BYTES: integer(268_435_456, 1_048_576, 17_179_869_184),
 });
+
+export interface WebTags {
+  /** The content of a `google-site-verification` meta tag. */
+  readonly googleSiteVerification: string | undefined;
+  /** A Google Analytics measurement id (`G-...`). Set, the pages load the analytics script. */
+  readonly googleAnalyticsId: string | undefined;
+}
 
 export interface Config {
   readonly environment: "development" | "test" | "production";
@@ -161,6 +176,8 @@ export interface Config {
     readonly publicUrl: string | undefined;
     /** Addresses shown on the front page of the explorer. */
     readonly featured: readonly Address[];
+    /** Tags written into the head of every page, for search consoles and analytics. */
+    readonly tags: WebTags;
   };
   readonly stats: {
     /** Count connections, tool calls and skill loads per public repository and day. */
@@ -272,7 +289,15 @@ export function loadConfig(
     },
     database: { url: env.DATABASE_URL, poolMax: env.DATABASE_POOL_MAX },
     github: { apiUrl: env.GITHUB_API_URL, token: env.GITHUB_TOKEN },
-    web: { root: env.WEB_ROOT, publicUrl: env.PUBLIC_URL, featured: env.FEATURED_ADDRESSES },
+    web: {
+      root: env.WEB_ROOT,
+      publicUrl: env.PUBLIC_URL,
+      featured: env.FEATURED_ADDRESSES,
+      tags: {
+        googleSiteVerification: env.GOOGLE_SITE_VERIFICATION,
+        googleAnalyticsId: env.GOOGLE_ANALYTICS_ID,
+      },
+    },
     stats: { enabled: env.USAGE_STATS, flushMs: env.USAGE_STATS_FLUSH_SECONDS * 1000 },
     mounts: { repoTtlMs: env.REPO_TTL_SECONDS * 1000, refTtlMs: env.REF_TTL_SECONDS * 1000 },
     indexing: {
