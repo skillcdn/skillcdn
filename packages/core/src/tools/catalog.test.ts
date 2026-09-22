@@ -28,6 +28,10 @@ const mount: MountSummary = {
   truncated: false,
 };
 
+function never(): never {
+  throw new Error("expected a ready catalog");
+}
+
 const skill = (name: string, description: string, directory = `skills/${name}`): CatalogSkill => ({
   name,
   directory: path(directory),
@@ -41,6 +45,7 @@ const ready = (
   status: "ready",
   catalog: {
     mount,
+    manifest: undefined,
     skills,
     skillCount: counts.skillCount ?? skills.length,
     documentCount: counts.documentCount ?? 2,
@@ -48,6 +53,40 @@ const ready = (
 });
 
 describe("renderInstructions", () => {
+  it("lets a repository with a manifest introduce itself, and points at its rules", () => {
+    const state = ready([skill("incident-review", "Guides a blameless incident review.")]);
+    const catalog = state.status === "ready" ? state.catalog : never();
+    const text = renderInstructions({
+      status: "ready",
+      catalog: {
+        ...catalog,
+        manifest: {
+          name: "Acme playbooks",
+          description: "The playbooks every Acme team runs. Use them for incidents and releases.",
+          path: path("SKILLCDN.md"),
+          hasRules: true,
+        },
+      },
+    });
+    expect(text).toContain(
+      "This server serves Acme playbooks, the git repository acme/skills@main (commit 0123456): The playbooks every Acme team runs. Use them for incidents and releases. It has 1 skill and 2 other documents.",
+    );
+    expect(text).toContain(
+      "Rules that hold for every skill here come with each skill that get returns",
+    );
+    expect(text.length).toBeLessThanOrEqual(INSTRUCTIONS_MAX_LENGTH);
+
+    const unnamed = renderInstructions({
+      status: "ready",
+      catalog: {
+        ...catalog,
+        manifest: { name: undefined, description: "Playbooks.", path: undefined, hasRules: false },
+      },
+    });
+    expect(unnamed).toContain("This server serves acme/skills, the git repository");
+    expect(unnamed).not.toContain("Rules that hold");
+  });
+
   it("names every skill with its description, and says how to use one", () => {
     const text = renderInstructions(
       ready([

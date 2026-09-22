@@ -1,5 +1,5 @@
 import type { RepoFileKind } from "@skillcdn/core";
-import { and, eq, ne, not, or, type SQL, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, not, or, type SQL, sql } from "drizzle-orm";
 import { type Database, drizzleOf } from "../client.js";
 import { indexEntries, type SkillFrontMatter } from "../schema.js";
 import { SEARCH_CONFIG, type SnapshotScope } from "./snapshots.js";
@@ -43,8 +43,11 @@ function underPath(column: typeof indexEntries.path, mountPath: string): SQL | u
 /** Byte order, so that results come back in the same order whatever the database's collation. */
 const BY_PATH = sql`${indexEntries.path} collate "C"`;
 
+/** Files a repository manifest leaves out are known to the index and served by nothing. */
+const VISIBLE = eq(indexEntries.visible, true);
+
 /** Documents and skills that are searchable: everything `find` can return. */
-const FINDABLE = sql`${indexEntries.search} is not null`;
+const FINDABLE = and(VISIBLE, sql`${indexEntries.search} is not null`);
 
 /**
  * Full-text search inside a mount. A query matches when any of its words match; rank decides
@@ -70,6 +73,7 @@ export async function searchEntries(
       and(
         inSnapshot(scope),
         underPath(indexEntries.path, mountPath),
+        VISIBLE,
         sql`numnode(${tsquery}) > 0`,
         sql`${indexEntries.search} @@ ${tsquery}`,
       ),
@@ -166,6 +170,7 @@ export async function findSkills(
       and(
         inSnapshot(scope),
         eq(indexEntries.kind, "skill"),
+        VISIBLE,
         underPath(indexEntries.path, mountPath),
         or(...matches),
       ),
@@ -185,7 +190,12 @@ export async function listSkillFiles(
     .select({ path: indexEntries.path })
     .from(indexEntries)
     .where(
-      and(inSnapshot(scope), eq(indexEntries.skillDir, skillDir), ne(indexEntries.kind, "skill")),
+      and(
+        inSnapshot(scope),
+        eq(indexEntries.skillDir, skillDir),
+        ne(indexEntries.kind, "skill"),
+        VISIBLE,
+      ),
     )
     .orderBy(BY_PATH)
     .limit(limit);
@@ -226,6 +236,7 @@ export async function listDirectory(
     .where(
       and(
         inSnapshot(scope),
+        VISIBLE,
         prefix.length === 0 ? undefined : sql`starts_with(${indexEntries.path}, ${prefix})`,
       ),
     )
@@ -255,7 +266,42 @@ export async function getEntry(
   const [row] = await drizzleOf(database)
     .select(entryColumns)
     .from(indexEntries)
-    .where(and(inSnapshot(scope), eq(indexEntries.path, path)))
+    .where(and(inSnapshot(scope), VISIBLE, eq(indexEntries.path, path)))
+    .limit(1);
+  return row;
+}
+
+/**
+ * The repository manifest that governs a mount: the one in the mounted directory, else the
+ * nearest one above it, up to the root of the repository. `undefined` when there is none.
+ */
+export async function getManifest(
+  database: Database,
+  scope: SnapshotScope,
+  mountPath: string,
+): Promise<EntryRecord | undefined> {
+  // Every directory from the mount up to the root, so the candidates are a bounded list.
+  const candidates: string[] = [];
+  let directory = mountPath;
+  while (true) {
+    candidates.push(directory.length === 0 ? "SKILLCDN.md" : `${directory}/SKILLCDN.md`);
+    const slash = directory.lastIndexOf("/");
+    if (directory.length === 0) {
+      break;
+    }
+    directory = slash < 0 ? "" : directory.slice(0, slash);
+  }
+  const [row] = await drizzleOf(database)
+    .select(entryColumns)
+    .from(indexEntries)
+    .where(
+      and(
+        inSnapshot(scope),
+        eq(indexEntries.kind, "manifest"),
+        inArray(indexEntries.path, candidates),
+      ),
+    )
+    .orderBy(sql`length(${indexEntries.path}) desc`)
     .limit(1);
   return row;
 }

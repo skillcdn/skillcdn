@@ -6,12 +6,16 @@ import {
   GitHostError,
   type IndexLimits,
   isHiddenPath,
+  isServedPath,
+  joinRepoPath,
   owningSkillDirectory,
   parentDirectory,
+  parseRepoManifest,
   parseSkillManifest,
   type RepoCoordinates,
   type RepoFileKind,
   type RepoPath,
+  type ServedScope,
   summarizeMarkdown,
   type TreeEntry,
 } from "@skillcdn/core";
@@ -38,7 +42,10 @@ interface Candidate {
   readonly kind: RepoFileKind;
 }
 
-const SEARCHABLE_KINDS: readonly RepoFileKind[] = ["skill", "markdown", "json"];
+/** The kinds whose bodies are fetched and searched. */
+const DOCUMENT_KINDS: readonly RepoFileKind[] = ["markdown", "json"];
+
+const byPath = (a: Candidate, b: Candidate): number => (a.entry.path < b.entry.path ? -1 : 1);
 
 /** Runs `work` over `items` with a bounded number in flight. Stops at the first failure. */
 async function forEachConcurrently<T>(
@@ -60,10 +67,14 @@ async function forEachConcurrently<T>(
 }
 
 /**
- * Reads one commit into an index: lists the tree, fetches the bodies of searchable files that the
- * blob store does not have yet, and parses them with the convention parser. Repository content is
- * data throughout: nothing is executed, symlinks and submodules are not followed, and every limit
- * turns "too much" into a partial index that says so, never into a failure.
+ * Reads one commit into an index: lists the tree, fetches the bodies of the files that are
+ * searched, and parses them with the convention parser. Repository content is data throughout:
+ * nothing is executed, symlinks and submodules are not followed, and every limit turns "too
+ * much" into a partial index that says so, never into a failure.
+ *
+ * The bodies come in two rounds. The manifests (SKILLCDN.md) and the skills (SKILL.md) first,
+ * because they decide which other files are served at all, and because when a repository is
+ * over the limits they are what must survive; then the documents that are served.
  */
 export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<SnapshotIndex> {
   const { gitHost, blobStore, coordinates, commit, limits, signal } = options;
@@ -77,176 +88,266 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
     files.length = limits.maxTreeEntries;
     truncated = true;
   }
+  const candidates: Candidate[] = files.map((entry) => ({
+    entry,
+    kind: classifyRepoFile(entry.path),
+  }));
 
-  // Skills first: when a repository is over the limits, its skills are what must survive.
-  const candidates: Candidate[] = files
-    .map((entry) => ({ entry, kind: classifyRepoFile(entry.path) }))
-    .filter(({ kind }) => SEARCHABLE_KINDS.includes(kind))
-    .sort(
-      (a, b) =>
-        Number(b.kind === "skill") - Number(a.kind === "skill") ||
-        (a.entry.path < b.entry.path ? -1 : 1),
-    );
-
-  const searchable = new Map<RepoPath, Candidate>();
+  // What the index holds, admitted in the order of the rounds and within the limits.
+  const admitted = new Map<RepoPath, Candidate>();
   let indexedBytes = 0;
-  for (const candidate of candidates) {
+  const admit = (candidate: Candidate): boolean => {
     const { size } = candidate.entry;
     if (size > limits.maxIndexedFileBytes) {
-      continue;
+      return false;
     }
     if (
-      searchable.size >= limits.maxIndexedFiles ||
+      admitted.size >= limits.maxIndexedFiles ||
       indexedBytes + size > limits.maxIndexedTotalBytes
     ) {
       truncated = true;
-      continue;
+      return false;
     }
-    searchable.set(candidate.entry.path, candidate);
+    admitted.set(candidate.entry.path, candidate);
     indexedBytes += size;
-  }
+    return true;
+  };
 
   // Bodies are content-addressed: whatever an earlier commit or another repository already
   // stored is not fetched again.
-  const wanted = [...searchable.values()];
-  const missing = await blobStore.missing(wanted.map(({ entry }) => entry.hash));
   const texts = new Map<string, string | undefined>();
+  const fetchBodies = async (wanted: readonly Candidate[]): Promise<void> => {
+    const missing = await blobStore.missing(wanted.map(({ entry }) => entry.hash));
 
-  // The archive is a transport, not a source of truth: it may convert line endings, expand
-  // keywords or leave files out. A body counts only when it hashes to what the tree says;
-  // everything else falls through to the per-file path below.
-  if (gitHost.readArchive !== undefined && missing.size >= ARCHIVE_THRESHOLD) {
-    const awaited = new Map(
-      wanted.filter(({ entry }) => missing.has(entry.hash)).map(({ entry }) => [entry.path, entry]),
-    );
-    try {
-      const archive = gitHost.readArchive(coordinates, commit, {
-        wants: (path, size) => awaited.has(path) && size <= limits.maxIndexedFileBytes,
-        maxArchiveBytes: limits.maxArchiveBytes,
-      });
-      for await (const file of archive) {
-        signal.throwIfAborted();
-        const entry = awaited.get(file.path);
-        if (entry === undefined || gitBlobHash(file.bytes) !== entry.hash) {
-          continue;
+    // The archive is a transport, not a source of truth: it may convert line endings, expand
+    // keywords or leave files out. A body counts only when it hashes to what the tree says;
+    // everything else falls through to the per-file path below.
+    if (gitHost.readArchive !== undefined && missing.size >= ARCHIVE_THRESHOLD) {
+      const awaited = new Map(
+        wanted
+          .filter(({ entry }) => missing.has(entry.hash))
+          .map(({ entry }) => [entry.path, entry]),
+      );
+      try {
+        const archive = gitHost.readArchive(coordinates, commit, {
+          wants: (path, size) => awaited.has(path) && size <= limits.maxIndexedFileBytes,
+          maxArchiveBytes: limits.maxArchiveBytes,
+        });
+        for await (const file of archive) {
+          signal.throwIfAborted();
+          const entry = awaited.get(file.path);
+          if (entry === undefined || gitBlobHash(file.bytes) !== entry.hash) {
+            continue;
+          }
+          const text = decodeText(file.bytes);
+          if (text !== undefined) {
+            await blobStore.write(entry.hash, text);
+          }
+          texts.set(entry.hash, text);
         }
-        const text = decodeText(file.bytes);
-        if (text !== undefined) {
-          await blobStore.write(entry.hash, text);
+      } catch (error) {
+        // Without the archive the work is the same, only slower. A rate limit is different:
+        // asking again file by file would make it worse.
+        const recoverable = error instanceof GitHostError && error.kind !== "rate_limited";
+        if (signal.aborted || !recoverable) {
+          throw error;
         }
-        texts.set(entry.hash, text);
-      }
-    } catch (error) {
-      // Without the archive the work is the same, only slower. A rate limit is different:
-      // asking again file by file would make it worse.
-      const recoverable = error instanceof GitHostError && error.kind !== "rate_limited";
-      if (signal.aborted || !recoverable) {
-        throw error;
       }
     }
-  }
 
-  await forEachConcurrently(wanted, FETCH_CONCURRENCY, async ({ entry }) => {
-    signal.throwIfAborted();
-    if (texts.has(entry.hash)) {
-      return;
-    }
-    if (!missing.has(entry.hash)) {
-      texts.set(entry.hash, await blobStore.read(entry.hash));
-      return;
-    }
-    // Reserve the hash so that a second file with the same content does not fetch it again.
-    texts.set(entry.hash, undefined);
-    let bytes: Uint8Array;
-    try {
-      bytes = await gitHost.readBlob(coordinates, entry.hash, limits.maxIndexedFileBytes);
-    } catch (error) {
-      // One unreadable file does not fail the repository. Anything else does, and is retried.
-      if (
-        error instanceof GitHostError &&
-        (error.kind === "invalid" || error.kind === "not_found")
-      ) {
+    await forEachConcurrently(wanted, FETCH_CONCURRENCY, async ({ entry }) => {
+      signal.throwIfAborted();
+      if (texts.has(entry.hash)) {
         return;
       }
-      throw error;
-    }
-    const text = decodeText(bytes);
-    if (text !== undefined) {
-      await blobStore.write(entry.hash, text);
-      texts.set(entry.hash, text);
-    }
-  });
-  signal.throwIfAborted();
+      if (!missing.has(entry.hash)) {
+        texts.set(entry.hash, await blobStore.read(entry.hash));
+        return;
+      }
+      // Reserve the hash so that a second file with the same content does not fetch it again.
+      texts.set(entry.hash, undefined);
+      let bytes: Uint8Array;
+      try {
+        bytes = await gitHost.readBlob(coordinates, entry.hash, limits.maxIndexedFileBytes);
+      } catch (error) {
+        // One unreadable file does not fail the repository. Anything else does, and is retried.
+        if (
+          error instanceof GitHostError &&
+          (error.kind === "invalid" || error.kind === "not_found")
+        ) {
+          return;
+        }
+        throw error;
+      }
+      const text = decodeText(bytes);
+      if (text !== undefined) {
+        await blobStore.write(entry.hash, text);
+        texts.set(entry.hash, text);
+      }
+    });
+    signal.throwIfAborted();
+  };
 
   const diagnostics: SnapshotDiagnostic[] = [];
+  const report = (path: RepoPath, code: string, message: string): void => {
+    if (diagnostics.length < MAX_DIAGNOSTICS) {
+      diagnostics.push({ path, code, message });
+    }
+  };
+
+  // Round one: what declares. Manifests before skills, so that a manifest survives the limits.
+  const declaring = candidates
+    .filter(({ kind }) => kind === "manifest" || kind === "skill")
+    .sort((a, b) => Number(b.kind === "manifest") - Number(a.kind === "manifest") || byPath(a, b))
+    .filter(admit);
+  await fetchBodies(declaring);
+
+  const manifests = new Map<RepoPath, NewIndexEntry>();
   const skills = new Map<RepoPath, NewIndexEntry>();
   const documents = new Map<RepoPath, NewIndexEntry>();
+  /** Per manifest directory, the document directories it declares. A broken one declares none. */
+  const documentDirectories = new Map<RepoPath, readonly RepoPath[]>();
 
-  for (const { entry, kind } of wanted) {
+  for (const { entry, kind } of declaring) {
+    const directory = parentDirectory(entry.path);
     const text = texts.get(entry.hash);
-    if (text === undefined) {
-      continue;
-    }
     const base = {
       path: entry.path,
       size: entry.size,
       blobSha: entry.hash,
       skillDir: undefined,
-      searchable: true,
+      visible: true,
     };
-    if (kind === "skill") {
-      const directory = parentDirectory(entry.path);
-      const parsed = parseSkillManifest(text, {
-        directoryName: directory.length === 0 ? undefined : baseName(directory),
-      });
-      if (parsed.ok) {
-        const { manifest, warnings } = parsed.value;
-        skills.set(directory, {
+    if (kind === "manifest") {
+      // A manifest that cannot be read still governs its directory: fail closed, and say why.
+      documentDirectories.set(directory, []);
+      if (text === undefined) {
+        report(entry.path, "unavailable", "the manifest could not be read");
+        continue;
+      }
+      const parsed = parseRepoManifest(text);
+      if (!parsed.ok) {
+        report(entry.path, parsed.error.code, parsed.error.message);
+        // Readable, so the author can see what was found, but not listed as a document.
+        documents.set(entry.path, {
           ...base,
-          kind: "skill",
-          name: manifest.name,
+          kind: "markdown",
+          name: undefined,
           title: undefined,
-          description: manifest.description,
-          frontMatter: {
-            ...(manifest.license === undefined ? {} : { license: manifest.license }),
-            ...(manifest.compatibility === undefined
-              ? {}
-              : { compatibility: manifest.compatibility }),
-            ...(manifest.allowedTools === undefined ? {} : { allowedTools: manifest.allowedTools }),
-            metadata: { ...manifest.metadata },
-            warnings: warnings.map((warning) => warning.message),
-          },
+          description: undefined,
+          frontMatter: undefined,
+          searchable: false,
         });
         continue;
       }
-      if (diagnostics.length < MAX_DIAGNOSTICS) {
-        diagnostics.push({
-          path: entry.path,
-          code: parsed.error.code,
-          message: parsed.error.message,
-        });
-      }
-      // A manifest that does not parse is still a readable, searchable document.
+      const { manifest, warnings } = parsed.value;
+      documentDirectories.set(
+        directory,
+        manifest.documents.map((declared) => joinRepoPath(directory, declared)),
+      );
+      manifests.set(entry.path, {
+        ...base,
+        kind: "manifest",
+        name: manifest.name,
+        title: undefined,
+        description: manifest.description,
+        frontMatter: {
+          ...(manifest.license === undefined ? {} : { license: manifest.license }),
+          metadata: { ...manifest.metadata },
+          warnings: warnings.map((warning) => warning.message),
+          documents: [...manifest.documents],
+        },
+        searchable: false,
+      });
+      continue;
+    }
+    if (text === undefined) {
+      continue;
+    }
+    const parsed = parseSkillManifest(text, {
+      directoryName: directory.length === 0 ? undefined : baseName(directory),
+    });
+    if (parsed.ok) {
+      const { manifest, warnings } = parsed.value;
+      skills.set(directory, {
+        ...base,
+        kind: "skill",
+        name: manifest.name,
+        title: undefined,
+        description: manifest.description,
+        frontMatter: {
+          ...(manifest.license === undefined ? {} : { license: manifest.license }),
+          ...(manifest.compatibility === undefined
+            ? {}
+            : { compatibility: manifest.compatibility }),
+          ...(manifest.allowedTools === undefined ? {} : { allowedTools: manifest.allowedTools }),
+          metadata: { ...manifest.metadata },
+          warnings: warnings.map((warning) => warning.message),
+        },
+        searchable: true,
+      });
+      continue;
+    }
+    report(entry.path, parsed.error.code, parsed.error.message);
+    // A skill manifest that does not parse is still a readable, searchable document.
+    const summary = summarizeMarkdown(text);
+    documents.set(entry.path, {
+      ...base,
+      kind: "markdown",
+      name: undefined,
+      title: summary.title,
+      description: summary.description,
+      frontMatter: undefined,
+      searchable: true,
+    });
+  }
+
+  const skillDirectories = new Set(skills.keys());
+  const scope: ServedScope = {
+    skillDirectories,
+    manifestDirectories: new Set(documentDirectories.keys()),
+    documentDirectories,
+  };
+  const served = (path: RepoPath): boolean => isServedPath(path, scope);
+
+  // Round two: the documents that are served. The others are known to the index and nothing else.
+  const reading = candidates
+    .filter(({ entry, kind }) => DOCUMENT_KINDS.includes(kind) && served(entry.path))
+    .sort(byPath)
+    .filter(admit);
+  await fetchBodies(reading);
+
+  for (const { entry, kind } of reading) {
+    const text = texts.get(entry.hash);
+    if (text === undefined) {
+      continue;
     }
     const summary = kind === "json" ? undefined : summarizeMarkdown(text);
     documents.set(entry.path, {
-      ...base,
+      path: entry.path,
+      size: entry.size,
+      blobSha: entry.hash,
+      skillDir: undefined,
       kind: kind === "json" ? "json" : "markdown",
       name: undefined,
       title: summary?.title,
       description: summary?.description,
       frontMatter: undefined,
+      searchable: true,
+      visible: true,
     });
   }
 
-  const skillDirectories = new Set(skills.keys());
   const entries: NewIndexEntry[] = files.map((entry) => {
     const skill = skills.get(parentDirectory(entry.path));
     const indexed =
-      skill !== undefined && skill.path === entry.path ? skill : documents.get(entry.path);
+      skill !== undefined && skill.path === entry.path
+        ? skill
+        : (manifests.get(entry.path) ?? documents.get(entry.path));
     const skillDir = owningSkillDirectory(entry.path, skillDirectories);
+    const visible = served(entry.path);
     if (indexed !== undefined) {
-      return { ...indexed, skillDir };
+      return { ...indexed, skillDir, visible };
     }
     return {
       path: entry.path,
@@ -259,6 +360,7 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
       description: undefined,
       frontMatter: undefined,
       searchable: false,
+      visible,
     };
   });
 

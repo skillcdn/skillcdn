@@ -50,11 +50,29 @@ export {
   baseName,
   classifyRepoFile,
   isHiddenPath,
+  isServedPath,
+  nearestDirectoryAtOrAbove,
   owningSkillDirectory,
   parentDirectory,
+  REPO_MANIFEST_FILE,
   type RepoFileKind,
+  repoManifestPath,
+  type ServedScope,
   SKILL_MANIFEST_FILE,
 } from "./repo-layout.js";
+export {
+  MAX_DOCUMENT_DIRECTORIES,
+  MAX_REPO_DESCRIPTION_LENGTH,
+  MAX_REPO_MANIFEST_LENGTH,
+  MAX_REPO_NAME_LENGTH,
+  type ParsedRepoManifest,
+  parseRepoManifest,
+  type RepoManifest,
+  type RepoManifestError,
+  type RepoManifestErrorCode,
+  type RepoManifestWarning,
+  type RepoManifestWarningCode,
+} from "./repo-manifest.js";
 export {
   isWithinRepoPath,
   joinRepoPath,
@@ -78,6 +96,7 @@ export {
   type RestFile,
   type RestFind,
   type RestFindItem,
+  type RestManifest,
   type RestMount,
   type RestRepository,
   type RestSkill,
@@ -113,6 +132,7 @@ export {
 } from "./skill-manifest.js";
 export { hasForbiddenCodePoint } from "./text-safety.js";
 export {
+  type CatalogManifest,
   type CatalogSkill,
   type CatalogState,
   describeFindTool,
@@ -154,7 +174,9 @@ export {
   type FileResult,
   type FindItem,
   type FindResult,
+  MAX_SKILL_RULES_LENGTH,
   type MountSummary,
   pageOfText,
   type SkillResult,
+  type SkillRules,
 } from "./tools/results.js";

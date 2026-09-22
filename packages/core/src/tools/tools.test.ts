@@ -239,6 +239,7 @@ describe("rendering", () => {
       files: [path("skills/release-notes/references/style.md")],
       filesTruncated: true,
       warnings: ['"name" should match the directory'],
+      rules: undefined,
     });
     expect(text).toBe(
       [
@@ -277,10 +278,51 @@ describe("rendering", () => {
       files: [],
       filesTruncated: false,
       warnings: [],
+      rules: undefined,
     });
     expect(text).toContain("Allowed tools: Read Bash");
     expect(text).toContain("Metadata: author: acme; version: 1.0");
     expect(text).toContain("Relative paths in the instructions start at the mounted root.");
+  });
+
+  it("puts the repository's rules before the instructions of a skill", () => {
+    const base = {
+      mount,
+      name: "commit-messages",
+      directory: path(""),
+      description: "Writes commit messages.",
+      license: undefined,
+      compatibility: undefined,
+      allowedTools: undefined,
+      metadata: {},
+      body: "# Commit messages",
+      files: [],
+      filesTruncated: false,
+      warnings: [],
+    };
+    const inside = renderSkillResult({
+      ...base,
+      rules: { path: path("SKILLCDN.md"), body: "\n# Rules\n\n- Ask first.\n", truncated: true },
+    });
+    expect(inside).toContain(
+      [
+        "--- rules for every skill in this repository (from SKILLCDN.md) ---",
+        "# Rules",
+        "",
+        "- Ask first.",
+        "(The rules continue; read_file SKILLCDN.md has the whole text.)",
+        "",
+        "--- instructions ---",
+        "# Commit messages",
+      ].join("\n"),
+    );
+    const above = renderSkillResult({
+      ...base,
+      rules: { path: undefined, body: "- Ask first.", truncated: false },
+    });
+    expect(above).toContain(
+      "--- rules for every skill in this repository (from the repository manifest above the mounted directory) ---\n- Ask first.\n\n--- instructions ---",
+    );
   });
 
   it("lists a directory with what to read next", () => {

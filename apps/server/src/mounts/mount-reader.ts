@@ -1,6 +1,7 @@
 import {
   type BlobStore,
   type CatalogState,
+  classifyRepoFile,
   type DirectoryResult,
   FIND_DEFAULT_LIMIT,
   FIND_LIST_SKILLS_MAX,
@@ -10,17 +11,22 @@ import {
   type GitHost,
   type IndexLimits,
   isHiddenPath,
+  isServedPath,
   joinRepoPath,
+  MAX_SKILL_RULES_LENGTH,
   type MountCatalog,
   type MountSummary,
   pageOfText,
+  parentDirectory,
   parseRepoPath,
   READ_FILE_DEFAULT_LIMIT,
   type RepoPath,
   type RepoTree,
   ROOT_PATH,
   relativeRepoPath,
+  type ServedScope,
   type SkillResult,
+  type SkillRules,
   splitFrontMatter,
 } from "@skillcdn/core";
 import {
@@ -30,12 +36,14 @@ import {
   type EntryRecord,
   findSkills,
   getEntry,
+  getManifest,
   getSnapshotDiagnostics,
   listDirectory,
   listEntries,
   listSkillFiles,
   type SnapshotDiagnostic,
   type SnapshotRecord,
+  type SnapshotScope,
   searchEntries,
 } from "@skillcdn/db";
 import type { SnapshotOutcome, SnapshotService } from "../indexer/snapshot-service.js";
@@ -81,8 +89,19 @@ export interface SkillListing {
   readonly warnings: readonly string[];
 }
 
+/** The repository manifest that governs a mount, as read from the index and the blob store. */
+export interface MountManifest {
+  /** Relative to the mounted root; `undefined` when the manifest lies above the mount. */
+  readonly path: RepoPath | undefined;
+  readonly name: string | undefined;
+  readonly description: string;
+  /** The Markdown after the front-matter, trimmed: the rules. Empty when there are none. */
+  readonly rules: string;
+}
+
 export interface MountOverview {
   readonly mount: MountSummary;
+  readonly manifest: MountManifest | undefined;
   readonly skillCount: number;
   readonly documentCount: number;
   readonly skills: readonly SkillListing[];
@@ -94,7 +113,27 @@ const MAX_LISTED_SKILL_FILES = 50;
 const MAX_SUGGESTED_SKILLS = 20;
 const MAX_CACHED_TREES = 8;
 const MAX_CACHED_CATALOGS = 64;
+const MAX_CACHED_MANIFESTS = 64;
 const MAX_DIRECTORY_ENTRIES = 200;
+
+/** Keeps a bounded number of promises by key; the oldest goes first. */
+function remember<T>(
+  cache: Map<string, Promise<T>>,
+  key: string,
+  limit: number,
+  loading: Promise<T>,
+) {
+  loading.catch(() => {
+    cache.delete(key);
+  });
+  cache.set(key, loading);
+  if (cache.size > limit) {
+    const oldest = cache.keys().next().value;
+    if (oldest !== undefined) {
+      cache.delete(oldest);
+    }
+  }
+}
 
 /**
  * Answers questions about one resolved mount as data. The MCP tools render these answers as text
@@ -112,9 +151,39 @@ export class MountReader {
    * snapshot never changes, so neither does this; the map is small and only saves queries.
    */
   readonly #catalogs = new Map<string, Promise<Omit<MountCatalog, "mount">>>();
+  /** The manifest of each mount, by snapshot and mounted path. Read once, kept while wanted. */
+  readonly #manifests = new Map<string, Promise<MountManifest | undefined>>();
 
   constructor(dependencies: MountReaderDependencies) {
     this.#dependencies = dependencies;
+  }
+
+  /**
+   * The repository manifest that governs a mount: the one in the mounted directory, else the
+   * nearest above it. Its rules come from the blob store, so that `get` can hand them over.
+   */
+  #manifestOf(mount: Mount, scope: SnapshotScope): Promise<MountManifest | undefined> {
+    const key = `${scope.snapshotId} ${mount.address.path}`;
+    const cached = this.#manifests.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const { database, blobStore } = this.#dependencies;
+    const loading = getManifest(database, scope, mount.address.path).then(async (row) => {
+      if (row === undefined || row.description === null) {
+        return undefined;
+      }
+      const text = await blobStore.read(row.blobSha);
+      const split = text === undefined ? undefined : splitFrontMatter(text);
+      return {
+        path: belowMount(mount, row.path),
+        name: row.name ?? undefined,
+        description: row.description,
+        rules: split?.kind === "found" ? split.body.trim() : "",
+      };
+    });
+    remember(this.#manifests, key, MAX_CACHED_MANIFESTS, loading);
+    return loading;
   }
 
   /**
@@ -135,7 +204,17 @@ export class MountReader {
       loading = Promise.all([
         listEntries(database, scope, path, FIND_LIST_SKILLS_MAX, "skills"),
         countEntries(database, scope, path),
-      ]).then(([skills, counts]) => ({
+        this.#manifestOf(mount, scope),
+      ]).then(([skills, counts, manifest]) => ({
+        manifest:
+          manifest === undefined
+            ? undefined
+            : {
+                name: manifest.name,
+                description: manifest.description,
+                path: manifest.path,
+                hasRules: manifest.rules.length > 0,
+              },
         skills: skills.flatMap((row) => {
           const directory = belowMount(mount, row.skillDir);
           return directory === undefined || row.name === null
@@ -145,16 +224,7 @@ export class MountReader {
         skillCount: counts.skills,
         documentCount: counts.documents,
       }));
-      loading.catch(() => {
-        this.#catalogs.delete(key);
-      });
-      this.#catalogs.set(key, loading);
-      if (this.#catalogs.size > MAX_CACHED_CATALOGS) {
-        const oldest = this.#catalogs.keys().next().value;
-        if (oldest !== undefined) {
-          this.#catalogs.delete(oldest);
-        }
-      }
+      remember(this.#catalogs, key, MAX_CACHED_CATALOGS, loading);
     }
     return {
       status: "ready",
@@ -263,12 +333,19 @@ export class MountReader {
       return { status: "ready", lookup: { kind: "unavailable" } };
     }
     const split = splitFrontMatter(text);
-    const files = await listSkillFiles(
-      database,
-      scope,
-      skill.skillDir ?? "",
-      MAX_LISTED_SKILL_FILES + 1,
-    );
+    const [files, manifest] = await Promise.all([
+      listSkillFiles(database, scope, skill.skillDir ?? "", MAX_LISTED_SKILL_FILES + 1),
+      this.#manifestOf(mount, scope),
+    ]);
+    let rules: SkillRules | undefined;
+    if (manifest !== undefined && manifest.rules.length > 0) {
+      const truncated = manifest.rules.length > MAX_SKILL_RULES_LENGTH;
+      rules = {
+        path: manifest.path,
+        body: truncated ? manifest.rules.slice(0, MAX_SKILL_RULES_LENGTH) : manifest.rules,
+        truncated,
+      };
+    }
     return {
       status: "ready",
       lookup: {
@@ -289,6 +366,7 @@ export class MountReader {
             .filter((file) => file !== undefined),
           filesTruncated: files.length > MAX_LISTED_SKILL_FILES,
           warnings: skill.frontMatter?.warnings ?? [],
+          rules,
         },
       },
     };
@@ -410,16 +488,18 @@ export class MountReader {
     }
     const scope = { accountId: outcome.snapshot.accountId, snapshotId: outcome.snapshot.id };
     const path = mount.address.path;
-    const [counts, skills, documents, diagnostics] = await Promise.all([
+    const [counts, skills, documents, diagnostics, manifest] = await Promise.all([
       countEntries(database, scope, path),
       listEntries(database, scope, path, listLimit, "skills"),
       listEntries(database, scope, path, listLimit, "documents_outside_skills"),
       getSnapshotDiagnostics(database, scope),
+      this.#manifestOf(mount, scope),
     ]);
     return {
       status: "ready",
       overview: {
         mount: this.summary(mount, outcome.snapshot),
+        manifest,
         skillCount: counts.skills,
         documentCount: counts.documents,
         skills: skills.flatMap((row) => {
@@ -454,23 +534,29 @@ export class MountReader {
     if (cached !== undefined) {
       return cached;
     }
-    // Hidden entries are never served, from the tree any more than from the index.
+    // Hidden entries are never served, from the tree any more than from the index. Nor is what a
+    // manifest leaves out: until the commit is indexed nothing has read the manifests, so under
+    // one only the skills and the manifests themselves are served, which fails closed.
     const loading = this.#dependencies.gitHost
       .getTree(mount.coordinates, mount.commit)
-      .then((tree) => ({
-        ...tree,
-        entries: tree.entries.filter((entry) => !isHiddenPath(entry.path)),
-      }));
-    loading.catch(() => {
-      this.#trees.delete(key);
-    });
-    this.#trees.set(key, loading);
-    if (this.#trees.size > MAX_CACHED_TREES) {
-      const oldest = this.#trees.keys().next().value;
-      if (oldest !== undefined) {
-        this.#trees.delete(oldest);
-      }
-    }
+      .then((tree) => {
+        const files = tree.entries.filter(
+          (entry) => entry.type === "file" && !isHiddenPath(entry.path),
+        );
+        const directoriesOf = (kind: string): Set<RepoPath> =>
+          new Set(
+            files
+              .filter((entry) => classifyRepoFile(entry.path) === kind)
+              .map((entry) => parentDirectory(entry.path)),
+          );
+        const scope: ServedScope = {
+          skillDirectories: directoriesOf("skill"),
+          manifestDirectories: directoriesOf("manifest"),
+          documentDirectories: new Map(),
+        };
+        return { ...tree, entries: files.filter((entry) => isServedPath(entry.path, scope)) };
+      });
+    remember(this.#trees, key, MAX_CACHED_TREES, loading);
     return loading;
   }
 }

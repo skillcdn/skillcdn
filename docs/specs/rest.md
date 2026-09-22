@@ -50,6 +50,7 @@ What the address serves.
   "index": {
     "status": "ready",
     "truncated": false,
+    "manifest": { "path": "SKILLCDN.md", "name": "Acme playbooks", "description": "..." },
     "skillCount": 2,
     "documentCount": 1,
     "skills": [{ "name": "ad-copy", "directory": "ad-copy", "description": "...", "warnings": [] }],
@@ -61,6 +62,7 @@ What the address serves.
 
 - `address` is the canonical form. `ref` is `null` for the default branch. `pinned` is true for a full commit hash.
 - `repository.description` is what the host shows as the description of the repository, on one line, or `null`.
+- `manifest` is what the repository's manifest says about the mount ([convention](skill-repo.md), "The repository manifest"), or `null` when there is none: `name` (`null` when the repository goes by the name its host gives it), `description`, and `path`, the manifest relative to the mount, or `null` when it lies above the mounted directory. With a manifest, the counts and the listings cover only what it declares.
 - `skills` and `documents` list at most 200 entries each; the counts are complete. `documents` are the Markdown and JSON files that do not belong to a skill; a skill's own files are listed by the skills endpoint.
 - `diagnostics` are the findings of the [convention parser](skill-repo.md) for the repository author: manifests that were skipped, and why. Only manifests inside the mounted path are listed.
 - `truncated` is true when the repository was larger than the indexing limits.
@@ -88,9 +90,12 @@ The `get` tool: one skill by name or by directory.
   "name": "incident-review", "directory": "skills/incident-review", "description": "...",
   "license": "Apache-2.0", "compatibility": null, "allowedTools": null, "metadata": {},
   "body": "# Incident review\n...", "files": ["skills/incident-review/assets/timeline.json"],
-  "filesTruncated": false, "warnings": []
+  "filesTruncated": false, "warnings": [],
+  "rules": { "path": "SKILLCDN.md", "body": "# Rules for every skill\n...", "truncated": false }
 } }
 ```
+
+`rules` is the body of the repository's manifest, which holds for every skill, or `null` when there is none; `path` is `null` when the manifest lies above the mounted directory, and `truncated` is true when the body was cut at the limit `get` applies.
 
 ### `GET /api/v1/files/<address>?path=&offset=&limit=`
 

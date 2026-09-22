@@ -9,6 +9,7 @@ export {
   type EntryRecord,
   findSkills,
   getEntry,
+  getManifest,
   listDirectory,
   listEntries,
   listSkillFiles,

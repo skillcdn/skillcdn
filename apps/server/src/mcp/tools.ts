@@ -90,6 +90,7 @@ export async function createMountServer(
     account: mount.repo.accountId,
   });
   const catalog = await reader.catalog(mount);
+  const manifest = catalog.status === "ready" ? catalog.catalog.manifest : undefined;
 
   /** Runs a handler with usage accounting, and keeps unexpected failures away from the caller. */
   const guarded =
@@ -120,8 +121,11 @@ export async function createMountServer(
     {
       name: SERVER_NAME,
       version: SERVER_VERSION,
-      title: titleOf(mount),
-      description: `The skills and documents of ${repository}, served over MCP by SkillCDN.`,
+      // A repository with a manifest is shown under the name it gives itself.
+      title: manifest?.name ?? titleOf(mount),
+      description:
+        manifest?.description ??
+        `The skills and documents of ${repository}, served over MCP by SkillCDN.`,
       websiteUrl: `${request.origin}${formatAddress(mount.address)}`,
     },
     // Prompts are declared even while the index is being built, so that every client sees the

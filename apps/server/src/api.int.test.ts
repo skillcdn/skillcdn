@@ -362,6 +362,111 @@ describe("other repository shapes", () => {
   });
 });
 
+describe("a repository with a manifest", () => {
+  /** Connects once so that indexing starts, waits for it, and connects to the ready index. */
+  async function connectIndexed(h: ReturnType<typeof harness>, address: string): Promise<Client> {
+    await (await h.connect(address)).close();
+    await h.snapshots.idle();
+    return h.connect(address);
+  }
+
+  it("introduces itself, serves only what it declares, and hands its rules over with every skill", async () => {
+    const h = harness();
+    const client = await connectIndexed(h, "/gh/acme/with-manifest");
+    expect(client.getInstructions()).toContain(
+      "This server serves Acme playbooks, the git repository Acme/with-manifest",
+    );
+    expect(client.getInstructions()).toContain("The playbooks every Acme team runs.");
+    expect(client.getInstructions()).toContain("Rules that hold for every skill here");
+    expect(client.getServerVersion()).toMatchObject({ title: "Acme playbooks" });
+
+    const listing = await call(client, "find");
+    expect(listing.text).toContain("1 skill and 1 document in Acme/with-manifest");
+    expect(listing.text).toContain("document: docs/guide.md - Using the playbooks");
+    expect(listing.text).not.toContain("README.md");
+    expect(listing.text).not.toContain("notes/");
+    expect((await call(client, "find", { query: "not served" })).text).not.toContain("private.md");
+
+    const root = await call(client, "read_file", { path: "." });
+    expect(root.text).toContain("Directory: the mounted root (3 entries)");
+    expect(root.text).toContain("- docs/");
+    expect(root.text).toContain("- skills/");
+    expect(root.text).toContain("- SKILLCDN.md (");
+    for (const path of ["README.md", "notes/private.md", "scripts/check.mjs", "notes"]) {
+      expect((await call(client, "read_file", { path })).isError, path).toBe(true);
+    }
+    expect((await call(client, "read_file", { path: "SKILLCDN.md" })).text).toContain(
+      "name: Acme playbooks",
+    );
+    expect((await call(client, "read_file", { path: "docs/guide.md" })).isError).toBe(false);
+
+    const skill = await call(client, "get", { name: "greeting" });
+    expect(skill.text).toContain(
+      "--- rules for every skill in this repository (from SKILLCDN.md) ---\n# Rules for every skill in this repository\n\n- Ask when a choice changes the result",
+    );
+    expect(skill.text.indexOf("--- rules")).toBeLessThan(skill.text.indexOf("--- instructions"));
+    const prompt = await client.getPrompt({ name: "greeting" });
+    expect(prompt.messages[0]?.content).toMatchObject({ type: "text" });
+    expect(JSON.stringify(prompt.messages[0]?.content)).toContain("rules for every skill");
+    await client.close();
+  });
+
+  it("governs a sub-path mount from above it", async () => {
+    const client = await connectIndexed(harness(), "/gh/acme/with-manifest@main/skills");
+    expect(client.getInstructions()).toContain("This server serves Acme playbooks");
+    const skill = await call(client, "get", { name: "greeting" });
+    expect(skill.text).toContain("(from the repository manifest above the mounted directory) ---");
+    // The manifest lies outside the mount, so it cannot be read from here.
+    expect((await call(client, "read_file", { path: "SKILLCDN.md" })).isError).toBe(true);
+    await client.close();
+  });
+
+  it("serves only the skills when the manifest cannot be read", async () => {
+    const host = createFixtureHost("broken-manifest");
+    host.addFile(
+      "SKILLCDN.md",
+      new TextEncoder().encode("---\nname: Broken\n---\n# No description\n"),
+    );
+    const client = await connectIndexed(
+      harness({ host }),
+      `/gh/acme/multi-skill@${fixtureCommits("broken-manifest").main}`,
+    );
+    expect(client.getInstructions()).toContain("the skills and documents of the git repository");
+    expect(client.getInstructions()).not.toContain("Broken");
+    const listing = await call(client, "find");
+    expect(listing.text).toContain("2 skills and 0 documents");
+    expect((await call(client, "read_file", { path: "README.md" })).isError).toBe(true);
+    // The file itself stays readable, so the author can see what was found.
+    expect((await call(client, "read_file", { path: "SKILLCDN.md" })).isError).toBe(false);
+    expect((await call(client, "get", { name: "release-notes" })).text).not.toContain("--- rules");
+    await client.close();
+  });
+
+  it("keeps its files out of reach while the commit is still being indexed", async () => {
+    const host = createFixtureHost("manifest-indexing");
+    const release = host.holdTrees();
+    const client = await harness({ host }).connect(
+      `/gh/acme/with-manifest@${fixtureCommits("manifest-indexing").main}`,
+    );
+    // Asked while the index is not there, so the tree answers, once it arrives.
+    const reads = Promise.all([
+      call(client, "read_file", { path: "." }),
+      call(client, "read_file", { path: "docs/guide.md" }),
+      call(client, "read_file", { path: "skills/greeting/SKILL.md" }),
+    ]);
+    release();
+    const [root, guide, skill] = await reads;
+    expect(root.text).toContain("- skills/");
+    expect(root.text).toContain("- SKILLCDN.md (");
+    expect(root.text).not.toContain("README.md");
+    expect(root.text).not.toContain("notes/");
+    // Nothing has read the manifest yet, so its declared directory is not served: closed, not guessed.
+    expect(guide.isError).toBe(true);
+    expect(skill.isError).toBe(false);
+    await client.close();
+  });
+});
+
 describe("addresses that cannot be served", () => {
   it("answers a missing and a private repository identically", async () => {
     const { request } = harness();

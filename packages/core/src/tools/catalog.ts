@@ -14,8 +14,20 @@ export interface CatalogSkill {
   readonly description: string;
 }
 
+/** What the repository manifest (SKILLCDN.md) says about the mount, when there is one. */
+export interface CatalogManifest {
+  /** Absent: the repository goes by the name its git host gives it. */
+  readonly name: string | undefined;
+  readonly description: string;
+  /** The manifest, relative to the mounted root; `undefined` when it lies above the mount. */
+  readonly path: RepoPath | undefined;
+  /** Whether the manifest has a body: rules that come with every skill. */
+  readonly hasRules: boolean;
+}
+
 export interface MountCatalog {
   readonly mount: MountSummary;
+  readonly manifest: CatalogManifest | undefined;
   /** Every skill of the mount, up to the listing cap of `find`. */
   readonly skills: readonly CatalogSkill[];
   readonly skillCount: number;
@@ -42,6 +54,10 @@ const HOW_TO =
   "To use a skill, call get with its name, follow the instructions it returns, and read the " +
   "files it points to with read_file. find searches the skills and the documents; read_file " +
   "lists a directory when given one.";
+const RULES_NOTE =
+  "Rules that hold for every skill here come with each skill that get returns; follow them.";
+/** How much of the manifest's description the instructions carry. */
+const MANIFEST_DESCRIPTION_CLIP = 400;
 
 function clip(text: string, length: number): string {
   const flat = text.replaceAll(/\s+/g, " ").trim();
@@ -91,7 +107,12 @@ function skillList(catalog: MountCatalog, budget: number): string {
 /** The instructions a client hands to the model when it connects. */
 export function renderInstructions(state: CatalogState): string {
   const mount = state.status === "ready" ? state.catalog.mount : state.mount;
-  const opening = `This server serves the skills and documents of the git repository ${describeMount(mount)}.`;
+  const manifest = state.status === "ready" ? state.catalog.manifest : undefined;
+  // A repository with a manifest introduces itself; one without is introduced by its address.
+  const opening =
+    manifest === undefined
+      ? `This server serves the skills and documents of the git repository ${describeMount(mount)}.`
+      : `This server serves ${manifest.name ?? mount.repository}, the git repository ${describeMount(mount)}: ${clip(manifest.description, MANIFEST_DESCRIPTION_CLIP)}`;
   if (state.status !== "ready") {
     return state.status === "indexing"
       ? `${opening} The commit is being indexed; in a few seconds, find lists its skills. ${HOW_TO}`
@@ -101,9 +122,10 @@ export function renderInstructions(state: CatalogState): string {
   if (catalog.skillCount === 0) {
     return `${opening} It has no skills; its ${plural(catalog.documentCount, "document")} can be searched with find and read with read_file.`;
   }
+  const howTo = manifest?.hasRules === true ? `${HOW_TO} ${RULES_NOTE}` : HOW_TO;
   const head = `${opening} It has ${plural(catalog.skillCount, "skill")} and ${plural(catalog.documentCount, "other document")}.\nSkills:\n`;
-  const budget = INSTRUCTIONS_MAX_LENGTH - head.length - HOW_TO.length - 1;
-  return `${head}${skillList(catalog, budget)}\n${HOW_TO}`;
+  const budget = INSTRUCTIONS_MAX_LENGTH - head.length - howTo.length - 1;
+  return `${head}${skillList(catalog, budget)}\n${howTo}`;
 }
 
 /** The description of `find`, with the skills named, for clients that show no instructions. */

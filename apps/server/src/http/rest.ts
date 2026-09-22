@@ -91,6 +91,14 @@ export function mountBody(
         : {
             status: "ready",
             truncated: answer.overview.mount.truncated,
+            manifest:
+              answer.overview.manifest === undefined
+                ? null
+                : {
+                    path: answer.overview.manifest.path ?? null,
+                    name: answer.overview.manifest.name ?? null,
+                    description: answer.overview.manifest.description,
+                  },
             skillCount: answer.overview.skillCount,
             documentCount: answer.overview.documentCount,
             skills: answer.overview.skills.map((skill) => ({
@@ -172,6 +180,14 @@ export function skillOutcome(
             files: [...skill.files],
             filesTruncated: skill.filesTruncated,
             warnings: [...skill.warnings],
+            rules:
+              skill.rules === undefined
+                ? null
+                : {
+                    path: skill.rules.path ?? null,
+                    body: skill.rules.body,
+                    truncated: skill.rules.truncated,
+                  },
           },
         },
       };
@@ -399,6 +415,13 @@ export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies):
             {
               address: formatAddress(address),
               repository: repositoryOf(mount),
+              manifest:
+                answer.status === "ready" && answer.overview.manifest !== undefined
+                  ? {
+                      name: answer.overview.manifest.name ?? null,
+                      description: answer.overview.manifest.description,
+                    }
+                  : null,
               status: answer.status,
               skillCount: answer.status === "ready" ? answer.overview.skillCount : null,
               skills:

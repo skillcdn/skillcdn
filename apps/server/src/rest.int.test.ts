@@ -97,6 +97,43 @@ describe("GET /api/v1/mounts/<address>", () => {
     expect(mount.index.truncated).toBe(false);
   });
 
+  it("relays the manifest of a repository, and its rules with every skill", async () => {
+    const h = harness();
+    await indexed(h, "/gh/acme/with-manifest");
+    const mount = restMountSchema.parse(
+      await (await h.request("/api/v1/mounts/gh/acme/with-manifest")).json(),
+    );
+    if (mount.index.status !== "ready") {
+      throw new Error("expected a ready index");
+    }
+    expect(mount.index.manifest).toEqual({
+      path: "SKILLCDN.md",
+      name: "Acme playbooks",
+      description:
+        "The playbooks every Acme team runs. Use them for greetings, and for anything else the skills here cover.",
+    });
+    expect(mount.index.documents.map((document) => document.path)).toEqual(["docs/guide.md"]);
+
+    const skill = restSkillSchema.parse(
+      await (await h.request("/api/v1/skills/gh/acme/with-manifest?name=greeting")).json(),
+    );
+    if (skill.status !== "ready") {
+      throw new Error("expected a ready skill");
+    }
+    expect(skill.skill.rules).toEqual({
+      path: "SKILLCDN.md",
+      body: "# Rules for every skill in this repository\n\n- Ask when a choice changes the result; ask once, batched, only for what is missing.\n- Anything that costs the user money is estimated first and started only after they agree.",
+      truncated: false,
+    });
+
+    const above = restSkillSchema.parse(
+      await (
+        await h.request("/api/v1/skills/gh/acme/with-manifest@main/skills?name=greeting")
+      ).json(),
+    );
+    expect(above.status === "ready" ? above.skill.rules?.path : "unexpected").toBeNull();
+  });
+
   it("answers for the default branch and for a sub-path, with paths relative to the mount", async () => {
     const h = harness();
     await indexed(h, "/gh/acme/multi-skill");
@@ -331,11 +368,23 @@ describe("GET /api/v1/featured", () => {
             defaultBranch: "main",
             description: "Two skills and the documents next to them.",
           },
+          manifest: null,
           status: "ready",
           skillCount: 2,
           skills: ["incident-review", "release-notes"],
         },
       ],
+    });
+  });
+
+  it("names a featured repository as its manifest does", async () => {
+    const h = harness({ featured: ["/gh/acme/with-manifest"] });
+    await indexed(h, "/gh/acme/with-manifest");
+    const body = restFeaturedSchema.parse(await (await h.request("/api/v1/featured")).json());
+    expect(body.items[0]?.manifest).toEqual({
+      name: "Acme playbooks",
+      description:
+        "The playbooks every Acme team runs. Use them for greetings, and for anything else the skills here cover.",
     });
   });
 

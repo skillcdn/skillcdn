@@ -133,11 +133,24 @@ export function renderSkillResult(result: SkillResult): string {
       ? undefined
       : `Warnings for the skill author:\n${result.warnings.map((warning) => `- ${warning}`).join("\n")}`;
 
+  // The repository's rules come before the skill, as its author meant them to be read.
+  let rules: string | undefined;
+  if (result.rules !== undefined) {
+    const { path, body, truncated } = result.rules;
+    const source =
+      path === undefined ? "the repository manifest above the mounted directory" : path;
+    const cut = truncated
+      ? `\n(The rules continue${path === undefined ? "" : `; read_file ${path} has the whole text`}.)`
+      : "";
+    rules = `--- rules for every skill in this repository (from ${source}) ---\n${body.trim()}${cut}`;
+  }
+
   return joinSections([
     header.join("\n"),
     files,
     warnings,
     notices(result.mount).join("\n"),
+    rules,
     `--- instructions ---\n${result.body.trim()}`,
   ]);
 }

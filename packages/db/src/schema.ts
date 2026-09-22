@@ -159,13 +159,18 @@ export interface SnapshotDiagnostic {
   readonly message: string;
 }
 
-/** Front-matter of a skill manifest, as validated by the convention parser. */
+/**
+ * Front-matter of a skill manifest, as validated by the convention parser. A repository manifest
+ * (`SKILLCDN.md`) stores its front-matter here too, with the document directories it declares.
+ */
 export interface SkillFrontMatter {
   readonly license?: string;
   readonly compatibility?: string;
   readonly allowedTools?: string;
   readonly metadata: Readonly<Record<string, string>>;
   readonly warnings: readonly string[];
+  /** Repository manifest only: the directories it serves, relative to its own directory. */
+  readonly documents?: readonly string[];
 }
 
 /** One file of a snapshot. Immutable: rows are inserted and deleted, never updated. */
@@ -180,12 +185,12 @@ export const indexEntries = pgTable(
       .notNull()
       .references(() => snapshots.id, { onDelete: "cascade" }),
     path: text().notNull(),
-    kind: text({ enum: ["skill", "markdown", "json", "other"] }).notNull(),
+    kind: text({ enum: ["skill", "manifest", "markdown", "json", "other"] }).notNull(),
     size: integer().notNull(),
     blobSha: text().notNull(),
-    /** The skill directory that owns the file; for a manifest, its own directory. */
+    /** The skill directory that owns the file; for a skill manifest, its own directory. */
     skillDir: text(),
-    /** Skill name. */
+    /** Skill name, or the name a repository manifest gives the repository. */
     name: text(),
     /** Document title. */
     title: text(),
@@ -193,6 +198,11 @@ export const indexEntries = pgTable(
     frontMatter: jsonb().$type<SkillFrontMatter>(),
     /** Null for files that are listed but not searchable. */
     search: tsvector(),
+    /**
+     * False for a file that a repository manifest leaves out: stored so that the tree is known,
+     * never listed, searched or read (docs/specs/skill-repo.md, "The repository manifest").
+     */
+    visible: boolean().notNull().default(true),
     createdAt: createdAt(),
   },
   (table) => [
@@ -201,7 +211,10 @@ export const indexEntries = pgTable(
     index("index_entries_snapshot_skill_dir_idx").on(table.snapshotId, table.skillDir),
     index("index_entries_search_idx").using("gin", table.search),
     index("index_entries_account_idx").on(table.accountId),
-    check("index_entries_kind_check", sql`${table.kind} in ('skill', 'markdown', 'json', 'other')`),
+    check(
+      "index_entries_kind_check",
+      sql`${table.kind} in ('skill', 'manifest', 'markdown', 'json', 'other')`,
+    ),
   ],
 );
 

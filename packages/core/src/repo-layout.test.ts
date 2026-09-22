@@ -3,8 +3,12 @@ import {
   baseName,
   classifyRepoFile,
   isHiddenPath,
+  isServedPath,
+  nearestDirectoryAtOrAbove,
   owningSkillDirectory,
   parentDirectory,
+  repoManifestPath,
+  type ServedScope,
 } from "./repo-layout.js";
 import { parseRepoPath, type RepoPath } from "./repo-path.js";
 
@@ -32,10 +36,69 @@ describe("isHiddenPath", () => {
   });
 });
 
+describe("nearestDirectoryAtOrAbove", () => {
+  const directories = new Set([path(""), path("packages/a")]);
+  it("finds the directory itself, else the nearest ancestor", () => {
+    expect(nearestDirectoryAtOrAbove(path("packages/a"), directories)).toBe("packages/a");
+    expect(nearestDirectoryAtOrAbove(path("packages/a/docs"), directories)).toBe("packages/a");
+    expect(nearestDirectoryAtOrAbove(path("packages/b"), directories)).toBe("");
+    expect(nearestDirectoryAtOrAbove(path("packages"), new Set([path("x")]))).toBeUndefined();
+  });
+});
+
+describe("isServedPath", () => {
+  const scope: ServedScope = {
+    skillDirectories: new Set([path("skills/ads"), path("packages/a/skills/one")]),
+    manifestDirectories: new Set([path(""), path("packages/a")]),
+    documentDirectories: new Map([
+      [path(""), [path("docs")]],
+      [path("packages/a"), [path("packages/a")]],
+    ]),
+  };
+
+  it.each([
+    ["SKILLCDN.md", true],
+    ["docs/guide.md", true],
+    ["docs/deep/guide.md", true],
+    ["skills/ads/SKILL.md", true],
+    ["skills/ads/references/style.md", true],
+    ["README.md", false],
+    ["scripts/check.mjs", false],
+    ["documents/guide.md", false],
+    ["docs.md", false],
+    ["packages/a/SKILLCDN.md", true],
+    ["packages/a/anything.md", true],
+    ["packages/a/skills/one/SKILL.md", true],
+  ])("%s -> %s under the manifests", (input, served) => {
+    expect(isServedPath(path(input), scope)).toBe(served);
+  });
+
+  it("serves everything where no manifest governs", () => {
+    const none: ServedScope = {
+      skillDirectories: new Set(),
+      manifestDirectories: new Set([path("packages/a")]),
+      documentDirectories: new Map([[path("packages/a"), []]]),
+    };
+    expect(isServedPath(path("README.md"), none)).toBe(true);
+    expect(isServedPath(path("packages/b/notes.md"), none)).toBe(true);
+    // A manifest without document directories serves its skills and itself, nothing else.
+    expect(isServedPath(path("packages/a/notes.md"), none)).toBe(false);
+    expect(isServedPath(path("packages/a/SKILLCDN.md"), none)).toBe(true);
+  });
+
+  it("names the manifest of a directory", () => {
+    expect(repoManifestPath(path(""))).toBe("SKILLCDN.md");
+    expect(repoManifestPath(path("packages/a"))).toBe("packages/a/SKILLCDN.md");
+  });
+});
+
 describe("classifyRepoFile", () => {
   it.each([
     ["SKILL.md", "skill"],
     ["skills/ads/SKILL.md", "skill"],
+    ["SKILLCDN.md", "manifest"],
+    ["packages/a/SKILLCDN.md", "manifest"],
+    ["skillcdn.md", "markdown"],
     ["skills/ads/skill.md", "markdown"],
     ["skills/ads/SKILL.md.bak", "other"],
     ["README.md", "markdown"],

@@ -29,6 +29,13 @@
       "when": 1790060170067,
       "tag": "0003_repo-description",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790067645089,
+      "tag": "0004_repo-manifest",
+      "breakpoints": true
     }
   ]
 }

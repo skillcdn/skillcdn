@@ -175,6 +175,8 @@ export interface NewIndexEntry {
   readonly frontMatter: SkillFrontMatter | undefined;
   /** Make the entry searchable: metadata always, plus the stored body of `blobSha` if there is one. */
   readonly searchable: boolean;
+  /** False for a file a repository manifest leaves out: known, never served. */
+  readonly visible: boolean;
 }
 
 export interface SnapshotIndex {
@@ -219,14 +221,14 @@ export async function writeSnapshotIndex(
       const rows = sql.join(
         batch.map(
           (entry) =>
-            sql`(${entry.path}, ${entry.kind}, ${entry.size}::integer, ${entry.blobSha}, ${entry.skillDir ?? null}, ${entry.name ?? null}, ${entry.title ?? null}, ${entry.description ?? null}, ${entry.frontMatter === undefined ? null : JSON.stringify(entry.frontMatter)}::jsonb, ${entry.searchable}::boolean)`,
+            sql`(${entry.path}, ${entry.kind}, ${entry.size}::integer, ${entry.blobSha}, ${entry.skillDir ?? null}, ${entry.name ?? null}, ${entry.title ?? null}, ${entry.description ?? null}, ${entry.frontMatter === undefined ? null : JSON.stringify(entry.frontMatter)}::jsonb, ${entry.searchable}::boolean, ${entry.visible}::boolean)`,
         ),
         sql`, `,
       );
       // Name and title weigh most, then the description, then the path, then the body.
       await tx.execute(sql`
         insert into index_entries
-          (account_id, snapshot_id, path, kind, size, blob_sha, skill_dir, name, title, description, front_matter, search)
+          (account_id, snapshot_id, path, kind, size, blob_sha, skill_dir, name, title, description, front_matter, search, visible)
         select
           ${scope.accountId}::uuid, ${scope.snapshotId}::uuid,
           v.path, v.kind, v.size, v.blob_sha, v.skill_dir, v.name, v.title, v.description, v.front_matter,
@@ -235,9 +237,10 @@ export async function writeSnapshotIndex(
             setweight(to_tsvector(${SEARCH_CONFIG}::regconfig, coalesce(v.description, '')), 'B') ||
             setweight(to_tsvector(${SEARCH_CONFIG}::regconfig, translate(v.path, '/._-', '    ')), 'C') ||
             setweight(to_tsvector(${SEARCH_CONFIG}::regconfig, coalesce(left(b.content, ${MAX_SEARCHED_BODY_LENGTH}::integer), '')), 'D')
-          end
+          end,
+          v.visible
         from (values ${rows})
-          as v (path, kind, size, blob_sha, skill_dir, name, title, description, front_matter, searchable)
+          as v (path, kind, size, blob_sha, skill_dir, name, title, description, front_matter, searchable, visible)
         left join blobs b on b.sha = v.blob_sha and v.searchable
       `);
     }

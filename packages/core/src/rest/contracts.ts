@@ -62,6 +62,15 @@ export const restDiagnosticSchema = z.object({
   message: z.string(),
 });
 
+/** What the repository manifest (SKILLCDN.md) says about the mount. */
+export const restManifestSchema = z.object({
+  /** The manifest, relative to the mounted root, or `null` when it lies above the mount. */
+  path: z.nullable(z.string()),
+  /** `null`: the repository goes by the name its git host gives it. */
+  name: z.nullable(z.string()),
+  description: z.string(),
+});
+
 export const restMountSchema = z.object({
   address: z.string(),
   repository: restRepositorySchema,
@@ -74,6 +83,8 @@ export const restMountSchema = z.object({
     z.object({
       status: z.literal("ready"),
       truncated: z.boolean(),
+      /** `null` when the mount has no manifest. */
+      manifest: z.nullable(restManifestSchema),
       skillCount: count,
       documentCount: count,
       skills: z.array(restSkillSummarySchema),
@@ -129,6 +140,15 @@ export const restSkillSchema = z.discriminatedUnion("status", [
       files: z.array(z.string()),
       filesTruncated: z.boolean(),
       warnings: z.array(z.string()),
+      /** The repository's rules from its manifest, or `null` when there are none. */
+      rules: z.nullable(
+        z.object({
+          /** The manifest, relative to the mounted root, or `null` when it lies above the mount. */
+          path: z.nullable(z.string()),
+          body: z.string(),
+          truncated: z.boolean(),
+        }),
+      ),
     }),
   }),
   indexing,
@@ -166,6 +186,8 @@ export const restFeaturedSchema = z.object({
     z.object({
       address: z.string(),
       repository: restRepositorySchema,
+      /** The name and description the repository gives itself, once indexed, or `null`. */
+      manifest: z.nullable(z.object({ name: z.nullable(z.string()), description: z.string() })),
       status: z.enum(["ready", "indexing", "failed"]),
       skillCount: z.nullable(count),
       skills: z.array(z.string()),
@@ -183,6 +205,7 @@ export const restErrorSchema = z.object({
 });
 
 export type RestRepository = z.infer<typeof restRepositorySchema>;
+export type RestManifest = z.infer<typeof restManifestSchema>;
 export type RestSkillSummary = z.infer<typeof restSkillSummarySchema>;
 export type RestDocumentSummary = z.infer<typeof restDocumentSummarySchema>;
 export type RestDiagnostic = z.infer<typeof restDiagnosticSchema>;

@@ -38,6 +38,18 @@ export interface FindResult {
   readonly totals: { readonly skills: number; readonly documents: number } | undefined;
 }
 
+/** How much of the repository's rules a skill result carries. `read_file` has the rest. */
+export const MAX_SKILL_RULES_LENGTH = 8_000;
+
+/** The rules that hold for every skill of the repository, from its manifest (SKILLCDN.md). */
+export interface SkillRules {
+  /** The manifest, relative to the mounted root; `undefined` when it lies above the mount. */
+  readonly path: RepoPath | undefined;
+  readonly body: string;
+  /** True when the body was cut at `MAX_SKILL_RULES_LENGTH`. */
+  readonly truncated: boolean;
+}
+
 export interface SkillResult {
   readonly mount: MountSummary;
   readonly name: string;
@@ -52,6 +64,8 @@ export interface SkillResult {
   readonly files: readonly RepoPath[];
   readonly filesTruncated: boolean;
   readonly warnings: readonly string[];
+  /** The repository's rules, when it has a manifest with a body. */
+  readonly rules: SkillRules | undefined;
 }
 
 export interface FileResult {

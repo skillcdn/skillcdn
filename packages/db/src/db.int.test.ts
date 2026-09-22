@@ -12,6 +12,7 @@ import {
   findRepoByAlias,
   findSkills,
   getEntry,
+  getManifest,
   getSchemaStatus,
   getSnapshot,
   getSnapshotDiagnostics,
@@ -95,6 +96,7 @@ function entry(patch: Partial<NewIndexEntry> & Pick<NewIndexEntry, "path">): New
     description: undefined,
     frontMatter: undefined,
     searchable: true,
+    visible: true,
     ...patch,
   };
 }
@@ -469,6 +471,87 @@ describe("search", () => {
     expect(await searchEntries(database, stranger, "", "release", 10)).toEqual([]);
     expect(await listEntries(database, stranger, "", 10)).toEqual([]);
     expect(await getEntry(database, stranger, "docs/releasing.md")).toBeUndefined();
+  });
+});
+
+describe("a repository manifest", () => {
+  let scope: SnapshotScope;
+
+  beforeAll(async () => {
+    scope = await readySnapshot(
+      [
+        entry({
+          path: "SKILLCDN.md",
+          kind: "manifest",
+          blobSha: "body-manifest",
+          name: "Acme playbooks",
+          description: "The playbooks every Acme team runs.",
+          frontMatter: { metadata: {}, warnings: [], documents: ["docs"] },
+          searchable: false,
+        }),
+        entry({
+          path: "packages/a/SKILLCDN.md",
+          kind: "manifest",
+          blobSha: "body-manifest-a",
+          description: "Package a.",
+          frontMatter: { metadata: {}, warnings: [], documents: [] },
+          searchable: false,
+        }),
+        entry({
+          path: "skills/release-notes/SKILL.md",
+          kind: "skill",
+          blobSha: "body-release",
+          skillDir: "skills/release-notes",
+          name: "release-notes",
+          description: "Drafts release notes.",
+        }),
+        entry({ path: "docs/releasing.md", blobSha: "body-doc", title: "How we release" }),
+        entry({ path: "README.md", blobSha: "body-readme", title: "Readme", visible: false }),
+        entry({ path: "scripts/check.mjs", kind: "other", searchable: false, visible: false }),
+      ],
+      {
+        "body-release": "Collect the merged changes.",
+        "body-doc": "Releasing happens every week.",
+        "body-readme": "Releasing is described in the readme too.",
+      },
+    );
+  });
+
+  it("is found from the mounted directory or the nearest one above it", async () => {
+    expect((await getManifest(database, scope, ""))?.path).toBe("SKILLCDN.md");
+    expect((await getManifest(database, scope, "skills"))?.path).toBe("SKILLCDN.md");
+    expect((await getManifest(database, scope, "packages/a"))?.path).toBe("packages/a/SKILLCDN.md");
+    expect((await getManifest(database, scope, "packages/a/deep/er"))?.path).toBe(
+      "packages/a/SKILLCDN.md",
+    );
+    expect(await getManifest(database, scope, "packages/b")).toMatchObject({
+      path: "SKILLCDN.md",
+      name: "Acme playbooks",
+      frontMatter: { documents: ["docs"] },
+    });
+  });
+
+  it("keeps what it leaves out away from every query", async () => {
+    // README.md says "releasing" too, and is left out.
+    expect((await searchEntries(database, scope, "", "releasing", 10)).map((r) => r.path)).toEqual([
+      "skills/release-notes/SKILL.md",
+      "docs/releasing.md",
+    ]);
+    expect((await listEntries(database, scope, "", 10)).map((r) => r.path)).toEqual([
+      "skills/release-notes/SKILL.md",
+      "docs/releasing.md",
+    ]);
+    expect(await countEntries(database, scope, "")).toEqual({ skills: 1, documents: 1 });
+    expect(await getEntry(database, scope, "README.md")).toBeUndefined();
+    expect(await getEntry(database, scope, "scripts/check.mjs")).toBeUndefined();
+    // The manifest itself is readable, though never listed by find.
+    expect((await getEntry(database, scope, "SKILLCDN.md"))?.kind).toBe("manifest");
+    expect((await listDirectory(database, scope, "", 10)).map((child) => child.path)).toEqual([
+      "docs",
+      "packages",
+      "skills",
+      "SKILLCDN.md",
+    ]);
   });
 });
 
