@@ -31,51 +31,55 @@ function MountHeader(props: { readonly address: Address; readonly mount: RestMou
   return (
     <header className={styles.header}>
       <p className={styles.kicker}>{t.mount.repository}</p>
-      <h1 className={styles.title}>{name}</h1>
+      {/* The badges belong to the name: they say what this address resolves to, and whether
+          anyone has vouched for what it resolves to. */}
+      <div className={styles.titleRow}>
+        <h1 className={styles.title}>{name}</h1>
+        {mount !== undefined && (
+          <ul className={styles.badges}>
+            <li>
+              {mount.pinned ? (
+                <Badge tone="success">{t.mount.pinned}</Badge>
+              ) : (
+                <Badge tone="accent">
+                  {mount.ref ?? `${mount.repository.defaultBranch} · ${t.mount.defaultBranch}`}
+                </Badge>
+              )}
+            </li>
+            {!mount.verified && (
+              <li>
+                <Badge tone="warning" title={t.mount.unverifiedHint}>
+                  {t.mount.unverified}
+                </Badge>
+              </li>
+            )}
+          </ul>
+        )}
+      </div>
       {mount?.repository.description != null && (
         <p className={styles.description}>{mount.repository.description}</p>
       )}
       {mount !== undefined && (
-        <ul className={styles.facts}>
-          <li>
-            {mount.pinned ? (
-              <Badge tone="success">{t.mount.pinned}</Badge>
-            ) : (
-              <Badge tone="accent">
-                {mount.ref ?? `${mount.repository.defaultBranch} · ${t.mount.defaultBranch}`}
-              </Badge>
-            )}
-          </li>
-          <li className={styles.fact}>
-            <span className={styles.factLabel}>{t.mount.commit}</span>
-            <code>{mount.commit.slice(0, 7)}</code>
-          </li>
-          {mount.path !== "" && (
+        <div className={styles.facts}>
+          {/* A small label, then the value in the code face. */}
+          <ul className={styles.factList}>
             <li className={styles.fact}>
-              <span className={styles.factLabel}>{t.mount.path}</span>
-              <code>{mount.path}</code>
+              <span className={styles.factLabel}>{t.mount.commit}</span>
+              <code>{mount.commit.slice(0, 7)}</code>
             </li>
-          )}
-          {!mount.verified && (
-            <li>
-              <Badge tone="warning" title={t.mount.unverifiedHint}>
-                {t.mount.unverified}
-              </Badge>
-            </li>
-          )}
+            {mount.path !== "" && (
+              <li className={styles.fact}>
+                <span className={styles.factLabel}>{t.mount.path}</span>
+                <code>{mount.path}</code>
+              </li>
+            )}
+          </ul>
           {hostUrl !== undefined && (
-            <li>
-              <a
-                className={styles.hostLink}
-                href={hostUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {t.mount.viewOnHost}
-              </a>
-            </li>
+            <a className={styles.hostLink} href={hostUrl} target="_blank" rel="noopener noreferrer">
+              {t.mount.viewOnHost}
+            </a>
           )}
-        </ul>
+        </div>
       )}
     </header>
   );

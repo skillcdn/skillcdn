@@ -1,5 +1,5 @@
 .page {
-  padding-block: var(--space-7) var(--space-8);
+  padding-block: var(--space-8) var(--space-9);
 }
 
 /* Header */
@@ -13,8 +13,18 @@
   text-transform: uppercase;
 }
 
-.title {
+/* The name goes in the middle track and the badges hang off the right one. The two side tracks
+   are equal, so the name stays on the centre line of the page whatever is beside it. */
+.titleRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
   margin-top: var(--space-1);
+}
+
+.title {
+  grid-column: 2;
   font-size: var(--text-2xl);
   overflow-wrap: anywhere;
   text-align: center;
@@ -28,14 +38,33 @@
   overflow-wrap: anywhere;
 }
 
+/* What the address resolved to, and the way out to the git host. The gap between the two groups
+   is wider than the gap inside one, so the eye reads them apart. */
 .facts {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: var(--space-2) var(--space-4);
-  margin-top: var(--space-3);
+  gap: var(--space-3) var(--space-5);
+  margin-top: var(--space-4);
   font-size: var(--text-sm);
+}
+
+.badges {
+  grid-column: 3;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-self: start;
+  gap: var(--space-2);
+}
+
+.factList {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-4);
+  color: var(--color-text-muted);
 }
 
 .fact {
@@ -45,12 +74,24 @@
   overflow-wrap: anywhere;
 }
 
+/* The label names the value and then gets out of the way. */
 .factLabel {
-  color: var(--color-text-muted);
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
 }
 
+.fact code {
+  font-size: var(--text-sm);
+}
+
+/* An action, not a fact: it stays quiet until it is pointed at. */
 .hostLink {
   font-size: var(--text-sm);
+  text-decoration: none;
+}
+
+.hostLink:hover {
+  text-decoration: underline;
 }
 
 /* Content */
@@ -59,7 +100,7 @@
   display: grid;
   gap: var(--space-5);
   min-width: 0;
-  margin-top: var(--space-6);
+  margin-top: var(--space-7);
 }
 
 .stack {
@@ -82,7 +123,7 @@
   padding: 0 var(--space-4);
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-md);
-  background: var(--color-bg);
+  background: var(--color-bg-subtle);
   font-size: var(--text-sm);
 }
 
@@ -110,19 +151,27 @@
   gap: var(--space-3);
 }
 
+/* A card, the same one the landing page uses for its tiles. The glow is kept for the hover: a
+   repository can list hundreds of these, and all of them lit at once is a wall of light. */
 .item {
   display: grid;
   gap: var(--space-1);
   padding: var(--space-4);
   border: var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-subtle);
   color: var(--color-text);
   text-decoration: none;
-  transition: border-color var(--transition);
+  transition:
+    border-color var(--transition),
+    background var(--transition),
+    box-shadow var(--transition);
 }
 
 .item:hover {
   border-color: var(--color-accent);
+  background: var(--color-bg-inset);
+  box-shadow: var(--glow);
   color: var(--color-text);
 }
 
@@ -177,7 +226,8 @@
   gap: var(--space-1);
   padding: var(--space-4);
   border: var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-subtle);
   overflow-wrap: anywhere;
 }
 
@@ -219,7 +269,8 @@
 .meta {
   display: grid;
   border: var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-subtle);
   font-size: var(--text-sm);
 }
 
@@ -293,15 +344,21 @@
   overflow-wrap: anywhere;
 }
 
-.toggle {
-  display: inline-flex;
-  gap: var(--space-1);
-  padding: 2px;
-  border: var(--border);
-  border-radius: var(--radius-md);
-}
-
 @media (max-width: 40rem) {
+  /* No room for a name flanked by badges: they go under it, still on the centre line. */
+  .titleRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .title,
+  .badges {
+    grid-column: 1;
+  }
+
+  .badges {
+    justify-self: center;
+  }
+
   .metaRow {
     grid-template-columns: minmax(0, 1fr);
     gap: 0;

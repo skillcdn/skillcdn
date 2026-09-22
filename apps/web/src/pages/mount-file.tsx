@@ -4,6 +4,7 @@ import { ApiError, api } from "../api/client.js";
 import { resourceKeys } from "../api/keys.js";
 import { useResource } from "../api/use-resource.js";
 import { CodeBlock } from "../components/code-block.js";
+import controls from "../components/controls.module.css";
 import { ErrorCallout } from "../components/error-callout.js";
 import { Markdown } from "../components/markdown.js";
 import { Button, Skeleton } from "../components/ui.js";
@@ -148,23 +149,23 @@ export function MountFile(props: { readonly address: Address; readonly path: str
           <code>{path}</code>
         </h2>
         {isMarkdown && (
-          <div className={styles.toggle}>
-            <Button
-              size="sm"
-              variant={mode === "rendered" ? "secondary" : "ghost"}
+          <div className={controls.segmented}>
+            <button
+              type="button"
+              className={mode === "rendered" ? controls.activeSegment : controls.segment}
               aria-pressed={mode === "rendered"}
               onClick={() => setMode("rendered")}
             >
               {t.file.rendered}
-            </Button>
-            <Button
-              size="sm"
-              variant={mode === "source" ? "secondary" : "ghost"}
+            </button>
+            <button
+              type="button"
+              className={mode === "source" ? controls.activeSegment : controls.segment}
               aria-pressed={mode === "source"}
               onClick={() => setMode("source")}
             >
               {t.file.source}
-            </Button>
+            </button>
           </div>
         )}
       </header>

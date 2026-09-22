@@ -1,11 +1,13 @@
+/* The panel a visitor comes here for, lit like the boxes on the landing page. */
 .guide {
   display: grid;
   gap: var(--space-5);
-  margin-top: var(--space-6);
+  margin-top: var(--space-7);
   padding: var(--space-5);
   border: var(--border);
   border-radius: var(--radius-lg);
   background: var(--color-bg-subtle);
+  box-shadow: var(--glow);
 }
 
 .head {

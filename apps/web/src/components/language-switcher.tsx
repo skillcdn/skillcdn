@@ -30,7 +30,7 @@ export function LanguageSwitcher() {
   const here = `${location.pathname}${location.search}`;
   return (
     <nav aria-label={t.language.label}>
-      <ul className={styles.languages}>
+      <ul className={styles.segmented}>
         {LANGUAGES.map((code) => (
           <li key={code}>
             <Link
@@ -41,7 +41,7 @@ export function LanguageSwitcher() {
               aria-label={LANGUAGE_INFO[code].label}
               title={LANGUAGE_INFO[code].label}
               aria-current={code === language ? "true" : undefined}
-              className={code === language ? styles.activeLanguage : styles.language}
+              className={code === language ? styles.activeSegment : styles.segment}
               onClick={(event) => {
                 // A modified click opens the forcing URL as any link would.
                 const plain =
