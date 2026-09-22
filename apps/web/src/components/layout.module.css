@@ -11,7 +11,7 @@
   z-index: 20;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
-  background: var(--color-accent);
+  background: var(--color-accent-solid);
   color: var(--color-accent-contrast);
   transform: translateY(-200%);
 }
@@ -94,12 +94,13 @@
   background: var(--color-bg-subtle);
 }
 
+/* The two halves sit at the two ends of the page, so the footer is as wide as what is above it. */
 .footerInner {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-5);
+  flex-wrap: wrap;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--space-5) var(--space-6);
   width: 100%;
   max-width: var(--width-page);
   margin-inline: auto;
@@ -118,7 +119,7 @@
 .footerLinks {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
+  justify-content: flex-end;
   gap: var(--space-2) var(--space-5);
   font-size: var(--text-sm);
 }
@@ -148,7 +149,13 @@
     display: none;
   }
 
+  /* Not enough width for two ends: the halves stack, still reading from the left. */
   .footerInner {
+    flex-direction: column;
     padding-inline: var(--space-4);
+  }
+
+  .footerLinks {
+    justify-content: flex-start;
   }
 }

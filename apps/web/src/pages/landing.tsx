@@ -1,11 +1,77 @@
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { AddressForm } from "../components/address-form.js";
 import { Container, Section } from "../components/ui.js";
 import { useI18n } from "../i18n/index.js";
 import { Link } from "../navigation.js";
 import { PATHS } from "../router.js";
-import { HOW_CLIPS, LINKS } from "../site.js";
+import { FEATURED_ADDRESSES, HOW_CLIPS, hostOf, LINKS } from "../site.js";
 import styles from "./landing.module.css";
+
+/* Decoration for the three tiles, in the order of their copy: one skill, several skills, and a
+   set where one is broken. Drawn here rather than shipped as files, so they take the tokens. */
+const TILE_ART: readonly ReactNode[] = [
+  <>
+    <rect x="18" y="10" width="28" height="44" rx="3" />
+    <path d="M25 22h14M25 30h14M25 38h8" />
+  </>,
+  <>
+    <rect x="8" y="12" width="22" height="18" rx="3" />
+    <rect x="34" y="12" width="22" height="18" rx="3" />
+    <rect x="8" y="34" width="22" height="18" rx="3" />
+    <rect x="34" y="34" width="22" height="18" rx="3" />
+  </>,
+  <>
+    <rect x="8" y="12" width="22" height="18" rx="3" />
+    <rect x="34" y="34" width="22" height="18" rx="3" />
+    <g className={styles.tileArtBroken}>
+      <rect x="34" y="12" width="22" height="18" rx="3" strokeDasharray="4 4" />
+      <rect x="8" y="34" width="22" height="18" rx="3" strokeDasharray="4 4" />
+      <path d="M39 17l12 8M51 17l-12 8M13 39l12 8M25 39l-12 8" />
+    </g>
+  </>,
+];
+
+/**
+ * What the step beside it looks like in practice: a repository, the addresses it answers to, and
+ * the calls an agent makes. All of it is code, so it reads the same in every language and stays
+ * out of the language packs. A marked line is the one the step is about; `id` names the line,
+ * because two of them can hold the same text.
+ */
+type PanelLine = { readonly id: string; readonly text: string; readonly mark?: boolean };
+
+function howPanels(host: string): readonly (readonly PanelLine[])[] {
+  return [
+    [
+      { id: "root", text: "my-repo/" },
+      { id: "skills", text: "  skills/" },
+      { id: "notes", text: "    release-notes/" },
+      { id: "notes-manifest", text: "      SKILL.md", mark: true },
+      { id: "notes-checklist", text: "      checklist.md" },
+      { id: "review", text: "    incident-review/" },
+      { id: "review-manifest", text: "      SKILL.md", mark: true },
+      { id: "docs", text: "  docs/" },
+      { id: "docs-style", text: "    style-guide.md" },
+    ],
+    [
+      { id: "default", text: `${host}/gh/my-org/my-repo`, mark: true },
+      { id: "tag", text: `${host}/gh/my-org/my-repo@v1.2.0` },
+      { id: "subpath", text: `${host}/gh/my-org/my-repo@main/skills` },
+      { id: "gap", text: "" },
+      { id: "add", text: "claude mcp add --transport http \\" },
+      { id: "add-args", text: `  my-repo ${host}/gh/my-org/my-repo` },
+    ],
+    [
+      { id: "find", text: 'find("release notes")', mark: true },
+      { id: "find-skill", text: "  skills/release-notes" },
+      { id: "find-doc", text: "  docs/style-guide.md" },
+      { id: "gap-get", text: "" },
+      { id: "get", text: 'get("skills/release-notes")', mark: true },
+      { id: "get-files", text: "  SKILL.md, checklist.md" },
+      { id: "gap-read", text: "" },
+      { id: "read", text: 'read_file("docs/style-guide.md")', mark: true },
+    ],
+  ];
+}
 
 /** How long a step keeps the frame beside it before the next one takes over. */
 const STEP_MS = 6000;
@@ -20,6 +86,7 @@ export function LandingPage(props: { readonly origin: string }) {
   const [picked, setPicked] = useState(false);
   const [held, setHeld] = useState(false);
   const clip = HOW_CLIPS[step];
+  const panel = howPanels(hostOf(props.origin))[step];
   const stepCount = copy.how.steps.length;
 
   useEffect(() => {
@@ -46,6 +113,30 @@ export function LandingPage(props: { readonly origin: string }) {
           </div>
         </Container>
       </div>
+
+      <Section id="featured" title={copy.featured.title} lead={copy.featured.lead}>
+        <ul className={styles.featured}>
+          {copy.featured.items.map((item, index) => (
+            <li key={item.title}>
+              <Link className={styles.tile} href={`/gh/${FEATURED_ADDRESSES[index]}`}>
+                <svg
+                  className={styles.tileArt}
+                  viewBox="0 0 64 64"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  aria-hidden="true"
+                >
+                  {TILE_ART[index]}
+                </svg>
+                <span className={styles.tileTitle}>{item.title}</span>
+                <span className={styles.tileBody}>{item.body}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </Section>
 
       <Section id="how" title={copy.how.title}>
         <div
@@ -79,10 +170,24 @@ export function LandingPage(props: { readonly origin: string }) {
               </li>
             ))}
           </ol>
-          {/* Decoration: the step beside it says the same thing in words. */}
+          {/* Decoration: the step next to it says the same thing in words. */}
           <figure className={styles.media} aria-hidden="true">
             <div className={styles.frame}>
-              {clip !== undefined && (
+              {clip === undefined ? (
+                <pre className={styles.panel}>
+                  <span className={styles.panelLines}>
+                    {panel?.map((line) => (
+                      <span
+                        key={line.id}
+                        className={line.mark === true ? styles.panelMark : undefined}
+                      >
+                        {line.text}
+                        {"\n"}
+                      </span>
+                    ))}
+                  </span>
+                </pre>
+              ) : (
                 <video
                   key={clip}
                   className={styles.clip}
@@ -98,7 +203,7 @@ export function LandingPage(props: { readonly origin: string }) {
         </div>
       </Section>
 
-      <Section id="authors" title={copy.authors.title} subtle>
+      <Section id="authors" title={copy.authors.title}>
         <p className={styles.prose}>{copy.authors.body}</p>
         <p className={styles.actions}>
           <Link className={styles.primaryLink} href={PATHS.explore}>

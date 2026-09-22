@@ -12,12 +12,18 @@ export const LANGUAGE_PARAM = "lang";
 
 export const LANGUAGE_STORAGE_KEY = "skillcdn.lang";
 
+/** `short` is what the switcher shows; `label` names it for anyone who cannot see it. */
 export const LANGUAGE_INFO: Record<
   Language,
-  { readonly label: string; readonly htmlLang: string; readonly ogLocale: string }
+  {
+    readonly label: string;
+    readonly short: string;
+    readonly htmlLang: string;
+    readonly ogLocale: string;
+  }
 > = {
-  en: { label: "English", htmlLang: "en", ogLocale: "en_US" },
-  ko: { label: "한국어", htmlLang: "ko", ogLocale: "ko_KR" },
+  en: { label: "English", short: "EN", htmlLang: "en", ogLocale: "en_US" },
+  ko: { label: "한국어", short: "KO", htmlLang: "ko", ogLocale: "ko_KR" },
 };
 
 export function isLanguage(value: unknown): value is Language {

@@ -39,12 +39,12 @@
 }
 
 .primary {
-  background: var(--color-accent);
+  background: var(--color-accent-solid);
   color: var(--color-accent-contrast);
 }
 
 .primary:hover:not(:disabled) {
-  background: var(--color-accent-hover);
+  background: var(--color-accent-solid-hover);
   color: var(--color-accent-contrast);
 }
 
@@ -76,7 +76,7 @@
   gap: var(--space-1);
   padding: 0.1rem var(--space-2);
   border: 1px solid var(--color-border);
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
   line-height: 1.5;
@@ -234,7 +234,7 @@
 /* Section */
 
 .section {
-  padding-block: var(--space-8);
+  padding-block: var(--space-9);
   border-top: var(--border);
 }
 
@@ -256,9 +256,10 @@
   font-size: var(--text-lg);
 }
 
+/* The title and its lead are one block; what follows them stands clear of it. */
 .sectionTitle + *:not(.sectionLead),
 .sectionLead + * {
-  margin-top: var(--space-6);
+  margin-top: var(--space-7);
 }
 
 @media (max-width: 40rem) {
@@ -267,6 +268,6 @@
   }
 
   .section {
-    padding-block: var(--space-7);
+    padding-block: var(--space-8);
   }
 }

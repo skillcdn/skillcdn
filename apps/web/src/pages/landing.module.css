@@ -1,13 +1,16 @@
 .hero {
-  padding-block: var(--space-9) var(--space-8);
+  padding-block: var(--space-10) var(--space-9);
   text-align: center;
 }
 
+/* Prose, not code, so it stays in the interface face: the mono stack has no Hangul, and half of
+   this line would fall back to a system font and read as two different typefaces. The spacing
+   carries the eyebrow, not the face. */
 .eyebrow {
   color: var(--color-accent);
-  font-family: var(--font-mono);
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
+  letter-spacing: 0.04em;
 }
 
 .title {
@@ -26,12 +29,75 @@
   font-size: var(--text-lg);
 }
 
+/* The form shares an edge with the lead above it. */
 .try {
-  max-width: 44rem;
-  margin-top: var(--space-7);
+  max-width: var(--width-prose);
+  margin-top: var(--space-8);
   margin-inline: auto;
 }
 
+/* The three the page puts forward: square tiles, side by side, each one a link to a repository. */
+
+.featured {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+
+/* The tile is the square: the drawing takes the room that is left above the two lines of text. */
+.tile {
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  aspect-ratio: 1;
+  height: 100%;
+  padding: var(--space-6);
+  border: var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-subtle);
+  box-shadow: var(--glow);
+  color: inherit;
+  text-decoration: none;
+  transition:
+    border-color var(--transition),
+    background var(--transition),
+    box-shadow var(--transition);
+}
+
+.tile:hover {
+  border-color: var(--color-accent);
+  background: var(--color-bg-inset);
+  box-shadow: var(--glow-strong);
+}
+
+.tileArt {
+  width: 5.5rem;
+  height: 5.5rem;
+  align-self: center;
+  justify-self: center;
+  color: var(--color-text-faint);
+  transition: color var(--transition);
+}
+
+.tile:hover .tileArt {
+  color: var(--color-accent);
+}
+
+/* The broken ones in the third drawing: there, and plainly not counted. */
+.tileArtBroken {
+  color: var(--color-border-strong);
+}
+
+.tileTitle {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-medium);
+}
+
+.tileBody {
+  margin-top: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
 /* How it works: the steps on one side, the clip of the selected one on the other. */
 
 .how {
@@ -42,7 +108,8 @@
 
 .steps {
   display: grid;
-  gap: var(--space-2);
+  align-content: start;
+  gap: var(--space-3);
 }
 
 .step,
@@ -58,21 +125,40 @@
 
 .step:hover {
   border-left-color: var(--color-border-strong);
-  background: var(--color-bg-subtle);
+  background: var(--color-bg-inset);
 }
 
+/* The selected step sits at the same level a hovered one rises to; the accent rail and the filled
+   number are what tell them apart. */
 .stepActive {
   border-left-color: var(--color-accent);
-  background: var(--color-bg-subtle);
+  background: var(--color-bg-inset);
 }
 
+/* A small mono chip, so the order of the steps is legible before any of the words are. */
 .stepNumber {
-  display: block;
-  margin-bottom: var(--space-2);
-  color: var(--color-accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-bottom: var(--space-3);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-faint);
   font-family: var(--font-mono);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   font-weight: var(--weight-bold);
+  transition:
+    border-color var(--transition),
+    background var(--transition),
+    color var(--transition);
+}
+
+.stepActive .stepNumber {
+  border-color: transparent;
+  background: var(--color-accent-solid);
+  color: var(--color-accent-contrast);
 }
 
 .stepButton {
@@ -101,7 +187,8 @@
   outline-offset: 2px;
 }
 
-/* An empty frame holds the place until the clips exist (site.ts, HOW_CLIPS). */
+/* Beside the steps: what the selected one looks like in practice, or its clip once one exists
+   (site.ts, HOW_CLIPS). */
 .media {
   display: flex;
   height: 100%;
@@ -112,9 +199,34 @@
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  border: 1px dashed var(--color-border-strong);
+  border: var(--border);
   border-radius: var(--radius-lg);
-  background: var(--color-bg-inset);
+  background: var(--color-bg-subtle);
+  box-shadow: var(--glow);
+}
+
+/* The frame is as tall as the steps beside it, and no panel fills that; the lines sit in the
+   middle of it rather than leaving the bottom half empty. */
+.panel {
+  display: grid;
+  align-content: center;
+  height: 100%;
+  margin: 0;
+  padding: var(--space-6);
+  overflow: auto;
+  color: var(--color-text-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.9;
+}
+
+.panelLines {
+  display: block;
+}
+
+/* The line the step is about; the rest is context around it. */
+.panelMark {
+  color: var(--color-accent);
 }
 
 /* The panel takes the height of the steps, the clip keeps its own shape inside it. */
@@ -142,9 +254,11 @@
   font-size: var(--text-lg);
 }
 
+/* Centred under left-aligned prose: the two are a call to action, not part of the paragraph. */
 .actions {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: var(--space-3);
   max-width: var(--width-prose);
   margin-top: var(--space-5);
@@ -168,12 +282,12 @@
 }
 
 .primaryLink {
-  background: var(--color-accent);
+  background: var(--color-accent-solid);
   color: var(--color-accent-contrast);
 }
 
 .primaryLink:hover {
-  background: var(--color-accent-hover);
+  background: var(--color-accent-solid-hover);
   color: var(--color-accent-contrast);
 }
 
@@ -184,7 +298,7 @@
 }
 
 .secondaryLink:hover {
-  background: var(--color-bg-inset);
+  background: var(--color-bg-raised);
   color: var(--color-text);
 }
 
@@ -203,7 +317,7 @@
 
 .faqQuestion {
   position: relative;
-  padding: var(--space-4) var(--space-7) var(--space-4) var(--space-3);
+  padding: var(--space-4) var(--space-7) var(--space-4) 0;
   font-weight: var(--weight-bold);
   list-style: none;
   cursor: pointer;
@@ -224,7 +338,7 @@
   content: "";
   position: absolute;
   top: 50%;
-  right: var(--space-5);
+  right: var(--space-2);
   width: 0.45rem;
   height: 0.45rem;
   margin-top: -0.35rem;
@@ -240,7 +354,7 @@
 }
 
 .faqAnswer {
-  padding: 0 var(--space-7) var(--space-5) var(--space-3);
+  padding: 0 var(--space-7) var(--space-5) 0;
   color: var(--color-text-muted);
 }
 
@@ -262,6 +376,17 @@
 
 @media (max-width: 40rem) {
   .hero {
-    padding-block: var(--space-8) var(--space-7);
+    padding-block: var(--space-9) var(--space-8);
+  }
+
+  /* One under another, and no longer square: the text decides the height. */
+  .featured {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tile {
+    aspect-ratio: auto;
+    grid-template-rows: auto auto auto;
+    gap: var(--space-3);
   }
 }

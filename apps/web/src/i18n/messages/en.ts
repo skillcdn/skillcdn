@@ -173,6 +173,24 @@ export const en = {
     title: "Turn any git repository into an MCP server.",
     lead: "Connect your agent to one URL and it can search, load and read the skills and documents in that repository. Nothing to install, nothing to upload. Git stays the source of truth.",
     tryLabel: "Try it with a public GitHub repository",
+    featured: {
+      title: "Try one of these",
+      lead: "Each one opens that repository's page, where the address to connect and a ready-made client configuration are on screen.",
+      items: [
+        {
+          title: "One skill",
+          body: "A single SKILL.md at the root, with the document it refers to.",
+        },
+        {
+          title: "Several skills",
+          body: "Two skills under skills/, with ordinary documents beside them.",
+        },
+        {
+          title: "Broken ones skipped",
+          body: "A manifest that does not parse is reported and left out; the rest is still served.",
+        },
+      ],
+    },
     how: {
       title: "How it works",
       steps: [

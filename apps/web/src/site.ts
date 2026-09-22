@@ -27,6 +27,16 @@ export const LINKS = {
  */
 export const HOW_CLIPS: readonly string[] = [];
 
+/**
+ * The three the landing page puts forward, in the order their copy is written. A tile leads to
+ * that repository's page, which is where the address to connect is on screen.
+ */
+export const FEATURED_ADDRESSES = [
+  "skillcdn/skillcdn/skills/single-skill",
+  "skillcdn/skillcdn/skills/multi-skill",
+  "skillcdn/skillcdn@main/skills/hostile",
+] as const;
+
 /** Addresses that exist and stay valid: the reference repositories of this project. */
 export const EXAMPLE_ADDRESSES = [
   "skillcdn/skillcdn/skills/multi-skill",

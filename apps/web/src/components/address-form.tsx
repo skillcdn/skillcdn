@@ -39,7 +39,11 @@ export function AddressForm(props: {
     <div className={styles.wrapper}>
       <form className={styles.form} onSubmit={onSubmit} noValidate>
         <label
-          className={props.label === undefined ? "visually-hidden" : styles.label}
+          className={
+            props.label === undefined
+              ? "visually-hidden"
+              : cx(styles.label, props.large === true && styles.largeLabel)
+          }
           htmlFor={inputId}
         >
           {props.label ?? t.address.label}

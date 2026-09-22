@@ -35,11 +35,13 @@ export function LanguageSwitcher() {
               href={withLanguage(here, code)}
               hrefLang={LANGUAGE_INFO[code].htmlLang}
               lang={LANGUAGE_INFO[code].htmlLang}
+              aria-label={LANGUAGE_INFO[code].label}
+              title={LANGUAGE_INFO[code].label}
               aria-current={code === language ? "true" : undefined}
               className={code === language ? styles.activeLanguage : styles.language}
               onClick={() => remember(code)}
             >
-              {LANGUAGE_INFO[code].label}
+              {LANGUAGE_INFO[code].short}
             </Link>
           </li>
         ))}

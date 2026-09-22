@@ -13,58 +13,51 @@
   font-weight: var(--weight-medium);
 }
 
-/* One control: the host, what is typed and the button share a single shell. */
+/* Two controls side by side: the field carries the shell, the button stands on its own. */
 .row {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-1);
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+}
+
+/* The address is typed, so it is set in the code face. The button beside it is a label and not
+   an address: it stays in the interface face, the one Hangul has a webfont for. */
+.field {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-height: 2.5rem;
+  min-width: 0;
+  padding-inline: var(--space-4);
   border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   background: var(--color-bg-subtle);
   font-family: var(--font-mono);
-  font-size: var(--text-sm);
   transition:
     border-color var(--transition),
     box-shadow var(--transition);
 }
 
-.row:focus-within {
+.field:focus-within {
   border-color: var(--color-accent);
   box-shadow: 0 0 0 3px var(--color-accent-subtle);
 }
 
-/* An error outranks the focus ring: the control keeps saying something is wrong. */
-.invalid,
-.invalid:focus-within {
-  border-color: var(--color-danger);
-}
-
-.invalid:focus-within {
-  box-shadow: 0 0 0 3px var(--color-danger-subtle);
-}
-
-.field {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  min-width: 0;
-}
-
 .prefix {
   flex: none;
-  padding-left: var(--space-3);
   color: var(--color-text-faint);
   white-space: nowrap;
   user-select: none;
 }
 
-/* No padding on the left: what is typed continues the host, as one address. */
+/* The field sets the height and the inset; the input has neither of its own, so what is typed
+   continues the host as one address and the two ends of the field stay symmetric. */
 .input {
   flex: 1;
+  align-self: stretch;
   min-width: 0;
-  height: 2.25rem;
-  padding: 0 var(--space-2) 0 0;
+  padding: 0;
   border: 0;
   background: transparent;
   font-family: inherit;
@@ -79,27 +72,75 @@
   color: var(--color-text-faint);
 }
 
-/* The button sits inside the shell: its corners follow the shell's, less the padding. */
+/* The button stands beside the field, not in it. Its height and corners are a button's: both
+   controls are sized by min-height, so neither can end up a border taller than the other. */
 .submit {
   flex: none;
-  min-height: 2.25rem;
   padding-inline: var(--space-4);
-  border-radius: var(--radius-md);
 }
 
+/* The main control of the landing page: taller, and lit like the boxes further down the page so
+   the eye lands on it first. The field and the button each carry the glow, so the pair reads as
+   one lit control. */
 .large {
   font-size: var(--text-md);
 }
 
-.large .input,
 .large .submit {
-  height: 3rem;
+  box-shadow: var(--glow-bright);
+}
+
+/* White, so the field reads as the thing to fill in. On white the dark text colours take over,
+   and the focus ring has to be the accent itself: the subtle blue behind it would vanish. */
+.large .field {
+  border-color: transparent;
+  background: var(--color-bg-invert);
+  box-shadow: var(--glow-bright);
+  color: var(--color-text-invert);
+}
+
+.large .prefix {
+  color: var(--color-text-invert-muted);
+}
+
+.large .input::placeholder {
+  color: var(--color-text-invert-faint);
+}
+
+/* On focus the ring goes on top of the glow, both in the one property. */
+.large .field:focus-within {
+  border-color: var(--color-accent-solid);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--color-accent) 35%, transparent),
+    var(--glow-bright);
+}
+
+.large .field,
+.large .submit {
   min-height: 3rem;
 }
 
 .large .submit {
   padding-inline: var(--space-5);
   font-size: var(--text-md);
+}
+
+.largeLabel {
+  margin-bottom: var(--space-3);
+  color: var(--color-text);
+  font-size: var(--text-md);
+}
+
+/* An error outranks the focus ring and the glow, so these rules come after every rule they have
+   to beat: the control keeps saying something is wrong, whatever else is going on. */
+.invalid .field {
+  border-color: var(--color-danger);
+  box-shadow: none;
+}
+
+.invalid .field:focus-within {
+  border-color: var(--color-danger);
+  box-shadow: 0 0 0 3px var(--color-danger-subtle);
 }
 
 /* The hint, or what went wrong, and the examples run on as one line of small text: they flow
@@ -161,8 +202,8 @@
     display: none;
   }
 
-  .input {
-    padding-left: var(--space-3);
+  .field {
+    padding-inline: var(--space-3);
   }
 
   .large .submit {

@@ -1,13 +1,17 @@
 /* The language switcher is a toggle: two real links in one track, the current one pressed in.
-   Same shape as the toggle on a file view (pages/mount.module.css). */
+   The track needs a surface of its own, because a border alone is the same colour as the black
+   behind it, and the current language is tinted with the accent rather than filled with it: the
+   same quiet chip the accent badge uses, enough to say which one you are reading without
+   competing with the button below. */
 .languages {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
   padding: 2px;
-  border: var(--border);
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-full);
+  background: var(--color-bg-subtle);
+  font-size: var(--text-xs);
 }
 
 .language,
@@ -15,8 +19,8 @@
   display: inline-block;
   padding: var(--space-1) var(--space-3);
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  color: var(--color-text-muted);
+  border-radius: var(--radius-full);
+  color: var(--color-text-faint);
   text-decoration: none;
   white-space: nowrap;
   transition:
@@ -30,8 +34,7 @@
 }
 
 .activeLanguage {
-  border-color: var(--color-border-strong);
-  background: var(--color-bg-subtle);
-  color: var(--color-text);
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
   font-weight: var(--weight-medium);
 }
