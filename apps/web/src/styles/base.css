@@ -30,6 +30,12 @@ body {
   overflow-wrap: anywhere;
 }
 
+/* A page prerendered in the default language waits, unseen, to be rendered in the visitor's
+   language (public/boot.js sets the attribute, the app removes it). */
+html[data-language-pending] #root {
+  visibility: hidden;
+}
+
 h1,
 h2,
 h3,

@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 import { useI18n } from "./i18n/index.js";
-import { withLanguage } from "./i18n/languages.js";
+import { DEFAULT_LANGUAGE, withForcedLanguage, withLanguage } from "./i18n/languages.js";
 
 export interface AppLocation {
   readonly pathname: string;
@@ -56,10 +56,14 @@ export function useLocation(): AppLocation {
   return useContext(LocationContext);
 }
 
-/** An href inside the app, in the current language. */
+/**
+ * An href inside the app. It carries the language on only when the URL forces one; otherwise it
+ * stays clean, so a copied link opens in each reader's own language.
+ */
 export function useHref(): (href: string) => string {
-  const { language } = useI18n();
-  return (href) => withLanguage(href, language);
+  const { language, forced } = useI18n();
+  return (href) =>
+    forced ? withForcedLanguage(href, language) : withLanguage(href, DEFAULT_LANGUAGE);
 }
 
 function isPlainLeftClick(event: MouseEvent): boolean {

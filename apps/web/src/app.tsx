@@ -1,10 +1,18 @@
-import { type ComponentType, lazy, type ReactNode, Suspense, useEffect, useMemo } from "react";
+import {
+  type ComponentType,
+  lazy,
+  type ReactNode,
+  Suspense,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { type InitialData, InitialDataContext } from "./api/initial-data.js";
 import styles from "./app.module.css";
 import { Layout } from "./components/layout.js";
 import { Container, Skeleton } from "./components/ui.js";
-import { I18nContext, messagesFor } from "./i18n/index.js";
-import { languageOfSearch } from "./i18n/languages.js";
+import { I18nContext, LanguagePreferenceContext, messagesFor } from "./i18n/index.js";
+import { LANGUAGE_PENDING_ATTRIBUTE, type Language, resolveLanguage } from "./i18n/languages.js";
 import { type AppLocation, LocationProvider, useLocation } from "./navigation.js";
 import { ExplorePage } from "./pages/explore.js";
 import { LandingPage } from "./pages/landing.js";
@@ -42,6 +50,11 @@ export interface AppProps {
   readonly initialData?: InitialData;
   /** The explorer view, when it must render at once rather than load. */
   readonly mountPage?: ComponentType<MountPageProps>;
+  /**
+   * The language a URL without one is shown in: the visitor's choice or their browser's, read
+   * by the browser entry. The server, which has no visitor, leaves it out and renders the default.
+   */
+  readonly preferredLanguage?: Language;
 }
 
 function pageOf(route: Route, origin: string, MountPage: ComponentType<MountPageProps>): ReactNode {
@@ -67,10 +80,11 @@ function Routed(props: {
   readonly origin: string;
   readonly shell: boolean;
   readonly mountPage: ComponentType<MountPageProps>;
+  readonly preferredLanguage: Language | undefined;
 }) {
   const location = useLocation();
-  const language = languageOfSearch(location.search);
-  const i18n = useMemo(() => ({ language, t: messagesFor(language) }), [language]);
+  const { language, forced } = resolveLanguage(location.search, props.preferredLanguage);
+  const i18n = useMemo(() => ({ language, forced, t: messagesFor(language) }), [language, forced]);
   const route = matchRoute(location.pathname, location.search, import.meta.env.DEV);
 
   // The view of an address writes its own head once it knows what it shows (pages/mount.tsx).
@@ -80,6 +94,12 @@ function Routed(props: {
       applyHead(buildHead(route, language, props.origin));
     }
   }, [location.pathname, location.search, language, props.origin]);
+
+  // A page prerendered in the default language is hidden by public/boot.js until it is rendered
+  // in the visitor's language, which has now happened.
+  useEffect(() => {
+    document.documentElement.removeAttribute(LANGUAGE_PENDING_ATTRIBUTE);
+  }, []);
 
   const placeholder = (
     <Container>
@@ -114,15 +134,20 @@ function Routed(props: {
 }
 
 export function App(props: AppProps) {
+  const [preferred, setPreferred] = useState(props.preferredLanguage);
+  const preference = useMemo(() => ({ preferred, setPreferred }), [preferred]);
   return (
     <InitialDataContext.Provider value={props.initialData ?? {}}>
-      <LocationProvider initial={props.initialLocation}>
-        <Routed
-          origin={props.origin}
-          shell={props.shell === true}
-          mountPage={props.mountPage ?? LazyMountPage}
-        />
-      </LocationProvider>
+      <LanguagePreferenceContext.Provider value={preference}>
+        <LocationProvider initial={props.initialLocation}>
+          <Routed
+            origin={props.origin}
+            shell={props.shell === true}
+            mountPage={props.mountPage ?? LazyMountPage}
+            preferredLanguage={preferred}
+          />
+        </LocationProvider>
+      </LanguagePreferenceContext.Provider>
     </InitialDataContext.Provider>
   );
 }

@@ -3,8 +3,11 @@ import { messagesFor } from "./index.js";
 import {
   DEFAULT_LANGUAGE,
   LANGUAGES,
+  languageInSearch,
   languageOfSearch,
   preferredLanguage,
+  resolveLanguage,
+  withForcedLanguage,
   withLanguage,
 } from "./languages.js";
 
@@ -73,6 +76,12 @@ describe("the language of a URL", () => {
     expect(languageOfSearch("?lang=")).toBe("en");
   });
 
+  it("is forced only when the parameter names a language we have", () => {
+    expect(languageInSearch("")).toBeUndefined();
+    expect(languageInSearch("?lang=fr")).toBeUndefined();
+    expect(languageInSearch("?lang=ko")).toBe("ko");
+  });
+
   it("gives every page exactly one URL per language", () => {
     expect(withLanguage("/", "en")).toBe("/");
     expect(withLanguage("/", "ko")).toBe("/?lang=ko");
@@ -81,6 +90,27 @@ describe("the language of a URL", () => {
     expect(withLanguage("/gh/acme/skills@release/1.2:docs?file=a%20b.md#top", "ko")).toBe(
       "/gh/acme/skills@release/1.2:docs?file=a+b.md&lang=ko#top",
     );
+  });
+});
+
+describe("a forced language", () => {
+  it("is carried on even when it is the default", () => {
+    expect(withForcedLanguage("/explore", "en")).toBe("/explore?lang=en");
+    expect(withForcedLanguage("/explore?lang=ko", "en")).toBe("/explore?lang=en");
+    expect(withForcedLanguage("/gh/acme/skills?file=a.md#top", "ko")).toBe(
+      "/gh/acme/skills?file=a.md&lang=ko#top",
+    );
+  });
+});
+
+describe("the language a page is shown in", () => {
+  it("is the one the URL forces, else the visitor's preference, else the default", () => {
+    expect(resolveLanguage("?lang=ko", "en")).toEqual({ language: "ko", forced: true });
+    expect(resolveLanguage("?lang=en", "ko")).toEqual({ language: "en", forced: true });
+    expect(resolveLanguage("?q=x", "ko")).toEqual({ language: "ko", forced: false });
+    expect(resolveLanguage("?lang=fr", "ko")).toEqual({ language: "ko", forced: false });
+    expect(resolveLanguage("", undefined)).toEqual({ language: "en", forced: false });
+    expect(resolveLanguage("")).toEqual({ language: DEFAULT_LANGUAGE, forced: false });
   });
 });
 

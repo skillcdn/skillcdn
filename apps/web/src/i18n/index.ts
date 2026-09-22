@@ -13,11 +13,31 @@ export function messagesFor(language: Language): Messages {
 
 export interface I18n {
   readonly language: Language;
+  /** Whether the URL forces the language (i18n/languages.ts, `resolveLanguage`). */
+  readonly forced: boolean;
   readonly t: Messages;
 }
 
-export const I18nContext = createContext<I18n>({ language: "en", t: en });
+export const I18nContext = createContext<I18n>({ language: "en", forced: false, t: en });
 
 export function useI18n(): I18n {
   return useContext(I18nContext);
+}
+
+/**
+ * The language the visitor prefers, and how to change it. A preference is what a URL without a
+ * language shows; the language switcher sets it. On the server there is none.
+ */
+export interface LanguagePreference {
+  readonly preferred: Language | undefined;
+  readonly setPreferred: (language: Language) => void;
+}
+
+export const LanguagePreferenceContext = createContext<LanguagePreference>({
+  preferred: undefined,
+  setPreferred: () => undefined,
+});
+
+export function useLanguagePreference(): LanguagePreference {
+  return useContext(LanguagePreferenceContext);
 }

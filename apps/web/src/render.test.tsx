@@ -1,5 +1,7 @@
 import type { RestMount, RestSkill } from "@skillcdn/core";
+import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { App } from "./app.js";
 import {
   LANGUAGES,
   ORIGIN_PLACEHOLDER,
@@ -100,6 +102,31 @@ describe("prerendered pages", () => {
     const english = renderPage("/", "en").body;
     expect(english).toContain('href="/explore"');
     expect(english).not.toContain('href="/explore?lang=');
+  });
+
+  it("shown in a visitor's own language keep their links clean, unless the URL forces one", () => {
+    const preferred = renderToString(
+      <App
+        initialLocation={{ pathname: "/", search: "" }}
+        origin={ORIGIN_PLACEHOLDER}
+        preferredLanguage="ko"
+      />,
+    );
+    expect(preferred).toContain(messagesFor("ko").landing.title);
+    expect(preferred).toContain('href="/explore"');
+    expect(preferred).not.toContain('href="/explore?lang=');
+    // The switcher still offers the URL of every language, for crawlers and for sharing.
+    expect(preferred).toContain('href="/?lang=ko"');
+
+    const forced = renderToString(
+      <App
+        initialLocation={{ pathname: "/", search: "?lang=en" }}
+        origin={ORIGIN_PLACEHOLDER}
+        preferredLanguage="ko"
+      />,
+    );
+    expect(forced).toContain(messagesFor("en").landing.title);
+    expect(forced).toContain('href="/explore?lang=en"');
   });
 
   it("carry a placeholder where the public origin goes", () => {
