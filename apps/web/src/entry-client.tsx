@@ -37,7 +37,7 @@ const route = matchRoute(location.pathname, location.search, import.meta.env.DEV
 // The same rule public/boot.js applied before the first paint: a URL without a language shows
 // the visitor's choice, else their browser's, without the URL changing.
 const preferred = preferredLanguage(storedLanguage(), navigator.languages ?? [navigator.language]);
-const { language } = resolveLanguage(location.search, preferred);
+const language = resolveLanguage(location.search, preferred);
 const initialData = readInitialData();
 const app = (
   <StrictMode>

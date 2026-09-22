@@ -7,7 +7,6 @@ import {
   languageOfSearch,
   preferredLanguage,
   resolveLanguage,
-  withForcedLanguage,
   withLanguage,
 } from "./languages.js";
 
@@ -93,24 +92,14 @@ describe("the language of a URL", () => {
   });
 });
 
-describe("a forced language", () => {
-  it("is carried on even when it is the default", () => {
-    expect(withForcedLanguage("/explore", "en")).toBe("/explore?lang=en");
-    expect(withForcedLanguage("/explore?lang=ko", "en")).toBe("/explore?lang=en");
-    expect(withForcedLanguage("/gh/acme/skills?file=a.md#top", "ko")).toBe(
-      "/gh/acme/skills?file=a.md&lang=ko#top",
-    );
-  });
-});
-
 describe("the language a page is shown in", () => {
   it("is the one the URL forces, else the visitor's preference, else the default", () => {
-    expect(resolveLanguage("?lang=ko", "en")).toEqual({ language: "ko", forced: true });
-    expect(resolveLanguage("?lang=en", "ko")).toEqual({ language: "en", forced: true });
-    expect(resolveLanguage("?q=x", "ko")).toEqual({ language: "ko", forced: false });
-    expect(resolveLanguage("?lang=fr", "ko")).toEqual({ language: "ko", forced: false });
-    expect(resolveLanguage("", undefined)).toEqual({ language: "en", forced: false });
-    expect(resolveLanguage("")).toEqual({ language: DEFAULT_LANGUAGE, forced: false });
+    expect(resolveLanguage("?lang=ko", "en")).toBe("ko");
+    expect(resolveLanguage("?lang=en", "ko")).toBe("en");
+    expect(resolveLanguage("?q=x", "ko")).toBe("ko");
+    expect(resolveLanguage("?lang=fr", "ko")).toBe("ko");
+    expect(resolveLanguage("", undefined)).toBe("en");
+    expect(resolveLanguage("")).toBe(DEFAULT_LANGUAGE);
   });
 });
 

@@ -13,12 +13,10 @@ export function messagesFor(language: Language): Messages {
 
 export interface I18n {
   readonly language: Language;
-  /** Whether the URL forces the language (i18n/languages.ts, `resolveLanguage`). */
-  readonly forced: boolean;
   readonly t: Messages;
 }
 
-export const I18nContext = createContext<I18n>({ language: "en", forced: false, t: en });
+export const I18nContext = createContext<I18n>({ language: "en", t: en });
 
 export function useI18n(): I18n {
   return useContext(I18nContext);

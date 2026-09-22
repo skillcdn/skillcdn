@@ -96,9 +96,13 @@ describe("prerendered pages", () => {
     expect(STATIC_PAGES.map((page) => page.path)).toEqual(["/", "/explore"]);
   });
 
-  it("link to each other in the language they are in, and to the other languages", () => {
+  it("link to each other without a language, and to the other languages", () => {
+    // A forced language holds for one page: the Korean page links to clean URLs, and the
+    // switcher still offers the URL of every language.
     const korean = renderPage("/", "ko").body;
-    expect(korean).toContain('href="/explore?lang=ko"');
+    expect(korean).toContain(messagesFor("ko").landing.title);
+    expect(korean).toContain('href="/explore"');
+    expect(korean).not.toContain('href="/explore?lang=');
     expect(korean).toContain('hrefLang="en"');
     expect(korean).toContain('href="/?lang=ko"');
     const english = renderPage("/", "en").body;
@@ -106,7 +110,7 @@ describe("prerendered pages", () => {
     expect(english).not.toContain('href="/explore?lang=');
   });
 
-  it("shown in a visitor's own language keep their links clean, unless the URL forces one", () => {
+  it("keep their links clean in a visitor's own language and in a forced one alike", () => {
     const preferred = renderToString(
       <App
         initialLocation={{ pathname: "/", search: "" }}
@@ -128,7 +132,8 @@ describe("prerendered pages", () => {
       />,
     );
     expect(forced).toContain(messagesFor("en").landing.title);
-    expect(forced).toContain('href="/explore?lang=en"');
+    expect(forced).toContain('href="/explore"');
+    expect(forced).not.toContain('href="/explore?lang=');
   });
 
   it("carry a placeholder where the public origin goes", () => {

@@ -1,7 +1,7 @@
 import type { AddressErrorCode } from "@skillcdn/core";
 import { type FormEvent, useId, useState } from "react";
 import { useI18n } from "../i18n/index.js";
-import { Link, navigate, useHref } from "../navigation.js";
+import { appHref, Link, navigate } from "../navigation.js";
 import { addressFromInput, mountHref } from "../router.js";
 import { EXAMPLE_ADDRESSES, hostOf } from "../site.js";
 import styles from "./address-form.module.css";
@@ -17,7 +17,6 @@ export function AddressForm(props: {
   readonly footnote?: boolean;
 }) {
   const { t } = useI18n();
-  const localized = useHref();
   const inputId = useId();
   const errorId = useId();
   const hintId = useId();
@@ -32,7 +31,7 @@ export function AddressForm(props: {
       return;
     }
     setErrorCode(undefined);
-    navigate(localized(mountHref(parsed.value)));
+    navigate(appHref(mountHref(parsed.value)));
   };
 
   return (

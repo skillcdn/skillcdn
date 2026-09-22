@@ -13,7 +13,7 @@ import { ErrorCallout } from "../components/error-callout.js";
 import { Tabs } from "../components/tabs.js";
 import { Badge, Button, EmptyState, Skeleton } from "../components/ui.js";
 import { useI18n } from "../i18n/index.js";
-import { Link, navigate, useHref } from "../navigation.js";
+import { appHref, Link, navigate } from "../navigation.js";
 import { mountHref } from "../router.js";
 import styles from "./mount.module.css";
 
@@ -128,12 +128,11 @@ export function MountOverview(props: {
   readonly query: string | undefined;
 }) {
   const { t } = useI18n();
-  const localized = useHref();
   const { address, index, query } = props;
   const [text, setText] = useState(query ?? "");
 
   const search = (next: string | undefined) =>
-    navigate(localized(mountHref(address, { kind: "overview", query: next })));
+    navigate(appHref(mountHref(address, { kind: "overview", query: next })));
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
     const trimmed = text.trim();

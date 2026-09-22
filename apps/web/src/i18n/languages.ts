@@ -51,34 +51,23 @@ export function languageOfSearch(search: string): Language {
   return languageInSearch(search) ?? DEFAULT_LANGUAGE;
 }
 
-export interface ResolvedLanguage {
-  readonly language: Language;
-  /**
-   * Whether the URL names the language. Links then carry it on, so the page stays in that
-   * language wherever it leads; otherwise links stay clean and every reader gets their own.
-   */
-  readonly forced: boolean;
-}
-
 /**
  * The language a page is shown in: the one the URL forces, else the visitor's preference (their
  * choice, or their browser's, as `preferredLanguage` gives it), else the default. Without a
- * preference, as on the server, a URL without a parameter is the default language.
+ * preference, as on the server, a URL without a parameter is the default language. A forced
+ * language holds for that one page: the links inside the app carry none (ADR-0015).
  */
 export function resolveLanguage(
   search: string,
   preferred: Language | undefined = undefined,
-): ResolvedLanguage {
-  const forced = languageInSearch(search);
-  if (forced !== undefined) {
-    return { language: forced, forced: true };
-  }
-  return { language: preferred ?? DEFAULT_LANGUAGE, forced: false };
+): Language {
+  return languageInSearch(search) ?? preferred ?? DEFAULT_LANGUAGE;
 }
 
 /**
  * The same location in another language. The default language has no parameter, so every page
- * has exactly one URL per language.
+ * has exactly one URL per language, and the default language's URL is the clean one that links
+ * inside the app use.
  */
 export function withLanguage(href: string, language: Language): string {
   const url = new URL(href, "http://relative.invalid");
@@ -87,17 +76,6 @@ export function withLanguage(href: string, language: Language): string {
   } else {
     url.searchParams.set(LANGUAGE_PARAM, language);
   }
-  return `${url.pathname}${url.search}${url.hash}`;
-}
-
-/**
- * The same location, forcing a language: the parameter is set even for the default language,
- * which a page reached through a forcing URL carries on to the pages it links to. Nothing
- * prerendered links this way, so crawlers never see a second URL for the default language.
- */
-export function withForcedLanguage(href: string, language: Language): string {
-  const url = new URL(href, "http://relative.invalid");
-  url.searchParams.set(LANGUAGE_PARAM, language);
   return `${url.pathname}${url.search}${url.hash}`;
 }
 

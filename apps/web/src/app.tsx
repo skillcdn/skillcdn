@@ -83,8 +83,8 @@ function Routed(props: {
   readonly preferredLanguage: Language | undefined;
 }) {
   const location = useLocation();
-  const { language, forced } = resolveLanguage(location.search, props.preferredLanguage);
-  const i18n = useMemo(() => ({ language, forced, t: messagesFor(language) }), [language, forced]);
+  const language = resolveLanguage(location.search, props.preferredLanguage);
+  const i18n = useMemo(() => ({ language, t: messagesFor(language) }), [language]);
   const route = matchRoute(location.pathname, location.search, import.meta.env.DEV);
 
   // The view of an address writes its own head once it knows what it shows (pages/mount.tsx).

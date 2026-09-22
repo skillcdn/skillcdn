@@ -7,8 +7,7 @@ import {
   useEffect,
   useState,
 } from "react";
-import { useI18n } from "./i18n/index.js";
-import { DEFAULT_LANGUAGE, withForcedLanguage, withLanguage } from "./i18n/languages.js";
+import { DEFAULT_LANGUAGE, withLanguage } from "./i18n/languages.js";
 
 export interface AppLocation {
   readonly pathname: string;
@@ -57,13 +56,12 @@ export function useLocation(): AppLocation {
 }
 
 /**
- * An href inside the app. It carries the language on only when the URL forces one; otherwise it
- * stays clean, so a copied link opens in each reader's own language.
+ * An href inside the app: the location without a language. A language the URL forces holds for
+ * that page only, so every link stays clean and a copied link opens in each reader's own
+ * language (ADR-0015).
  */
-export function useHref(): (href: string) => string {
-  const { language, forced } = useI18n();
-  return (href) =>
-    forced ? withForcedLanguage(href, language) : withLanguage(href, DEFAULT_LANGUAGE);
+export function appHref(href: string): string {
+  return withLanguage(href, DEFAULT_LANGUAGE);
 }
 
 function isPlainLeftClick(event: MouseEvent): boolean {
@@ -71,8 +69,8 @@ function isPlainLeftClick(event: MouseEvent): boolean {
 }
 
 /**
- * A link to a page of the app. It is a real anchor with a real href, in the current language,
- * so it works without scripts, for crawlers, and with "open in new tab".
+ * A link to a page of the app. It is a real anchor with a real href, without a language, so it
+ * works without scripts, for crawlers, and with "open in new tab".
  */
 export function Link(
   props: AnchorHTMLAttributes<HTMLAnchorElement> & {
@@ -82,8 +80,7 @@ export function Link(
   },
 ) {
   const { href, exact, onClick, children, ...rest } = props;
-  const localized = useHref();
-  const target = exact === true ? href : localized(href);
+  const target = exact === true ? href : appHref(href);
   return (
     <a
       {...rest}

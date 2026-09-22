@@ -18,7 +18,7 @@ pnpm dev:web          # http://localhost:5173
 The development server answers the REST API from fixtures (`dev/fixtures.ts`), so every page works and every state can be reached:
 
 - **<http://localhost:5173/dev/states>** lists every state of every page (loading, indexing, empty, errors, long texts, a partial index) and shows every building block on one page.
-- Add `?lang=ko` to any URL to force Korean. Without it the page is shown in the language you picked last, else your browser's, and the URL stays as it is.
+- Add `?lang=ko` to any URL to force Korean on that page. Without it the page is shown in the language you picked last, else your browser's, and the URL stays as it is. Links inside the app never carry the parameter.
 
 To look at real repositories instead, the UI can run in front of a real server, which answers the REST API and MCP while the pages stay local: `pnpm dev:web:live` uses the hosted service at `https://skillcdn.ai`, and `pnpm dev:web:api` a server on this machine (see [`apps/server`](../server/README.md), `http://127.0.0.1:11188`). Either takes another server from `SKILLCDN_API_URL` in `apps/web/.env.local`. Fixtures remain the way to see every state, since a real server only shows the states its repositories are in.
 
@@ -52,7 +52,7 @@ Styles are CSS modules: a class is local to its component, so renaming or restyl
 
 The explorer view of an address is rendered by the server per request: it calls `renderAddressPage` from the render module with the language, the origin, the URL and the answers the page would ask the REST API for, and the page carries those answers in a JSON element (`#skillcdn-data`) so that the browser hydrates instead of loading them again (`src/api/initial-data.ts`, `src/api/use-resource.ts`). The head of that page (`src/seo/head.ts`) says whether it may be indexed: the overview of an address without a ref and one skill are; a ref, a file, a search or an index that is not ready are not.
 
-Languages share their paths; `?lang=ko` forces Korean, and a URL without a parameter is English to the server and to crawlers. In a browser such a URL is shown in the visitor's language instead, without the URL changing: `public/boot.js` hides the prerendered page when another language is wanted, and the app renders it in that language ([ADR-0013](../../docs/adr/0013-language-decided-in-the-browser-without-changing-the-url.md)). Pages carry a placeholder instead of the public origin, which the server fills in, so one build works on any domain. For a plain static host, build with `SKILLCDN_PUBLIC_URL=https://your.host` and the origin is written into the files; such a host serves the default language only.
+Languages share their paths; `?lang=ko` forces Korean on that page, and a URL without a parameter is English to the server and to crawlers. In a browser such a URL is shown in the visitor's language instead, without the URL changing: `public/boot.js` hides the prerendered page when another language is wanted, and the app renders it in that language ([ADR-0013](../../docs/adr/0013-language-decided-in-the-browser-without-changing-the-url.md)). Links inside the app carry no language, whatever page they are on ([ADR-0015](../../docs/adr/0015-a-forced-language-holds-for-one-page.md)). Pages carry a placeholder instead of the public origin, which the server fills in, so one build works on any domain. For a plain static host, build with `SKILLCDN_PUBLIC_URL=https://your.host` and the origin is written into the files; such a host serves the default language only.
 
 ## Adding a language
 
