@@ -52,28 +52,35 @@ export function Layout(props: { readonly children: ReactNode }) {
       </main>
       <footer className={styles.footer}>
         <div className={styles.footerInner}>
-          <div>
-            <p className={styles.footerBrand}>{t.meta.siteName}</p>
-            <p className={styles.footerText}>{t.footer.tagline}</p>
-            <p className={styles.footerText}>{t.footer.sourceAvailable}</p>
+          {/* The name and the links share one line, at the two ends of the page; what the site is
+              and what it is licensed under sits under them, quietly. */}
+          <div className={styles.footerTop}>
+            <p className={styles.footerBrand}>
+              <BrandSymbol />
+              <span>{t.meta.siteName}</span>
+            </p>
+            <ul className={styles.footerLinks}>
+              <li>
+                <a href={LINKS.docs}>{t.nav.docs}</a>
+              </li>
+              <li>
+                <a href={LINKS.repository}>{t.footer.source}</a>
+              </li>
+              <li>
+                <a href={LINKS.license}>{t.footer.license}</a>
+              </li>
+              <li>
+                <a href={LINKS.trademarks}>{t.footer.trademarks}</a>
+              </li>
+              <li>
+                <a href={LINKS.security}>{t.footer.security}</a>
+              </li>
+            </ul>
           </div>
-          <ul className={styles.footerLinks}>
-            <li>
-              <a href={LINKS.docs}>{t.nav.docs}</a>
-            </li>
-            <li>
-              <a href={LINKS.repository}>{t.footer.source}</a>
-            </li>
-            <li>
-              <a href={LINKS.license}>{t.footer.license}</a>
-            </li>
-            <li>
-              <a href={LINKS.trademarks}>{t.footer.trademarks}</a>
-            </li>
-            <li>
-              <a href={LINKS.security}>{t.footer.security}</a>
-            </li>
-          </ul>
+          <p className={styles.footerNote}>
+            <span>{t.footer.tagline}</span>
+            <span>{t.footer.sourceAvailable}</span>
+          </p>
         </div>
       </footer>
     </div>

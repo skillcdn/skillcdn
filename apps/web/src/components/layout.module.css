@@ -89,37 +89,42 @@
   flex: 1;
 }
 
+/* No tint: the page is one surface from the hero down, and a rule is enough to end it. */
 .footer {
   border-top: var(--border);
-  background: var(--color-bg-subtle);
 }
 
-/* The two halves sit at the two ends of the page, so the footer is as wide as what is above it. */
 .footerInner {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: start;
-  justify-content: space-between;
-  gap: var(--space-5) var(--space-6);
+  display: grid;
+  gap: var(--space-5);
   width: 100%;
   max-width: var(--width-page);
   margin-inline: auto;
-  padding: var(--space-6) var(--space-5);
+  padding: var(--space-7) var(--space-5);
+}
+
+/* The name and the links sit at the two ends of one line, so the footer is as wide as the page
+   above it and the two blocks share a baseline instead of one hanging off the top of the other. */
+.footerTop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4) var(--space-6);
 }
 
 .footerBrand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-lg);
   font-weight: var(--weight-bold);
-}
-
-.footerText {
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
+  letter-spacing: -0.02em;
 }
 
 .footerLinks {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
   gap: var(--space-2) var(--space-5);
   font-size: var(--text-sm);
 }
@@ -127,11 +132,21 @@
 .footerLinks a {
   color: var(--color-text-muted);
   text-decoration: none;
+  transition: color var(--transition);
 }
 
 .footerLinks a:hover {
   color: var(--color-text);
   text-decoration: underline;
+}
+
+/* One line of small print, two sentences apart rather than stacked. */
+.footerNote {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  color: var(--color-text-faint);
+  font-size: var(--text-sm);
 }
 
 @media (max-width: 40rem) {
@@ -149,13 +164,7 @@
     display: none;
   }
 
-  /* Not enough width for two ends: the halves stack, still reading from the left. */
   .footerInner {
-    flex-direction: column;
     padding-inline: var(--space-4);
-  }
-
-  .footerLinks {
-    justify-content: flex-start;
   }
 }
