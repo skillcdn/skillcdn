@@ -9,6 +9,7 @@ import {
 import { type Database, getSchemaStatus, listTopRepositories, usageDayOf } from "@skillcdn/db";
 import { type Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import { cors } from "hono/cors";
 import type { SnapshotService } from "../indexer/snapshot-service.js";
 import type { Logger } from "../logger.js";
 import { createMountServer, type ToolDependencies } from "../mcp/tools.js";
@@ -16,7 +17,13 @@ import type { MountReader } from "../mounts/mount-reader.js";
 import { type Mount, MountError, type MountService } from "../mounts/mount-service.js";
 import type { ClientAddressResolver } from "./client-address.js";
 import { type AppEnv, requestContext } from "./request-context.js";
-import { hostFailure, mountBody, registerRest, skillOutcome } from "./rest.js";
+import {
+  CORS_MAX_AGE_SECONDS,
+  hostFailure,
+  mountBody,
+  registerRest,
+  skillOutcome,
+} from "./rest.js";
 import { type AddressData, type WebBundle, type WebRequest, wantsHtml } from "./web.js";
 
 export interface AppDependencies {
@@ -240,6 +247,25 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
       return bundle.address(request, { mount: { error: { status, code, message } } }, status);
     }
   };
+
+  // Public content, anonymous and read-only: a page on any origin may reach the endpoint, as it
+  // may reach the REST API. No cookies are involved, so credentials are never allowed.
+  app.use(
+    "/gh/*",
+    cors({
+      origin: "*",
+      allowMethods: ["GET", "POST", "OPTIONS"],
+      allowHeaders: [
+        "accept",
+        "authorization",
+        "content-type",
+        "mcp-protocol-version",
+        "mcp-session-id",
+      ],
+      exposeHeaders: ["mcp-protocol-version", "mcp-session-id", "retry-after", "x-request-id"],
+      maxAge: CORS_MAX_AGE_SECONDS,
+    }),
+  );
 
   app.all(
     "/gh/*",

@@ -88,7 +88,7 @@ Identifiers are UUIDv7; timestamps are `timestamptz`. File bodies are stored und
 | Runtime | Node.js 24 LTS, TypeScript 7, ESM only. pnpm pins both itself and the Node.js runtime in the lockfile. |
 | Monorepo | pnpm workspaces with a catalog, Turborepo, TypeScript project references. Packages compile to `dist/`. |
 | HTTP | Hono on the Node.js adapter. |
-| MCP | The official MCP TypeScript SDK, v2, over Streamable HTTP. One server instance per request, no sessions, so no affinity is needed ([ADR-0006](adr/0006-mcp-sdk-v2-per-request-servers.md)). |
+| MCP | The official MCP TypeScript SDK, v2, over Streamable HTTP. One server instance per request, no sessions, so no affinity is needed ([ADR-0006](adr/0006-mcp-sdk-v2-per-request-servers.md)). Besides the three tools, a server tells the client what the mount holds as it connects and offers every skill as a prompt ([ADR-0012](adr/0012-what-a-client-is-told-and-offered.md)). |
 | Validation | Zod at every boundary. |
 | Database | PostgreSQL 18: `tsvector` + GIN full-text search, JSONB, native `uuidv7()`; pgvector later. |
 | Data access | Drizzle ORM on the `pg` driver; migrations are generated, reviewed SQL files. The ORM never leaves `packages/db`. |

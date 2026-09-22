@@ -467,6 +467,39 @@ Only the archive test has this text: zeppelin ${index}.
   });
 });
 
+describe("a client running in a browser, on another origin", () => {
+  it("gets its preflight answered and may talk to the endpoint without credentials", async () => {
+    const { request } = harness();
+    const preflight = await request("/gh/acme/single-skill", {
+      method: "OPTIONS",
+      headers: {
+        origin: "https://app.example",
+        "access-control-request-method": "POST",
+        "access-control-request-headers": "content-type, mcp-protocol-version",
+      },
+    });
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers.get("access-control-allow-origin")).toBe("*");
+    expect(preflight.headers.get("access-control-allow-methods")).toContain("POST");
+    expect(preflight.headers.get("access-control-allow-headers")).toContain("mcp-protocol-version");
+    expect(preflight.headers.get("access-control-max-age")).toBe("86400");
+
+    const listed = await request("/gh/acme/single-skill", {
+      method: "POST",
+      headers: {
+        origin: "https://app.example",
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+    });
+    expect(listed.status).toBe(200);
+    expect(listed.headers.get("access-control-allow-origin")).toBe("*");
+    expect(listed.headers.get("access-control-allow-credentials")).toBeNull();
+    expect(listed.headers.get("access-control-expose-headers")).toContain("x-request-id");
+  });
+});
+
 describe("clients from the previous protocol era", () => {
   it("serves stateless JSON-RPC without a session", async () => {
     const { request } = harness();

@@ -49,7 +49,7 @@ A client learns three things about a mount before it calls a tool, so that a mod
 
 Every skill of a mount is also an MCP prompt: named after the skill (after its directory, with `-` for `/`, when several skills share a name), titled with the skill's name, described by its description, and without arguments. Asking for the prompt returns what `get` returns, as one user message. A client that turns prompts into commands thus lets a person call a skill up by name, without the model having to find it first. The list is what the index knows when the client connects; a client that connected while the commit was being indexed sees no prompts until it connects again.
 
-Documents are not offered as MCP resources: `find` and `read_file` reach them, and a repository may hold hundreds of them.
+Documents are not offered as MCP resources: `find` and `read_file` reach them, and a repository may hold hundreds of them ([ADR-0012](../adr/0012-what-a-client-is-told-and-offered.md)).
 
 ## While a commit is being indexed
 
@@ -68,6 +68,7 @@ The first request for a commit starts indexing in the background; connecting to 
 - Responses from unverified repos include a provenance notice. Until the GitHub App exists every repository is unverified. The wording is a draft and lives next to the renderers in `packages/core`.
 - Every tool call passes the permission check for the mounted repo. For private repos there are no exceptions, including cached results.
 - Errors are typed and safe: they never reveal whether a private repo exists.
+- **A client running in a browser may reach the endpoint from any origin**, as it may reach the [REST API](rest.md): responses say `access-control-allow-origin: *`, preflight requests are answered, and credentials are never used ([ADR-0012](../adr/0012-what-a-client-is-told-and-offered.md)).
 
 ## Open questions
 

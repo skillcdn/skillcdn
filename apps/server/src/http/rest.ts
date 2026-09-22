@@ -202,7 +202,8 @@ export function hostFailure(error: unknown): RestFailure | undefined {
 }
 
 /** How long a browser may remember the answer to a preflight request. */
-const CORS_MAX_AGE_SECONDS = 86_400;
+/** How long a browser may remember a preflight answer. */
+export const CORS_MAX_AGE_SECONDS = 86_400;
 
 /** Registers the REST API of docs/specs/rest.md on the app. */
 export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies): void {

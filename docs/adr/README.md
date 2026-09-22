@@ -25,3 +25,4 @@ One short file per decision that has lasting consequences and that a future cont
 | [0009](0009-web-ui-prerendered-per-language.md) | The web UI is prerendered per language and served by the `api` role; `?lang=` selects the language | Accepted |
 | [0010](0010-distinct-clients-by-daily-keyed-hash.md) | Distinct clients are counted by a keyed hash of the address under a key that dies with the day | Accepted |
 | [0011](0011-address-pages-rendered-on-the-server.md) | The page of an address is rendered on the server with its data and may be indexed; the sitemap lists featured and popular repositories | Accepted |
+| [0012](0012-what-a-client-is-told-and-offered.md) | The catalog travels with the connection; skills are prompts, documents are not resources, results stay text; the endpoint answers any origin | Accepted |
