@@ -7,7 +7,7 @@ How the docs are organized, and what each one is for. The rules for *when* to up
 | [`../README.md`](../README.md) | What SkillCDN is, for someone who has never seen it. | Overview only. Details live below. |
 | [`architecture.md`](architecture.md) | How the system is built: components, boundaries, data, stack, security model, extension points. | Living. Always describes the intended current design. |
 | [`roadmap.md`](roadmap.md) | What exists, what is being built now, what comes next. | Living. Updated when a milestone item starts, finishes or is dropped. |
-| [`specs/`](specs/) | The public contract: address scheme, skill-repo convention, tools. | Living and normative. If the README and a spec disagree, the spec wins and the README gets fixed. |
+| [`specs/`](specs/) | The public contract: address scheme, the SkillCDN Format (how a repository is read and written), tools, REST API. | Living and normative. If the README and a spec disagree, the spec wins and the README gets fixed. |
 | [`adr/`](adr/) | Decisions with lasting consequences, and why. | Append-only. Accepted ADRs are superseded, never edited. |
 | [`../deploy/README.md`](../deploy/README.md) | Building, configuring and releasing the image; the contract with the infrastructure that runs it. | Living. |
 | `<workspace>/README.md` | What a package is for, its public surface, how to work on it. | Living. |

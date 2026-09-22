@@ -29,7 +29,7 @@ Design points still open (record the outcome in the spec or an ADR):
 
 ## Next
 
-1. User documentation: how to write a skill repository and how to use one from an agent. Written for repository authors and the people who use their repositories, not as a description of internals. One source: every topic lives in exactly one Markdown file in this repository, the published documentation is rendered from those files, and everything else links to them instead of repeating them. How it is published is decided when the work starts.
+1. User documentation: how to write a skill repository and how to use one from an agent. Written for repository authors and the people who use their repositories, not as a description of internals. One source: every topic lives in exactly one Markdown file in this repository, the published documentation is rendered from those files, and everything else links to them instead of repeating them. How it is published is decided when the work starts. The format a repository follows is specified as the SkillCDN Format in [specs/skill-repo.md](specs/skill-repo.md); `skillcdn/examples` is its reference repository, the one the explorer offers to try, and will carry a skill that writes a repository in the format.
 2. GitHub App and MCP OAuth for private repos; permission cache and webhook invalidation; project tokens. Open: the permission cache TTL, and how aggressive invalidation must be for SSO-enforced orgs. Write `specs/permissions.md` first.
 3. `worker` role: webhook-driven and scheduled re-indexing.
 4. `intake`, and composed tools declared in Markdown or YAML.
