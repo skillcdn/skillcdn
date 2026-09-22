@@ -1,27 +1,14 @@
 import { useI18n, useLanguagePreference } from "../i18n/index.js";
-import {
-  DEFAULT_LANGUAGE,
-  LANGUAGE_INFO,
-  LANGUAGE_STORAGE_KEY,
-  LANGUAGES,
-  type Language,
-  withLanguage,
-} from "../i18n/languages.js";
+import { DEFAULT_LANGUAGE, LANGUAGE_INFO, LANGUAGES, withLanguage } from "../i18n/languages.js";
+import { rememberLanguage } from "../i18n/preference.js";
 import { Link, navigate, useLocation } from "../navigation.js";
 import styles from "./controls.module.css";
 
-function remember(language: Language): void {
-  try {
-    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
-  } catch {
-    // Without storage the choice still holds until the page is left.
-  }
-}
-
 /**
  * One real link per language, to the same page. Crawlers follow them like any link, to the URL
- * that forces that language. A visitor's click instead becomes their preference: the page is
- * shown in that language at its plain URL, and later visits without a language keep it.
+ * that forces that language. A visitor's click instead becomes their preference, replacing
+ * whatever set it before: the page is shown in that language at its plain URL, and later visits
+ * without a language keep it.
  */
 export function LanguageSwitcher() {
   const { language, t } = useI18n();
@@ -54,7 +41,7 @@ export function LanguageSwitcher() {
                   return;
                 }
                 event.preventDefault();
-                remember(code);
+                rememberLanguage(code);
                 setPreferred(code);
                 navigate(withLanguage(here, DEFAULT_LANGUAGE), { replace: true });
               }}

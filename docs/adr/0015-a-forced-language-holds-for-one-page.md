@@ -1,6 +1,6 @@
 # ADR-0015: A forced language holds for one page; links inside the app carry no language
 
-- Status: Accepted; amends point 2 of ADR-0013
+- Status: Accepted; amends point 2 of ADR-0013; point 1 (a forced language holds for one page) is amended by ADR-0017
 - Date: 2026-09-22
 
 ## Context

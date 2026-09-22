@@ -4,10 +4,11 @@ import { readInitialData } from "./api/initial-data.js";
 import { App } from "./app.js";
 import {
   LANGUAGE_INFO,
-  LANGUAGE_STORAGE_KEY,
+  languageInSearch,
   preferredLanguage,
   resolveLanguage,
 } from "./i18n/languages.js";
+import { rememberLanguage, storedLanguage } from "./i18n/preference.js";
 import { matchRoute } from "./router.js";
 import { ORIGIN_META_NAME, ORIGIN_PLACEHOLDER, readOrigin } from "./site.js";
 // Pretendard is served from this origin: the content security policy allows no other source,
@@ -24,19 +25,17 @@ if (container === null) {
   throw new Error("the page has no #root element");
 }
 
-function storedLanguage(): string | null {
-  try {
-    return window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
-  } catch {
-    return null;
-  }
-}
-
 const location = { pathname: window.location.pathname, search: window.location.search };
 const route = matchRoute(location.pathname, location.search, import.meta.env.DEV);
-// The same rule public/boot.js applied before the first paint: a URL without a language shows
-// the visitor's choice, else their browser's, without the URL changing.
-const preferred = preferredLanguage(storedLanguage(), navigator.languages ?? [navigator.language]);
+// The same rule public/boot.js applied before the first paint: a URL that names a language makes
+// it the visitor's preference from now on, and a URL without one shows their choice, else their
+// browser's, without the URL changing.
+const forced = languageInSearch(location.search);
+if (forced !== undefined) {
+  rememberLanguage(forced);
+}
+const preferred =
+  forced ?? preferredLanguage(storedLanguage(), navigator.languages ?? [navigator.language]);
 const language = resolveLanguage(location.search, preferred);
 const initialData = readInitialData();
 const app = (

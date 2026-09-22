@@ -10,6 +10,7 @@ export const DEFAULT_LANGUAGE: Language = "en";
 /** The query parameter that forces the language. Paths are the same in every language. */
 export const LANGUAGE_PARAM = "lang";
 
+/** Where the browser keeps the visitor's preference (i18n/preference.ts). */
 export const LANGUAGE_STORAGE_KEY = "skillcdn.lang";
 
 /**
@@ -55,7 +56,8 @@ export function languageOfSearch(search: string): Language {
  * The language a page is shown in: the one the URL forces, else the visitor's preference (their
  * choice, or their browser's, as `preferredLanguage` gives it), else the default. Without a
  * preference, as on the server, a URL without a parameter is the default language. A forced
- * language holds for that one page: the links inside the app carry none (ADR-0015).
+ * language becomes the preference (the browser entry stores it), and the links inside the app
+ * carry none: the pages that follow are shown in the preference (ADR-0015, ADR-0017).
  */
 export function resolveLanguage(
   search: string,

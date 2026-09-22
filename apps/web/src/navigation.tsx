@@ -56,9 +56,9 @@ export function useLocation(): AppLocation {
 }
 
 /**
- * An href inside the app: the location without a language. A language the URL forces holds for
- * that page only, so every link stays clean and a copied link opens in each reader's own
- * language (ADR-0015).
+ * An href inside the app: the location without a language, so that a copied link opens in each
+ * reader's own language. The language a page is shown in is the visitor's preference, which a
+ * forcing URL or the switcher sets (ADR-0015, ADR-0017).
  */
 export function appHref(href: string): string {
   return withLanguage(href, DEFAULT_LANGUAGE);

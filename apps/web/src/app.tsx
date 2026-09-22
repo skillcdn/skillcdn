@@ -51,8 +51,9 @@ export interface AppProps {
   /** The explorer view, when it must render at once rather than load. */
   readonly mountPage?: ComponentType<MountPageProps>;
   /**
-   * The language a URL without one is shown in: the visitor's choice or their browser's, read
-   * by the browser entry. The server, which has no visitor, leaves it out and renders the default.
+   * The language a URL without one is shown in: the visitor's choice (which a URL that forces a
+   * language makes) or their browser's, read by the browser entry. The server, which has no
+   * visitor, leaves it out and renders the default.
    */
   readonly preferredLanguage?: Language;
 }

@@ -1,6 +1,6 @@
 # ADR-0014: A repository manifest names the repository and decides what a mount serves
 
-- Status: Accepted
+- Status: Accepted; point 2 (a repository without a manifest) is amended by ADR-0016
 - Date: 2026-09-22
 
 ## Context

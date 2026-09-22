@@ -14,8 +14,16 @@
     }
   };
 
-  // A URL that names a language is shown in that language, whatever the visitor prefers.
-  if (new URL(location.href).searchParams.has("lang")) {
+  // A URL that names a language is shown in that language, whatever the visitor preferred, and
+  // from now on that is what they prefer: it holds on every page until the switcher changes it.
+  // The page was prerendered in that language, so there is nothing to hide.
+  const forced = new URL(location.href).searchParams.get("lang");
+  if (SUPPORTED.includes(forced)) {
+    try {
+      localStorage.setItem("skillcdn.lang", forced);
+    } catch {
+      // Without storage the choice holds until the page is left.
+    }
     return;
   }
   // A URL without one is shown in the language the visitor chose, or, never having chosen, in
