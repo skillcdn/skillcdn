@@ -49,6 +49,7 @@ export { discardUsage, type UsageEvent, type UsageSink } from "./ports/usage-sin
 export {
   baseName,
   classifyRepoFile,
+  isHiddenPath,
   owningSkillDirectory,
   parentDirectory,
   type RepoFileKind,

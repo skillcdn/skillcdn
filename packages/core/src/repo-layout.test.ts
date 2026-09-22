@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   baseName,
   classifyRepoFile,
+  isHiddenPath,
   owningSkillDirectory,
   parentDirectory,
 } from "./repo-layout.js";
@@ -14,6 +15,22 @@ function path(input: string): RepoPath {
   }
   return result.value;
 }
+
+describe("isHiddenPath", () => {
+  it.each([
+    [".editorconfig", true],
+    [".github/workflows/ci.yml", true],
+    [".claude/settings.json", true],
+    ["docs/.drafts/plan.md", true],
+    ["docs/.plan.md", true],
+    ["README.md", false],
+    ["skills/ads/SKILL.md", false],
+    ["docs/notes.hidden.md", false],
+    ["docs/a.b/c.md", false],
+  ])("%s -> %s", (input, hidden) => {
+    expect(isHiddenPath(path(input))).toBe(hidden);
+  });
+});
 
 describe("classifyRepoFile", () => {
   it.each([

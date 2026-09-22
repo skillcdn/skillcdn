@@ -268,6 +268,35 @@ describe("a multi-skill repository", () => {
     await client.close();
   });
 
+  it("never serves hidden entries", async () => {
+    const host = createFixtureHost("hidden");
+    const encode = (text: string) => new TextEncoder().encode(text);
+    host.addFile(".editorconfig", encode("root = true\n"));
+    host.addFile(".github/workflows/ci.yml", encode("on: push\n"));
+    host.addFile("docs/.draft.md", encode("# Draft\n\nNot for agents.\n"));
+    const client = await harness({ host }).connect(
+      `/gh/acme/multi-skill@${fixtureCommits("hidden").main}`,
+    );
+
+    const listing = await call(client, "find");
+    expect(listing.text).toContain("2 skills and 2 documents");
+    expect(listing.text).not.toContain(".draft.md");
+    const search = await call(client, "find", { query: "draft agents" });
+    expect(search.text).not.toContain(".draft.md");
+
+    const root = await call(client, "read_file", { path: "." });
+    expect(root.text).toContain("(3 entries)");
+    expect(root.text).not.toContain(".editorconfig");
+    expect(root.text).not.toContain(".github");
+    const docs = await call(client, "read_file", { path: "docs" });
+    expect(docs.text).toContain("- docs/getting-started.md (");
+    expect(docs.text).not.toContain(".draft.md");
+    for (const path of [".editorconfig", ".github", ".github/workflows/ci.yml", "docs/.draft.md"]) {
+      expect((await call(client, "read_file", { path })).isError, path).toBe(true);
+    }
+    await client.close();
+  });
+
   it("confines a sub-path mount to its directory", async () => {
     const client = await harness().connect("/gh/acme/multi-skill@main/skills/release-notes");
 

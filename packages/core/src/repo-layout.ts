@@ -25,6 +25,15 @@ export function parentDirectory(path: RepoPath): RepoPath {
   return slash < 0 ? ROOT_PATH : (path.slice(0, slash) as RepoPath);
 }
 
+/**
+ * Hidden entries are never listed, searched or read: any file with a segment that starts with a
+ * dot, such as `.github/workflows/ci.yml`, `.editorconfig` or `.claude/settings.json`. They are
+ * tooling for the repository, not content for an agent.
+ */
+export function isHiddenPath(path: RepoPath): boolean {
+  return path.split("/").some((segment) => segment.startsWith("."));
+}
+
 export function classifyRepoFile(path: RepoPath): RepoFileKind {
   const name = baseName(path);
   if (name === SKILL_MANIFEST_FILE) {

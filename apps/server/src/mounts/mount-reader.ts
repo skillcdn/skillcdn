@@ -9,6 +9,7 @@ import {
   type FindResult,
   type GitHost,
   type IndexLimits,
+  isHiddenPath,
   joinRepoPath,
   type MountCatalog,
   type MountSummary,
@@ -453,7 +454,13 @@ export class MountReader {
     if (cached !== undefined) {
       return cached;
     }
-    const loading = this.#dependencies.gitHost.getTree(mount.coordinates, mount.commit);
+    // Hidden entries are never served, from the tree any more than from the index.
+    const loading = this.#dependencies.gitHost
+      .getTree(mount.coordinates, mount.commit)
+      .then((tree) => ({
+        ...tree,
+        entries: tree.entries.filter((entry) => !isHiddenPath(entry.path)),
+      }));
     loading.catch(() => {
       this.#trees.delete(key);
     });

@@ -5,6 +5,7 @@ import {
   type GitHost,
   GitHostError,
   type IndexLimits,
+  isHiddenPath,
   owningSkillDirectory,
   parentDirectory,
   parseSkillManifest,
@@ -70,7 +71,8 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
   signal.throwIfAborted();
 
   let truncated = tree.truncated;
-  const files = tree.entries.filter((entry) => entry.type === "file");
+  // Hidden entries are tooling, not content: they take no room in the index and its limits.
+  const files = tree.entries.filter((entry) => entry.type === "file" && !isHiddenPath(entry.path));
   if (files.length > limits.maxTreeEntries) {
     files.length = limits.maxTreeEntries;
     truncated = true;

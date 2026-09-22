@@ -15,6 +15,7 @@ repo/
     <name>/assets/          small data files the skill reads
     <name>/scripts/         optional helpers; served as text, never run
   docs/ (any name)          plain documents: listed, searched and read without a skill
+  .github/, .anything       hidden: never listed, searched or read
   skillcdn.yaml             not yet: see the open questions
 ```
 
@@ -25,6 +26,7 @@ What the indexer does with a repository. These hold for every repository, whethe
 - **A skill is a directory that holds a file named exactly `SKILL.md`**, at any depth inside the mounted path. `skills/<name>/SKILL.md` is the usual layout; a `SKILL.md` at the mounted root makes the whole mount one skill. A file belongs to the nearest skill directory above it, so a nested skill owns its own files.
 - `SKILL.md` is YAML front-matter followed by a Markdown body. Everything else in the skill directory is a supporting file the body may point to.
 - A repo without any skill manifest still works, as a document-reading endpoint: `find` and `read_file` only.
+- **Hidden entries are never served.** A file with any path segment that starts with a dot (`.github/workflows/ci.yml`, `.editorconfig`, `.claude/settings.json`) is not listed, not searched and cannot be read, and takes no room in the index. Such files are tooling for the repository, not content for an agent.
 - **Repositories declare; they never ship code that we execute.** Composition ("take this input, call these tools in this order") will be declared in Markdown or YAML. Scripts in a repo are files like any other: readable, never run. `allowed-tools` is passed through as text and grants nothing.
 - Indexed content: skill manifests, Markdown (`.md`, `.markdown`, `.mdx`) and small JSON. Every other file is listed and can be read, but is not searched. Binary and oversized files are skipped. Limits are configuration with safe defaults.
 - A plain Markdown document is listed under its front-matter `title` and `description` when it has them; otherwise its title is its first level-one heading, and its description is the first paragraph after that heading (or the first paragraph of the document when there is no heading), shortened to 200 characters. Links become their text; badges, images, lists, quotes, tables and code are skipped on the way.
