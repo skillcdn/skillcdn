@@ -218,7 +218,7 @@ export const usageDaily = pgTable(
       .notNull()
       .references(() => repos.id, { onDelete: "cascade" }),
     day: date({ mode: "string" }).notNull(),
-    metric: text({ enum: ["connection", "tool_call", "skill_load"] }).notNull(),
+    metric: text({ enum: ["connection", "tool_call", "skill_load", "client"] }).notNull(),
     /** What the metric is about: the tool name, the skill directory, or empty. */
     subject: text().notNull().default(""),
     count: bigint({ mode: "number" }).notNull().default(0),
@@ -231,9 +231,48 @@ export const usageDaily = pgTable(
     index("usage_daily_account_idx").on(table.accountId),
     check(
       "usage_daily_metric_check",
-      sql`${table.metric} in ('connection', 'tool_call', 'skill_load')`,
+      sql`${table.metric} in ('connection', 'tool_call', 'skill_load', 'client')`,
     ),
   ],
+);
+
+/**
+ * The distinct clients that used a repository on one day (UTC), while that day is being counted.
+ * `client` is a keyed hash of the client's network address under the day's key in
+ * `usage_client_keys`; it can be matched within the day and means nothing once the key is gone.
+ * Rows and the key are deleted together when the day is folded into `usage_daily` as `client`.
+ */
+export const usageClients = pgTable(
+  "usage_clients",
+  {
+    id: id(),
+    accountId: uuid()
+      .notNull()
+      .references(() => accounts.id),
+    repoId: uuid()
+      .notNull()
+      .references(() => repos.id, { onDelete: "cascade" }),
+    day: date({ mode: "string" }).notNull(),
+    client: text().notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex("usage_clients_key").on(table.repoId, table.day, table.client),
+    index("usage_clients_day_idx").on(table.day),
+    index("usage_clients_account_idx").on(table.accountId),
+  ],
+);
+
+/** The key under which client addresses are hashed on one day. Random, and gone with the day. */
+export const usageClientKeys = pgTable(
+  "usage_client_keys",
+  {
+    id: id(),
+    day: date({ mode: "string" }).notNull(),
+    key: text().notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [uniqueIndex("usage_client_keys_day_key").on(table.day)],
 );
 
 /**

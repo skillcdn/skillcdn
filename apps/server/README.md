@@ -53,7 +53,7 @@ src/
   mounts/        address -> repository and commit, through the database first and the git host second;
                  MountReader answers questions about a mount as data, for MCP and REST alike
   indexer/       builds the index of a commit; coordinates who builds it (ADR-0007)
-  stats/         daily usage counters per public repository: added up in memory, written in batches
+  stats/         daily usage counters and distinct clients per public repository: added up in memory, written in batches
   adapters/      implementations of core ports that are not their own package (clock, ...)
   testing/       test support: a git host backed by the fixtures in skills/ (not compiled into dist)
 ```

@@ -1,14 +1,19 @@
 import type { HostRepository } from "@skillcdn/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { drizzleOf } from "./client.js";
 import {
   addUsage,
+  addUsageClients,
   type Database,
+  foldUsageClients,
   getRepoUsage,
+  getUsageClientKey,
   listTopRepositories,
   type RepoScope,
   saveRepository,
   usageDayOf,
 } from "./index.js";
+import { usageClientKeys, usageClients } from "./schema.js";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "./testing.js";
 
 let testDatabase: TestDatabase;
@@ -29,22 +34,23 @@ let nextHostId = 5000;
 async function repository(
   name: string,
   patch: Partial<HostRepository> = {},
-): Promise<RepoScope & { readonly name: string }> {
+): Promise<RepoScope & { readonly name: string; readonly owner: string }> {
   nextHostId += 1;
+  const owner = `Owner${nextHostId}`;
   const saved = await saveRepository(
     database,
-    { host: "gh", owner: `owner${nextHostId}`, repo: name.toLowerCase() },
+    { host: "gh", owner: owner.toLowerCase(), repo: name.toLowerCase() },
     {
       hostRepoId: String(nextHostId),
       name,
       defaultBranch: "main",
       visibility: "public",
-      owner: { hostAccountId: `7${nextHostId}`, login: `Owner${nextHostId}`, kind: "organization" },
+      owner: { hostAccountId: `7${nextHostId}`, login: owner, kind: "organization" },
       ...patch,
     },
     NOW,
   );
-  return { accountId: saved.accountId, repoId: saved.id, name };
+  return { accountId: saved.accountId, repoId: saved.id, name, owner };
 }
 
 describe("usageDayOf", () => {
@@ -114,6 +120,77 @@ describe("usage counters", () => {
     );
     expect(await getRepoUsage(database, scope, { from: "2026-03-10", to: "2026-03-10" })).toEqual([
       { metric: "skill_load", subject, count: 1 },
+    ]);
+  });
+});
+
+describe("distinct clients", () => {
+  it("are keyed hashes for a day, folded into a count when the day is over", async () => {
+    const one = await repository("One");
+    const two = await repository("Two");
+    let made = 0;
+    const newKey = () => {
+      made += 1;
+      return `key-${made}`;
+    };
+    // Several processes ask for the key of a day at once: one key, whoever made it.
+    const keys = await Promise.all([
+      getUsageClientKey(database, "2026-08-01", newKey, NOW),
+      getUsageClientKey(database, "2026-08-01", newKey, NOW),
+      getUsageClientKey(database, "2026-08-01", newKey, NOW),
+    ]);
+    expect(new Set(keys).size).toBe(1);
+    expect(await getUsageClientKey(database, "2026-08-01", newKey, NOW)).toBe(keys[0]);
+    expect(await getUsageClientKey(database, "2026-08-02", newKey, NOW)).not.toBe(keys[0]);
+
+    const seen = (scope: RepoScope, day: string, client: string) => ({ scope, day, client });
+    await addUsageClients(
+      database,
+      [
+        seen(one, "2026-08-01", "a"),
+        seen(one, "2026-08-01", "b"),
+        seen(one, "2026-08-01", "a"),
+        seen(two, "2026-08-01", "a"),
+        seen(one, "2026-08-02", "a"),
+      ],
+      NOW,
+    );
+    // Reported again by another process, or later the same day: still the same clients.
+    await addUsageClients(
+      database,
+      [seen(one, "2026-08-01", "b"), seen(one, "2026-08-02", "c")],
+      NOW,
+    );
+    await addUsageClients(database, [], NOW);
+
+    // The day being counted is not folded; the days before it are, key included.
+    await foldUsageClients(database, "2026-08-02", NOW);
+    const range = { from: "2026-08-01", to: "2026-08-02" };
+    expect(await getRepoUsage(database, one, range)).toEqual([
+      { metric: "client", subject: "", count: 2 },
+    ]);
+    expect(await getRepoUsage(database, two, range)).toEqual([
+      { metric: "client", subject: "", count: 1 },
+    ]);
+    const handle = drizzleOf(database);
+    expect(
+      (await handle.select({ day: usageClients.day }).from(usageClients)).map((row) => row.day),
+    ).toEqual(["2026-08-02", "2026-08-02"]);
+    expect(
+      (await handle.select({ day: usageClientKeys.day }).from(usageClientKeys)).map(
+        (row) => row.day,
+      ),
+    ).toEqual(["2026-08-02"]);
+
+    // Folding again moves nothing and changes nothing; the next day adds to the counts.
+    await foldUsageClients(database, "2026-08-02", NOW);
+    await foldUsageClients(database, "2026-08-03", NOW);
+    expect(await getRepoUsage(database, one, range)).toEqual([
+      { metric: "client", subject: "", count: 4 },
+    ]);
+    expect(await listTopRepositories(database, { metric: "client", ...range, limit: 5 })).toEqual([
+      { host: "gh", owner: one.owner, name: "One", count: 4 },
+      { host: "gh", owner: two.owner, name: "Two", count: 1 },
     ]);
   });
 });

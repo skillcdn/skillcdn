@@ -178,6 +178,11 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
       if (mount instanceof Response) {
         return mount;
       }
+      // Every MCP message is a POST, whichever protocol revision the client speaks; a client
+      // that sent one used this repository today.
+      if (c.req.method === "POST") {
+        tools.stats.client(mount, c.get("clientAddress"));
+      }
       resolvedFor.set(c.req.raw, { mount, requestId: c.get("requestId") });
       const response = await mcp.fetch(c.req.raw);
       // Public content, but a moving ref: caches between us and the client must not pin it.

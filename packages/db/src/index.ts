@@ -40,9 +40,13 @@ export {
 } from "./queries/snapshots.js";
 export {
   addUsage,
+  addUsageClients,
+  foldUsageClients,
   getRepoUsage,
+  getUsageClientKey,
   listTopRepositories,
   type RepositoryUsage,
+  type UsageClient,
   type UsageDay,
   type UsageIncrement,
   type UsageMetric,

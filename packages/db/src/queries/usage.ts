@@ -1,9 +1,10 @@
-import { and, between, desc, eq, sql } from "drizzle-orm";
+import { and, between, desc, eq, lt, sql } from "drizzle-orm";
 import { type Database, drizzleOf } from "../client.js";
-import { accounts, repos, usageDaily } from "../schema.js";
+import { accounts, repos, usageClientKeys, usageClients, usageDaily } from "../schema.js";
 import type { RepoScope } from "./repos.js";
 
-export type UsageMetric = "connection" | "tool_call" | "skill_load";
+/** `client` is how many distinct clients used the repository that day; it appears once the day is folded. */
+export type UsageMetric = "connection" | "tool_call" | "skill_load" | "client";
 
 /** A day in UTC, as `YYYY-MM-DD`. */
 export type UsageDay = string;
@@ -72,6 +73,95 @@ export async function addUsage(
         set: { count: sql`${usageDaily.count} + excluded.count`, updatedAt: now },
       });
   }
+}
+
+/**
+ * The key under which client addresses are hashed on one day, made on first use. Every process
+ * asks; the first to ask on a day makes the key, and the others get that one.
+ */
+export async function getUsageClientKey(
+  database: Database,
+  day: UsageDay,
+  newKey: () => string,
+  now: Date,
+): Promise<string> {
+  const handle = drizzleOf(database);
+  await handle
+    .insert(usageClientKeys)
+    .values({ day, key: newKey(), createdAt: now })
+    .onConflictDoNothing({ target: usageClientKeys.day });
+  const [row] = await handle
+    .select({ key: usageClientKeys.key })
+    .from(usageClientKeys)
+    .where(eq(usageClientKeys.day, day))
+    .limit(1);
+  if (row === undefined) {
+    throw new Error(`no usage client key for ${day}`);
+  }
+  return row.key;
+}
+
+export interface UsageClient {
+  readonly scope: RepoScope;
+  readonly day: UsageDay;
+  /** The keyed hash of the client, as hex. */
+  readonly client: string;
+}
+
+/** Notes that these clients were seen. A client seen before on that day is not a new row. */
+export async function addUsageClients(
+  database: Database,
+  clients: readonly UsageClient[],
+  now: Date,
+): Promise<void> {
+  const distinct = new Map<string, UsageClient>();
+  for (const seen of clients) {
+    distinct.set(JSON.stringify([seen.scope.repoId, seen.day, seen.client]), seen);
+  }
+  const rows = [...distinct.values()];
+  for (let start = 0; start < rows.length; start += BATCH_SIZE) {
+    await drizzleOf(database)
+      .insert(usageClients)
+      .values(
+        rows.slice(start, start + BATCH_SIZE).map((row) => ({
+          accountId: row.scope.accountId,
+          repoId: row.scope.repoId,
+          day: row.day,
+          client: row.client,
+          createdAt: now,
+        })),
+      )
+      .onConflictDoNothing({
+        target: [usageClients.repoId, usageClients.day, usageClients.client],
+      });
+  }
+}
+
+/**
+ * Turns the clients of every day before `before` into `client` counts in `usage_daily`, and
+ * deletes the rows and the keys of those days. The move is one statement, so processes that fold
+ * at the same time each move their own share and the totals still add up.
+ */
+export async function foldUsageClients(
+  database: Database,
+  before: UsageDay,
+  now: Date,
+): Promise<void> {
+  const handle = drizzleOf(database);
+  await handle.execute(sql`
+    with moved as (
+      delete from ${usageClients}
+      where ${usageClients.day} < ${before}
+      returning ${usageClients.accountId} as account_id, ${usageClients.repoId} as repo_id, ${usageClients.day} as day
+    )
+    insert into ${usageDaily} (account_id, repo_id, day, metric, subject, count, created_at, updated_at)
+    select account_id, repo_id, day, 'client', '', count(*), ${now}, ${now}
+    from moved
+    group by account_id, repo_id, day
+    on conflict (repo_id, day, metric, subject)
+    do update set count = ${usageDaily}.count + excluded.count, updated_at = excluded.updated_at
+  `);
+  await handle.delete(usageClientKeys).where(lt(usageClientKeys.day, before));
 }
 
 export interface UsageTotal {

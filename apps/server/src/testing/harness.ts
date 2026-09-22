@@ -28,7 +28,8 @@ export interface Harness {
   readonly logs: Record<string, unknown>[];
   readonly snapshots: SnapshotService;
   readonly usage: UsageEvent[];
-  connect(address: string): Promise<Client>;
+  /** An MCP client connected to an address, from `peer` (the socket address) when given. */
+  connect(address: string, options?: { readonly peer?: string }): Promise<Client>;
   request(path: string, init?: RequestInit): Promise<Response>;
 }
 
@@ -106,11 +107,15 @@ export function createHarness(testDatabase: TestDatabase, options: HarnessOption
     snapshots,
     usage,
     request,
-    async connect(address) {
+    async connect(address, options = {}) {
       const client = new Client({ name: "skillcdn-test", version: "0.0.0" });
+      const env =
+        options.peer === undefined
+          ? undefined
+          : { incoming: { socket: { remoteAddress: options.peer } } };
       await client.connect(
         new StreamableHTTPClientTransport(new URL(`${BASE_URL}${address}`), {
-          fetch: async (input, init) => app.fetch(new Request(input, init)),
+          fetch: async (input, init) => app.fetch(new Request(input, init), env),
         }),
       );
       return client;

@@ -89,6 +89,61 @@ describe("usage statistics", () => {
     ).toEqual([{ host: "gh", owner: "Acme", name: "multi-skill", count: 3 }]);
   });
 
+  it("count distinct clients by a keyed hash of their address, folded when the day is over", async () => {
+    let day = "2026-07-10";
+    const movingClock = { now: () => new Date(`${day}T12:00:00Z`) };
+    const logs: Record<string, unknown>[] = [];
+    const stats = new UsageRecorder({
+      database: testDatabase.database,
+      clock: movingClock,
+      logger: pino(
+        { level: "info" },
+        { write: (line: string) => logs.push(JSON.parse(line) as Record<string, unknown>) },
+      ),
+    });
+    const commit = fixtureCommits("stats-clients").main;
+    const h = createHarness(testDatabase, { host: createFixtureHost("stats-clients"), stats });
+    const address = `/gh/acme/multi-skill@${commit}/skills`;
+
+    // Two clients at one address, one of them twice; a client that says nothing about itself.
+    for (const peer of ["203.0.113.7", "203.0.113.7", "2001:db8::1", undefined]) {
+      const client = await h.connect(address, peer === undefined ? {} : { peer });
+      await client.callTool({ name: "find", arguments: {} });
+      await client.close();
+    }
+    await h.snapshots.idle();
+    await stats.flush();
+
+    const repo = await findRepoByAlias(testDatabase.database, {
+      host: "gh",
+      owner: "acme",
+      repo: "multi-skill",
+    });
+    if (repo === undefined) {
+      throw new Error("the repository was not saved");
+    }
+    const scope = { accountId: repo.accountId, repoId: repo.id };
+    const clientsOn = async (from: string, to: string) =>
+      (await getRepoUsage(testDatabase.database, scope, { from, to })).filter(
+        (total) => total.metric === "client",
+      );
+    // Today is still being counted: nothing to show yet, and nothing stored that names a client.
+    expect(await clientsOn(day, day)).toEqual([]);
+    expect(JSON.stringify(logs)).not.toContain("203.0.113.7");
+
+    // The next day, the first write folds the day before into a count.
+    const firstDay = day;
+    day = "2026-07-11";
+    const again = await h.connect(address, { peer: "203.0.113.7" });
+    await again.close();
+    await stats.close();
+    expect(await clientsOn(firstDay, firstDay)).toEqual([
+      { metric: "client", subject: "", count: 2 },
+    ]);
+    expect(await clientsOn(day, day)).toEqual([]);
+    expect(logs.filter((line) => line.level === 40)).toEqual([]);
+  });
+
   it("writes early when many counters pile up, and survives a database that refuses", async () => {
     const { stats, logs } = recorder({ maxBuffered: 2 });
     const h = createHarness(testDatabase, { host: createFixtureHost("stats-early"), stats });

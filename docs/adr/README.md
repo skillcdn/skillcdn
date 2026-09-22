@@ -23,3 +23,4 @@ One short file per decision that has lasting consequences and that a future cont
 | [0007](0007-snapshot-rows-coordinate-indexing.md) | Snapshot rows coordinate indexing; the api role indexes lazily | Accepted |
 | [0008](0008-repository-ends-at-an-image-that-builds.md) | This repository ends at an image that builds; publishing and deployment are outside | Accepted |
 | [0009](0009-web-ui-prerendered-per-language.md) | The web UI is prerendered per language and served by the `api` role; `?lang=` selects the language | Accepted |
+| [0010](0010-distinct-clients-by-daily-keyed-hash.md) | Distinct clients are counted by a keyed hash of the address under a key that dies with the day | Accepted |
