@@ -20,6 +20,7 @@ Goal: an agent that connects to an address knows what it got and uses it well, w
 - [x] The MCP endpoint answers browsers on any origin, as the REST API does
 - [x] The page of a repository leads with its name and description, then the steps to connect it to the common clients, and shows what the agent is told when it connects
 - [x] Hidden entries (any path segment that starts with a dot) are never listed, searched or read
+- [ ] The repository manifest `SKILLCDN.md`: name, description, the directories whose documents are served, and the rules that hold for every skill; with a manifest, only what it declares is indexed, now and by any later index. The proposal is in [specs/skill-repo.md](specs/skill-repo.md) and is decided before it is built.
 - [ ] Connect real clients by hand, to a local server and to the hosted service, and fix what they show. Nothing in this repository can test that; it is done after every change to what a client sees.
 
 Design points still open (record the outcome in the spec or an ADR):

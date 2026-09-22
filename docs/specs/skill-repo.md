@@ -7,7 +7,9 @@ How SkillCDN reads a repository, and how a repository is written so that an agen
 
 ```
 repo/
-  README.md                 what the repository is: the first document an agent and a person read
+  SKILLCDN.md               proposed: name, description, which directories hold documents, and
+                            the rules that hold for every skill (see "The repository manifest")
+  README.md                 what the repository is, for whoever reads it on the git host
   SKILL.md                  a single-skill repo, or
   skills/
     <name>/SKILL.md         a multi-skill repo; front-matter carries name, description, ...
@@ -16,7 +18,6 @@ repo/
     <name>/scripts/         optional helpers; served as text, never run
   docs/ (any name)          plain documents: listed, searched and read without a skill
   .github/, .anything       hidden: never listed, searched or read
-  skillcdn.yaml             not yet: see the open questions
 ```
 
 ## Reading rules
@@ -61,7 +62,7 @@ A repository is in the SkillCDN Format when all of these hold. They are what the
 3. **A skill is self-contained.** Its files link only inside its own directory, because a skill may be mounted alone (`.../<repo>/skills/<name>`) and a link that leaves the mount cannot be read through it. Anything a skill depends on is restated inside it, or linked by address.
 4. **Everything an agent must read is Markdown or small JSON.** Other files are listed and readable, never searched; rendered media and binaries are not part of a skill.
 5. **Nothing has to run.** A skill works from its `SKILL.md` and the documents it points to. Scripts may be shipped as help for agents that run locally, and are served as text.
-6. **The root has a `README.md`** that starts with a level-one heading and one paragraph saying what the repository is. That is the document the page of the address shows first and what `find` lists for it.
+6. **The root says what the repository is.** Until the repository manifest below exists, that is a `README.md` that starts with a level-one heading and one paragraph: the document the page of the address shows first and what `find` lists for it. With the manifest, `SKILLCDN.md` carries the name and the description, and `README.md` is for whoever reads the repository on the git host.
 7. **No secrets, no private hostnames, no real people's identity or likeness**, in any file. The repository is served to whoever holds the address.
 
 ### Recommended
@@ -80,9 +81,51 @@ The body of a `SKILL.md`, in this order, so that an agent that has read one know
 
 Plain documents (a document set is a directory of Markdown without a `SKILL.md`) carry a front-matter `title` and `description`, or start with a level-one heading followed by one summary paragraph, because that is what search shows.
 
-### The repository root
+### The repository root today
 
-A client is told the repository, the commit and the mounted path, and the catalog of skills ([tools](tools.md)). The name of a mount is its address; the description shown for a repository is the one its git host shows ([REST](rest.md)). The root `README.md` is a document like any other, listed first by the page of the address. There is no root manifest yet that names or describes the repository, declares shared rules for its skills, or aliases; see the open questions.
+A client is told the repository, the commit and the mounted path, and the catalog of skills ([tools](tools.md)). The name of a mount is its address; the description shown for a repository is the one its git host shows ([REST](rest.md)). The root `README.md` is a document like any other, listed first by the page of the address. Everything in the mount but hidden entries is served.
+
+### The repository manifest: `SKILLCDN.md`
+
+**Proposed, not implemented.** The decisions it settles are recorded in an ADR when it is built.
+
+A file named exactly `SKILLCDN.md` is to a repository what `SKILL.md` is to a skill: YAML front-matter that says what a client is told, and a Markdown body with the rules that hold for every skill in the repository. It is read with the same parser and the same limits as `SKILL.md`, and it is visible on the git host as a document like any other.
+
+```markdown
+---
+name: SkillCDN examples
+description: Example skills and document sets, served live through SkillCDN. Use to see how a skill that drives a given tool is written.
+documents:
+  - documents
+license: MIT
+metadata:
+  author: skillcdn
+---
+# Rules for every skill in this repository
+
+- Ask when a choice changes the result; ask once, batched, only for what is missing.
+- Anything that costs the user money is estimated first and started only after they agree.
+- ...
+```
+
+| Field | Required | Rule |
+|---|---|---|
+| `name` | no | 1 to 100 characters on one line. Default: the repository's name on the git host. |
+| `description` | yes | 1 to 1024 characters. What the repository holds and who it is for. Shown on the page of the address, in the server instructions and in the description of `find`, instead of the host's description. |
+| `documents` | no | A sequence of directories, relative to the manifest, no `..`, at most 20. Their Markdown and JSON are listed and searched, and every file in them can be read. Default: none. |
+| `license` | no | Short text, as in `SKILL.md`. |
+| `metadata` | no | Mapping from short text keys to short text values, as in `SKILL.md`. |
+
+What changes when a mount has a manifest:
+
+- **Only what is declared is served.** The mount exposes its skills (every directory with a `SKILL.md`, as before), the directories named in `documents`, and the manifest itself. Nothing else is listed, searched or read: not the root `README.md`, not the check scripts, not the documentation of the repository's own conventions. Any later index (embeddings, for one) indexes the same set and nothing more.
+- **The body is the repository's rules.** The server hands it to the client with every skill: `get` and the skill's prompt return it as a section before the skill's own body, under a heading that names the file, and the server instructions say that the repository has rules and where they are. A skill no longer restates them. The body is kept short; past a limit it is cut with a note, and `read_file` has the rest.
+- **The name and the description come from the manifest**, on the page, in the instructions and in the REST answer, instead of from the host.
+- **A manifest that cannot be read fails closed**: it is reported as a diagnostic like a broken `SKILL.md`, and the mount serves its skills and the manifest only, so that a typo never exposes what the author meant to hide.
+
+Where it is looked up: at the mounted root; when there is none there, at each ancestor directory up to the repository root, nearest wins. A sub-path mount of a monorepo thus inherits the repository's manifest, and a directory with a manifest of its own is a project of its own; `documents` are clipped to the mount. A repository without a manifest is served as today: everything but hidden entries.
+
+The name: uppercase like `SKILL.md`, `README.md` and `AGENTS.md`, matched exactly, and it says which product reads it. A repository is in the SkillCDN Format once it has one.
 
 ## Parsing requirements
 
@@ -95,8 +138,7 @@ Everything in a repo is untrusted input:
 
 ## Open questions
 
-- A root manifest: whether the format should let a repository name and describe itself instead of relying on the git host, declare rules that every skill in it restates, and enable modules. The leading candidate is a Markdown file with front-matter at the root, the repository's counterpart of `SKILL.md`: the front-matter carries what a client is told (name, description), the body carries the rules that hold for every skill, and the server can hand both to a client with the catalog. A YAML file stays the fallback for configuration that is not prose. How much of it is needed versus inferred from `SKILL.md` front-matter.
-- Which files a mount should hide. Today every file in the tree is listed by `read_file` and every Markdown and JSON file is searched, tooling included (`.github/`, editor settings, check scripts). Candidates: skipping dot-directories and dotfiles by default, and an ignore list in the root manifest; a separate ignore file is a parser of its own.
+- The manifest, before it is built: whether skills should also be confined to declared directories (`skills:`) or stay "any directory with a `SKILL.md`"; whether the rules body is better served as a prompt of its own than as a section of every skill; the exact limits; and whether modules and aliases belong in its front-matter or in configuration that is not prose (a YAML file stays the fallback for that).
 - The exact rules for *verified*, and the wording of the provenance warning.
 - How `intake` questions are declared.
 - How skills that need user files describe an upload step, given that remote MCP servers cannot receive chat attachments.
