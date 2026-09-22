@@ -1,4 +1,4 @@
-// Runs before the first paint, so neither the theme nor the language flashes.
+// Runs before the first paint, so the language does not flash.
 // A plain script on purpose: it must work before any bundle has loaded. The language list is
 // checked against src/i18n/languages.ts by a test.
 (() => {
@@ -12,11 +12,6 @@
       return null;
     }
   };
-
-  const theme = stored("skillcdn.theme");
-  if (theme === "light" || theme === "dark") {
-    document.documentElement.dataset.theme = theme;
-  }
 
   const url = new URL(location.href);
   if (url.searchParams.has("lang")) {

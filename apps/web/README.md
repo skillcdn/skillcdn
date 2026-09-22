@@ -19,7 +19,6 @@ The development server answers the REST API from fixtures (`dev/fixtures.ts`), s
 
 - **<http://localhost:5173/dev/states>** lists every state of every page (loading, indexing, empty, errors, long texts, a partial index) and shows every building block on one page.
 - Add `?lang=ko` to any URL for Korean. Without it the page follows the browser's language once, then what you picked.
-- The theme button in the header cycles system, light, dark.
 
 To look at real repositories instead, run the server (see [`apps/server`](../server/README.md)) and start the UI with `pnpm dev:web:api`. It proxies to `http://127.0.0.1:11188`; to use another server, put `SKILLCDN_API_URL=https://...` into `apps/web/.env.local`.
 
@@ -27,9 +26,11 @@ To look at real repositories instead, run the server (see [`apps/server`](../ser
 
 | To change... | Edit |
 |---|---|
-| Colors, fonts, sizes, spacing, radii, light and dark | [`src/styles/tokens.css`](src/styles/tokens.css). Every value the UI uses is a token; components contain no raw colors or font stacks. Colors are `light-dark(<light>, <dark>)` pairs. |
+| Colors, fonts, sizes, spacing, radii | [`src/styles/tokens.css`](src/styles/tokens.css). Every value the UI uses is a token; components contain no raw colors or font stacks. The UI is dark only: one value per color. |
+| The Korean font | Hangul is drawn by Pretendard, self-hosted from the `pretendard` package. Latin stays with the system fonts in the stack. [`src/styles/pretendard.css`](src/styles/pretendard.css) is generated: run `pnpm --filter @skillcdn/web run generate:fonts` after changing the package version. |
 | Document defaults (headings, links, focus ring) | [`src/styles/base.css`](src/styles/base.css) |
 | A building block (button, badge, callout, tabs, code block, address form) | `src/components/<name>.tsx` with its styles next to it in `<name>.module.css` |
+| The clips beside "how it works" | `HOW_CLIPS` in [`src/site.ts`](src/site.ts), one per step, in the order of the steps. The files go under `public/`. A step without a clip shows an empty frame. |
 | A page | `src/pages/`: `landing`, `explore`, `mount*` (the explorer view of an address), `simple` (not found, bad address) |
 | How rendered Markdown from repositories looks | [`src/components/markdown.module.css`](src/components/markdown.module.css) |
 | Words | [`src/i18n/messages/en.ts`](src/i18n/messages/en.ts) and [`ko.ts`](src/i18n/messages/ko.ts). English is the source; the Korean pack must have the same shape, and a test checks it. |

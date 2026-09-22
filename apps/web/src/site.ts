@@ -21,6 +21,12 @@ export const LINKS = {
   security: `${REPOSITORY_URL}/blob/main/SECURITY.md`,
 } as const;
 
+/**
+ * A short silent clip beside each step of "how it works", in the order of the steps: a path
+ * under public/. A step without one shows an empty frame. Nothing is recorded yet.
+ */
+export const HOW_CLIPS: readonly string[] = [];
+
 /** Addresses that exist and stay valid: the reference repositories of this project. */
 export const EXAMPLE_ADDRESSES = [
   "skillcdn/skillcdn/skills/multi-skill",

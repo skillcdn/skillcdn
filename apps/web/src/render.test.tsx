@@ -72,6 +72,11 @@ describe("prerendered pages", () => {
       for (const item of t.landing.faq.items) {
         expect(landing.body, item.question).toContain(item.question);
       }
+      // Selecting a step changes the clip beside it, never what is on the page.
+      for (const step of t.landing.how.steps) {
+        expect(landing.body, step.title).toContain(step.title);
+        expect(landing.body, step.title).toContain(step.body);
+      }
       expect(landing.head).toContain(`<title data-head="">${t.meta.landing.title}</title>`);
 
       const explore = renderPage("/explore", language);
@@ -94,7 +99,8 @@ describe("prerendered pages", () => {
   it("carry a placeholder where the public origin goes", () => {
     const landing = renderPage("/", "en");
     expect(landing.head).toContain(`href="${ORIGIN_PLACEHOLDER}/"`);
-    expect(landing.body).toContain(`${ORIGIN_PLACEHOLDER.replace("https://", "")}/gh/owner/repo`);
+    // The host in front of the address field is where the origin reaches the body.
+    expect(landing.body).toContain(`${ORIGIN_PLACEHOLDER.replace("https://", "")}/gh/`);
   });
 
   it("include a frame for pages that render in the browser, and a page for what is missing", () => {

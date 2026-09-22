@@ -5,6 +5,10 @@ import { App } from "./app.js";
 import { LANGUAGE_INFO, languageOfSearch } from "./i18n/languages.js";
 import { matchRoute } from "./router.js";
 import { ORIGIN_META_NAME, ORIGIN_PLACEHOLDER, readOrigin } from "./site.js";
+// Pretendard is served from this origin: the content security policy allows no other source,
+// and the image has to work without the internet.
+// biome-ignore lint/correctness/useImportExtensions: a style sheet keeps its extension
+import "./styles/pretendard.css";
 // biome-ignore lint/correctness/useImportExtensions: a style sheet keeps its extension
 import "./styles/tokens.css";
 // biome-ignore lint/correctness/useImportExtensions: a style sheet keeps its extension

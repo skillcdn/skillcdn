@@ -61,6 +61,7 @@
   color: var(--color-accent);
 }
 
+/* The brand takes the left, the controls the right, and the bar fills its width. */
 .nav {
   display: flex;
   gap: var(--space-5);
@@ -95,8 +96,9 @@
 
 .footerInner {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: var(--space-5);
   width: 100%;
   max-width: var(--width-page);
@@ -116,6 +118,7 @@
 .footerLinks {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: var(--space-2) var(--space-5);
   font-size: var(--text-sm);
 }

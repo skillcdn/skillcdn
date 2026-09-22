@@ -53,13 +53,6 @@ export const en = {
     main: "Main",
   },
 
-  theme: {
-    label: "Theme",
-    system: "System",
-    light: "Light",
-    dark: "Dark",
-  },
-
   language: {
     label: "Language",
   },

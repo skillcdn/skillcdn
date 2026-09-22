@@ -28,7 +28,7 @@ export function BadAddressPage(props: { readonly origin: string; readonly error:
       <h1 className={styles.title}>{t.address.invalid}</h1>
       <Callout tone="danger">{t.address.errors[props.error.code]}</Callout>
       <div className={styles.form}>
-        <AddressForm origin={props.origin} examples />
+        <AddressForm origin={props.origin} footnote />
       </div>
     </Container>
   );

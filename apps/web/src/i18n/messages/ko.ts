@@ -45,13 +45,6 @@ export const ko: Messages = {
     main: "주 메뉴",
   },
 
-  theme: {
-    label: "테마",
-    system: "시스템",
-    light: "라이트",
-    dark: "다크",
-  },
-
   language: {
     label: "언어",
   },

@@ -57,7 +57,7 @@ export function StatesPage(_props: { readonly origin: string }) {
       <h1 className={styles.title}>States and building blocks</h1>
       <p className={styles.lead}>
         Development only. Every link opens a page in one particular state, served from fixtures. Add{" "}
-        <code>?lang=ko</code> to any of them, and switch the theme in the header.
+        <code>?lang=ko</code> to any of them.
       </p>
 
       <h2 className={styles.heading}>Pages</h2>

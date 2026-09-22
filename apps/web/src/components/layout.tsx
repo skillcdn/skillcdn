@@ -5,7 +5,6 @@ import { PATHS } from "../router.js";
 import { LINKS } from "../site.js";
 import { LanguageSwitcher } from "./language-switcher.js";
 import styles from "./layout.module.css";
-import { ThemeToggle } from "./theme-toggle.js";
 
 /** The placeholder symbol, inline so that it takes the text color. Same drawing as public/brand/symbol.svg. */
 function BrandSymbol() {
@@ -45,7 +44,6 @@ export function Layout(props: { readonly children: ReactNode }) {
           </nav>
           <div className={styles.controls}>
             <LanguageSwitcher />
-            <ThemeToggle />
           </div>
         </div>
       </header>

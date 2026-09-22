@@ -4,11 +4,14 @@
 
 .title {
   font-size: var(--text-2xl);
+  text-align: center;
 }
 
 .lead {
   max-width: var(--width-prose);
   margin-top: var(--space-3);
+  margin-inline: auto;
+  text-align: center;
   color: var(--color-text-muted);
   font-size: var(--text-lg);
 }
@@ -16,6 +19,7 @@
 .form {
   max-width: 44rem;
   margin-top: var(--space-6);
+  margin-inline: auto;
 }
 
 .featured {

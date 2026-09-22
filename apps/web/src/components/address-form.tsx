@@ -13,7 +13,8 @@ export function AddressForm(props: {
   readonly initialValue?: string;
   readonly label?: string;
   readonly large?: boolean;
-  readonly examples?: boolean;
+  /** The small line under the field: what else may be typed, and addresses to try. */
+  readonly footnote?: boolean;
 }) {
   const { t } = useI18n();
   const localized = useHref();
@@ -43,8 +44,14 @@ export function AddressForm(props: {
         >
           {props.label ?? t.address.label}
         </label>
-        <div className={cx(styles.row, props.large === true && styles.large)}>
-          <div className={cx(styles.field, errorCode !== undefined && styles.invalid)}>
+        <div
+          className={cx(
+            styles.row,
+            props.large === true && styles.large,
+            errorCode !== undefined && styles.invalid,
+          )}
+        >
+          <div className={styles.field}>
             <span className={styles.prefix} aria-hidden="true">
               {`${hostOf(props.origin)}/gh/`}
             </span>
@@ -70,30 +77,39 @@ export function AddressForm(props: {
             {t.address.submit}
           </Button>
         </div>
-        {errorCode === undefined ? (
-          <p id={hintId} className={styles.hint}>
-            {t.address.hint}
-          </p>
+        {props.footnote === true || errorCode !== undefined ? (
+          <div className={styles.footnote}>
+            {errorCode === undefined ? (
+              <p id={hintId} className={styles.hint}>
+                {t.address.hint}
+              </p>
+            ) : (
+              <p id={errorId} className={styles.error} role="alert">
+                {t.address.invalid} {t.address.errors[errorCode]}
+              </p>
+            )}
+            {props.footnote === true && (
+              <div className={styles.examples}>
+                <span className={styles.examplesLabel}>{t.address.examples}</span>
+                <ul className={styles.exampleList}>
+                  {EXAMPLE_ADDRESSES.map((example) => (
+                    <li key={example}>
+                      <Link className={styles.example} href={`/gh/${example}`}>
+                        {example}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
         ) : (
-          <p id={errorId} className={styles.error} role="alert">
-            {t.address.invalid} {t.address.errors[errorCode]}
+          // Nothing to read here, but the field still describes itself to a screen reader.
+          <p id={hintId} className="visually-hidden">
+            {t.address.hint}
           </p>
         )}
       </form>
-      {props.examples === true && (
-        <div className={styles.examples}>
-          <span className={styles.examplesLabel}>{t.address.examples}</span>
-          <ul className={styles.exampleList}>
-            {EXAMPLE_ADDRESSES.map((example) => (
-              <li key={example}>
-                <Link className={styles.example} href={`/gh/${example}`}>
-                  {example}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
     </div>
   );
 }

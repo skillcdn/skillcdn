@@ -53,6 +53,10 @@
   },
   "overrides": [
     {
+      "includes": ["apps/web/src/styles/pretendard.css"],
+      "formatter": { "enabled": false }
+    },
+    {
       "includes": ["**/*.config.ts"],
       "linter": {
         "rules": {

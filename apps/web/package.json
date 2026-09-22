@@ -10,6 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json --noEmit",
     "test": "vitest run --passWithNoTests",
     "dev": "vite",
+    "generate:fonts": "node scripts/generate-pretendard-css.mjs",
     "dev:api": "vite --mode api",
     "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\""
   },
@@ -25,6 +26,7 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^6.0.0",
+    "pretendard": "^1.3.9",
     "typescript": "catalog:",
     "vite": "^8.0.0",
     "vitest": "catalog:"

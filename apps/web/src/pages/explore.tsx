@@ -63,7 +63,7 @@ export function ExplorePage(props: { readonly origin: string }) {
       <h1 className={styles.title}>{t.explore.title}</h1>
       <p className={styles.lead}>{t.explore.lead}</p>
       <div className={styles.form}>
-        <AddressForm origin={props.origin} large examples />
+        <AddressForm origin={props.origin} large footnote />
       </div>
       <Featured />
     </Container>

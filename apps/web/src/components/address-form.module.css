@@ -1,32 +1,27 @@
 .wrapper {
   display: grid;
-  gap: var(--space-4);
 }
 
 .form {
   display: grid;
-  gap: var(--space-2);
 }
 
 .label {
+  margin-bottom: var(--space-2);
   color: var(--color-text-muted);
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
 }
 
+/* One control: the host, what is typed and the button share a single shell. */
 .row {
   display: flex;
-  gap: var(--space-2);
-}
-
-.field {
-  display: flex;
-  flex: 1;
   align-items: center;
-  min-width: 0;
+  gap: var(--space-2);
+  padding: var(--space-1);
   border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-md);
-  background: var(--color-bg);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-subtle);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   transition:
@@ -34,28 +29,42 @@
     box-shadow var(--transition);
 }
 
-.field:focus-within {
+.row:focus-within {
   border-color: var(--color-accent);
   box-shadow: 0 0 0 3px var(--color-accent-subtle);
 }
 
-.invalid {
+/* An error outranks the focus ring: the control keeps saying something is wrong. */
+.invalid,
+.invalid:focus-within {
   border-color: var(--color-danger);
+}
+
+.invalid:focus-within {
+  box-shadow: 0 0 0 3px var(--color-danger-subtle);
+}
+
+.field {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
 }
 
 .prefix {
   flex: none;
-  padding-left: var(--space-4);
+  padding-left: var(--space-3);
   color: var(--color-text-faint);
   white-space: nowrap;
   user-select: none;
 }
 
+/* No padding on the left: what is typed continues the host, as one address. */
 .input {
   flex: 1;
   min-width: 0;
-  height: 2.75rem;
-  padding: 0 var(--space-4) 0 0;
+  height: 2.25rem;
+  padding: 0 var(--space-2) 0 0;
   border: 0;
   background: transparent;
   font-family: inherit;
@@ -70,32 +79,45 @@
   color: var(--color-text-faint);
 }
 
+/* The button sits inside the shell: its corners follow the shell's, less the padding. */
 .submit {
-  min-height: 2.75rem;
-  padding-inline: var(--space-5);
+  flex: none;
+  min-height: 2.25rem;
+  padding-inline: var(--space-4);
+  border-radius: var(--radius-md);
 }
 
-.large .field {
+.large {
   font-size: var(--text-md);
 }
 
 .large .input,
 .large .submit {
-  height: 3.25rem;
-  min-height: 3.25rem;
+  height: 3rem;
+  min-height: 3rem;
 }
 
 .large .submit {
+  padding-inline: var(--space-5);
   font-size: var(--text-md);
+}
+
+/* The hint, or what went wrong, and the examples run on as one line of small text: they flow
+   into each other and wrap mid-line instead of each taking a row of its own. */
+.footnote {
+  margin-top: var(--space-2);
+  padding-inline: var(--space-2);
+  font-size: var(--text-xs);
+  line-height: 1.9;
 }
 
 .hint,
 .error {
-  font-size: var(--text-sm);
+  display: inline;
 }
 
 .hint {
-  color: var(--color-text-muted);
+  color: var(--color-text-faint);
 }
 
 .error {
@@ -103,53 +125,47 @@
 }
 
 .examples {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-2) var(--space-3);
-  font-size: var(--text-sm);
+  display: inline;
+  margin-left: var(--space-5);
 }
 
 .examplesLabel {
-  color: var(--color-text-muted);
+  color: var(--color-text-faint);
 }
 
 .exampleList {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
+  display: inline;
+}
+
+.exampleList li {
+  display: inline;
+  margin-left: var(--space-3);
 }
 
 .example {
-  display: inline-block;
-  padding: 0.15rem var(--space-3);
-  border: var(--border);
-  border-radius: 999px;
   color: var(--color-text-muted);
   font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  white-space: nowrap;
   text-decoration: none;
-  transition:
-    border-color var(--transition),
-    color var(--transition);
+  transition: color var(--transition);
 }
 
 .example:hover {
-  border-color: var(--color-accent);
   color: var(--color-accent);
+  text-decoration: underline;
 }
 
 @media (max-width: 40rem) {
-  .row {
-    flex-direction: column;
-  }
-
   /* The host takes the room the input needs on a narrow screen; the label already says GitHub. */
   .prefix {
     display: none;
   }
 
   .input {
-    padding-left: var(--space-4);
+    padding-left: var(--space-3);
+  }
+
+  .large .submit {
+    padding-inline: var(--space-4);
   }
 }
