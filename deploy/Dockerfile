@@ -41,6 +41,6 @@ COPY --from=build --chown=node:node /out ./
 COPY --from=build --chown=node:node /repo/apps/web/dist ./web
 ENV WEB_ROOT=/app/web
 USER node
-EXPOSE 8080
+EXPOSE 11188
 ENTRYPOINT ["node", "--enable-source-maps", "dist/main.js"]
 CMD ["api"]

@@ -29,10 +29,10 @@ function fixtureApi(): Plugin {
 }
 
 // `vite` serves the UI against fixtures. `vite --mode api` proxies to a real server instead:
-// http://127.0.0.1:8080, or SKILLCDN_API_URL from apps/web/.env.local.
+// http://127.0.0.1:11188, or SKILLCDN_API_URL from apps/web/.env.local.
 export default defineConfig(({ mode, isSsrBuild }) => {
   const env = loadEnv(mode, process.cwd(), "SKILLCDN_");
-  const apiUrl = mode === "api" ? (env.SKILLCDN_API_URL ?? "http://127.0.0.1:8080") : undefined;
+  const apiUrl = mode === "api" ? (env.SKILLCDN_API_URL ?? "http://127.0.0.1:11188") : undefined;
 
   return {
     plugins: [react(), ...(apiUrl === undefined ? [fixtureApi()] : [])],

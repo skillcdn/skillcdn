@@ -24,7 +24,7 @@ describe("loadConfig", () => {
     expect(config).toMatchObject({
       environment: "production",
       logLevel: "info",
-      http: { host: "0.0.0.0", port: 8080, shutdownGraceMs: 20_000 },
+      http: { host: "0.0.0.0", port: 11188, shutdownGraceMs: 20_000 },
       database: { url: DATABASE_URL, poolMax: 10 },
       github: { apiUrl: "https://api.github.com", token: undefined },
       mounts: { repoTtlMs: 60_000, refTtlMs: 60_000 },

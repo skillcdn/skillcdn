@@ -79,7 +79,7 @@ const environmentSchema = z.object({
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
 
   HOST: z.string().min(1).default("0.0.0.0"),
-  PORT: integer(8080, 1, 65_535),
+  PORT: integer(11188, 1, 65_535),
   SHUTDOWN_GRACE_SECONDS: integer(20, 1, 600),
   HTTP_KEEP_ALIVE_SECONDS: integer(65, 1, 3600),
   HTTP_REQUEST_TIMEOUT_SECONDS: integer(60, 1, 3600),

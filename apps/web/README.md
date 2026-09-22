@@ -21,7 +21,7 @@ The development server answers the REST API from fixtures (`dev/fixtures.ts`), s
 - Add `?lang=ko` to any URL for Korean. Without it the page follows the browser's language once, then what you picked.
 - The theme button in the header cycles system, light, dark.
 
-To look at real repositories instead, run the server (see [`apps/server`](../server/README.md)) and start the UI with `pnpm dev:web:api`. It proxies to `http://127.0.0.1:8080`; to use another server, put `SKILLCDN_API_URL=https://...` into `apps/web/.env.local`.
+To look at real repositories instead, run the server (see [`apps/server`](../server/README.md)) and start the UI with `pnpm dev:web:api`. It proxies to `http://127.0.0.1:11188`; to use another server, put `SKILLCDN_API_URL=https://...` into `apps/web/.env.local`.
 
 ## Where the design lives
 

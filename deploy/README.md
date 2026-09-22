@@ -15,7 +15,7 @@ A compose bundle and install script for self-hosting are planned ([roadmap](../d
 ```sh
 docker build -f deploy/Dockerfile -t skillcdn .      # from the repository root
 docker run --rm skillcdn migrate                     # one-off role
-docker run --rm -p 8080:8080 --env-file .env skillcdn api
+docker run --rm -p 11188:11188 --env-file .env skillcdn api
 ```
 
 The image runs as a non-root user, contains production dependencies only, and has no secrets and no configuration baked in.
@@ -28,7 +28,7 @@ The server is configured only through environment variables. [`.env.example`](..
 |---|---|---|---|---|
 | `NODE_ENV` | all | no | no | The image sets `production`. |
 | `LOG_LEVEL` | all | no | no | Default `info`. |
-| `HOST`, `PORT` | `api` | no | no | Defaults `0.0.0.0` and `8080`. |
+| `HOST`, `PORT` | `api` | no | no | Defaults `0.0.0.0` and `11188`. |
 | `SHUTDOWN_GRACE_SECONDS` | `api` | no | no | Default `20`. Keep the platform's stop timeout above it. |
 | `HTTP_KEEP_ALIVE_SECONDS`, `HTTP_REQUEST_TIMEOUT_SECONDS` | `api` | no | no | Defaults `65` and `60`. See [Behind a reverse proxy](#behind-a-reverse-proxy). |
 | `ACCESS_LOG` | `api` | no | no | Default `true`: one log line per request, probes excluded. |
