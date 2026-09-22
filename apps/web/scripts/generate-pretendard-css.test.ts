@@ -57,6 +57,15 @@ describe("the generated Pretendard style sheet", () => {
     expect(faces(generated)).toHaveLength(withHangul.length);
   });
 
+  it("ships the license of the font next to it", () => {
+    // The Open Font License asks for its text and the copyright notices to travel with the font
+    // files; the web build carries them as public/licenses/pretendard.txt.
+    const notice = readFileSync(join(here, "../public/licenses/pretendard.txt"), "utf8");
+    expect(notice).toContain("SIL OPEN FONT LICENSE Version 1.1");
+    expect(notice).toContain("Reserved Font Name 'Pretendard'");
+    expect(notice).toContain("PERMISSION & CONDITIONS");
+  });
+
   it("points at files the package ships", () => {
     const urls = [...generated.matchAll(/url\("([^"]+)"\)/g)].map((match) => match[1] ?? "");
     expect(urls).toHaveLength(faces(generated).length);

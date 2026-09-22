@@ -135,6 +135,7 @@ Keep docs lean: current facts and decisions, not history or essays. Git history 
 
 - Add with `pnpm add --filter <package> <dep>`. Versions shared across packages go in the `catalog` in `pnpm-workspace.yaml`.
 - Justify every new runtime dependency in the commit message: why it is needed, maintenance health, install scripts, license. Permissive licenses only (MIT, Apache-2.0, BSD, ISC); we ship images, so no copyleft or source-available dependencies.
+- Fonts and other assets that end up in the image are dependencies too, and they must ship inside it: an installation may have no internet, and the pages allow no foreign source. Their license must permit bundling and redistribution. The SIL Open Font License 1.1 is accepted for font files that are not modified, with the copyright and license notice shipped next to them. List every such asset in `THIRD-PARTY-NOTICES.md`.
 - Releases younger than three days are not installable (`minimumReleaseAge`). Bypass only for a security fix, and say so in the commit message.
 - Never hand-edit `pnpm-lock.yaml`; resolve conflicts by running `pnpm install`.
 

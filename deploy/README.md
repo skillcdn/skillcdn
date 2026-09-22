@@ -18,7 +18,7 @@ docker run --rm skillcdn migrate                     # one-off role
 docker run --rm -p 11188:11188 --env-file .env skillcdn api
 ```
 
-The image runs as a non-root user, contains production dependencies only, and has no secrets and no configuration baked in.
+The image runs as a non-root user, contains production dependencies only, and has no secrets and no configuration baked in. It carries the fonts of the web UI under their own license; see [`THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOTICES.md).
 
 ## Environment contract
 

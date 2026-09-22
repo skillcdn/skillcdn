@@ -27,7 +27,7 @@ To look at real repositories instead, the UI can run in front of a real server, 
 | To change... | Edit |
 |---|---|
 | Colors, fonts, sizes, spacing, radii | [`src/styles/tokens.css`](src/styles/tokens.css). Every value the UI uses is a token; components contain no raw colors or font stacks. The UI is dark only: one value per color. |
-| The Korean font | Hangul is drawn by Pretendard, self-hosted from the `pretendard` package. Latin stays with the system fonts in the stack. [`src/styles/pretendard.css`](src/styles/pretendard.css) is generated: run `pnpm --filter @skillcdn/web run generate:fonts` after changing the package version. |
+| The Korean font | Hangul is drawn by Pretendard, self-hosted from the `pretendard` package. Latin stays with the system fonts in the stack. [`src/styles/pretendard.css`](src/styles/pretendard.css) is generated: run `pnpm --filter @skillcdn/web run generate:fonts` after changing the package version. Its license ships with it as [`public/licenses/pretendard.txt`](public/licenses/pretendard.txt), listed in [`THIRD-PARTY-NOTICES.md`](../../THIRD-PARTY-NOTICES.md). |
 | Document defaults (headings, links, focus ring) | [`src/styles/base.css`](src/styles/base.css) |
 | A building block (button, badge, callout, tabs, code block, address form) | `src/components/<name>.tsx` with its styles next to it in `<name>.module.css` |
 | The clips beside "how it works" | `HOW_CLIPS` in [`src/site.ts`](src/site.ts), one per step, in the order of the steps. The files go under `public/`. A step without a clip shows an empty frame. |

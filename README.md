@@ -107,7 +107,7 @@ SkillCDN is **source-available** under the [Functional Source License, Version 1
 - The one thing reserved is offering this software, or something substantially similar built from it, to others as a competing commercial product or service.
 - Every release becomes Apache 2.0 two years after it is published.
 
-This summary is not the license; [LICENSE.md](LICENSE.md) is. "SkillCDN" and its logos are trademarks of KDX Labs Corp. and are not licensed with the code; see [TRADEMARKS.md](TRADEMARKS.md). The hosted service at `skillcdn.ai` is operated by KDX Labs. To report a vulnerability, see [SECURITY.md](SECURITY.md).
+This summary is not the license; [LICENSE.md](LICENSE.md) is. "SkillCDN" and its logos are trademarks of KDX Labs Corp. and are not licensed with the code; see [TRADEMARKS.md](TRADEMARKS.md). The hosted service at `skillcdn.ai` is operated by KDX Labs. Fonts bundled with the web UI have licenses of their own; see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
 ---
 
