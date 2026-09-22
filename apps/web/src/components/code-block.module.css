@@ -23,20 +23,13 @@
   letter-spacing: 0.02em;
 }
 
-.pre,
-.wrapped {
-  padding: var(--space-4);
-  font-size: var(--text-sm);
-  line-height: 1.55;
-  tab-size: 2;
-}
-
+/* Long lines wrap; nothing here scrolls sideways. A block holds a URL, a command, a configuration
+   or a file, and all of those are meant to be read whole, not panned across. */
 .pre {
-  overflow-x: auto;
-  white-space: pre;
-}
-
-.wrapped {
+  padding: var(--space-5);
+  font-size: var(--text-sm);
+  line-height: var(--leading-code);
+  tab-size: 2;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }

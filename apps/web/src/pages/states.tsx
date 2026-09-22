@@ -118,7 +118,6 @@ export function StatesPage(_props: { readonly origin: string }) {
           label="With a label"
           code={"claude mcp add --transport http skills https://example.test/gh/acme/skills"}
           copy
-          wrap
         />
         <Tabs
           label="Example tabs"

@@ -120,7 +120,7 @@ export function ConnectGuide(props: {
   const name = serverNameOf(address);
   const c = t.connect.clients;
   const config = (shape: Record<string, unknown>) => JSON.stringify(shape, null, 2);
-  const endpoint = <CodeBlock code={url} copy wrap />;
+  const endpoint = <CodeBlock code={url} copy />;
 
   const tabs = [
     {
@@ -157,9 +157,7 @@ export function ConnectGuide(props: {
           items={[
             {
               text: c.claudeCode.steps[0],
-              extra: (
-                <CodeBlock code={`claude mcp add --transport http ${name} ${url}`} copy wrap />
-              ),
+              extra: <CodeBlock code={`claude mcp add --transport http ${name} ${url}`} copy />,
             },
             { text: c.claudeCode.steps[1] },
           ]}
@@ -212,7 +210,6 @@ export function ConnectGuide(props: {
                 <CodeBlock
                   code={`code --add-mcp '${JSON.stringify({ name, type: "http", url })}'`}
                   copy
-                  wrap
                 />
               ),
             },
@@ -244,7 +241,7 @@ export function ConnectGuide(props: {
           items={[
             {
               text: c.codex.steps[0],
-              extra: <CodeBlock code={`codex mcp add ${name} --url ${url}`} copy wrap />,
+              extra: <CodeBlock code={`codex mcp add ${name} --url ${url}`} copy />,
             },
           ]}
         />
@@ -258,9 +255,7 @@ export function ConnectGuide(props: {
           items={[
             {
               text: c.gemini.steps[0],
-              extra: (
-                <CodeBlock code={`gemini mcp add --transport http ${name} ${url}`} copy wrap />
-              ),
+              extra: <CodeBlock code={`gemini mcp add --transport http ${name} ${url}`} copy />,
             },
           ]}
         />
@@ -292,14 +287,14 @@ export function ConnectGuide(props: {
         </h2>
         <p className={styles.lead}>{t.connect.lead}</p>
       </div>
-      <CodeBlock label={t.connect.endpoint} code={url} copy wrap />
+      <CodeBlock label={t.connect.endpoint} code={url} copy />
       <Tabs label={t.connect.clientsLabel} tabs={tabs} />
       <p className={styles.hint}>{t.connect.nameHint(name)}</p>
       {mount !== undefined && (
         <details className={styles.preview}>
           <summary className={styles.previewSummary}>{t.connect.preview.summary}</summary>
           <p className={styles.hint}>{t.connect.preview.hint}</p>
-          <CodeBlock code={instructionsOf(address, mount)} wrap />
+          <CodeBlock code={instructionsOf(address, mount)} />
         </details>
       )}
     </section>

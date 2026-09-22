@@ -39,7 +39,6 @@ export function CodeBlock(props: {
   readonly code: string;
   readonly label?: string;
   readonly copy?: boolean;
-  readonly wrap?: boolean;
 }) {
   return (
     <figure className={styles.block}>
@@ -49,8 +48,7 @@ export function CodeBlock(props: {
           {props.copy === true && <CopyButton text={props.code} />}
         </figcaption>
       )}
-      {/* biome-ignore lint/a11y/noNoninteractiveTabindex: a scrolling region must be reachable by keyboard */}
-      <pre className={props.wrap === true ? styles.wrapped : styles.pre} tabIndex={0}>
+      <pre className={styles.pre}>
         <code>{props.code}</code>
       </pre>
     </figure>
