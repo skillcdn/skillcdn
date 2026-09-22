@@ -32,6 +32,9 @@ function MountHeader(props: { readonly address: Address; readonly mount: RestMou
     <header className={styles.header}>
       <p className={styles.kicker}>{t.mount.repository}</p>
       <h1 className={styles.title}>{name}</h1>
+      {mount?.repository.description != null && (
+        <p className={styles.description}>{mount.repository.description}</p>
+      )}
       {mount !== undefined && (
         <ul className={styles.facts}>
           <li>

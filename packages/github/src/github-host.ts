@@ -7,6 +7,7 @@ import {
   type GitHost,
   GitHostError,
   type HostRepository,
+  hasForbiddenCodePoint,
   isFullCommitHash,
   parseRepoPath,
   type RepoCoordinates,
@@ -46,6 +47,19 @@ const JSON_ACCEPT = "application/vnd.github+json";
 const SHA_ACCEPT = "application/vnd.github.sha";
 const RAW_ACCEPT = "application/vnd.github.raw+json";
 
+/** GitHub caps a description at 350 characters. Anything unprintable is not a description. */
+const MAX_DESCRIPTION_LENGTH = 350;
+
+function cleanDescription(value: string | null | undefined): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const text = value.replaceAll(/\s+/g, " ").trim();
+  return text.length === 0 || hasForbiddenCodePoint(text)
+    ? undefined
+    : text.slice(0, MAX_DESCRIPTION_LENGTH);
+}
+
 // Only the fields we read are validated; GitHub adds fields freely.
 const repositorySchema = z.object({
   id: z.number().int().positive(),
@@ -53,6 +67,7 @@ const repositorySchema = z.object({
   private: z.boolean(),
   visibility: z.string().optional(),
   default_branch: z.string().min(1),
+  description: z.string().nullable().optional(),
   owner: z.object({
     id: z.number().int().positive(),
     login: z.string().min(1),
@@ -164,6 +179,7 @@ export function createGitHubHost(options: GitHubHostOptions): GitHost {
         },
         name: repository.name,
         defaultBranch: repository.default_branch,
+        description: cleanDescription(repository.description),
         // "internal" is visible to a whole enterprise, which is still not public.
         visibility:
           !repository.private && (repository.visibility ?? "public") === "public"

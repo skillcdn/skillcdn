@@ -41,7 +41,7 @@ What the address serves.
 ```json
 {
   "address": "/gh/acme/skills@v2/ads",
-  "repository": { "host": "gh", "owner": "Acme", "name": "skills", "defaultBranch": "main" },
+  "repository": { "host": "gh", "owner": "Acme", "name": "skills", "defaultBranch": "main", "description": "Skills for every team" },
   "ref": "v2",
   "pinned": false,
   "commit": "0123456789abcdef0123456789abcdef01234567",
@@ -60,6 +60,7 @@ What the address serves.
 ```
 
 - `address` is the canonical form. `ref` is `null` for the default branch. `pinned` is true for a full commit hash.
+- `repository.description` is what the host shows as the description of the repository, on one line, or `null`.
 - `skills` and `documents` list at most 200 entries each; the counts are complete.
 - `diagnostics` are the findings of the [convention parser](skill-repo.md) for the repository author: manifests that were skipped, and why. Only manifests inside the mounted path are listed.
 - `truncated` is true when the repository was larger than the indexing limits.
@@ -102,7 +103,7 @@ The addresses the operator chose to show on the explorer's front page (`FEATURED
 
 ```json
 { "items": [
-  { "address": "/gh/acme/skills", "repository": { "host": "gh", "owner": "Acme", "name": "skills", "defaultBranch": "main" },
+  { "address": "/gh/acme/skills", "repository": { "host": "gh", "owner": "Acme", "name": "skills", "defaultBranch": "main", "description": null },
     "status": "ready", "skillCount": 12, "skills": ["ad-copy", "incident-review"] }
 ] }
 ```

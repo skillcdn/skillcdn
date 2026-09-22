@@ -51,6 +51,7 @@ function hostRepository(patch: Partial<HostRepository> = {}): HostRepository {
     hostRepoId: String(nextHostId),
     name: "Skills",
     defaultBranch: "main",
+    description: undefined,
     visibility: "public",
     owner: { hostAccountId: `9${nextHostId}`, login: "Acme", kind: "organization" },
     ...patch,
@@ -113,7 +114,7 @@ describe("migrations", () => {
 describe("repositories", () => {
   it("round-trips what the host reported", async () => {
     const alias = { host: "gh" as const, owner: "acme", repo: "skills" };
-    const repository = hostRepository();
+    const repository = hostRepository({ description: "Skills for every team." });
     expect(await findRepoByAlias(database, alias)).toBeUndefined();
     const saved = await saveRepository(database, alias, repository, T0);
     expect(await findRepoByAlias(database, alias)).toEqual({

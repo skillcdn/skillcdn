@@ -50,7 +50,13 @@ describe("GET /api/v1/mounts/<address>", () => {
     const mount = restMountSchema.parse(await (await h.request(`/api/v1/mounts${address}`)).json());
     expect(mount).toMatchObject({
       address,
-      repository: { host: "gh", owner: "Acme", name: "multi-skill", defaultBranch: "main" },
+      repository: {
+        host: "gh",
+        owner: "Acme",
+        name: "multi-skill",
+        defaultBranch: "main",
+        description: "Two skills and the documents next to them.",
+      },
       ref: fixtureCommits("rest-overview").main,
       pinned: true,
       commit: fixtureCommits("rest-overview").main,
@@ -275,7 +281,13 @@ describe("GET /api/v1/featured", () => {
       items: [
         {
           address: `/gh/acme/multi-skill@${commit}`,
-          repository: { host: "gh", owner: "Acme", name: "multi-skill", defaultBranch: "main" },
+          repository: {
+            host: "gh",
+            owner: "Acme",
+            name: "multi-skill",
+            defaultBranch: "main",
+            description: "Two skills and the documents next to them.",
+          },
           status: "ready",
           skillCount: 2,
           skills: ["incident-review", "release-notes"],

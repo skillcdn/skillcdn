@@ -62,6 +62,7 @@ function repositoryOf(mount: Mount): RestRepository {
     owner: repository.owner.login,
     name: repository.name,
     defaultBranch: repository.defaultBranch,
+    description: repository.description ?? null,
   };
 }
 

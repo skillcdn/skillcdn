@@ -59,6 +59,7 @@ export async function findRepoByAlias(
       hostRepoId: row.repo.hostRepoId,
       name: row.repo.name,
       defaultBranch: row.repo.defaultBranch,
+      description: row.repo.description ?? undefined,
       visibility: row.repo.visibility,
       owner: {
         hostAccountId: row.account.hostAccountId,
@@ -106,6 +107,7 @@ export async function saveRepository(
         hostRepoId: repository.hostRepoId,
         name: repository.name,
         defaultBranch: repository.defaultBranch,
+        description: repository.description ?? null,
         visibility: repository.visibility,
         updatedAt: now,
       })
@@ -116,6 +118,7 @@ export async function saveRepository(
           accountId: account.id,
           name: repository.name,
           defaultBranch: repository.defaultBranch,
+          description: repository.description ?? null,
           visibility: repository.visibility,
           updatedAt: now,
         },

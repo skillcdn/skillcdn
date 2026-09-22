@@ -15,6 +15,8 @@ export interface FixtureRepository {
   readonly owner: string;
   readonly name: string;
   readonly defaultBranch: string;
+  /** What the host shows as the repository's description. */
+  readonly description?: string;
   readonly commit: string;
   readonly state: "ready" | "indexing" | "slow" | "failed";
   readonly truncated?: boolean;
@@ -139,6 +141,7 @@ const ACME_SKILLS: FixtureRepository = {
   owner: "Acme",
   name: "skills",
   defaultBranch: "main",
+  description: "The skills Acme's teams share: release notes, incident reviews and more.",
   commit: "4f2a9c1e7b3d5a6f8091a2b3c4d5e6f708192a3b",
   state: "ready",
   skills: [
@@ -241,6 +244,7 @@ const DEMO_LONG: FixtureRepository = {
   owner: "an-organization-with-a-remarkably-long-name",
   name: "a-repository-name-that-is-also-far-too-long-to-fit.anywhere",
   defaultBranch: "main",
+  description: LONG_TEXT.repeat(2).trim(),
   commit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   state: "ready",
   truncated: true,
@@ -270,6 +274,7 @@ export const FIXTURE_REPOSITORIES: Readonly<Record<string, FixtureRepository>> =
     owner: "Acme",
     name: "handbook",
     defaultBranch: "trunk",
+    description: "How Acme works, as plain documents.",
     commit: "b7e1d2c3a4f5968778695a4b3c2d1e0f9a8b7c6d",
     state: "ready",
     skills: [],

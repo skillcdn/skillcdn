@@ -39,6 +39,8 @@ export const restRepositorySchema = z.object({
   owner: z.string(),
   name: z.string(),
   defaultBranch: z.string(),
+  /** What the host shows as the repository's description, or `null`. */
+  description: z.nullable(z.string()),
 });
 
 export const restSkillSummarySchema = z.object({

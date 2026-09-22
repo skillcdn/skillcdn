@@ -44,6 +44,7 @@ async function repository(
       hostRepoId: String(nextHostId),
       name,
       defaultBranch: "main",
+      description: undefined,
       visibility: "public",
       owner: { hostAccountId: `7${nextHostId}`, login: owner, kind: "organization" },
       ...patch,

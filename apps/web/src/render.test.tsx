@@ -18,7 +18,13 @@ const TEMPLATE = `<!doctype html>\n${TEMPLATE_MARKERS.htmlLang}<head>${TEMPLATE_
 
 const MOUNT: RestMount = {
   address: "/gh/acme/skills",
-  repository: { host: "gh", owner: "Acme", name: "skills", defaultBranch: "main" },
+  repository: {
+    host: "gh",
+    owner: "Acme",
+    name: "skills",
+    defaultBranch: "main",
+    description: "Skills for the whole team.",
+  },
   ref: null,
   pinned: false,
   commit: "a".repeat(40),

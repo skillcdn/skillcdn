@@ -55,6 +55,8 @@ export const repos = pgTable(
     hostRepoId: text().notNull(),
     name: text().notNull(),
     defaultBranch: text().notNull(),
+    /** The host's description of the repository, when it has one. */
+    description: text(),
     visibility: text({ enum: ["public", "private"] }).notNull(),
     createdAt: createdAt(),
     updatedAt: instant().notNull().defaultNow(),

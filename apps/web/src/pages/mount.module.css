@@ -20,6 +20,14 @@
   text-align: center;
 }
 
+.description {
+  max-width: var(--width-prose);
+  margin: var(--space-2) auto 0;
+  color: var(--color-text-muted);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
 .facts {
   display: flex;
   flex-wrap: wrap;

@@ -91,6 +91,7 @@ describe("getRepository", () => {
       owner: { hostAccountId: "331879177", login: "skillcdn", kind: "organization" },
       name: "skillcdn",
       defaultBranch: "main",
+      description: undefined,
       visibility: "public",
     });
   });

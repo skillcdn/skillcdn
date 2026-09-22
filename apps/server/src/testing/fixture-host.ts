@@ -16,6 +16,12 @@ const FIXTURES_ROOT = fileURLToPath(new URL("../../../../skills", import.meta.ur
 
 const sha1 = (text: string): string => createHash("sha1").update(text).digest("hex");
 
+/** What the host would show as the description of a fixture repository. */
+const FIXTURE_DESCRIPTIONS: Readonly<Record<string, string>> = {
+  "multi-skill": "Two skills and the documents next to them.",
+  "single-skill": "One skill at the root of the repository.",
+};
+
 /**
  * The commits behind the two refs every fixture repository has. Tests share one database, and a
  * commit is indexed once: a host that adds files of its own takes a `variant`, which gives it
@@ -139,6 +145,7 @@ export function createFixtureHost(
         owner: { hostAccountId: "42", login: "Acme", kind: "organization" },
         name: coordinates.repo,
         defaultBranch: "main",
+        description: FIXTURE_DESCRIPTIONS[coordinates.repo],
         visibility: isPrivate ? "private" : "public",
       };
     },

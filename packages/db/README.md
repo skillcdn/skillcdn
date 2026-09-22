@@ -36,7 +36,7 @@ Primary keys are `uuid DEFAULT uuidv7()` and timestamps are `timestamptz`, with 
 | Table | What a row is | Keys and indexes |
 |---|---|---|
 | `accounts` | An organization or user on a git host: the tenant unit. | unique `(host, host_account_id)` |
-| `repos` | A repository, identified by the host's immutable id, so renames and transfers keep their index. Holds what the host last reported: name, default branch, visibility. | unique `(host, host_repo_id)`; `account_id` |
+| `repos` | A repository, identified by the host's immutable id, so renames and transfers keep their index. Holds what the host last reported: name, default branch, description, visibility. | unique `(host, host_repo_id)`; `account_id` |
 | `repo_aliases` | An `owner/name` spelling from an address (lowercase) and the repository it currently names, with `checked_at` for the freshness of that fact. A lookup index read before the account is known, so it is not tenant-scoped. | unique `(host, owner, name)`; `repo_id` |
 | `repo_refs` | Cache of a moving ref: `ref` (empty for the default branch) to `commit_sha`, with `checked_at`. | unique `(repo_id, ref)` |
 | `snapshots` | The index of one commit of one repository and how far building it has come: `status` (`pending`, `indexing`, `ready`, `failed`), `attempts`, `lease_expires_at`, `retry_at`, `error_code`, `truncated`, counters, `diagnostics` for the repository author. | unique `(repo_id, commit_sha)`; `account_id` |

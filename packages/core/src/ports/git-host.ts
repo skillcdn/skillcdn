@@ -23,6 +23,8 @@ export interface HostRepository {
   /** The name as the host spells it. */
   readonly name: string;
   readonly defaultBranch: string;
+  /** What the host shows as the repository's description, on one line; `undefined` when there is none. */
+  readonly description: string | undefined;
   /** Anything the host does not report as public is `private`. */
   readonly visibility: "public" | "private";
 }

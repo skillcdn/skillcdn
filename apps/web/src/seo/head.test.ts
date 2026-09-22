@@ -8,7 +8,13 @@ const ORIGIN = "https://skills.example";
 
 const MOUNT: RestMount = {
   address: "/gh/acme/skills",
-  repository: { host: "gh", owner: "Acme", name: "skills", defaultBranch: "main" },
+  repository: {
+    host: "gh",
+    owner: "Acme",
+    name: "skills",
+    defaultBranch: "main",
+    description: null,
+  },
   ref: null,
   pinned: false,
   commit: "a".repeat(40),
