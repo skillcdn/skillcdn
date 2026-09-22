@@ -79,7 +79,9 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
 
   // The MCP handler builds a server per request. The mount it serves is resolved by the route
   // below before the handler runs, and handed over through this map.
-  const resolvedFor = new WeakMap<Request, { mount: Mount; requestId: string }>();
+  const resolvedFor = new WeakMap<Request, { mount: Mount; requestId: string; origin: string }>();
+  /** Where the pages of this deployment are, as far as a request can tell. */
+  const originOf = (url: string): string => tools.publicUrl ?? new URL(url).origin;
   const mcp = createMcpHandler(
     async (context) => {
       const request = context.requestInfo;
@@ -90,13 +92,14 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
         const parsed = parseAddress(new URL(request.url).pathname);
         mount = parsed.ok ? await mounts.resolve(parsed.value) : undefined;
       }
-      if (mount === undefined) {
+      if (mount === undefined || request === undefined) {
         throw new Error("no mount was resolved for this request");
       }
-      return createMountServer(mount, {
-        ...tools,
-        logger: tools.logger.child({ requestId: resolved?.requestId }),
-      });
+      return await createMountServer(
+        mount,
+        { ...tools, logger: tools.logger.child({ requestId: resolved?.requestId }) },
+        { origin: resolved?.origin ?? originOf(request.url) },
+      );
     },
     {
       onerror: (error) => logger.warn({ err: error }, "mcp handler error"),
@@ -258,7 +261,11 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
       if (c.req.method === "POST") {
         tools.stats.client(mount, c.get("clientAddress"));
       }
-      resolvedFor.set(c.req.raw, { mount, requestId: c.get("requestId") });
+      resolvedFor.set(c.req.raw, {
+        mount,
+        requestId: c.get("requestId"),
+        origin: originOf(c.req.url),
+      });
       const response = await mcp.fetch(c.req.raw);
       // Public content, but a moving ref: caches between us and the client must not pin it.
       response.headers.set("cache-control", "no-store");

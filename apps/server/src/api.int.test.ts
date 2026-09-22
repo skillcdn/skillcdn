@@ -1,5 +1,5 @@
 import type { Client } from "@modelcontextprotocol/client";
-import { INDEXING_NOTICE, PROVENANCE_NOTICE } from "@skillcdn/core";
+import { INDEXING_NOTICE, INSTRUCTIONS_MAX_LENGTH, PROVENANCE_NOTICE } from "@skillcdn/core";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createFixtureHost, fixtureCommits } from "./testing/fixture-host.js";
@@ -184,6 +184,41 @@ describe("a multi-skill repository", () => {
       expect(result.isError).toBe(true);
       expect(result.text).toContain(reason);
     }
+    await client.close();
+  });
+
+  it("tells a client what the repository holds as it connects", async () => {
+    const host = createFixtureHost("connect-catalog");
+    // Pinned, so that the ref cache of the earlier tests does not answer with their commit.
+    const commit = fixtureCommits("connect-catalog").main;
+    const release = host.holdTrees();
+    const h = harness({ host });
+
+    // Until the index is there, the instructions say so and the tools still work.
+    const early = await h.connect(`/gh/acme/multi-skill@${commit}`);
+    expect(early.getInstructions()).toContain("Acme/multi-skill");
+    expect(early.getInstructions()).toContain("The commit is being indexed");
+    await early.close();
+    release();
+    await h.snapshots.idle();
+
+    const client = await h.connect(`/gh/acme/multi-skill@${commit}/skills`);
+    const instructions = client.getInstructions() ?? "";
+    expect(instructions).toContain(
+      `Acme/multi-skill@${commit} (commit ${commit.slice(0, 7)}, under skills)`,
+    );
+    expect(instructions).toContain("It has 2 skills and 0 other documents.");
+    expect(instructions).toContain("- incident-review: Guides a blameless incident review");
+    expect(instructions).toContain("- release-notes: Drafts release notes");
+    expect(instructions).toContain("call get with its name");
+    expect(instructions.length).toBeLessThanOrEqual(INSTRUCTIONS_MAX_LENGTH);
+    expect(client.getServerVersion()).toMatchObject({
+      name: "skillcdn",
+      title: `Acme/multi-skill@${commit.slice(0, 7)}/skills`,
+      websiteUrl: `http://skillcdn.test/gh/acme/multi-skill@${commit}/skills`,
+    });
+    const find = (await client.listTools()).tools.find((tool) => tool.name === "find");
+    expect(find?.description).toContain("Skills here: incident-review, release-notes.");
     await client.close();
   });
 

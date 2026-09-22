@@ -112,6 +112,15 @@ export {
 } from "./skill-manifest.js";
 export { hasForbiddenCodePoint } from "./text-safety.js";
 export {
+  type CatalogSkill,
+  type CatalogState,
+  describeFindTool,
+  FIND_DESCRIPTION_MAX_LENGTH,
+  INSTRUCTIONS_MAX_LENGTH,
+  type MountCatalog,
+  renderInstructions,
+} from "./tools/catalog.js";
+export {
   FIND_DEFAULT_LIMIT,
   FIND_LIST_SKILLS_MAX,
   FIND_MAX_LIMIT,

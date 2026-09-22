@@ -37,6 +37,14 @@ All three tools are read-only and idempotent.
 - A problem the model can fix (unknown skill, unknown path, a binary or oversized file) is a tool result marked as an error, with a hint. It is not a protocol error.
 - When the repository is larger than the indexing limits, results say that files are missing.
 
+## What a client is told on connect
+
+A client learns three things about a mount before it calls a tool, so that a model can tell whether this server matters for a task without a round trip:
+
+- **The server instructions** name the repository, the commit and the mounted path, say how many skills and other documents there are, list every skill with its description, and say how a skill is used (`get`, then `read_file` for the files it points to). They stay under 2,000 characters, because clients hand them to the model as they are and one of them cuts them there: descriptions are shortened step by step, then only names are listed, then fewer names with a count of the rest. While the commit is being indexed, the instructions say so instead.
+- **The description of `find`** names the skills as well, for clients that show no instructions.
+- **The server info** carries the address as its title and the page of the address as its website, for clients that show where a server comes from.
+
 ## While a commit is being indexed
 
 The first request for a commit starts indexing in the background; connecting to the endpoint already does, before any tool is called.

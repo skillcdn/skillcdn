@@ -45,7 +45,7 @@ export interface ApiPorts {
 
 export type ApiConfig = Pick<Config, "mounts" | "indexing"> & {
   /** Left out, the explorer features nothing. */
-  readonly web?: Pick<Config["web"], "featured">;
+  readonly web?: Pick<Config["web"], "featured"> & { readonly publicUrl?: string | undefined };
   /** Left out, no proxy is trusted and every request is logged. */
   readonly http?: Pick<
     Config["http"],
@@ -111,6 +111,7 @@ export function createApi(
       clock,
       logger,
       indexWaitMs: config.indexing.waitMs,
+      publicUrl: config.web?.publicUrl,
     },
   });
   return { app, snapshots };

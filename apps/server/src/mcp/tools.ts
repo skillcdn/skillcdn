@@ -1,7 +1,9 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import {
   type Clock,
+  describeFindTool,
   findTool,
+  formatAddress,
   GitHostError,
   getTool,
   INDEXING_NOTICE,
@@ -10,6 +12,7 @@ import {
   renderDirectoryResult,
   renderFileResult,
   renderFindResult,
+  renderInstructions,
   renderSkillResult,
   type UsageSink,
 } from "@skillcdn/core";
@@ -28,6 +31,8 @@ export interface ToolDependencies {
   readonly logger: Logger;
   /** How long `find` and `get` wait for an index that is still being built. */
   readonly indexWaitMs: number;
+  /** Where the pages live, for the link a client may show. Unset: the origin of each request. */
+  readonly publicUrl: string | undefined;
 }
 
 interface ToolReply {
@@ -51,8 +56,25 @@ function notReady(outcome: NotReady): ToolReply {
   );
 }
 
-/** Builds the MCP server for one request: the fixed tool set, bound to one resolved mount. */
-export function createMountServer(mount: Mount, dependencies: ToolDependencies): McpServer {
+/** How a client may show the server: the repository, then the ref and the path when there are any. */
+function titleOf(mount: Mount): string {
+  const { repository } = mount.repo;
+  const ref = mount.address.ref;
+  const refPart =
+    ref === undefined ? "" : `@${ref.kind === "commit" ? ref.hash.slice(0, 7) : ref.name}`;
+  const pathPart = mount.address.path.length === 0 ? "" : `/${mount.address.path}`;
+  return `${repository.owner.login}/${repository.name}${refPart}${pathPart}`;
+}
+
+/**
+ * Builds the MCP server for one request: the fixed tool set, bound to one resolved mount, and
+ * told what the mount holds so that the client learns it as it connects.
+ */
+export async function createMountServer(
+  mount: Mount,
+  dependencies: ToolDependencies,
+  request: { readonly origin: string },
+): Promise<McpServer> {
   const { reader, usage, stats, clock, indexWaitMs } = dependencies;
   const repository = `${mount.repo.repository.owner.login}/${mount.repo.repository.name}`;
   const log = dependencies.logger.child({
@@ -60,6 +82,7 @@ export function createMountServer(mount: Mount, dependencies: ToolDependencies):
     commit: mount.commit,
     account: mount.repo.accountId,
   });
+  const catalog = await reader.catalog(mount);
 
   /** Runs a handler with usage accounting, and keeps unexpected failures away from the caller. */
   const guarded =
@@ -87,13 +110,14 @@ export function createMountServer(mount: Mount, dependencies: ToolDependencies):
     };
 
   const server = new McpServer(
-    { name: SERVER_NAME, version: SERVER_VERSION },
     {
-      instructions:
-        `This server serves the skills and documents of the git repository ${repository}. ` +
-        "Call find to see what is available, get to load a skill, and read_file to read a file " +
-        "that a skill or a search result points to.",
+      name: SERVER_NAME,
+      version: SERVER_VERSION,
+      title: titleOf(mount),
+      description: `The skills and documents of ${repository}, served over MCP by SkillCDN.`,
+      websiteUrl: `${request.origin}${formatAddress(mount.address)}`,
     },
+    { instructions: renderInstructions(catalog) },
   );
 
   // Requests share no session, so a connection is counted when a client says it has finished
@@ -104,7 +128,7 @@ export function createMountServer(mount: Mount, dependencies: ToolDependencies):
     findTool.name,
     {
       title: findTool.title,
-      description: findTool.description,
+      description: describeFindTool(catalog),
       inputSchema: findTool.inputSchema,
       annotations: READ_ONLY,
     },

@@ -1,5 +1,6 @@
 import {
   type BlobStore,
+  type CatalogState,
   type DirectoryResult,
   FIND_DEFAULT_LIMIT,
   FIND_LIST_SKILLS_MAX,
@@ -9,6 +10,7 @@ import {
   type GitHost,
   type IndexLimits,
   joinRepoPath,
+  type MountCatalog,
   type MountSummary,
   pageOfText,
   parseRepoPath,
@@ -90,6 +92,7 @@ export interface MountOverview {
 const MAX_LISTED_SKILL_FILES = 50;
 const MAX_SUGGESTED_SKILLS = 20;
 const MAX_CACHED_TREES = 8;
+const MAX_CACHED_CATALOGS = 64;
 const MAX_DIRECTORY_ENTRIES = 200;
 
 /**
@@ -103,9 +106,59 @@ export class MountReader {
    * A commit's tree never changes; the cache is small and only saves repeated upstream calls.
    */
   readonly #trees = new Map<string, Promise<RepoTree>>();
+  /**
+   * What each mount holds, by snapshot and mounted path, for every connection to read. A
+   * snapshot never changes, so neither does this; the map is small and only saves queries.
+   */
+  readonly #catalogs = new Map<string, Promise<Omit<MountCatalog, "mount">>>();
 
   constructor(dependencies: MountReaderDependencies) {
     this.#dependencies = dependencies;
+  }
+
+  /**
+   * What a client is told when it connects: the skills of the mount and how much else there is.
+   * Never waits for the index; a commit that is not indexed yet says so instead.
+   */
+  async catalog(mount: Mount): Promise<CatalogState> {
+    const { database, snapshots } = this.#dependencies;
+    const outcome = await snapshots.ready(mount, 0);
+    if (outcome.status !== "ready") {
+      return { status: outcome.status, mount: this.summary(mount, undefined) };
+    }
+    const scope = { accountId: outcome.snapshot.accountId, snapshotId: outcome.snapshot.id };
+    const path = mount.address.path;
+    const key = `${outcome.snapshot.id} ${path}`;
+    let loading = this.#catalogs.get(key);
+    if (loading === undefined) {
+      loading = Promise.all([
+        listEntries(database, scope, path, FIND_LIST_SKILLS_MAX, "skills"),
+        countEntries(database, scope, path),
+      ]).then(([skills, counts]) => ({
+        skills: skills.flatMap((row) => {
+          const directory = belowMount(mount, row.skillDir);
+          return directory === undefined || row.name === null
+            ? []
+            : [{ name: row.name, directory, description: row.description ?? "" }];
+        }),
+        skillCount: counts.skills,
+        documentCount: counts.documents,
+      }));
+      loading.catch(() => {
+        this.#catalogs.delete(key);
+      });
+      this.#catalogs.set(key, loading);
+      if (this.#catalogs.size > MAX_CACHED_CATALOGS) {
+        const oldest = this.#catalogs.keys().next().value;
+        if (oldest !== undefined) {
+          this.#catalogs.delete(oldest);
+        }
+      }
+    }
+    return {
+      status: "ready",
+      catalog: { mount: this.summary(mount, outcome.snapshot), ...(await loading) },
+    };
   }
 
   summary(mount: Mount, snapshot: SnapshotRecord | undefined): MountSummary {

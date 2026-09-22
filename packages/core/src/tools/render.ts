@@ -23,7 +23,8 @@ export const INDEXING_NOTICE =
 const TRUNCATED_NOTICE =
   "Note: the repository is larger than the indexing limits, so some files are missing here.";
 
-function describeMount(mount: MountSummary): string {
+/** The repository, its ref, its commit and the mounted path, as results name them. */
+export function describeMount(mount: MountSummary): string {
   const ref = mount.ref === undefined ? "" : `@${mount.ref}`;
   const path = mount.path.length === 0 ? "" : `, under ${mount.path}`;
   return `${mount.repository}${ref} (commit ${mount.commit.slice(0, 7)}${path})`;
@@ -44,7 +45,7 @@ function joinSections(sections: readonly (string | undefined)[]): string {
   return sections.filter((section) => section !== undefined && section.length > 0).join("\n\n");
 }
 
-const plural = (count: number, one: string, many = `${one}s`): string =>
+export const plural = (count: number, one: string, many = `${one}s`): string =>
   `${count} ${count === 1 ? one : many}`;
 
 export function renderFindResult(result: FindResult): string {
