@@ -38,6 +38,9 @@
   --color-accent-solid-hover: #4171d8;
   --color-accent-contrast: #ffffff;
   --color-accent-subtle: #111a2b;
+  /* Selected text. The subtle accent is too close to the surfaces to show a selection at all;
+     this is the solid blue, let through enough to read the text on it. */
+  --color-selection: color-mix(in srgb, var(--color-accent-solid) 60%, transparent);
 
   /* Status */
   --color-success: #4cc38a;

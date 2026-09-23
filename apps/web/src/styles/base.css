@@ -113,7 +113,8 @@ table {
 }
 
 ::selection {
-  background: var(--color-accent-subtle);
+  background: var(--color-selection);
+  color: var(--color-accent-contrast);
 }
 
 /* Motion is decoration here. Modules opt in to it, so that nobody has to opt out. */
