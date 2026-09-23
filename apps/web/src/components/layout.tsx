@@ -35,8 +35,8 @@ export function Layout(props: { readonly children: ReactNode }) {
       </main>
       <footer className={styles.footer}>
         <div className={styles.footerInner}>
-          {/* The name and the links share one line, at the two ends of the page; what the site is
-              and what it is licensed under sits under them, quietly. */}
+          {/* The name and the links share one line, at the two ends of the page; what the site
+              promises sits under them, quietly. */}
           <div className={styles.footerTop}>
             <p className={styles.footerBrand}>
               <BrandSymbol className={styles.symbol} />
@@ -60,10 +60,7 @@ export function Layout(props: { readonly children: ReactNode }) {
               </li>
             </ul>
           </div>
-          <p className={styles.footerNote}>
-            <span>{t.footer.tagline}</span>
-            <span>{t.footer.sourceAvailable}</span>
-          </p>
+          <p className={styles.footerNote}>{t.footer.tagline}</p>
         </div>
       </footer>
     </div>

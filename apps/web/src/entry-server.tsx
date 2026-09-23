@@ -17,7 +17,7 @@ import {
 import { MountPage } from "./pages/mount.js";
 import { matchRoute, PATHS } from "./router.js";
 import { buildHead, type PageData, renderHead } from "./seo/head.js";
-import { LINKS, ORIGIN_PLACEHOLDER } from "./site.js";
+import { FEATURED_VIDEO, LINKS, ORIGIN_PLACEHOLDER } from "./site.js";
 
 // Rendering to HTML, without a browser. scripts/prerender.mjs imports the bundle made from this
 // file at build time and writes one file per static page and language; the server imports the
@@ -166,24 +166,39 @@ export function renderAddressPage(template: string, input: AddressPageInput): Ad
   return { html, indexable: head.indexable };
 }
 
-/** A plain-text description of the site for language models, after the llms.txt convention. */
+/**
+ * A plain-text description of the site for language models, after the llms.txt convention: what
+ * it is in one sentence, what there is to make, how it goes, and where the pages are.
+ */
 export function renderLlmsTxt(language: Language): string {
   const t = messagesFor(language);
   const origin = ORIGIN_PLACEHOLDER;
+  const featured = t.landing.featured.video;
   const lines = [
     `# ${t.meta.siteName}`,
     "",
     `> ${t.meta.landing.description}`,
     "",
+    t.meta.landing.about,
+    "",
     t.landing.lead,
+    "",
+    `## ${t.landing.featured.title}`,
+    "",
+    `- [${featured.title}](${origin}${FEATURED_VIDEO.href}): ${featured.body} ${featured.requirement}.`,
     "",
     `## ${t.landing.how.title}`,
     "",
-    ...t.landing.how.steps.map((step, index) => `${index + 1}. **${step.title}.** ${step.body}`),
+    ...t.landing.how.steps.map((step, index) => `${index + 1}. **${step.title}** ${step.body}`),
+    "",
+    `## ${t.landing.start.title}`,
+    "",
+    ...t.landing.start.steps.map((step, index) => `${index + 1}. ${step}`),
     "",
     `## ${t.address.label}`,
     "",
-    `\`${origin}/gh/owner/repo\`: ${t.address.hint}`,
+    `- \`${origin}/gh/owner/repo\`: ${t.address.hint}`,
+    `- ${t.connect.copyTitle}: ${t.connect.copyHint}`,
     "",
     `## ${t.landing.faq.title}`,
     "",

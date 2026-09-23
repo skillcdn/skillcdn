@@ -21,11 +21,27 @@ export const LINKS = {
   security: `${REPOSITORY_URL}/blob/main/SECURITY.md`,
 } as const;
 
-/** Editorial selection shared by the landing page and explorer. Assets are bundled locally. */
+/**
+ * Editorial selection shared by the landing page and explorer. Its media is bundled with the
+ * site: an original AI-generated concept clip of the kind of result the skill is for (not a
+ * recording of a run of it), one of its frames as the poster that stands in for it, and what
+ * the clip was made from, which the example conversation attaches: a frame of the ad it took
+ * its look from, and the picture of its star.
+ */
 export const FEATURED_VIDEO = {
   address: "/gh/skillcdn/examples",
   href: "/gh/skillcdn/examples",
-  image: "/showcase/perfume-concept.png",
+  clip: "/showcase/explorer-ad.mp4",
+  poster: "/showcase/explorer-ad.webp",
+  reference: "/showcase/reference-ad.webp",
+  picture: "/showcase/explorer.webp",
+  /** Pixel size of the clip and its poster. */
+  width: 752,
+  height: 560,
+  /** One pass of the loop. The example conversation plays it once through before it restarts. */
+  durationMs: 9_500,
+  /** For the structured data that describes the clip. */
+  published: "2026-09-24",
 } as const;
 
 /**

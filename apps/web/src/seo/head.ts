@@ -14,7 +14,7 @@ import {
   skillTitle,
 } from "../i18n/repository-text.js";
 import { mountHref, PATHS, type Route } from "../router.js";
-import { LINKS } from "../site.js";
+import { FEATURED_VIDEO, LINKS } from "../site.js";
 
 // What a crawler reads before it reads the page: title, description, which URL is canonical,
 // where the other languages are, the social preview, and structured data. Built as data so it can
@@ -170,6 +170,14 @@ export function buildHead(
 
   const jsonLd: Record<string, unknown>[] = [];
   if (route.name === "landing" && canonical !== undefined) {
+    // The site as one entity, named the same everywhere, with its logo and its source.
+    const publisher = {
+      "@type": "Organization",
+      name: t.meta.siteName,
+      url: `${origin}${PATHS.landing}`,
+      logo: `${origin}/brand/logo.svg`,
+      sameAs: [LINKS.repository],
+    };
     jsonLd.push(
       {
         "@context": "https://schema.org",
@@ -178,16 +186,29 @@ export function buildHead(
         url: canonical,
         description: t.meta.landing.description,
         inLanguage,
+        publisher,
       },
       {
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
         name: t.meta.siteName,
         url: canonical,
-        description: t.meta.landing.description,
+        description: t.meta.landing.about,
         applicationCategory: "ProductivityApplication",
         operatingSystem: "Any",
         license: LINKS.license,
+        inLanguage,
+        author: publisher,
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "VideoObject",
+        name: `${t.meta.siteName}: ${t.landing.featured.video.title}`,
+        description: t.landing.featured.video.clip,
+        thumbnailUrl: [`${origin}${FEATURED_VIDEO.poster}`],
+        contentUrl: `${origin}${FEATURED_VIDEO.clip}`,
+        uploadDate: FEATURED_VIDEO.published,
+        duration: `PT${Math.round(FEATURED_VIDEO.durationMs / 1000)}S`,
         inLanguage,
       },
       {

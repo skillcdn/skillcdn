@@ -2,6 +2,7 @@ import type { RestMount, RestSkill } from "@skillcdn/core";
 import { describe, expect, it } from "vitest";
 import { LANGUAGES } from "../i18n/languages.js";
 import { matchRoute } from "../router.js";
+import { FEATURED_VIDEO } from "../site.js";
 import { buildHead, renderHead } from "./head.js";
 
 const ORIGIN = "https://skills.example";
@@ -98,9 +99,21 @@ describe("buildHead", () => {
       expect(head.jsonLd.map((data) => data["@type"])).toEqual([
         "WebSite",
         "SoftwareApplication",
+        "VideoObject",
         "FAQPage",
       ]);
       expect(head.jsonLd.every((data) => data.inLanguage === language)).toBe(true);
+      // The site is one entity with a logo, and the clip is described where it is served from.
+      expect(head.jsonLd[0]?.publisher).toMatchObject({
+        "@type": "Organization",
+        name: "SkillCDN",
+        logo: `${ORIGIN}/brand/logo.svg`,
+      });
+      expect(head.jsonLd[2]).toMatchObject({
+        contentUrl: `${ORIGIN}${FEATURED_VIDEO.clip}`,
+        thumbnailUrl: [`${ORIGIN}${FEATURED_VIDEO.poster}`],
+        uploadDate: FEATURED_VIDEO.published,
+      });
     }
     expect(buildHead(matchRoute("/explore", ""), "en", ORIGIN).jsonLd).toEqual([]);
   });
@@ -233,7 +246,7 @@ describe("renderHead", () => {
       '<meta property="og:image" content="https://skills.example/og/og-ko.png"',
     );
     expect(html).toContain('<meta name="twitter:card" content="summary_large_image"');
-    expect(html.match(/application\/ld\+json/g)).toHaveLength(3);
+    expect(html.match(/application\/ld\+json/g)).toHaveLength(4);
 
     const hidden = renderHead(buildHead(matchRoute("/gh/acme/skills", ""), "en", ORIGIN));
     expect(hidden).toContain('<meta name="robots" content="noindex,follow"');

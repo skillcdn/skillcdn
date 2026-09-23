@@ -5,5 +5,7 @@
 *.jpg binary
 *.ico binary
 *.woff2 binary
+*.mp4 binary
+*.webp binary
 
 pnpm-lock.yaml linguist-generated=true

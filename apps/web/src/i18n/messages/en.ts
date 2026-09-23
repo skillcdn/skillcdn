@@ -8,14 +8,17 @@ export const en = {
   meta: {
     siteName: "SkillCDN",
     landing: {
-      title: "SkillCDN: big ideas, beautifully made",
+      title: "SkillCDN: skills for the AI you already use",
       description:
-        "Make more of your ideas with the AI you already use. Discover useful skills, connect your AI, and create something worth sharing, even your first time.",
+        "Give ChatGPT, Claude or any AI app that connects over MCP a ready-made skill. Say what you want in your own words and get results with a professional finish, no prompt engineering needed.",
+      /** What SkillCDN is, in one plain sentence, for readers that are machines. */
+      about:
+        "SkillCDN turns a GitHub repository into an MCP server, so that an AI app such as ChatGPT or Claude can load the skills it holds and follow them in a conversation.",
     },
     explore: {
       title: "Find your next creation | SkillCDN",
       description:
-        "Discover selected skills that help your AI turn your ideas into finished work. Start with a short video ad for your product.",
+        "Skills that turn a conversation with your AI into finished work. Start with a short ad made from a video you like and a picture of yours, with the AI you already use.",
     },
     mount: {
       title: (repository: string) => `${repository} | SkillCDN`,
@@ -44,7 +47,7 @@ export const en = {
       title: "Page not found | SkillCDN",
       description: "There is nothing at this address.",
     },
-    ogImageAlt: "SkillCDN: big ideas, beautifully made",
+    ogImageAlt: "SkillCDN: your everyday AI, extraordinary results",
   },
 
   nav: {
@@ -250,12 +253,11 @@ export const en = {
   },
 
   footer: {
-    tagline: "A little know-how. A world of possibility.",
+    tagline: "Skills for the AI you already use.",
     source: "Source on GitHub",
     license: "License",
     trademarks: "Trademarks",
     security: "Security",
-    sourceAvailable: "Source-available under FSL-1.1-ALv2.",
   },
 };
 

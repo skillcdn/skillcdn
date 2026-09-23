@@ -86,7 +86,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  margin-top: var(--space-3);
+  margin-bottom: var(--space-3);
 }
 .attachments > span {
   display: inline-flex;
@@ -120,18 +120,21 @@
   overflow: hidden;
   margin-top: calc(-1 * var(--space-2));
 }
-.resultImage {
+.resultMedia {
   position: relative;
   height: var(--conversation-result-height);
   overflow: hidden;
+  background: var(--color-bg);
 }
-.resultImage img {
+/* The result is wider than the clip is tall, so it shows a band of it: a little above the
+   middle, where the star of every scene is. */
+.resultMedia :is(img, video) {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center 53%;
+  object-position: 50% 45%;
 }
-.resultImage > span:first-of-type {
+.resultMedia > span:first-of-type {
   position: absolute;
   top: var(--space-3);
   left: var(--space-3);
@@ -141,7 +144,7 @@
   border-radius: var(--radius-sm);
   font-size: var(--text-xs);
 }
-.result[data-finished="false"] img {
+.result[data-finished="false"] :is(img, video) {
   filter: blur(var(--space-1));
   opacity: 0.5;
 }
@@ -209,25 +212,6 @@
   border-radius: var(--radius-full);
   background: var(--color-text-muted);
 }
-.transcript {
-  margin-top: var(--space-3);
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-}
-.transcript summary {
-  cursor: pointer;
-  width: fit-content;
-  margin-inline: auto;
-  padding: var(--space-2);
-}
-.transcript ol {
-  display: grid;
-  gap: var(--space-4);
-  padding: var(--space-5);
-  margin-top: var(--space-3);
-  border: var(--border);
-  border-radius: var(--radius-lg);
-}
 @media (prefers-reduced-motion: no-preference) {
   .scene {
     animation: scene-in 350ms ease-out;
@@ -241,7 +225,7 @@
   .thinking i:nth-child(3) {
     animation-delay: 320ms;
   }
-  .result img {
+  .result :is(img, video) {
     transition:
       filter 700ms ease,
       opacity 700ms ease;
@@ -291,7 +275,7 @@
   .user {
     max-width: 95%;
   }
-  .resultImage {
+  .resultMedia {
     height: var(--conversation-mobile-result-height);
   }
 }

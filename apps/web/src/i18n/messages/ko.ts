@@ -9,14 +9,16 @@ export const ko: Messages = {
   meta: {
     siteName: "SkillCDN",
     landing: {
-      title: "SkillCDN: 아이디어는 크게, 완성은 멋지게",
+      title: "SkillCDN: 쓰던 AI에 더하는 스킬",
       description:
-        "평소 쓰던 AI로 아이디어를 멋진 결과물로 만들어 보세요. 유용한 스킬을 고르고 연결하면, 처음이어도 나누고 싶은 결과물을 만들 수 있어요.",
+        "ChatGPT, Claude 등 MCP로 연결되는 AI 앱에 스킬을 더하세요. 프롬프트를 몰라도, 내 말로 이야기하면 전문가의 손길이 닿은 결과물이 완성됩니다.",
+      about:
+        "SkillCDN은 GitHub 저장소를 MCP 서버로 만들어, ChatGPT나 Claude 같은 AI 앱이 그 안의 스킬을 불러와 대화 속에서 따르게 합니다.",
     },
     explore: {
       title: "만들고 싶은 것 찾기 | SkillCDN",
       description:
-        "AI와 함께 아이디어를 완성할 수 있는 스킬을 만나보세요. 우리 제품을 위한 짧은 광고 영상부터 시작해 볼까요?",
+        "AI와의 대화를 완성된 결과물로 바꾸는 스킬을 만나보세요. 늘 쓰던 AI로, 좋아하는 영상과 사진 한 장으로 만드는 짧은 광고 영상부터 만들어 볼까요?",
     },
     mount: {
       title: (repository: string) => `${repository} | SkillCDN`,
@@ -35,7 +37,7 @@ export const ko: Messages = {
       title: "페이지를 찾을 수 없습니다 | SkillCDN",
       description: "이 주소에는 아무것도 없습니다.",
     },
-    ogImageAlt: "SkillCDN: 아이디어는 크게, 완성은 멋지게",
+    ogImageAlt: "SkillCDN: 늘 쓰던 AI로, 한 차원 다른 결과물을",
   },
 
   nav: {
@@ -242,11 +244,10 @@ export const ko: Messages = {
   },
 
   footer: {
-    tagline: "조금의 노하우로 여는 새로운 가능성.",
+    tagline: "쓰던 AI에 더하는 스킬.",
     source: "GitHub의 소스",
     license: "라이선스",
     trademarks: "상표",
     security: "보안",
-    sourceAvailable: "FSL-1.1-ALv2로 소스가 공개되어 있습니다.",
   },
 };

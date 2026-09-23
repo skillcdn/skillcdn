@@ -8,7 +8,7 @@ export function OgCard() {
   const { t } = useI18n();
   return (
     <div className={styles.card}>
-      <img className={styles.art} src={FEATURED_VIDEO.image} alt="" />
+      <img className={styles.art} src={FEATURED_VIDEO.poster} alt="" />
       <div className={styles.brand}>
         <BrandSymbol />
         <span>{t.meta.siteName}</span>
@@ -17,7 +17,7 @@ export function OgCard() {
         {t.landing.title}
         <span>{t.landing.titleAccent}</span>
       </p>
-      <p className={styles.tagline}>{t.footer.tagline}</p>
+      <p className={styles.tagline}>{t.landing.lead}</p>
       <p className={styles.address}>skillcdn.ai</p>
     </div>
   );

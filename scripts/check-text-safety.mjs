@@ -4,7 +4,8 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
-const BINARY = /\.(png|jpe?g|gif|ico|webp|pdf|woff2?|ttf|zip|gz|tgz)$/i;
+// Every binary type the repository tracks is listed here; anything else is read as text.
+const BINARY = /\.(png|jpe?g|gif|ico|webp|avif|mp4|webm|pdf|woff2?|ttf|zip|gz|tgz)$/i;
 
 function isForbidden(codePoint) {
   return (

@@ -121,26 +121,37 @@ describe("prerendered pages", () => {
           body.indexOf('inputMode="url"'),
         );
         expect(body).not.toMatch(/href="\/gh\/skillcdn\/skillcdn/);
-        expect(body).toContain(`src="${FEATURED_VIDEO.image}"`);
-        expect(body).not.toMatch(/style="|<img[^>]+src="https?:/);
+        // The clip is local, waits to be seen before it loads, and plays without sound.
+        expect(body).toMatch(/<video[^>]+src="\/showcase\/[^"]+\.mp4"/);
+        expect(body).toContain(`src="${FEATURED_VIDEO.clip}"`);
+        expect(body).toContain(`poster="${FEATURED_VIDEO.poster}"`);
+        expect(body).toMatch(/<video[^>]+preload="none"/);
+        expect(body).toMatch(/<video[^>]+muted=""/);
+        expect(body).not.toMatch(/<video[^>]+autoplay/i);
+        expect(body).toContain(t.landing.featured.video.clip);
+        expect(body).not.toMatch(/style="|<(?:img|video)[^>]+src="https?:/);
       }
     }
   });
 
-  it("keeps the complete illustrative conversation and spending consent readable without animation", () => {
+  it("shows the spending consent without animation, and keeps the whole conversation for assistive technology", () => {
     for (const language of LANGUAGES) {
       const t = messagesFor(language);
       const { body, head } = renderPage("/", language);
+      // Without a script the last scene stands: the consent and the result.
+      expect(body).toContain('data-demo-phase="2"');
+      expect(body).toContain(t.landing.demo.approval);
+      expect(body).toContain(t.landing.demo.consent);
+      expect(body).toContain(t.landing.demo.resultLabel);
+      // Nothing to click through, but every line is there to be read.
+      expect(body).toContain(`<ol class="visually-hidden" aria-label="${t.landing.demo.label}">`);
       for (const message of [
         t.landing.demo.prompt,
         t.landing.demo.question,
         t.landing.demo.answer,
         t.landing.demo.plan,
-        t.landing.demo.consent,
       ])
         expect(body).toContain(message);
-      expect(body).toContain(t.landing.demo.transcript);
-      expect(body).toContain('data-demo-phase="2"');
       expect(t.landing.faq.items).toHaveLength(3);
       for (const item of t.landing.faq.items) expect(head).toContain(item.question);
     }
@@ -345,6 +356,10 @@ describe("llms.txt", () => {
       );
       expect(text).toContain(`## ${t.landing.faq.title}`);
       expect(text).toContain(`${ORIGIN_PLACEHOLDER}/gh/owner/repo`);
+      // What the site is, in one plain sentence, and what there is to make, with its address.
+      expect(text).toContain(t.meta.landing.about);
+      expect(text).toContain(`${ORIGIN_PLACEHOLDER}${FEATURED_VIDEO.href}`);
+      expect(text).toContain(t.landing.featured.video.title);
       expect(text).not.toContain("</");
     }
   });

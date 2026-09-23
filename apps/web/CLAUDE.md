@@ -2,7 +2,8 @@
 
 Read the root [`CLAUDE.md`](../../CLAUDE.md) and this workspace's [`README.md`](README.md) first.
 
-- **Keep the agreed direction.** The landing page leads with creative outcomes for beginners: the existing branching symbol, the existing system-font wordmark, one blue accent, layered dark surfaces, and local result artwork. Keep setup details secondary to choosing a skill and starting a conversation. Larger changes of direction need a maintainer request.
+- **Keep the agreed direction.** The landing page leads with creative outcomes for beginners: the existing branching symbol, the existing system-font wordmark, one blue accent, layered dark surfaces, and a local concept clip. Keep setup details secondary to choosing a skill and starting a conversation. Larger changes of direction need a maintainer request.
+- **Copy promises, it does not explain.** Landing copy is short and confident and leaves the how to the sections that show it; the promise is that someone who is not an expert gets a professional result from the AI they already use, said without saying so. Details belong in the FAQ, the connection guide and the docs, not in a hero line.
 - **Tokens only.** No raw color, font stack or pixel size in a component's CSS: add or reuse a token in `src/styles/tokens.css`. The social-preview card is the one exception, because it is a picture.
 - **Connection illustrations.** Client marks and illustrated client windows retain their own brand colors inside the dark, blue-accented site. Keep every caption and screen label in the language packs. These are illustrative guides, never live connection status; keep their steps aligned with the official references in `docs/specs/connect-guide.md`.
 - **Fonts ship with the image.** The content security policy allows no foreign source, so a font is added as a package and imported in `entry-client.tsx`. Never link a font from a CDN. Only Hangul has a webfont, because only Hangul needs one: `styles/pretendard.css` is generated from the package and narrowed to the Hangul ranges, and Latin is drawn by the system fonts in `--font-sans`. Do not edit that file by hand. A font is a bundled dependency: its license must allow that (root `CLAUDE.md`, Dependencies), and its notice ships in `public/licenses/`, listed in `THIRD-PARTY-NOTICES.md`.
@@ -18,6 +19,7 @@ Read the root [`CLAUDE.md`](../../CLAUDE.md) and this workspace's [`README.md`](
 ## Gotchas
 
 - The integrated server caches the built web manifest and templates at startup. Restart it after rebuilding `WEB_ROOT`; otherwise it can reference removed asset hashes. Vite development previews reload changes automatically.
+- A video only plays on some phones when the server answers byte ranges, which the integrated server does; a static host or a cache in front has to as well. A clip's poster is its first frame on purpose: with any other frame, playback starts with a visible jump.
 - `boot.js` may hide a page while a saved language is applied, but must preserve the server's `html.lang`. The client uses that value to decide whether to hydrate or render afresh; only `applyHead` changes it after rendering.
 - Biome rewrites `import "./x.css"` to `./x.js` (`useImportExtensions`). Style sheets that are imported for their side effect carry a `biome-ignore` for that; CSS modules are not affected.
 - Adjacent expressions in JSX (`{host}{path}`) become separate text nodes with a comment between them in prerendered HTML. Write one template string when the text must be searchable as a whole.
