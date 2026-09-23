@@ -170,6 +170,52 @@ describe("files", () => {
     const head = answer("/favicon.svg", { method: "HEAD" });
     expect(head.headers.get("content-length")).toBe(icon.headers.get("content-length"));
     expect(await head.text()).toBe("");
+    expect(answer("/showcase/clip.mp4").headers.get("content-type")).toBe("video/mp4");
+  });
+
+  it("answer the byte ranges that video playback asks for", async () => {
+    const path = "/showcase/clip.mp4";
+    const whole = answer(path);
+    expect(whole.status).toBe(200);
+    expect(whole.headers.get("accept-ranges")).toBe("bytes");
+    const size = Number(whole.headers.get("content-length"));
+    const etag = whole.headers.get("etag") ?? "";
+
+    const first = answer(path, { headers: { range: "bytes=0-4" } });
+    expect(first.status).toBe(206);
+    expect(first.headers.get("content-range")).toBe(`bytes 0-4/${size}`);
+    expect(first.headers.get("content-length")).toBe("5");
+    expect(await first.text()).toBe("not a");
+    const last = answer(path, { headers: { range: "bytes=-4" } });
+    expect(last.headers.get("content-range")).toBe(`bytes ${size - 4}-${size - 1}/${size}`);
+    expect(await last.text()).toBe("one\n");
+    const open = answer(path, { headers: { range: `bytes=${size - 2}-` } });
+    expect(await open.text()).toBe("e\n");
+    // A range that ends past the file ends at the file; the same file is still the one asked for.
+    const clipped = answer(path, { headers: { range: `bytes=2-${size + 50}`, "if-range": etag } });
+    expect(clipped.status).toBe(206);
+    expect(clipped.headers.get("content-range")).toBe(`bytes 2-${size - 1}/${size}`);
+    const head = answer(path, { method: "HEAD", headers: { range: "bytes=0-4" } });
+    expect(head.status).toBe(206);
+    expect(head.headers.get("content-length")).toBe("5");
+    expect(await head.text()).toBe("");
+
+    // Nothing in the file: said so, with the size. Not a range we read: the whole file, as is a
+    // range of a file the client saw another version of.
+    const beyond = answer(path, { headers: { range: `bytes=${size}-` } });
+    expect(beyond.status).toBe(416);
+    expect(beyond.headers.get("content-range")).toBe(`bytes */${size}`);
+    expect(answer(path, { headers: { range: "bytes=4-2" } }).status).toBe(416);
+    for (const range of ["bytes=0-1,3-4", "bytes=-", "items=0-1", "bytes=a-b"]) {
+      expect(answer(path, { headers: { range } }).status, range).toBe(200);
+    }
+    const changed = answer(path, { headers: { range: "bytes=0-4", "if-range": 'W/"other"' } });
+    expect(changed.status).toBe(200);
+    expect(changed.headers.get("content-length")).toBe(String(size));
+    // Freshness comes first: a client that has the file gets nothing, range or not.
+    expect(answer(path, { headers: { range: "bytes=0-4", "if-none-match": etag } }).status).toBe(
+      304,
+    );
   });
 
   it("do not include the manifest, pages under their file names, or anything outside", () => {

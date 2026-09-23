@@ -106,5 +106,6 @@ export function createWebBuild(
   write("llms.txt", `# Site\n\n${ORIGIN_PLACEHOLDER}/gh/owner/repo\n`);
   write("assets/index-abc123.js", "console.log('bundle');\n");
   write("favicon.svg", "<svg xmlns='http://www.w3.org/2000/svg'/>\n");
+  write("showcase/clip.mp4", "not a video, but served like one\n");
   return { root, write, remove: () => rmSync(root, { recursive: true, force: true }) };
 }

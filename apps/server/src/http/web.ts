@@ -70,6 +70,10 @@ const CONTENT_TYPES: Readonly<Record<string, string>> = {
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".webp": "image/webp",
+  ".avif": "image/avif",
+  ".gif": "image/gif",
+  ".mp4": "video/mp4",
+  ".webm": "video/webm",
   ".ico": "image/x-icon",
   ".txt": "text/plain; charset=utf-8",
   ".xml": "application/xml; charset=utf-8",
@@ -230,6 +234,36 @@ export function wantsHtml(request: Pick<WebRequest, "method" | "headers">): bool
 }
 
 const sha1 = (text: string): string => createHash("sha1").update(text).digest("hex").slice(0, 16);
+
+interface ByteRange {
+  readonly start: number;
+  readonly end: number;
+}
+
+/**
+ * The one range of bytes a request asks for, out of `size`. `undefined` for a header we do not
+ * read (several ranges, or something else), which is answered with the whole file as the
+ * standard allows; `null` for a range that is well formed but not in the file.
+ */
+function byteRange(header: string, size: number): ByteRange | null | undefined {
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (match === null) {
+    return undefined;
+  }
+  const from = match[1] ?? "";
+  const to = match[2] ?? "";
+  if (from === "" && to === "") {
+    return undefined;
+  }
+  if (from === "") {
+    // The last so many bytes.
+    const count = Number(to);
+    return count === 0 || size === 0 ? null : { start: Math.max(size - count, 0), end: size - 1 };
+  }
+  const start = Number(from);
+  const end = to === "" ? size - 1 : Math.min(Number(to), size - 1);
+  return start >= size || start > end ? null : { start, end };
+}
 
 const escapeXml = (text: string): string =>
   text
@@ -509,22 +543,46 @@ export async function loadWebBundle(
       { "content-type": "text/plain; charset=utf-8", "cache-control": "public, max-age=3600" },
     );
 
+  // Files answer byte ranges: a phone plays a video by asking for pieces of it, and some will
+  // not play at all from a server that only ever sends the whole file.
   const file = (request: WebRequest, found: StaticFile): Response => {
-    const headers = {
+    const headers: Record<string, string> = {
       "content-type": found.contentType,
-      "content-length": String(found.size),
       "cache-control": found.cacheControl,
       etag: found.etag,
+      "accept-ranges": "bytes",
       "x-content-type-options": "nosniff",
     };
     if (notModified(request, found.etag)) {
       return new Response(null, { status: 304, headers });
     }
-    if (request.method === "HEAD") {
-      return new Response(null, { headers });
+    // A range is only honored for the file the client has a piece of; else it gets the whole.
+    const asked = request.headers.get("range");
+    const ifRange = request.headers.get("if-range");
+    const range =
+      asked === null || (ifRange !== null && ifRange.trim() !== found.etag)
+        ? undefined
+        : byteRange(asked, found.size);
+    if (range === null) {
+      return new Response(null, {
+        status: 416,
+        headers: { ...headers, "content-range": `bytes */${found.size}` },
+      });
     }
-    const stream = Readable.toWeb(createReadStream(found.file)) as ReadableStream<Uint8Array>;
-    return new Response(stream, { headers });
+    const start = range?.start ?? 0;
+    const end = range?.end ?? found.size - 1;
+    const status = range === undefined ? 200 : 206;
+    headers["content-length"] = String(found.size === 0 ? 0 : end - start + 1);
+    if (range !== undefined) {
+      headers["content-range"] = `bytes ${start}-${end}/${found.size}`;
+    }
+    if (request.method === "HEAD") {
+      return new Response(null, { status, headers });
+    }
+    const stream = Readable.toWeb(
+      createReadStream(found.file, range === undefined ? {} : { start, end }),
+    ) as ReadableStream<Uint8Array>;
+    return new Response(stream, { status, headers });
   };
 
   // On an address the response depends on the Accept header: a page here, MCP otherwise.
