@@ -19,6 +19,7 @@ Goal: an agent that connects to an address knows what it got and uses it well, w
 - [x] Every skill is an MCP prompt; documents are not resources
 - [x] The MCP endpoint answers browsers on any origin, as the REST API does
 - [x] The page of a repository leads with its name and description, then the steps to connect it to the common clients, and shows what the agent is told when it connects
+- [x] Beginner-friendly connection guide: bundled client icons, English/Korean animated screen illustrations, manual steps and reduced-motion support, copyable setup and a first-message prompt ([guide contract](specs/connect-guide.md))
 - [x] Hidden entries (any path segment that starts with a dot) are never listed, searched or read
 - [x] The repository manifest `SKILLCDN.md`: name, description, the directories whose documents are served, and the rules that hold for every skill; with a manifest, only what it declares is served, now and by any later index ([ADR-0014](adr/0014-the-repository-manifest-decides-what-a-mount-serves.md)); without one, the skills and `docs` ([ADR-0016](adr/0016-without-a-manifest-a-repository-serves-its-skills-and-docs.md))
 - [ ] Connect real clients by hand, to a local server and to the hosted service, and fix what they show. Nothing in this repository can test that; it is done after every change to what a client sees.

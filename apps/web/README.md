@@ -22,6 +22,8 @@ The development server answers the REST API from fixtures (`dev/fixtures.ts`), s
 
 To look at real repositories instead, the UI can run in front of a real server, which answers the REST API and MCP while the pages stay local: `pnpm dev:web:live` uses the hosted service at `https://skillcdn.ai`, and `pnpm dev:web:api` a server on this machine (see [`apps/server`](../server/README.md), `http://127.0.0.1:11188`). Either takes another server from `SKILLCDN_API_URL` in `apps/web/.env.local`. Fixtures remain the way to see every state, since a real server only shows the states its repositories are in.
 
+The integrated server's default port is **11188**. To serve the built UI there as well, build the web workspace and point `WEB_ROOT` at `apps/web/dist` when starting the server. The separate Vite development UI uses **5173** and may choose a higher available port when that is occupied; it does not change the API port.
+
 ## Where the design lives
 
 | To change... | Edit |
@@ -32,7 +34,8 @@ To look at real repositories instead, the UI can run in front of a real server, 
 | A building block (button, badge, callout, tabs, code block, address form) | `src/components/<name>.tsx` with its styles next to it in `<name>.module.css` |
 | The clips beside "how it works" | `HOW_CLIPS` in [`src/site.ts`](src/site.ts), one per step, in the order of the steps. The files go under `public/`. A step without a clip shows an empty frame. |
 | A page | `src/pages/`: `landing`, `explore`, `mount*` (the page of an address: its name and description, how to connect an agent, then what it serves), `simple` (not found, bad address) |
-| The steps to connect each client | [`src/components/connect-guide.tsx`](src/components/connect-guide.tsx) builds the commands, the links and the configuration from the address; the words live under `connect` in the language packs. A new client is a tab there and its steps in every pack. |
+| The steps to connect each client | [`src/components/connect-guide.tsx`](src/components/connect-guide.tsx) assembles the app picker, address, walkthrough and first message. [`connect-clients.ts`](src/components/connect-clients.ts) holds client metadata and setup commands. Words live in `src/i18n/messages/connect-en.ts` and `connect-ko.ts`, imported by the main packs. The behavior and official setup references are in [the connection guide spec](../../docs/specs/connect-guide.md). |
+| Connection animations and client icons | [`connect-walkthrough.tsx`](src/components/connect-walkthrough.tsx) selects a desktop step and displays all steps vertically on mobile; [`connect-animation.tsx`](src/components/connect-animation.tsx) synchronizes repeating clicks, toggles and typing in [`connect-preview.tsx`](src/components/connect-preview.tsx). [`connect-preview-copy.tsx`](src/components/connect-preview-copy.tsx) keeps illustrated commands, configuration, names and addresses selectable and copyable. Mobile scrolls the app picker horizontally. These are local DOM illustrations with translated text. Icons ship under `public/clients/`, with their licenses in `public/licenses/` and the root notices. |
 | How rendered Markdown from repositories looks | [`src/components/markdown.module.css`](src/components/markdown.module.css) |
 | Words | [`src/i18n/messages/en.ts`](src/i18n/messages/en.ts) and [`ko.ts`](src/i18n/messages/ko.ts). English is the source; the Korean pack must have the same shape, and a test checks it. |
 | The symbol and the favicon | [`public/brand/symbol.svg`](public/brand/symbol.svg), [`public/favicon.svg`](public/favicon.svg), and the inline copy in `src/components/layout.tsx`. They are placeholders until there is a logo. |

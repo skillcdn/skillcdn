@@ -44,8 +44,14 @@ describe("language packs", () => {
         expect(text.trim().length, `${language}: an empty message`).toBeGreaterThan(0);
       }
     }
-    // Names of products stay as they are in every language.
-    const names = new Set(["Claude Code", "VS Code", "Codex CLI", "Gemini CLI"]);
+    // Product names and verified menu labels of apps without a localized menu stay native.
+    const names = new Set([
+      "Claude Code",
+      "VS Code",
+      "Codex CLI",
+      "Gemini CLI",
+      "Open MCP config file",
+    ]);
     const english = new Set(
       stringsOf(messagesFor("en")).filter((text) => text.includes(" ") && !names.has(text)),
     );

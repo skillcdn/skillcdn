@@ -4,6 +4,7 @@ import styles from "./tabs.module.css";
 export interface Tab {
   readonly id: string;
   readonly label: string;
+  readonly icon?: ReactNode;
   readonly content: ReactNode;
 }
 
@@ -26,20 +27,29 @@ export function Tabs(props: {
 
   const onKeyDown = (event: KeyboardEvent) => {
     const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
-    if (step === 0) {
+    if (step === 0 && event.key !== "Home" && event.key !== "End") {
       return;
     }
     event.preventDefault();
     const index = tabs.findIndex((tab) => tab.id === active.id);
-    const next = tabs[(index + step + tabs.length) % tabs.length];
+    const next =
+      tabs[
+        event.key === "Home"
+          ? 0
+          : event.key === "End"
+            ? tabs.length - 1
+            : (index + step + tabs.length) % tabs.length
+      ];
     if (next !== undefined) {
       setActiveId(next.id);
       buttons.current.get(next.id)?.focus();
+      if (tiles)
+        buttons.current.get(next.id)?.scrollIntoView({ block: "nearest", inline: "nearest" });
     }
   };
 
   return (
-    <div>
+    <div className={styles.root}>
       <div
         className={tiles ? styles.tiles : styles.list}
         role="tablist"
@@ -71,9 +81,14 @@ export function Tabs(props: {
                   ? styles.activeTab
                   : styles.tab
             }
-            onClick={() => setActiveId(tab.id)}
+            onClick={(event) => {
+              setActiveId(tab.id);
+              if (tiles)
+                event.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" });
+            }}
           >
-            {tab.label}
+            {tab.icon}
+            <span>{tab.label}</span>
           </button>
         ))}
       </div>

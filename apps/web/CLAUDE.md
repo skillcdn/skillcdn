@@ -4,6 +4,7 @@ Read the root [`CLAUDE.md`](../../CLAUDE.md) and this workspace's [`README.md`](
 
 - **Ask before changing the look.** Visual direction, colors, the symbol and what the landing page says were decided with the maintainers (restrained developer tool, one blue accent, dark only, centered headers over left-aligned text, placeholder symbol). Restyle within that; ask before leaving it.
 - **Tokens only.** No raw color, font stack or pixel size in a component's CSS: add or reuse a token in `src/styles/tokens.css`. The social-preview card is the one exception, because it is a picture.
+- **Connection illustrations.** Client marks and illustrated client windows retain their own brand colors inside the dark, blue-accented site. Keep every caption and screen label in the language packs. These are illustrative guides, never live connection status; keep their steps aligned with the official references in `docs/specs/connect-guide.md`.
 - **Fonts ship with the image.** The content security policy allows no foreign source, so a font is added as a package and imported in `entry-client.tsx`. Never link a font from a CDN. Only Hangul has a webfont, because only Hangul needs one: `styles/pretendard.css` is generated from the package and narrowed to the Hangul ranges, and Latin is drawn by the system fonts in `--font-sans`. Do not edit that file by hand. A font is a bundled dependency: its license must allow that (root `CLAUDE.md`, Dependencies), and its notice ships in `public/licenses/`, listed in `THIRD-PARTY-NOTICES.md`.
 - **Every word goes through the language packs.** No user-visible string in a component. English is the source of truth; keep `ko.ts` in step in the same change, in natural Korean. The development-only pages are the exception. Language packs are the one place where committed text is not English.
 - **Copy says what exists.** No prices or plans, no comparisons with other products, no promises about features that are not built. Naming an MCP client we work with is fine.
@@ -16,6 +17,7 @@ Read the root [`CLAUDE.md`](../../CLAUDE.md) and this workspace's [`README.md`](
 
 ## Gotchas
 
+- The integrated server caches the built web manifest and templates at startup. Restart it after rebuilding `WEB_ROOT`; otherwise it can reference removed asset hashes. Vite development previews reload changes automatically.
 - Biome rewrites `import "./x.css"` to `./x.js` (`useImportExtensions`). Style sheets that are imported for their side effect carry a `biome-ignore` for that; CSS modules are not affected.
 - Adjacent expressions in JSX (`{host}{path}`) become separate text nodes with a comment between them in prerendered HTML. Write one template string when the text must be searchable as a whole.
 - `--font-mono` has no Hangul: Pretendard is declared for the Hangul ranges only and sits in `--font-sans`. A Korean line set in the code face therefore splits in two, the Latin in a monospace and the Hangul in whatever the system offers. Only set code in `--font-mono` (an address, a path, a call, a digit); prose stays in `--font-sans`, however technical it looks.

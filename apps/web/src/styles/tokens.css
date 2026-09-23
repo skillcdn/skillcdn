@@ -129,4 +129,55 @@
 
   --focus-ring: 2px solid var(--color-accent);
   --transition: 120ms ease-out;
+
+  /* Connection guide and the native dark surfaces in its instructional illustrations. */
+  --radius-xl: 20px;
+  --control-size: 2.5rem;
+  --client-icon-box: 2.75rem;
+  --client-icon-size: 1.75rem;
+  --client-claude-tint: #251b17;
+  --client-gemini-tint: #161b2c;
+  --client-chatgpt-bg: #212121;
+  --client-chatgpt-sidebar: #171717;
+  --client-chatgpt-field: #303030;
+  --client-claude-bg: #262624;
+  --client-claude-sidebar: #1f1e1d;
+  --client-claude-field: #30302e;
+  --client-claude-accent: #d97757;
+  --client-editor-bg: #1e1e1e;
+  --client-editor-sidebar: #181818;
+  --client-editor-field: #252526;
+  --client-cursor-bg: #181818;
+  --client-windsurf-bg: #171b21;
+  --client-terminal-bg: #111215;
+  --client-text: #e8e6e3;
+  --client-muted: #a6a6a6;
+  --client-border: #444444;
+  --client-window-close: #ec6a5e;
+  --client-window-minimize: #f4bf50;
+  --client-window-expand: #61c454;
+  --client-shadow: 0 1rem 3rem #00000040;
+  --connect-lead-width: 35rem;
+  --connect-preview-width: 36rem;
+  --preview-height: 25rem;
+  --preview-mobile-height: 23rem;
+  --preview-chrome-height: 2.75rem;
+  --preview-sidebar-width: 31%;
+  --preview-activity-width: 2.5rem;
+  --preview-title-size: 0.9375rem;
+  --preview-border: 1px solid var(--client-border);
+  --preview-dot: 0.5rem;
+  --preview-toggle-width: 1.75rem;
+  --preview-toggle-height: 1rem;
+  --preview-toggle-knob: 0.75rem;
+  --client-tile-mobile-width: 5.25rem;
+  --preview-pointer-width: 1.5rem;
+  --preview-pointer-height: 1.75rem;
+  --preview-pointer-hotspot: 0.1875rem;
+  --preview-pointer-shadow: 0 0.125rem 0.125rem #00000055;
+  --preview-caret-width: 0.1rem;
+  --preview-send-size: 2rem;
+  --preview-send-icon: 1.25rem;
+  --demo-transition: 240ms ease-out;
+  --demo-pointer-transition: 360ms cubic-bezier(0.2, 0.7, 0.3, 1);
 }

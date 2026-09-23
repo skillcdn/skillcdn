@@ -1,13 +1,7 @@
+import { connectEn } from "./connect-en.js";
+
 // The English pack is the source: its shape is the type every other pack must have.
 // Copy states what the product does today. No prices, no plans, no comparisons.
-
-/** A fixed number of steps, so that a component can count on each one being there. */
-function fixed(a: string): readonly [string];
-function fixed(a: string, b: string): readonly [string, string];
-function fixed(a: string, b: string, c: string): readonly [string, string, string];
-function fixed(...items: readonly string[]): readonly string[] {
-  return items;
-}
 
 export const en = {
   meta: {
@@ -98,83 +92,7 @@ export const en = {
     },
   },
 
-  connect: {
-    title: "Connect an agent",
-    copyButton: "Copy the address",
-    phases: {
-      copy: "Copy this address",
-      pick: "Open your app and follow the steps",
-    },
-    pickHint: "Choose the app you use. If it is not here, choose “Other”.",
-    clientsLabel: "Clients",
-    nameHint: (name: string) =>
-      `Where an app asks for a name, any name will do; the examples use “${name}”.`,
-    nameFromManifest: (name: string) =>
-      `Where an app asks for a name, the examples use “${name}”, after the name the repository gives itself. Any name will do.`,
-    add: (client: string) => `Add to ${client}`,
-    firstMessage: {
-      label: "Then say, for example",
-      text: (name: string) =>
-        `Look at what ${name} offers and tell me which of its skills fit what I am working on.`,
-      hint: "Name the server in your request, and the agent knows where to look. From then on, ask for a skill by name or describe what you need.",
-    },
-    clients: {
-      chatgpt: {
-        label: "ChatGPT",
-        steps: fixed(
-          "Open Settings, then Connectors. Under Advanced settings, turn on Developer mode.",
-          "Choose Create, name the connector, paste the address you copied as the MCP server URL, and leave authentication set to none.",
-          "In a new chat, add the connector from the plus menu and ask for a skill by name.",
-        ),
-      },
-      claude: {
-        label: "Claude",
-        steps: fixed(
-          "In the web app or the desktop app, open Settings, then Connectors, and choose Add custom connector.",
-          "Name it and paste the address you copied into the URL field.",
-          "In a chat, turn the connector on in the tools menu and ask for a skill by name.",
-        ),
-      },
-      cursor: {
-        label: "Cursor",
-        steps: fixed(
-          "Click the button, or open Settings, then Tools & MCP, add a new MCP server and paste this configuration:",
-        ),
-      },
-      vscode: {
-        label: "VS Code",
-        steps: fixed(
-          "Click the button, or add the server to .vscode/mcp.json in your workspace:",
-          "Or from a terminal:",
-        ),
-      },
-      windsurf: {
-        label: "Windsurf",
-        steps: fixed("Open Settings, then MCP, and add this to your mcp_config.json:"),
-      },
-      claudeCode: {
-        label: "Claude Code",
-        steps: fixed(
-          "Run this in a terminal:",
-          "The skills appear as commands in the slash menu, and the agent finds and loads them by itself.",
-        ),
-      },
-      codex: {
-        label: "Codex CLI",
-        steps: fixed("Run this in a terminal:"),
-      },
-      gemini: {
-        label: "Gemini CLI",
-        steps: fixed("Run this in a terminal:"),
-      },
-      other: {
-        label: "Other",
-        steps: fixed(
-          "Any app that can add an MCP server over HTTP will take the address. Most read a configuration of this shape, where the key is a name of your choice:",
-        ),
-      },
-    },
-  },
+  connect: connectEn,
 
   landing: {
     eyebrow: "An MCP server for any git repository",

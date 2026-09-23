@@ -1,8 +1,16 @@
 import { type Address, formatAddress, type RestMount } from "@skillcdn/core";
-import type { ReactNode } from "react";
 import { useI18n } from "../i18n/index.js";
+import { ClientIcon } from "./client-icon.js";
 import { CodeBlock, CopyButton } from "./code-block.js";
+import {
+  CLIENT_DETAILS,
+  CONNECT_CLIENTS,
+  type ConnectClient,
+  clientConfiguration,
+  isTerminalClient,
+} from "./connect-clients.js";
 import styles from "./connect-guide.module.css";
+import { ConnectWalkthrough } from "./connect-walkthrough.js";
 import { Tabs } from "./tabs.js";
 import { cx } from "./ui.js";
 import ui from "./ui.module.css";
@@ -43,258 +51,160 @@ export function vscodeInstallLink(name: string, url: string): string {
   return `vscode:mcp/install?${encodeURIComponent(JSON.stringify({ name, type: "http", url }))}`;
 }
 
-function Steps(props: {
-  readonly items: readonly { readonly text: string; readonly extra?: ReactNode }[];
+function ClientGuide({
+  client,
+  name,
+  url,
+}: {
+  readonly client: ConnectClient;
+  readonly name: string;
+  readonly url: string;
 }) {
+  const { t, language } = useI18n();
+  const c = t.connect.clients[client];
+  const details = CLIENT_DETAILS[client];
+  const terminal = isTerminalClient(client);
+  const install =
+    client === "cursor"
+      ? cursorInstallLink(name, url)
+      : client === "vscode"
+        ? vscodeInstallLink(name, url)
+        : undefined;
+  const configuration = clientConfiguration(client, name, url);
+  const addressCard = (
+    <div className={styles.copyAddress}>
+      <div className={styles.copyLabel}>
+        <span className={styles.linkSymbol} aria-hidden="true">
+          ↗
+        </span>
+        <div>
+          <strong>{t.connect.copyTitle}</strong>
+          <p>{t.connect.copyHint}</p>
+        </div>
+      </div>
+      <div className={styles.copyField}>
+        <code>{url}</code>
+        <CopyButton text={url} label={t.connect.copyButton} variant="primary" size="md" />
+      </div>
+    </div>
+  );
   return (
-    <ol className={styles.steps}>
-      {props.items.map((item) => (
-        // The list item keeps its marker. Inside, the words sit beside the picture of the screen
-        // they describe, and anything to copy runs the full width under both.
-        <li key={item.text} className={styles.step}>
-          <div className={styles.stepMain}>
-            <p className={styles.stepText}>{item.text}</p>
-            <span className={styles.stepShot} aria-hidden="true" />
-          </div>
-          {item.extra}
-        </li>
-      ))}
-    </ol>
+    <div className={styles.clientGuide}>
+      {install === undefined && addressCard}
+      <div className={styles.guideHeading}>
+        <div>
+          <h3>{t.connect.follow(c.label)}</h3>
+          <p className={styles.hint}>{t.connect.guideHint}</p>
+        </div>
+        {(install !== undefined || details.web !== undefined) && (
+          <a
+            className={cx(
+              ui.button,
+              install === undefined ? ui.secondary : ui.primary,
+              styles.openLink,
+            )}
+            href={install ?? details.web}
+            target={install === undefined ? "_blank" : undefined}
+            rel={install === undefined ? "noopener noreferrer" : undefined}
+          >
+            {install !== undefined ? t.connect.add(c.label) : t.connect.open(c.label)}
+            <span aria-hidden="true">↗</span>
+          </a>
+        )}
+      </div>
+      <ConnectWalkthrough key={`${client}-${language}`} client={client} name={name} url={url} />
+      {terminal ? (
+        <CodeBlock code={configuration} label={t.connect.preview.terminal} copy />
+      ) : (
+        (client === "cursor" || client === "vscode" || client === "windsurf") && (
+          <details className={styles.manual} open={client === "windsurf"}>
+            <summary>{t.connect.manual}</summary>
+            {install !== undefined && addressCard}
+            <CodeBlock code={configuration} copy />
+            {client === "vscode" && (
+              <CodeBlock
+                code={`code --add-mcp '${JSON.stringify({ name, type: "http", url })}'`}
+                label={t.connect.preview.terminal}
+                copy
+              />
+            )}
+          </details>
+        )
+      )}
+      <div className={styles.support}>
+        <p>{c.note}</p>
+        <details>
+          <summary>{t.connect.help}</summary>
+          <p>{t.connect.helpBody}</p>
+          <p>{t.connect.nameHint(name)}</p>
+          {details.docs !== undefined && (
+            <a href={details.docs} target="_blank" rel="noopener noreferrer">
+              {t.connect.official}
+              <span aria-hidden="true"> ↗</span>
+            </a>
+          )}
+        </details>
+      </div>
+    </div>
   );
 }
 
-function InstallLink(props: { readonly href: string; readonly label: string }) {
-  return (
-    <p className={styles.actions}>
-      <a className={cx(ui.button, ui.primary, styles.link)} href={props.href}>
-        {props.label}
-      </a>
-    </p>
-  );
-}
-
-/**
- * How to point an agent at this address: copy it, then the steps for each common client, and
- * what to say first. The server goes by the name the repository gives itself. The address is
- * shown once, in the step that copies it; a step that says "paste the address you copied" must
- * not print it again.
- */
-export function ConnectGuide(props: {
+export function ConnectGuide({
+  origin,
+  address,
+  mount,
+}: {
   readonly origin: string;
   readonly address: Address;
-  /** What the address serves, once known: the name comes from it. */
   readonly mount: RestMount | undefined;
 }) {
   const { t } = useI18n();
-  const { origin, address, mount } = props;
   const url = `${origin}${formatAddress(address)}`;
   const manifest = mount?.index.status === "ready" ? mount.index.manifest : undefined;
   const name = serverNameOf(address, manifest?.name);
-  const displayName = displayNameOf(address, mount);
-  const c = t.connect.clients;
-  const config = (shape: Record<string, unknown>) => JSON.stringify(shape, null, 2);
-
-  // Apps first, then the tools that run in a terminal: a visitor who is not a developer
-  // should meet what they use before what they do not.
-  const tabs = [
-    {
-      id: "chatgpt",
-      label: c.chatgpt.label,
-      content: (
-        <Steps
-          items={[
-            { text: c.chatgpt.steps[0] },
-            { text: c.chatgpt.steps[1] },
-            { text: c.chatgpt.steps[2] },
-          ]}
-        />
-      ),
-    },
-    {
-      id: "claude",
-      label: c.claude.label,
-      content: (
-        <Steps
-          items={[
-            { text: c.claude.steps[0] },
-            { text: c.claude.steps[1] },
-            { text: c.claude.steps[2] },
-          ]}
-        />
-      ),
-    },
-    {
-      id: "cursor",
-      label: c.cursor.label,
-      content: (
-        <Steps
-          items={[
-            {
-              text: c.cursor.steps[0],
-              extra: (
-                <>
-                  <InstallLink
-                    href={cursorInstallLink(name, url)}
-                    label={t.connect.add(c.cursor.label)}
-                  />
-                  <CodeBlock code={config({ mcpServers: { [name]: { url } } })} copy />
-                </>
-              ),
-            },
-          ]}
-        />
-      ),
-    },
-    {
-      id: "vscode",
-      label: c.vscode.label,
-      content: (
-        <Steps
-          items={[
-            {
-              text: c.vscode.steps[0],
-              extra: (
-                <>
-                  <InstallLink
-                    href={vscodeInstallLink(name, url)}
-                    label={t.connect.add(c.vscode.label)}
-                  />
-                  <CodeBlock code={config({ servers: { [name]: { type: "http", url } } })} copy />
-                </>
-              ),
-            },
-            {
-              text: c.vscode.steps[1],
-              extra: (
-                <CodeBlock
-                  code={`code --add-mcp '${JSON.stringify({ name, type: "http", url })}'`}
-                  copy
-                />
-              ),
-            },
-          ]}
-        />
-      ),
-    },
-    {
-      id: "windsurf",
-      label: c.windsurf.label,
-      content: (
-        <Steps
-          items={[
-            {
-              text: c.windsurf.steps[0],
-              extra: (
-                <CodeBlock code={config({ mcpServers: { [name]: { serverUrl: url } } })} copy />
-              ),
-            },
-          ]}
-        />
-      ),
-    },
-    {
-      id: "claude-code",
-      label: c.claudeCode.label,
-      content: (
-        <Steps
-          items={[
-            {
-              text: c.claudeCode.steps[0],
-              extra: <CodeBlock code={`claude mcp add --transport http ${name} ${url}`} copy />,
-            },
-            { text: c.claudeCode.steps[1] },
-          ]}
-        />
-      ),
-    },
-    {
-      id: "codex",
-      label: c.codex.label,
-      content: (
-        <Steps
-          items={[
-            {
-              text: c.codex.steps[0],
-              extra: <CodeBlock code={`codex mcp add ${name} --url ${url}`} copy />,
-            },
-          ]}
-        />
-      ),
-    },
-    {
-      id: "gemini",
-      label: c.gemini.label,
-      content: (
-        <Steps
-          items={[
-            {
-              text: c.gemini.steps[0],
-              extra: <CodeBlock code={`gemini mcp add --transport http ${name} ${url}`} copy />,
-            },
-          ]}
-        />
-      ),
-    },
-    {
-      id: "other",
-      label: c.other.label,
-      content: (
-        <Steps
-          items={[
-            {
-              text: c.other.steps[0],
-              extra: (
-                <CodeBlock code={config({ mcpServers: { [name]: { type: "http", url } } })} copy />
-              ),
-            },
-          ]}
-        />
-      ),
-    },
-  ];
+  const message = t.connect.firstMessage.text(displayNameOf(address, mount));
+  const tabs = CONNECT_CLIENTS.map((client) => ({
+    id: client,
+    label: t.connect.clients[client].label,
+    icon: <ClientIcon client={client} />,
+    content: <ClientGuide key={client} client={client} name={name} url={url} />,
+  }));
 
   return (
     <section className={styles.guide} aria-labelledby="connect-title">
-      <h2 id="connect-title" className={styles.title}>
-        {t.connect.title}
-      </h2>
-      {/* Two things to do, in order. Someone who has never added an MCP server should get through
-          the page without having to know what one is. */}
-      <ol className={styles.phases}>
-        <li className={styles.phase}>
-          <p className={styles.phaseHead}>
-            <span className={styles.phaseNumber} aria-hidden="true">
-              1
-            </span>
-            <span className={styles.phaseTitle}>{t.connect.phases.copy}</span>
-          </p>
-          {/* One button, because copying is the only thing to do here. The address itself stays in
-              the page as text and shows when the button is pointed at or focused. */}
-          <p className={styles.copyAddress}>
-            <CopyButton text={url} label={t.connect.copyButton} variant="primary" size="md" />
-            <span className={styles.address}>{url}</span>
-          </p>
-        </li>
-        <li className={styles.phase}>
-          <p className={styles.phaseHead}>
-            <span className={styles.phaseNumber} aria-hidden="true">
-              2
-            </span>
-            <span className={styles.phaseTitle}>{t.connect.phases.pick}</span>
-          </p>
-          <p className={styles.hint}>{t.connect.pickHint}</p>
-          <Tabs label={t.connect.clientsLabel} tabs={tabs} variant="tiles" />
-        </li>
-      </ol>
-      <p className={styles.hint}>
-        {manifest?.name != null ? t.connect.nameFromManifest(name) : t.connect.nameHint(name)}
-      </p>
-      <CodeBlock
-        label={t.connect.firstMessage.label}
-        code={t.connect.firstMessage.text(displayName)}
-        copy
-      />
-      <p className={styles.hint}>{t.connect.firstMessage.hint}</p>
+      <header className={styles.header}>
+        <p className={styles.eyebrow}>
+          <span aria-hidden="true">✦</span>
+          {t.connect.eyebrow}
+        </p>
+        <h2 id="connect-title">{t.connect.title}</h2>
+        <p className={styles.lead}>{t.connect.lead}</p>
+      </header>
+      <div className={styles.choose}>
+        <h3>{t.connect.choose}</h3>
+        <p className={styles.hint}>{t.connect.pickHint}</p>
+      </div>
+      <Tabs label={t.connect.clientsLabel} tabs={tabs} variant="tiles" />
+      <div className={styles.firstMessage}>
+        <div className={styles.messageHeading}>
+          <span className={styles.messageIcon} aria-hidden="true">
+            ✧
+          </span>
+          <div>
+            <h3>{t.connect.firstMessage.label}</h3>
+            <p className={styles.hint}>{t.connect.firstMessage.hint}</p>
+          </div>
+        </div>
+        <div className={styles.messageBubble}>
+          <p>{message}</p>
+          <CopyButton
+            text={message}
+            label={t.connect.firstMessage.copy}
+            variant="secondary"
+            size="md"
+          />
+        </div>
+      </div>
     </section>
   );
 }

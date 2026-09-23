@@ -1,3 +1,4 @@
+import { connectKo } from "./connect-ko.js";
 import type { Messages } from "./en.js";
 
 // Korean pack. Language packs are the one place where committed text is not English.
@@ -82,83 +83,7 @@ export const ko: Messages = {
     },
   },
 
-  connect: {
-    title: "에이전트 연결하기",
-    copyButton: "주소 복사하기",
-    phases: {
-      copy: "이 주소를 복사하세요",
-      pick: "쓰시는 앱을 열고 순서대로 따라 하세요",
-    },
-    pickHint: "쓰시는 앱을 고르세요. 목록에 없으면 “기타”를 고르시면 됩니다.",
-    clientsLabel: "클라이언트",
-    nameHint: (name: string) =>
-      `앱이 이름을 물어보면 아무 이름이나 써도 됩니다. 예시에서는 “${name}”을 씁니다.`,
-    nameFromManifest: (name: string) =>
-      `앱이 이름을 물어보면 예시처럼 저장소가 스스로 정한 이름을 따서 “${name}”을 쓰세요. 다른 이름도 상관없습니다.`,
-    add: (client: string) => `${client}에 추가`,
-    firstMessage: {
-      label: "그다음 이렇게 말해 보세요",
-      text: (name: string) =>
-        `${name}에 어떤 스킬이 있는지 살펴보고, 지금 내가 하는 일에 맞는 스킬을 골라 줘.`,
-      hint: "요청에 서버 이름을 넣으면 에이전트가 어디를 봐야 할지 압니다. 그다음부터는 스킬 이름을 말하거나 필요한 일을 설명하면 됩니다.",
-    },
-    clients: {
-      chatgpt: {
-        label: "ChatGPT",
-        steps: [
-          "설정에서 커넥터(Connectors)를 연 뒤, 고급 설정에서 개발자 모드(Developer mode)를 켭니다.",
-          "만들기(Create)를 누르고 커넥터 이름을 정한 뒤, 복사한 주소를 MCP 서버 URL 칸에 붙여 넣고 인증은 “없음”으로 둡니다.",
-          "새 대화에서 더하기 메뉴로 커넥터를 추가하고, 스킬 이름을 말하며 요청합니다.",
-        ],
-      },
-      claude: {
-        label: "Claude",
-        steps: [
-          "웹 앱이나 데스크톱 앱의 설정에서 커넥터(Connectors)를 열고, 사용자 지정 커넥터 추가(Add custom connector)를 선택합니다.",
-          "이름을 정하고, 복사한 주소를 URL 칸에 붙여 넣습니다.",
-          "대화에서 도구 메뉴로 커넥터를 켜고, 스킬 이름을 말하며 요청합니다.",
-        ],
-      },
-      cursor: {
-        label: "Cursor",
-        steps: [
-          "버튼을 누르거나, 설정에서 Tools & MCP를 열어 새 MCP 서버를 추가하고 이 설정을 붙여 넣습니다:",
-        ],
-      },
-      vscode: {
-        label: "VS Code",
-        steps: [
-          "버튼을 누르거나, 작업 공간의 .vscode/mcp.json에 서버를 추가합니다:",
-          "또는 터미널에서:",
-        ],
-      },
-      windsurf: {
-        label: "Windsurf",
-        steps: ["설정에서 MCP를 열고 mcp_config.json에 다음을 추가합니다:"],
-      },
-      claudeCode: {
-        label: "Claude Code",
-        steps: [
-          "터미널에서 다음을 실행합니다:",
-          "스킬이 슬래시 메뉴의 명령으로 나타나고, 에이전트가 스스로 스킬을 찾아 불러옵니다.",
-        ],
-      },
-      codex: {
-        label: "Codex CLI",
-        steps: ["터미널에서 다음을 실행합니다:"],
-      },
-      gemini: {
-        label: "Gemini CLI",
-        steps: ["터미널에서 다음을 실행합니다:"],
-      },
-      other: {
-        label: "기타",
-        steps: [
-          "MCP 서버를 HTTP로 추가할 수 있는 앱이라면 어디든 이 주소를 쓸 수 있습니다. 대부분 이런 형태의 설정을 읽으며, 키는 원하는 이름으로 정하면 됩니다:",
-        ],
-      },
-    },
-  },
+  connect: connectKo,
 
   landing: {
     eyebrow: "어떤 git 저장소든 MCP 서버로",

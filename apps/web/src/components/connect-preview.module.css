@@ -1,0 +1,743 @@
+.window {
+  --app-bg: var(--client-chatgpt-bg);
+  --app-sidebar: var(--client-chatgpt-sidebar);
+  --app-field: var(--client-chatgpt-field);
+  --app-accent: var(--color-accent);
+  height: var(--preview-height);
+  overflow: hidden;
+  border: var(--preview-border);
+  border-radius: var(--radius-lg);
+  background: var(--app-bg);
+  color: var(--client-text);
+  box-shadow: var(--client-shadow);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+}
+
+.window[data-client="claude"] {
+  --app-bg: var(--client-claude-bg);
+  --app-sidebar: var(--client-claude-sidebar);
+  --app-field: var(--client-claude-field);
+  --app-accent: var(--client-claude-accent);
+}
+.window[data-client="cursor"],
+.window[data-client="vscode"],
+.window[data-client="windsurf"] {
+  --app-bg: var(--client-editor-bg);
+  --app-sidebar: var(--client-editor-sidebar);
+  --app-field: var(--client-editor-field);
+}
+.window[data-client="cursor"] {
+  --app-bg: var(--client-cursor-bg);
+}
+.window[data-client="windsurf"] {
+  --app-bg: var(--client-windsurf-bg);
+}
+.window[data-client="claudeCode"],
+.window[data-client="codex"],
+.window[data-client="gemini"] {
+  --app-bg: var(--client-terminal-bg);
+  --app-sidebar: var(--client-editor-sidebar);
+}
+.chrome {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  height: var(--preview-chrome-height);
+  padding-inline: var(--space-4);
+  border-bottom: var(--preview-border);
+  background: var(--app-sidebar);
+  color: var(--client-muted);
+}
+.traffic {
+  display: flex;
+  gap: var(--space-1);
+}
+.traffic i {
+  width: var(--preview-dot);
+  height: var(--preview-dot);
+  border-radius: var(--radius-full);
+  background: var(--client-window-close);
+}
+.traffic i:nth-child(2) {
+  background: var(--client-window-minimize);
+}
+.traffic i:nth-child(3) {
+  background: var(--client-window-expand);
+}
+.windowBadge {
+  padding-inline: var(--space-2);
+  border: var(--preview-border);
+  border-radius: var(--radius-sm);
+}
+.scene {
+  height: calc(100% - var(--preview-chrome-height));
+}
+.settings {
+  display: grid;
+  grid-template-columns: var(--preview-sidebar-width) minmax(0, 1fr);
+  height: 100%;
+}
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  background: var(--app-sidebar);
+  padding: var(--space-4) var(--space-2);
+  color: var(--client-muted);
+}
+.sidebar strong {
+  margin-bottom: var(--space-3);
+  padding-inline: var(--space-2);
+  color: var(--client-text);
+}
+.sidebar > span {
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+}
+.sidebar .sidebarSelected {
+  background: var(--app-field);
+  color: var(--client-text);
+}
+.settingsContent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-5) var(--space-4);
+}
+.settingsContent h4,
+.editorSettings h4 {
+  font-size: var(--preview-title-size);
+  margin-bottom: var(--space-3);
+}
+.settingRow,
+.formRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-block: var(--space-2);
+  border-bottom: var(--preview-border);
+}
+.highlight {
+  position: relative;
+  display: inline-flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: var(--preview-border);
+  border-color: var(--app-accent);
+  border-radius: var(--radius-md);
+  background: var(--app-field);
+}
+.toggle {
+  position: relative;
+  display: block;
+  flex: none;
+  width: var(--preview-toggle-width);
+  height: var(--preview-toggle-height);
+  padding: calc(var(--space-1) / 2);
+  border-radius: var(--radius-full);
+  background: var(--app-accent);
+  transition: background var(--demo-transition);
+}
+.toggle::after {
+  content: "";
+  display: block;
+  transform: translateX(calc(var(--preview-toggle-width) - var(--preview-toggle-height)));
+  width: var(--preview-toggle-knob);
+  height: var(--preview-toggle-knob);
+  border-radius: var(--radius-full);
+  background: var(--color-accent-contrast);
+  transition: transform var(--demo-transition);
+}
+.skeleton,
+.skeletonShort {
+  height: var(--space-2);
+  background: var(--app-field);
+  border-radius: var(--radius-full);
+  margin-top: var(--space-3);
+}
+.skeletonShort {
+  width: 65%;
+  margin-top: 0;
+}
+.modalBackdrop {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: var(--space-4);
+  background: var(--app-sidebar);
+}
+.formWindow {
+  height: auto;
+  min-height: var(--preview-height);
+}
+.formWindow .scene {
+  height: auto;
+}
+.formWindow .modalBackdrop {
+  height: auto;
+  min-height: calc(var(--preview-height) - var(--preview-chrome-height));
+}
+.dialog {
+  width: 100%;
+  max-width: var(--connect-lead-width);
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: var(--preview-border);
+  border-radius: var(--radius-lg);
+  background: var(--app-bg);
+}
+.dialogTitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+  font-size: var(--text-sm);
+}
+.field {
+  display: grid;
+  gap: var(--space-1);
+  color: var(--client-muted);
+}
+.fieldControl {
+  position: relative;
+  min-width: 0;
+}
+.input,
+.inputHighlight {
+  position: relative;
+  min-width: 0;
+  padding: var(--space-1) var(--space-2);
+  border: var(--preview-border);
+  border-radius: var(--radius-md);
+  background: var(--app-field);
+  color: var(--client-text);
+  overflow-wrap: anywhere;
+}
+.inputHighlight {
+  border-color: var(--app-accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  max-height: var(--space-8);
+  overflow: visible;
+}
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-1);
+}
+.selectValue {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+  padding: var(--space-1) var(--space-2);
+  border: var(--preview-border);
+  border-radius: var(--radius-md);
+  background: var(--app-field);
+  color: var(--client-text);
+}
+.selectValue svg {
+  width: var(--space-4);
+  height: var(--space-4);
+}
+.chat {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  height: 100%;
+  padding: var(--space-4) var(--space-5);
+}
+.chatTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.chatTitle strong {
+  font-size: var(--text-sm);
+}
+.chatMenu {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: var(--preview-border);
+  border-radius: var(--radius-lg);
+  background: var(--app-sidebar);
+}
+.chatMenu > span {
+  color: var(--client-muted);
+}
+.composer {
+  position: relative;
+  display: grid;
+  gap: var(--space-2);
+  margin-top: auto;
+  padding: var(--space-3) var(--space-4);
+  border: var(--preview-border);
+  border-radius: var(--radius-xl);
+  background: var(--app-field);
+}
+.chip {
+  justify-self: start;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  border: var(--preview-border);
+  border-radius: var(--radius-full);
+  padding: var(--space-1) var(--space-2);
+}
+.send {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--preview-send-size);
+  height: var(--preview-send-size);
+  border-radius: var(--radius-full);
+  background: var(--client-text);
+  color: var(--app-bg);
+  transition:
+    transform var(--demo-transition),
+    opacity var(--demo-transition);
+}
+.send > svg {
+  width: var(--preview-send-icon);
+  height: var(--preview-send-icon);
+}
+.window[data-client="claude"] .send {
+  border-radius: var(--radius-md);
+  background: var(--client-claude-accent);
+  color: var(--color-accent-contrast);
+}
+.composerBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: var(--space-2);
+}
+.attach {
+  font-size: var(--text-xl);
+  color: var(--client-muted);
+}
+.sentMessage {
+  position: absolute;
+  top: 40%;
+  right: var(--space-5);
+  max-width: 80%;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--app-field);
+  opacity: 0;
+  transform: translateY(var(--space-3));
+  transition:
+    opacity var(--demo-transition),
+    transform var(--demo-transition);
+}
+.editor {
+  display: grid;
+  grid-template-columns: var(--preview-activity-width) minmax(0, 1fr);
+  height: 100%;
+}
+.activity {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  padding-top: var(--space-3);
+  border-right: var(--preview-border);
+  background: var(--app-sidebar);
+  font-size: var(--text-lg);
+  color: var(--client-muted);
+}
+.activity span:last-child {
+  margin-top: auto;
+  margin-bottom: var(--space-3);
+}
+.editorBody {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.editorTab {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: var(--preview-border);
+  background: var(--app-field);
+  font-family: var(--font-mono);
+}
+.editorBody > .chat {
+  min-height: 0;
+  padding: var(--space-3);
+  gap: var(--space-2);
+}
+.editorCode {
+  padding: var(--space-3);
+  margin-bottom: var(--space-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow: auto;
+  color: var(--color-accent-hover);
+  font-size: var(--text-xs);
+  min-height: 0;
+  border: 0;
+}
+.codeActions {
+  padding: var(--space-2) var(--space-3) 0;
+  color: var(--color-accent);
+}
+.palette {
+  display: grid;
+  gap: var(--space-3);
+  margin: var(--space-4);
+  padding: var(--space-3);
+  border: var(--preview-border);
+  border-radius: var(--radius-md);
+  background: var(--app-field);
+  box-shadow: var(--client-shadow);
+}
+.paletteInput {
+  padding: var(--space-2);
+  border: var(--preview-border);
+  border-color: var(--app-accent);
+  background: var(--app-bg);
+}
+.editorSettings {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+.serverCard {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: var(--preview-border);
+  border-radius: var(--radius-md);
+}
+.serverCard code {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.dot {
+  width: var(--space-2);
+  height: var(--space-2);
+  flex: none;
+  background: var(--color-success);
+  border-radius: var(--radius-full);
+}
+.terminal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  height: 100%;
+  padding: var(--space-5);
+}
+.terminalBrand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.terminalBrand strong {
+  font-size: var(--text-lg);
+}
+.terminalHint {
+  color: var(--client-muted);
+}
+.command {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: var(--preview-border);
+  border-color: var(--app-accent);
+  border-radius: var(--radius-md);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.terminalCommands {
+  display: grid;
+  gap: var(--space-2);
+  min-height: 0;
+  overflow: auto;
+}
+.copyable {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+  line-height: inherit;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.command,
+.editorCode,
+.copyText {
+  background: transparent;
+}
+.copyText {
+  display: block;
+  padding: 0;
+  border: 0;
+}
+.copyBadge {
+  position: absolute;
+  top: calc(-1 * var(--space-5));
+  right: var(--space-1);
+  padding-inline: var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--app-bg);
+  color: var(--color-success);
+  font-family: var(--font-sans);
+  -webkit-user-select: none;
+  user-select: none;
+}
+.copyable:hover,
+.copyable:focus-visible {
+  background: var(--app-field);
+}
+.copyable:focus-visible {
+  outline-offset: calc(-1 * var(--space-1));
+}
+.copyBody {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.inputHighlight .copyBody {
+  max-height: calc(var(--space-8) - var(--space-3));
+  overflow: hidden;
+}
+.copyBody code {
+  min-width: 0;
+  font-size: var(--text-xs);
+}
+.copyHint {
+  color: var(--client-muted);
+  font-family: var(--font-sans);
+  white-space: normal;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.prompt {
+  color: var(--color-accent);
+}
+.terminalServer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  color: var(--client-muted);
+  overflow-wrap: anywhere;
+}
+.terminalServer > span:last-child {
+  margin-left: auto;
+}
+
+@media (max-width: 40rem) {
+  .window {
+    height: var(--preview-mobile-height);
+  }
+  .settingsContent,
+  .terminal,
+  .chat {
+    padding: var(--space-3);
+  }
+  .modalBackdrop {
+    padding: var(--space-2);
+  }
+  .formWindow {
+    height: auto;
+    min-height: var(--preview-mobile-height);
+  }
+  .formWindow .modalBackdrop {
+    min-height: calc(var(--preview-mobile-height) - var(--preview-chrome-height));
+  }
+  .dialog {
+    padding: var(--space-2);
+    gap: var(--space-1);
+  }
+  .dialogTitle {
+    margin-bottom: 0;
+  }
+  .dialog .formRow {
+    padding-block: var(--space-1);
+  }
+  .settings {
+    grid-template-columns: minmax(0, 0.6fr) minmax(0, 1.4fr);
+  }
+  .sidebar {
+    padding-inline: var(--space-1);
+  }
+  .editorSettings {
+    gap: var(--space-3);
+    padding: var(--space-3);
+  }
+  .editorTab {
+    font-family: var(--font-sans);
+  }
+  .terminal {
+    gap: var(--space-3);
+  }
+  .chatTitle > span {
+    --client-icon-box: var(--space-6);
+    --client-icon-size: var(--space-5);
+  }
+  .chatMenu {
+    padding: var(--space-2);
+  }
+  .composer {
+    gap: var(--space-1);
+  }
+  .editorBody .composer {
+    padding: var(--space-2) var(--space-3);
+  }
+  .composerBar {
+    margin-top: var(--space-1);
+  }
+}
+
+.typed {
+  display: grid;
+  min-width: 0;
+}
+.typeSpace,
+.typeInk {
+  grid-area: 1 / 1;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.typeSpace {
+  visibility: hidden;
+}
+.textCaret {
+  display: none;
+  width: var(--preview-caret-width);
+  height: 1em;
+  margin-left: var(--preview-caret-width);
+  background: currentColor;
+  vertical-align: text-bottom;
+}
+.pointer,
+.actionPointer {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  top: 50%;
+  width: var(--preview-pointer-width);
+  height: var(--preview-pointer-height);
+  margin-left: calc(-1 * var(--preview-pointer-hotspot));
+  margin-top: calc(-1 * var(--preview-pointer-hotspot));
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(var(--space-6), var(--space-5));
+  transform-origin: var(--preview-pointer-hotspot) var(--preview-pointer-hotspot);
+  transition:
+    transform var(--demo-pointer-transition),
+    opacity var(--demo-transition);
+}
+.pointer svg,
+.actionPointer svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(var(--preview-pointer-shadow));
+}
+.pointer path,
+.actionPointer path {
+  fill: var(--color-accent-contrast);
+  stroke: var(--client-terminal-bg);
+  stroke-width: 1.3;
+  stroke-linejoin: round;
+}
+.highlight {
+  transition:
+    border-color var(--demo-transition),
+    background var(--demo-transition);
+}
+.chatMenu,
+.composerText {
+  transition: opacity var(--demo-transition);
+}
+.window[data-phase="approach"] .pointer {
+  opacity: 1;
+}
+.window[data-phase="hover"] .pointer {
+  opacity: 1;
+  transform: translate(0, 0);
+}
+.window[data-phase="click"] .pointer {
+  opacity: 1;
+  transform: translate(0, 0) scale(0.88);
+}
+.window[data-phase="action"] .actionPointer {
+  opacity: 1;
+  transform: translate(0, 0);
+}
+.window[data-phase="submit"] .actionPointer {
+  opacity: 1;
+  transform: translate(0, 0) scale(0.88);
+}
+.window[data-phase="click"] .highlight:not([data-action="true"]),
+.window[data-phase="submit"] .highlight[data-action="true"] {
+  border-color: var(--app-accent);
+  background: color-mix(in srgb, var(--app-accent) 18%, var(--app-field));
+}
+.window:is([data-phase="approach"], [data-phase="hover"]) .toggle {
+  background: var(--client-border);
+}
+.window:is([data-phase="approach"], [data-phase="hover"]) .toggle::after {
+  transform: translateX(0);
+}
+.window:is([data-phase="approach"], [data-phase="hover"]) .afterClick {
+  opacity: 0;
+}
+.window[data-phase="type"] .textCaret {
+  display: inline-block;
+}
+.window[data-phase="submit"] .send {
+  transform: scale(0.9);
+}
+.window[data-phase="done"] .chatMenu {
+  opacity: 0;
+}
+.window[data-phase="done"] .sentMessage {
+  opacity: 1;
+  transform: translateY(0);
+}
+.window[data-phase="done"] .composerText {
+  opacity: 0;
+}
+.window[data-phase="done"] .composerText:focus-within {
+  opacity: 1;
+}
+.window:is([data-phase="approach"], [data-phase="hover"], [data-phase="click"]) .send {
+  opacity: 0.45;
+}
+.window[data-phase="still"] * {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .window * {
+    transition: none;
+  }
+  .window .pointer,
+  .window .actionPointer,
+  .window[data-phase="type"] .textCaret {
+    display: none;
+  }
+  .window .sentMessage,
+  .window .send {
+    transform: none;
+  }
+}

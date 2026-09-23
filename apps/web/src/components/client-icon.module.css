@@ -1,0 +1,32 @@
+.icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: var(--client-icon-box);
+  height: var(--client-icon-box);
+  border: var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-inset);
+  color: var(--color-text-muted);
+}
+
+.icon img,
+.icon svg {
+  width: var(--client-icon-size);
+  height: var(--client-icon-size);
+}
+
+.icon img {
+  filter: brightness(0) invert(1);
+}
+.icon[data-brand="vscode"] img,
+.icon[data-brand="claude"] img,
+.icon[data-brand="gemini"] img {
+  filter: none;
+}
+.icon[data-brand="claude"] {
+  background: var(--client-claude-tint);
+}
+.icon[data-brand="gemini"] {
+  background: var(--client-gemini-tint);
+}

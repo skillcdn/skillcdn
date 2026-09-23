@@ -1,161 +1,328 @@
-/* The panel a visitor comes here for, lit like the boxes on the landing page. */
 .guide {
   display: grid;
-  gap: var(--space-6);
+  gap: var(--space-5);
   margin-top: var(--space-7);
   padding: var(--space-6);
   border: var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--color-bg-subtle);
+  border-radius: var(--radius-xl);
+  background:
+    radial-gradient(ellipse at 50% 0, var(--color-accent-subtle), transparent 45%),
+    var(--color-bg-subtle);
   box-shadow: var(--glow);
 }
 
-/* Two things to do, in order. The number is decoration; the heading beside it carries the step. */
-.phases {
+.header {
   display: grid;
-  gap: var(--space-7);
-}
-
-.phase {
-  display: grid;
-  gap: var(--space-4);
-}
-
-.phaseHead {
-  display: flex;
-  align-items: center;
+  justify-items: center;
   gap: var(--space-3);
-}
-
-.phaseNumber {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  border-radius: var(--radius-full);
-  background: var(--color-accent-solid);
-  color: var(--color-accent-contrast);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-bold);
-}
-
-.phaseTitle {
-  font-size: var(--text-lg);
-  font-weight: var(--weight-bold);
-}
-
-.title {
-  font-size: var(--text-xl);
+  padding-block: var(--space-5);
   text-align: center;
 }
-
+.header h2 {
+  font-size: var(--text-2xl);
+}
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-accent);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+}
+.eyebrow > span {
+  font-size: var(--text-lg);
+}
+.lead {
+  max-width: var(--connect-lead-width);
+  color: var(--color-text-muted);
+  text-wrap: pretty;
+}
+.choose {
+  display: grid;
+  gap: var(--space-2);
+}
+.choose h3,
+.guideHeading h3,
+.messageHeading h3 {
+  font-size: var(--text-lg);
+}
 .hint {
   color: var(--color-text-muted);
   font-size: var(--text-sm);
 }
-
-.steps {
+.clientGuide {
   display: grid;
-  gap: var(--space-6);
-  padding-left: var(--space-5);
-  list-style: decimal;
-}
-
-.step::marker {
-  color: var(--color-text-faint);
-}
-
-/* The item stays a list item: display: grid here would drop its number. What follows the words
-   and the picture is spaced with a margin instead of a gap. */
-.stepMain + * {
-  margin-top: var(--space-3);
-}
-
-/* The words and the picture of the screen they describe, side by side. */
-.stepMain {
-  display: grid;
-  grid-template-columns: minmax(0, 18rem) minmax(0, 1fr);
-  align-items: center;
   gap: var(--space-5);
 }
-
-/* Empty until the screenshots exist, the way the frame on the landing page waits for its clip. */
-.stepShot {
-  aspect-ratio: 16 / 10;
-  border: var(--border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-inset);
-}
-
-.actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-}
-
-.link {
-  text-decoration: none;
-}
-
-.preview {
+.copyAddress {
   display: grid;
   gap: var(--space-3);
+  padding: var(--space-4);
+  border: var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-inset);
 }
-
-.previewSummary {
-  cursor: pointer;
-  color: var(--color-text-muted);
+.copyLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
   font-size: var(--text-sm);
 }
+.copyLabel p {
+  color: var(--color-text-muted);
+}
+.linkSymbol {
+  color: var(--color-accent);
+  font-size: var(--text-xl);
+}
+.copyField {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+}
+.copyField code {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+.copyField button {
+  flex: none;
+}
+.guideHeading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+.guideHeading .hint {
+  margin-top: var(--space-2);
+}
+.openLink {
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  text-decoration: none;
+}
+.walkthrough {
+  display: grid;
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+  gap: var(--space-2) var(--space-5);
+  grid-template-rows: auto auto 1fr;
+  align-items: start;
+}
+.stepRow {
+  display: contents;
+}
+.step {
+  grid-column: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-4);
+  border: var(--border);
+  border-color: transparent;
+  border-radius: var(--radius-lg);
+  background: transparent;
+  text-align: left;
+  transition:
+    background var(--transition),
+    border-color var(--transition);
+}
+.step:hover {
+  background: var(--color-bg-inset);
+}
+.step[aria-current="step"] {
+  background: var(--color-accent-subtle);
+  border-color: var(--color-border-strong);
+}
+.stepNumber {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--space-5);
+  height: var(--space-5);
+  border: var(--border);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  color: var(--color-text-muted);
+}
+.step[aria-current="step"] .stepNumber {
+  background: var(--color-accent-solid);
+  border-color: var(--color-accent-solid);
+  color: var(--color-accent-contrast);
+}
+.stepHeading {
+  display: none;
+}
+.step strong {
+  display: block;
+  font-size: var(--text-sm);
+}
+.stepText {
+  display: block;
+  margin-top: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+.preview {
+  display: none;
+  min-width: 0;
+  grid-column: 2;
+  grid-row: 1 / span 3;
+}
+.preview[data-active="true"] {
+  display: block;
+}
+.manual {
+  border: var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-sm);
+}
+.manual summary,
+.support summary {
+  cursor: pointer;
+  color: var(--color-text-muted);
+}
+.manual[open] > :not(summary) {
+  margin-top: var(--space-3);
+}
+.support {
+  display: grid;
+  gap: var(--space-2);
+  border-top: var(--border);
+  padding-top: var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+.support :where(details p) {
+  margin-block: var(--space-2);
+}
+.firstMessage {
+  display: grid;
+  gap: var(--space-4);
+  margin-top: var(--space-2);
+  padding: var(--space-5);
+  border: var(--border);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(120deg, var(--color-accent-subtle), var(--color-bg-inset));
+}
+.messageHeading {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+.messageHeading .hint {
+  margin-top: var(--space-2);
+}
+.messageIcon {
+  color: var(--color-accent);
+  font-size: var(--text-2xl);
+  line-height: 1;
+}
+.messageBubble {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-4);
+  border: var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-subtle);
+}
+.messageBubble p {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--text-sm);
+}
+.messageBubble button {
+  flex: none;
+}
 
-.previewSummary:hover {
-  color: var(--color-text);
+@media (max-width: 52rem) {
+  .walkthrough {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    gap: var(--space-6);
+  }
+  .stepRow {
+    display: grid;
+    gap: var(--space-3);
+  }
+  .step {
+    display: none;
+  }
+  .stepHeading {
+    display: flex;
+    padding: 0;
+    border: 0;
+  }
+  .stepHeading:hover {
+    background: transparent;
+  }
+  .stepHeading .stepNumber {
+    background: var(--color-accent-solid);
+    border-color: var(--color-accent-solid);
+    color: var(--color-accent-contrast);
+  }
+  .preview {
+    display: block;
+    grid-column: auto;
+    grid-row: auto;
+    width: 100%;
+    max-width: var(--connect-preview-width);
+    justify-self: center;
+  }
 }
 
 @media (max-width: 40rem) {
   .guide {
     padding: var(--space-4);
+    border-radius: var(--radius-lg);
   }
-
-  /* Not enough width to set the words beside the picture: it goes under them. */
-  .stepMain {
-    grid-template-columns: minmax(0, 1fr);
+  .header {
+    padding-block: var(--space-3);
+  }
+  .guide {
+    gap: var(--space-4);
+  }
+  .header .lead {
+    font-size: var(--text-sm);
+  }
+  .copyLabel {
+    font-size: var(--text-xs);
+  }
+  .copyAddress {
+    padding: var(--space-3);
+  }
+  .header h2 {
+    font-size: var(--text-xl);
+  }
+  .copyField,
+  .messageBubble {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .copyField {
+    padding: var(--space-3);
+  }
+  .firstMessage {
+    padding: var(--space-4);
   }
 }
 
-/* The one thing to do in this step is copy, so it is one button, centred. The address is under
-   it as text, there to select or to read out, and it fades in when the button is pointed at or
-   reached by keyboard: a reader who wants to see what they are copying can, and everyone else
-   is not asked to read a URL. */
-.copyAddress {
-  position: relative;
-  display: flex;
-  justify-content: center;
-}
-
-.address {
-  position: absolute;
-  top: calc(100% + var(--space-2));
-  left: 50%;
-  translate: -50%;
-  max-width: 100%;
-  padding: var(--space-2) var(--space-3);
-  border: var(--border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-inset);
-  color: var(--color-text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  text-align: center;
-  overflow-wrap: anywhere;
-  opacity: 0;
-  transition: opacity var(--transition);
-}
-
-.copyAddress:hover .address,
-.copyAddress:focus-within .address {
-  opacity: 1;
+@media (prefers-reduced-motion: reduce) {
+  .step {
+    transition: none;
+  }
 }
