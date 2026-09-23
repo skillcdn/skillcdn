@@ -36,7 +36,7 @@ Public repository hygiene
 
 ```
 apps/
-  server/     the single deployable; roles: api | worker | migrate        (Node 24)
+  server/     the single deployable; roles: api | worker | migrate | check (Node 24)
   web/        optional web UI: landing and explorer; REST only, prerendered per language
 packages/
   core/       pure domain logic and ports; no I/O, no Node APIs
@@ -152,3 +152,4 @@ Keep docs lean: current facts and decisions, not history or essays. Git history 
 - The anonymous GitHub API allows 60 requests per hour per IP address, and a local `api` shares that with everything else you do. Put a token without scopes in `.env` as `GITHUB_TOKEN`, and never in a test or a fixture.
 - If a tool writes source files for you, check what became of escape sequences (a backslash followed by `u` and a code point, or by `0`): some tools decode them on the way, and an invisible character in a source file is exactly what the text-safety checks exist to catch. In tests, build such characters with `String.fromCodePoint`.
 - pnpm older than 12.4 is rejected (`ERR_PNPM_UNSUPPORTED_ENGINE`): older versions ignore the version pin and the supply-chain settings. Upgrade with `npm install -g pnpm@latest`; inside the repo pnpm then switches to the exact version in `packageManager`.
+- A corepack shim from Node.js 22 cannot start pnpm 12 (`Cannot find module .../bin/pnpm.cjs`: pnpm 12 ships `bin/pnpm.mjs`). Upgrade corepack (`npm install -g corepack`) or install pnpm globally as above; until then `node "$LOCALAPPDATA/node/corepack/v1/pnpm/12.4.2/bin/pnpm.mjs"` (Windows) runs the downloaded pnpm directly.

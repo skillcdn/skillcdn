@@ -8,7 +8,7 @@ The rules for working in this codebase (conventions, testing, commits, documenta
 
 You need:
 
-- **pnpm 12 or newer** (`npm install -g pnpm@latest`, or Corepack). pnpm then pins its own exact version and downloads the pinned Node.js 24 runtime for project scripts; both are verified against the lockfile.
+- **pnpm 12 or newer** (`npm install -g pnpm@latest`, or a Corepack recent enough to start pnpm 12; the one bundled with Node.js 22 is not, see the gotchas in `CLAUDE.md`). pnpm then pins its own exact version and downloads the pinned Node.js 24 runtime for project scripts; both are verified against the lockfile.
 - **Docker**, for the local PostgreSQL and for building the image.
 - Node.js 24 as your system Node.js is recommended so editors and ad-hoc commands match. It is not required for pnpm scripts.
 
