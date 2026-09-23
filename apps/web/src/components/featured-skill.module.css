@@ -12,8 +12,9 @@
   min-height: var(--showcase-height);
   overflow: hidden;
 }
-.art img,
-.art video {
+/* The video, or the animated image that takes its place where the video will not play. */
+.art video,
+.art img {
   width: 100%;
   height: 100%;
   position: absolute;

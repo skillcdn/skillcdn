@@ -130,6 +130,11 @@ describe("prerendered pages", () => {
         expect(body).not.toMatch(/<video[^>]+autoplay/i);
         expect(body).toContain(t.landing.featured.video.clip);
         expect(body).not.toMatch(/style="|<(?:img|video)[^>]+src="https?:/);
+        // The animated image is for a browser that refuses the video, so it is not in the page
+        // until one does, and nothing is laid over the clip.
+        expect(body).not.toContain(FEATURED_VIDEO.animation);
+        const card = body.slice(body.indexOf("<article"), body.indexOf("</article>"));
+        expect(card).not.toContain("<button");
       }
     }
   });

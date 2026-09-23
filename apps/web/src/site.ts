@@ -24,14 +24,16 @@ export const LINKS = {
 /**
  * Editorial selection shared by the landing page and explorer. Its media is bundled with the
  * site: an original AI-generated concept clip of the kind of result the skill is for (not a
- * recording of a run of it), one of its frames as the poster that stands in for it, and what
- * the clip was made from, which the example conversation attaches: a frame of the ad it took
- * its look from, and the picture of its star.
+ * recording of a run of it), the same clip as an animated image for where the video will not
+ * play, its first frame as the poster that stands in for both, and what the clip was made from,
+ * which the example conversation attaches: a frame of the ad it took its look from, and the
+ * picture of its star.
  */
 export const FEATURED_VIDEO = {
   address: "/gh/skillcdn/examples",
   href: "/gh/skillcdn/examples",
   clip: "/showcase/explorer-ad.mp4",
+  animation: "/showcase/explorer-ad.avif",
   poster: "/showcase/explorer-ad.webp",
   reference: "/showcase/reference-ad.webp",
   picture: "/showcase/explorer.webp",

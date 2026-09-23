@@ -7,5 +7,6 @@
 *.woff2 binary
 *.mp4 binary
 *.webp binary
+*.avif binary
 
 pnpm-lock.yaml linguist-generated=true

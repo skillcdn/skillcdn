@@ -3,6 +3,7 @@ import { useI18n } from "../i18n/index.js";
 import type { Messages } from "../i18n/messages/en.js";
 import { FEATURED_VIDEO } from "../site.js";
 import { BrandSymbol } from "./brand.js";
+import { ClipAnimation, isRefusal } from "./clip-animation.js";
 import styles from "./creation-demo.module.css";
 import { useInView } from "./use-in-view.js";
 
@@ -108,10 +109,12 @@ function Thinking() {
 
 /**
  * The result, playing: the concept clip itself, from its first frame once the result is done,
- * and paused while the conversation is off screen.
+ * and paused while the conversation is off screen. Where the browser will not start it by
+ * itself, the same clip as an animated image takes its place.
  */
 function ResultClip(props: { readonly playing: boolean }) {
   const video = useRef<HTMLVideoElement>(null);
+  const [failed, setFailed] = useState(false);
   useEffect(() => {
     const node = video.current;
     if (node === null) return;
@@ -122,10 +125,13 @@ function ResultClip(props: { readonly playing: boolean }) {
     // A browser lets a video start by itself only when it is muted; the property is what it
     // checks, and a client-rendered element does not always have it from the markup alone.
     node.muted = true;
-    node.play().catch(() => {
-      // Refused, by a phone saving power for one: the poster stands in, and it is the result too.
+    node.play().catch((error: unknown) => {
+      if (isRefusal(error)) setFailed(true);
     });
   }, [props.playing]);
+  if (failed) {
+    return <ClipAnimation alt="" />;
+  }
   return (
     <video
       ref={video}
@@ -136,9 +142,10 @@ function ResultClip(props: { readonly playing: boolean }) {
       muted
       loop
       playsInline
-      preload="auto"
+      preload="none"
       disablePictureInPicture
       disableRemotePlayback
+      onError={() => setFailed(true)}
     />
   );
 }
