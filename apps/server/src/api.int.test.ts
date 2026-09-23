@@ -448,26 +448,47 @@ describe("a repository with a manifest", () => {
 
   it("keeps its files out of reach while the commit is still being indexed", async () => {
     const host = createFixtureHost("manifest-indexing");
-    const release = host.holdTrees();
-    const client = await harness({ host }).connect(
+    const indexingStarted = Promise.withResolvers<void>();
+    const resumeIndexing = Promise.withResolvers<void>();
+    const getTree = host.getTree;
+    let heldIndexer = false;
+    host.getTree = async (...args) => {
+      // Hold only the indexer's first tree request. Fallback reads must finish before
+      // indexing resumes, regardless of how the database schedules their requests.
+      if (!heldIndexer) {
+        heldIndexer = true;
+        indexingStarted.resolve();
+        await resumeIndexing.promise;
+      }
+      return getTree(...args);
+    };
+    const { connect, snapshots } = harness({ host });
+    const client = await connect(
       `/gh/acme/with-manifest@${fixtureCommits("manifest-indexing").main}`,
     );
-    // Asked while the index is not there, so the tree answers, once it arrives.
-    const reads = Promise.all([
-      call(client, "read_file", { path: "." }),
-      call(client, "read_file", { path: "docs/guide.md" }),
-      call(client, "read_file", { path: "skills/greeting/SKILL.md" }),
-    ]);
-    release();
-    const [root, guide, skill] = await reads;
-    expect(root.text).toContain("- skills/");
-    expect(root.text).toContain("- SKILLCDN.md (");
-    expect(root.text).not.toContain("README.md");
-    expect(root.text).not.toContain("notes/");
-    // Nothing has read the manifest yet, so its declared directory is not served: closed, not guessed.
-    expect(guide.isError).toBe(true);
-    expect(skill.isError).toBe(false);
-    await client.close();
+    try {
+      await indexingStarted.promise;
+      const [root, guide, skill] = await Promise.all([
+        call(client, "read_file", { path: "." }),
+        call(client, "read_file", { path: "docs/guide.md" }),
+        call(client, "read_file", { path: "skills/greeting/SKILL.md" }),
+      ]);
+      expect(root.text).toContain("- skills/");
+      expect(root.text).toContain("- SKILLCDN.md (");
+      expect(root.text).not.toContain("README.md");
+      expect(root.text).not.toContain("notes/");
+      // Nothing has read the manifest yet, so its declared directory is not served: closed, not guessed.
+      expect(guide.isError).toBe(true);
+      expect(skill.isError).toBe(false);
+
+      resumeIndexing.resolve();
+      await snapshots.idle();
+      expect((await call(client, "read_file", { path: "docs/guide.md" })).isError).toBe(false);
+    } finally {
+      resumeIndexing.resolve();
+      await snapshots.idle();
+      await client.close();
+    }
   });
 });
 
