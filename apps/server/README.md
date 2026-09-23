@@ -56,7 +56,7 @@ src/
   indexer/       builds the index of a commit; coordinates who builds it (ADR-0007)
   stats/         daily usage counters and distinct clients per public repository: added up in memory, written in batches
   adapters/      implementations of core ports that are not their own package (clock, ...)
-  testing/       test support: a git host backed by the fixtures in skills/ (not compiled into dist)
+  testing/       test support: a git host backed by fixtures/.repositories/ (not compiled into dist)
 ```
 
 Create directories when they get their first file. Do not add empty scaffolding.
@@ -79,7 +79,7 @@ Create directories when they get their first file. Do not add empty scaffolding.
 ## Tests
 
 - Unit tests next to the code.
-- `src/api.int.test.ts` runs the real app against real PostgreSQL with the MCP client SDK and a git host backed by [`skills/`](../../skills/). It covers both protocol eras, sub-path mounts, hostile repositories, the indexing budget and the error surface. It needs the compose database, like the `db` integration tests.
+- `src/api.int.test.ts` runs the real app against real PostgreSQL with the MCP client SDK and a git host backed by [`fixtures/.repositories/`](fixtures/.repositories/). It covers both protocol eras, sub-path mounts, hostile repositories, the indexing budget and the error surface. It needs the compose database, like the `db` integration tests.
 - `src/rest.int.test.ts` does the same for the REST API and parses every response with the schemas in `@skillcdn/core`, which are what the web UI parses with.
 - `src/web.int.test.ts` and `src/http/web.test.ts` cover serving a web build: language variants, the public origin, caching, the content security policy, the sitemap with its featured and popular repositories, and an address answering a browser with a rendered page and everyone else with MCP. They use a small fake build with a fake render module (`src/testing/web-build.ts`), not `apps/web`.
 - `src/testing/harness.ts` wires the app for all of them. Every test file has a database of its own; tests inside a file share it.

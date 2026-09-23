@@ -1,8 +1,7 @@
 /* A segmented control: the choices sit in one track and the current one is pressed in. The track
    needs a surface of its own, because a border alone is the same colour as the black behind it,
    and the current choice is tinted with the accent rather than filled with it: the same quiet chip
-   the accent badge uses. The language switcher in the header and the toggle on a file view are
-   both this control, so they are one set of rules and cannot drift apart again. */
+   the accent badge uses. File-view controls use this track; the language picker is a separate disclosure list. */
 .segmented {
   display: inline-flex;
   align-items: center;

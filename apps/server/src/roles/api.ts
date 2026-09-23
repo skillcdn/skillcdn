@@ -44,7 +44,7 @@ export interface ApiPorts {
 }
 
 export type ApiConfig = Pick<Config, "mounts" | "indexing"> & {
-  /** Left out, the explorer features nothing. */
+  /** Left out, there are no operator-configured featured addresses. */
   readonly web?: Pick<Config["web"], "featured"> & { readonly publicUrl?: string | undefined };
   /** Left out, no proxy is trusted and every request is logged. */
   readonly http?: Pick<

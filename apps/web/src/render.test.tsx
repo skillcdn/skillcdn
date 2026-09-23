@@ -1,4 +1,4 @@
-import type { RestMount, RestSkill } from "@skillcdn/core";
+import type { RestFeatured, RestMount, RestSkill } from "@skillcdn/core";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { App } from "./app.js";
@@ -15,6 +15,7 @@ import {
   TEMPLATE_MARKERS,
 } from "./entry-server.js";
 import { messagesFor } from "./i18n/index.js";
+import { FEATURED_VIDEO } from "./site.js";
 
 const TEMPLATE = `<!doctype html>\n${TEMPLATE_MARKERS.htmlLang}<head>${TEMPLATE_MARKERS.head}</head><body>${TEMPLATE_MARKERS.root}</body></html>`;
 
@@ -72,6 +73,76 @@ const SKILL: RestSkill = {
 // What the build writes into the prerendered files, rendered here without a browser.
 
 describe("prerendered pages", () => {
+  it("preserves operator recommendations while excluding duplicate picks and retired fixtures", () => {
+    const item = (address: string): RestFeatured["items"][number] => ({
+      address,
+      repository: MOUNT.repository,
+      manifest: null,
+      status: "ready",
+      skillCount: 1,
+      skills: ["review"],
+    });
+    const items = [
+      FEATURED_VIDEO.address,
+      "/gh/SkillCDN/examples",
+      "/gh/acme/useful",
+      "/gh/Acme/useful",
+      "/gh/skillcdn/skillcdn@release/1.2:skills/hostile",
+      "/gh/skillcdn/skillcdn@main/skills/single-skill/references",
+      "/gh/skillcdn/skillcdn/skills/hostile-tools",
+      "/gh/skillcdn/examples@v1",
+    ].map(item);
+    const body = renderToString(
+      <App
+        initialLocation={{ pathname: "/explore", search: "" }}
+        origin={ORIGIN_PLACEHOLDER}
+        initialData={{ featured: { ready: { items } } }}
+      />,
+    );
+    expect(body.match(/href="\/gh\/acme\/useful"/g)).toHaveLength(1);
+    expect(body).not.toContain('skills/hostile"');
+    expect(body).not.toContain("single-skill/references");
+    expect(body).not.toContain('href="/gh/SkillCDN/examples"');
+    expect(body).toContain('href="/gh/skillcdn/skillcdn/skills/hostile-tools"');
+    expect(body).toContain('href="/gh/skillcdn/examples@v1"');
+  });
+
+  it("offers the real editorial skill before repository setup on both public pages", () => {
+    for (const language of LANGUAGES) {
+      const t = messagesFor(language);
+      for (const path of ["/", "/explore"]) {
+        const { body } = renderPage(path, language);
+        expect(body).toContain(`href="${FEATURED_VIDEO.href}"`);
+        expect(body).toContain(t.landing.featured.video.title);
+        expect(body.indexOf(t.landing.featured.video.title)).toBeLessThan(
+          body.indexOf('inputMode="url"'),
+        );
+        expect(body).not.toMatch(/href="\/gh\/skillcdn\/skillcdn/);
+        expect(body).toContain(`src="${FEATURED_VIDEO.image}"`);
+        expect(body).not.toMatch(/style="|<img[^>]+src="https?:/);
+      }
+    }
+  });
+
+  it("keeps the complete illustrative conversation and spending consent readable without animation", () => {
+    for (const language of LANGUAGES) {
+      const t = messagesFor(language);
+      const { body, head } = renderPage("/", language);
+      for (const message of [
+        t.landing.demo.prompt,
+        t.landing.demo.question,
+        t.landing.demo.answer,
+        t.landing.demo.plan,
+        t.landing.demo.consent,
+      ])
+        expect(body).toContain(message);
+      expect(body).toContain(t.landing.demo.transcript);
+      expect(body).toContain('data-demo-phase="2"');
+      expect(t.landing.faq.items).toHaveLength(3);
+      for (const item of t.landing.faq.items) expect(head).toContain(item.question);
+    }
+  });
+
   it("exist once per language, with their content in the HTML itself", () => {
     for (const language of LANGUAGES) {
       const t = messagesFor(language);

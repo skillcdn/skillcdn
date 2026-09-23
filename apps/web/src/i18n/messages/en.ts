@@ -1,4 +1,5 @@
 import { connectEn } from "./connect-en.js";
+import { landingEn } from "./landing-en.js";
 
 // The English pack is the source: its shape is the type every other pack must have.
 // Copy states what the product does today. No prices, no plans, no comparisons.
@@ -7,14 +8,14 @@ export const en = {
   meta: {
     siteName: "SkillCDN",
     landing: {
-      title: "SkillCDN: turn any git repository into an MCP server",
+      title: "SkillCDN: big ideas, beautifully made",
       description:
-        "Connect an agent to one URL and it can search, load and read the skills and documents in a git repository. Nothing to install, nothing to upload.",
+        "Make more of your ideas with the AI you already use. Discover useful skills, connect your AI, and create something worth sharing, even your first time.",
     },
     explore: {
-      title: "Explore a repository | SkillCDN",
+      title: "Find your next creation | SkillCDN",
       description:
-        "Paste a repository address and see what an agent gets from it: its skills, its documents, and what was skipped and why.",
+        "Discover selected skills that help your AI turn your ideas into finished work. Start with a short video ad for your product.",
     },
     mount: {
       title: (repository: string) => `${repository} | SkillCDN`,
@@ -43,7 +44,7 @@ export const en = {
       title: "Page not found | SkillCDN",
       description: "There is nothing at this address.",
     },
-    ogImageAlt: "SkillCDN: turn any git repository into an MCP server",
+    ogImageAlt: "SkillCDN: big ideas, beautifully made",
   },
 
   nav: {
@@ -94,143 +95,12 @@ export const en = {
 
   connect: connectEn,
 
-  landing: {
-    eyebrow: "An MCP server for any git repository",
-    title: "Turn any git repository into an MCP server.",
-    lead: "Connect your agent to one URL and it can search, load and read the skills and documents in that repository. Nothing to install, nothing to upload. Git stays the source of truth.",
-    tryLabel: "Try it with a public GitHub repository",
-    featured: {
-      title: "Try one of these",
-      lead: "Each one opens that repository's page, where the address to connect and a ready-made client configuration are on screen.",
-      items: [
-        {
-          title: "One skill",
-          body: "A single SKILL.md at the root, with the document it refers to.",
-        },
-        {
-          title: "Several skills",
-          body: "Two skills under skills/, with ordinary documents beside them.",
-        },
-        {
-          title: "Broken ones skipped",
-          body: "A manifest that does not parse is reported and left out; the rest is still served.",
-        },
-      ],
-    },
-    how: {
-      title: "How it works",
-      steps: [
-        {
-          title: "Keep skills in git",
-          body: "A skill is a directory with a SKILL.md: a name, a description and instructions in Markdown. Put one or many in a repository, next to the documents they refer to.",
-        },
-        {
-          title: "Connect one URL",
-          body: "The address is the repository: /gh/owner/repo, optionally with a branch, tag or commit and a sub-path. Add it to any MCP client that speaks Streamable HTTP.",
-        },
-        {
-          title: "The agent pulls what it needs",
-          body: "Three tools, however many skills: find searches names, descriptions and documents, get loads one skill, and read_file reads the files it points to.",
-        },
-      ],
-    },
-    addresses: {
-      title: "One address scheme",
-      lead: "An address names a repository, optionally a ref and a directory. It is the whole configuration.",
-      rows: [
-        { address: "/gh/owner/repo", meaning: "The default branch, at its latest commit." },
-        { address: "/gh/owner/repo@v1.2.0", meaning: "A tag or a branch." },
-        {
-          address: "/gh/owner/repo@<40-digit commit>",
-          meaning: "Pinned: always exactly the content that was reviewed.",
-        },
-        { address: "/gh/owner/repo@main/skills/ads", meaning: "Only one directory." },
-        {
-          address: "/gh/owner/repo@release/1.2:skills",
-          meaning: "A ref that contains a slash ends with a colon.",
-        },
-      ],
-      addressHeader: "Address",
-      meaningHeader: "What it serves",
-    },
-    principles: {
-      title: "What you can rely on",
-      items: [
-        {
-          title: "Git is the source of truth",
-          body: "SkillCDN indexes and serves; it never hosts your content. Pin a commit and agents get exactly what was reviewed.",
-        },
-        {
-          title: "Repositories declare, they never execute",
-          body: "Skills are text. Nothing from a repository runs on the server, and nothing is sent to run on your machine.",
-        },
-        {
-          title: "A small, fixed tool set",
-          body: "Agents see three tools, not one per skill, so a repository with hundreds of skills costs the same context as one with three.",
-        },
-        {
-          title: "Self-hostable",
-          body: "The whole service is one container image and PostgreSQL. The source is available, and the same image runs on your own infrastructure.",
-        },
-      ],
-    },
-    authors: {
-      title: "Writing a skill repository",
-      body: "Follow the Agent Skills layout: any directory with a SKILL.md is a skill, and the files next to it belong to it. The explorer shows how your repository is read: which skills were found, which were skipped, and why.",
-      convention: "Read the convention",
-      check: "Check your repository",
-    },
-    faq: {
-      title: "Questions",
-      items: [
-        {
-          question: "What is SkillCDN?",
-          answer:
-            "SkillCDN is a service that turns a git repository into an MCP server. An agent connects to a URL such as /gh/owner/repo on the service and can search and read the skills and documents in that repository through three tools: find, get and read_file.",
-        },
-        {
-          question: "What is a skill?",
-          answer:
-            "A skill is a directory with a SKILL.md file: YAML front-matter with a name and a description, followed by instructions in Markdown. Supporting files live next to it. This is the Agent Skills format.",
-        },
-        {
-          question: "Which agents can use it?",
-          answer:
-            "Any MCP client that supports the Streamable HTTP transport. The page of a repository shows the steps for the common ones: ChatGPT, Claude, Claude Code, Cursor, VS Code, Windsurf, Codex CLI and Gemini CLI.",
-        },
-        {
-          question: "Do I have to upload or register anything?",
-          answer:
-            "No. SkillCDN reads the repository from the git host when an agent first asks for it, indexes that commit once, and answers from the index.",
-        },
-        {
-          question: "How do updates reach agents?",
-          answer:
-            "An address without a commit follows its branch or tag and picks up new commits shortly after they are pushed. An address with a full commit hash never changes.",
-        },
-        {
-          question: "Does SkillCDN run code from repositories?",
-          answer:
-            "No. Repository content is parsed as data and returned as text. Nothing from a repository is executed.",
-        },
-        {
-          question: "Can I use private repositories?",
-          answer:
-            "Not yet. Public GitHub repositories work today. Private repositories, through a GitHub App, are on the roadmap.",
-        },
-        {
-          question: "Can I host it myself?",
-          answer:
-            "Yes. The service is one container image plus PostgreSQL. The source is available under the Functional Source License (FSL-1.1-ALv2); each release becomes Apache 2.0 two years later.",
-        },
-      ],
-    },
-  },
+  landing: landingEn,
 
   explore: {
-    title: "Explore a repository",
-    lead: "Paste an address to see what an agent gets from it: the skills, the documents, and what was skipped and why.",
-    featured: "Featured repositories",
+    title: "What will you create next?",
+    lead: "A little inspiration. A useful skill. Your next idea starts here.",
+    featured: "More to explore",
     featuredSkills: (count: number) => (count === 1 ? "1 skill" : `${count} skills`),
     featuredIndexing: "Indexing…",
     featuredFailed: "Could not be indexed",
@@ -378,7 +248,7 @@ export const en = {
   },
 
   footer: {
-    tagline: "Any git repository, served to agents over MCP.",
+    tagline: "A little know-how. A world of possibility.",
     source: "Source on GitHub",
     license: "License",
     trademarks: "Trademarks",

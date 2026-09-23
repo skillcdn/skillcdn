@@ -1,9 +1,12 @@
+import { formatAddress, parseAddress } from "@skillcdn/core";
 import { api } from "../api/client.js";
 import { useResource } from "../api/use-resource.js";
 import { AddressForm } from "../components/address-form.js";
+import { FeaturedSkill } from "../components/featured-skill.js";
 import { Badge, Container, Skeleton } from "../components/ui.js";
 import { useI18n } from "../i18n/index.js";
 import { Link } from "../navigation.js";
+import { FEATURED_VIDEO, LINKS } from "../site.js";
 import styles from "./explore.module.css";
 
 function Featured() {
@@ -22,14 +25,31 @@ function Featured() {
       </section>
     );
   }
-  if (featured.value.items.length === 0) {
+  const seen = new Set<string>([FEATURED_VIDEO.address]);
+  const items = featured.value.items.filter((item) => {
+    const parsed = parseAddress(item.address);
+    if (!parsed.ok) return false;
+    const address = parsed.value;
+    // Retired public examples are now hidden, test-only fixtures, including at named refs.
+    if (
+      address.owner === "skillcdn" &&
+      address.repo === "skillcdn" &&
+      /^skills\/(?:single-skill|multi-skill|hostile|with-manifest)(?:\/|$)/.test(address.path)
+    )
+      return false;
+    const canonical = formatAddress(address);
+    if (seen.has(canonical)) return false;
+    seen.add(canonical);
+    return true;
+  });
+  if (items.length === 0) {
     return null;
   }
   return (
     <section className={styles.featured}>
       <h2 className={styles.heading}>{t.explore.featured}</h2>
       <ul className={styles.grid}>
-        {featured.value.items.map((item) => (
+        {items.map((item) => (
           <li key={item.address}>
             <Link className={styles.card} href={item.address}>
               <span className={styles.cardTitle}>
@@ -62,10 +82,18 @@ export function ExplorePage(props: { readonly origin: string }) {
     <Container className={styles.page}>
       <h1 className={styles.title}>{t.explore.title}</h1>
       <p className={styles.lead}>{t.explore.lead}</p>
-      <div className={styles.form}>
-        <AddressForm origin={props.origin} large footnote />
+      <div className={styles.selection}>
+        <FeaturedSkill />
       </div>
       <Featured />
+      <section className={styles.form}>
+        <h2 className={styles.heading}>{t.landing.authors.title}</h2>
+        <p className={styles.formLead}>{t.landing.authors.body}</p>
+        <AddressForm origin={props.origin} label={t.landing.authors.check} footnote />
+        <a className={styles.authorLink} href={LINKS.convention}>
+          {t.landing.authors.convention}
+        </a>
+      </section>
     </Container>
   );
 }

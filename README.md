@@ -80,7 +80,7 @@ packages/
   core/       address parser, skill-repo convention, permission rules, tool contracts, ports   pure TS
   db/         schema, migrations, query layer                           Drizzle + PostgreSQL
   github/     GitHub App, user-token and contents adapter               implements the git-host port
-skills/       reference skill repos used by tests and docs
+apps/server/fixtures/.repositories/  test-only repository fixtures
 deploy/       Dockerfile, compose files, the contract for whoever operates the image
 docs/         architecture, specs, ADRs, roadmap
 ```

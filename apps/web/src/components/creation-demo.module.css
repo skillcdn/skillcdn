@@ -1,0 +1,297 @@
+.root {
+  min-width: 0;
+}
+.root[data-held="true"] * {
+  animation-play-state: paused;
+}
+.window {
+  overflow: hidden;
+  border: var(--border);
+  border-color: var(--color-border-strong);
+  border-radius: var(--radius-xl);
+  background: var(--color-bg-subtle);
+  box-shadow: var(--shadow-stage);
+}
+.chrome {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: var(--border);
+  font-size: var(--text-sm);
+  background: var(--color-bg-raised);
+}
+.symbol {
+  color: var(--color-accent);
+  width: var(--control-size);
+  height: var(--control-size);
+  padding: var(--space-1);
+}
+.chrome small {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+}
+.chromeStatus {
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+  margin-left: auto;
+}
+.conversation {
+  height: var(--conversation-height);
+  padding: var(--space-5);
+  font-size: var(--text-sm);
+}
+.scene {
+  display: grid;
+  align-content: start;
+  gap: var(--space-5);
+  height: 100%;
+}
+.user {
+  justify-self: end;
+  max-width: 87%;
+  background: var(--color-bg-raised);
+  border: var(--border);
+  border-radius: var(--radius-lg) var(--radius-lg) var(--space-1) var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+  min-height: var(--space-8);
+}
+.user small,
+.assistant small {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--color-text-faint);
+  margin-bottom: var(--space-2);
+}
+.assistant {
+  display: flex;
+  align-items: start;
+  gap: var(--space-3);
+  padding-block: var(--space-3);
+}
+.assistant > svg {
+  flex: none;
+  width: var(--space-5);
+  height: var(--space-5);
+  color: var(--color-accent);
+}
+.assistant p {
+  line-height: var(--leading-code);
+}
+.attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+.attachments > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-bg-subtle);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+}
+.attachments img {
+  height: var(--space-6);
+  width: var(--space-6);
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+}
+.approved {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+.approved > span {
+  color: var(--color-accent);
+}
+.result {
+  border: var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  margin-top: calc(-1 * var(--space-2));
+}
+.resultImage {
+  position: relative;
+  height: var(--conversation-result-height);
+  overflow: hidden;
+}
+.resultImage img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 53%;
+}
+.resultImage > span:first-of-type {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  background: var(--color-media-shade);
+  color: var(--color-accent-contrast);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+}
+.result[data-finished="false"] img {
+  filter: blur(var(--space-1));
+  opacity: 0.5;
+}
+.resultText {
+  padding: var(--space-3) var(--space-4);
+  display: grid;
+  gap: var(--space-1);
+  background: var(--color-bg-raised);
+}
+.resultText span {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+.progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: var(--space-1);
+  background: var(--color-accent);
+  width: 65%;
+}
+.stages {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  padding: var(--space-4);
+  border-top: var(--border);
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+}
+.stages span {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.stages i {
+  width: var(--space-1);
+  height: var(--space-1);
+  border-radius: var(--radius-full);
+  background: var(--color-border-strong);
+}
+.stages [data-active="true"] {
+  color: var(--color-accent);
+}
+.stages :where([data-active="true"]) i {
+  background: currentColor;
+}
+.caret {
+  display: inline-block;
+  width: var(--preview-caret-width);
+  height: 1em;
+  background: var(--color-accent);
+  margin-left: var(--preview-caret-width);
+  vertical-align: middle;
+}
+.thinking {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-2);
+}
+.thinking i {
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-text-muted);
+}
+.transcript {
+  margin-top: var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+.transcript summary {
+  cursor: pointer;
+  width: fit-content;
+  margin-inline: auto;
+  padding: var(--space-2);
+}
+.transcript ol {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  margin-top: var(--space-3);
+  border: var(--border);
+  border-radius: var(--radius-lg);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .scene {
+    animation: scene-in 350ms ease-out;
+  }
+  .thinking i {
+    animation: thinking 1s ease-in-out infinite alternate;
+  }
+  .thinking i:nth-child(2) {
+    animation-delay: 160ms;
+  }
+  .thinking i:nth-child(3) {
+    animation-delay: 320ms;
+  }
+  .result img {
+    transition:
+      filter 700ms ease,
+      opacity 700ms ease;
+  }
+  .progress {
+    animation: progress 1.3s ease-out;
+  }
+  @keyframes scene-in {
+    from {
+      opacity: 0.4;
+      transform: translateY(var(--space-2));
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes thinking {
+    to {
+      opacity: 0.3;
+      transform: translateY(calc(-1 * var(--space-1)));
+    }
+  }
+  @keyframes progress {
+    from {
+      width: 0;
+    }
+    to {
+      width: 100%;
+    }
+  }
+}
+@media (max-width: 40rem) {
+  .conversation {
+    padding: var(--space-4);
+    height: var(--conversation-mobile-height);
+  }
+  .chrome {
+    padding: var(--space-3) var(--space-4);
+  }
+  .stages {
+    gap: var(--space-3);
+  }
+  .scene {
+    gap: var(--space-4);
+  }
+  .user {
+    max-width: 95%;
+  }
+  .resultImage {
+    height: var(--conversation-mobile-result-height);
+  }
+}

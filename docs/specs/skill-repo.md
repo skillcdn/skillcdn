@@ -1,7 +1,7 @@
 # Spec: the SkillCDN Format
 
 - Status: **Draft.**
-- Implemented by: `packages/core` (`parseSkillManifest`, `parseRepoManifest`, `classifyRepoFile`, `isServedPath`, `summarizeMarkdown`). Fixtures live in [`skills/`](../../skills/); the reference repository, written in the format and served live, is `skillcdn/examples`.
+- Implemented by: `packages/core` (`parseSkillManifest`, `parseRepoManifest`, `classifyRepoFile`, `isServedPath`, `summarizeMarkdown`). Fixtures live in [`apps/server/fixtures/.repositories/`](../../apps/server/fixtures/.repositories/); the reference repository, written in the format and served live, is `skillcdn/examples`.
 
 How SkillCDN reads a repository, and how a repository is written so that an agent uses it well. The layout is the [Agent Skills](https://agentskills.io/specification) layout: a repository that already works as a skills folder works here unchanged. That layout, together with the conventions that grow around it (what sits next to `SKILL.md`, what the repository root says, how plain documents are written), is the **SkillCDN Format**. This file is its specification; user documentation will be rendered from it.
 

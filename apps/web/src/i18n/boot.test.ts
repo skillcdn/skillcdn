@@ -74,11 +74,11 @@ describe("the boot script", () => {
 
   it("shows a URL without a language in the stored choice, else the browser's", () => {
     expect(boot({ href: "https://x.test/", stored: "ko" })).toMatchObject({
-      lang: "ko",
+      lang: "en",
       pending: true,
     });
     expect(boot({ href: "https://x.test/", browser: ["ko-KR", "en"] })).toMatchObject({
-      lang: "ko",
+      lang: "en",
       pending: true,
     });
     expect(boot({ href: "https://x.test/", browser: ["fr", "en-US"] })).toMatchObject({
@@ -90,7 +90,7 @@ describe("the boot script", () => {
   it("ignores a language it does not have, and keeps the stored choice", () => {
     expect(boot({ href: "https://x.test/?lang=fr", stored: "ko" })).toEqual({
       stored: "ko",
-      lang: "ko",
+      lang: "en",
       pending: true,
     });
   });
@@ -101,8 +101,15 @@ describe("the boot script", () => {
       pending: false,
     });
     expect(boot({ href: "https://x.test/", blocked: true, browser: ["ko"] })).toMatchObject({
-      lang: "ko",
+      lang: "en",
       pending: true,
     });
+  });
+
+  it("keeps the server's language so a saved Korean preference cannot hydrate English text", () => {
+    const result = boot({ href: "https://x.test/", stored: "ko" });
+    expect(result.stored).toBe("ko");
+    expect(result.pending).toBe(true);
+    expect(result.lang).toBe("en");
   });
 });

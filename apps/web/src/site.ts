@@ -21,26 +21,16 @@ export const LINKS = {
   security: `${REPOSITORY_URL}/blob/main/SECURITY.md`,
 } as const;
 
-/**
- * A short silent clip beside each step of "how it works", in the order of the steps: a path
- * under public/. A step without one shows an empty frame. Nothing is recorded yet.
- */
-export const HOW_CLIPS: readonly string[] = [];
-
-/**
- * The three the landing page puts forward, in the order their copy is written. A tile leads to
- * that repository's page, which is where the address to connect is on screen.
- */
-export const FEATURED_ADDRESSES = [
-  "skillcdn/skillcdn/skills/single-skill",
-  "skillcdn/skillcdn/skills/multi-skill",
-  "skillcdn/skillcdn@main/skills/hostile",
-] as const;
+/** Editorial selection shared by the landing page and explorer. Assets are bundled locally. */
+export const FEATURED_VIDEO = {
+  address: "/gh/skillcdn/examples",
+  href: "/gh/skillcdn/examples",
+  image: "/showcase/perfume-concept.png",
+} as const;
 
 /**
  * Addresses to try under the field: the examples repository of this project, written in the
- * SkillCDN Format (docs/specs/skill-repo.md) and kept working. The forms an address can take
- * are taught by the table on the front page, not here.
+ * SkillCDN Format (docs/specs/skill-repo.md) and kept working.
  */
 export const EXAMPLE_ADDRESSES = ["skillcdn/examples"] as const;
 

@@ -40,7 +40,8 @@
         .find((code) => SUPPORTED.includes(code)) ?? DEFAULT;
   }
   if (wanted !== DEFAULT) {
-    document.documentElement.lang = wanted;
+    // Keep the server's language until the client decides whether it can hydrate this HTML.
+    // Changing it here would make English markup appear to have been rendered in Korean.
     document.documentElement.setAttribute(PENDING, "");
     setTimeout(() => document.documentElement.removeAttribute(PENDING), 4000);
   }

@@ -5,6 +5,7 @@ import { App } from "./app.js";
 import {
   LANGUAGE_INFO,
   languageInSearch,
+  languageOfSearch,
   preferredLanguage,
   resolveLanguage,
 } from "./i18n/languages.js";
@@ -59,6 +60,8 @@ const declaredOrigin = document
   ?.getAttribute("content");
 const prerenderedAsThis =
   container.dataset.prerendered === route.name &&
+  // The URL is also evidence: a cached boot script may have changed html.lang already.
+  languageOfSearch(location.search) === language &&
   document.documentElement.lang === LANGUAGE_INFO[language].htmlLang &&
   declaredOrigin !== ORIGIN_PLACEHOLDER &&
   (route.name !== "mount" || Object.keys(initialData).length > 0);

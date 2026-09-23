@@ -1,9 +1,11 @@
 .wrapper {
   display: grid;
+  min-width: 0;
 }
 
 .form {
   display: grid;
+  min-width: 0;
 }
 
 .label {
@@ -16,6 +18,7 @@
 /* Two controls side by side: the field carries the shell, the button stands on its own. */
 .row {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: var(--space-3);
   font-size: var(--text-sm);

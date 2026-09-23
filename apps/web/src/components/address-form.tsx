@@ -7,7 +7,7 @@ import { EXAMPLE_ADDRESSES, hostOf } from "../site.js";
 import styles from "./address-form.module.css";
 import { Button, cx } from "./ui.js";
 
-/** The main control of the site: type a repository, see what it serves. */
+/** Open a known repository directly and see what it serves. */
 export function AddressForm(props: {
   readonly origin: string;
   readonly initialValue?: string;

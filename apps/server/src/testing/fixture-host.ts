@@ -10,9 +10,9 @@ import {
   type TreeEntry,
 } from "@skillcdn/core";
 
-// Test support: a git host whose repositories are the directories under skills/.
+// Test support: a git host whose repositories are the directories under fixtures/.repositories/.
 
-const FIXTURES_ROOT = fileURLToPath(new URL("../../../../skills", import.meta.url));
+const FIXTURES_ROOT = fileURLToPath(new URL("../../fixtures/.repositories", import.meta.url));
 
 const sha1 = (text: string): string => createHash("sha1").update(text).digest("hex");
 
@@ -83,7 +83,7 @@ export interface FixtureHost extends GitHost {
 }
 
 /**
- * `acme/<directory under skills/>` is a public repository; `acme/private-repo` exists but is
+ * `acme/<fixture directory>` is a public repository; `acme/private-repo` exists but is
  * private; everything else is missing. Every repository has the refs `main` (the default branch)
  * and `release/1.2`; see {@link fixtureCommits}.
  */

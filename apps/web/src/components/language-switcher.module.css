@@ -1,0 +1,57 @@
+.picker {
+  position: relative;
+  font-size: var(--text-xs);
+}
+.picker summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-size);
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  list-style: none;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+.picker summary::-webkit-details-marker {
+  display: none;
+}
+.picker summary:hover,
+.picker[open] summary {
+  background: var(--color-bg-raised);
+  color: var(--color-text);
+}
+.list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--space-2));
+  width: var(--language-menu-width);
+  padding: var(--space-1);
+  border: var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-inset);
+  box-shadow: var(--shadow-stage);
+}
+.list a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+.list a:hover {
+  background: var(--color-bg-raised);
+  color: var(--color-text);
+}
+.list .active {
+  color: var(--color-accent);
+}
+@media (max-width: 40rem) {
+  .picker summary {
+    gap: var(--space-1);
+    padding-inline: var(--space-1);
+  }
+}

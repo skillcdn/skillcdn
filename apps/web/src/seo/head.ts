@@ -170,7 +170,7 @@ export function buildHead(
         name: t.meta.siteName,
         url: canonical,
         description: t.meta.landing.description,
-        applicationCategory: "DeveloperApplication",
+        applicationCategory: "ProductivityApplication",
         operatingSystem: "Any",
         license: LINKS.license,
         inLanguage,

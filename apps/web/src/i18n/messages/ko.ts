@@ -1,5 +1,6 @@
 import { connectKo } from "./connect-ko.js";
 import type { Messages } from "./en.js";
+import { landingKo } from "./landing-ko.js";
 
 // Korean pack. Language packs are the one place where committed text is not English.
 // Keep technical terms that readers search for in their original form: MCP, SKILL.md, find, get.
@@ -8,14 +9,14 @@ export const ko: Messages = {
   meta: {
     siteName: "SkillCDN",
     landing: {
-      title: "SkillCDN: 어떤 git 저장소든 MCP 서버로",
+      title: "SkillCDN: 아이디어는 크게, 완성은 멋지게",
       description:
-        "에이전트를 URL 하나에 연결하면 git 저장소의 스킬과 문서를 검색하고, 불러오고, 읽을 수 있습니다. 설치할 것도, 업로드할 것도 없습니다.",
+        "평소 쓰던 AI로 아이디어를 멋진 결과물로 만들어 보세요. 유용한 스킬을 고르고 연결하면, 처음이어도 나누고 싶은 결과물을 만들 수 있어요.",
     },
     explore: {
-      title: "저장소 살펴보기 | SkillCDN",
+      title: "만들고 싶은 것 찾기 | SkillCDN",
       description:
-        "저장소 주소를 붙여 넣으면 에이전트가 무엇을 받게 되는지 볼 수 있습니다. 스킬, 문서, 그리고 제외된 항목과 그 이유까지.",
+        "AI와 함께 아이디어를 완성할 수 있는 스킬을 만나보세요. 우리 제품을 위한 짧은 광고 영상부터 시작해 볼까요?",
     },
     mount: {
       title: (repository: string) => `${repository} | SkillCDN`,
@@ -34,7 +35,7 @@ export const ko: Messages = {
       title: "페이지를 찾을 수 없습니다 | SkillCDN",
       description: "이 주소에는 아무것도 없습니다.",
     },
-    ogImageAlt: "SkillCDN: 어떤 git 저장소든 MCP 서버로",
+    ogImageAlt: "SkillCDN: 아이디어는 크게, 완성은 멋지게",
   },
 
   nav: {
@@ -85,143 +86,12 @@ export const ko: Messages = {
 
   connect: connectKo,
 
-  landing: {
-    eyebrow: "어떤 git 저장소든 MCP 서버로",
-    title: "git 저장소를 그대로 MCP 서버로 만드세요.",
-    lead: "에이전트를 URL 하나에 연결하면 그 저장소의 스킬과 문서를 검색하고, 불러오고, 읽을 수 있습니다. 설치할 것도, 업로드할 것도 없습니다. 원본은 언제나 git입니다.",
-    tryLabel: "공개 GitHub 저장소로 바로 확인해 보세요",
-    featured: {
-      title: "이 중 하나로 해 보세요",
-      lead: "누르면 그 저장소의 페이지가 열리고, 연결에 쓸 주소와 바로 쓸 수 있는 클라이언트 설정이 화면에 그대로 나옵니다.",
-      items: [
-        {
-          title: "스킬 하나",
-          body: "루트에 SKILL.md 하나, 그리고 그 스킬이 참조하는 문서.",
-        },
-        {
-          title: "스킬 여럿",
-          body: "skills/ 아래 스킬 두 개와 그 옆의 일반 문서들.",
-        },
-        {
-          title: "깨진 것은 건너뜀",
-          body: "읽히지 않는 매니페스트는 이유와 함께 제외되고, 나머지는 그대로 제공됩니다.",
-        },
-      ],
-    },
-    how: {
-      title: "동작 방식",
-      steps: [
-        {
-          title: "스킬을 git에 둡니다",
-          body: "스킬은 SKILL.md가 들어 있는 디렉터리입니다. 이름과 설명, 그리고 Markdown으로 쓴 지침이 전부입니다. 저장소 하나에 스킬을 하나든 여러 개든, 참조하는 문서와 함께 두면 됩니다.",
-        },
-        {
-          title: "URL 하나를 연결합니다",
-          body: "주소가 곧 저장소입니다. /gh/owner/repo 뒤에 브랜치, 태그 또는 커밋과 하위 경로를 붙일 수 있습니다. Streamable HTTP를 지원하는 MCP 클라이언트에 추가하세요.",
-        },
-        {
-          title: "에이전트가 필요한 것만 가져갑니다",
-          body: "스킬이 몇 개든 도구는 세 개입니다. find는 이름, 설명, 문서를 검색하고, get은 스킬 하나를 불러오고, read_file은 스킬이 가리키는 파일을 읽습니다.",
-        },
-      ],
-    },
-    addresses: {
-      title: "주소 체계는 하나입니다",
-      lead: "주소는 저장소를 가리키고, 필요하면 ref와 디렉터리까지 가리킵니다. 설정은 이것이 전부입니다.",
-      rows: [
-        { address: "/gh/owner/repo", meaning: "기본 브랜치의 최신 커밋." },
-        { address: "/gh/owner/repo@v1.2.0", meaning: "태그 또는 브랜치." },
-        {
-          address: "/gh/owner/repo@<40자리 커밋>",
-          meaning: "고정: 언제나 검토를 마친 바로 그 내용만 제공합니다.",
-        },
-        { address: "/gh/owner/repo@main/skills/ads", meaning: "디렉터리 하나만." },
-        {
-          address: "/gh/owner/repo@release/1.2:skills",
-          meaning: "슬래시가 들어간 ref는 콜론으로 끝냅니다.",
-        },
-      ],
-      addressHeader: "주소",
-      meaningHeader: "제공되는 내용",
-    },
-    principles: {
-      title: "믿고 쓸 수 있는 원칙",
-      items: [
-        {
-          title: "원본은 git입니다",
-          body: "SkillCDN은 색인하고 제공할 뿐, 콘텐츠를 호스팅하지 않습니다. 커밋을 고정하면 에이전트는 검토를 마친 바로 그 내용만 받습니다.",
-        },
-        {
-          title: "저장소는 선언할 뿐, 실행하지 않습니다",
-          body: "스킬은 텍스트입니다. 저장소에서 온 어떤 것도 서버에서 실행되지 않고, 사용자의 컴퓨터에서 실행되도록 전달되지도 않습니다.",
-        },
-        {
-          title: "작고 고정된 도구 세트",
-          body: "에이전트에는 스킬마다 도구가 하나씩 보이는 것이 아니라 세 개만 보입니다. 스킬이 수백 개인 저장소도 세 개인 저장소와 같은 컨텍스트만 차지합니다.",
-        },
-        {
-          title: "직접 호스팅할 수 있습니다",
-          body: "서비스 전체가 컨테이너 이미지 하나와 PostgreSQL입니다. 소스가 공개되어 있고, 같은 이미지를 자체 인프라에서 그대로 실행할 수 있습니다.",
-        },
-      ],
-    },
-    authors: {
-      title: "스킬 저장소 만들기",
-      body: "Agent Skills 구조를 따르면 됩니다. SKILL.md가 있는 디렉터리는 모두 스킬이고, 그 옆의 파일은 그 스킬에 속합니다. 살펴보기 화면에서 내 저장소가 어떻게 읽히는지 확인할 수 있습니다. 어떤 스킬이 인식되었고, 어떤 것이 왜 제외되었는지까지.",
-      convention: "규칙 읽어 보기",
-      check: "내 저장소 확인하기",
-    },
-    faq: {
-      title: "자주 묻는 질문",
-      items: [
-        {
-          question: "SkillCDN은 무엇인가요?",
-          answer:
-            "SkillCDN은 git 저장소를 MCP 서버로 바꿔 주는 서비스입니다. 에이전트는 서비스의 /gh/owner/repo 같은 URL에 연결해서 find, get, read_file 세 가지 도구로 그 저장소의 스킬과 문서를 검색하고 읽습니다.",
-        },
-        {
-          question: "스킬이란 무엇인가요?",
-          answer:
-            "스킬은 SKILL.md 파일이 있는 디렉터리입니다. 이름과 설명을 담은 YAML 프런트매터 뒤에 Markdown으로 쓴 지침이 이어지고, 보조 파일은 같은 디렉터리에 둡니다. Agent Skills 형식 그대로입니다.",
-        },
-        {
-          question: "어떤 에이전트에서 쓸 수 있나요?",
-          answer:
-            "Streamable HTTP 전송을 지원하는 MCP 클라이언트라면 모두 쓸 수 있습니다. 저장소 페이지에서 ChatGPT, Claude, Claude Code, Cursor, VS Code, Windsurf, Codex CLI, Gemini CLI의 연결 순서를 안내합니다.",
-        },
-        {
-          question: "무언가를 업로드하거나 등록해야 하나요?",
-          answer:
-            "아니요. 에이전트가 처음 요청할 때 SkillCDN이 git 호스트에서 저장소를 읽어 그 커밋을 한 번 색인하고, 이후에는 색인에서 응답합니다.",
-        },
-        {
-          question: "변경 사항은 에이전트에 어떻게 반영되나요?",
-          answer:
-            "커밋을 지정하지 않은 주소는 브랜치나 태그를 따라가며, 새 커밋이 푸시되면 곧 반영됩니다. 전체 커밋 해시를 지정한 주소는 절대 바뀌지 않습니다.",
-        },
-        {
-          question: "SkillCDN이 저장소의 코드를 실행하나요?",
-          answer:
-            "아니요. 저장소 콘텐츠는 데이터로 파싱되어 텍스트로만 반환됩니다. 저장소에서 온 어떤 것도 실행되지 않습니다.",
-        },
-        {
-          question: "비공개 저장소도 쓸 수 있나요?",
-          answer:
-            "아직은 아닙니다. 지금은 공개 GitHub 저장소를 지원하며, GitHub App을 통한 비공개 저장소 지원은 로드맵에 있습니다.",
-        },
-        {
-          question: "직접 호스팅할 수 있나요?",
-          answer:
-            "네. 서비스는 컨테이너 이미지 하나와 PostgreSQL로 구성됩니다. 소스는 Functional Source License(FSL-1.1-ALv2)로 공개되어 있으며, 각 릴리스는 2년 뒤 Apache 2.0으로 전환됩니다.",
-        },
-      ],
-    },
-  },
+  landing: landingKo,
 
   explore: {
-    title: "저장소 살펴보기",
-    lead: "주소를 붙여 넣으면 에이전트가 무엇을 받게 되는지 볼 수 있습니다. 스킬, 문서, 그리고 제외된 항목과 그 이유까지.",
-    featured: "추천 저장소",
+    title: "다음엔 무엇을 만들어 볼까요?",
+    lead: "작은 영감 하나, 유용한 스킬 하나. 다음 아이디어가 여기서 시작돼요.",
+    featured: "더 둘러보기",
     featuredSkills: (count: number) => `스킬 ${count}개`,
     featuredIndexing: "색인 중…",
     featuredFailed: "색인하지 못했습니다",
@@ -370,7 +240,7 @@ export const ko: Messages = {
   },
 
   footer: {
-    tagline: "어떤 git 저장소든 MCP로 에이전트에 제공합니다.",
+    tagline: "조금의 노하우로 여는 새로운 가능성.",
     source: "GitHub의 소스",
     license: "라이선스",
     trademarks: "상표",

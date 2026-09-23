@@ -3,26 +3,9 @@ import { useI18n } from "../i18n/index.js";
 import { Link } from "../navigation.js";
 import { PATHS } from "../router.js";
 import { LINKS } from "../site.js";
+import { BrandSymbol } from "./brand.js";
 import { LanguageSwitcher } from "./language-switcher.js";
 import styles from "./layout.module.css";
-
-/** The placeholder symbol, inline so that it takes the text color. Same drawing as public/brand/symbol.svg. */
-function BrandSymbol() {
-  return (
-    <svg className={styles.symbol} viewBox="0 0 32 32" width="26" height="26" aria-hidden="true">
-      <path
-        d="M10 16h4.5c3.5 0 3-6 7.5-6M14.5 16c3.5 0 3 6 7.5 6"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-      />
-      <circle cx="10" cy="16" r="3" fill="currentColor" />
-      <circle cx="22.4" cy="10" r="2.5" fill="currentColor" />
-      <circle cx="22.4" cy="22" r="2.5" fill="currentColor" />
-    </svg>
-  );
-}
 
 export function Layout(props: { readonly children: ReactNode }) {
   const { t } = useI18n();
@@ -34,7 +17,7 @@ export function Layout(props: { readonly children: ReactNode }) {
       <header className={styles.header}>
         <div className={styles.bar}>
           <Link className={styles.brand} href={PATHS.landing} aria-label={t.nav.home}>
-            <BrandSymbol />
+            <BrandSymbol className={styles.symbol} />
             <span>{t.meta.siteName}</span>
           </Link>
           <nav className={styles.nav} aria-label={t.nav.main}>
@@ -56,7 +39,7 @@ export function Layout(props: { readonly children: ReactNode }) {
               and what it is licensed under sits under them, quietly. */}
           <div className={styles.footerTop}>
             <p className={styles.footerBrand}>
-              <BrandSymbol />
+              <BrandSymbol className={styles.symbol} />
               <span>{t.meta.siteName}</span>
             </p>
             <ul className={styles.footerLinks}>
