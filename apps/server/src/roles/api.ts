@@ -70,6 +70,7 @@ export function createApi(
     repoTtlMs: config.mounts.repoTtlMs,
     refTtlMs: config.mounts.refTtlMs,
     staleGraceMs: Math.max(config.mounts.repoTtlMs, config.mounts.refTtlMs) * STALE_GRACE_FACTOR,
+    verifiedRepositories: config.mounts.verifiedRepositories,
   });
   const snapshots = new SnapshotService({
     database,

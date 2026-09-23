@@ -7,6 +7,7 @@ import { ConnectGuide } from "../components/connect-guide.js";
 import { ErrorCallout } from "../components/error-callout.js";
 import { Badge, Callout, Container, Skeleton, Spinner } from "../components/ui.js";
 import { useI18n } from "../i18n/index.js";
+import { repositoryDescription, repositoryName, translationFor } from "../i18n/repository-text.js";
 import type { MountView } from "../router.js";
 import { applyHead, buildHead } from "../seo/head.js";
 import styles from "./mount.module.css";
@@ -15,16 +16,23 @@ import { MountOverview } from "./mount-overview.js";
 import { MountSkill } from "./mount-skill.js";
 
 function MountHeader(props: { readonly address: Address; readonly mount: RestMount | undefined }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const { address, mount } = props;
   const repository =
     mount === undefined
       ? `${address.owner}/${address.repo}`
       : `${mount.repository.owner}/${mount.repository.name}`;
-  // A repository with a manifest goes by the name and the description it gives itself.
+  // A repository with a manifest goes by the name and the description it gives itself, in the
+  // visitor's language when it translated them.
   const manifest = mount?.index.status === "ready" ? mount.index.manifest : null;
-  const name = manifest?.name ?? repository;
-  const description = manifest?.description ?? mount?.repository.description;
+  const name = (manifest === null ? null : repositoryName(manifest, language)) ?? repository;
+  const description =
+    manifest === null ? mount?.repository.description : repositoryDescription(manifest, language);
+  // Text shown as the author wrote it is in the repository's language, when the manifest says.
+  const descriptionLanguage =
+    manifest !== null && translationFor(manifest.translations, language)?.description == null
+      ? (manifest.language ?? undefined)
+      : undefined;
   const hostUrl =
     mount === undefined
       ? undefined
@@ -60,7 +68,11 @@ function MountHeader(props: { readonly address: Address; readonly mount: RestMou
           </ul>
         )}
       </div>
-      {description != null && <p className={styles.description}>{description}</p>}
+      {description != null && (
+        <p className={styles.description} lang={descriptionLanguage}>
+          {description}
+        </p>
+      )}
       {mount !== undefined && (
         <div className={styles.facts}>
           {/* A small label, then the value in the code face. */}

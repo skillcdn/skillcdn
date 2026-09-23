@@ -23,6 +23,8 @@ Goal: an agent that connects to an address knows what it got and uses it well, w
 - [x] Creation-focused landing and explorer: editorial skills from the separate examples repository, local concept artwork, an animated conversation, a language list, and a consistent wordmark and symbol
 - [x] Hidden entries (any path segment that starts with a dot) are never listed, searched or read
 - [x] The repository manifest `SKILLCDN.md`: name, description, the directories whose documents are served, and the rules that hold for every skill; with a manifest, only what it declares is served, now and by any later index ([ADR-0014](adr/0014-the-repository-manifest-decides-what-a-mount-serves.md)); without one, the skills and `docs` ([ADR-0016](adr/0016-without-a-manifest-a-repository-serves-its-skills-and-docs.md))
+- [x] What the first real runs asked for: a manifest that cannot be read is reported wherever an agent or an author looks (server instructions, `find`, `get`, the REST diagnostics, and the `check` role of the image, which reads a working tree with the same indexer, [ADR-0020](adr/0020-a-check-role-reads-a-working-tree-with-the-indexer.md)), with a hint for the usual YAML mistakes; `find` folds a skill's files under the skill and says that it matches words in the repository's language, which the manifest may declare; `get` returns the files a skill declares as needed on every run; the provenance notice no longer contradicts `get`, and the operator lists the repositories it vouches for ([ADR-0019](adr/0019-the-operator-vouches-for-repositories-until-owners-can.md))
+- [x] Names and descriptions translated for people: `translations` in both manifests, shown on the page in the visitor's language ([ADR-0018](adr/0018-skillcdn-fields-in-skill-md-under-one-key.md))
 - [ ] Connect real clients by hand, to a local server and to the hosted service, and fix what they show. Nothing in this repository can test that; it is done after every change to what a client sees.
 
 Design points still open (record the outcome in the spec or an ADR):
@@ -41,4 +43,4 @@ Design points still open (record the outcome in the spec or an ADR):
 
 ## Later, undecided
 
-Rankings on the landing page, fed by the usage statistics. Embedding search. A command-line client. A work-board module for parallel agents. Signed-commit verification for publishers. Aliases for verified publishers.
+Rankings on the landing page, fed by the usage statistics. Embedding search, and a search that understands inflected languages (a Korean query finds nothing in a Korean repository unless the words are written the same). A command-line client. A work-board module for parallel agents. Signed-commit verification for publishers. Aliases for verified publishers.

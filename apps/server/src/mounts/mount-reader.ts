@@ -5,14 +5,19 @@ import {
   type DirectoryResult,
   FIND_DEFAULT_LIMIT,
   FIND_LIST_SKILLS_MAX,
+  FIND_MAX_SKILL_FILES,
   type FileResult,
+  type FindFile,
   type FindItem,
   type FindResult,
   type GitHost,
+  type IncludedFile,
+  type IndexDiagnostic,
   type IndexLimits,
   isHiddenPath,
   isServedPath,
   joinRepoPath,
+  MAX_SKILL_INCLUDED_LENGTH,
   MAX_SKILL_RULES_LENGTH,
   type MountCatalog,
   type MountSummary,
@@ -21,12 +26,14 @@ import {
   parseRepoPath,
   READ_FILE_DEFAULT_LIMIT,
   type RepoPath,
+  type RepoTranslation,
   type RepoTree,
   ROOT_PATH,
   relativeRepoPath,
   type ServedScope,
   type SkillResult,
   type SkillRules,
+  type SkillTranslation,
   splitFrontMatter,
 } from "@skillcdn/core";
 import {
@@ -37,13 +44,14 @@ import {
   findSkills,
   getEntry,
   getManifest,
+  getSkillsAt,
   getSnapshotDiagnostics,
   listDirectory,
   listEntries,
   listSkillFiles,
-  type SnapshotDiagnostic,
   type SnapshotRecord,
   type SnapshotScope,
+  type StoredTranslation,
   searchEntries,
 } from "@skillcdn/db";
 import type { SnapshotOutcome, SnapshotService } from "../indexer/snapshot-service.js";
@@ -63,7 +71,12 @@ export type NotReady = Exclude<SnapshotOutcome, { status: "ready" }>;
 
 export type SkillLookup =
   | { readonly kind: "found"; readonly skill: SkillResult }
-  | { readonly kind: "not_found"; readonly available: readonly string[] }
+  | {
+      readonly kind: "not_found";
+      readonly available: readonly string[];
+      /** What could not be read: the skill asked for may be among them. */
+      readonly diagnostics: readonly IndexDiagnostic[];
+    }
   | { readonly kind: "ambiguous"; readonly directories: readonly string[] }
   /** Indexed, but its body is not in the blob store. */
   | { readonly kind: "unavailable" };
@@ -87,6 +100,7 @@ export interface SkillListing {
   readonly directory: RepoPath;
   readonly description: string;
   readonly warnings: readonly string[];
+  readonly translations: Readonly<Record<string, SkillTranslation>>;
 }
 
 /** The repository manifest that governs a mount, as read from the index and the blob store. */
@@ -95,6 +109,9 @@ export interface MountManifest {
   readonly path: RepoPath | undefined;
   readonly name: string | undefined;
   readonly description: string;
+  /** The tag of the language the repository says it is written in. */
+  readonly language: string | undefined;
+  readonly translations: Readonly<Record<string, RepoTranslation>>;
   /** The Markdown after the front-matter, trimmed: the rules. Empty when there are none. */
   readonly rules: string;
 }
@@ -106,7 +123,7 @@ export interface MountOverview {
   readonly documentCount: number;
   readonly skills: readonly SkillListing[];
   readonly documents: readonly Extract<FindItem, { kind: "document" }>[];
-  readonly diagnostics: readonly SnapshotDiagnostic[];
+  readonly diagnostics: readonly IndexDiagnostic[];
 }
 
 const MAX_LISTED_SKILL_FILES = 50;
@@ -115,6 +132,12 @@ const MAX_CACHED_TREES = 8;
 const MAX_CACHED_CATALOGS = 64;
 const MAX_CACHED_MANIFESTS = 64;
 const MAX_DIRECTORY_ENTRIES = 200;
+/**
+ * A search fetches more rows than it answers with, because a skill's files fold into the skill:
+ * several rows can become one item.
+ */
+const FIND_FETCH_FACTOR = 4;
+const FIND_FETCH_MAX = 100;
 
 /** Keeps a bounded number of promises by key; the oldest goes first. */
 function remember<T>(
@@ -133,6 +156,26 @@ function remember<T>(
       cache.delete(oldest);
     }
   }
+}
+
+function skillTranslationsOf(
+  stored: Readonly<Record<string, StoredTranslation>> | undefined,
+): Readonly<Record<string, SkillTranslation>> {
+  const translations: Record<string, SkillTranslation> = Object.create(null);
+  for (const [tag, entry] of Object.entries(stored ?? {})) {
+    translations[tag] = { title: entry.title, description: entry.description };
+  }
+  return translations;
+}
+
+function repoTranslationsOf(
+  stored: Readonly<Record<string, StoredTranslation>> | undefined,
+): Readonly<Record<string, RepoTranslation>> {
+  const translations: Record<string, RepoTranslation> = Object.create(null);
+  for (const [tag, entry] of Object.entries(stored ?? {})) {
+    translations[tag] = { name: entry.name, description: entry.description };
+  }
+  return translations;
 }
 
 /**
@@ -179,11 +222,24 @@ export class MountReader {
         path: belowMount(mount, row.path),
         name: row.name ?? undefined,
         description: row.description,
+        language: row.frontMatter?.language,
+        translations: repoTranslationsOf(row.frontMatter?.translations),
         rules: split?.kind === "found" ? split.body.trim() : "",
       };
     });
     remember(this.#manifests, key, MAX_CACHED_MANIFESTS, loading);
     return loading;
+  }
+
+  /** The manifests inside the mount that could not be read. Findings above the mount are not ours. */
+  async #diagnosticsOf(mount: Mount, scope: SnapshotScope): Promise<IndexDiagnostic[]> {
+    const all = await getSnapshotDiagnostics(this.#dependencies.database, scope);
+    return all.flatMap((diagnostic) => {
+      const below = belowMount(mount, diagnostic.path);
+      return below === undefined
+        ? []
+        : [{ path: below, code: diagnostic.code, message: diagnostic.message }];
+    });
   }
 
   /**
@@ -205,7 +261,8 @@ export class MountReader {
         listEntries(database, scope, path, FIND_LIST_SKILLS_MAX, "skills"),
         countEntries(database, scope, path),
         this.#manifestOf(mount, scope),
-      ]).then(([skills, counts, manifest]) => ({
+        this.#diagnosticsOf(mount, scope),
+      ]).then(([skills, counts, manifest, diagnostics]) => ({
         manifest:
           manifest === undefined
             ? undefined
@@ -214,6 +271,7 @@ export class MountReader {
                 description: manifest.description,
                 path: manifest.path,
                 hasRules: manifest.rules.length > 0,
+                language: manifest.language,
               },
         skills: skills.flatMap((row) => {
           const directory = belowMount(mount, row.skillDir);
@@ -223,6 +281,7 @@ export class MountReader {
         }),
         skillCount: counts.skills,
         documentCount: counts.documents,
+        diagnostics,
       }));
       remember(this.#catalogs, key, MAX_CACHED_CATALOGS, loading);
     }
@@ -243,8 +302,7 @@ export class MountReader {
             : mount.address.ref.name,
       commit: mount.commit,
       path: mount.address.path,
-      // Verification arrives with the GitHub App. Until then every repository is unverified.
-      verified: false,
+      verified: mount.verified,
       truncated: snapshot?.truncated ?? false,
     };
   }
@@ -264,7 +322,7 @@ export class MountReader {
     const query = trimmed === undefined || trimmed.length === 0 ? undefined : trimmed;
     const limit = input.limit ?? FIND_DEFAULT_LIMIT;
     const path = mount.address.path;
-    let rows: EntryRecord[];
+    let items: FindItem[];
     let totals: FindResult["totals"];
     if (query === undefined) {
       // A listing names every skill: a skill's own files are reached through the skill.
@@ -273,10 +331,19 @@ export class MountReader {
         listEntries(database, scope, path, limit, "documents_outside_skills"),
         countEntries(database, scope, path),
       ]);
-      rows = [...skills, ...documents];
+      items = [...skills, ...documents]
+        .map((row) => toFindItem(mount, row))
+        .filter((item) => item !== undefined);
       totals = counts;
     } else {
-      rows = await searchEntries(database, scope, path, query, limit);
+      const rows = await searchEntries(
+        database,
+        scope,
+        path,
+        query,
+        Math.min(limit * FIND_FETCH_FACTOR, FIND_FETCH_MAX),
+      );
+      items = (await this.#fold(mount, scope, rows)).slice(0, limit);
       totals = undefined;
     }
     return {
@@ -284,10 +351,91 @@ export class MountReader {
       result: {
         mount: this.summary(mount, outcome.snapshot),
         query,
-        items: rows.map((row) => toFindItem(mount, row)).filter((item) => item !== undefined),
+        items,
         totals,
+        diagnostics: await this.#diagnosticsOf(mount, scope),
       },
     };
+  }
+
+  /**
+   * Search results in rank order, with the files of a skill folded under the skill: the skill
+   * takes the place of its best-ranked member, so that a model loads the skill rather than a
+   * fragment of it. A skill whose files matched, but that did not match itself, is looked up.
+   */
+  async #fold(
+    mount: Mount,
+    scope: SnapshotScope,
+    rows: readonly EntryRecord[],
+  ): Promise<FindItem[]> {
+    interface Group {
+      skill: EntryRecord | undefined;
+      readonly files: EntryRecord[];
+    }
+    const groups = new Map<string, Group>();
+    const order: ({ readonly group: string } | { readonly row: EntryRecord })[] = [];
+    for (const row of rows) {
+      const owner = row.skillDir;
+      if (owner === null || belowMount(mount, owner) === undefined) {
+        order.push({ row });
+        continue;
+      }
+      let group = groups.get(owner);
+      if (group === undefined) {
+        group = { skill: undefined, files: [] };
+        groups.set(owner, group);
+        order.push({ group: owner });
+      }
+      if (row.kind === "skill") {
+        group.skill = row;
+      } else {
+        group.files.push(row);
+      }
+    }
+    const unmatched = [...groups]
+      .filter(([, group]) => group.skill === undefined)
+      .map(([directory]) => directory);
+    for (const row of await getSkillsAt(this.#dependencies.database, scope, unmatched)) {
+      const group = row.skillDir === null ? undefined : groups.get(row.skillDir);
+      if (group !== undefined) {
+        group.skill = row;
+      }
+    }
+
+    const items: FindItem[] = [];
+    const push = (row: EntryRecord): void => {
+      const item = toFindItem(mount, row);
+      if (item !== undefined) {
+        items.push(item);
+      }
+    };
+    for (const entry of order) {
+      if ("row" in entry) {
+        push(entry.row);
+        continue;
+      }
+      const group = groups.get(entry.group);
+      const skill = group?.skill === undefined ? undefined : toFindItem(mount, group.skill);
+      if (group === undefined || skill === undefined || skill.kind !== "skill") {
+        // The skill itself is out of reach: its files stand on their own and say whose they are.
+        for (const row of group?.files ?? []) {
+          push(row);
+        }
+        continue;
+      }
+      const files = group.files.flatMap((row): FindFile[] => {
+        const path = belowMount(mount, row.path);
+        return path === undefined
+          ? []
+          : [{ path, title: row.title ?? undefined, summary: row.description ?? undefined }];
+      });
+      items.push({
+        ...skill,
+        files: files.slice(0, FIND_MAX_SKILL_FILES),
+        moreFiles: Math.max(0, files.length - FIND_MAX_SKILL_FILES),
+      });
+    }
+    return items;
   }
 
   async skill(
@@ -311,10 +459,12 @@ export class MountReader {
     const matches = exact.length > 0 ? exact : found;
 
     if (matches.length === 0) {
-      const available = (
-        await listEntries(database, scope, mount.address.path, MAX_SUGGESTED_SKILLS, "skills")
-      ).flatMap((row) => (row.name === null ? [] : [row.name]));
-      return { status: "ready", lookup: { kind: "not_found", available } };
+      const [listed, diagnostics] = await Promise.all([
+        listEntries(database, scope, mount.address.path, MAX_SUGGESTED_SKILLS, "skills"),
+        this.#diagnosticsOf(mount, scope),
+      ]);
+      const available = listed.flatMap((row) => (row.name === null ? [] : [row.name]));
+      return { status: "ready", lookup: { kind: "not_found", available, diagnostics } };
     }
     const [skill, ...others] = matches;
     if (skill === undefined || others.length > 0) {
@@ -333,9 +483,10 @@ export class MountReader {
       return { status: "ready", lookup: { kind: "unavailable" } };
     }
     const split = splitFrontMatter(text);
-    const [files, manifest] = await Promise.all([
+    const [files, manifest, included] = await Promise.all([
       listSkillFiles(database, scope, skill.skillDir ?? "", MAX_LISTED_SKILL_FILES + 1),
       this.#manifestOf(mount, scope),
+      this.#includedFiles(mount, scope, skill.skillDir ?? "", skill.frontMatter?.include ?? []),
     ]);
     let rules: SkillRules | undefined;
     if (manifest !== undefined && manifest.rules.length > 0) {
@@ -365,11 +516,58 @@ export class MountReader {
             .map((file) => belowMount(mount, file))
             .filter((file) => file !== undefined),
           filesTruncated: files.length > MAX_LISTED_SKILL_FILES,
+          included,
           warnings: skill.frontMatter?.warnings ?? [],
           rules,
+          translations: skillTranslationsOf(skill.frontMatter?.translations),
         },
       },
     };
+  }
+
+  /**
+   * The files a skill declares as needed on every run, with their text, in the order declared
+   * and within one budget for all of them: past it a file is cut, and `read_file` has the rest.
+   */
+  async #includedFiles(
+    mount: Mount,
+    scope: SnapshotScope,
+    skillDir: string,
+    include: readonly string[],
+  ): Promise<IncludedFile[]> {
+    const { database, blobStore } = this.#dependencies;
+    const base = parseRepoPath(skillDir);
+    const read = await Promise.all(
+      include.map(async (relative) => {
+        const parsed = parseRepoPath(relative);
+        if (!base.ok || !parsed.ok) {
+          return undefined;
+        }
+        const absolute = joinRepoPath(base.value, parsed.value);
+        const path = belowMount(mount, absolute);
+        if (path === undefined) {
+          return undefined;
+        }
+        const entry = await getEntry(database, scope, absolute);
+        const text = entry === undefined ? undefined : await blobStore.read(entry.blobSha);
+        return { path, text };
+      }),
+    );
+    let remaining = MAX_SKILL_INCLUDED_LENGTH;
+    const included: IncludedFile[] = [];
+    for (const file of read) {
+      if (file === undefined) {
+        continue;
+      }
+      if (file.text === undefined) {
+        included.push({ path: file.path, content: undefined, truncated: false });
+        continue;
+      }
+      const content = remaining <= 0 ? "" : pageOfText(file.text, 0, remaining).content;
+      remaining -= content.length;
+      included.push({ path: file.path, content, truncated: content.length < file.text.length });
+    }
+    return included;
   }
 
   /**
@@ -492,7 +690,7 @@ export class MountReader {
       countEntries(database, scope, path),
       listEntries(database, scope, path, listLimit, "skills"),
       listEntries(database, scope, path, listLimit, "documents_outside_skills"),
-      getSnapshotDiagnostics(database, scope),
+      this.#diagnosticsOf(mount, scope),
       this.#manifestOf(mount, scope),
     ]);
     return {
@@ -512,6 +710,7 @@ export class MountReader {
                   directory,
                   description: row.description ?? "",
                   warnings: row.frontMatter?.warnings ?? [],
+                  translations: skillTranslationsOf(row.frontMatter?.translations),
                 },
               ];
         }),
@@ -519,11 +718,7 @@ export class MountReader {
           const item = toFindItem(mount, row);
           return item?.kind === "document" ? [item] : [];
         }),
-        // Findings about manifests outside the mounted directory are somebody else's.
-        diagnostics: diagnostics.flatMap((diagnostic) => {
-          const below = belowMount(mount, diagnostic.path);
-          return below === undefined ? [] : [{ ...diagnostic, path: below }];
-        }),
+        diagnostics,
       },
     };
   }
@@ -599,7 +794,15 @@ function toFindItem(mount: Mount, row: EntryRecord): FindItem | undefined {
     const directory = belowMount(mount, row.skillDir);
     return directory === undefined || row.name === null
       ? undefined
-      : { kind: "skill", name: row.name, directory, description: row.description ?? "" };
+      : {
+          kind: "skill",
+          name: row.name,
+          directory,
+          description: row.description ?? "",
+          files: [],
+          moreFiles: 0,
+          translations: skillTranslationsOf(row.frontMatter?.translations),
+        };
   }
   const path = belowMount(mount, row.path);
   return path === undefined

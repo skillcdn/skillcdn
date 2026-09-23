@@ -5,12 +5,13 @@ import { AddressForm } from "../components/address-form.js";
 import { FeaturedSkill } from "../components/featured-skill.js";
 import { Badge, Container, Skeleton } from "../components/ui.js";
 import { useI18n } from "../i18n/index.js";
+import { repositoryName } from "../i18n/repository-text.js";
 import { Link } from "../navigation.js";
 import { FEATURED_VIDEO, LINKS } from "../site.js";
 import styles from "./explore.module.css";
 
 function Featured() {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const featured = useResource("featured", (signal) => api.featured(signal));
 
   // The front page works without this list, so a failure to load it is not worth an error.
@@ -53,7 +54,8 @@ function Featured() {
           <li key={item.address}>
             <Link className={styles.card} href={item.address}>
               <span className={styles.cardTitle}>
-                {item.manifest?.name ?? `${item.repository.owner}/${item.repository.name}`}
+                {(item.manifest === null ? null : repositoryName(item.manifest, language)) ??
+                  `${item.repository.owner}/${item.repository.name}`}
               </span>
               <span className={styles.cardAddress}>{item.address}</span>
               <span className={styles.cardMeta}>

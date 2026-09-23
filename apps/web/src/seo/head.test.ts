@@ -27,8 +27,20 @@ const MOUNT: RestMount = {
     skillCount: 2,
     documentCount: 1,
     skills: [
-      { name: "review", directory: "review", description: "Reviews a change.", warnings: [] },
-      { name: "release", directory: "release", description: "Writes notes.", warnings: [] },
+      {
+        name: "review",
+        directory: "review",
+        description: "Reviews a change.",
+        warnings: [],
+        translations: {},
+      },
+      {
+        name: "release",
+        directory: "release",
+        description: "Writes notes.",
+        warnings: [],
+        translations: {},
+      },
     ],
     documents: [{ path: "README.md", title: "Skills", summary: null }],
     diagnostics: [],
@@ -48,8 +60,12 @@ const SKILL: RestSkill = {
     body: "# Review",
     files: [],
     filesTruncated: false,
+    included: [],
     warnings: [],
     rules: null,
+    translations: {
+      ko: { title: "리뷰", description: "린터가 보지 못하는 것을 살펴 변경을 검토합니다." },
+    },
   },
 };
 
@@ -113,7 +129,13 @@ describe("buildHead", () => {
       ...MOUNT,
       index: {
         ...MOUNT.index,
-        manifest: { path: "SKILLCDN.md", name: "Acme playbooks", description: "What Acme runs." },
+        manifest: {
+          path: "SKILLCDN.md",
+          name: "Acme playbooks",
+          description: "What Acme runs.",
+          language: "en",
+          translations: { ko: { name: "Acme 플레이북", description: "Acme가 하는 일." } },
+        },
       },
     };
     const overview = buildHead(matchRoute("/gh/acme/skills", ""), "en", ORIGIN, { mount });
@@ -125,6 +147,23 @@ describe("buildHead", () => {
       skill: SKILL,
     });
     expect(skill.title).toBe("review · Acme playbooks | SkillCDN");
+
+    // In a language the author translated into, the page speaks that language.
+    const korean = buildHead(matchRoute("/gh/acme/skills", "?lang=ko"), "ko", ORIGIN, { mount });
+    expect(korean.title).toBe("Acme 플레이북 | SkillCDN");
+    expect(korean.description).toBe("Acme가 하는 일.");
+    const koreanSkill = buildHead(
+      matchRoute("/gh/acme/skills", "?skill=review&lang=ko"),
+      "ko",
+      ORIGIN,
+      {
+        mount,
+        skill: SKILL,
+      },
+    );
+    expect(koreanSkill.title).toBe("리뷰 · Acme 플레이북 | SkillCDN");
+    expect(koreanSkill.description).toContain("린터가 보지 못하는 것을");
+    expect(koreanSkill.jsonLd[0]?.name).toBe("리뷰");
   });
 
   it("describes a repository and a skill from their data, per language, with one canonical URL", () => {

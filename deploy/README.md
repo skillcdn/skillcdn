@@ -4,7 +4,7 @@ Everything needed to build the image and hand it to whatever runs it. This repos
 
 | File | Purpose |
 |---|---|
-| [`Dockerfile`](Dockerfile) | The one multi-stage image. Roles `api`, `worker` and `migrate` are selected by the container command. |
+| [`Dockerfile`](Dockerfile) | The one multi-stage image. Roles `api`, `worker`, `migrate` and `check` are selected by the container command. |
 | [`compose.dev.yaml`](compose.dev.yaml) | Local development dependencies (PostgreSQL 18). Not a production topology. |
 | [`../.github/workflows/ci.yml`](../.github/workflows/ci.yml) | Lint, build, typecheck, tests (integration tests run against a PostgreSQL service container), secret scan, and an image build that is then exercised: exit codes, `migrate`, readiness, non-root user, clean shutdown. It needs no secrets. |
 
@@ -16,6 +16,7 @@ A compose bundle and install script for self-hosting are planned ([roadmap](../d
 docker build -f deploy/Dockerfile -t skillcdn .      # from the repository root
 docker run --rm skillcdn migrate                     # one-off role
 docker run --rm -p 11188:11188 --env-file .env skillcdn api
+docker run --rm -v "$PWD:/repo:ro" skillcdn check /repo    # what an agent would get from this directory
 ```
 
 The image runs as a non-root user, contains production dependencies only, and has no secrets and no configuration baked in. It carries the fonts of the web UI under their own license; see [`THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOTICES.md).
@@ -45,9 +46,10 @@ The server is configured only through environment variables. [`.env.example`](..
 | `GOOGLE_ANALYTICS_ID` | `api` | no | no | A Google Analytics measurement id (`G-...`). Set, every page loads the analytics script, and the content security policy allows its sources and nothing else new. Whether visitors must consent first depends on where they are; the UI ships no consent banner. |
 | `USAGE_STATS`, `USAGE_STATS_FLUSH_SECONDS` | `api` | no | no | Daily counts per public repository (connections, tool calls, skill loads, distinct clients), without anything that identifies a client: addresses are hashed under a key that is deleted with the day. Defaults `true` and `15`. |
 | `REPO_TTL_SECONDS`, `REF_TTL_SECONDS` | `api` | no | no | How long repository facts and moving refs are trusted before revalidation. Default `60` each. |
+| `VERIFIED_REPOSITORIES` | `api` | no | no | Repositories the operator vouches for, comma-separated as `/gh/owner/repo`: results from them carry no provenance notice, and their pages no warning ([ADR-0019](../docs/adr/0019-the-operator-vouches-for-repositories-until-owners-can.md)). Default: none. |
 | `INDEX_WAIT_MS` | `api` | no | no | How long a tool call waits for a new commit's index. Default `20000`. |
 | `INDEX_CONCURRENCY`, `INDEX_LEASE_SECONDS` | `api`, `worker` | no | no | Commits indexed at once per process, and the lifetime of an indexing claim. |
-| `INDEX_MAX_*`, `READ_MAX_FILE_BYTES` | `api`, `worker` | no | no | Limits on the work one repository may cause, including the unpacked size of a commit archive; see [`.env.example`](../.env.example). |
+| `INDEX_MAX_*`, `READ_MAX_FILE_BYTES` | `api`, `worker`, `check` | no | no | Limits on the work one repository may cause, including the unpacked size of a commit archive; see [`.env.example`](../.env.example). `check` reads these and nothing else. |
 
 Invalid configuration stops the process with exit code `78` and a message that names the variable and the rule, never the value.
 

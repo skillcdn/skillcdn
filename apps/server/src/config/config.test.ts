@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ConfigError, HOSTED_ORIGIN, loadConfig } from "./config.js";
+import { ConfigError, HOSTED_ORIGIN, loadConfig, loadIndexLimits } from "./config.js";
 
 const DATABASE_URL = "postgres://user:not-a-real-password@db.internal:5432/skillcdn";
 const noFiles = (): string => {
@@ -129,6 +129,30 @@ describe("loadConfig", () => {
     expect(problemsOf({ DATABASE_URL, FEATURED_ADDRESSES: tooMany }).problems).toEqual([
       "FEATURED_ADDRESSES: must list at most 24 addresses",
     ]);
+  });
+
+  it("reads the repositories the operator vouches for, as addresses without a ref or a path", () => {
+    expect(loadConfig({ DATABASE_URL }, noFiles).mounts.verifiedRepositories).toEqual(new Set());
+    const config = loadConfig(
+      { DATABASE_URL, VERIFIED_REPOSITORIES: "/gh/Acme/skills, gh/acme/docs," },
+      noFiles,
+    );
+    expect(config.mounts.verifiedRepositories).toEqual(
+      new Set(["/gh/acme/skills", "/gh/acme/docs"]),
+    );
+    for (const value of ["/gh/acme/skills@v2", "/gh/acme/skills/guides", "https://example.test"]) {
+      expect(problemsOf({ DATABASE_URL, VERIFIED_REPOSITORIES: value }).problems).toEqual([
+        "VERIFIED_REPOSITORIES: must be a list of repositories such as /gh/owner/repo, without a ref or a path",
+      ]);
+    }
+  });
+
+  it("reads the indexing limits on their own, for the role that needs nothing else", () => {
+    expect(loadIndexLimits({})).toEqual(loadConfig({ DATABASE_URL }, noFiles).indexing.limits);
+    expect(loadIndexLimits({ INDEX_MAX_FILES: "5", DATABASE_URL: "" })).toMatchObject({
+      maxIndexedFiles: 5,
+    });
+    expect(() => loadIndexLimits({ INDEX_MAX_FILES: "many" })).toThrow(ConfigError);
   });
 
   it("reads where the web UI is and what the public origin is", () => {

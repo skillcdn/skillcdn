@@ -123,9 +123,13 @@ describe("a multi-skill repository", () => {
     const search = await call(client, "find", { query: "how do I run a blameless review?" });
     expect(search.text).toContain("1. skill: incident-review");
 
+    // A skill's file that matches is listed under the skill, which takes its place in the order.
     const fragment = await call(client, "find", { query: "style guide" });
-    expect(fragment.text).toContain("skills/release-notes/references/style.md");
-    expect(fragment.text).toContain("Belongs to the skill at skills/release-notes");
+    expect(fragment.text).toContain("1. skill: release-notes (skills/release-notes)");
+    expect(fragment.text).toContain(
+      "   Its files that match as well (get loads the skill; read_file reads one):\n   - skills/release-notes/references/style.md - Release notes style guide",
+    );
+    expect(fragment.text).not.toContain("document: skills/release-notes/references/style.md");
 
     const skill = await call(client, "get", { name: "release-notes" });
     expect(skill.isError).toBe(false);
@@ -341,27 +345,61 @@ describe("other repository shapes", () => {
     await client.close();
   });
 
-  it("skips broken manifests and keeps serving the rest", async () => {
-    const client = await harness().connect("/gh/acme/hostile");
+  it("skips broken manifests, keeps serving the rest, and says what was skipped and why", async () => {
+    const h = harness();
+    await (await h.connect("/gh/acme/hostile")).close();
+    await h.snapshots.idle();
+    const client = await h.connect("/gh/acme/hostile");
+    // The instructions count what could not be read, so that a model asked for one of those
+    // skills by name does not look for it in vain.
+    expect(client.getInstructions()).toContain("It has 3 skills and 0 other documents.");
+    expect(client.getInstructions()).toMatch(
+      /7 manifests could not be read and are not served \(skills\/alias-bomb\/SKILL\.md, skills\/bad-yaml\/SKILL\.md, skills\/colon-in-description\/SKILL\.md and 4 more\); find without a query says why\./,
+    );
+
     const listing = await call(client, "find", { limit: 25 });
     expect(listing.text).toContain("skill: Loud Name (skills/Loud_Name)");
+    expect(listing.text).toContain("skill: commented-value (skills/commented-value)");
     expect(listing.text).toContain("skill: valid-neighbor (skills/valid-neighbor)");
     expect(listing.text).not.toContain("skill: alias-bomb");
     expect(listing.text).not.toContain("skill: tagged");
     // A SKILL.md that cannot be read as a skill is no document of the mount, but it stays
-    // readable, so that the author can see what was found.
-    expect(listing.text).not.toContain("no-front-matter/SKILL.md");
+    // readable, so that the author can see what was found; the listing says why it is missing.
+    expect(listing.text).not.toContain("document: skills/no-front-matter/SKILL.md");
+    expect(listing.text).toContain(
+      "Manifests that could not be read, so what they declare is not served (fix them and push; the next commit is indexed anew):",
+    );
+    expect(listing.text).toContain(
+      '- skills/colon-in-description/SKILL.md (invalid_front_matter): front-matter is not valid YAML (BLOCK_AS_IMPLICIT_KEY): the value of "description" contains ": "; quote the value or write it as a block scalar (>)',
+    );
+    expect(listing.text).toContain("- skills/no-front-matter/SKILL.md (missing_front_matter)");
     const unread = await call(client, "read_file", { path: "skills/no-front-matter/SKILL.md" });
     expect(unread.isError).toBe(false);
     expect(unread.text).toContain("No front-matter");
 
+    // Among search results, one line points at the listing.
+    const search = await call(client, "find", { query: "neighbor" });
+    expect(search.text).toContain("1. skill: valid-neighbor");
+    expect(search.text).toContain(
+      "Note: 7 manifests could not be read and are not served; find without a query says which.",
+    );
+    expect(search.text).not.toContain("BLOCK_AS_IMPLICIT_KEY");
+
     const loud = await call(client, "get", { name: "loud name" });
     expect(loud.isError).toBe(false);
     expect(loud.text).toContain("Warnings for the skill author:");
+    // A value cut at a hash is served as YAML read it, and the author is told.
+    const commented = await call(client, "get", { name: "commented-value" });
+    expect(commented.text).toContain("Description: Greets people\n");
+    expect(commented.text).toContain('- the value of "description" is cut at " #"');
 
-    const unknown = await call(client, "get", { name: "alias-bomb" });
+    // Asking for a skill that could not be read gets the reason, not only the list of the rest.
+    const unknown = await call(client, "get", { name: "colon-in-description" });
     expect(unknown.isError).toBe(true);
-    expect(unknown.text).toContain("Available skills: Loud Name, valid-neighbor.");
+    expect(unknown.text).toContain("Available skills: Loud Name, commented-value, valid-neighbor.");
+    expect(unknown.text).toContain(
+      '- skills/colon-in-description/SKILL.md (invalid_front_matter): front-matter is not valid YAML (BLOCK_AS_IMPLICIT_KEY): the value of "description" contains ": "',
+    );
     await client.close();
   });
 });
@@ -409,9 +447,30 @@ describe("a repository with a manifest", () => {
       "--- rules for every skill in this repository (from SKILLCDN.md) ---\n# Rules for every skill in this repository\n\n- Ask when a choice changes the result",
     );
     expect(skill.text.indexOf("--- rules")).toBeLessThan(skill.text.indexOf("--- instructions"));
+    // The file the skill declares as needed on every run comes with it, after the instructions.
+    expect(skill.text).toContain("- skills/greeting/references/tone.md (included below)");
+    expect(skill.text).toContain(
+      "--- included file: skills/greeting/references/tone.md ---\n# Tone\n\nWarm and brief.",
+    );
+    expect(skill.text.indexOf("--- instructions")).toBeLessThan(
+      skill.text.indexOf("--- included file"),
+    );
+    // Translations are for people; a model reads the original.
+    expect(skill.text).not.toContain("인사말");
     const prompt = await client.getPrompt({ name: "greeting" });
     expect(prompt.messages[0]?.content).toMatchObject({ type: "text" });
     expect(JSON.stringify(prompt.messages[0]?.content)).toContain("rules for every skill");
+    expect(JSON.stringify(prompt.messages[0]?.content)).toContain("included file");
+    await client.close();
+  });
+
+  it("says which language the repository is written in", async () => {
+    const client = await connectIndexed(harness(), "/gh/acme/with-manifest");
+    expect(client.getInstructions()).toContain(
+      "It has 1 skill and 1 other document. Written in en.",
+    );
+    const find = (await client.listTools()).tools.find((tool) => tool.name === "find");
+    expect(find?.description).toContain("Written in en. Skills here: greeting.");
     await client.close();
   });
 
@@ -489,6 +548,24 @@ describe("a repository with a manifest", () => {
       await snapshots.idle();
       await client.close();
     }
+  });
+});
+
+describe("a repository the operator vouches for", () => {
+  it("carries no provenance notice, while every other repository does", async () => {
+    const h = harness({ verified: ["/gh/Acme/single-skill"] });
+    const vouched = await h.connect("/gh/acme/single-skill");
+    const skill = await call(vouched, "get", { name: "commit-messages" });
+    expect(skill.isError).toBe(false);
+    expect(skill.text).not.toContain(PROVENANCE_NOTICE);
+    expect((await call(vouched, "read_file", { path: "SKILL.md" })).text).not.toContain(
+      PROVENANCE_NOTICE,
+    );
+    await vouched.close();
+
+    const other = await h.connect("/gh/acme/multi-skill");
+    expect((await call(other, "find")).text).toContain(PROVENANCE_NOTICE);
+    await other.close();
   });
 });
 

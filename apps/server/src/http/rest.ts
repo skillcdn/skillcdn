@@ -10,12 +10,16 @@ import {
   REST_FEATURED_SKILL_NAMES,
   REST_MOUNT_LIST_LIMIT,
   REST_ROUTES,
+  type RepoTranslation,
   type RestFeatured,
   type RestFile,
   type RestFind,
   type RestMount,
   type RestRepository,
+  type RestRepoTranslation,
   type RestSkill,
+  type RestSkillTranslation,
+  type SkillTranslation,
 } from "@skillcdn/core";
 import type { Context, Hono } from "hono";
 import { cors } from "hono/cors";
@@ -71,6 +75,29 @@ const notReadyBody = (outcome: NotReady) =>
     ? ({ status: "indexing" } as const)
     : ({ status: "failed", errorCode: outcome.errorCode } as const);
 
+// Absent values are `null` in the API, never missing keys.
+function skillTranslations(
+  translations: Readonly<Record<string, SkillTranslation>>,
+): Record<string, RestSkillTranslation> {
+  return Object.fromEntries(
+    Object.entries(translations).map(([tag, entry]) => [
+      tag,
+      { title: entry.title ?? null, description: entry.description ?? null },
+    ]),
+  );
+}
+
+function repoTranslations(
+  translations: Readonly<Record<string, RepoTranslation>>,
+): Record<string, RestRepoTranslation> {
+  return Object.fromEntries(
+    Object.entries(translations).map(([tag, entry]) => [
+      tag,
+      { name: entry.name ?? null, description: entry.description ?? null },
+    ]),
+  );
+}
+
 /** What an address serves, as the API says it: shared with the page rendered for browsers. */
 export function mountBody(
   mount: Mount,
@@ -84,7 +111,7 @@ export function mountBody(
     pinned: isPinnedAddress(mount.address),
     commit: mount.commit,
     path: mount.address.path,
-    verified: false,
+    verified: mount.verified,
     index:
       answer.status !== "ready"
         ? notReadyBody(answer)
@@ -98,6 +125,8 @@ export function mountBody(
                     path: answer.overview.manifest.path ?? null,
                     name: answer.overview.manifest.name ?? null,
                     description: answer.overview.manifest.description,
+                    language: answer.overview.manifest.language ?? null,
+                    translations: repoTranslations(answer.overview.manifest.translations),
                   },
             skillCount: answer.overview.skillCount,
             documentCount: answer.overview.documentCount,
@@ -106,6 +135,7 @@ export function mountBody(
               directory: skill.directory,
               description: skill.description,
               warnings: [...skill.warnings],
+              translations: skillTranslations(skill.translations),
             })),
             documents: answer.overview.documents.map((document) => ({
               path: document.path,
@@ -179,7 +209,9 @@ export function skillOutcome(
             body: skill.body,
             files: [...skill.files],
             filesTruncated: skill.filesTruncated,
+            included: skill.included.map((file) => file.path),
             warnings: [...skill.warnings],
+            translations: skillTranslations(skill.translations),
             rules:
               skill.rules === undefined
                 ? null
@@ -301,7 +333,19 @@ export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies):
               query: found.result.query ?? null,
               items: found.result.items.map((item) =>
                 item.kind === "skill"
-                  ? { ...item }
+                  ? {
+                      kind: "skill",
+                      name: item.name,
+                      directory: item.directory,
+                      description: item.description,
+                      translations: skillTranslations(item.translations),
+                      files: item.files.map((file) => ({
+                        path: file.path,
+                        title: file.title ?? null,
+                        summary: file.summary ?? null,
+                      })),
+                      moreFiles: item.moreFiles,
+                    }
                   : {
                       kind: "document",
                       path: item.path,
@@ -420,6 +464,7 @@ export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies):
                   ? {
                       name: answer.overview.manifest.name ?? null,
                       description: answer.overview.manifest.description,
+                      translations: repoTranslations(answer.overview.manifest.translations),
                     }
                   : null,
               status: answer.status,

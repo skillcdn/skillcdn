@@ -1,8 +1,12 @@
 import { parseFrontMatter, splitFrontMatter } from "./front-matter.js";
 import {
+  commentedValueWarnings,
   MAX_OPTIONAL_FIELD_LENGTH,
+  optionalLanguage,
   optionalText,
   readMetadata,
+  readTranslations,
+  requiredLine,
   requiredText,
 } from "./manifest-fields.js";
 import { DEFAULT_DOCUMENT_DIRECTORIES } from "./repo-layout.js";
@@ -18,6 +22,12 @@ export const MAX_REPO_NAME_LENGTH = 100;
 export const MAX_REPO_DESCRIPTION_LENGTH = 1024;
 export const MAX_DOCUMENT_DIRECTORIES = 20;
 
+/** What people see in one language instead of the name and the description. */
+export interface RepoTranslation {
+  readonly name: string | undefined;
+  readonly description: string | undefined;
+}
+
 export interface RepoManifest {
   /** Absent: the repository is named as its git host names it. */
   readonly name: string | undefined;
@@ -30,6 +40,10 @@ export interface RepoManifest {
   readonly documents: readonly RepoPath[];
   readonly license: string | undefined;
   readonly metadata: Readonly<Record<string, string>>;
+  /** The tag of the language the repository is written in, when it says. */
+  readonly language: string | undefined;
+  /** The name and the description in other languages, by language tag. */
+  readonly translations: Readonly<Record<string, RepoTranslation>>;
   /** The Markdown after the front-matter: the rules that hold for every skill. */
   readonly body: string;
 }
@@ -47,7 +61,7 @@ export interface RepoManifestError {
   readonly message: string;
 }
 
-export type RepoManifestWarningCode = "ignored_field" | "ignored_directory";
+export type RepoManifestWarningCode = "ignored_field" | "ignored_directory" | "commented_value";
 
 export interface RepoManifestWarning {
   readonly code: RepoManifestWarningCode;
@@ -64,6 +78,12 @@ function fail(
   message: string,
 ): Result<ParsedRepoManifest, RepoManifestError> {
   return err({ code, message });
+}
+
+function pickRepoTranslation(fields: ReadonlyMap<unknown, unknown>): RepoTranslation | undefined {
+  const name = requiredLine(fields.get("name"), MAX_REPO_NAME_LENGTH);
+  const description = requiredText(fields.get("description"), MAX_REPO_DESCRIPTION_LENGTH);
+  return name === undefined && description === undefined ? undefined : { name, description };
 }
 
 /**
@@ -104,6 +124,9 @@ export function parseRepoManifest(text: string): Result<ParsedRepoManifest, Repo
     ignored('"name" is ignored: expected one line of text');
     name = undefined;
   }
+  for (const message of commentedValueWarnings(split.source, ["name", "description"])) {
+    warnings.push({ code: "commented_value", message });
+  }
 
   return ok({
     manifest: {
@@ -112,6 +135,8 @@ export function parseRepoManifest(text: string): Result<ParsedRepoManifest, Repo
       documents: readDocuments(fields.get("documents"), warnings),
       license: optionalText(fields, "license", MAX_OPTIONAL_FIELD_LENGTH, ignored),
       metadata: readMetadata(fields.get("metadata"), ignored),
+      language: optionalLanguage(fields, ignored),
+      translations: readTranslations(fields.get("translations"), pickRepoTranslation, ignored),
       body: split.body,
     },
     warnings,

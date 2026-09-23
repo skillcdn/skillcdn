@@ -151,6 +151,7 @@ export const ko: Messages = {
 
   skill: {
     all: "전체 스킬과 문서",
+    name: "이름",
     directory: "디렉터리",
     license: "라이선스",
     compatibility: "호환성",
@@ -159,6 +160,7 @@ export const ko: Messages = {
     files: "이 스킬의 파일",
     filesTruncated: "앞쪽 파일만 표시됩니다.",
     noFiles: "이 스킬에는 보조 파일이 없습니다.",
+    included: "스킬과 함께 전달됨",
     warnings: "작성자를 위한 경고",
     root: "(저장소 루트)",
     rules: "이 저장소의 모든 스킬에 적용되는 규칙",

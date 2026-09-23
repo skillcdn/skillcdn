@@ -31,3 +31,6 @@ One short file per decision that has lasting consequences and that a future cont
 | [0015](0015-a-forced-language-holds-for-one-page.md) | A forced language holds for one page; links inside the app carry no language | Accepted |
 | [0016](0016-without-a-manifest-a-repository-serves-its-skills-and-docs.md) | Without a manifest, a repository serves its skills and `docs`; the reading rules are versioned | Accepted |
 | [0017](0017-a-forced-language-becomes-the-preference.md) | A language the URL forces becomes the visitor's preference, as a click in the switcher does | Accepted |
+| [0018](0018-skillcdn-fields-in-skill-md-under-one-key.md) | What SkillCDN adds to `SKILL.md` lives under `skillcdn`: the files that come with the skill, and translations for people | Accepted |
+| [0019](0019-the-operator-vouches-for-repositories-until-owners-can.md) | The provenance notice warns about what goes beyond the task; the operator vouches for repositories until owners can | Accepted |
+| [0020](0020-a-check-role-reads-a-working-tree-with-the-indexer.md) | A `check` role reads a working tree with the indexer; whatever the indexer skips is reported everywhere | Accepted |

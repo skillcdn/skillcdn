@@ -1,5 +1,5 @@
 /** Process roles served by the single server image. See docs/architecture.md. */
-export const ROLES = ["api", "worker", "migrate"] as const;
+export const ROLES = ["api", "worker", "migrate", "check"] as const;
 
 export type Role = (typeof ROLES)[number];
 

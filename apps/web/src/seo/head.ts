@@ -7,6 +7,12 @@ import {
   type Language,
   withLanguage,
 } from "../i18n/languages.js";
+import {
+  repositoryDescription,
+  repositoryName,
+  skillDescription,
+  skillTitle,
+} from "../i18n/repository-text.js";
 import { mountHref, PATHS, type Route } from "../router.js";
 import { LINKS } from "../site.js";
 
@@ -86,20 +92,29 @@ function mountText(
   const { address, view } = route;
   const mount = data?.mount;
   const manifest = (mount?.index.status === "ready" ? mount.index.manifest : null) ?? null;
-  // A repository with a manifest goes by the name it gives itself.
+  // A repository with a manifest goes by the name it gives itself, in this language when it can.
   const repository =
-    manifest?.name ??
+    (manifest === null ? null : repositoryName(manifest, language)) ??
     (mount === undefined
       ? `${address.owner}/${address.repo}`
       : `${mount.repository.owner}/${mount.repository.name}`);
   if (view.kind === "skill") {
     const skill = data?.skill?.status === "ready" ? data.skill.skill : undefined;
     return {
-      title: t.meta.mount.skillTitle(skill?.name ?? view.name, repository),
+      title: t.meta.mount.skillTitle(
+        skill === undefined ? view.name : skillTitle(skill, language),
+        repository,
+      ),
       description:
         skill === undefined
           ? t.meta.mount.description(repository)
-          : clip(t.meta.mount.skillDescription(skill.name, repository, skill.description)),
+          : clip(
+              t.meta.mount.skillDescription(
+                skillTitle(skill, language),
+                repository,
+                skillDescription(skill, language),
+              ),
+            ),
     };
   }
   if (view.kind === "file") {
@@ -115,7 +130,7 @@ function mountText(
       index === undefined
         ? t.meta.mount.description(repository)
         : manifest !== null
-          ? clip(manifest.description)
+          ? clip(repositoryDescription(manifest, language))
           : clip(
               t.meta.mount.summary(
                 repository,
@@ -189,15 +204,16 @@ export function buildHead(
   }
   if (route.name === "mount" && canonical !== undefined && data?.mount !== undefined) {
     const { repository } = data.mount;
-    const manifestName =
-      data.mount.index.status === "ready" ? data.mount.index.manifest?.name : undefined;
-    const repositoryName = manifestName ?? `${repository.owner}/${repository.name}`;
+    const manifest = data.mount.index.status === "ready" ? data.mount.index.manifest : null;
+    const named =
+      (manifest === null ? null : repositoryName(manifest, language)) ??
+      `${repository.owner}/${repository.name}`;
     const skill =
       route.view.kind === "skill" && data.skill?.status === "ready" ? data.skill.skill : undefined;
     jsonLd.push({
       "@context": "https://schema.org",
       "@type": skill === undefined ? "SoftwareSourceCode" : "TechArticle",
-      name: skill === undefined ? repositoryName : skill.name,
+      name: skill === undefined ? named : skillTitle(skill, language),
       url: canonical,
       description: text.description,
       inLanguage,
@@ -206,7 +222,7 @@ export function buildHead(
         : {
             isPartOf: {
               "@type": "SoftwareSourceCode",
-              name: repositoryName,
+              name: named,
             },
           }),
     });

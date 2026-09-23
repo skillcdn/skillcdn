@@ -22,6 +22,7 @@ export {
   splitFrontMatter,
 } from "./front-matter.js";
 export { isFullCommitHash, isValidRefName, MAX_REF_LENGTH } from "./git-ref.js";
+export { isLanguageTag, MAX_TRANSLATIONS } from "./manifest-fields.js";
 export { type MarkdownSummary, summarizeMarkdown } from "./markdown.js";
 export type { BlobStore } from "./ports/blob-store.js";
 export type { Clock } from "./ports/clock.js";
@@ -72,6 +73,7 @@ export {
   type RepoManifestErrorCode,
   type RepoManifestWarning,
   type RepoManifestWarningCode,
+  type RepoTranslation,
 } from "./repo-manifest.js";
 export {
   isWithinRepoPath,
@@ -99,8 +101,10 @@ export {
   type RestManifest,
   type RestMount,
   type RestRepository,
+  type RestRepoTranslation,
   type RestSkill,
   type RestSkillSummary,
+  type RestSkillTranslation,
   restDiagnosticSchema,
   restDirectoryEntrySchema,
   restDocumentSummarySchema,
@@ -112,15 +116,21 @@ export {
   restMountSchema,
   restPath,
   restRepositorySchema,
+  restRepoTranslationSchema,
+  restRepoTranslationsSchema,
   restSkillSchema,
   restSkillSummarySchema,
+  restSkillTranslationSchema,
+  restSkillTranslationsSchema,
 } from "./rest/contracts.js";
 export { err, ok, type Result } from "./result.js";
 export {
+  MAX_INCLUDED_FILES,
   MAX_SKILL_COMPATIBILITY_LENGTH,
   MAX_SKILL_DESCRIPTION_LENGTH,
   MAX_SKILL_MANIFEST_LENGTH,
   MAX_SKILL_NAME_LENGTH,
+  MAX_SKILL_TITLE_LENGTH,
   type ParsedSkillManifest,
   parseSkillManifest,
   type SkillManifest,
@@ -129,6 +139,7 @@ export {
   type SkillManifestErrorCode,
   type SkillManifestWarning,
   type SkillManifestWarningCode,
+  type SkillTranslation,
 } from "./skill-manifest.js";
 export { hasForbiddenCodePoint } from "./text-safety.js";
 export {
@@ -145,6 +156,7 @@ export {
   FIND_DEFAULT_LIMIT,
   FIND_LIST_SKILLS_MAX,
   FIND_MAX_LIMIT,
+  FIND_MAX_SKILL_FILES,
   type FindInput,
   findInputSchema,
   findTool,
@@ -163,6 +175,7 @@ export {
 export {
   INDEXING_NOTICE,
   PROVENANCE_NOTICE,
+  renderDiagnostics,
   renderDirectoryResult,
   renderFileResult,
   renderFindResult,
@@ -172,8 +185,12 @@ export {
   type DirectoryEntry,
   type DirectoryResult,
   type FileResult,
+  type FindFile,
   type FindItem,
   type FindResult,
+  type IncludedFile,
+  type IndexDiagnostic,
+  MAX_SKILL_INCLUDED_LENGTH,
   MAX_SKILL_RULES_LENGTH,
   type MountSummary,
   pageOfText,

@@ -95,6 +95,31 @@ describe("parseFrontMatter", () => {
   });
 });
 
+describe("parseFrontMatter on the usual mistakes", () => {
+  const messageOf = (source: string): string => {
+    const result = parseFrontMatter(source);
+    return result.ok ? "" : result.error.message;
+  };
+
+  it("points at a colon inside a plain value", () => {
+    expect(messageOf("name: a\ndescription: Makes a video: fast and cheap\n")).toBe(
+      'front-matter is not valid YAML (BLOCK_AS_IMPLICIT_KEY): the value of "description" contains ": "; quote the value or write it as a block scalar (>)',
+    );
+  });
+
+  it("points at an opening character that means something in YAML", () => {
+    expect(messageOf("description: [not a list\n")).toContain(
+      'the value of "description" starts with "["',
+    );
+    expect(messageOf("description: *ref\n")).toContain('starts with "*"');
+  });
+
+  it("says nothing more when the source shows no such mistake", () => {
+    expect(messageOf('name: "unclosed\n')).toBe("front-matter is not valid YAML (MISSING_CHAR)");
+    expect(messageOf("description: 'It''s: fine'\nx: [\n")).not.toContain("description");
+  });
+});
+
 describe("parseFrontMatter with hostile input", () => {
   it("rejects aliases instead of expanding them", () => {
     const bomb = [

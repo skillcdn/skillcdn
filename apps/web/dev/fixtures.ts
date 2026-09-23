@@ -1,6 +1,7 @@
 import type {
   RestDiagnostic,
   RestDocumentSummary,
+  RestRepoTranslation,
   RestSkill,
   RestSkillSummary,
 } from "@skillcdn/core";
@@ -22,6 +23,10 @@ export interface FixtureRepository {
     readonly path: string;
     readonly name: string | null;
     readonly description: string;
+    /** The tag of the language the repository is written in, when the manifest says. */
+    readonly language?: string;
+    /** The name and description in other languages, by language tag. */
+    readonly translations?: Readonly<Record<string, RestRepoTranslation>>;
     /** The Markdown after the front-matter: the rules every skill comes with. */
     readonly rules: string;
   };
@@ -79,8 +84,10 @@ const skill = (
   body: `# ${name}\n\n${description}\n\n## Steps\n\n1. Read the request.\n2. Follow [the style guide](references/style.md).\n3. Answer.\n`,
   files: [`${directory}/references/style.md`],
   filesTruncated: false,
+  included: [],
   warnings: [],
   rules: null,
+  translations: {},
   ...extra,
 });
 
@@ -97,10 +104,24 @@ description: The skills Acme's teams share. Use them for release notes, incident
 documents:
   - docs
 license: Apache-2.0
+language: en
+translations:
+  ko:
+    name: Acme 스킬
+    description: Acme의 팀들이 함께 쓰는 스킬입니다. 릴리스 노트, 인시던트 리뷰, API 설계에 쓰세요.
 metadata:
   owner: platform-team
 ---
 ${ACME_RULES}`;
+
+/** What the manifest above says in Korean, as the API relays it. */
+const ACME_TRANSLATIONS: Readonly<Record<string, RestRepoTranslation>> = {
+  ko: {
+    name: "Acme 스킬",
+    description:
+      "Acme의 팀들이 함께 쓰는 스킬입니다. 릴리스 노트, 인시던트 리뷰, API 설계에 쓰세요.",
+  },
+};
 
 const MARKDOWN_SHOWCASE = `# Markdown showcase
 
@@ -157,6 +178,13 @@ description: Write release notes from merged changes, grouped by what a user not
 license: Apache-2.0
 metadata:
   owner: platform-team
+skillcdn:
+  include:
+    - references/style.md
+  translations:
+    ko:
+      title: 릴리스 노트
+      description: 병합된 변경 사항으로 릴리스 노트를 씁니다. 사용자가 먼저 알아차릴 것부터 묶어서 씁니다.
 ---
 
 # Release notes
@@ -174,6 +202,8 @@ const ACME_SKILLS: FixtureRepository = {
     name: "Acme skills",
     description:
       "The skills Acme's teams share. Use them for release notes, incident reviews and API design.",
+    language: "en",
+    translations: ACME_TRANSLATIONS,
     rules: ACME_RULES.trim(),
   },
   commit: "4f2a9c1e7b3d5a6f8091a2b3c4d5e6f708192a3b",
@@ -191,6 +221,14 @@ const ACME_SKILLS: FixtureRepository = {
           "skills/release-notes/scripts/collect.sh",
           "skills/release-notes/assets/template.json",
         ],
+        included: ["skills/release-notes/references/style.md"],
+        translations: {
+          ko: {
+            title: "릴리스 노트",
+            description:
+              "병합된 변경 사항으로 릴리스 노트를 씁니다. 사용자가 먼저 알아차릴 것부터 묶어서 씁니다.",
+          },
+        },
       },
     ),
     skill(
@@ -367,5 +405,6 @@ export function summaryOf(detail: SkillDetail): RestSkillSummary {
     directory: detail.directory,
     description: detail.description,
     warnings: detail.warnings,
+    translations: detail.translations,
   };
 }

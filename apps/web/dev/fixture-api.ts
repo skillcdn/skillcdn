@@ -138,6 +138,8 @@ function mountBody(
                       path: below(address.path, repository.manifest.path) ?? null,
                       name: repository.manifest.name,
                       description: repository.manifest.description,
+                      language: repository.manifest.language ?? null,
+                      translations: repository.manifest.translations ?? {},
                     },
               skillCount: skills.length,
               documentCount: documents.length,
@@ -171,11 +173,20 @@ function findBody(
   const matches = (text: string) =>
     words.length === 0 || words.some((word) => text.toLowerCase().includes(word));
 
-  const skills: RestFindItem[] = [];
+  type SkillItem = Extract<RestFindItem, { kind: "skill" }>;
+  const skills: SkillItem[] = [];
   for (const detail of repository.skills) {
     const directory = below(address.path, detail.directory);
     if (directory !== undefined && matches(`${detail.name} ${detail.description} ${detail.body}`)) {
-      skills.push({ kind: "skill", name: detail.name, directory, description: detail.description });
+      skills.push({
+        kind: "skill",
+        name: detail.name,
+        directory,
+        description: detail.description,
+        translations: detail.translations,
+        files: [],
+        moreFiles: 0,
+      });
     }
   }
   const documents: RestFindItem[] = [];
@@ -183,13 +194,17 @@ function findBody(
     const path = below(address.path, document.path);
     const text = `${document.path} ${document.title ?? ""} ${document.summary ?? ""}`;
     const owner = skillOwning(address, repository, document.path);
-    // A listing leaves a skill's own files to the skill.
-    if (
-      path !== undefined &&
-      path !== "" &&
-      matches(text) &&
-      (words.length > 0 || owner === null)
-    ) {
+    // A listing leaves a skill's own files to the skill; a search folds them under the skill.
+    if (path === undefined || path === "" || !matches(text)) {
+      continue;
+    }
+    const skill = owner === null ? undefined : skills.find((item) => item.directory === owner);
+    if (skill !== undefined && words.length > 0) {
+      skills[skills.indexOf(skill)] = {
+        ...skill,
+        files: [...skill.files, { path, title: document.title, summary: document.summary }],
+      };
+    } else if (words.length > 0 || owner === null) {
       documents.push({
         kind: "document",
         path,
@@ -242,6 +257,7 @@ function skillAnswer(
       ...match.detail,
       directory: match.directory,
       files: match.detail.files.flatMap((file) => below(address.path, file) ?? []),
+      included: match.detail.included.flatMap((file) => below(address.path, file) ?? []),
       rules:
         repository.manifest === undefined || repository.manifest.rules.length === 0
           ? null
@@ -350,7 +366,11 @@ function featuredBody(now: number): RestFeatured {
           },
           manifest:
             status === "ready" && repository.manifest !== undefined
-              ? { name: repository.manifest.name, description: repository.manifest.description }
+              ? {
+                  name: repository.manifest.name,
+                  description: repository.manifest.description,
+                  translations: repository.manifest.translations ?? {},
+                }
               : null,
           status,
           skillCount: status === "ready" ? repository.skills.length : null,

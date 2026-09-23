@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# One image, several roles. The role is the container command: api | worker | migrate.
+# One image, several roles. The role is the container command: api | worker | migrate | check.
 # Build from the repository root:
 #   docker build -f deploy/Dockerfile -t skillcdn .
 #

@@ -45,6 +45,7 @@ const MOUNT: RestMount = {
         directory: "review",
         description: "Reviews <b>changes</b>.</script><script>alert(1)</script>",
         warnings: [],
+        translations: {},
       },
     ],
     documents: [{ path: "README.md", title: "Skills", summary: null }],
@@ -65,8 +66,10 @@ const SKILL: RestSkill = {
     body: "# Review\n\nLook for **regressions**.",
     files: ["review/SKILL.md"],
     filesTruncated: false,
+    included: [],
     warnings: [],
     rules: null,
+    translations: {},
   },
 };
 

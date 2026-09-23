@@ -41,10 +41,113 @@ describe("parseSkillManifest", () => {
         compatibility: undefined,
         allowedTools: undefined,
         metadata: {},
+        include: [],
+        translations: {},
         body: "# Release notes\n\nCollect the merged changes first.\n",
       },
       warnings: [],
     });
+  });
+
+  it("reads the files to include and the translations under the skillcdn key", () => {
+    const { manifest, warnings } = parsed(
+      [
+        "---",
+        "name: release-notes",
+        "description: Drafts release notes.",
+        "skillcdn:",
+        "  include:",
+        "    - references/style.md",
+        "    - assets/template.json",
+        "    - references/style.md",
+        "  translations:",
+        "    ko:",
+        "      title: 릴리스 노트",
+        "      description: 병합된 변경 사항으로 릴리스 노트를 작성합니다.",
+        "    pt-BR:",
+        "      description: Escreve notas de versão.",
+        "---",
+        "Body",
+      ].join("\n"),
+    );
+    expect(warnings).toEqual([]);
+    expect(manifest.include).toEqual(["references/style.md", "assets/template.json"]);
+    expect(manifest.translations).toEqual({
+      ko: { title: "릴리스 노트", description: "병합된 변경 사항으로 릴리스 노트를 작성합니다." },
+      "pt-BR": { title: undefined, description: "Escreve notas de versão." },
+    });
+    expect(Object.getPrototypeOf(manifest.translations)).toBeNull();
+  });
+
+  it("drops included files and translations it cannot use, and says so", () => {
+    const { manifest, warnings } = parsed(
+      [
+        "---",
+        "name: release-notes",
+        "description: Drafts release notes.",
+        "skillcdn:",
+        "  include:",
+        "    - ../other/SKILL.md",
+        "    - scripts/run.sh",
+        "    - .hidden/notes.md",
+        "    - SKILL.md",
+        "    - references/ok.md",
+        "    - 7",
+        "  translations:",
+        "    Korean:",
+        "      title: x",
+        "    ko: just text",
+        "    fr:",
+        "      other: nothing usable",
+        "    de:",
+        `      title: ${"t".repeat(201)}`,
+        "      description: Schreibt Versionshinweise.",
+        "---",
+      ].join("\n"),
+    );
+    expect(manifest.include).toEqual(["references/ok.md"]);
+    expect(manifest.translations).toEqual({
+      de: { title: undefined, description: "Schreibt Versionshinweise." },
+    });
+    expect(warnings.map((warning) => warning.code)).toEqual(["ignored_field", "ignored_field"]);
+    expect(warnings[0]?.message).toContain('5 "skillcdn.include" entries are ignored');
+    expect(warnings[1]?.message).toContain('3 "translations" entries are ignored');
+  });
+
+  it("ignores a skillcdn key that is not a mapping", () => {
+    const { manifest, warnings } = parsed(
+      "---\nname: release-notes\ndescription: D.\nskillcdn: yes\n---\n",
+    );
+    expect(manifest.include).toEqual([]);
+    expect(warnings.map((warning) => warning.message)).toEqual([
+      '"skillcdn" is ignored: expected a mapping',
+    ]);
+  });
+
+  it("warns when a value is cut at a hash that YAML reads as a comment", () => {
+    const { manifest, warnings } = parsed(
+      "---\nname: release-notes\ndescription: Drafts notes # for everyone\n---\n",
+    );
+    expect(manifest.description).toBe("Drafts notes");
+    expect(warnings.map((warning) => warning.code)).toEqual(["commented_value"]);
+    expect(warnings[0]?.message).toContain('"description" is cut at " #"');
+    expect(
+      parsed('---\nname: release-notes\ndescription: "Drafts notes # for everyone"\n---\n')
+        .warnings,
+    ).toEqual([]);
+  });
+
+  it("explains the colon that turns a description into a mapping", () => {
+    const result = parseSkillManifest(
+      "---\nname: a\ndescription: Makes a video: fast and cheap.\n---\n",
+      { directoryName: undefined },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("invalid_front_matter");
+      expect(result.error.message).toContain('the value of "description" contains ": "');
+      expect(result.error.message).toContain("block scalar");
+    }
   });
 
   it("reads the optional fields and keeps scalars as text", () => {

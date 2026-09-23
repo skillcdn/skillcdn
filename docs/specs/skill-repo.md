@@ -33,7 +33,8 @@ What the indexer does with a repository. These hold for every repository, whethe
 - **Repositories declare; they never ship code that we execute.** Composition ("take this input, call these tools in this order") will be declared in Markdown or YAML. Scripts in a repo are files like any other: readable, never run. `allowed-tools` is passed through as text and grants nothing.
 - Indexed content: skill manifests, Markdown (`.md`, `.markdown`, `.mdx`) and small JSON. Every other file is listed and can be read, but is not searched. Binary and oversized files are skipped. Limits are configuration with safe defaults.
 - A plain Markdown document is listed under its front-matter `title` and `description` when it has them; otherwise its title is its first level-one heading, and its description is the first paragraph after that heading (or the first paragraph of the document when there is no heading), shortened to 200 characters. Links become their text; badges, images, lists, quotes, tables and code are skipped on the way.
-- Repos where the GitHub App is installed are **verified**. Responses from unverified repos carry a provenance warning.
+- **A manifest that cannot be read is reported, never dropped in silence.** The finding (its path, a code and the reason, with a hint when the cause is one of the usual YAML mistakes below) is in the `diagnostics` of the [REST API](rest.md) and on the page of the address; an agent sees it in the server instructions, in the listing `find` gives without a query, and in the answer to `get` for a name that is not served ([tools](tools.md)). Before pushing, `check` reads a working tree with the same indexer and prints the same findings ([the check role](#checking-a-repository-before-pushing)).
+- Repos whose owner has verified them with the service are **verified**; until owners can, the operator of a deployment lists the repositories it vouches for. Responses from every other repository carry a provenance notice ([tools](tools.md)).
 
 ## Front-matter
 
@@ -45,11 +46,32 @@ What the indexer does with a repository. These hold for every repository, whethe
 | `compatibility` | no | 1 to 500 characters. |
 | `allowed-tools` | no | Text, passed through. |
 | `metadata` | no | Mapping from short text keys to short text values. |
+| `skillcdn` | no | A mapping with what SkillCDN adds to the layout, so that the top level stays the specification's: `include` and `translations`, below. |
+| `skillcdn.include` | no | A sequence of at most 20 paths, relative to the skill directory, of Markdown or JSON files the skill needs on every run. `get` returns their text with the skill, within a size limit ([tools](tools.md)), so that an agent does not read them one by one. Anything else (a path that leaves the directory, a hidden entry, another kind of file) is dropped and reported. |
+| `skillcdn.translations` | no | A mapping from a language tag (`ko`, `pt-BR`) to a mapping with `title` (1 to 200 characters on one line) and `description` (1 to 1024 characters), for people who read the page of the address in that language. At most 32 languages; an entry that translates nothing usable is dropped and reported. Agents always read `name` and `description`. |
 
 - A manifest that breaks a rule for a required field, has no front-matter, or has front-matter that is not valid YAML is **skipped and reported**. It never fails the whole repo. The file stays readable, so that the author can see what was found; it is listed and searched only where a document would be.
 - A `name` that ignores the naming convention (lowercase letters, digits and single hyphens) or differs from its directory name is **served with a warning**. The directory rule does not apply to a manifest at the mounted root.
 - An optional field that cannot be used is ignored with a warning. Unknown fields are ignored silently, so the convention can grow.
 - Two skills may share a `name`; the skill directory is what identifies a skill.
+
+### Writing the values
+
+The front-matter is YAML, and a sentence written as a plain (unquoted) value can mean something else to YAML than to its author. The three mistakes that matter, and what the report says about them:
+
+| Written | What YAML reads | The report |
+|---|---|---|
+| `description: Makes a video: fast and cheap.` | A nested mapping: a colon followed by a space splits a plain value. The front-matter is invalid and the skill is **skipped**. | `invalid_front_matter`, with the hint that the value of `description` contains `: `. |
+| `description: Greets people # by name` | `Greets people`: a space followed by a hash starts a comment. The skill is served with **half its description**. | The warning `commented_value`. |
+| `description: [x] Marks the task done.` | A sequence, or an error: `[`, `{`, `&`, `*`, `!`, `%`, `@` and `` ` `` mean something at the start of a value. | `invalid_front_matter`, with the hint that the value starts with that character. |
+
+Quote such a value (`description: "Makes a video: fast and cheap."`) or write it as a block scalar, which takes any text:
+
+```yaml
+description: >
+  Makes a video: fast and cheap. Use when the user wants a promo
+  short for their product.
+```
 
 ## The format
 
@@ -81,6 +103,10 @@ skills/<name>/
 
 The body of a `SKILL.md`, in this order, so that an agent that has read one knows where to look in the next: a title and a one-paragraph summary of what comes out from what; the requirements, that is the tools the skill calls and what to do when one is missing; the inputs, what the user must supply and the questions to ask for gaps; the workflow, as numbered phases that name what each consumes and produces and where the user is consulted; the hard rules an agent must never break; and the terms the skill uses with a fixed meaning.
 
+A file that every run needs is declared in `skillcdn.include`, so that it arrives with the skill in one call; a file that only some phase needs is linked from that phase and read when the phase comes. A skill whose files are all needed on every run declares them all, within the size limit.
+
+The `name` and the `description` are written for agents, in one language: the one the repository declares in its manifest. What people see on the page of the address is translated in `skillcdn.translations` (a title, since the name is an identifier, and the description) and in the manifest's `translations`, for each language the author cares to write.
+
 Plain documents (a document set is a directory of Markdown without a `SKILL.md`) carry a front-matter `title` and `description`, or start with a level-one heading followed by one summary paragraph, because that is what search shows.
 
 ### A repository without a manifest
@@ -97,6 +123,11 @@ name: SkillCDN examples
 description: Example skills and document sets, served live through SkillCDN. Use to see how a skill that drives a given tool is written.
 documents:
   - docs
+language: en
+translations:
+  ko:
+    name: SkillCDN 예제
+    description: SkillCDN으로 실시간 제공되는 예제 스킬과 문서 모음입니다. 특정 도구를 다루는 스킬이 어떻게 쓰이는지 볼 때 쓰세요.
 license: MIT
 metadata:
   author: skillcdn
@@ -113,8 +144,12 @@ metadata:
 | `name` | no | 1 to 100 characters on one line. Default: the repository's name on the git host. |
 | `description` | yes | 1 to 1024 characters. What the repository holds and who it is for. Shown on the page of the address, in the server instructions and in the description of `find`, instead of the host's description. |
 | `documents` | no | A sequence of directories relative to the manifest (`docs`, `docs/` or `.` for the manifest's own directory), no `..`, at most 20; an entry that is not such a path is dropped and reported. Their Markdown and JSON are listed and searched, and every file in them can be read. Default: `docs`, next to the manifest; an empty sequence serves no documents. |
+| `language` | no | The tag of the language the repository is written in (`en`, `ko`, `pt-BR`). Told to the client on connect, so that a model searches in that language; on the page, text shown as the author wrote it is marked as being in it. A tag that is not one is ignored and reported. |
+| `translations` | no | A mapping from a language tag to a mapping with `name` (1 to 100 characters on one line) and `description` (1 to 1024 characters): what people see on the page in that language. At most 32 languages. Agents always read `name` and `description`. |
 | `license` | no | Short text, as in `SKILL.md`. |
 | `metadata` | no | Mapping from short text keys to short text values, as in `SKILL.md`. |
+
+The values are YAML, with the same pitfalls as in `SKILL.md` ([writing the values](#writing-the-values)).
 
 What changes when a mount has a manifest:
 
@@ -128,6 +163,17 @@ Where it is looked up: at the mounted root; when there is none there, at each an
 
 The name: uppercase like `SKILL.md`, `README.md` and `AGENTS.md`, matched exactly, and it says which product reads it. A repository is in the SkillCDN Format once it has one.
 
+## Checking a repository before pushing
+
+The server image has a `check` role that reads a directory as the indexer reads a commit, with the same parsers and the same limits, and prints what an agent would get: the manifest, every skill with its files and warnings, the documents outside the skills, what is not served, the manifests that could not be read and why, and the instructions a client is told on connect. It needs no database and no git host, executes nothing from the directory, and exits with `1` when a manifest cannot be read, so it can gate a push.
+
+```sh
+pnpm --filter @skillcdn/server run start check ../examples    # from a checkout of this repository
+node dist/main.js check /path/to/repository                    # from the image
+```
+
+Hidden entries, `node_modules` and symbolic links are left out, as they are absent from a git tree or never served. Only the `INDEX_*` limits are read from the environment ([deploy](../../deploy/README.md)).
+
 ## Parsing requirements
 
 Everything in a repo is untrusted input:
@@ -140,7 +186,8 @@ Everything in a repo is untrusted input:
 ## Open questions
 
 - Whether skills should also be confined to directories the manifest declares (`skills:`), or stay "any directory with a `SKILL.md`" as now; and whether modules and aliases belong in the manifest's front-matter or in configuration that is not prose (a YAML file stays the fallback for that).
-- The exact rules for *verified*, and the wording of the provenance warning.
+- The exact rules for *verified* once owners can verify a repository themselves; the operator's list is a stand-in.
 - How `intake` questions are declared.
 - How skills that need user files describe an upload step, given that remote MCP servers cannot receive chat attachments.
 - Whether the explorer reports the format's required points 3 to 6 as diagnostics, next to the manifest diagnostics it already reports.
+- Search matches words as written. A repository in a language whose words carry particles or inflections (Korean, for one) is found by its exact words; whether `language` should pick a text-search configuration, or a morphological or embedding search should take over, is open.

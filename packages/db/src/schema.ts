@@ -164,6 +164,15 @@ export interface SnapshotDiagnostic {
   readonly message: string;
 }
 
+/** What people see in one language instead of a name and a description. */
+export interface StoredTranslation {
+  /** A skill's translated title. */
+  readonly title?: string;
+  /** A repository's translated name. */
+  readonly name?: string;
+  readonly description?: string;
+}
+
 /**
  * Front-matter of a skill manifest, as validated by the convention parser. A repository manifest
  * (`SKILLCDN.md`) stores its front-matter here too, with the document directories it declares.
@@ -174,8 +183,14 @@ export interface SkillFrontMatter {
   readonly allowedTools?: string;
   readonly metadata: Readonly<Record<string, string>>;
   readonly warnings: readonly string[];
+  /** Skill only: the files it needs on every run, relative to its directory. */
+  readonly include?: readonly string[];
+  /** By language tag: the title (skill) or name (repository), and the description. */
+  readonly translations?: Readonly<Record<string, StoredTranslation>>;
   /** Repository manifest only: the directories it serves, relative to its own directory. */
   readonly documents?: readonly string[];
+  /** Repository manifest only: the tag of the language the repository is written in. */
+  readonly language?: string;
 }
 
 /** One file of a snapshot. Immutable: rows are inserted and deleted, never updated. */

@@ -1,7 +1,7 @@
 import type { RepoPath } from "../repo-path.js";
 import { findTool } from "./contracts.js";
 import { describeMount, plural } from "./render.js";
-import type { MountSummary } from "./results.js";
+import type { IndexDiagnostic, MountSummary } from "./results.js";
 
 // What a client is told about a mount when it connects, before it calls anything: the server
 // instructions and the description of find carry the catalog of skills, so that a model can tell
@@ -23,6 +23,8 @@ export interface CatalogManifest {
   readonly path: RepoPath | undefined;
   /** Whether the manifest has a body: rules that come with every skill. */
   readonly hasRules: boolean;
+  /** The tag of the language the repository says it is written in. */
+  readonly language: string | undefined;
 }
 
 export interface MountCatalog {
@@ -33,6 +35,8 @@ export interface MountCatalog {
   readonly skillCount: number;
   /** Documents outside the skills. */
   readonly documentCount: number;
+  /** Manifests inside the mount that could not be read, so what they declare is not served. */
+  readonly diagnostics: readonly IndexDiagnostic[];
 }
 
 export type CatalogState =
@@ -49,11 +53,13 @@ export const FIND_DESCRIPTION_MAX_LENGTH = 800;
 
 /** How far a description is shortened before names alone have to do. */
 const DESCRIPTION_CLIPS = [Number.POSITIVE_INFINITY, 240, 120, 60];
+/** How many manifests that could not be read the instructions name. */
+const NAMED_DIAGNOSTICS = 3;
 
 const HOW_TO =
   "To use a skill, call get with its name, follow the instructions it returns, and read the " +
-  "files it points to with read_file. find searches the skills and the documents; read_file " +
-  "lists a directory when given one.";
+  "files it points to with read_file; the files it needs on every run come with it. find " +
+  "matches words, in the language of the repository; read_file lists a directory when given one.";
 const RULES_NOTE =
   "Rules that hold for every skill here come with each skill that get returns; follow them.";
 /** How much of the manifest's description the instructions carry. */
@@ -104,6 +110,24 @@ function skillList(catalog: MountCatalog, budget: number): string {
   return andMore(skillCount, "").slice(0, budget);
 }
 
+/**
+ * A skill whose manifest could not be read is not in the list, and a model asked for it by
+ * name would otherwise look for it in vain: the instructions say what was skipped.
+ */
+function skippedNote(diagnostics: readonly IndexDiagnostic[]): string {
+  const count = diagnostics.length;
+  if (count === 0) {
+    return "";
+  }
+  const named = diagnostics.slice(0, NAMED_DIAGNOSTICS).map((diagnostic) => diagnostic.path);
+  const rest = count > NAMED_DIAGNOSTICS ? ` and ${count - NAMED_DIAGNOSTICS} more` : "";
+  return ` ${plural(count, "manifest")} could not be read and ${count === 1 ? "is" : "are"} not served (${named.join(", ")}${rest}); find without a query says why.`;
+}
+
+function languageNote(manifest: CatalogManifest | undefined): string {
+  return manifest?.language === undefined ? "" : ` Written in ${manifest.language}.`;
+}
+
 /** The instructions a client hands to the model when it connects. */
 export function renderInstructions(state: CatalogState): string {
   const mount = state.status === "ready" ? state.catalog.mount : state.mount;
@@ -119,11 +143,12 @@ export function renderInstructions(state: CatalogState): string {
       : `${opening} The commit could not be indexed and is retried automatically; read_file works in the meantime.`;
   }
   const { catalog } = state;
+  const notes = `${languageNote(manifest)}${skippedNote(catalog.diagnostics)}`;
   if (catalog.skillCount === 0) {
-    return `${opening} It has no skills; its ${plural(catalog.documentCount, "document")} can be searched with find and read with read_file.`;
+    return `${opening} It has no skills; its ${plural(catalog.documentCount, "document")} can be searched with find and read with read_file.${notes}`;
   }
   const howTo = manifest?.hasRules === true ? `${HOW_TO} ${RULES_NOTE}` : HOW_TO;
-  const head = `${opening} It has ${plural(catalog.skillCount, "skill")} and ${plural(catalog.documentCount, "other document")}.\nSkills:\n`;
+  const head = `${opening} It has ${plural(catalog.skillCount, "skill")} and ${plural(catalog.documentCount, "other document")}.${notes}\nSkills:\n`;
   const budget = INSTRUCTIONS_MAX_LENGTH - head.length - howTo.length - 1;
   return `${head}${skillList(catalog, budget)}\n${howTo}`;
 }
@@ -137,10 +162,11 @@ export function describeFindTool(state: CatalogState): string {
       : base;
   }
   const { catalog } = state;
+  const language = languageNote(catalog.manifest);
   if (catalog.skillCount === 0) {
-    return `${base} This repository has no skills, only documents.`;
+    return `${base}${language} This repository has no skills, only documents.`;
   }
-  const lead = `${base} Skills here: `;
+  const lead = `${base}${language} Skills here: `;
   const names = catalog.skills.map((skill) => labelOf(skill, catalog.skills));
   for (let shown = names.length; shown > 0; shown -= 1) {
     const hidden = catalog.skillCount - shown;
@@ -149,5 +175,5 @@ export function describeFindTool(state: CatalogState): string {
       return text;
     }
   }
-  return `${base} This repository has ${plural(catalog.skillCount, "skill")}.`;
+  return `${base}${language} This repository has ${plural(catalog.skillCount, "skill")}.`;
 }

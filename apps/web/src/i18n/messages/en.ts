@@ -160,6 +160,7 @@ export const en = {
 
   skill: {
     all: "All skills and documents",
+    name: "Name",
     directory: "Directory",
     license: "License",
     compatibility: "Compatibility",
@@ -168,6 +169,7 @@ export const en = {
     files: "Files of this skill",
     filesTruncated: "Only the first files are listed.",
     noFiles: "This skill has no supporting files.",
+    included: "Comes with the skill",
     warnings: "Warnings for the author",
     root: "(repository root)",
     rules: "Rules for every skill in this repository",

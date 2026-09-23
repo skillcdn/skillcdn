@@ -7,6 +7,8 @@ export const FIND_DEFAULT_LIMIT = 10;
 export const FIND_MAX_LIMIT = 25;
 /** A listing names every skill, up to this many; a repository with more is searched instead. */
 export const FIND_LIST_SKILLS_MAX = 100;
+/** How many of a skill's own files a search result lists under the skill. */
+export const FIND_MAX_SKILL_FILES = 5;
 export const MAX_QUERY_LENGTH = 500;
 export const READ_FILE_DEFAULT_LIMIT = 40_000;
 export const READ_FILE_MAX_LIMIT = 100_000;
@@ -17,7 +19,8 @@ export const findInputSchema = z.object({
     .max(MAX_QUERY_LENGTH)
     .optional()
     .describe(
-      "Keywords or a question. Omit it to list every skill, then the documents outside the skills.",
+      "Keywords, in the language the repository is written in. Omit it to list every skill, " +
+        "then the documents outside the skills.",
     ),
   limit: z
     .number()
@@ -72,10 +75,12 @@ export const findTool: ToolContract<typeof findInputSchema> = {
   name: "find",
   title: "Find skills and documents",
   description:
-    "Search the skills and documents of the mounted repository. Skills match on their name and " +
-    "description, documents on their text; the best matches come first. Call it without a query " +
-    "to list what is available: every skill, then the documents that do not belong to a skill. " +
-    "Then load a skill with get, or read a document with read_file.",
+    "Search the skills and documents of the mounted repository. Matching is by words, not by " +
+    "meaning, and in the language the repository is written in: use its terms. Skills match " +
+    "on their name and description, documents on their text; the best matches come first, " +
+    "and a skill's own files are listed under the skill. Call it without a query to list what " +
+    "is available: every skill, then the documents that do not belong to a skill. Then load a " +
+    "skill with get, or read a document with read_file.",
   inputSchema: findInputSchema,
 };
 
@@ -83,9 +88,10 @@ export const getTool: ToolContract<typeof getInputSchema> = {
   name: "get",
   title: "Get a skill",
   description:
-    "Load one skill by name: its instructions, its front-matter and the supporting files it " +
-    "ships. Apply the instructions to the user's task, and read supporting files with read_file " +
-    "when the instructions point to them.",
+    "Load one skill by name: its instructions, its front-matter, the files it needs on every " +
+    "run (their text comes with it) and the list of its other supporting files. Apply the " +
+    "instructions to the user's task, and read further files with read_file when the " +
+    "instructions point to them.",
   inputSchema: getInputSchema,
 };
 

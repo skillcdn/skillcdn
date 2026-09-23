@@ -19,7 +19,12 @@ import {
   summarizeMarkdown,
   type TreeEntry,
 } from "@skillcdn/core";
-import type { NewIndexEntry, SnapshotDiagnostic, SnapshotIndex } from "@skillcdn/db";
+import type {
+  NewIndexEntry,
+  SnapshotDiagnostic,
+  SnapshotIndex,
+  StoredTranslation,
+} from "@skillcdn/db";
 import { gitBlobHash } from "./git-hash.js";
 import { decodeText } from "./text.js";
 
@@ -30,7 +35,7 @@ import { decodeText } from "./text.js";
  * is rebuilt when it is next asked for (`ensureSnapshot` in @skillcdn/db); without the bump, a
  * deployment keeps serving what the old rules produced until the repository moves on.
  */
-export const INDEX_VERSION = 2;
+export const INDEX_VERSION = 3;
 
 const MAX_DIAGNOSTICS = 50;
 const FETCH_CONCURRENCY = 8;
@@ -38,7 +43,8 @@ const FETCH_CONCURRENCY = 8;
 const ARCHIVE_THRESHOLD = 4;
 
 export interface BuildIndexOptions {
-  readonly gitHost: GitHost;
+  /** Only the reading side of the port: a tree, and bodies by hash. */
+  readonly gitHost: Pick<GitHost, "getTree" | "readBlob" | "readArchive">;
   readonly blobStore: BlobStore;
   readonly coordinates: RepoCoordinates;
   readonly commit: string;
@@ -55,6 +61,30 @@ interface Candidate {
 const DOCUMENT_KINDS: readonly RepoFileKind[] = ["markdown", "json"];
 
 const byPath = (a: Candidate, b: Candidate): number => (a.entry.path < b.entry.path ? -1 : 1);
+
+/** Translations as the index stores them: only the fields that are there. */
+function storedTranslations(
+  translations: Readonly<
+    Record<
+      string,
+      {
+        readonly title?: string | undefined;
+        readonly name?: string | undefined;
+        readonly description?: string | undefined;
+      }
+    >
+  >,
+): Readonly<Record<string, StoredTranslation>> | undefined {
+  const stored: Record<string, StoredTranslation> = {};
+  for (const [tag, entry] of Object.entries(translations)) {
+    stored[tag] = {
+      ...(entry.title === undefined ? {} : { title: entry.title }),
+      ...(entry.name === undefined ? {} : { name: entry.name }),
+      ...(entry.description === undefined ? {} : { description: entry.description }),
+    };
+  }
+  return Object.keys(stored).length === 0 ? undefined : stored;
+}
 
 /** Runs `work` over `items` with a bounded number in flight. Stops at the first failure. */
 async function forEachConcurrently<T>(
@@ -267,6 +297,10 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
           metadata: { ...manifest.metadata },
           warnings: warnings.map((warning) => warning.message),
           documents: [...manifest.documents],
+          ...(manifest.language === undefined ? {} : { language: manifest.language }),
+          ...(storedTranslations(manifest.translations) === undefined
+            ? {}
+            : { translations: storedTranslations(manifest.translations) }),
         },
         searchable: false,
       });
@@ -294,6 +328,10 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
           ...(manifest.allowedTools === undefined ? {} : { allowedTools: manifest.allowedTools }),
           metadata: { ...manifest.metadata },
           warnings: warnings.map((warning) => warning.message),
+          ...(manifest.include.length === 0 ? {} : { include: [...manifest.include] }),
+          ...(storedTranslations(manifest.translations) === undefined
+            ? {}
+            : { translations: storedTranslations(manifest.translations) }),
         },
         searchable: true,
       });

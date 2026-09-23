@@ -179,6 +179,32 @@ export async function findSkills(
     .limit(limit);
 }
 
+/**
+ * The skills that live in exactly these directories, for a search that turned up their files:
+ * the skill is what gets listed, with the files under it.
+ */
+export async function getSkillsAt(
+  database: Database,
+  scope: SnapshotScope,
+  directories: readonly string[],
+): Promise<EntryRecord[]> {
+  if (directories.length === 0) {
+    return [];
+  }
+  return drizzleOf(database)
+    .select(entryColumns)
+    .from(indexEntries)
+    .where(
+      and(
+        inSnapshot(scope),
+        eq(indexEntries.kind, "skill"),
+        VISIBLE,
+        inArray(indexEntries.skillDir, [...directories]),
+      ),
+    )
+    .orderBy(BY_PATH);
+}
+
 /** Files that belong to a skill directory, the manifest itself excluded. */
 export async function listSkillFiles(
   database: Database,

@@ -50,10 +50,16 @@ What the address serves.
   "index": {
     "status": "ready",
     "truncated": false,
-    "manifest": { "path": "SKILLCDN.md", "name": "Acme playbooks", "description": "..." },
+    "manifest": {
+      "path": "SKILLCDN.md", "name": "Acme playbooks", "description": "...", "language": "en",
+      "translations": { "ko": { "name": "Acme 플레이북", "description": "..." } }
+    },
     "skillCount": 2,
     "documentCount": 1,
-    "skills": [{ "name": "ad-copy", "directory": "ad-copy", "description": "...", "warnings": [] }],
+    "skills": [{
+      "name": "ad-copy", "directory": "ad-copy", "description": "...", "warnings": [],
+      "translations": { "ko": { "title": "광고 문구", "description": "..." } }
+    }],
     "documents": [{ "path": "docs/ads.md", "title": "Ads", "summary": "..." }],
     "diagnostics": [{ "path": "broken/SKILL.md", "code": "missing_description", "message": "..." }]
   }
@@ -61,9 +67,10 @@ What the address serves.
 ```
 
 - `address` is the canonical form. `ref` is `null` for the default branch. `pinned` is true for a full commit hash.
+- `verified` is true when the repository's owner has verified it with the service, or the operator has listed it as one it vouches for ([tools](tools.md), "Rules"); the page shows a warning otherwise.
 - `repository.description` is what the host shows as the description of the repository, on one line, or `null`.
-- `manifest` is what the repository's manifest says about the mount ([convention](skill-repo.md), "The repository manifest"), or `null` when there is none: `name` (`null` when the repository goes by the name its host gives it), `description`, and `path`, the manifest relative to the mount, or `null` when it lies above the mounted directory. With a manifest, the counts and the listings cover only what it declares.
-- `skills` and `documents` list at most 200 entries each; the counts are complete. `documents` are the Markdown and JSON files that do not belong to a skill; a skill's own files are listed by the skills endpoint.
+- `manifest` is what the repository's manifest says about the mount ([convention](skill-repo.md), "The repository manifest"), or `null` when there is none: `name` (`null` when the repository goes by the name its host gives it), `description`, `path`, the manifest relative to the mount, or `null` when it lies above the mounted directory, `language`, the tag of the language the repository says it is written in, or `null`, and `translations`, by language tag, with `name` and `description` (`null` for a field the author did not translate). With a manifest, the counts and the listings cover only what it declares.
+- `skills` and `documents` list at most 200 entries each; the counts are complete. `documents` are the Markdown and JSON files that do not belong to a skill; a skill's own files are listed by the skills endpoint. A skill's `translations` carry a `title` (what people see instead of the name in that language) and a `description`, by language tag; the web UI shows them in the visitor's language.
 - `diagnostics` are the findings of the [convention parser](skill-repo.md) for the repository author: manifests that were skipped, and why. Only manifests inside the mounted path are listed.
 - `truncated` is true when the repository was larger than the indexing limits.
 
@@ -73,13 +80,13 @@ The `find` tool. `query` is optional (at most 500 characters); `limit` is 1 to 2
 
 ```json
 { "status": "ready", "query": "blameless review", "items": [
-  { "kind": "skill", "name": "incident-review", "directory": "skills/incident-review", "description": "..." },
-  { "kind": "document", "path": "docs/getting-started.md", "title": "Getting started", "summary": "...", "skillDirectory": null },
-  { "kind": "document", "path": "skills/incident-review/assets/timeline.json", "title": null, "summary": null, "skillDirectory": "skills/incident-review" }
+  { "kind": "skill", "name": "incident-review", "directory": "skills/incident-review", "description": "...", "translations": {},
+    "files": [{ "path": "skills/incident-review/assets/timeline.json", "title": null, "summary": null }], "moreFiles": 0 },
+  { "kind": "document", "path": "docs/getting-started.md", "title": "Getting started", "summary": "...", "skillDirectory": null }
 ], "totals": null }
 ```
 
-`skillDirectory` names the skill a document belongs to, when it belongs to one inside the mount.
+A skill's own files that match a query are folded under the skill, as the `find` tool folds them: `files` lists up to five of them, best first, and `moreFiles` counts the rest; a skill whose file matched is listed even when the skill itself did not. Without a query `files` is empty. `skillDirectory` names the skill a document belongs to, when it belongs to one inside the mount and could not be folded under it.
 
 ### `GET /api/v1/skills/<address>?name=`
 
@@ -90,12 +97,13 @@ The `get` tool: one skill by name or by directory.
   "name": "incident-review", "directory": "skills/incident-review", "description": "...",
   "license": "Apache-2.0", "compatibility": null, "allowedTools": null, "metadata": {},
   "body": "# Incident review\n...", "files": ["skills/incident-review/assets/timeline.json"],
-  "filesTruncated": false, "warnings": [],
-  "rules": { "path": "SKILLCDN.md", "body": "# Rules for every skill\n...", "truncated": false }
+  "filesTruncated": false, "included": ["skills/incident-review/assets/timeline.json"], "warnings": [],
+  "rules": { "path": "SKILLCDN.md", "body": "# Rules for every skill\n...", "truncated": false },
+  "translations": { "ko": { "title": "인시던트 리뷰", "description": "..." } }
 } }
 ```
 
-`rules` is the body of the repository's manifest, which holds for every skill, or `null` when there is none; `path` is `null` when the manifest lies above the mounted directory, and `truncated` is true when the body was cut at the limit `get` applies.
+`rules` is the body of the repository's manifest, which holds for every skill, or `null` when there is none; `path` is `null` when the manifest lies above the mounted directory, and `truncated` is true when the body was cut at the limit `get` applies. `included` names the files the skill declares as needed on every run, which the `get` tool returns inline; here they are paths, and the files endpoint has their text. `translations` are what people see in another language, by language tag.
 
 ### `GET /api/v1/files/<address>?path=&offset=&limit=`
 
@@ -121,11 +129,12 @@ The addresses the operator chose to show on the explorer's front page (`FEATURED
 ```json
 { "items": [
   { "address": "/gh/acme/skills", "repository": { "host": "gh", "owner": "Acme", "name": "skills", "defaultBranch": "main", "description": null },
+    "manifest": { "name": "Acme skills", "description": "...", "translations": {} },
     "status": "ready", "skillCount": 12, "skills": ["ad-copy", "incident-review"] }
 ] }
 ```
 
-`skills` holds at most 5 names. There is deliberately no endpoint that lists every indexed repository: anyone can have any public repository indexed by asking for it once, so such a list needs a listing policy first.
+`manifest` is the name and description the repository gives itself, with their translations, once it is indexed, or `null`. `skills` holds at most 5 names. There is deliberately no endpoint that lists every indexed repository: anyone can have any public repository indexed by asking for it once, so such a list needs a listing policy first.
 
 ## Open questions
 

@@ -1,4 +1,5 @@
 import { parseDocument, visit } from "yaml";
+import { plainScalarHint } from "./manifest-fields.js";
 import { err, ok, type Result } from "./result.js";
 
 export const MAX_FRONT_MATTER_LENGTH = 16_384;
@@ -82,9 +83,12 @@ export function parseFrontMatter(
     });
     const [problem] = document.errors;
     if (problem !== undefined) {
+      // The parser's code names the symptom; the usual cause is a sentence written as a plain
+      // scalar, which the source shows.
+      const hint = plainScalarHint(source);
       return err({
         code: "invalid_yaml",
-        message: `front-matter is not valid YAML (${problem.code})`,
+        message: `front-matter is not valid YAML (${problem.code})${hint === undefined ? "" : `: ${hint}`}`,
       });
     }
     // The library resolves well-known tags (timestamps, binary, sets) under any schema.
@@ -104,7 +108,11 @@ export function parseFrontMatter(
     value = document.toJS({ mapAsMap: true, maxAliasCount: 0 });
   } catch {
     // Aliases, and nesting deep enough to exhaust the parser's stack, end up here.
-    return err({ code: "invalid_yaml", message: "front-matter is not valid YAML" });
+    const hint = plainScalarHint(source);
+    return err({
+      code: "invalid_yaml",
+      message: `front-matter is not valid YAML${hint === undefined ? "" : `: ${hint}`}`,
+    });
   }
   if (value === null || value === undefined) {
     return ok(new Map());

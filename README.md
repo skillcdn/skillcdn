@@ -44,7 +44,7 @@ Headless agents get a **project token**: repo-scoped, read-only, expiring, revoc
 | Tool | Purpose |
 |---|---|
 | `find` | search over skill descriptions and documents in the mounted repo |
-| `get` | return a skill or playbook by name, with its front-matter and body |
+| `get` | return a skill by name, with its front-matter, its body and the files it needs on every run |
 | `read_file` | read a file, or list a directory, inside the mounted ref |
 | `intake` | *(later)* walk a non-expert through the questions a skill declares |
 | `describe` / `run` | *(later)* composed tools declared in Markdown or YAML |
@@ -62,6 +62,7 @@ Specifications: [address scheme](docs/specs/address.md) · [skill-repo conventio
      |   skillcdn.ai/gh/<owner>/<repo>[@ref][/path]   OAuth, or anonymous for public read
 [api]        stateless MCP over HTTP · permission check · meta tools · REST for the web app · webhook receiver
 [worker]     index and re-index on webhook or schedule   (same image as api, different role)
+[check]      read a working tree with the same indexer, for authors before they push   (no database)
 [postgres]   content index (full-text) · permission cache · job queue · later: vectors
 [git host]   GitHub (App) · GitLab / Gitea (self-hosted, air-gapped)
 ```
@@ -74,7 +75,7 @@ TypeScript monorepo: pnpm workspaces, Turborepo, Node.js 24, PostgreSQL 18.
 
 ```
 apps/
-  server/     the single deployable; roles: api | worker | migrate     Hono + MCP SDK
+  server/     the single deployable; roles: api | worker | migrate | check     Hono + MCP SDK
   web/        optional web UI: landing page and explorer              Vite + React
 packages/
   core/       address parser, skill-repo convention, permission rules, tool contracts, ports   pure TS

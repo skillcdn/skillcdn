@@ -111,8 +111,23 @@ describe("GET /api/v1/mounts/<address>", () => {
       name: "Acme playbooks",
       description:
         "The playbooks every Acme team runs. Use them for greetings, and for anything else the skills here cover.",
+      language: "en",
+      translations: {
+        ko: {
+          name: "Acme 플레이북",
+          description:
+            "Acme의 모든 팀이 쓰는 플레이북입니다. 인사말을 비롯해 이곳의 스킬이 다루는 일에 쓰세요.",
+        },
+      },
     });
     expect(mount.index.documents.map((document) => document.path)).toEqual(["docs/guide.md"]);
+    expect(mount.index.skills[0]?.translations).toEqual({
+      ko: {
+        title: "인사말",
+        description:
+          "팀의 말투로 이름을 불러 인사합니다. 인사말이나 환영 메시지가 필요할 때 쓰세요.",
+      },
+    });
 
     const skill = restSkillSchema.parse(
       await (await h.request("/api/v1/skills/gh/acme/with-manifest?name=greeting")).json(),
@@ -125,6 +140,9 @@ describe("GET /api/v1/mounts/<address>", () => {
       body: "# Rules for every skill in this repository\n\n- Ask when a choice changes the result; ask once, batched, only for what is missing.\n- Anything that costs the user money is estimated first and started only after they agree.",
       truncated: false,
     });
+    // The files the skill declares as needed on every run are named; their text is for the tools.
+    expect(skill.skill.included).toEqual(["skills/greeting/references/tone.md"]);
+    expect(skill.skill.translations.ko?.title).toBe("인사말");
 
     const above = restSkillSchema.parse(
       await (
@@ -236,6 +254,23 @@ describe("GET /api/v1/find/<address>", () => {
     }
     expect(search.query).toBe("blameless review");
     expect(search.items[0]).toMatchObject({ kind: "skill", name: "incident-review" });
+
+    // A skill's file that matches is folded under the skill, as the tool folds it.
+    const folded = restFindSchema.parse(
+      await (await h.request("/api/v1/find/gh/acme/multi-skill?query=style%20guide")).json(),
+    );
+    if (folded.status !== "ready") {
+      throw new Error("expected a ready index");
+    }
+    expect(folded.items[0]).toEqual(
+      expect.objectContaining({
+        kind: "skill",
+        name: "release-notes",
+        files: [expect.objectContaining({ path: "skills/release-notes/references/style.md" })],
+        moreFiles: 0,
+      }),
+    );
+    expect(folded.items.some((item) => item.kind === "document")).toBe(false);
   });
 
   it("rejects malformed parameters without repeating them", async () => {
@@ -270,6 +305,8 @@ describe("GET /api/v1/skills/<address>", () => {
       expect(answer.skill.body).toContain("# ");
       expect(answer.skill.body).not.toContain("description:");
       expect(answer.skill.files).toContain("skills/release-notes/references/style.md");
+      expect(answer.skill.included).toEqual([]);
+      expect(answer.skill.translations).toEqual({});
     }
   });
 
@@ -388,6 +425,13 @@ describe("GET /api/v1/featured", () => {
       name: "Acme playbooks",
       description:
         "The playbooks every Acme team runs. Use them for greetings, and for anything else the skills here cover.",
+      translations: {
+        ko: {
+          name: "Acme 플레이북",
+          description:
+            "Acme의 모든 팀이 쓰는 플레이북입니다. 인사말을 비롯해 이곳의 스킬이 다루는 일에 쓰세요.",
+        },
+      },
     });
   });
 

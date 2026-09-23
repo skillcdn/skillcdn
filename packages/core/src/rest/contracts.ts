@@ -43,11 +43,29 @@ export const restRepositorySchema = z.object({
   description: z.nullable(z.string()),
 });
 
+/** What people see in one language instead of a skill's name and description. */
+export const restSkillTranslationSchema = z.object({
+  title: z.nullable(z.string()),
+  description: z.nullable(z.string()),
+});
+
+/** By language tag, such as `ko`. Absent languages are simply not there. */
+export const restSkillTranslationsSchema = z.record(z.string(), restSkillTranslationSchema);
+
+/** What people see in one language instead of a repository's name and description. */
+export const restRepoTranslationSchema = z.object({
+  name: z.nullable(z.string()),
+  description: z.nullable(z.string()),
+});
+
+export const restRepoTranslationsSchema = z.record(z.string(), restRepoTranslationSchema);
+
 export const restSkillSummarySchema = z.object({
   name: z.string(),
   directory: z.string(),
   description: z.string(),
   warnings: z.array(z.string()),
+  translations: restSkillTranslationsSchema,
 });
 
 export const restDocumentSummarySchema = z.object({
@@ -69,6 +87,9 @@ export const restManifestSchema = z.object({
   /** `null`: the repository goes by the name its git host gives it. */
   name: z.nullable(z.string()),
   description: z.string(),
+  /** The tag of the language the repository says it is written in, or `null`. */
+  language: z.nullable(z.string()),
+  translations: restRepoTranslationsSchema,
 });
 
 export const restMountSchema = z.object({
@@ -102,6 +123,11 @@ export const restFindItemSchema = z.discriminatedUnion("kind", [
     name: z.string(),
     directory: z.string(),
     description: z.string(),
+    translations: restSkillTranslationsSchema,
+    /** With a query: the files of the skill that matched as well, best first. */
+    files: z.array(restDocumentSummarySchema),
+    /** How many more of its files matched than are listed. */
+    moreFiles: count,
   }),
   z.object({
     kind: z.literal("document"),
@@ -139,7 +165,10 @@ export const restSkillSchema = z.discriminatedUnion("status", [
       body: z.string(),
       files: z.array(z.string()),
       filesTruncated: z.boolean(),
+      /** The files the skill declares as needed on every run; `get` returns their text. */
+      included: z.array(z.string()),
       warnings: z.array(z.string()),
+      translations: restSkillTranslationsSchema,
       /** The repository's rules from its manifest, or `null` when there are none. */
       rules: z.nullable(
         z.object({
@@ -187,7 +216,13 @@ export const restFeaturedSchema = z.object({
       address: z.string(),
       repository: restRepositorySchema,
       /** The name and description the repository gives itself, once indexed, or `null`. */
-      manifest: z.nullable(z.object({ name: z.nullable(z.string()), description: z.string() })),
+      manifest: z.nullable(
+        z.object({
+          name: z.nullable(z.string()),
+          description: z.string(),
+          translations: restRepoTranslationsSchema,
+        }),
+      ),
       status: z.enum(["ready", "indexing", "failed"]),
       skillCount: z.nullable(count),
       skills: z.array(z.string()),
@@ -206,6 +241,8 @@ export const restErrorSchema = z.object({
 
 export type RestRepository = z.infer<typeof restRepositorySchema>;
 export type RestManifest = z.infer<typeof restManifestSchema>;
+export type RestSkillTranslation = z.infer<typeof restSkillTranslationSchema>;
+export type RestRepoTranslation = z.infer<typeof restRepoTranslationSchema>;
 export type RestSkillSummary = z.infer<typeof restSkillSummarySchema>;
 export type RestDocumentSummary = z.infer<typeof restDocumentSummarySchema>;
 export type RestDiagnostic = z.infer<typeof restDiagnosticSchema>;

@@ -5,8 +5,9 @@ import { resourceKeys } from "../api/keys.js";
 import { useResource } from "../api/use-resource.js";
 import { ErrorCallout } from "../components/error-callout.js";
 import { Markdown } from "../components/markdown.js";
-import { Callout, Skeleton } from "../components/ui.js";
+import { Badge, Callout, Skeleton } from "../components/ui.js";
 import { useI18n } from "../i18n/index.js";
+import { skillDescription, skillTitle } from "../i18n/repository-text.js";
 import { Link } from "../navigation.js";
 import { mountHref } from "../router.js";
 import styles from "./mount.module.css";
@@ -24,7 +25,7 @@ export function MountSkill(props: {
   /** Told what was loaded, or that nothing is, so that the page can say so in its head. */
   readonly onLoaded?: (skill: RestSkill | undefined) => void;
 }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const { address, name, onLoaded } = props;
   const answer = useResource(
     resourceKeys.skill(address, name),
@@ -79,7 +80,10 @@ export function MountSkill(props: {
   }
 
   const { skill } = answer.value;
+  // A translated title stands in for the name; the name is then a fact, since get takes it.
+  const title = skillTitle(skill, language);
   const facts: (readonly [string, string])[] = [
+    ...(title === skill.name ? [] : [[t.skill.name, skill.name] as const]),
     [t.skill.directory, skill.directory === "" ? t.skill.root : skill.directory],
     ...(skill.license === null ? [] : [[t.skill.license, skill.license] as const]),
     ...(skill.compatibility === null
@@ -94,8 +98,8 @@ export function MountSkill(props: {
       {back}
       <header>
         <p className={styles.kicker}>{t.mount.kinds.skill}</p>
-        <h2 className={styles.viewTitle}>{skill.name}</h2>
-        <p className={styles.viewLead}>{skill.description}</p>
+        <h2 className={styles.viewTitle}>{title}</h2>
+        <p className={styles.viewLead}>{skillDescription(skill, language)}</p>
       </header>
 
       <dl className={styles.meta}>
@@ -153,6 +157,12 @@ export function MountSkill(props: {
                 <Link href={mountHref(address, { kind: "file", path: file })}>
                   <code>{file}</code>
                 </Link>
+                {skill.included.includes(file) && (
+                  <>
+                    {" "}
+                    <Badge tone="accent">{t.skill.included}</Badge>
+                  </>
+                )}
               </li>
             ))}
           </ul>

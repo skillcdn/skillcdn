@@ -3,11 +3,13 @@ import {
   type Clock,
   DomainError,
   type Entitlements,
+  formatAddress,
   type GitHost,
   GitHostError,
   type IndexLimits,
   isAnonymouslyReadable,
   type RepoCoordinates,
+  ROOT_PATH,
 } from "@skillcdn/core";
 import {
   type Database,
@@ -27,6 +29,16 @@ export interface Mount {
   readonly commit: string;
   /** Limits that replace the configured defaults for this account. */
   readonly limits: Partial<IndexLimits>;
+  /**
+   * Whether someone has vouched for the repository: its owner through the git host's app, once
+   * that exists, or the operator through configuration until then. Results say so when nobody has.
+   */
+  readonly verified: boolean;
+}
+
+/** How a repository is named in the operator's list of verified repositories: `/gh/owner/repo`. */
+export function repositoryKey(address: Address): string {
+  return formatAddress({ ...address, ref: undefined, path: ROOT_PATH });
 }
 
 export type MountErrorCode =
@@ -62,6 +74,8 @@ export interface MountServiceOptions {
   readonly refTtlMs: number;
   /** How much older than its TTL a fact may be when the host cannot be asked. */
   readonly staleGraceMs: number;
+  /** Repositories the operator vouches for, as {@link repositoryKey} spells them. */
+  readonly verifiedRepositories: ReadonlySet<string>;
 }
 
 const MAX_REMEMBERED_MISSING = 10_000;
@@ -149,7 +163,14 @@ export class MountService {
         ? refNotFound(address)
         : error;
     }
-    return { address, coordinates, repo, commit, limits: decision.limits ?? {} };
+    return {
+      address,
+      coordinates,
+      repo,
+      commit,
+      limits: decision.limits ?? {},
+      verified: this.#options.verifiedRepositories.has(repositoryKey(address)),
+    };
   }
 
   async #resolveRepository(coordinates: RepoCoordinates): Promise<RepoRecord> {

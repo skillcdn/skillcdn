@@ -1,11 +1,22 @@
 import { readFileSync } from "node:fs";
-import { type Address, parseAddress } from "@skillcdn/core";
+import { type Address, type IndexLimits, parseAddress } from "@skillcdn/core";
 import * as z from "zod";
 import { type Cidr, parseCidr } from "../http/client-address.js";
+import { repositoryKey } from "../mounts/mount-service.js";
 
 // The only module that reads the environment. Contract: .env.example and deploy/README.md.
 
 const SECRET_NAMES = ["DATABASE_URL", "GITHUB_TOKEN"] as const;
+
+/** The limits on the work one repository may cause, unless the `INDEX_*` variables say otherwise. */
+export const INDEX_LIMIT_DEFAULTS: IndexLimits = {
+  maxTreeEntries: 20_000,
+  maxIndexedFiles: 2000,
+  maxIndexedFileBytes: 262_144,
+  maxIndexedTotalBytes: 33_554_432,
+  maxReadableFileBytes: 1_048_576,
+  maxArchiveBytes: 268_435_456,
+};
 
 const integer = (fallback: number, min: number, max: number) =>
   z.coerce.number().int().min(min).max(max).default(fallback);
@@ -74,8 +85,53 @@ const addressList = z
     return addresses;
   });
 
+/**
+ * A comma-separated list of repositories, each written as an address without a ref or a path:
+ * the repositories the operator vouches for.
+ */
+const repositoryList = z
+  .string()
+  .default("")
+  .transform((value, context) => {
+    const keys = new Set<string>();
+    for (const entry of value.split(",").filter((part) => part.trim().length > 0)) {
+      const text = entry.trim();
+      const parsed = parseAddress(text.startsWith("/") ? text : `/${text}`);
+      if (!parsed.ok || parsed.value.ref !== undefined || parsed.value.path.length > 0) {
+        context.addIssue({
+          code: "custom",
+          message: "must be a list of repositories such as /gh/owner/repo, without a ref or a path",
+        });
+        return z.NEVER;
+      }
+      keys.add(repositoryKey(parsed.value));
+    }
+    return keys;
+  });
+
 /** The origin of the hosted service: what pages describe themselves as when nothing is configured. */
 export const HOSTED_ORIGIN = "https://skillcdn.ai";
+
+const indexLimitFields = {
+  INDEX_MAX_TREE_ENTRIES: integer(INDEX_LIMIT_DEFAULTS.maxTreeEntries, 1, 1_000_000),
+  INDEX_MAX_FILES: integer(INDEX_LIMIT_DEFAULTS.maxIndexedFiles, 1, 100_000),
+  INDEX_MAX_FILE_BYTES: integer(INDEX_LIMIT_DEFAULTS.maxIndexedFileBytes, 1024, 16_777_216),
+  INDEX_MAX_TOTAL_BYTES: integer(INDEX_LIMIT_DEFAULTS.maxIndexedTotalBytes, 1024, 1_073_741_824),
+  READ_MAX_FILE_BYTES: integer(INDEX_LIMIT_DEFAULTS.maxReadableFileBytes, 1024, 16_777_216),
+  INDEX_MAX_ARCHIVE_BYTES: integer(INDEX_LIMIT_DEFAULTS.maxArchiveBytes, 1_048_576, 17_179_869_184),
+};
+const indexLimitsSchema = z.object(indexLimitFields);
+
+function indexLimitsOf(env: z.infer<typeof indexLimitsSchema>): IndexLimits {
+  return {
+    maxTreeEntries: env.INDEX_MAX_TREE_ENTRIES,
+    maxIndexedFiles: env.INDEX_MAX_FILES,
+    maxIndexedFileBytes: env.INDEX_MAX_FILE_BYTES,
+    maxIndexedTotalBytes: env.INDEX_MAX_TOTAL_BYTES,
+    maxReadableFileBytes: env.READ_MAX_FILE_BYTES,
+    maxArchiveBytes: env.INDEX_MAX_ARCHIVE_BYTES,
+  };
+}
 
 const environmentSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("production"),
@@ -126,16 +182,12 @@ const environmentSchema = z.object({
 
   REPO_TTL_SECONDS: integer(60, 0, 86_400),
   REF_TTL_SECONDS: integer(60, 0, 86_400),
+  VERIFIED_REPOSITORIES: repositoryList,
 
   INDEX_WAIT_MS: integer(20_000, 0, 120_000),
   INDEX_CONCURRENCY: integer(2, 1, 64),
   INDEX_LEASE_SECONDS: integer(120, 10, 3600),
-  INDEX_MAX_TREE_ENTRIES: integer(20_000, 1, 1_000_000),
-  INDEX_MAX_FILES: integer(2000, 1, 100_000),
-  INDEX_MAX_FILE_BYTES: integer(262_144, 1024, 16_777_216),
-  INDEX_MAX_TOTAL_BYTES: integer(33_554_432, 1024, 1_073_741_824),
-  READ_MAX_FILE_BYTES: integer(1_048_576, 1024, 16_777_216),
-  INDEX_MAX_ARCHIVE_BYTES: integer(268_435_456, 1_048_576, 17_179_869_184),
+  ...indexLimitFields,
 });
 
 export interface WebTags {
@@ -193,20 +245,18 @@ export interface Config {
     readonly repoTtlMs: number;
     /** How long a moving ref is trusted. */
     readonly refTtlMs: number;
+    /**
+     * Repositories the operator vouches for, as `/gh/owner/repo`. Results from every other
+     * repository carry a provenance notice, until owners can verify their repositories themselves.
+     */
+    readonly verifiedRepositories: ReadonlySet<string>;
   };
   readonly indexing: {
     /** How long a tool call waits for an index before answering "still indexing". */
     readonly waitMs: number;
     readonly concurrency: number;
     readonly leaseMs: number;
-    readonly limits: {
-      readonly maxTreeEntries: number;
-      readonly maxIndexedFiles: number;
-      readonly maxIndexedFileBytes: number;
-      readonly maxIndexedTotalBytes: number;
-      readonly maxReadableFileBytes: number;
-      readonly maxArchiveBytes: number;
-    };
+    readonly limits: IndexLimits;
   };
 }
 
@@ -304,19 +354,33 @@ export function loadConfig(
       },
     },
     stats: { enabled: env.USAGE_STATS, flushMs: env.USAGE_STATS_FLUSH_SECONDS * 1000 },
-    mounts: { repoTtlMs: env.REPO_TTL_SECONDS * 1000, refTtlMs: env.REF_TTL_SECONDS * 1000 },
+    mounts: {
+      repoTtlMs: env.REPO_TTL_SECONDS * 1000,
+      refTtlMs: env.REF_TTL_SECONDS * 1000,
+      verifiedRepositories: env.VERIFIED_REPOSITORIES,
+    },
     indexing: {
       waitMs: env.INDEX_WAIT_MS,
       concurrency: env.INDEX_CONCURRENCY,
       leaseMs: env.INDEX_LEASE_SECONDS * 1000,
-      limits: {
-        maxTreeEntries: env.INDEX_MAX_TREE_ENTRIES,
-        maxIndexedFiles: env.INDEX_MAX_FILES,
-        maxIndexedFileBytes: env.INDEX_MAX_FILE_BYTES,
-        maxIndexedTotalBytes: env.INDEX_MAX_TOTAL_BYTES,
-        maxReadableFileBytes: env.READ_MAX_FILE_BYTES,
-        maxArchiveBytes: env.INDEX_MAX_ARCHIVE_BYTES,
-      },
+      limits: indexLimitsOf(env),
     },
   };
+}
+
+/**
+ * Only the indexing limits, for the `check` role, which reads a directory and needs neither a
+ * database nor a git host: the rest of the environment is not looked at.
+ */
+export function loadIndexLimits(environment: Environment = process.env): IndexLimits {
+  const present = Object.fromEntries(
+    Object.entries(environment).filter(([, value]) => value !== undefined && value !== ""),
+  );
+  const parsed = indexLimitsSchema.safeParse(present);
+  if (!parsed.success) {
+    throw new ConfigError(
+      parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`),
+    );
+  }
+  return indexLimitsOf(parsed.data);
 }

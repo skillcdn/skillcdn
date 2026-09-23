@@ -1,4 +1,5 @@
 import type { RepoPath } from "../repo-path.js";
+import type { SkillTranslation } from "../skill-manifest.js";
 
 /** What a tool call was answered from. Every path in a result is relative to `path`. */
 export interface MountSummary {
@@ -8,10 +9,27 @@ export interface MountSummary {
   readonly ref: string | undefined;
   readonly commit: string;
   readonly path: RepoPath;
-  /** False until the repository owner has verified the repository with the service. */
+  /** False until the repository owner, or the operator, has vouched for the repository. */
   readonly verified: boolean;
   /** True when the repository was too large to index completely. */
   readonly truncated: boolean;
+}
+
+/**
+ * A finding of the convention parser for the repository author: a manifest that could not be
+ * read, so what it declares is not served, and why.
+ */
+export interface IndexDiagnostic {
+  readonly path: RepoPath;
+  readonly code: string;
+  readonly message: string;
+}
+
+/** A file of a skill that matched a search; it is listed under its skill, never on its own. */
+export interface FindFile {
+  readonly path: RepoPath;
+  readonly title: string | undefined;
+  readonly summary: string | undefined;
 }
 
 export type FindItem =
@@ -20,6 +38,12 @@ export type FindItem =
       readonly name: string;
       readonly directory: RepoPath;
       readonly description: string;
+      /** With a query: the files of the skill that matched as well, best first. */
+      readonly files: readonly FindFile[];
+      /** How many more of its files matched than are listed. */
+      readonly moreFiles: number;
+      /** For people: the title and the description in other languages. Not rendered for a model. */
+      readonly translations: Readonly<Record<string, SkillTranslation>>;
     }
   | {
       readonly kind: "document";
@@ -36,10 +60,14 @@ export interface FindResult {
   readonly items: readonly FindItem[];
   /** Without a query: how many skills, and how many documents outside the skills, the mount has. */
   readonly totals: { readonly skills: number; readonly documents: number } | undefined;
+  /** Manifests inside the mount that could not be read, so what they declare is not served. */
+  readonly diagnostics: readonly IndexDiagnostic[];
 }
 
 /** How much of the repository's rules a skill result carries. `read_file` has the rest. */
 export const MAX_SKILL_RULES_LENGTH = 8_000;
+/** How much text the files a skill declares as needed on every run may add to it, together. */
+export const MAX_SKILL_INCLUDED_LENGTH = 100_000;
 
 /** The rules that hold for every skill of the repository, from its manifest (SKILLCDN.md). */
 export interface SkillRules {
@@ -47,6 +75,16 @@ export interface SkillRules {
   readonly path: RepoPath | undefined;
   readonly body: string;
   /** True when the body was cut at `MAX_SKILL_RULES_LENGTH`. */
+  readonly truncated: boolean;
+}
+
+/** A file the skill declares as needed on every run, returned with the skill. */
+export interface IncludedFile {
+  /** Relative to the mounted root, like every path in a result. */
+  readonly path: RepoPath;
+  /** The text; `undefined` when it is not at hand (not indexed, or over the limits). */
+  readonly content: string | undefined;
+  /** True when the content was cut at `MAX_SKILL_INCLUDED_LENGTH`. */
   readonly truncated: boolean;
 }
 
@@ -63,9 +101,13 @@ export interface SkillResult {
   /** Supporting files of the skill, ready to pass to `read_file`. */
   readonly files: readonly RepoPath[];
   readonly filesTruncated: boolean;
+  /** The files the skill declares as needed on every run, with their text. */
+  readonly included: readonly IncludedFile[];
   readonly warnings: readonly string[];
   /** The repository's rules, when it has a manifest with a body. */
   readonly rules: SkillRules | undefined;
+  /** For people: the title and the description in other languages. Not rendered for a model. */
+  readonly translations: Readonly<Record<string, SkillTranslation>>;
 }
 
 export interface FileResult {

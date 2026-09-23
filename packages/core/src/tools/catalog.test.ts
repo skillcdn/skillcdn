@@ -49,7 +49,14 @@ const ready = (
     skills,
     skillCount: counts.skillCount ?? skills.length,
     documentCount: counts.documentCount ?? 2,
+    diagnostics: [],
   },
+});
+
+const broken = (name: string) => ({
+  path: path(`skills/${name}/SKILL.md`),
+  code: "invalid_front_matter",
+  message: "front-matter is not valid YAML",
 });
 
 describe("renderInstructions", () => {
@@ -65,6 +72,7 @@ describe("renderInstructions", () => {
           description: "The playbooks every Acme team runs. Use them for incidents and releases.",
           path: path("SKILLCDN.md"),
           hasRules: true,
+          language: undefined,
         },
       },
     });
@@ -80,11 +88,66 @@ describe("renderInstructions", () => {
       status: "ready",
       catalog: {
         ...catalog,
-        manifest: { name: undefined, description: "Playbooks.", path: undefined, hasRules: false },
+        manifest: {
+          name: undefined,
+          description: "Playbooks.",
+          path: undefined,
+          hasRules: false,
+          language: undefined,
+        },
       },
     });
     expect(unnamed).toContain("This server serves acme/skills, the git repository");
     expect(unnamed).not.toContain("Rules that hold");
+  });
+
+  it("says which language the repository is written in, when it says", () => {
+    const state = ready([skill("greeting", "Greets people.")]);
+    const catalog = state.status === "ready" ? state.catalog : never();
+    const korean: CatalogState = {
+      status: "ready",
+      catalog: {
+        ...catalog,
+        manifest: {
+          name: "인사 스킬",
+          description: "인사말을 만드는 스킬입니다.",
+          path: path("SKILLCDN.md"),
+          hasRules: false,
+          language: "ko",
+        },
+      },
+    };
+    expect(renderInstructions(korean)).toContain(
+      "It has 1 skill and 2 other documents. Written in ko.\nSkills:",
+    );
+    expect(describeFindTool(korean)).toContain("Written in ko. Skills here: greeting.");
+    expect(renderInstructions(state)).not.toContain("Written in");
+  });
+
+  it("names the manifests that could not be read, so that a missing skill has a reason", () => {
+    const state = ready([skill("a", "A.")]);
+    const catalog = state.status === "ready" ? state.catalog : never();
+    const one = renderInstructions({
+      status: "ready",
+      catalog: { ...catalog, diagnostics: [broken("promo-video")] },
+    });
+    expect(one).toContain(
+      "It has 1 skill and 2 other documents. 1 manifest could not be read and is not served (skills/promo-video/SKILL.md); find without a query says why.\nSkills:",
+    );
+    const five = renderInstructions({
+      status: "ready",
+      catalog: { ...catalog, diagnostics: ["a", "b", "c", "d", "e"].map(broken) },
+    });
+    expect(five).toContain(
+      "5 manifests could not be read and are not served (skills/a/SKILL.md, skills/b/SKILL.md, skills/c/SKILL.md and 2 more); find without a query says why.",
+    );
+    expect(five.length).toBeLessThanOrEqual(INSTRUCTIONS_MAX_LENGTH);
+    const none = renderInstructions({
+      status: "ready",
+      catalog: { ...catalog, skills: [], skillCount: 0, diagnostics: [broken("only")] },
+    });
+    expect(none).toContain("It has no skills; its 2 documents can be searched");
+    expect(none).toContain("1 manifest could not be read");
   });
 
   it("names every skill with its description, and says how to use one", () => {
@@ -100,7 +163,7 @@ describe("renderInstructions", () => {
         "Skills:",
         "- incident-review: Guides a blameless incident review.",
         "- release-notes: Drafts release notes from merged changes.",
-        "To use a skill, call get with its name, follow the instructions it returns, and read the files it points to with read_file. find searches the skills and the documents; read_file lists a directory when given one.",
+        "To use a skill, call get with its name, follow the instructions it returns, and read the files it points to with read_file; the files it needs on every run come with it. find matches words, in the language of the repository; read_file lists a directory when given one.",
       ].join("\n"),
     );
     expect(text.length).toBeLessThanOrEqual(INSTRUCTIONS_MAX_LENGTH);

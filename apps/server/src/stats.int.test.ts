@@ -183,6 +183,7 @@ describe("usage statistics", () => {
       repo,
       commit: "c".repeat(40),
       limits: {},
+      verified: false,
     };
     lost.count(mount, "connection");
     await expect(lost.close()).resolves.toBeUndefined();

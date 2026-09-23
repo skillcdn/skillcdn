@@ -13,6 +13,7 @@ import { parseCidr } from "../http/client-address.js";
 import type { AppEnv } from "../http/request-context.js";
 import type { WebBundle } from "../http/web.js";
 import type { SnapshotService } from "../indexer/snapshot-service.js";
+import { repositoryKey } from "../mounts/mount-service.js";
 import { createApi } from "../roles/api.js";
 import type { UsageStats } from "../stats/usage-recorder.js";
 import { createFixtureHost, type FixtureHost } from "./fixture-host.js";
@@ -41,6 +42,8 @@ export interface HarnessOptions {
   readonly clientIpHeader?: string;
   /** Addresses for the front page of the explorer, as they are written in configuration. */
   readonly featured?: readonly string[];
+  /** Repositories the operator vouches for, as they are written in configuration. */
+  readonly verified?: readonly string[];
   /** A loaded web build. Left out, the server has no UI. */
   readonly web?: WebBundle;
   /** Left out, nothing is counted. */
@@ -61,7 +64,13 @@ export function createHarness(testDatabase: TestDatabase, options: HarnessOption
   const logs: Record<string, unknown>[] = [];
   const { app, snapshots } = createApi(
     {
-      mounts: { repoTtlMs: 60_000, refTtlMs: 60_000 },
+      mounts: {
+        repoTtlMs: 60_000,
+        refTtlMs: 60_000,
+        verifiedRepositories: new Set(
+          (options.verified ?? []).map((text) => repositoryKey(addressOf(text))),
+        ),
+      },
       http: {
         trustedProxies: (options.trustedProxies ?? []).flatMap((text) => parseCidr(text) ?? []),
         clientIpHeader: options.clientIpHeader ?? "x-forwarded-for",

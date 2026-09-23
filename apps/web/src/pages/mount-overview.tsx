@@ -13,6 +13,7 @@ import { ErrorCallout } from "../components/error-callout.js";
 import { Tabs } from "../components/tabs.js";
 import { Badge, Button, EmptyState, Skeleton } from "../components/ui.js";
 import { useI18n } from "../i18n/index.js";
+import { skillDescription, skillTitle } from "../i18n/repository-text.js";
 import { appHref, Link, navigate } from "../navigation.js";
 import { mountHref } from "../router.js";
 import styles from "./mount.module.css";
@@ -25,8 +26,11 @@ function skillKey(skill: { readonly name: string; readonly directory: string }):
 }
 
 function SkillItem(props: { readonly address: Address; readonly skill: RestSkillSummary }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const { skill } = props;
+  // A translated title stands in for the name, which then stays visible next to the directory.
+  const title = skillTitle(skill, language);
+  const where = skill.directory === "" ? t.skill.root : skill.directory;
   return (
     <li>
       <Link
@@ -34,14 +38,14 @@ function SkillItem(props: { readonly address: Address; readonly skill: RestSkill
         href={mountHref(props.address, { kind: "skill", name: skillKey(skill) })}
       >
         <span className={styles.itemHead}>
-          <span className={styles.itemName}>{skill.name}</span>
+          <span className={styles.itemName}>{title}</span>
           {skill.warnings.length > 0 && (
             <Badge tone="warning">{t.mount.warnings(skill.warnings.length)}</Badge>
           )}
         </span>
-        <span className={styles.itemBody}>{skill.description}</span>
+        <span className={styles.itemBody}>{skillDescription(skill, language)}</span>
         <span className={styles.itemPath}>
-          {skill.directory === "" ? t.skill.root : skill.directory}
+          {title === skill.name ? where : `${skill.name} · ${where}`}
         </span>
       </Link>
     </li>
@@ -100,21 +104,32 @@ function SearchResults(props: { readonly address: Address; readonly query: strin
         <EmptyState title={t.mount.search.none} />
       ) : (
         <ol className={styles.list}>
-          {found.value.items.map((item) =>
-            item.kind === "skill" ? (
-              <SkillItem
-                key={`skill ${item.directory} ${item.name}`}
-                address={address}
-                skill={{ ...item, warnings: [] }}
-              />
-            ) : (
-              <DocumentItem
-                key={`document ${item.path}`}
-                address={address}
-                document={item}
-                skillDirectory={item.skillDirectory}
-              />
-            ),
+          {found.value.items.flatMap((item) =>
+            item.kind === "skill"
+              ? [
+                  <SkillItem
+                    key={`skill ${item.directory} ${item.name}`}
+                    address={address}
+                    skill={{ ...item, warnings: [] }}
+                  />,
+                  // The files of the skill that matched too, right after it, as the tool lists them.
+                  ...item.files.map((file) => (
+                    <DocumentItem
+                      key={`file ${file.path}`}
+                      address={address}
+                      document={file}
+                      skillDirectory={item.directory}
+                    />
+                  )),
+                ]
+              : [
+                  <DocumentItem
+                    key={`document ${item.path}`}
+                    address={address}
+                    document={item}
+                    skillDirectory={item.skillDirectory}
+                  />,
+                ],
           )}
         </ol>
       )}

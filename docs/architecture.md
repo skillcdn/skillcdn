@@ -53,6 +53,7 @@ Where new things go:
 | `api` | Serves HTTP. Holds no state another replica needs. | Any number of replicas. |
 | `worker` | Consumes the job queue and runs schedules. Jobs are idempotent and resumable, so a worker may be stopped at any moment. | Any number; interruptible capacity is fine. |
 | `migrate` | Applies pending migrations, then exits. | Run once, before a new version rolls out. |
+| `check` | Reads a directory as the indexer reads a commit and prints what an agent would get; for repository authors, before they push ([ADR-0020](adr/0020-a-check-role-reads-a-working-tree-with-the-indexer.md)). Needs no database and no git host. | Runs on an author's machine or in a repository's CI, then exits. |
 
 For a single-container install, a configuration flag lets `api` run the worker loop in-process.
 
@@ -127,7 +128,7 @@ Infrastructure-level caching, DNS, TLS and edge configuration are outside this r
 - **Fail closed.** No permission answer means no access. A repo that does not exist and a repo the caller may not see produce the same response.
 - **Tokens.** Git-host user tokens are encrypted at rest and never leave the server. Project tokens are stored as hashes. Our own access tokens are short-lived. Tokens and authorization headers are never logged.
 - **Outbound requests.** Host adapters connect only to operator-configured base URLs, never to a URL taken from user input.
-- **Provenance.** Repos with the App installed are *verified*; responses from unverified repos carry a provenance warning.
+- **Provenance.** Repos whose owner has verified them, or that the operator lists as ones it vouches for until owners can ([ADR-0019](adr/0019-the-operator-vouches-for-repositories-until-owners-can.md)), are *verified*; responses from every other repo carry a provenance notice that warns about what the content says beyond the user's task.
 - **Supply chain.** Lockfile with integrity hashes, a minimum release age for new dependency versions, an allow-list for install scripts, actions pinned by commit, secret scanning, and provenance plus SBOM attestations on published images.
 
 ## Extension points

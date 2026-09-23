@@ -10,6 +10,7 @@ import {
   INDEXING_NOTICE,
   joinRepoPath,
   readFileTool,
+  renderDiagnostics,
   renderDirectoryResult,
   renderFileResult,
   renderFindResult,
@@ -175,12 +176,15 @@ export async function createMountServer(
             joinRepoPath(mount.address.path, lookup.skill.directory),
           );
           return reply(renderSkillResult(lookup.skill));
-        case "not_found":
-          return problem(
+        case "not_found": {
+          const head =
             lookup.available.length === 0
               ? `No skill named ${name}. This mount has no skills; use find and read_file to read its documents.`
-              : `No skill named ${name}. Available skills: ${lookup.available.join(", ")}.`,
-          );
+              : `No skill named ${name}. Available skills: ${lookup.available.join(", ")}.`;
+          // The skill asked for may be one whose manifest could not be read: say so here.
+          const skipped = renderDiagnostics(lookup.diagnostics, true);
+          return problem(skipped === undefined ? head : `${head}\n\n${skipped}`);
+        }
         case "ambiguous":
           return problem(
             `Several skills are named ${name}. Call get with one of these directories as the name: ${lookup.directories.join(", ")}.`,

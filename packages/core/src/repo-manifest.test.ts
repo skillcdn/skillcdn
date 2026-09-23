@@ -56,7 +56,62 @@ describe("parseRepoManifest", () => {
     const { manifest } = parsed("---\ndescription: Playbooks.\n---\n");
     expect(manifest.name).toBeUndefined();
     expect(manifest.documents).toEqual(["docs"]);
+    expect(manifest.language).toBeUndefined();
+    expect(manifest.translations).toEqual({});
     expect(manifest.body).toBe("");
+  });
+
+  it("reads the language and the translations", () => {
+    const { manifest, warnings } = parsed(
+      [
+        "---",
+        "name: Acme playbooks",
+        "description: The playbooks every Acme team runs.",
+        "language: en",
+        "translations:",
+        "  ko:",
+        "    name: Acme 플레이북",
+        "    description: Acme의 모든 팀이 쓰는 플레이북입니다.",
+        "  ja:",
+        "    name: Acme プレイブック",
+        "---",
+      ].join("\n"),
+    );
+    expect(warnings).toEqual([]);
+    expect(manifest.language).toBe("en");
+    expect(manifest.translations).toEqual({
+      ko: { name: "Acme 플레이북", description: "Acme의 모든 팀이 쓰는 플레이북입니다." },
+      ja: { name: "Acme プレイブック", description: undefined },
+    });
+  });
+
+  it("ignores a language that is not a tag and translations that translate nothing", () => {
+    const { manifest, warnings } = parsed(
+      [
+        "---",
+        "description: D.",
+        "language: Korean",
+        "translations:",
+        "  ko:",
+        "    name: |",
+        "      two",
+        "      lines",
+        "  en-US-x-private-long-subtag: {name: x}",
+        "---",
+      ].join("\n"),
+    );
+    expect(manifest.language).toBeUndefined();
+    expect(manifest.translations).toEqual({});
+    expect(warnings.map((warning) => warning.message)).toEqual([
+      '"language" is ignored: expected a language tag such as "en" or "pt-BR"',
+      '2 "translations" entries are ignored: expected at most 32 language tags such as "ko", each mapping to translated fields',
+    ]);
+  });
+
+  it("warns when the description is cut at a hash", () => {
+    const { manifest, warnings } = parsed("---\ndescription: Playbooks # for teams\n---\n");
+    expect(manifest.description).toBe("Playbooks");
+    expect(warnings.map((warning) => warning.code)).toEqual(["commented_value"]);
   });
 
   it("serves docs unless told otherwise, and nothing when told so", () => {
