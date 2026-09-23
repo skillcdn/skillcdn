@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createWebBuild, WEB_BUILD_MANIFEST, type WebBuildFixture } from "../testing/web-build.js";
 import {
   loadWebBundle,
+  negotiateLanguage,
   type WebBundle,
   WebBundleError,
   type WebRequest,
@@ -36,18 +37,43 @@ const answer = (path: string, init?: Parameters<typeof request>[1]): Response =>
 };
 
 describe("pages", () => {
-  it("are chosen by path and by the language parameter, never by Accept-Language", async () => {
-    const english = answer("/", { headers: { "accept-language": "ko-KR" } });
-    expect(english.headers.get("content-language")).toBe("en");
-    expect(await english.text()).toContain('<html lang="en">');
-
+  it("are chosen by the language parameter, else by what the request asks for, else the default", async () => {
+    // The parameter decides, whatever the request asks for, and nothing about the answer varies.
+    const forced = answer("/?lang=en", { headers: { "accept-language": "ko-KR" } });
+    expect(forced.headers.get("content-language")).toBe("en");
+    expect(forced.headers.get("vary")).toBeNull();
+    expect(await forced.text()).toContain('<html lang="en">');
     const korean = answer("/?lang=ko");
     expect(korean.headers.get("content-language")).toBe("ko");
     expect(await korean.text()).toContain("Front page in Korean");
     expect(await answer("/explore?lang=ko&utm=x").text()).toContain("Explore in Korean");
-    // A language we do not have is the default language, not an error.
-    expect(await answer("/?lang=fr").text()).toContain('<html lang="en">');
+
+    // Without one, what the request asks for decides, and the answer says it depends on that:
+    // a link preview is in the language of the app that asks for it (ADR-0021).
+    const asked = answer("/", { headers: { "accept-language": "ko-KR,ko;q=0.9,en-US;q=0.8" } });
+    expect(asked.headers.get("content-language")).toBe("ko");
+    expect(asked.headers.get("vary")).toBe("accept-language");
+    expect(await asked.text()).toContain("Front page in Korean");
+    const second = answer("/explore", {
+      headers: { "accept-language": "fr-FR, ko;q=0.5, en;q=0.4" },
+    });
+    expect(await second.text()).toContain("Explore in Korean");
+    // Nothing asked for, or nothing the build has: the default, still saying it varies.
+    const plain = answer("/");
+    expect(plain.headers.get("content-language")).toBe("en");
+    expect(plain.headers.get("vary")).toBe("accept-language");
+    expect(await answer("/", { headers: { "accept-language": "fr, de" } }).text()).toContain(
+      '<html lang="en">',
+    );
+    // A parameter naming a language the build does not have forces nothing.
+    expect(await answer("/?lang=fr", { headers: { "accept-language": "ko" } }).text()).toContain(
+      "Front page in Korean",
+    );
     expect(await answer("/?lang=KO").text()).toContain('<html lang="en">');
+    // A file in one language only answers in that one, whatever is asked for.
+    const llms = answer("/llms.txt", { headers: { "accept-language": "ko" } });
+    expect(llms.headers.get("content-language")).toBe("en");
+    expect(llms.headers.get("vary")).toBe("accept-language");
   });
 
   it("carry the public origin in place of the placeholder", async () => {
@@ -130,6 +156,19 @@ describe("the page of an address", () => {
     });
     // The template's placeholder is filled in like everywhere else.
     expect(html).toContain('<meta name="skillcdn-origin" content="https://skills.example">');
+  });
+
+  it("is rendered in the language the request asks for when the URL names none", async () => {
+    const page = web.address(
+      request("/gh/acme/skills", { headers: { "accept-language": "ko-KR,ko;q=0.9" } }),
+      { mount: { ready: mount } },
+    );
+    expect(page.headers.get("content-language")).toBe("ko");
+    expect(page.headers.get("vary")).toBe("accept, accept-language");
+    const html = await page.text();
+    expect(html).toContain('<html lang="ko">');
+    const input = JSON.parse(/<pre id="input">(.*?)<\/pre>/s.exec(html)?.[1] ?? "{}");
+    expect(input).toMatchObject({ language: "ko", search: "" });
   });
 
   it("carries the status the server gives it, and nothing when there is nothing to know", async () => {
@@ -364,5 +403,37 @@ describe("wantsHtml", () => {
     ).toBe(false);
     expect(wantsHtml(request("/", { headers: { accept: "*/*" } }))).toBe(false);
     expect(wantsHtml(request("/"))).toBe(false);
+  });
+});
+
+describe("negotiateLanguage", () => {
+  const available = ["en", "ko"];
+
+  it("takes the heaviest language the build has, then the first written, by tag or primary subtag", () => {
+    expect(negotiateLanguage("ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7", available)).toBe("ko");
+    expect(negotiateLanguage("en-GB, ko", available)).toBe("en");
+    expect(negotiateLanguage("fr-FR, de;q=0.9, ko;q=0.5, en;q=0.4", available)).toBe("ko");
+    expect(negotiateLanguage("en;q=0.5, ko;q=0.8", available)).toBe("ko");
+    expect(negotiateLanguage("KO", available)).toBe("ko");
+    expect(negotiateLanguage("pt-BR, en", ["en", "pt-BR"])).toBe("pt-BR");
+    expect(negotiateLanguage("pt-PT", ["en", "pt-BR"])).toBeUndefined();
+  });
+
+  it("asks for nothing without the header, with none the build has, or with nothing well formed", () => {
+    expect(negotiateLanguage(null, available)).toBeUndefined();
+    expect(negotiateLanguage("", available)).toBeUndefined();
+    expect(negotiateLanguage("fr, de", available)).toBeUndefined();
+    expect(negotiateLanguage("*", available)).toBeUndefined();
+    expect(negotiateLanguage("ko;q=0, fr", available)).toBeUndefined();
+    expect(negotiateLanguage("ko;q=abc", available)).toBeUndefined();
+    expect(negotiateLanguage("ko;q=2", available)).toBeUndefined();
+    expect(negotiateLanguage("<script>, ko_KR, ../ko", available)).toBeUndefined();
+  });
+
+  it("reads a bounded part of a hostile header", () => {
+    // Past the ranges it reads, a language is not found; the work stays small either way.
+    expect(negotiateLanguage(`${"fr, ".repeat(40)}ko`, available)).toBeUndefined();
+    expect(negotiateLanguage(`${"x".repeat(5000)}, ko`, available)).toBeUndefined();
+    expect(negotiateLanguage(`ko, ${"x".repeat(5000)}`, available)).toBe("ko");
   });
 });

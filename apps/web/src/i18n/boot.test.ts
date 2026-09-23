@@ -11,6 +11,8 @@ function boot(options: {
   readonly browser?: readonly string[];
   /** Storage that throws, as a private window or a blocking policy makes it. */
   readonly blocked?: boolean;
+  /** The language the server answered in, as html.lang says. Default: the default language. */
+  readonly served?: string;
 }) {
   const store = new Map<string, string>();
   if (options.stored !== undefined) {
@@ -18,7 +20,7 @@ function boot(options: {
   }
   const attributes = new Set<string>();
   const html = {
-    lang: "en",
+    lang: options.served ?? "en",
     setAttribute: (name: string) => attributes.add(name),
     removeAttribute: (name: string) => attributes.delete(name),
   };
@@ -104,6 +106,25 @@ describe("the boot script", () => {
       lang: "en",
       pending: true,
     });
+  });
+
+  it("hides a page only when the visitor wants another language than the server answered in", () => {
+    // The server answered in the language the request asked for (ADR-0021).
+    expect(boot({ href: "https://x.test/", stored: "ko", served: "ko" })).toMatchObject({
+      lang: "ko",
+      pending: false,
+    });
+    expect(boot({ href: "https://x.test/", browser: ["ko-KR", "en"], served: "ko" })).toMatchObject(
+      { lang: "ko", pending: false },
+    );
+    // A visitor who chose English over the language their browser asks for sees English.
+    expect(boot({ href: "https://x.test/", stored: "en", served: "ko" })).toMatchObject({
+      lang: "ko",
+      pending: true,
+    });
+    expect(boot({ href: "https://x.test/", browser: ["fr", "en-US"], served: "en" })).toMatchObject(
+      { lang: "en", pending: false },
+    );
   });
 
   it("keeps the server's language so a saved Korean preference cannot hydrate English text", () => {

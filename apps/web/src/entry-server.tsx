@@ -86,7 +86,11 @@ export function renderNotFound(language: Language): RenderedPage {
   return render("/this-page-does-not-exist", language, false);
 }
 
-/** A rendered page in the document template (index.html as the client build wrote it). */
+/**
+ * A rendered page in the document template (index.html as the client build wrote it). The root
+ * says which page and which language it holds, where no script before the app touches it: the
+ * browser hydrates only what matches (entry-client.tsx), whichever URL the server served it at.
+ */
 export function renderDocument(template: string, page: RenderedPage): string {
   const data = page.initialData === undefined ? "" : renderInitialData(page.initialData);
   return template
@@ -94,13 +98,16 @@ export function renderDocument(template: string, page: RenderedPage): string {
     .replace(TEMPLATE_MARKERS.head, page.head)
     .replace(
       TEMPLATE_MARKERS.root,
-      `<div id="root" data-prerendered="${page.routeName}">${page.body}</div>${data}`,
+      `<div id="root" data-prerendered="${page.routeName}" data-lang="${page.htmlLang}">${page.body}</div>${data}`,
     );
 }
 
 /** What the server knows when it renders the view of an address. */
 export interface AddressPageInput {
-  /** From the URL; one we do not have falls back to the default language. */
+  /**
+   * The language the server chose: the URL's, else the one the request asked for (ADR-0021).
+   * One we do not have falls back to the default language.
+   */
   readonly language: string;
   /** The public origin of this deployment. */
   readonly origin: string;
@@ -146,6 +153,8 @@ export function renderAddressPage(template: string, input: AddressPageInput): Ad
     }
   }
   const head = buildHead(route, language, input.origin, pageData satisfies PageData);
+  // A URL without a language is rendered in the one the server chose, as the browser shows it in
+  // the one its visitor prefers.
   const body = renderToString(
     <StrictMode>
       <App
@@ -153,6 +162,7 @@ export function renderAddressPage(template: string, input: AddressPageInput): Ad
         origin={input.origin}
         initialData={initialData}
         mountPage={MountPage}
+        preferredLanguage={language}
       />
     </StrictMode>,
   );

@@ -1,6 +1,6 @@
 # ADR-0009: The web UI is prerendered per language and served by the `api` role
 
-- Status: Accepted; the shell for address pages in point 1 is amended by ADR-0011, and the redirect to the visitor's language in point 4 by ADR-0013
+- Status: Accepted; the shell for address pages in point 1 is amended by ADR-0011, and the redirect to the visitor's language in point 4 by ADR-0013; the rest of point 4, that the server never reads `Accept-Language`, is amended by ADR-0021
 - Date: 2026-09-22
 
 ## Context

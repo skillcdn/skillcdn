@@ -84,6 +84,12 @@ describe("a server with a web build", () => {
         skill: { ready: { status: "ready", skill: { name: "release-notes" } } },
       },
     });
+    // Without a language in the URL, the page is in the one the request asks for (ADR-0021).
+    const asked = await h.request(address, {
+      headers: { ...BROWSER, "accept-language": "ko-KR,ko;q=0.9" },
+    });
+    expect(asked.headers.get("vary")).toBe("accept, accept-language");
+    expect(await inputOf(asked)).toMatchObject({ language: "ko", search: "" });
     const missingSkill = await inputOf(
       await h.request(`${address}?skill=no-such-skill`, { headers: BROWSER }),
     );

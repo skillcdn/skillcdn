@@ -342,10 +342,29 @@ describe("the page of an address", () => {
     expect(bad.html).toContain(t.address.invalid);
   });
 
+  it("renders a URL without a language in the one the server chose for the request", () => {
+    const t = messagesFor("ko");
+    const { html } = renderAddressPage(TEMPLATE, {
+      language: "ko",
+      origin: "https://skills.example",
+      pathname: "/gh/acme/skills",
+      search: "",
+      data: { mount: { ready: MOUNT } },
+    });
+    expect(html).toContain('<html lang="ko">');
+    expect(html).toContain('data-prerendered="mount" data-lang="ko"');
+    expect(html).toContain(t.connect.title);
+    // It is the Korean page, whichever URL served it.
+    expect(html).toContain(
+      '<link rel="canonical" href="https://skills.example/gh/acme/skills?lang=ko"',
+    );
+  });
+
   it("is written into the same document as every prerendered page", () => {
     const html = renderDocument(TEMPLATE, renderPage("/", "ko"));
     expect(html).toContain('<html lang="ko">');
-    expect(html).toContain('data-prerendered="landing"');
+    // The root says what it holds, where no script before the app changes it.
+    expect(html).toContain('data-prerendered="landing" data-lang="ko"');
     expect(html).not.toContain("<!--app-");
     expect(html).not.toContain("skillcdn-data");
   });

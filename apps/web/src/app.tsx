@@ -52,8 +52,8 @@ export interface AppProps {
   readonly mountPage?: ComponentType<MountPageProps>;
   /**
    * The language a URL without one is shown in: the visitor's choice (which a URL that forces a
-   * language makes) or their browser's, read by the browser entry. The server, which has no
-   * visitor, leaves it out and renders the default.
+   * language makes) or their browser's, read by the browser entry. The server passes the one the
+   * request asked for (ADR-0021); prerendering leaves it out and renders the default.
    */
   readonly preferredLanguage?: Language;
 }

@@ -5,7 +5,6 @@ import { App } from "./app.js";
 import {
   LANGUAGE_INFO,
   languageInSearch,
-  languageOfSearch,
   preferredLanguage,
   resolveLanguage,
 } from "./i18n/languages.js";
@@ -52,17 +51,19 @@ const app = (
 
 // Hydrate only what was prerendered as exactly this page: the same route, the same language, the
 // origin filled in, and for the view of an address the answers it was rendered with. A shell, a
-// page from a host that ignores the language, a page prerendered in the default language for a
-// visitor who reads another, or a page whose placeholders were never replaced is rendered afresh
-// instead (with the answers it carries, when it carries any).
+// page from a host that ignores the language, a page served in another language than the visitor
+// reads, or a page whose placeholders were never replaced is rendered afresh instead (with the
+// answers it carries, when it carries any). The server may answer a URL without a language in
+// the one the request asked for (ADR-0021), so the language is read from what the root records,
+// which no script before this one changes, and from html.lang, which must agree.
 const declaredOrigin = document
   .querySelector(`meta[name="${ORIGIN_META_NAME}"]`)
   ?.getAttribute("content");
+const htmlLang = LANGUAGE_INFO[language].htmlLang;
 const prerenderedAsThis =
   container.dataset.prerendered === route.name &&
-  // The URL is also evidence: a cached boot script may have changed html.lang already.
-  languageOfSearch(location.search) === language &&
-  document.documentElement.lang === LANGUAGE_INFO[language].htmlLang &&
+  container.dataset.lang === htmlLang &&
+  document.documentElement.lang === htmlLang &&
   declaredOrigin !== ORIGIN_PLACEHOLDER &&
   (route.name !== "mount" || Object.keys(initialData).length > 0);
 

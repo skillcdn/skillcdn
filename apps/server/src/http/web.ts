@@ -235,6 +235,53 @@ export function wantsHtml(request: Pick<WebRequest, "method" | "headers">): bool
 
 const sha1 = (text: string): string => createHash("sha1").update(text).digest("hex").slice(0, 16);
 
+/** How much of an Accept-Language header is read: plenty for any real one. */
+const MAX_ACCEPT_LANGUAGE = 1024;
+const MAX_LANGUAGE_RANGES = 32;
+
+/**
+ * The language of `available` that an Accept-Language header asks for first: by weight, then in
+ * the order written, a tag matching exactly or by its primary subtag (`ko-KR` is `ko`). A range
+ * of weight 0, a wildcard and a malformed weight ask for nothing. `undefined` when none of them
+ * is available (ADR-0021).
+ */
+export function negotiateLanguage(
+  header: string | null,
+  available: readonly string[],
+): string | undefined {
+  if (header === null) {
+    return undefined;
+  }
+  const ranges = header
+    .slice(0, MAX_ACCEPT_LANGUAGE)
+    .split(",")
+    .slice(0, MAX_LANGUAGE_RANGES)
+    .map((part, index) => {
+      const [tag = "", ...parameters] = part.split(";").map((piece) => piece.trim());
+      const q = parameters.find((parameter) => /^q=/i.test(parameter));
+      const weight = q === undefined ? 1 : Number(q.slice(2));
+      return { tag: tag.toLowerCase(), weight, index };
+    })
+    .filter(
+      (range) =>
+        /^[a-z]{1,8}(-[a-z0-9]{1,8})*$/.test(range.tag) &&
+        Number.isFinite(range.weight) &&
+        range.weight > 0 &&
+        range.weight <= 1,
+    )
+    .sort((a, b) => b.weight - a.weight || a.index - b.index);
+  for (const { tag } of ranges) {
+    const primary = tag.split("-")[0];
+    const found =
+      available.find((code) => code.toLowerCase() === tag) ??
+      available.find((code) => code.toLowerCase() === primary);
+    if (found !== undefined) {
+      return found;
+    }
+  }
+  return undefined;
+}
+
 interface ByteRange {
   readonly start: number;
   readonly end: number;
@@ -417,9 +464,27 @@ export async function loadWebBundle(
 
   const routes = new Map(manifest.routes.map((route) => [route.path, route]));
   const originOf = (request: WebRequest): string => options.publicUrl ?? request.url.origin;
-  const languageOf = (request: WebRequest): string => {
+  /**
+   * The language of a page: the one the parameter names, when the build has it; else the one the
+   * request asks for; else the default (ADR-0021). Only the first is the same for every request.
+   */
+  const languageOf = (
+    request: WebRequest,
+  ): { readonly language: string; readonly forced: boolean } => {
     const asked = request.url.searchParams.get(languageParam);
-    return asked !== null && languages.includes(asked) ? asked : defaultLanguage;
+    if (asked !== null && languages.includes(asked)) {
+      return { language: asked, forced: true };
+    }
+    return {
+      language:
+        negotiateLanguage(request.headers.get("accept-language"), languages) ?? defaultLanguage,
+      forced: false,
+    };
+  };
+  /** A response that depends on Accept-Language says so, next to whatever else it varies on. */
+  const varyOn = (forced: boolean, also: string | undefined): Record<string, string> => {
+    const on = [...(also === undefined ? [] : [also]), ...(forced ? [] : ["accept-language"])];
+    return on.length === 0 ? {} : { vary: on.join(", ") };
   };
   const notModified = (request: WebRequest, etag: string): boolean =>
     (request.headers.get("if-none-match") ?? "")
@@ -472,15 +537,16 @@ export async function loadWebBundle(
     status = 200,
     extra: Record<string, string> = {},
   ): Response => {
-    const chosen = languageOf(request);
+    const { language: chosen, forced } = languageOf(request);
     const found = pages.get(files[chosen] ?? files[defaultLanguage] ?? "");
     if (found === undefined) {
       throw new WebBundleError("a page of the manifest was not loaded");
     }
     const body = withOrigin(found, originOf(request));
     const language = files[chosen] === undefined ? defaultLanguage : chosen;
+    const vary = varyOn(forced, extra.vary);
     if (contentType === HTML) {
-      return html(request, body, language, status, extra);
+      return html(request, body, language, status, { ...extra, ...vary });
     }
     return text(
       request,
@@ -489,6 +555,7 @@ export async function loadWebBundle(
         "content-type": contentType,
         "content-language": language,
         "cache-control": "public, max-age=0, must-revalidate",
+        ...vary,
       },
       status,
     );
@@ -611,7 +678,7 @@ export async function loadWebBundle(
         return page(request, manifest.shell, HTML, status, ADDRESS_HEADERS);
       }
       const origin = originOf(request);
-      const language = languageOf(request);
+      const { language, forced } = languageOf(request);
       const rendered = renderer.module.renderAddressPage(renderer.template, {
         language,
         origin,
@@ -622,7 +689,13 @@ export async function loadWebBundle(
       if (typeof rendered !== "object" || rendered === null || typeof rendered.html !== "string") {
         throw new WebBundleError("the render module did not return a page");
       }
-      return html(request, withOrigin(rendered.html, origin), language, status, ADDRESS_HEADERS);
+      return html(
+        request,
+        withOrigin(rendered.html, origin),
+        language,
+        status,
+        varyOn(forced, ADDRESS_HEADERS.vary),
+      );
     },
     sitemap,
     notFound: (request) => page(request, manifest.notFound, HTML, 404),

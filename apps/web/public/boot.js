@@ -28,9 +28,10 @@
   }
   // A URL without one is shown in the language the visitor chose, or, never having chosen, in
   // the one their browser reads first. The URL stays as it is, so a shared link opens in each
-  // reader's language. The page was prerendered in the default language: when another one is
-  // wanted, the page stays hidden until the app has rendered it in that language, and shows
-  // anyway after a moment should the app never arrive.
+  // reader's language. The server answered in the language the request asked for, else the
+  // default, and html.lang says which: when another one is wanted, the page stays hidden until
+  // the app has rendered it in that language, and shows anyway after a moment should the app
+  // never arrive.
   let wanted = stored("skillcdn.lang");
   if (!SUPPORTED.includes(wanted)) {
     const preferred = navigator.languages ?? [navigator.language];
@@ -39,7 +40,10 @@
         .map((tag) => String(tag).toLowerCase().split("-")[0])
         .find((code) => SUPPORTED.includes(code)) ?? DEFAULT;
   }
-  if (wanted !== DEFAULT) {
+  const served = String(document.documentElement.lang || DEFAULT)
+    .toLowerCase()
+    .split("-")[0];
+  if (wanted !== served) {
     // Keep the server's language until the client decides whether it can hydrate this HTML.
     // Changing it here would make English markup appear to have been rendered in Korean.
     document.documentElement.setAttribute(PENDING, "");

@@ -1,6 +1,6 @@
 # ADR-0013: A URL without a language is shown in the visitor's language, and the URL stays as it is
 
-- Status: Accepted; amends point 4 of ADR-0009; point 2 (links carry a forced language on) is amended by ADR-0015, and point 3 (what sets the preference) by ADR-0017
+- Status: Accepted; amends point 4 of ADR-0009; point 2 (links carry a forced language on) is amended by ADR-0015, and point 3 (what sets the preference) by ADR-0017; point 4 (the server knows only the parameter) is amended by ADR-0021
 - Date: 2026-09-22
 
 ## Context
