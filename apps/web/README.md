@@ -12,17 +12,17 @@ You need git and [pnpm](https://pnpm.io/installation) (`winget install pnpm.pnpm
 git clone https://github.com/skillcdn/skillcdn.git
 cd skillcdn
 pnpm install
-pnpm dev:web          # http://localhost:5173
+pnpm dev:web          # http://localhost:11189
 ```
 
 The development server answers the REST API from fixtures (`dev/fixtures.ts`), so every page works and every state can be reached:
 
-- **<http://localhost:5173/dev/states>** lists every state of every page (loading, indexing, empty, errors, long texts, a partial index) and shows every building block on one page.
+- **<http://localhost:11189/dev/states>** lists every state of every page (loading, indexing, empty, errors, long texts, a partial index) and shows every building block on one page.
 - Add `?lang=ko` to any URL to force Korean; that is then your preference, like a click in the language switcher, until you pick another. Without a parameter the page is shown in that preference, else your browser's language, and the URL stays as it is. Links inside the app never carry the parameter.
 
 To look at real repositories instead, the UI can run in front of a real server, which answers the REST API and MCP while the pages stay local: `pnpm dev:web:live` uses the hosted service at `https://skillcdn.ai`, and `pnpm dev:web:api` a server on this machine (see [`apps/server`](../server/README.md), `http://127.0.0.1:11188`). Either takes another server from `SKILLCDN_API_URL` in `apps/web/.env.local`. Fixtures remain the way to see every state, since a real server only shows the states its repositories are in.
 
-The integrated server's default port is **11188**. To serve the built UI there as well, build the web workspace and point `WEB_ROOT` at `apps/web/dist` when starting the server. The separate Vite development UI uses **5173** and may choose a higher available port when that is occupied; it does not change the API port.
+The integrated server's default port is **11188**. To serve the built UI there as well, build the web workspace and point `WEB_ROOT` at `apps/web/dist` when starting the server. The separate Vite development UI uses **11189**, the next port up, and may choose a higher available one when that is occupied; it does not change the API port.
 
 ## Where the design lives
 

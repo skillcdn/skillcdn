@@ -46,7 +46,9 @@ export default defineConfig(({ mode, isSsrBuild }) => {
   return {
     plugins: [react(), ...(apiUrl === undefined ? [fixtureApi()] : [])],
     server: {
-      port: 5173,
+      // Next to the integrated server's 11188, so that every local port of the project is one
+      // block; another Vite instance takes the next free one.
+      port: 11189,
       ...(apiUrl === undefined
         ? {}
         : {

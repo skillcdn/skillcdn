@@ -444,7 +444,7 @@ describe("GET /api/v1/featured", () => {
 describe("from a page on another origin", () => {
   it("answers the preflight and lets any origin read the responses, without credentials", async () => {
     const h = harness();
-    const origin = "http://localhost:5173";
+    const origin = "http://localhost:11189";
 
     const preflight = await h.request("/api/v1/featured", {
       method: "OPTIONS",
