@@ -119,6 +119,8 @@ export interface AddressPageInput {
   readonly data: {
     readonly mount?: InitialResource | undefined;
     readonly skill?: InitialResource | undefined;
+    readonly browse?: InitialResource | undefined;
+    readonly find?: InitialResource | undefined;
   };
 }
 
@@ -146,9 +148,17 @@ export function renderAddressPage(template: string, input: AddressPageInput): Ad
       }
     }
     if (view.kind === "skill" && input.data.skill !== undefined) {
-      initialData[resourceKeys.skill(address, view.name)] = input.data.skill;
+      initialData[resourceKeys.skill(address, view.path)] = input.data.skill;
       if (input.data.skill.ready !== undefined) {
         pageData.skill = input.data.skill.ready as RestSkill;
+      }
+    }
+    if (view.kind === "overview") {
+      if (input.data.browse !== undefined) {
+        initialData[resourceKeys.browse(address, view.path)] = input.data.browse;
+      }
+      if (view.query !== undefined && input.data.find !== undefined) {
+        initialData[resourceKeys.find(address, view.query, view.path)] = input.data.find;
       }
     }
   }

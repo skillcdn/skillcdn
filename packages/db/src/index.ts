@@ -15,6 +15,7 @@ export {
   listEntries,
   listSkillFiles,
   searchEntries,
+  servedEntries,
 } from "./queries/entries.js";
 export {
   type CachedRef,

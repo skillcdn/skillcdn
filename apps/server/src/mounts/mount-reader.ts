@@ -1,11 +1,17 @@
 import {
   type BlobStore,
+  BROWSE_DEFAULT_LIMIT,
+  type BrowseEntry,
+  type BrowseResult,
+  browseCatalogFiles,
   type CatalogState,
   classifyRepoFile,
+  contextPage,
   type DirectoryResult,
   FIND_DEFAULT_LIMIT,
   FIND_LIST_SKILLS_MAX,
   FIND_MAX_SKILL_FILES,
+  type FileReference,
   type FileResult,
   type FindFile,
   type FindItem,
@@ -16,9 +22,8 @@ import {
   type IndexLimits,
   isHiddenPath,
   isServedPath,
+  isWithinRepoPath,
   joinRepoPath,
-  MAX_SKILL_INCLUDED_LENGTH,
-  MAX_SKILL_RULES_LENGTH,
   type MountCatalog,
   type MountSummary,
   pageOfText,
@@ -29,8 +34,8 @@ import {
   type RepoTranslation,
   type RepoTree,
   ROOT_PATH,
-  relativeRepoPath,
   type ServedScope,
+  SKILL_PAGE_BYTES,
   type SkillResult,
   type SkillRules,
   type SkillTranslation,
@@ -53,9 +58,16 @@ import {
   type SnapshotScope,
   type StoredTranslation,
   searchEntries,
+  servedEntries,
 } from "@skillcdn/db";
 import type { SnapshotOutcome, SnapshotService } from "../indexer/snapshot-service.js";
 import { decodeText } from "../indexer/text.js";
+import {
+  continuationKey,
+  continuationOffset,
+  nextContinuation,
+  ReaderInputError,
+} from "./continuation.js";
 import type { Mount } from "./mount-service.js";
 
 export interface MountReaderDependencies {
@@ -86,7 +98,11 @@ export type FileLookup =
   /** The path names a directory: its entries are the answer. */
   | { readonly kind: "directory"; readonly directory: DirectoryResult }
   | { readonly kind: "invalid_path"; readonly reason: string }
-  | { readonly kind: "not_found"; readonly path: RepoPath }
+  | {
+      readonly kind: "not_found";
+      readonly path: RepoPath;
+      readonly suggestions?: readonly string[];
+    }
   | {
       readonly kind: "too_large";
       readonly path: RepoPath;
@@ -117,6 +133,7 @@ export interface MountManifest {
 }
 
 export interface MountOverview {
+  readonly groups?: readonly BrowseEntry[];
   readonly mount: MountSummary;
   readonly manifest: MountManifest | undefined;
   readonly skillCount: number;
@@ -132,12 +149,6 @@ const MAX_CACHED_TREES = 8;
 const MAX_CACHED_CATALOGS = 64;
 const MAX_CACHED_MANIFESTS = 64;
 const MAX_DIRECTORY_ENTRIES = 200;
-/**
- * A search fetches more rows than it answers with, because a skill's files fold into the skill:
- * several rows can become one item.
- */
-const FIND_FETCH_FACTOR = 4;
-const FIND_FETCH_MAX = 100;
 
 /** Keeps a bounded number of promises by key; the oldest goes first. */
 function remember<T>(
@@ -184,6 +195,113 @@ function repoTranslationsOf(
  */
 export class MountReader {
   readonly #dependencies: MountReaderDependencies;
+  readonly #entries = new Map<string, Promise<readonly EntryRecord[]>>();
+
+  #entriesOf(scope: SnapshotScope): Promise<readonly EntryRecord[]> {
+    const key = `${scope.accountId} ${scope.snapshotId}`;
+    let loading = this.#entries.get(key);
+    if (loading === undefined) {
+      loading = servedEntries(this.#dependencies.database, scope);
+      remember(this.#entries, key, MAX_CACHED_TREES, loading);
+    }
+    return loading;
+  }
+
+  #scopePath(mount: Mount, wanted: string | undefined): RepoPath {
+    const parsed = parseRepoPath(wanted ?? mount.address.path);
+    if (!parsed.ok || !isWithinRepoPath(mount.address.path, parsed.value)) {
+      throw new ReaderInputError("Use a repository-root path inside the mounted folder.");
+    }
+    return parsed.value;
+  }
+
+  #pageKey(
+    mount: Mount,
+    snapshot: SnapshotRecord,
+    operation: string,
+    path: string,
+    query = "",
+  ): string {
+    return continuationKey([
+      snapshot.id,
+      snapshot.indexVersion,
+      mount.address.path,
+      operation,
+      path,
+      query,
+    ]);
+  }
+
+  async #references(
+    mount: Mount,
+    scope: SnapshotScope,
+    references: readonly { href: string; path: string }[],
+  ): Promise<FileReference[]> {
+    const entries = await this.#entriesOf(scope);
+    const available = new Set(entries.map((entry) => entry.path));
+    return references.map((reference) => {
+      const path = parseRepoPath(reference.path);
+      return {
+        ...reference,
+        status: !path.ok
+          ? "blocked"
+          : !isWithinRepoPath(mount.address.path, path.value)
+            ? "outside_mount"
+            : available.has(reference.path)
+              ? "available"
+              : "missing",
+      };
+    });
+  }
+
+  async #browseEntries(scope: SnapshotScope, path: RepoPath): Promise<BrowseEntry[]> {
+    const rows = await this.#entriesOf(scope);
+    return browseCatalogFiles(
+      rows.map((row) => ({
+        path: row.path as RepoPath,
+        kind: row.kind,
+        name: row.name ?? undefined,
+        title: row.title ?? undefined,
+        description: row.description ?? undefined,
+        skillDir: row.skillDir === null ? undefined : (row.skillDir as RepoPath),
+        searchable: row.searchable,
+        size: row.size,
+        linkedOnly: row.frontMatter?.linkedOnly,
+        language: row.frontMatter?.language,
+      })),
+      path,
+    );
+  }
+
+  async browse(
+    mount: Mount,
+    input: {
+      readonly path?: string | undefined;
+      readonly cursor?: string | undefined;
+      readonly limit?: number | undefined;
+    },
+    waitMs: number,
+  ): Promise<NotReady | { readonly status: "ready"; readonly result: BrowseResult }> {
+    const path = this.#scopePath(mount, input.path);
+    const outcome = await this.#dependencies.snapshots.ready(mount, waitMs);
+    if (outcome.status !== "ready") return outcome;
+    const scope = { accountId: outcome.snapshot.accountId, snapshotId: outcome.snapshot.id };
+    const key = this.#pageKey(mount, outcome.snapshot, "browse", path);
+    const offset = continuationOffset(input.cursor, key);
+    const entries = await this.#browseEntries(scope, path);
+    const limit = input.limit ?? BROWSE_DEFAULT_LIMIT;
+    return {
+      status: "ready",
+      result: {
+        mount: this.summary(mount, outcome.snapshot),
+        path,
+        entries: entries.slice(offset, offset + limit),
+        nextCursor:
+          offset + limit < entries.length ? nextContinuation(key, offset + limit) : undefined,
+        diagnostics: await this.#diagnosticsOf(mount, scope),
+      },
+    };
+  }
   /**
    * Trees of commits whose index is not ready yet, so that files can be read in the meantime.
    * A commit's tree never changes; the cache is small and only saves repeated upstream calls.
@@ -218,11 +336,19 @@ export class MountReader {
       }
       const text = await blobStore.read(row.blobSha);
       const split = text === undefined ? undefined : splitFrontMatter(text);
+      const ancestors = (await this.#entriesOf(scope))
+        .filter(
+          (entry) =>
+            entry.kind === "manifest" &&
+            isWithinRepoPath(parentDirectory(entry.path as RepoPath), mount.address.path),
+        )
+        .sort((a, b) => b.path.length - a.path.length);
       return {
-        path: belowMount(mount, row.path),
+        path: parseRepoPath(row.path).ok ? (row.path as RepoPath) : undefined,
         name: row.name ?? undefined,
         description: row.description,
-        language: row.frontMatter?.language,
+        language: ancestors.find((entry) => entry.frontMatter?.language !== undefined)?.frontMatter
+          ?.language,
         translations: repoTranslationsOf(row.frontMatter?.translations),
         rules: split?.kind === "found" ? split.body.trim() : "",
       };
@@ -262,7 +388,8 @@ export class MountReader {
         countEntries(database, scope, path),
         this.#manifestOf(mount, scope),
         this.#diagnosticsOf(mount, scope),
-      ]).then(([skills, counts, manifest, diagnostics]) => ({
+      ]).then(async ([skills, counts, manifest, diagnostics]) => ({
+        groups: (await this.#browseEntries(scope, path)).slice(0, BROWSE_DEFAULT_LIMIT),
         manifest:
           manifest === undefined
             ? undefined
@@ -309,7 +436,12 @@ export class MountReader {
 
   async find(
     mount: Mount,
-    input: { readonly query?: string | undefined; readonly limit?: number | undefined },
+    input: {
+      readonly query?: string | undefined;
+      readonly limit?: number | undefined;
+      readonly path?: string | undefined;
+      readonly cursor?: string | undefined;
+    },
     waitMs: number,
   ): Promise<NotReady | { readonly status: "ready"; readonly result: FindResult }> {
     const { database, snapshots } = this.#dependencies;
@@ -321,14 +453,16 @@ export class MountReader {
     const trimmed = input.query?.trim();
     const query = trimmed === undefined || trimmed.length === 0 ? undefined : trimmed;
     const limit = input.limit ?? FIND_DEFAULT_LIMIT;
-    const path = mount.address.path;
+    const path = this.#scopePath(mount, input.path);
+    const key = this.#pageKey(mount, outcome.snapshot, "search", path, query ?? "");
+    const offset = continuationOffset(input.cursor, key);
     let items: FindItem[];
     let totals: FindResult["totals"];
     if (query === undefined) {
       // A listing names every skill: a skill's own files are reached through the skill.
       const [skills, documents, counts] = await Promise.all([
-        listEntries(database, scope, path, FIND_LIST_SKILLS_MAX, "skills"),
-        listEntries(database, scope, path, limit, "documents_outside_skills"),
+        listEntries(database, scope, path, Number.MAX_SAFE_INTEGER, "skills"),
+        listEntries(database, scope, path, Number.MAX_SAFE_INTEGER, "documents_outside_skills"),
         countEntries(database, scope, path),
       ]);
       items = [...skills, ...documents]
@@ -336,14 +470,8 @@ export class MountReader {
         .filter((item) => item !== undefined);
       totals = counts;
     } else {
-      const rows = await searchEntries(
-        database,
-        scope,
-        path,
-        query,
-        Math.min(limit * FIND_FETCH_FACTOR, FIND_FETCH_MAX),
-      );
-      items = (await this.#fold(mount, scope, rows)).slice(0, limit);
+      const rows = await searchEntries(database, scope, path, query);
+      items = await this.#fold({ ...mount, address: { ...mount.address, path } }, scope, rows);
       totals = undefined;
     }
     return {
@@ -351,7 +479,10 @@ export class MountReader {
       result: {
         mount: this.summary(mount, outcome.snapshot),
         query,
-        items,
+        items: items.slice(offset, offset + limit),
+        path,
+        nextCursor:
+          offset + limit < items.length ? nextContinuation(key, offset + limit) : undefined,
         totals,
         diagnostics: await this.#diagnosticsOf(mount, scope),
       },
@@ -442,6 +573,8 @@ export class MountReader {
     mount: Mount,
     wanted: string,
     waitMs: number,
+    cursor?: string,
+    exactPath = false,
   ): Promise<NotReady | { readonly status: "ready"; readonly lookup: SkillLookup }> {
     const { database, blobStore, snapshots } = this.#dependencies;
     const outcome = await snapshots.ready(mount, waitMs);
@@ -449,12 +582,19 @@ export class MountReader {
       return outcome;
     }
     const scope = { accountId: outcome.snapshot.accountId, snapshotId: outcome.snapshot.id };
-    const name = wanted.trim();
+    const name = exactPath ? wanted : wanted.trim();
     const asDirectory = parseRepoPath(name);
-    const directory = asDirectory.ok
-      ? joinRepoPath(mount.address.path, asDirectory.value)
-      : undefined;
-    const found = await findSkills(database, scope, mount.address.path, { name, directory }, 10);
+    const directory =
+      asDirectory.ok && isWithinRepoPath(mount.address.path, asDirectory.value)
+        ? asDirectory.value
+        : undefined;
+    const byPath = directory === undefined ? undefined : await getEntry(database, scope, directory);
+    const found =
+      byPath?.kind === "skill"
+        ? [byPath]
+        : exactPath
+          ? []
+          : await findSkills(database, scope, mount.address.path, { name, directory }, 10);
     const exact = found.filter((row) => row.name === name || row.skillDir === directory);
     const matches = exact.length > 0 ? exact : found;
 
@@ -463,7 +603,7 @@ export class MountReader {
         listEntries(database, scope, mount.address.path, MAX_SUGGESTED_SKILLS, "skills"),
         this.#diagnosticsOf(mount, scope),
       ]);
-      const available = listed.flatMap((row) => (row.name === null ? [] : [row.name]));
+      const available = listed.flatMap((row) => (row.name === null ? [] : [row.path]));
       return { status: "ready", lookup: { kind: "not_found", available, diagnostics } };
     }
     const [skill, ...others] = matches;
@@ -483,26 +623,115 @@ export class MountReader {
       return { status: "ready", lookup: { kind: "unavailable" } };
     }
     const split = splitFrontMatter(text);
-    const [files, manifest, included] = await Promise.all([
+    const [files, entries, included] = await Promise.all([
       listSkillFiles(database, scope, skill.skillDir ?? "", MAX_LISTED_SKILL_FILES + 1),
-      this.#manifestOf(mount, scope),
+      this.#entriesOf(scope),
       this.#includedFiles(mount, scope, skill.skillDir ?? "", skill.frontMatter?.include ?? []),
     ]);
-    let rules: SkillRules | undefined;
-    if (manifest !== undefined && manifest.rules.length > 0) {
-      const truncated = manifest.rules.length > MAX_SKILL_RULES_LENGTH;
-      rules = {
-        path: manifest.path,
-        body: truncated ? manifest.rules.slice(0, MAX_SKILL_RULES_LENGTH) : manifest.rules,
-        truncated,
-      };
+    const ancestors = entries
+      .filter(
+        (row) =>
+          row.kind === "manifest" &&
+          isWithinRepoPath(parentDirectory(row.path as RepoPath), skillDirectory),
+      )
+      .sort((a, b) => a.path.length - b.path.length);
+    const ruleChain: SkillRules[] = [];
+    const warnings = [...(skill.frontMatter?.warnings ?? [])];
+    let rulesComplete = true;
+    for (const ancestor of ancestors) {
+      const body =
+        ancestor.frontMatter?.manifestError === undefined
+          ? await blobStore.read(ancestor.blobSha)
+          : undefined;
+      if (body === undefined) {
+        rulesComplete = false;
+        warnings.push(
+          `Applicable rules unavailable: ${ancestor.path}. Read or repair this manifest before using the skill.`,
+        );
+        continue;
+      }
+      const parsed = splitFrontMatter(body);
+      if (parsed.kind === "found" && parsed.body.trim().length > 0)
+        ruleChain.push({
+          path: ancestor.path as RepoPath,
+          body: parsed.body.trim(),
+          truncated: false,
+        });
     }
+    const contextAvailable = rulesComplete && included.every((file) => file.content !== undefined);
+    for (const file of included) {
+      if (file.content === undefined) {
+        warnings.push(
+          `Required file unavailable in this snapshot: ${file.path}. It must be indexed and readable before using the skill.`,
+        );
+      }
+    }
+    const key = this.#pageKey(mount, outcome.snapshot, "get_skill", skill.path);
+    let skip = continuationOffset(cursor, key);
+    const start = skip;
+    let remaining = SKILL_PAGE_BYTES;
+    let consumed = 0;
+    let total = 0;
+    const page = (text: string): { content: string; truncated: boolean } => {
+      total += text.length;
+      if (skip >= text.length) {
+        skip -= text.length;
+        return { content: "", truncated: false };
+      }
+      const offset = skip;
+      skip = 0;
+      if (remaining <= 0) return { content: "", truncated: text.length > 0 };
+      const part = contextPage(text, offset, remaining);
+      // A deferred character must precede every later section on the next page.
+      remaining = part.more ? 0 : remaining - part.bytes;
+      consumed += part.content.length;
+      return { content: part.content, truncated: part.more };
+    };
+    const pagedRules = ruleChain.flatMap((rule) => {
+      const part = page(rule.body);
+      return part.content.length === 0
+        ? []
+        : [{ ...rule, body: part.content, truncated: part.truncated }];
+    });
+    const body = page(split.kind === "found" ? split.body : text).content;
+    const pagedIncluded = included.map((file) =>
+      file.content === undefined
+        ? file
+        : (() => {
+            const part = page(file.content);
+            return { ...file, content: part.content, truncated: part.truncated };
+          })(),
+    );
+    const nextCursor =
+      contextAvailable && start + consumed < total
+        ? nextContinuation(key, start + consumed)
+        : undefined;
+    const referenceSources = [
+      skill,
+      ...ancestors,
+      ...entries.filter((entry) => included.some((file) => file.path === entry.path)),
+    ];
+    const references = await this.#references(
+      mount,
+      scope,
+      referenceSources.flatMap((entry) =>
+        (entry.frontMatter?.references ?? []).map((reference) => ({
+          ...reference,
+          source: entry.path,
+        })),
+      ),
+    );
     return {
       status: "ready",
       lookup: {
         kind: "found",
         skill: {
           mount: this.summary(mount, outcome.snapshot),
+          path: skill.path as RepoPath,
+          ruleChain: pagedRules,
+          references,
+          complete: contextAvailable && nextCursor === undefined,
+          nextCursor,
           name: skill.name,
           directory: skillDirectory,
           description: skill.description ?? "",
@@ -510,15 +739,15 @@ export class MountReader {
           compatibility: skill.frontMatter?.compatibility,
           allowedTools: skill.frontMatter?.allowedTools,
           metadata: skill.frontMatter?.metadata ?? {},
-          body: split.kind === "found" ? split.body : text,
+          body,
           files: files
             .slice(0, MAX_LISTED_SKILL_FILES)
             .map((file) => belowMount(mount, file))
             .filter((file) => file !== undefined),
           filesTruncated: files.length > MAX_LISTED_SKILL_FILES,
-          included,
-          warnings: skill.frontMatter?.warnings ?? [],
-          rules,
+          included: pagedIncluded,
+          warnings,
+          rules: pagedRules[0],
           translations: skillTranslationsOf(skill.frontMatter?.translations),
         },
       },
@@ -526,8 +755,8 @@ export class MountReader {
   }
 
   /**
-   * The files a skill declares as needed on every run, with their text, in the order declared
-   * and within one budget for all of them: past it a file is cut, and `read_file` has the rest.
+   * Indexed bodies of required files, in declaration order. skill() pages these together with
+   * the skill and its rules. Unindexed files stay unavailable even if another read warms a blob.
    */
   async #includedFiles(
     mount: Mount,
@@ -549,11 +778,13 @@ export class MountReader {
           return undefined;
         }
         const entry = await getEntry(database, scope, absolute);
-        const text = entry === undefined ? undefined : await blobStore.read(entry.blobSha);
+        const text =
+          entry?.kind === "markdown" || entry?.kind === "json"
+            ? await blobStore.read(entry.blobSha)
+            : undefined;
         return { path, text };
       }),
     );
-    let remaining = MAX_SKILL_INCLUDED_LENGTH;
     const included: IncludedFile[] = [];
     for (const file of read) {
       if (file === undefined) {
@@ -563,9 +794,7 @@ export class MountReader {
         included.push({ path: file.path, content: undefined, truncated: false });
         continue;
       }
-      const content = remaining <= 0 ? "" : pageOfText(file.text, 0, remaining).content;
-      remaining -= content.length;
-      included.push({ path: file.path, content, truncated: content.length < file.text.length });
+      included.push({ path: file.path, content: file.text, truncated: false });
     }
     return included;
   }
@@ -584,7 +813,7 @@ export class MountReader {
   ): Promise<FileLookup> {
     const { database, blobStore, gitHost, snapshots } = this.#dependencies;
     const limits = { ...this.#dependencies.limits, ...mount.limits };
-    const wanted = input.path.trim();
+    const wanted = input.path;
     let below: RepoPath;
     if (wanted === "." || wanted === "/") {
       // Nothing else can name the mounted root, since an empty path is not a path.
@@ -599,7 +828,8 @@ export class MountReader {
       }
       below = parsed.value;
     }
-    const path = joinRepoPath(mount.address.path, below);
+    const path = below;
+    if (!isWithinRepoPath(mount.address.path, path)) return { kind: "not_found", path };
 
     const outcome = await snapshots.ready(mount, 0);
     let file: { readonly size: number; readonly hash: string } | undefined;
@@ -630,7 +860,22 @@ export class MountReader {
           : [{ path: childPath, kind: child.kind, size: child.size ?? undefined }];
       });
       if (entries.length === 0) {
-        return { kind: "not_found", path: below };
+        const suggestions =
+          outcome.status !== "ready"
+            ? []
+            : (
+                await this.#entriesOf({
+                  accountId: outcome.snapshot.accountId,
+                  snapshotId: outcome.snapshot.id,
+                })
+              )
+                .filter(
+                  (entry) =>
+                    belowMount(mount, entry.path) !== undefined && entry.path.endsWith(`/${below}`),
+                )
+                .slice(0, 5)
+                .map((entry) => entry.path);
+        return { kind: "not_found", path: below, suggestions };
       }
       return {
         kind: "directory",
@@ -664,9 +909,24 @@ export class MountReader {
       }
       await blobStore.write(file.hash, text);
     }
+    const refsOutcome =
+      outcome.status === "ready"
+        ? await this.#references(
+            mount,
+            { accountId: outcome.snapshot.accountId, snapshotId: outcome.snapshot.id },
+            (
+              await getEntry(
+                database,
+                { accountId: outcome.snapshot.accountId, snapshotId: outcome.snapshot.id },
+                path,
+              )
+            )?.frontMatter?.references ?? [],
+          )
+        : [];
     return {
       kind: "found",
       file: {
+        references: refsOutcome,
         mount: this.summary(mount, outcome.status === "ready" ? outcome.snapshot : undefined),
         path: below,
         ...pageOfText(text, input.offset ?? 0, input.limit ?? READ_FILE_DEFAULT_LIMIT),
@@ -686,17 +946,19 @@ export class MountReader {
     }
     const scope = { accountId: outcome.snapshot.accountId, snapshotId: outcome.snapshot.id };
     const path = mount.address.path;
-    const [counts, skills, documents, diagnostics, manifest] = await Promise.all([
+    const [counts, skills, documents, diagnostics, manifest, groups] = await Promise.all([
       countEntries(database, scope, path),
       listEntries(database, scope, path, listLimit, "skills"),
       listEntries(database, scope, path, listLimit, "documents_outside_skills"),
       this.#diagnosticsOf(mount, scope),
       this.#manifestOf(mount, scope),
+      this.#browseEntries(scope, path),
     ]);
     return {
       status: "ready",
       overview: {
         mount: this.summary(mount, outcome.snapshot),
+        groups: groups.filter((entry) => entry.kind === "directory").slice(0, BROWSE_DEFAULT_LIMIT),
         manifest,
         skillCount: counts.skills,
         documentCount: counts.documents,
@@ -729,10 +991,8 @@ export class MountReader {
     if (cached !== undefined) {
       return cached;
     }
-    // Hidden entries are never served, from the tree any more than from the index. Nor is what a
-    // manifest leaves out: until the commit is indexed nothing has read the manifests, so under
-    // one only the skills and the manifests themselves are served, which fails closed. Where no
-    // manifest governs, the default directories are served, as always.
+    // Declarations can be inspected before indexing, but their filenames alone cannot publish
+    // supporting files. Hidden declarations and declared document roots wait for validation.
     const loading = this.#dependencies.gitHost
       .getTree(mount.coordinates, mount.commit)
       .then((tree) => {
@@ -746,11 +1006,17 @@ export class MountReader {
               .map((entry) => parentDirectory(entry.path)),
           );
         const scope: ServedScope = {
-          skillDirectories: directoriesOf("skill"),
+          skillDirectories: new Set(),
           manifestDirectories: directoriesOf("manifest"),
           documentDirectories: new Map(),
         };
-        return { ...tree, entries: files.filter((entry) => isServedPath(entry.path, scope)) };
+        return {
+          ...tree,
+          entries: files.filter((entry) => {
+            const kind = classifyRepoFile(entry.path);
+            return kind === "skill" || kind === "manifest" || isServedPath(entry.path, scope);
+          }),
+        };
       });
     remember(this.#trees, key, MAX_CACHED_TREES, loading);
     return loading;
@@ -786,7 +1052,9 @@ function directoryOfTree(tree: RepoTree, directory: string, limit: number): Dire
 /** A path stored by the indexer, relative to the mounted root. */
 function belowMount(mount: Mount, stored: string | null): RepoPath | undefined {
   const parsed = stored === null ? undefined : parseRepoPath(stored);
-  return parsed?.ok === true ? relativeRepoPath(mount.address.path, parsed.value) : undefined;
+  return parsed?.ok === true && isWithinRepoPath(mount.address.path, parsed.value)
+    ? parsed.value
+    : undefined;
 }
 
 function toFindItem(mount: Mount, row: EntryRecord): FindItem | undefined {
@@ -796,6 +1064,7 @@ function toFindItem(mount: Mount, row: EntryRecord): FindItem | undefined {
       ? undefined
       : {
           kind: "skill",
+          path: row.path as RepoPath,
           name: row.name,
           directory,
           description: row.description ?? "",

@@ -191,6 +191,8 @@ export type PageAnswer =
 
 /** What the server knows about an address when a browser asks for its page. */
 export interface AddressData {
+  readonly browse?: PageAnswer;
+  readonly find?: PageAnswer;
   /** What the address serves, or why it does not. Left out for a path that is not an address. */
   readonly mount?: PageAnswer;
   /** The skill the URL asks for, when it asks for one. */

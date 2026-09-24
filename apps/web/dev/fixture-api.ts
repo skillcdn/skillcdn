@@ -6,6 +6,8 @@ import {
   REST_FEATURED_SKILL_NAMES,
   REST_MOUNT_LIST_LIMIT,
   REST_ROUTES,
+  type RestBrowse,
+  type RestBrowseEntry,
   type RestFeatured,
   type RestFile,
   type RestFind,
@@ -97,7 +99,7 @@ function mountBody(
   const state = stateOf(key, repository, now);
   const skills = repository.skills.flatMap((detail) => {
     const directory = below(address.path, detail.directory);
-    return directory === undefined ? [] : [{ ...summaryOf(detail), directory }];
+    return directory === undefined ? [] : [summaryOf(detail)];
   });
   const documents = repository.documents.flatMap((document) => {
     const path = below(address.path, document.path);
@@ -105,7 +107,7 @@ function mountBody(
       path === "" ||
       skillOwning(address, repository, document.path) !== null
       ? []
-      : [{ ...document, path }];
+      : [document];
   });
   const ref = address.ref;
   return {
@@ -135,12 +137,15 @@ function mountBody(
                   ? null
                   : {
                       // Above the mount when a sub-path is mounted, as the server would say.
-                      path: below(address.path, repository.manifest.path) ?? null,
+                      path: repository.manifest.path,
                       name: repository.manifest.name,
                       description: repository.manifest.description,
                       language: repository.manifest.language ?? null,
                       translations: repository.manifest.translations ?? {},
                     },
+              groups: browseEntries(address, repository, address.path).filter(
+                (entry) => entry.kind === "directory",
+              ),
               skillCount: skills.length,
               documentCount: documents.length,
               skills: skills.slice(0, REST_MOUNT_LIST_LIMIT),
@@ -150,13 +155,13 @@ function mountBody(
   };
 }
 
-/** The directory, relative to the mount, of the skill a file belongs to; `null` when none does. */
+/** The repository-root directory of the skill a file belongs to; `null` when none does. */
 function skillOwning(address: Address, repository: FixtureRepository, path: string): string | null {
   const owner = repository.skills.find(
     (detail) => detail.directory !== "" && path.startsWith(`${detail.directory}/`),
   );
   const directory = owner === undefined ? undefined : below(address.path, owner.directory);
-  return directory ?? null;
+  return directory === undefined ? null : (owner?.directory ?? null);
 }
 
 function findBody(
@@ -166,6 +171,8 @@ function findBody(
 ): RestFind {
   const query = params.get("query")?.trim() ?? "";
   const limit = Number(params.get("limit") ?? "10");
+  const scope = params.get("path") ?? address.path;
+  const offset = Number(params.get("cursor") ?? "0");
   const words = query
     .toLowerCase()
     .split(/\s+/)
@@ -176,12 +183,12 @@ function findBody(
   type SkillItem = Extract<RestFindItem, { kind: "skill" }>;
   const skills: SkillItem[] = [];
   for (const detail of repository.skills) {
-    const directory = below(address.path, detail.directory);
+    const directory = below(scope, detail.directory);
     if (directory !== undefined && matches(`${detail.name} ${detail.description} ${detail.body}`)) {
       skills.push({
         kind: "skill",
         name: detail.name,
-        directory,
+        directory: detail.directory,
         description: detail.description,
         translations: detail.translations,
         files: [],
@@ -191,7 +198,7 @@ function findBody(
   }
   const documents: RestFindItem[] = [];
   for (const document of repository.documents) {
-    const path = below(address.path, document.path);
+    const path = below(scope, document.path);
     const text = `${document.path} ${document.title ?? ""} ${document.summary ?? ""}`;
     const owner = skillOwning(address, repository, document.path);
     // A listing leaves a skill's own files to the skill; a search folds them under the skill.
@@ -202,31 +209,110 @@ function findBody(
     if (skill !== undefined && words.length > 0) {
       skills[skills.indexOf(skill)] = {
         ...skill,
-        files: [...skill.files, { path, title: document.title, summary: document.summary }],
+        files: [
+          ...skill.files,
+          { path: document.path, title: document.title, summary: document.summary },
+        ],
       };
     } else if (words.length > 0 || owner === null) {
       documents.push({
         kind: "document",
-        path,
+        path: document.path,
         title: document.title,
         summary: document.summary,
         skillDirectory: owner,
       });
     }
   }
-  if (words.length === 0) {
-    return {
-      status: "ready",
-      query: null,
-      items: [...skills, ...documents.slice(0, limit)],
-      totals: { skills: skills.length, documents: documents.length },
-    };
-  }
+  const items = [...skills, ...documents];
   return {
     status: "ready",
-    query,
-    items: [...skills, ...documents].slice(0, limit),
-    totals: null,
+    commit: repository.commit,
+    path: scope,
+    query: query === "" ? null : query,
+    items: items.slice(offset, offset + limit),
+    nextCursor: offset + limit < items.length ? String(offset + limit) : null,
+    totals: words.length === 0 ? { skills: skills.length, documents: documents.length } : null,
+  };
+}
+
+function browseEntries(
+  address: Address,
+  repository: FixtureRepository,
+  path: string,
+): RestBrowseEntry[] {
+  const entries = new Map<string, RestBrowseEntry>();
+  const prefix = path === "" ? "" : `${path}/`;
+  const files = new Set([
+    ...Object.keys(repository.files),
+    ...repository.documents.map((document) => document.path),
+    ...repository.skills.map(
+      (detail) =>
+        detail.path ?? (detail.directory === "" ? "SKILL.md" : `${detail.directory}/SKILL.md`),
+    ),
+  ]);
+  for (const file of files) {
+    if (!file.startsWith(prefix) || below(address.path, file) === undefined) continue;
+    const relative = file.slice(prefix.length);
+    const slash = relative.indexOf("/");
+    const childPath = slash < 0 ? file : `${prefix}${relative.slice(0, slash)}`;
+    const detail = repository.skills.find(
+      (skill) => `${skill.directory === "" ? "" : `${skill.directory}/`}SKILL.md` === file,
+    );
+    const directSkill = repository.skills.find((skill) => skill.directory === childPath);
+    const skill = slash < 0 ? detail : directSkill;
+    const entryPath =
+      skill === undefined
+        ? childPath
+        : `${skill.directory === "" ? "" : `${skill.directory}/`}SKILL.md`;
+    const group = repository.groups?.[childPath];
+    const document = repository.documents.find((item) => item.path === file);
+    entries.set(entryPath, {
+      kind: skill !== undefined ? "skill" : slash < 0 ? "file" : "directory",
+      path: entryPath,
+      name: skill?.name ?? group?.name ?? (slash < 0 ? document?.title : null) ?? null,
+      description:
+        skill?.description ?? group?.description ?? (slash < 0 ? document?.summary : null) ?? null,
+      skillCount:
+        skill !== undefined
+          ? 1
+          : repository.skills.filter((item) => below(childPath, item.directory) !== undefined)
+              .length,
+      documentCount:
+        slash < 0
+          ? 0
+          : repository.documents.filter(
+              (item) =>
+                below(childPath, item.path) !== undefined &&
+                skillOwning(address, repository, item.path) === null,
+            ).length,
+      size: slash < 0 ? (repository.files[file]?.length ?? null) : null,
+      manifestPath: group === undefined ? null : `${childPath}/SKILLCDN.md`,
+      language: group?.language ?? repository.manifest?.language ?? null,
+    });
+  }
+  return [...entries.values()].sort(
+    (a, b) =>
+      Number(a.kind !== "directory") - Number(b.kind !== "directory") ||
+      a.path.localeCompare(b.path),
+  );
+}
+
+function browseBody(
+  address: Address,
+  repository: FixtureRepository,
+  params: URLSearchParams,
+): RestBrowse {
+  const path = params.get("path") ?? address.path;
+  const offset = Number(params.get("cursor") ?? "0");
+  const limit = Number(params.get("limit") ?? "40");
+  const entries = browseEntries(address, repository, path);
+  return {
+    status: "ready",
+    commit: repository.commit,
+    path,
+    entries: entries.slice(offset, offset + limit),
+    nextCursor: offset + limit < entries.length ? String(offset + limit) : null,
   };
 }
 
@@ -234,12 +320,15 @@ function skillAnswer(
   address: Address,
   repository: FixtureRepository,
   wanted: string,
+  cursor: string | null = null,
 ): FixtureAnswer {
   const inMount = repository.skills.flatMap((detail) => {
     const directory = below(address.path, detail.directory);
-    return directory === undefined ? [] : [{ detail, directory }];
+    return directory === undefined ? [] : [{ detail, directory: detail.directory }];
   });
-  const byDirectory = inMount.filter((entry) => entry.directory === wanted);
+  const byDirectory = inMount.filter(
+    (entry) => entry.directory === wanted || entry.detail.path === wanted,
+  );
   const matches =
     byDirectory.length > 0 ? byDirectory : inMount.filter((entry) => entry.detail.name === wanted);
   const [match, ...others] = matches;
@@ -256,19 +345,74 @@ function skillAnswer(
     skill: {
       ...match.detail,
       directory: match.directory,
-      files: match.detail.files.flatMap((file) => below(address.path, file) ?? []),
-      included: match.detail.included.flatMap((file) => below(address.path, file) ?? []),
+      files: match.detail.files.filter((file) => below(address.path, file) !== undefined),
+      included: match.detail.included.filter((file) => below(address.path, file) !== undefined),
+      ruleChain: [
+        ...(repository.manifest === undefined
+          ? []
+          : [
+              { path: repository.manifest.path, body: repository.manifest.rules, truncated: false },
+            ]),
+        ...Object.entries(repository.groups ?? {})
+          .filter(([path]) => below(path, match.directory) !== undefined)
+          .map(([path, group]) => ({
+            path: `${path}/SKILLCDN.md`,
+            body: group.rules,
+            truncated: false,
+          })),
+      ],
+      includedContents: match.detail.included.map((path) => ({
+        path,
+        content: repository.files[path] ?? null,
+        truncated: false,
+      })),
       rules:
         repository.manifest === undefined || repository.manifest.rules.length === 0
           ? null
           : {
-              path: below(address.path, repository.manifest.path) ?? null,
+              path: repository.manifest.path,
               body: repository.manifest.rules,
               truncated: false,
             },
     },
   };
-  return { status: 200, body };
+  const offset = Number(cursor ?? "0");
+  let position = 0;
+  const take = (text: string): string => {
+    const start = Math.max(0, offset - position);
+    const end = Math.max(0, offset + PAGE_LIMIT - position);
+    position += text.length;
+    return text.slice(start, end);
+  };
+  const ruleChain = (body.skill.ruleChain ?? []).flatMap((rule) => {
+    const fragment = take(rule.body);
+    return fragment === ""
+      ? []
+      : [{ ...rule, body: fragment, truncated: fragment.length < rule.body.length }];
+  });
+  const instructions = take(body.skill.body);
+  const includedContents = (body.skill.includedContents ?? []).flatMap((file) => {
+    if (file.content === null) return [file];
+    const fragment = take(file.content);
+    return fragment === ""
+      ? []
+      : [{ ...file, content: fragment, truncated: fragment.length < file.content.length }];
+  });
+  const complete = offset + PAGE_LIMIT >= position;
+  return {
+    status: 200,
+    body: {
+      ...body,
+      skill: {
+        ...body.skill,
+        ruleChain,
+        body: instructions,
+        includedContents,
+        complete,
+        nextCursor: complete ? null : String(offset + PAGE_LIMIT),
+      },
+    },
+  };
 }
 
 function fileAnswer(
@@ -281,7 +425,9 @@ function fileAnswer(
     return problem(400, "request.invalid", "Missing or malformed query parameters: path.");
   }
   const isRoot = path === "." || path === "/";
-  const absolute = isRoot ? address.path : address.path === "" ? path : `${address.path}/${path}`;
+  const absolute = isRoot ? address.path : path;
+  if (below(address.path, absolute) === undefined)
+    return problem(404, "file.not_found", "No file at that path in this mount.");
   const unreadable = repository.unreadable?.[absolute];
   if (unreadable === "file.too_large") {
     return problem(
@@ -338,6 +484,7 @@ function fileAnswer(
   const body: RestFile = {
     kind: "file",
     path,
+    references: [],
     content: content.slice(offset, end),
     offset,
     nextOffset: end < content.length ? end : null,
@@ -392,7 +539,7 @@ export function handleFixtureRequest(
   if (url.pathname === REST_ROUTES.featured) {
     return { status: 200, body: featuredBody(now) };
   }
-  const operation = (["mounts", "find", "skills", "files"] as const).find((name) =>
+  const operation = (["mounts", "browse", "find", "skills", "files"] as const).find((name) =>
     url.pathname.startsWith(`${REST_ROUTES[name]}/`),
   );
   if (operation === undefined) {
@@ -428,11 +575,14 @@ export function handleFixtureRequest(
           : { status: "failed", errorCode: "git_host.transient" },
     };
   }
+  if (operation === "browse") {
+    return { status: 200, body: browseBody(address, repository, url.searchParams) };
+  }
   if (operation === "find") {
     return { status: 200, body: findBody(address, repository, url.searchParams) };
   }
-  const name = url.searchParams.get("name");
+  const name = url.searchParams.get("path") ?? url.searchParams.get("name");
   return name === null || name === ""
     ? problem(400, "request.invalid", "Missing or malformed query parameters: name.")
-    : skillAnswer(address, repository, name);
+    : skillAnswer(address, repository, name, url.searchParams.get("cursor"));
 }

@@ -200,8 +200,10 @@ export interface NewIndexEntry {
   readonly title: string | undefined;
   readonly description: string | undefined;
   readonly frontMatter: SkillFrontMatter | undefined;
-  /** Make the entry searchable: metadata always, plus the stored body of `blobSha` if there is one. */
+  /** Make the entry searchable: canonical metadata plus its search body. */
   readonly searchable: boolean;
+  /** Parsed body without presentation-only front-matter; omitted to search the raw blob. */
+  readonly searchBody?: string;
   /** False for a file outside the skills and the document directories: known, never served. */
   readonly visible: boolean;
 }
@@ -250,7 +252,7 @@ export async function writeSnapshotIndex(
       const rows = sql.join(
         batch.map(
           (entry) =>
-            sql`(${entry.path}, ${entry.kind}, ${entry.size}::integer, ${entry.blobSha}, ${entry.skillDir ?? null}, ${entry.name ?? null}, ${entry.title ?? null}, ${entry.description ?? null}, ${entry.frontMatter === undefined ? null : JSON.stringify(entry.frontMatter)}::jsonb, ${entry.searchable}::boolean, ${entry.visible}::boolean)`,
+            sql`(${entry.path}, ${entry.kind}, ${entry.size}::integer, ${entry.blobSha}, ${entry.skillDir ?? null}, ${entry.name ?? null}, ${entry.title ?? null}, ${entry.description ?? null}, ${entry.frontMatter === undefined ? null : JSON.stringify(entry.frontMatter)}::jsonb, ${entry.searchable}::boolean, ${entry.visible}::boolean, ${entry.searchBody?.slice(0, MAX_SEARCHED_BODY_LENGTH) ?? null}::text)`,
         ),
         sql`, `,
       );
@@ -265,11 +267,11 @@ export async function writeSnapshotIndex(
             setweight(to_tsvector(${SEARCH_CONFIG}::regconfig, coalesce(v.name, '') || ' ' || coalesce(v.title, '')), 'A') ||
             setweight(to_tsvector(${SEARCH_CONFIG}::regconfig, coalesce(v.description, '')), 'B') ||
             setweight(to_tsvector(${SEARCH_CONFIG}::regconfig, translate(v.path, '/._-', '    ')), 'C') ||
-            setweight(to_tsvector(${SEARCH_CONFIG}::regconfig, coalesce(left(b.content, ${MAX_SEARCHED_BODY_LENGTH}::integer), '')), 'D')
+            setweight(to_tsvector(${SEARCH_CONFIG}::regconfig, coalesce(v.search_body, left(b.content, ${MAX_SEARCHED_BODY_LENGTH}::integer), '')), 'D')
           end,
           v.visible
         from (values ${rows})
-          as v (path, kind, size, blob_sha, skill_dir, name, title, description, front_matter, searchable, visible)
+          as v (path, kind, size, blob_sha, skill_dir, name, title, description, front_matter, searchable, visible, search_body)
         left join blobs b on b.sha = v.blob_sha and v.searchable
       `);
     }

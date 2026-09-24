@@ -75,13 +75,18 @@ describe("a server with a web build", () => {
 
     // With the index there, the page carries what the address serves, and the skill it asks for.
     const done = await inputOf(
-      await h.request(`${address}?skill=release-notes`, { headers: BROWSER }),
+      await h.request(`${address}?skill=skills/release-notes/SKILL.md`, { headers: BROWSER }),
     );
     expect(done).toMatchObject({
       language: "en",
       data: {
         mount: { ready: { index: { status: "ready", skillCount: 2 } } },
-        skill: { ready: { status: "ready", skill: { name: "release-notes" } } },
+        skill: {
+          ready: {
+            status: "ready",
+            skill: { name: "release-notes", path: "skills/release-notes/SKILL.md" },
+          },
+        },
       },
     });
     // Without a language in the URL, the page is in the one the request asks for (ADR-0021).
@@ -91,7 +96,7 @@ describe("a server with a web build", () => {
     expect(asked.headers.get("vary")).toBe("accept, accept-language");
     expect(await inputOf(asked)).toMatchObject({ language: "ko", search: "" });
     const missingSkill = await inputOf(
-      await h.request(`${address}?skill=no-such-skill`, { headers: BROWSER }),
+      await h.request(`${address}?skill=skills/no-such-skill/SKILL.md`, { headers: BROWSER }),
     );
     expect(missingSkill.data).toMatchObject({
       skill: { error: { status: 404, code: "skill.not_found" } },
@@ -108,6 +113,52 @@ describe("a server with a web build", () => {
     // A GET that does not ask for HTML is MCP's to answer, as it was without a web build.
     const stream = await h.request(address, { headers: { accept: "text/event-stream" } });
     expect(stream.headers.get("content-type") ?? "").not.toContain("text/html");
+  });
+
+  it("renders invalid folder scopes and oversized page queries as 400 pages", async () => {
+    const host = createFixtureHost("web-invalid-scope");
+    const h = createHarness(testDatabase, { web, host });
+    const address = `/gh/acme/multi-skill@${fixtureCommits("web-invalid-scope").main}/skills/release-notes`;
+    const client = await h.connect(address);
+    await client.callTool({ name: "browse", arguments: {} });
+    await client.close();
+    const browse = await inputOf(await h.request(address, { headers: BROWSER }));
+    expect(browse.data).toMatchObject({
+      browse: { ready: { status: "ready", path: "skills/release-notes" } },
+    });
+    const search = await inputOf(await h.request(`${address}?q=style`, { headers: BROWSER }));
+    expect(search.data).toMatchObject({
+      find: {
+        ready: {
+          status: "ready",
+          items: [
+            expect.objectContaining({ kind: "skill", path: "skills/release-notes/SKILL.md" }),
+          ],
+        },
+      },
+    });
+    const invalidParameters: Record<string, string>[] = [
+      { path: "../outside" },
+      { path: "/etc/passwd" },
+      { path: "docs" },
+      { path: "docs", q: "guide" },
+      { q: "x".repeat(501) },
+      { query: "x".repeat(501) },
+      { path: "x".repeat(1025) },
+      { skill: "x".repeat(1025) },
+      { file: "x".repeat(1025) },
+    ];
+    for (const parameters of invalidParameters) {
+      const response = await h.request(`${address}?${new URLSearchParams(parameters)}`, {
+        headers: BROWSER,
+      });
+      expect(response.status, JSON.stringify(parameters).slice(0, 100)).toBe(400);
+      expect(response.headers.get("content-type")).toContain("text/html");
+      expect((await inputOf(response)).data).toMatchObject({
+        mount: { error: { status: 400, code: "request.invalid" } },
+      });
+    }
+    expect(h.logs.some((line) => line.msg === "unhandled request error")).toBe(false);
   });
 
   it("gives a browser the page, with the status, for an address that is nothing", async () => {

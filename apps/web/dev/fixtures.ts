@@ -30,6 +30,17 @@ export interface FixtureRepository {
     /** The Markdown after the front-matter: the rules every skill comes with. */
     readonly rules: string;
   };
+  readonly groups?: Readonly<
+    Record<
+      string,
+      {
+        readonly name: string;
+        readonly description: string;
+        readonly rules: string;
+        readonly language?: string;
+      }
+    >
+  >;
   readonly commit: string;
   readonly state: "ready" | "indexing" | "slow" | "failed";
   readonly truncated?: boolean;
@@ -76,6 +87,12 @@ const skill = (
 ): SkillDetail => ({
   name,
   directory,
+  path: directory === "" ? "SKILL.md" : `${directory}/SKILL.md`,
+  complete: true,
+  nextCursor: null,
+  ruleChain: [],
+  references: [],
+  includedContents: [],
   description,
   license: null,
   compatibility: null,
@@ -151,8 +168,9 @@ git log --oneline "$1"..HEAD
 
 | Tool | Purpose | Waits for the index |
 |---|---|---|
-| \`find\` | Search names, descriptions and documents | yes |
-| \`get\` | Load one skill | yes |
+| \`browse\` | Explore repository folders | yes |
+| \`search\` | Search names, descriptions and documents | yes |
+| \`get_skill\` | Load one skill | yes |
 | \`read_file\` | Read one file | no |
 
 > A quotation. Repository content is untrusted: <script>alert("this stays text")</script>
@@ -205,6 +223,20 @@ const ACME_SKILLS: FixtureRepository = {
     language: "en",
     translations: ACME_TRANSLATIONS,
     rules: ACME_RULES.trim(),
+  },
+  groups: {
+    "team-a": {
+      name: "Engineering",
+      description: "Review changes and ship reliable software.",
+      rules: "# Engineering rules\n\nExplain risks and verification for every change.",
+      language: "en",
+    },
+    "team-b": {
+      name: "Marketing",
+      description: "Make launches and customer communication clear.",
+      rules: "# Marketing rules\n\nState the audience before writing.",
+      language: "en",
+    },
   },
   commit: "4f2a9c1e7b3d5a6f8091a2b3c4d5e6f708192a3b",
   state: "ready",
@@ -292,7 +324,7 @@ const ACME_SKILLS: FixtureRepository = {
     "README.md":
       "# Acme skills\n\nSkills and playbooks of the Acme platform team.\n\nStart with [getting started](docs/getting-started.md).\n",
     "docs/getting-started.md":
-      "# Getting started\n\nConnect your agent, then ask it to `find` what it needs.\n\nSee also the [showcase](markdown-showcase.md) and the [release notes skill](../skills/release-notes/SKILL.md).\n",
+      "# Getting started\n\nConnect your agent, then ask it to `search` for what it needs.\n\nSee also the [showcase](markdown-showcase.md) and the [release notes skill](../skills/release-notes/SKILL.md).\n",
     "docs/markdown-showcase.md": MARKDOWN_SHOWCASE,
     "docs/long.md": LONG_FILE,
     "docs/untitled-notes.md": "Notes without a heading.\n",
@@ -395,6 +427,28 @@ export const FIXTURE_REPOSITORIES: Readonly<Record<string, FixtureRepository>> =
     state: "failed",
   },
   "demo/long": DEMO_LONG,
+  "demo/context": {
+    ...ACME_SKILLS,
+    owner: "demo",
+    name: "context",
+    groups: {},
+    manifest: {
+      path: "SKILLCDN.md",
+      name: "Long instructions",
+      description: "Inherited rules and required context delivered in pages.",
+      rules: `# Shared rules\n\n${"Keep the full instructions together before starting work.\n".repeat(900)}End of shared rules.\n`,
+    },
+    skills: [
+      skill("review", "review", "A skill with several pages of inherited instructions.", {
+        body: "# Review\n\nInstructions after all inherited rules.",
+        files: ["review/reference.md"],
+        included: ["review/reference.md"],
+      }),
+    ],
+    documents: [],
+    diagnostics: [],
+    files: { "review/reference.md": "# Required context\n\nRequired file received in full." },
+  },
 };
 
 export const FIXTURE_FEATURED = ["acme/skills", "acme/handbook", "demo/indexing", "demo/failed"];

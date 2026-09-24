@@ -3,6 +3,8 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import {
   type BlobStore,
+  BROWSE_DEFAULT_LIMIT,
+  browseCatalogFiles,
   FIND_LIST_SKILLS_MAX,
   type GitHost,
   GitHostError,
@@ -45,7 +47,7 @@ const NO_COMMIT = "0".repeat(40);
 
 /** Entries a working tree has and a git tree does not, or that are never served anyway. */
 function isSkipped(name: string): boolean {
-  return name.startsWith(".") || name === "node_modules";
+  return name === ".git" || name === "node_modules";
 }
 
 function pathOf(text: string): RepoPath {
@@ -54,8 +56,8 @@ function pathOf(text: string): RepoPath {
 }
 
 /**
- * The files of a directory as tree entries: hidden entries, `node_modules` and symbolic links
- * are left out, as the indexer leaves hidden entries out and a git tree never follows links. A
+ * The files of a directory as tree entries: `.git`, `node_modules` and symbolic links
+ * are left out. Hidden skills and explicitly referenced files follow the indexer's rules. A
  * file too large to be indexed gets a stand-in hash: nothing ever asks for its body.
  */
 async function readWorkingTree(
@@ -122,7 +124,7 @@ function translationsLine(entry: NewIndexEntry, indent: string): string {
 
 /**
  * Reads `directory` as the indexer would read a commit and reports what an agent would get.
- * Returns the exit code: 0 when every manifest could be read, 1 when one could not, 2 when the
+ * Returns the exit code: 0 when there are no index diagnostics, 1 when there are, 2 when the
  * directory cannot be read at all.
  */
 export async function checkDirectory(options: CheckOptions): Promise<number> {
@@ -175,7 +177,9 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
   const manifest = index.entries.find(
     (entry) => entry.kind === "manifest" && entry.path === "SKILLCDN.md",
   );
-  const skills = index.entries.filter((entry) => entry.kind === "skill").sort(byPath);
+  const skills = index.entries
+    .filter((entry) => entry.visible && entry.kind === "skill")
+    .sort(byPath);
   const documents = index.entries
     .filter(
       (entry) =>
@@ -199,7 +203,7 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
 
   write(
     `Read ${root} as SkillCDN would index it: ${files.length} files` +
-      `${skipped === 0 ? "" : `; ${skipped} hidden entries, symbolic links or node_modules skipped`}` +
+      `${skipped === 0 ? "" : `; ${skipped} .git entries, symbolic links or node_modules skipped`}` +
       `${index.truncated ? "; over the indexing limits, so the index is partial" : ""}.\n\n`,
   );
 
@@ -215,6 +219,9 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
         `  name: ${manifest.name ?? "(the repository's name on the git host)"}\n` +
         `  description: ${manifest.description ?? ""}\n` +
         `  language: ${manifest.frontMatter?.language ?? "(not declared)"}\n` +
+        (manifest.frontMatter?.manifestError === undefined
+          ? ""
+          : `  unavailable: ${manifest.frontMatter.manifestError}\n`) +
         translationsLine(manifest, "  ") +
         `  documents: ${(manifest.frontMatter?.documents ?? []).map((directory) => (directory === "" ? "." : directory)).join(", ") || "(none)"}\n` +
         `  rules: ${rules.length === 0 ? "none" : `${rules.length} characters`}\n` +
@@ -227,7 +234,7 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
   for (const skill of skills) {
     const directory = skill.skillDir ?? "";
     const owned = index.entries.filter(
-      (entry) => entry.skillDir === directory && entry.kind !== "skill",
+      (entry) => entry.visible && entry.skillDir === directory && entry.kind !== "skill",
     );
     const included = skill.frontMatter?.include ?? [];
     write(
@@ -255,13 +262,34 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
     write(`Not served: ${notServed.length} files (${named.join(", ")}${rest})\n\n`);
   }
 
-  write(`Manifests that could not be read: ${diagnostics.length}\n`);
+  const linked = index.entries.filter(
+    (entry) => entry.visible && entry.frontMatter?.linkedOnly === true,
+  );
+  write(`Linked reference files: ${linked.length}\n\n`);
+  write(`Index diagnostics: ${diagnostics.length}\n`);
   for (const diagnostic of diagnostics) {
     write(`- ${diagnostic.path} (${diagnostic.code}): ${diagnostic.message}\n`);
   }
   write("\n");
 
   const catalog: MountCatalog = {
+    groups: browseCatalogFiles(
+      index.entries
+        .filter((entry) => entry.visible)
+        .map((entry) => ({
+          path: pathOf(entry.path),
+          kind: entry.kind,
+          name: entry.name,
+          title: entry.title,
+          description: entry.description,
+          skillDir: entry.skillDir === undefined ? undefined : pathOf(entry.skillDir),
+          searchable: entry.searchable,
+          size: entry.size,
+          linkedOnly: entry.frontMatter?.linkedOnly,
+          language: entry.frontMatter?.language,
+        })),
+      ROOT_PATH,
+    ).slice(0, BROWSE_DEFAULT_LIMIT),
     mount: {
       repository: basename(root),
       ref: undefined,
@@ -271,7 +299,7 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
       truncated: index.truncated,
     },
     manifest:
-      manifest === undefined
+      manifest?.description === undefined
         ? undefined
         : {
             name: manifest.name,
@@ -300,8 +328,8 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
 
   write(
     diagnostics.length === 0
-      ? "ok: every manifest could be read\n"
-      : `${diagnostics.length} manifest(s) could not be read\n`,
+      ? "ok: no index diagnostics\n"
+      : `${diagnostics.length} index issue(s) found\n`,
   );
   return diagnostics.length === 0 ? 0 : 1;
 }

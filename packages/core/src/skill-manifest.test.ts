@@ -105,12 +105,12 @@ describe("parseSkillManifest", () => {
         "---",
       ].join("\n"),
     );
-    expect(manifest.include).toEqual(["references/ok.md"]);
+    expect(manifest.include).toEqual([".hidden/notes.md", "references/ok.md"]);
     expect(manifest.translations).toEqual({
       de: { title: undefined, description: "Schreibt Versionshinweise." },
     });
     expect(warnings.map((warning) => warning.code)).toEqual(["ignored_field", "ignored_field"]);
-    expect(warnings[0]?.message).toContain('5 "skillcdn.include" entries are ignored');
+    expect(warnings[0]?.message).toContain('4 "skillcdn.include" entries are ignored');
     expect(warnings[1]?.message).toContain('3 "translations" entries are ignored');
   });
 
@@ -253,17 +253,23 @@ describe("parseSkillManifest", () => {
     ],
     ["a missing description", "---\nname: a\n---\n", "invalid_description"],
     ["a blank description", '---\nname: a\ndescription: "  "\n---\n', "invalid_description"],
-    [
-      "a description that is too long",
-      `---\nname: a\ndescription: ${"d".repeat(MAX_SKILL_DESCRIPTION_LENGTH + 1)}\n---\n`,
-      "invalid_description",
-    ],
   ])("skips a manifest with %s", (_name, text, code) => {
     expect(errorCode(text)).toBe(code);
   });
 });
 
 describe("parseSkillManifest with hostile input", () => {
+  it("preserves long descriptions with a compatibility warning inside the YAML size bound", () => {
+    const description = "d".repeat(MAX_SKILL_DESCRIPTION_LENGTH + 100);
+    const parsed = parseSkillManifest(`---\nname: a\ndescription: ${description}\n---\n# A`, {
+      directoryName: "a",
+    });
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) {
+      expect(parsed.value.manifest.description).toBe(description);
+      expect(parsed.value.warnings.map((warning) => warning.code)).toContain("long_description");
+    }
+  });
   it.each<[string, string, SkillManifestErrorCode]>([
     ["an oversized file", `${MINIMAL}${"x".repeat(MAX_SKILL_MANIFEST_LENGTH)}`, "too_large"],
     [

@@ -191,6 +191,12 @@ export interface SkillFrontMatter {
   readonly documents?: readonly string[];
   /** Repository manifest only: the tag of the language the repository is written in. */
   readonly language?: string;
+  /** Local Markdown destinations, normalized to repository-root paths. */
+  readonly references?: readonly { readonly href: string; readonly path: string }[];
+  /** Readable through a link, without becoming an independent catalog/search document. */
+  readonly linkedOnly?: boolean;
+  /** A present but unreadable repository manifest still defines a closed boundary. */
+  readonly manifestError?: string;
 }
 
 /** One file of a snapshot. Immutable: rows are inserted and deleted, never updated. */

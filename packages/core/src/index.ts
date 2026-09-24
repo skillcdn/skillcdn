@@ -1,4 +1,5 @@
 // Public surface of @skillcdn/core. Other workspaces import from this entry point only.
+
 export { isAnonymouslyReadable } from "./access.js";
 export {
   type Address,
@@ -12,6 +13,8 @@ export {
   MAX_ADDRESS_LENGTH,
   parseAddress,
 } from "./address.js";
+export { browseCatalogFiles, type CatalogFile } from "./browse-tree.js";
+export { contextPage } from "./context-page.js";
 export { DomainError } from "./errors.js";
 export {
   type FrontMatterError,
@@ -24,6 +27,15 @@ export {
 export { isFullCommitHash, isValidRefName, MAX_REF_LENGTH } from "./git-ref.js";
 export { isLanguageTag, MAX_TRANSLATIONS } from "./manifest-fields.js";
 export { type MarkdownSummary, summarizeMarkdown } from "./markdown.js";
+export {
+  extractMarkdownReferences,
+  inspectMarkdownReferences,
+  MAX_LINK_MARKDOWN_LENGTH,
+  MAX_MARKDOWN_REFERENCES,
+  type MarkdownReference,
+  type MarkdownReferenceInspection,
+  resolveMarkdownReference,
+} from "./markdown-links.js";
 export type { BlobStore } from "./ports/blob-store.js";
 export type { Clock } from "./ports/clock.js";
 export {
@@ -90,6 +102,8 @@ export {
   REST_FEATURED_SKILL_NAMES,
   REST_MOUNT_LIST_LIMIT,
   REST_ROUTES,
+  type RestBrowse,
+  type RestBrowseEntry,
   type RestDiagnostic,
   type RestDirectoryEntry,
   type RestDocumentSummary,
@@ -100,11 +114,14 @@ export {
   type RestFindItem,
   type RestManifest,
   type RestMount,
+  type RestReference,
   type RestRepository,
   type RestRepoTranslation,
   type RestSkill,
   type RestSkillSummary,
   type RestSkillTranslation,
+  restBrowseEntrySchema,
+  restBrowseSchema,
   restDiagnosticSchema,
   restDirectoryEntrySchema,
   restDocumentSummarySchema,
@@ -115,6 +132,7 @@ export {
   restFindSchema,
   restMountSchema,
   restPath,
+  restReferenceSchema,
   restRepositorySchema,
   restRepoTranslationSchema,
   restRepoTranslationsSchema,
@@ -153,6 +171,10 @@ export {
   renderInstructions,
 } from "./tools/catalog.js";
 export {
+  BROWSE_DEFAULT_LIMIT,
+  BROWSE_MAX_LIMIT,
+  browseInputSchema,
+  browseTool,
   FIND_DEFAULT_LIMIT,
   FIND_LIST_SKILLS_MAX,
   FIND_MAX_LIMIT,
@@ -162,6 +184,8 @@ export {
   findTool,
   type GetInput,
   getInputSchema,
+  getSkillInputSchema,
+  getSkillTool,
   getTool,
   MAX_QUERY_LENGTH,
   READ_FILE_DEFAULT_LIMIT,
@@ -169,18 +193,23 @@ export {
   type ReadFileInput,
   readFileInputSchema,
   readFileTool,
+  SKILL_PAGE_BYTES,
+  searchInputSchema,
+  searchTool,
   TOOL_NAMES,
   type ToolContract,
 } from "./tools/contracts.js";
 export {
   INDEXING_NOTICE,
   PROVENANCE_NOTICE,
+  renderBrowseResult,
   renderDiagnostics,
   renderDirectoryResult,
   renderFileResult,
   renderFindResult,
   renderSkillResult,
 } from "./tools/render.js";
+export type { BrowseEntry, BrowseResult, FileReference } from "./tools/results.js";
 export {
   type DirectoryEntry,
   type DirectoryResult,

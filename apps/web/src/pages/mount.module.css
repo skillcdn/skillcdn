@@ -372,3 +372,59 @@
     flex-basis: 100%;
   }
 }
+
+/* Folder navigation stays inside the connected repository. */
+.browseHeader,
+.itemFoot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-4);
+}
+
+.itemActions {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+}
+
+.browseHeader .subheading {
+  margin-bottom: 0;
+}
+
+.breadcrumbs,
+.breadcrumbs li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  overflow-wrap: anywhere;
+}
+
+.breadcrumbs {
+  font-size: var(--text-sm);
+}
+
+.breadcrumbs a[aria-current="page"] {
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.separator {
+  color: var(--color-text-faint);
+}
+
+.diagnosticDetails {
+  padding: var(--space-4);
+  border: var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.diagnosticDetails summary {
+  cursor: pointer;
+  color: var(--color-text-muted);
+}
+
+.diagnosticDetails[open] summary {
+  margin-bottom: var(--space-4);
+}

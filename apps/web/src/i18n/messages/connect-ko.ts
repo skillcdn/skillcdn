@@ -53,6 +53,7 @@ export const connectKo: typeof connectEn = {
     addConnector: "사용자 정의 커넥터 추가",
     add: "추가",
     tools: "도구",
+    toolNames: "browse · search · get_skill · read_file",
     enabled: "사용 중",
     newChat: "새 대화",
     ask: "어떤 스킬로 나를 도와줄 수 있어?",
@@ -130,7 +131,7 @@ export const connectKo: typeof connectEn = {
       steps: [
         "프로젝트 폴더에서 터미널을 여세요. 아래 명령을 복사해서 실행하세요.",
         "claude로 Claude Code를 시작하고, /mcp를 입력해 서버 연결을 확인하세요.",
-        "아래 첫 질문을 보내세요. 슬래시 명령 메뉴에서도 서버의 스킬을 찾을 수 있어요.",
+        "아래 첫 질문을 보내세요. 에이전트가 폴더를 둘러보고 스킬을 검색해 지침을 불러올 수 있어요.",
       ],
       note: "현재 프로젝트에 서버를 추가하는 명령이에요. Claude Code가 미리 설치되어 있어야 해요.",
     },

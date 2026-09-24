@@ -9,6 +9,7 @@ import {
   READ_FILE_MAX_LIMIT,
   readFileInputSchema,
   readFileTool,
+  searchInputSchema,
   TOOL_NAMES,
 } from "./contracts.js";
 import {
@@ -81,8 +82,12 @@ const skillResult = (patch: Partial<SkillResult> = {}): SkillResult => ({
 });
 
 describe("tool contracts", () => {
+  it("requires search keywords instead of treating whitespace as a listing", () => {
+    expect(searchInputSchema.safeParse({ query: "   " }).success).toBe(false);
+    expect(searchInputSchema.safeParse({ query: "release notes" }).success).toBe(true);
+  });
   it("keeps the public tool names stable", () => {
-    expect(TOOL_NAMES).toEqual(["find", "get", "read_file"]);
+    expect(TOOL_NAMES).toEqual(["browse", "search", "get_skill", "read_file"]);
   });
 
   it("exports input schemas that convert to JSON Schema objects", () => {
@@ -193,16 +198,15 @@ describe("rendering", () => {
       [
         '2 results for "release" in acme/skills@main (commit 0123456):',
         "",
-        "1. skill: release-notes (skills/release-notes)",
+        "1. skill: release-notes (skills/release-notes/SKILL.md)",
         "   Drafts release notes.",
-        "   Its files that match as well (get loads the skill; read_file reads one):",
+        "   Its files that match as well (get_skill loads the skill; read_file reads one):",
         "   - skills/release-notes/references/style.md - Style guide",
         "   - ... (1 more)",
         "2. document: docs/getting-started.md - Getting started",
-        "",
-        'Next: get {"name": "<skill name>"} loads a skill; read_file {"path": "<path>"} reads a document.',
       ].join("\n"),
     );
+    expect(text).not.toContain("Next:");
   });
 
   it("says whose a file is when it could not be folded under its skill", () => {
@@ -229,9 +233,9 @@ describe("rendering", () => {
       diagnostics: [],
     });
     expect(text).toContain(
-      "1. document: skills/release-notes/references/style.md - Style guide\n   Lead with the benefit.\n   Belongs to the skill at skills/release-notes; get loads that skill with its files.",
+      "1. document: skills/release-notes/references/style.md - Style guide\n   Lead with the benefit.\n   Belongs to the skill at skills/release-notes; get_skill loads that skill with its files.",
     );
-    expect(text).toContain("Belongs to the skill at the mounted root;");
+    expect(text).toContain("Belongs to the skill at the repository root;");
   });
 
   it("lists what a mount has, with the totals and what was left out", () => {
@@ -253,8 +257,8 @@ describe("rendering", () => {
       diagnostics: [],
     });
     expect(text).toContain("3 skills and 5 documents in acme/skills@main (commit 0123456):");
-    expect(text).toContain("1 more skills are not listed here; search for them with find.");
-    expect(text).toContain("4 more documents are not listed here");
+    expect(text).toContain("1 skills are outside this page; continue with nextCursor.");
+    expect(text).toContain("4 documents are outside this page; continue with nextCursor.");
     expect(text).toContain("3. document: README.md - Skills");
     const complete = renderFindResult({
       mount,
@@ -298,7 +302,7 @@ describe("rendering", () => {
     });
     expect(listing).toContain(
       [
-        "Manifests that could not be read, so what they declare is not served (fix them and push; the next commit is indexed anew):",
+        "Index diagnostics (fix the source or its limits; the next index reports the result):",
         `- skills/broken/SKILL.md (invalid_front_matter): ${skipped.message}`,
       ].join("\n"),
     );
@@ -309,9 +313,7 @@ describe("rendering", () => {
       totals: undefined,
       diagnostics: [skipped],
     });
-    expect(results).toContain(
-      "Note: 1 manifest could not be read and is not served; find without a query says which.",
-    );
+    expect(results).toContain("Note: 1 index issue reported; browse provides details.");
     expect(results).not.toContain("invalid_front_matter");
     const nothing = renderFindResult({
       mount,
@@ -376,15 +378,17 @@ describe("rendering", () => {
         "",
         "Supporting files, readable with read_file:",
         "- skills/release-notes/references/style.md",
-        "- ... (more files not listed)",
+        '- ... (browse {"path":"skills/release-notes"} for all supporting files)',
         "",
         "Warnings for the skill author:",
         '- "name" should match the directory',
         "",
         "--- instructions ---",
+        "",
         "# Release notes",
         "",
         "Collect the changes.",
+        "",
       ].join("\n"),
     );
   });
@@ -419,13 +423,15 @@ describe("rendering", () => {
         "Read [the style](references/style.md) first.",
         "",
         "--- included file: references/style.md ---",
+        "",
         "# Style",
         "",
         "Short.",
         "",
+        "",
         "--- included file: assets/a.json ---",
         '{"a": 1',
-        "(Cut at the size limit for included files; read_file assets/a.json from offset 7 has the rest.)",
+        "(Continues in the next get_skill page.)",
         "",
         "--- included file: references/other.md ---",
         "(Not at hand here; read_file has it.)",

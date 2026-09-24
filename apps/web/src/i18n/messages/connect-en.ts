@@ -54,6 +54,7 @@ export const connectEn = {
     addConnector: "Add custom connector",
     add: "Add",
     tools: "Tools",
+    toolNames: "browse · search · get_skill · read_file",
     enabled: "Enabled",
     newChat: "New chat",
     ask: "What skills can you help me with?",
@@ -131,7 +132,7 @@ export const connectEn = {
       steps: three(
         "Open a terminal in your project. Copy and run the command below.",
         "Start Claude Code with claude, then enter /mcp to check the server’s connection.",
-        "Send the first message below. You can also find the server’s skills in the slash-command menu.",
+        "Send the first message below. Your agent can browse folders, search for a skill and load its instructions.",
       ),
       note: "This command adds the server to the current project. Claude Code must already be installed.",
     },

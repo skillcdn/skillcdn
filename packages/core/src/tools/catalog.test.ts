@@ -1,24 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { parseRepoPath, type RepoPath } from "../repo-path.js";
 import {
-  type CatalogSkill,
-  type CatalogState,
   describeFindTool,
   FIND_DESCRIPTION_MAX_LENGTH,
   INSTRUCTIONS_MAX_LENGTH,
+  type MountCatalog,
   renderInstructions,
 } from "./catalog.js";
-import { findTool } from "./contracts.js";
-import type { MountSummary } from "./results.js";
+import type { BrowseEntry, MountSummary } from "./results.js";
 
-function path(input: string): RepoPath {
-  const result = parseRepoPath(input);
-  if (!result.ok) {
-    throw new Error(`invalid test path ${input}`);
-  }
-  return result.value;
+function path(value: string): RepoPath {
+  const parsed = parseRepoPath(value);
+  if (!parsed.ok) throw new Error(value);
+  return parsed.value;
 }
-
 const mount: MountSummary = {
   repository: "acme/skills",
   ref: "main",
@@ -27,214 +22,126 @@ const mount: MountSummary = {
   verified: true,
   truncated: false,
 };
-
-function never(): never {
-  throw new Error("expected a ready catalog");
-}
-
-const skill = (name: string, description: string, directory = `skills/${name}`): CatalogSkill => ({
-  name,
-  directory: path(directory),
-  description,
+const base: MountCatalog = {
+  mount,
+  manifest: undefined,
+  skills: [],
+  skillCount: 0,
+  documentCount: 0,
+  diagnostics: [],
+};
+const folder = (value: string): BrowseEntry => ({
+  kind: "directory",
+  path: path(value),
+  name: "Team skills",
+  description: "Use for releases and incidents.",
+  skillCount: 128,
+  documentCount: 2,
+  size: null,
+  manifestPath: `${value}/SKILLCDN.md`,
+  language: "en",
 });
-
-const ready = (
-  skills: readonly CatalogSkill[],
-  counts: { skillCount?: number; documentCount?: number } = {},
-): CatalogState => ({
-  status: "ready",
-  catalog: {
-    mount,
-    manifest: undefined,
-    skills,
-    skillCount: counts.skillCount ?? skills.length,
-    documentCount: counts.documentCount ?? 2,
-    diagnostics: [],
-  },
-});
-
-const broken = (name: string) => ({
-  path: path(`skills/${name}/SKILL.md`),
-  code: "invalid_front_matter",
-  message: "front-matter is not valid YAML",
-});
-
-describe("renderInstructions", () => {
-  it("lets a repository with a manifest introduce itself, and points at its rules", () => {
-    const state = ready([skill("incident-review", "Guides a blameless incident review.")]);
-    const catalog = state.status === "ready" ? state.catalog : never();
+describe("repository instructions", () => {
+  it("introduces real folders without loading their skills or rules", () => {
     const text = renderInstructions({
       status: "ready",
       catalog: {
-        ...catalog,
+        ...base,
+        groups: [folder("engineering")],
+        skillCount: 128,
         manifest: {
-          name: "Acme playbooks",
-          description: "The playbooks every Acme team runs. Use them for incidents and releases.",
+          name: "Company skills",
+          description: "Shared expertise.",
           path: path("SKILLCDN.md"),
           hasRules: true,
-          language: undefined,
+          language: "en",
         },
       },
     });
-    expect(text).toContain(
-      "This server serves Acme playbooks, the git repository acme/skills@main (commit 0123456): The playbooks every Acme team runs. Use them for incidents and releases. It has 1 skill and 2 other documents.",
-    );
-    expect(text).toContain(
-      "Rules that hold for every skill here come with each skill that get returns",
-    );
-    expect(text.length).toBeLessThanOrEqual(INSTRUCTIONS_MAX_LENGTH);
-
-    const unnamed = renderInstructions({
-      status: "ready",
-      catalog: {
-        ...catalog,
-        manifest: {
-          name: undefined,
-          description: "Playbooks.",
-          path: undefined,
-          hasRules: false,
-          language: undefined,
-        },
-      },
-    });
-    expect(unnamed).toContain("This server serves acme/skills, the git repository");
-    expect(unnamed).not.toContain("Rules that hold");
+    expect(text).toContain("Company skills: Shared expertise.");
+    expect(text).toContain("engineering/");
+    expect(text).toContain("128 skills");
+    expect(text).toContain("Use for releases and incidents.");
+    expect(text).toContain("get_skill");
+    expect(text).toContain("until complete");
+    expect(text).toContain("repository root");
   });
-
-  it("says which language the repository is written in, when it says", () => {
-    const state = ready([skill("greeting", "Greets people.")]);
-    const catalog = state.status === "ready" ? state.catalog : never();
-    const korean: CatalogState = {
+  it("always preserves discovery instructions within the budget, even for long paths", () => {
+    const text = renderInstructions({
       status: "ready",
       catalog: {
-        ...catalog,
+        ...base,
+        groups: Array.from({ length: 300 }, (_, index) =>
+          folder(`skills/${index}/${"x".repeat(900)}`),
+        ),
+        skillCount: 30000,
         manifest: {
-          name: "인사 스킬",
-          description: "인사말을 만드는 스킬입니다.",
+          name: "x".repeat(100),
+          description: "x".repeat(1024),
+          path: path("SKILLCDN.md"),
+          hasRules: true,
+          language: "ko",
+        },
+        diagnostics: Array.from({ length: 50 }, (_, index) => ({
+          path: path(`skills/${index}/${"x".repeat(900)}/SKILL.md`),
+          code: "unavailable",
+          message: "Missing body",
+        })),
+      },
+    });
+    expect(text.length).toBeLessThanOrEqual(INSTRUCTIONS_MAX_LENGTH);
+    expect(text).toContain("browse returns the full folder contents");
+    expect(text).toContain("until complete");
+    expect(text).toContain("Written in ko");
+  });
+  it("uses exact entrypoint paths to distinguish duplicate names", () => {
+    const text = renderInstructions({
+      status: "ready",
+      catalog: {
+        ...base,
+        skills: [
+          { name: "review", directory: path("engineering/review"), description: "Review code" },
+          { name: "review", directory: path("marketing/review"), description: "Review copy" },
+        ],
+        skillCount: 2,
+      },
+    });
+    expect(text).toContain("engineering/review/SKILL.md");
+    expect(text).toContain("marketing/review/SKILL.md");
+  });
+  it("reports diagnostics, document-only catalogs and index states", () => {
+    const text = renderInstructions({
+      status: "ready",
+      catalog: {
+        ...base,
+        documentCount: 7,
+        diagnostics: [
+          { path: path("team/SKILLCDN.md"), code: "unavailable", message: "Cannot read" },
+        ],
+      },
+    });
+    expect(text).toContain("0 skills, 7 documents");
+    expect(text).toContain("team/SKILLCDN.md");
+    expect(text).toContain("browse reports diagnostics");
+    expect(renderInstructions({ status: "indexing", mount })).toContain("being indexed");
+    expect(renderInstructions({ status: "failed", mount })).toContain("could not be indexed");
+  });
+  it("keeps the search description bounded without enumerating every skill", () => {
+    const text = describeFindTool({
+      status: "ready",
+      catalog: {
+        ...base,
+        manifest: {
+          name: "A",
+          description: "x".repeat(1024),
           path: path("SKILLCDN.md"),
           hasRules: false,
           language: "ko",
         },
       },
-    };
-    expect(renderInstructions(korean)).toContain(
-      "It has 1 skill and 2 other documents. Written in ko.\nSkills:",
-    );
-    expect(describeFindTool(korean)).toContain("Written in ko. Skills here: greeting.");
-    expect(renderInstructions(state)).not.toContain("Written in");
-  });
-
-  it("names the manifests that could not be read, so that a missing skill has a reason", () => {
-    const state = ready([skill("a", "A.")]);
-    const catalog = state.status === "ready" ? state.catalog : never();
-    const one = renderInstructions({
-      status: "ready",
-      catalog: { ...catalog, diagnostics: [broken("promo-video")] },
     });
-    expect(one).toContain(
-      "It has 1 skill and 2 other documents. 1 manifest could not be read and is not served (skills/promo-video/SKILL.md); find without a query says why.\nSkills:",
-    );
-    const five = renderInstructions({
-      status: "ready",
-      catalog: { ...catalog, diagnostics: ["a", "b", "c", "d", "e"].map(broken) },
-    });
-    expect(five).toContain(
-      "5 manifests could not be read and are not served (skills/a/SKILL.md, skills/b/SKILL.md, skills/c/SKILL.md and 2 more); find without a query says why.",
-    );
-    expect(five.length).toBeLessThanOrEqual(INSTRUCTIONS_MAX_LENGTH);
-    const none = renderInstructions({
-      status: "ready",
-      catalog: { ...catalog, skills: [], skillCount: 0, diagnostics: [broken("only")] },
-    });
-    expect(none).toContain("It has no skills; its 2 documents can be searched");
-    expect(none).toContain("1 manifest could not be read");
-  });
-
-  it("names every skill with its description, and says how to use one", () => {
-    const text = renderInstructions(
-      ready([
-        skill("incident-review", "Guides a blameless incident review."),
-        skill("release-notes", "Drafts release notes  from merged\nchanges."),
-      ]),
-    );
-    expect(text).toBe(
-      [
-        "This server serves the skills and documents of the git repository acme/skills@main (commit 0123456). It has 2 skills and 2 other documents.",
-        "Skills:",
-        "- incident-review: Guides a blameless incident review.",
-        "- release-notes: Drafts release notes from merged changes.",
-        "To use a skill, call get with its name, follow the instructions it returns, and read the files it points to with read_file; the files it needs on every run come with it. find matches words, in the language of the repository; read_file lists a directory when given one.",
-      ].join("\n"),
-    );
-    expect(text.length).toBeLessThanOrEqual(INSTRUCTIONS_MAX_LENGTH);
-  });
-
-  it("shortens the descriptions, then keeps only the names, to stay under the budget", () => {
-    const long = "A description that goes on and on. ".repeat(30);
-    const shortened = renderInstructions(ready([skill("a", long), skill("b", long)]));
-    expect(shortened.length).toBeLessThanOrEqual(INSTRUCTIONS_MAX_LENGTH);
-    expect(shortened).toContain("- a: A description that goes on");
-    expect(shortened).toContain("…");
-
-    const thirty = Array.from({ length: 30 }, (_, index) => skill(`skill-${index}`, long));
-    const namesOnly = renderInstructions(ready(thirty));
-    expect(namesOnly.length).toBeLessThanOrEqual(INSTRUCTIONS_MAX_LENGTH);
-    expect(namesOnly).toContain("skill-0, skill-1,");
-    expect(namesOnly).toContain("skill-29");
-    expect(namesOnly).not.toContain("goes on");
-  });
-
-  it("counts the skills that did not fit, and the ones beyond the listing cap", () => {
-    const wide = Array.from({ length: 100 }, (_, index) =>
-      skill(`a-rather-long-skill-name-number-${index}`, "x".repeat(1024)),
-    );
-    const text = renderInstructions(ready(wide, { skillCount: 250 }));
-    expect(text.length).toBeLessThanOrEqual(INSTRUCTIONS_MAX_LENGTH);
-    expect(text).toMatch(/\(and \d+ more; find without a query lists every skill\)/);
-    expect(text).toContain("It has 250 skills");
-  });
-
-  it("tells skills that share a name apart by their directory", () => {
-    const text = renderInstructions(
-      ready([
-        skill("review", "Reviews code.", "eng/review"),
-        skill("review", "Reviews copy.", "marketing/review"),
-        skill("deploy", "Deploys."),
-      ]),
-    );
-    expect(text).toContain("- review (eng/review): Reviews code.");
-    expect(text).toContain("- review (marketing/review): Reviews copy.");
-    expect(text).toContain("- deploy: Deploys.");
-  });
-
-  it("says when the index is not there, and when there are no skills", () => {
-    expect(renderInstructions({ status: "indexing", mount })).toContain(
-      "The commit is being indexed; in a few seconds, find lists its skills.",
-    );
-    expect(renderInstructions({ status: "failed", mount })).toContain("could not be indexed");
-    const none = renderInstructions(ready([], { documentCount: 7 }));
-    expect(none).toContain("It has no skills; its 7 documents can be searched with find");
-  });
-});
-
-describe("describeFindTool", () => {
-  it("names the skills after the usual description", () => {
-    const text = describeFindTool(ready([skill("a", "A."), skill("b", "B.")]));
-    expect(text).toBe(`${findTool.description} Skills here: a, b.`);
-  });
-
-  it("stays short with many or long names", () => {
-    const many = Array.from({ length: 100 }, (_, index) =>
-      skill(`a-rather-long-skill-name-number-${index}`, "x"),
-    );
-    const text = describeFindTool(ready(many, { skillCount: 120 }));
     expect(text.length).toBeLessThanOrEqual(FIND_DESCRIPTION_MAX_LENGTH);
-    expect(text).toMatch(/ \(and \d+ more\)\.$/);
-  });
-
-  it("says when there is nothing to name yet", () => {
-    expect(describeFindTool({ status: "indexing", mount })).toContain("being indexed");
-    expect(describeFindTool({ status: "failed", mount })).toBe(findTool.description);
-    expect(describeFindTool(ready([]))).toContain("no skills, only documents");
+    expect(text).toContain("Written in ko");
+    expect(text).toContain("nextCursor");
   });
 });

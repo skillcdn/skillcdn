@@ -1,7 +1,33 @@
 import type { RepoPath } from "../repo-path.js";
 import type { SkillTranslation } from "../skill-manifest.js";
 
-/** What a tool call was answered from. Every path in a result is relative to `path`. */
+export interface FileReference {
+  readonly source?: string;
+  readonly href: string;
+  readonly path: string;
+  readonly status: "available" | "outside_mount" | "missing" | "blocked";
+}
+export interface BrowseEntry {
+  readonly browsePath?: RepoPath;
+  readonly kind: "directory" | "skill" | "file";
+  readonly path: RepoPath;
+  readonly name: string | null;
+  readonly description: string | null;
+  readonly skillCount: number;
+  readonly documentCount: number;
+  readonly size: number | null;
+  readonly manifestPath: string | null;
+  readonly language: string | null;
+}
+export interface BrowseResult {
+  readonly diagnostics?: readonly IndexDiagnostic[];
+  readonly mount: MountSummary;
+  readonly path: RepoPath;
+  readonly entries: readonly BrowseEntry[];
+  readonly nextCursor: string | undefined;
+}
+
+/** What a tool call was answered from. Content paths are repository-root paths. */
 export interface MountSummary {
   /** `owner/name` as the host spells it. */
   readonly repository: string;
@@ -35,6 +61,7 @@ export interface FindFile {
 export type FindItem =
   | {
       readonly kind: "skill";
+      readonly path?: RepoPath;
       readonly name: string;
       readonly directory: RepoPath;
       readonly description: string;
@@ -55,6 +82,8 @@ export type FindItem =
     };
 
 export interface FindResult {
+  readonly path?: RepoPath;
+  readonly nextCursor?: string | undefined;
   readonly mount: MountSummary;
   readonly query: string | undefined;
   readonly items: readonly FindItem[];
@@ -64,31 +93,36 @@ export interface FindResult {
   readonly diagnostics: readonly IndexDiagnostic[];
 }
 
-/** How much of the repository's rules a skill result carries. `read_file` has the rest. */
+/** Legacy rendering bound; current get_skill context uses SKILL_PAGE_BYTES. */
 export const MAX_SKILL_RULES_LENGTH = 8_000;
 /** How much text the files a skill declares as needed on every run may add to it, together. */
 export const MAX_SKILL_INCLUDED_LENGTH = 100_000;
 
 /** The rules that hold for every skill of the repository, from its manifest (SKILLCDN.md). */
 export interface SkillRules {
-  /** The manifest, relative to the mounted root; `undefined` when it lies above the mount. */
+  /** The manifest's canonical repository-root path. */
   readonly path: RepoPath | undefined;
   readonly body: string;
-  /** True when the body was cut at `MAX_SKILL_RULES_LENGTH`. */
+  /** True when this page ends before the rule body is complete. */
   readonly truncated: boolean;
 }
 
 /** A file the skill declares as needed on every run, returned with the skill. */
 export interface IncludedFile {
-  /** Relative to the mounted root, like every path in a result. */
+  /** The canonical repository-root path. */
   readonly path: RepoPath;
   /** The text; `undefined` when it is not at hand (not indexed, or over the limits). */
   readonly content: string | undefined;
-  /** True when the content was cut at `MAX_SKILL_INCLUDED_LENGTH`. */
+  /** True when this page ends before the included file is complete. */
   readonly truncated: boolean;
 }
 
 export interface SkillResult {
+  readonly path?: RepoPath;
+  readonly ruleChain?: readonly SkillRules[];
+  readonly references?: readonly FileReference[];
+  readonly complete?: boolean;
+  readonly nextCursor?: string | undefined;
   readonly mount: MountSummary;
   readonly name: string;
   readonly directory: RepoPath;
@@ -111,6 +145,7 @@ export interface SkillResult {
 }
 
 export interface FileResult {
+  readonly references?: readonly FileReference[];
   readonly mount: MountSummary;
   readonly path: RepoPath;
   readonly content: string;

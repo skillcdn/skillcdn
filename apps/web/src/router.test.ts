@@ -21,8 +21,8 @@ describe("matchRoute", () => {
     expect(matchRoute("/gh/acme/skills", "?q=%20review%20")).toMatchObject({
       view: { kind: "overview", query: "review" },
     });
-    expect(matchRoute("/gh/acme/skills", "?skill=skills/release-notes")).toMatchObject({
-      view: { kind: "skill", name: "skills/release-notes" },
+    expect(matchRoute("/gh/acme/skills", "?skill=skills/release-notes/SKILL.md")).toMatchObject({
+      view: { kind: "skill", path: "skills/release-notes/SKILL.md" },
     });
     expect(matchRoute("/gh/acme/skills", "?file=docs/a%20b.md")).toMatchObject({
       view: { kind: "file", path: "docs/a b.md" },
@@ -52,7 +52,8 @@ describe("mountHref", () => {
     for (const view of [
       { kind: "overview", query: undefined },
       { kind: "overview", query: "blameless review" },
-      { kind: "skill", name: "skills/release notes" },
+      { kind: "overview", query: "review", path: "marketing/skills" },
+      { kind: "skill", path: "skills/release notes/SKILL.md" },
       { kind: "file", path: "docs/a&b=c?.md" },
     ] as const) {
       const [pathname = "", search = ""] = mountHref(parsed.value, view).split("?");

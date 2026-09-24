@@ -4,8 +4,8 @@ import { type Address, type AddressError, formatAddress, parseAddress } from "@s
 // Paths are the same in every language; the language travels in the query (i18n/languages.ts).
 
 export type MountView =
-  | { readonly kind: "overview"; readonly query: string | undefined }
-  | { readonly kind: "skill"; readonly name: string }
+  | { readonly kind: "overview"; readonly query: string | undefined; readonly path?: string }
+  | { readonly kind: "skill"; readonly path: string }
   | { readonly kind: "file"; readonly path: string };
 
 export type Route =
@@ -46,10 +46,14 @@ export function matchRoute(pathname: string, search: string, development = false
     const query = params.get("q")?.trim();
     const view: MountView =
       skill !== null && skill.length > 0
-        ? { kind: "skill", name: skill }
+        ? { kind: "skill", path: skill }
         : file !== null && file.length > 0
           ? { kind: "file", path: file }
-          : { kind: "overview", query: query === undefined || query === "" ? undefined : query };
+          : {
+              kind: "overview",
+              query: query === undefined || query === "" ? undefined : query,
+              ...(params.has("path") ? { path: params.get("path") ?? "" } : {}),
+            };
     return { name: "mount", address: parsed.value, view };
   }
   if (development && pathname === PATHS.states) {
@@ -66,11 +70,12 @@ export function mountHref(address: Address, view?: MountView): string {
   const path = formatAddress(address);
   const params = new URLSearchParams();
   if (view?.kind === "skill") {
-    params.set("skill", view.name);
+    params.set("skill", view.path);
   } else if (view?.kind === "file") {
     params.set("file", view.path);
-  } else if (view?.kind === "overview" && view.query !== undefined) {
-    params.set("q", view.query);
+  } else if (view?.kind === "overview") {
+    if (view.path !== undefined && view.path !== address.path) params.set("path", view.path);
+    if (view.query !== undefined) params.set("q", view.query);
   }
   const query = params.toString();
   return query.length === 0 ? path : `${path}?${query}`;

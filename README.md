@@ -43,13 +43,16 @@ Headless agents get a **project token**: repo-scoped, read-only, expiring, revoc
 
 | Tool | Purpose |
 |---|---|
-| `find` | search over skill descriptions and documents in the mounted repo |
-| `get` | return a skill by name, with its front-matter, its body and the files it needs on every run |
-| `read_file` | read a file, or list a directory, inside the mounted ref |
+| `browse` | page through the repository's real folders, with descriptions and counts |
+| `search` | search skills and documents within the mount or a chosen folder |
+| `get_skill` | load an exact `SKILL.md` path, its inherited rules and required files through bounded pages |
+| `read_file` | read a raw text file by its repository-root path |
 | `intake` | *(later)* walk a non-expert through the questions a skill declares |
 | `describe` / `run` | *(later)* composed tools declared in Markdown or YAML |
 
-Every skill is also offered as an MCP prompt, so that a client which turns prompts into commands lets a person call a skill up by name; and the server tells the agent which skills a repository holds as soon as it connects.
+One `use_skill(path)` prompt starts loading a skill. The server introduces the repository and its folders when an agent connects; browse and search provide the rest. Names are display metadata, and every content path keeps its actual spelling from the repository root.
+
+Connect the repository root by default, so one connection reaches skills for different tasks and their shared Markdown references. Sub-path connections remain available when a narrower scope is wanted. Optional `SKILLCDN.md` files describe folders and add common rules; nested rules arrive with each skill in order. Repositories without those manifests still work through their real folder structure.
 
 The repo declares things; it never ships code that we execute. This is a deliberate security boundary: SkillCDN runs no third-party code, on the server or on the user's machine.
 

@@ -23,6 +23,7 @@ async function call(client: Client, name: string, args: Record<string, unknown> 
   return {
     text: content.map((block) => block.text ?? "").join("\n"),
     isError: result.isError === true,
+    data: result.structuredContent as Record<string, unknown> | undefined,
   };
 }
 
@@ -97,48 +98,56 @@ describe("behind a reverse proxy", () => {
 });
 
 describe("a multi-skill repository", () => {
-  it("serves find, get and read_file to an MCP client", async () => {
+  it("serves browse, search, get_skill and read_file to an MCP client", async () => {
     const { connect, host, usage } = harness();
     const client = await connect("/gh/acme/multi-skill");
 
     const tools = await client.listTools();
-    expect(tools.tools.map((tool) => tool.name)).toEqual(["find", "get", "read_file"]);
+    expect(tools.tools.map((tool) => tool.name)).toEqual([
+      "browse",
+      "search",
+      "get_skill",
+      "read_file",
+    ]);
     expect(tools.tools.every((tool) => tool.annotations?.readOnlyHint === true)).toBe(true);
 
-    const listing = await call(client, "find");
+    const listing = await call(client, "browse", { path: "skills" });
     expect(listing.isError).toBe(false);
     expect(listing.text).toContain(
-      `in Acme/multi-skill (commit ${fixtureCommits().main.slice(0, 7)})`,
+      `Acme/multi-skill (commit ${fixtureCommits().main.slice(0, 7)})`,
     );
-    expect(listing.text).toContain("2 skills and 1 document in Acme/multi-skill");
-    expect(listing.text).toContain("1. skill: incident-review (skills/incident-review)");
-    expect(listing.text).toContain("2. skill: release-notes (skills/release-notes)");
-    expect(listing.text).toContain("document: docs/getting-started.md - Getting started");
+    expect(listing.text).toContain("skill: skills/incident-review/SKILL.md (incident-review)");
+    expect(listing.text).toContain("skill: skills/release-notes/SKILL.md (release-notes)");
+    expect((await call(client, "browse", { path: "docs" })).text).toContain(
+      "file: docs/getting-started.md",
+    );
     // The root README.md is for the git host: outside docs/, it is not served.
     expect(listing.text).not.toContain("README.md");
     // A skill's own files come with the skill, not on their own.
     expect(listing.text).not.toContain("references/style.md");
     expect(listing.text).toContain(PROVENANCE_NOTICE);
 
-    const search = await call(client, "find", { query: "how do I run a blameless review?" });
+    const search = await call(client, "search", { query: "how do I run a blameless review?" });
     expect(search.text).toContain("1. skill: incident-review");
 
     // A skill's file that matches is listed under the skill, which takes its place in the order.
-    const fragment = await call(client, "find", { query: "style guide" });
-    expect(fragment.text).toContain("1. skill: release-notes (skills/release-notes)");
+    const fragment = await call(client, "search", { query: "style guide" });
+    expect(fragment.text).toContain("1. skill: release-notes (skills/release-notes/SKILL.md)");
     expect(fragment.text).toContain(
-      "   Its files that match as well (get loads the skill; read_file reads one):\n   - skills/release-notes/references/style.md - Release notes style guide",
+      "   - skills/release-notes/references/style.md - Release notes style guide",
     );
     expect(fragment.text).not.toContain("document: skills/release-notes/references/style.md");
 
-    const skill = await call(client, "get", { name: "release-notes" });
+    const skill = await call(client, "get_skill", { path: "skills/release-notes/SKILL.md" });
     expect(skill.isError).toBe(false);
     expect(skill.text).toContain("Skill: release-notes");
     expect(skill.text).toContain("- skills/release-notes/references/style.md");
     expect(skill.text).toContain("Group them into");
     expect(skill.text).not.toContain("name: release-notes");
 
-    const byDirectory = await call(client, "get", { name: "skills/incident-review" });
+    const byDirectory = await call(client, "get_skill", {
+      path: "skills/incident-review/SKILL.md",
+    });
     expect(byDirectory.text).toContain("Skill: incident-review");
     expect(byDirectory.text).toContain("- skills/incident-review/scripts/collect.sh");
 
@@ -156,7 +165,16 @@ describe("a multi-skill repository", () => {
     expect(host.calls.getTree).toBe(1);
     expect(
       usage.filter((event) => event.type === "tool_call").map((event) => event.subject),
-    ).toEqual(["find", "find", "find", "get", "get", "read_file", "read_file"]);
+    ).toEqual([
+      "browse",
+      "browse",
+      "search",
+      "search",
+      "get_skill",
+      "get_skill",
+      "read_file",
+      "read_file",
+    ]);
     expect(usage.some((event) => event.type === "index_completed")).toBe(true);
     await client.close();
   });
@@ -181,8 +199,8 @@ describe("a multi-skill repository", () => {
       ["assets/logo.png", "not a UTF-8 text file"],
       ["docs/missing.md", "No file at docs/missing.md"],
       ["nowhere", "No file at nowhere"],
-      ["../single-skill/SKILL.md", "Not a valid path"],
-      ["/etc/passwd", "Not a valid path"],
+      ["../single-skill/SKILL.md", "Invalid repository-root path"],
+      ["/etc/passwd", "Invalid repository-root path"],
     ] as const) {
       const result = await call(client, "read_file", { path });
       expect(result.isError).toBe(true);
@@ -211,68 +229,74 @@ describe("a multi-skill repository", () => {
     expect(instructions).toContain(
       `Acme/multi-skill@${commit} (commit ${commit.slice(0, 7)}, under skills)`,
     );
-    expect(instructions).toContain("It has 2 skills and 0 other documents.");
-    expect(instructions).toContain("- incident-review: Guides a blameless incident review");
-    expect(instructions).toContain("- release-notes: Drafts release notes");
-    expect(instructions).toContain("call get with its name");
+    expect(instructions).toContain("2 skills, 0 documents.");
+    expect(instructions).toContain("skills/incident-review/SKILL.md");
+    expect(instructions).toContain("skills/release-notes/SKILL.md");
+    expect(instructions).toContain("get_skill using its exact SKILL.md path");
     expect(instructions.length).toBeLessThanOrEqual(INSTRUCTIONS_MAX_LENGTH);
     expect(client.getServerVersion()).toMatchObject({
       name: "skillcdn",
-      title: `Acme/multi-skill@${commit.slice(0, 7)}/skills`,
+      title: "Acme/multi-skill/skills",
       websiteUrl: `http://skillcdn.test/gh/acme/multi-skill@${commit}/skills`,
     });
-    const find = (await client.listTools()).tools.find((tool) => tool.name === "find");
-    expect(find?.description).toContain("Skills here: incident-review, release-notes.");
+    const find = (await client.listTools()).tools.find((tool) => tool.name === "browse");
+    expect(find?.description).toContain("Explore a repository folder");
     await client.close();
   });
 
-  it("offers every skill as a prompt", async () => {
+  it("offers one path-based prompt regardless of the number of skills", async () => {
     const h = harness();
     const first = await h.connect("/gh/acme/multi-skill");
-    await call(first, "find");
+    await call(first, "browse");
     await first.close();
 
     // The list is what the index knows when the client connects.
     const client = await h.connect("/gh/acme/multi-skill");
     const listed = await client.listPrompts();
     expect(listed.prompts.map((prompt) => [prompt.name, prompt.title])).toEqual([
-      ["incident-review", "incident-review"],
-      ["release-notes", "release-notes"],
+      ["use_skill", "Use a skill"],
     ]);
-    expect(listed.prompts[1]?.description).toContain("Drafts release notes");
+    expect(listed.prompts[0]?.arguments).toEqual([
+      expect.objectContaining({ name: "path", required: true }),
+    ]);
 
-    const prompt = await client.getPrompt({ name: "release-notes" });
-    expect(prompt.description).toContain("Drafts release notes");
+    const prompt = await client.getPrompt({
+      name: "use_skill",
+      arguments: { path: "skills/release-notes/SKILL.md" },
+    });
     const [message] = prompt.messages;
     expect(message?.role).toBe("user");
     const text = message?.content.type === "text" ? message.content.text : "";
     expect(text).toContain("Skill: release-notes");
     expect(text).toContain("- skills/release-notes/references/style.md");
     expect(text).toContain("Group them into");
-    expect(h.usage.filter((event) => event.subject === "prompt")).toHaveLength(1);
+    expect(h.usage.filter((event) => event.subject === "get_skill")).toHaveLength(1);
     await client.close();
   });
 
-  it("lists a directory through read_file", async () => {
+  it("lists directories through browse and directs file reads to it", async () => {
     const client = await harness().connect("/gh/acme/multi-skill");
 
-    const root = await call(client, "read_file", { path: "." });
+    const root = await call(client, "browse");
     expect(root.isError).toBe(false);
-    expect(root.text).toContain("Directory: the mounted root (2 entries)");
-    expect(root.text).toContain("- docs/");
-    expect(root.text).toContain("- skills/");
+    expect(root.text).toContain("Folder: repository root");
+    expect(root.text).toContain("- directory: docs");
+    expect(root.text).toContain("- directory: skills");
     expect(root.text).not.toContain("README.md");
 
-    const skill = await call(client, "read_file", { path: "skills/release-notes" });
-    expect(skill.text).toContain("Directory: skills/release-notes/ (2 entries)");
-    expect(skill.text).toContain("- skills/release-notes/references/");
-    expect(skill.text).toContain("- skills/release-notes/SKILL.md (");
+    const skill = await call(client, "browse", { path: "skills/release-notes" });
+    expect(skill.text).toContain("Folder: skills/release-notes");
+    expect(skill.text).toContain("- directory: skills/release-notes/references");
+    expect(skill.text).toContain("- skill: skills/release-notes/SKILL.md (");
+    expect((await call(client, "read_file", { path: "skills/release-notes" })).text).toContain(
+      "Call browse",
+    );
 
     expect((await call(client, "read_file", { path: "skills/nowhere" })).isError).toBe(true);
     await client.close();
   });
 
-  it("never serves hidden entries", async () => {
+  it("does not publish hidden entries without declarations", async () => {
     const host = createFixtureHost("hidden");
     const encode = (text: string) => new TextEncoder().encode(text);
     host.addFile(".editorconfig", encode("root = true\n"));
@@ -282,18 +306,18 @@ describe("a multi-skill repository", () => {
       `/gh/acme/multi-skill@${fixtureCommits("hidden").main}`,
     );
 
-    const listing = await call(client, "find");
-    expect(listing.text).toContain("2 skills and 1 document");
+    const listing = await call(client, "browse");
+    expect(listing.text).toContain("directory: skills; 2 skills");
     expect(listing.text).not.toContain(".draft.md");
-    const search = await call(client, "find", { query: "draft agents" });
+    const search = await call(client, "search", { query: "draft agents" });
     expect(search.text).not.toContain(".draft.md");
 
-    const root = await call(client, "read_file", { path: "." });
-    expect(root.text).toContain("(2 entries)");
+    const root = await call(client, "browse");
+    expect(root.data?.entries).toHaveLength(2);
     expect(root.text).not.toContain(".editorconfig");
     expect(root.text).not.toContain(".github");
-    const docs = await call(client, "read_file", { path: "docs" });
-    expect(docs.text).toContain("- docs/getting-started.md (");
+    const docs = await call(client, "browse", { path: "docs" });
+    expect(docs.text).toContain("- file: docs/getting-started.md (");
     expect(docs.text).not.toContain(".draft.md");
     for (const path of [".editorconfig", ".github", ".github/workflows/ci.yml", "docs/.draft.md"]) {
       expect((await call(client, "read_file", { path })).isError, path).toBe(true);
@@ -304,19 +328,24 @@ describe("a multi-skill repository", () => {
   it("confines a sub-path mount to its directory", async () => {
     const client = await harness().connect("/gh/acme/multi-skill@main/skills/release-notes");
 
-    const listing = await call(client, "find");
+    const listing = await call(client, "browse");
     expect(listing.text).toContain("under skills/release-notes");
-    expect(listing.text).toContain("1 skill and 0 documents in");
-    expect(listing.text).toContain("1. skill: release-notes (.)");
+    expect(listing.text).toContain("skill: skills/release-notes/SKILL.md (release-notes)");
     // The mount is one skill: its files come with the skill, not as documents of the mount.
     expect(listing.text).not.toContain("document: references/style.md");
     expect(listing.text).not.toContain("incident-review");
 
-    expect((await call(client, "get", { name: "release-notes" })).text).toContain(
-      "- references/style.md",
-    );
-    expect((await call(client, "get", { name: "incident-review" })).isError).toBe(true);
-    expect((await call(client, "read_file", { path: "references/style.md" })).isError).toBe(false);
+    expect(
+      (await call(client, "get_skill", { path: "skills/release-notes/SKILL.md" })).text,
+    ).toContain("- skills/release-notes/references/style.md");
+    expect(
+      (await call(client, "get_skill", { path: "skills/incident-review/SKILL.md" })).isError,
+    ).toBe(true);
+    expect(
+      (await call(client, "read_file", { path: "skills/release-notes/references/style.md" }))
+        .isError,
+    ).toBe(false);
+    expect((await call(client, "read_file", { path: "references/style.md" })).isError).toBe(true);
     // The file exists in the repository, outside the mount: it must look like it does not exist.
     expect((await call(client, "read_file", { path: "docs/getting-started.md" })).isError).toBe(
       true,
@@ -326,11 +355,11 @@ describe("a multi-skill repository", () => {
 
   it("resolves refs that contain a slash", async () => {
     const client = await harness().connect("/gh/acme/multi-skill@release/1.2:docs");
-    const listing = await call(client, "find");
+    const listing = await call(client, "browse");
     expect(listing.text).toContain(
       `Acme/multi-skill@release/1.2 (commit ${fixtureCommits().release.slice(0, 7)}, under docs)`,
     );
-    expect(listing.text).toContain("document: getting-started.md");
+    expect(listing.text).toContain("file: docs/getting-started.md");
     await client.close();
   });
 });
@@ -338,7 +367,7 @@ describe("a multi-skill repository", () => {
 describe("other repository shapes", () => {
   it("treats a root manifest as one skill that owns the repository", async () => {
     const client = await harness().connect("/gh/acme/single-skill");
-    const skill = await call(client, "get", { name: "commit-messages" });
+    const skill = await call(client, "get_skill", { path: "SKILL.md" });
     expect(skill.text).toContain("Relative paths in the instructions start at the mounted root.");
     expect(skill.text).toContain("- references/checklist.md");
     expect(skill.text).toContain("License: Apache-2.0");
@@ -352,22 +381,22 @@ describe("other repository shapes", () => {
     const client = await h.connect("/gh/acme/hostile");
     // The instructions count what could not be read, so that a model asked for one of those
     // skills by name does not look for it in vain.
-    expect(client.getInstructions()).toContain("It has 3 skills and 0 other documents.");
+    expect(client.getInstructions()).toContain("3 skills, 0 documents.");
     expect(client.getInstructions()).toMatch(
-      /7 manifests could not be read and are not served \(skills\/alias-bomb\/SKILL\.md, skills\/bad-yaml\/SKILL\.md, skills\/colon-in-description\/SKILL\.md and 4 more\); find without a query says why\./,
+      /7 index issues reported \(skills\/alias-bomb\/SKILL\.md, skills\/bad-yaml\/SKILL\.md, skills\/colon-in-description\/SKILL\.md\)/,
     );
 
-    const listing = await call(client, "find", { limit: 25 });
-    expect(listing.text).toContain("skill: Loud Name (skills/Loud_Name)");
-    expect(listing.text).toContain("skill: commented-value (skills/commented-value)");
-    expect(listing.text).toContain("skill: valid-neighbor (skills/valid-neighbor)");
+    const listing = await call(client, "browse", { path: "skills", limit: 25 });
+    expect(listing.text).toContain("skill: skills/Loud_Name/SKILL.md (Loud Name)");
+    expect(listing.text).toContain("skill: skills/commented-value/SKILL.md (commented-value)");
+    expect(listing.text).toContain("skill: skills/valid-neighbor/SKILL.md (valid-neighbor)");
     expect(listing.text).not.toContain("skill: alias-bomb");
     expect(listing.text).not.toContain("skill: tagged");
     // A SKILL.md that cannot be read as a skill is no document of the mount, but it stays
     // readable, so that the author can see what was found; the listing says why it is missing.
     expect(listing.text).not.toContain("document: skills/no-front-matter/SKILL.md");
     expect(listing.text).toContain(
-      "Manifests that could not be read, so what they declare is not served (fix them and push; the next commit is indexed anew):",
+      "Index diagnostics (fix the source or its limits; the next index reports the result):",
     );
     expect(listing.text).toContain(
       '- skills/colon-in-description/SKILL.md (invalid_front_matter): front-matter is not valid YAML (BLOCK_AS_IMPLICIT_KEY): the value of "description" contains ": "; quote the value or write it as a block scalar (>)',
@@ -378,25 +407,27 @@ describe("other repository shapes", () => {
     expect(unread.text).toContain("No front-matter");
 
     // Among search results, one line points at the listing.
-    const search = await call(client, "find", { query: "neighbor" });
+    const search = await call(client, "search", { query: "neighbor" });
     expect(search.text).toContain("1. skill: valid-neighbor");
-    expect(search.text).toContain(
-      "Note: 7 manifests could not be read and are not served; find without a query says which.",
-    );
+    expect(search.text).toContain("Note: 7 index issues reported; browse provides details.");
     expect(search.text).not.toContain("BLOCK_AS_IMPLICIT_KEY");
 
-    const loud = await call(client, "get", { name: "loud name" });
+    const loud = await call(client, "get_skill", { path: "skills/Loud_Name/SKILL.md" });
     expect(loud.isError).toBe(false);
     expect(loud.text).toContain("Warnings for the skill author:");
     // A value cut at a hash is served as YAML read it, and the author is told.
-    const commented = await call(client, "get", { name: "commented-value" });
+    const commented = await call(client, "get_skill", { path: "skills/commented-value/SKILL.md" });
     expect(commented.text).toContain("Description: Greets people\n");
     expect(commented.text).toContain('- the value of "description" is cut at " #"');
 
     // Asking for a skill that could not be read gets the reason, not only the list of the rest.
-    const unknown = await call(client, "get", { name: "colon-in-description" });
+    const unknown = await call(client, "get_skill", {
+      path: "skills/colon-in-description/SKILL.md",
+    });
     expect(unknown.isError).toBe(true);
-    expect(unknown.text).toContain("Available skills: Loud Name, commented-value, valid-neighbor.");
+    expect(unknown.text).toContain(
+      "Available: skills/Loud_Name/SKILL.md, skills/commented-value/SKILL.md, skills/valid-neighbor/SKILL.md.",
+    );
     expect(unknown.text).toContain(
       '- skills/colon-in-description/SKILL.md (invalid_front_matter): front-matter is not valid YAML (BLOCK_AS_IMPLICIT_KEY): the value of "description" contains ": "',
     );
@@ -415,25 +446,25 @@ describe("a repository with a manifest", () => {
   it("introduces itself, serves only what it declares, and hands its rules over with every skill", async () => {
     const h = harness();
     const client = await connectIndexed(h, "/gh/acme/with-manifest");
-    expect(client.getInstructions()).toContain(
-      "This server serves Acme playbooks, the git repository Acme/with-manifest",
-    );
+    expect(client.getInstructions()).toContain("Skills and documents from Acme/with-manifest");
     expect(client.getInstructions()).toContain("The playbooks every Acme team runs.");
-    expect(client.getInstructions()).toContain("Rules that hold for every skill here");
+    expect(client.getInstructions()).toContain("get_skill using its exact SKILL.md path");
     expect(client.getServerVersion()).toMatchObject({ title: "Acme playbooks" });
 
-    const listing = await call(client, "find");
-    expect(listing.text).toContain("1 skill and 1 document in Acme/with-manifest");
-    expect(listing.text).toContain("document: docs/guide.md - Using the playbooks");
+    const listing = await call(client, "browse");
+    expect(listing.text).toContain("directory: skills; 1 skills");
+    expect((await call(client, "browse", { path: "docs" })).text).toContain("file: docs/guide.md");
     expect(listing.text).not.toContain("README.md");
     expect(listing.text).not.toContain("notes/");
-    expect((await call(client, "find", { query: "not served" })).text).not.toContain("private.md");
+    expect((await call(client, "search", { query: "not served" })).text).not.toContain(
+      "private.md",
+    );
 
-    const root = await call(client, "read_file", { path: "." });
-    expect(root.text).toContain("Directory: the mounted root (3 entries)");
-    expect(root.text).toContain("- docs/");
-    expect(root.text).toContain("- skills/");
-    expect(root.text).toContain("- SKILLCDN.md (");
+    const root = await call(client, "browse");
+    expect(root.data?.entries).toHaveLength(2);
+    expect(root.text).toContain("- directory: docs");
+    expect(root.text).toContain("- directory: skills");
+    expect(root.text).not.toContain("- file: SKILLCDN.md");
     for (const path of ["README.md", "notes/private.md", "scripts/check.mjs", "notes"]) {
       expect((await call(client, "read_file", { path })).isError, path).toBe(true);
     }
@@ -442,11 +473,13 @@ describe("a repository with a manifest", () => {
     );
     expect((await call(client, "read_file", { path: "docs/guide.md" })).isError).toBe(false);
 
-    const skill = await call(client, "get", { name: "greeting" });
+    const skill = await call(client, "get_skill", { path: "skills/greeting/SKILL.md" });
     expect(skill.text).toContain(
-      "--- rules for every skill in this repository (from SKILLCDN.md) ---\n# Rules for every skill in this repository\n\n- Ask when a choice changes the result",
+      "--- applicable rules: SKILLCDN.md ---\n# Rules for every skill in this repository\n\n- Ask when a choice changes the result",
     );
-    expect(skill.text.indexOf("--- rules")).toBeLessThan(skill.text.indexOf("--- instructions"));
+    expect(skill.text.indexOf("--- applicable rules")).toBeLessThan(
+      skill.text.indexOf("--- instructions"),
+    );
     // The file the skill declares as needed on every run comes with it, after the instructions.
     expect(skill.text).toContain("- skills/greeting/references/tone.md (included below)");
     expect(skill.text).toContain(
@@ -457,28 +490,29 @@ describe("a repository with a manifest", () => {
     );
     // Translations are for people; a model reads the original.
     expect(skill.text).not.toContain("인사말");
-    const prompt = await client.getPrompt({ name: "greeting" });
+    const prompt = await client.getPrompt({
+      name: "use_skill",
+      arguments: { path: "skills/greeting/SKILL.md" },
+    });
     expect(prompt.messages[0]?.content).toMatchObject({ type: "text" });
-    expect(JSON.stringify(prompt.messages[0]?.content)).toContain("rules for every skill");
+    expect(JSON.stringify(prompt.messages[0]?.content)).toContain("applicable rules");
     expect(JSON.stringify(prompt.messages[0]?.content)).toContain("included file");
     await client.close();
   });
 
   it("says which language the repository is written in", async () => {
     const client = await connectIndexed(harness(), "/gh/acme/with-manifest");
-    expect(client.getInstructions()).toContain(
-      "It has 1 skill and 1 other document. Written in en.",
-    );
-    const find = (await client.listTools()).tools.find((tool) => tool.name === "find");
-    expect(find?.description).toContain("Written in en. Skills here: greeting.");
+    expect(client.getInstructions()).toContain("1 skill, 1 document. Written in en");
+    const find = (await client.listTools()).tools.find((tool) => tool.name === "browse");
+    expect(find?.description).toContain("Explore a repository folder");
     await client.close();
   });
 
   it("governs a sub-path mount from above it", async () => {
     const client = await connectIndexed(harness(), "/gh/acme/with-manifest@main/skills");
-    expect(client.getInstructions()).toContain("This server serves Acme playbooks");
-    const skill = await call(client, "get", { name: "greeting" });
-    expect(skill.text).toContain("(from the repository manifest above the mounted directory) ---");
+    expect(client.getInstructions()).toContain("Acme playbooks");
+    const skill = await call(client, "get_skill", { path: "skills/greeting/SKILL.md" });
+    expect(skill.text).toContain("--- applicable rules: SKILLCDN.md ---");
     // The manifest lies outside the mount, so it cannot be read from here.
     expect((await call(client, "read_file", { path: "SKILLCDN.md" })).isError).toBe(true);
     await client.close();
@@ -494,19 +528,27 @@ describe("a repository with a manifest", () => {
       harness({ host }),
       `/gh/acme/multi-skill@${fixtureCommits("broken-manifest").main}`,
     );
-    expect(client.getInstructions()).toContain("the skills and documents of the git repository");
+    expect(client.getInstructions()).toContain("Skills and documents from");
     expect(client.getInstructions()).not.toContain("Broken");
-    const listing = await call(client, "find");
-    expect(listing.text).toContain("2 skills and 0 documents");
+    const listing = await call(client, "browse");
+    expect(listing.text).toContain("directory: skills; 2 skills, 0 documents");
     expect((await call(client, "read_file", { path: "README.md" })).isError).toBe(true);
     // The file itself stays readable, so the author can see what was found.
     expect((await call(client, "read_file", { path: "SKILLCDN.md" })).isError).toBe(false);
-    expect((await call(client, "get", { name: "release-notes" })).text).not.toContain("--- rules");
+    const incomplete = await call(client, "get_skill", { path: "skills/release-notes/SKILL.md" });
+    expect(incomplete.text).toContain("Skill context is incomplete");
+    expect(incomplete.data?.complete).toBe(false);
     await client.close();
   });
 
   it("keeps its files out of reach while the commit is still being indexed", async () => {
     const host = createFixtureHost("manifest-indexing");
+    host.addFile("skills/broken/SKILL.md", new TextEncoder().encode("Invalid declaration."));
+    host.addFile("skills/broken/notes.md", new TextEncoder().encode("Undeclared supporting file."));
+    host.addFile(
+      "skills/greeting/references/wait.md",
+      new TextEncoder().encode("Declared support."),
+    );
     const indexingStarted = Promise.withResolvers<void>();
     const resumeIndexing = Promise.withResolvers<void>();
     const getTree = host.getTree;
@@ -532,17 +574,25 @@ describe("a repository with a manifest", () => {
         call(client, "read_file", { path: "docs/guide.md" }),
         call(client, "read_file", { path: "skills/greeting/SKILL.md" }),
       ]);
-      expect(root.text).toContain("- skills/");
-      expect(root.text).toContain("- SKILLCDN.md (");
+      expect(root.isError).toBe(true);
+      expect(root.text).toContain("Call browse");
       expect(root.text).not.toContain("README.md");
       expect(root.text).not.toContain("notes/");
       // Nothing has read the manifest yet, so its declared directory is not served: closed, not guessed.
       expect(guide.isError).toBe(true);
       expect(skill.isError).toBe(false);
+      for (const path of ["skills/broken/notes.md", "skills/greeting/references/wait.md"])
+        expect((await call(client, "read_file", { path })).isError, path).toBe(true);
 
       resumeIndexing.resolve();
       await snapshots.idle();
       expect((await call(client, "read_file", { path: "docs/guide.md" })).isError).toBe(false);
+      expect((await call(client, "read_file", { path: "skills/broken/notes.md" })).isError).toBe(
+        true,
+      );
+      expect(
+        (await call(client, "read_file", { path: "skills/greeting/references/wait.md" })).isError,
+      ).toBe(false);
     } finally {
       resumeIndexing.resolve();
       await snapshots.idle();
@@ -555,7 +605,7 @@ describe("a repository the operator vouches for", () => {
   it("carries no provenance notice, while every other repository does", async () => {
     const h = harness({ verified: ["/gh/Acme/single-skill"] });
     const vouched = await h.connect("/gh/acme/single-skill");
-    const skill = await call(vouched, "get", { name: "commit-messages" });
+    const skill = await call(vouched, "get_skill", { path: "SKILL.md" });
     expect(skill.isError).toBe(false);
     expect(skill.text).not.toContain(PROVENANCE_NOTICE);
     expect((await call(vouched, "read_file", { path: "SKILL.md" })).text).not.toContain(
@@ -564,7 +614,7 @@ describe("a repository the operator vouches for", () => {
     await vouched.close();
 
     const other = await h.connect("/gh/acme/multi-skill");
-    expect((await call(other, "find")).text).toContain(PROVENANCE_NOTICE);
+    expect((await call(other, "browse")).text).toContain(PROVENANCE_NOTICE);
     await other.close();
   });
 });
@@ -646,7 +696,7 @@ describe("while a commit is being indexed", () => {
     const { connect, snapshots } = harness({ host, indexWaitMs: 200 });
     const client = await connect(`/gh/acme/hostile@${fixtureCommits("indexing").release}`);
 
-    const early = await call(client, "find", { query: "fresh" });
+    const early = await call(client, "search", { query: "fresh" });
     expect(early.isError).toBe(false);
     expect(early.text).toBe(INDEXING_NOTICE);
 
@@ -655,7 +705,7 @@ describe("while a commit is being indexed", () => {
     expect((await reading).text).toContain("Fresh content.");
 
     await snapshots.idle();
-    const late = await call(client, "find", { query: "fresh" });
+    const late = await call(client, "search", { query: "fresh" });
     expect(late.text).toContain("document: docs/only-here.md - Only here");
     await client.close();
   });
@@ -680,7 +730,7 @@ Only the archive test has this text: zeppelin ${index}.
     // Pinned: the default branch of this repository is already cached at another test's commit.
     const client = await connect(`/gh/acme/multi-skill@${fixtureCommits("archive").main}`);
 
-    const found = await call(client, "find", { query: "zeppelin" });
+    const found = await call(client, "search", { query: "zeppelin" });
     expect(found.text).toContain("6 results");
     expect(host.calls.readArchive).toBe(1);
     // Only the file whose archived copy did not match its hash went the slow way.
@@ -697,7 +747,7 @@ Only the archive test has this text: zeppelin ${index}.
     const client = await harness({ host }).connect(
       `/gh/acme/single-skill@${fixtureCommits("archive-small").main}`,
     );
-    expect((await call(client, "get", { name: "commit-messages" })).isError).toBe(false);
+    expect((await call(client, "get_skill", { path: "SKILL.md" })).isError).toBe(false);
     expect(host.calls.readArchive).toBe(0);
     await client.close();
   });
@@ -773,8 +823,9 @@ describe("clients from the previous protocol era", () => {
 
     const listed = await post({ jsonrpc: "2.0", id: 2, method: "tools/list" });
     expect((listed.result.tools as { name: string }[]).map((tool) => tool.name)).toEqual([
-      "find",
-      "get",
+      "browse",
+      "search",
+      "get_skill",
       "read_file",
     ]);
 
@@ -782,7 +833,7 @@ describe("clients from the previous protocol era", () => {
       jsonrpc: "2.0",
       id: 3,
       method: "tools/call",
-      params: { name: "get", arguments: { name: "commit-messages" } },
+      params: { name: "get_skill", arguments: { path: "SKILL.md" } },
     });
     expect(JSON.stringify(called.result.content)).toContain("Skill: commit-messages");
 

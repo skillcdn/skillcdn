@@ -35,3 +35,4 @@ One short file per decision that has lasting consequences and that a future cont
 | [0019](0019-the-operator-vouches-for-repositories-until-owners-can.md) | The provenance notice warns about what goes beyond the task; the operator vouches for repositories until owners can | Accepted |
 | [0020](0020-a-check-role-reads-a-working-tree-with-the-indexer.md) | A `check` role reads a working tree with the indexer; whatever the indexer skips is reported everywhere | Accepted |
 | [0021](0021-a-url-without-a-language-is-served-in-the-language-asked-for.md) | A URL without a language is served in the language the request asks for, and says it varies; `?lang=` still forces one | Accepted |
+| [0022](0022-repository-paths-and-progressive-skill-loading.md) | Canonical repository paths, four paged tools, complete inherited rules, declared hidden skills and local Markdown references; partially supersedes 0012, 0014, 0016 and 0018 | Accepted |

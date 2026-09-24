@@ -1,4 +1,5 @@
 import {
+  restBrowseSchema,
   restErrorSchema,
   restFeaturedSchema,
   restFileSchema,
@@ -89,6 +90,10 @@ describe("GET /api/v1/mounts/<address>", () => {
       ["incident-review", "skills/incident-review"],
       ["release-notes", "skills/release-notes"],
     ]);
+    expect(mount.index.skills.map((skill) => skill.path)).toEqual([
+      "skills/incident-review/SKILL.md",
+      "skills/release-notes/SKILL.md",
+    ]);
     expect(mount.index.skillCount).toBe(2);
     expect(mount.index.documents.map((document) => document.path)).toContain(
       "docs/getting-started.md",
@@ -130,7 +135,9 @@ describe("GET /api/v1/mounts/<address>", () => {
     });
 
     const skill = restSkillSchema.parse(
-      await (await h.request("/api/v1/skills/gh/acme/with-manifest?name=greeting")).json(),
+      await (
+        await h.request("/api/v1/skills/gh/acme/with-manifest?path=skills/greeting/SKILL.md")
+      ).json(),
     );
     if (skill.status !== "ready") {
       throw new Error("expected a ready skill");
@@ -146,13 +153,17 @@ describe("GET /api/v1/mounts/<address>", () => {
 
     const above = restSkillSchema.parse(
       await (
-        await h.request("/api/v1/skills/gh/acme/with-manifest@main/skills?name=greeting")
+        await h.request(
+          "/api/v1/skills/gh/acme/with-manifest@main/skills?path=skills/greeting/SKILL.md",
+        )
       ).json(),
     );
-    expect(above.status === "ready" ? above.skill.rules?.path : "unexpected").toBeNull();
+    expect(above.status === "ready" ? above.skill.ruleChain?.map((rule) => rule.path) : []).toEqual(
+      ["SKILLCDN.md"],
+    );
   });
 
-  it("answers for the default branch and for a sub-path, with paths relative to the mount", async () => {
+  it("answers for the default branch and for a sub-path, with paths from the repository root", async () => {
     const h = harness();
     await indexed(h, "/gh/acme/multi-skill");
     const whole = restMountSchema.parse(
@@ -169,7 +180,7 @@ describe("GET /api/v1/mounts/<address>", () => {
     if (sub.index.status !== "ready") {
       throw new Error("expected a ready index");
     }
-    expect(sub.index.skills.map((skill) => skill.directory)).toEqual([""]);
+    expect(sub.index.skills.map((skill) => skill.directory)).toEqual(["skills/release-notes"]);
     // The mount is one skill, so its files are the skill's, not documents of the mount.
     expect(sub.index.documents).toEqual([]);
     expect(sub.index.documentCount).toBe(0);
@@ -188,15 +199,29 @@ describe("GET /api/v1/mounts/<address>", () => {
     const skipped = mount.index.diagnostics.map((diagnostic) => diagnostic.path);
     expect(skipped).toContain("skills/missing-description/SKILL.md");
     expect(skipped).toContain("skills/alias-bomb/SKILL.md");
+    const browse = restBrowseSchema.parse(
+      await (await h.request("/api/v1/browse/gh/acme/hostile?path=skills")).json(),
+    );
+    const search = restFindSchema.parse(
+      await (await h.request("/api/v1/find/gh/acme/hostile?query=neighbor")).json(),
+    );
+    expect(browse.status === "ready" ? browse.diagnostics : undefined).toEqual(
+      mount.index.diagnostics,
+    );
+    expect(search.status === "ready" ? search.diagnostics : undefined).toEqual(
+      mount.index.diagnostics,
+    );
 
-    // Inside a mounted directory: only what is in it, with paths relative to it.
+    // Inside a mounted directory: only what is in it, with repository-root paths.
     const inside = restMountSchema.parse(
       await (await h.request("/api/v1/mounts/gh/acme/hostile/skills/alias-bomb")).json(),
     );
     if (inside.index.status !== "ready") {
       throw new Error("expected a ready index");
     }
-    expect(inside.index.diagnostics.map((diagnostic) => diagnostic.path)).toEqual(["SKILL.md"]);
+    expect(inside.index.diagnostics.map((diagnostic) => diagnostic.path)).toEqual([
+      "skills/alias-bomb/SKILL.md",
+    ]);
   });
 
   it("answers like the MCP endpoint when the address is wrong or names nothing", async () => {
@@ -230,20 +255,45 @@ describe("GET /api/v1/find/<address>", () => {
     const listing = restFindSchema.parse(
       await (await h.request("/api/v1/find/gh/acme/multi-skill?limit=2")).json(),
     );
-    // Every skill, then up to `limit` documents outside the skills.
+    // The limit applies to the final result units; continuation reaches the document too.
     expect(listing).toEqual({
       status: "ready",
       query: null,
+      commit: fixtureCommits().main,
+      path: "",
+      nextCursor: expect.any(String),
+      diagnostics: [],
       items: [
-        expect.objectContaining({ kind: "skill", name: "incident-review" }),
-        expect.objectContaining({ kind: "skill", name: "release-notes" }),
         expect.objectContaining({
-          kind: "document",
-          path: "docs/getting-started.md",
-          skillDirectory: null,
+          kind: "skill",
+          name: "incident-review",
+          path: "skills/incident-review/SKILL.md",
+        }),
+        expect.objectContaining({
+          kind: "skill",
+          name: "release-notes",
+          path: "skills/release-notes/SKILL.md",
         }),
       ],
       totals: { skills: 2, documents: 1 },
+    });
+    if (
+      listing.status !== "ready" ||
+      listing.nextCursor === null ||
+      listing.nextCursor === undefined
+    )
+      throw new Error("expected another page");
+    const next = restFindSchema.parse(
+      await (
+        await h.request(
+          `/api/v1/find/gh/acme/multi-skill?limit=2&cursor=${encodeURIComponent(listing.nextCursor)}`,
+        )
+      ).json(),
+    );
+    expect(next).toMatchObject({
+      status: "ready",
+      nextCursor: null,
+      items: [{ kind: "document", path: "docs/getting-started.md", skillDirectory: null }],
     });
 
     const search = restFindSchema.parse(
@@ -285,19 +335,23 @@ describe("GET /api/v1/find/<address>", () => {
 });
 
 describe("GET /api/v1/skills/<address>", () => {
-  it("returns a skill by name and by directory", async () => {
+  it("returns a skill by its exact repository-root SKILL.md path", async () => {
     const h = harness();
     await indexed(h, "/gh/acme/multi-skill");
-    for (const name of ["release-notes", "skills/release-notes"]) {
+    for (const mountPath of ["", "/skills/release-notes"]) {
       const answer = restSkillSchema.parse(
         await (
-          await h.request(`/api/v1/skills/gh/acme/multi-skill?name=${encodeURIComponent(name)}`)
+          await h.request(
+            `/api/v1/skills/gh/acme/multi-skill${mountPath}?path=skills/release-notes/SKILL.md`,
+          )
         ).json(),
       );
       if (answer.status !== "ready") {
         throw new Error("expected a ready index");
       }
       expect(answer.skill).toMatchObject({
+        path: "skills/release-notes/SKILL.md",
+        complete: true,
         name: "release-notes",
         directory: "skills/release-notes",
         filesTruncated: false,
@@ -310,10 +364,12 @@ describe("GET /api/v1/skills/<address>", () => {
     }
   });
 
-  it("says when there is no such skill, and when the name is missing", async () => {
+  it("says when there is no such skill, and when the path is missing", async () => {
     const h = harness();
     await indexed(h, "/gh/acme/multi-skill");
-    const missing = await h.request("/api/v1/skills/gh/acme/multi-skill?name=no-such-skill");
+    const missing = await h.request(
+      "/api/v1/skills/gh/acme/multi-skill?path=no-such-skill/SKILL.md",
+    );
     expect(missing.status).toBe(404);
     expect((await errorOf(missing)).code).toBe("skill.not_found");
     const unnamed = await h.request("/api/v1/skills/gh/acme/multi-skill");
@@ -323,6 +379,31 @@ describe("GET /api/v1/skills/<address>", () => {
 });
 
 describe("GET /api/v1/files/<address>", () => {
+  it("reads explicitly linked files without enumerating their folder through the file endpoint", async () => {
+    const host = createFixtureHost("rest-linked-directory");
+    host.addFile(
+      "skills/linked/SKILL.md",
+      new TextEncoder().encode(
+        "---\nname: linked\ndescription: Read a linked guide.\n---\n[Guide](/shared/guide.md)",
+      ),
+    );
+    host.addFile("shared/guide.md", new TextEncoder().encode("# Linked guide\n"));
+    const h = harness({ host });
+    const address = `/gh/acme/multi-skill@${fixtureCommits("rest-linked-directory").main}`;
+    await indexed(h, address);
+    expect((await h.request(`/api/v1/files${address}?path=shared/guide.md`)).status).toBe(200);
+    const directory = await h.request(`/api/v1/files${address}?path=shared`);
+    expect(directory.status).toBe(400);
+    expect(await errorOf(directory)).toEqual({
+      code: "request.invalid",
+      message: "Use browse for directories.",
+    });
+    const root = restBrowseSchema.parse(await (await h.request(`/api/v1/browse${address}`)).json());
+    expect(root.status === "ready" ? root.entries.map((entry) => entry.path) : []).not.toContain(
+      "shared",
+    );
+  });
+
   it("pages a text file and explains what it cannot read", async () => {
     const host = createFixtureHost("rest-files");
     host.addFile("docs/long.md", new TextEncoder().encode(`# Long\n\n${"0123456789".repeat(200)}`));
@@ -352,19 +433,27 @@ describe("GET /api/v1/files/<address>", () => {
     );
     expect(second).toMatchObject({ offset: 1000, nextOffset: null });
 
-    // A directory answers with its entries, from the tree while there is no index.
-    const directory = restFileSchema.parse(await (await h.request(fileUrl("path=docs"))).json());
-    expect(directory).toEqual({
-      kind: "directory",
+    for (const path of ["docs", "."]) {
+      const directory = await h.request(fileUrl(`path=${path}`));
+      expect(directory.status).toBe(400);
+      expect(await errorOf(directory)).toEqual({
+        code: "request.invalid",
+        message: "Use browse for directories.",
+      });
+    }
+    await indexed(h, address);
+    const directory = restBrowseSchema.parse(
+      await (await h.request(`/api/v1/browse${address}?path=docs`)).json(),
+    );
+    expect(directory).toMatchObject({
+      status: "ready",
       path: "docs",
+      nextCursor: null,
       entries: [
         { path: "docs/huge.md", kind: "file", size: 5000 },
         { path: "docs/long.md", kind: "file", size: 2008 },
       ],
-      truncated: false,
     });
-    const root = restFileSchema.parse(await (await h.request(fileUrl("path=."))).json());
-    expect(root).toMatchObject({ kind: "directory", path: "" });
 
     for (const [query, status, code] of [
       ["path=docs/missing.md", 404, "file.not_found"],

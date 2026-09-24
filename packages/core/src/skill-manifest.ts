@@ -1,4 +1,4 @@
-import { parseFrontMatter, splitFrontMatter } from "./front-matter.js";
+import { MAX_FRONT_MATTER_LENGTH, parseFrontMatter, splitFrontMatter } from "./front-matter.js";
 import {
   commentedValueWarnings,
   MAX_OPTIONAL_FIELD_LENGTH,
@@ -8,7 +8,7 @@ import {
   requiredLine,
   requiredText,
 } from "./manifest-fields.js";
-import { classifyRepoFile, isHiddenPath } from "./repo-layout.js";
+import { classifyRepoFile } from "./repo-layout.js";
 import { parseRepoPath, type RepoPath } from "./repo-path.js";
 import { err, ok, type Result } from "./result.js";
 
@@ -66,6 +66,7 @@ export interface SkillManifestError {
 }
 
 export type SkillManifestWarningCode =
+  | "long_description"
   | "unconventional_name"
   | "name_directory_mismatch"
   | "ignored_field"
@@ -110,7 +111,6 @@ function readIncludedFiles(value: unknown, ignored: (message: string) => void): 
     const usable =
       parsed?.ok === true &&
       parsed.value.length > 0 &&
-      !isHiddenPath(parsed.value) &&
       (kind === "markdown" || kind === "json") &&
       files.length < MAX_INCLUDED_FILES;
     if (!usable) {
@@ -161,15 +161,20 @@ export function parseSkillManifest(
   if (name === undefined) {
     return fail("invalid_name", `"name" must be 1 to ${MAX_SKILL_NAME_LENGTH} characters of text`);
   }
-  const description = requiredText(fields.get("description"), MAX_SKILL_DESCRIPTION_LENGTH);
+  const description = requiredText(fields.get("description"), MAX_FRONT_MATTER_LENGTH);
   if (description === undefined) {
     return fail(
       "invalid_description",
-      `"description" must be 1 to ${MAX_SKILL_DESCRIPTION_LENGTH} characters of text`,
+      '"description" must be nonempty text without control or invisible characters',
     );
   }
 
   const warnings: SkillManifestWarning[] = [];
+  if (description.length > MAX_SKILL_DESCRIPTION_LENGTH)
+    warnings.push({
+      code: "long_description",
+      message: `"description" exceeds the recommended ${MAX_SKILL_DESCRIPTION_LENGTH} characters; it is preserved within the front-matter size limit`,
+    });
   if (!CONVENTIONAL_SKILL_NAME.test(name)) {
     warnings.push({
       code: "unconventional_name",

@@ -3,7 +3,7 @@ import type { Messages } from "./en.js";
 import { landingKo } from "./landing-ko.js";
 
 // Korean pack. Language packs are the one place where committed text is not English.
-// Keep technical terms that readers search for in their original form: MCP, SKILL.md, find, get.
+// Keep technical terms that readers search for in their original form: MCP, SKILL.md, browse, search, get_skill.
 
 export const ko: Messages = {
   meta: {
@@ -58,6 +58,7 @@ export const ko: Messages = {
     copied: "복사됨",
     loading: "불러오는 중…",
     retry: "다시 시도",
+    reload: "처음부터 다시 불러오기",
     back: "뒤로",
   },
 
@@ -139,13 +140,21 @@ export const ko: Messages = {
       lead: "아래 매니페스트는 제공되지 않았습니다. 수정해서 푸시하면 다음 커밋부터 다시 색인됩니다.",
     },
     warnings: (count: number) => `경고 ${count}개`,
+    browse: {
+      title: "저장소 둘러보기",
+      root: "저장소 루트",
+      breadcrumb: "저장소 폴더",
+      empty: "이 폴더에 스킬이나 파일이 없습니다.",
+      counts: (skills: number, documents: number) => `스킬 ${skills}개 · 문서 ${documents}개`,
+    },
     search: {
-      label: "이 마운트에서 검색",
-      placeholder: "스킬과 문서 검색…",
+      label: "이 폴더와 하위 폴더 검색",
+      placeholder: "이 폴더에서 검색…",
+      hint: "원문의 언어(대개 영어)로 검색하세요. 화면용 번역은 검색에 쓰이지 않습니다.",
       submit: "검색",
       clear: "지우기",
-      resultsFor: (query: string) => `“${query}”에 대해 find가 반환하는 결과`,
-      none: "일치하는 항목이 없습니다. find는 검색어의 단어 중 하나라도 일치하면 결과로 돌려줍니다.",
+      resultsFor: (query: string) => `“${query}” 검색 결과`,
+      none: "이 폴더에서 일치하는 항목을 찾지 못했습니다. 다른 검색어나 상위 폴더에서 찾아보세요.",
     },
     kinds: { skill: "스킬", document: "문서" },
     partOfSkill: (directory: string) => `${directory} 스킬에 속한 파일`,
@@ -153,6 +162,7 @@ export const ko: Messages = {
 
   skill: {
     all: "전체 스킬과 문서",
+    translationNote: "화면에 표시하기 위한 번역입니다. 에이전트는 스킬 원문을 읽습니다.",
     name: "이름",
     directory: "디렉터리",
     license: "라이선스",
@@ -161,13 +171,17 @@ export const ko: Messages = {
     metadata: "메타데이터",
     files: "이 스킬의 파일",
     filesTruncated: "앞쪽 파일만 표시됩니다.",
+    browseFiles: "지원 파일 전체 둘러보기",
+    browseChildren: "파일과 하위 스킬 둘러보기",
+    incomplete:
+      "스킬의 지침이 아직 전부 로드되지 않았습니다. 계속 읽어 상위 폴더의 규칙과 필수 내용을 확인하세요.",
+    moreContext: "남은 지침 불러오기",
     noFiles: "이 스킬에는 보조 파일이 없습니다.",
     included: "스킬과 함께 전달됨",
     warnings: "작성자를 위한 경고",
     root: "(저장소 루트)",
-    rules: "이 저장소의 모든 스킬에 적용되는 규칙",
-    rulesSource: (path: string) =>
-      `${path}에서 가져왔습니다. 에이전트는 스킬을 불러올 때마다 이 규칙을 함께 받습니다.`,
+    rules: "상위 폴더에서 적용된 규칙",
+    rulesSource: (path: string) => `${path}에서 가져왔습니다. 이 스킬에 적용되는 규칙입니다.`,
     rulesAbove:
       "마운트된 디렉터리 위에 있는 저장소 매니페스트에서 가져왔습니다. 에이전트는 스킬을 불러올 때마다 이 규칙을 함께 받습니다.",
     rulesTruncated: "앞부분만 표시됩니다. 전체 내용은 매니페스트에 있습니다.",
@@ -179,6 +193,7 @@ export const ko: Messages = {
     showing: (from: number, to: number, total: number) =>
       `전체 ${total.toLocaleString("ko")}자 중 ${from.toLocaleString("ko")}~${to.toLocaleString("ko")}자`,
     more: "더 불러오기",
+    referenceUnavailable: "이 연결에서 읽을 수 없는 참조입니다.",
     imageOmitted: "이미지는 불러오지 않습니다",
     directory: "디렉터리",
     bytes: (count: number) => `${count.toLocaleString("ko")}바이트`,

@@ -1,4 +1,4 @@
-import type { RestFeatured, RestMount, RestSkill } from "@skillcdn/core";
+import type { RestBrowse, RestFeatured, RestMount, RestSkill } from "@skillcdn/core";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { App } from "./app.js";
@@ -51,6 +51,26 @@ const MOUNT: RestMount = {
     documents: [{ path: "README.md", title: "Skills", summary: null }],
     diagnostics: [],
   },
+};
+
+const BROWSE: RestBrowse = {
+  status: "ready",
+  commit: MOUNT.commit,
+  path: "",
+  nextCursor: null,
+  entries: [
+    {
+      kind: "skill",
+      path: "review/SKILL.md",
+      name: "review",
+      description: "Reviews <b>changes</b>.</script><script>alert(1)</script>",
+      skillCount: 1,
+      documentCount: 0,
+      size: null,
+      manifestPath: null,
+      language: null,
+    },
+  ],
 };
 
 const SKILL: RestSkill = {
@@ -257,7 +277,7 @@ describe("the page of an address", () => {
       origin: "https://skills.example",
       pathname: "/gh/acme/skills",
       search: "?lang=ko",
-      data: { mount: { ready: MOUNT } },
+      data: { mount: { ready: MOUNT }, browse: { ready: BROWSE } },
     });
     expect(indexable).toBe(true);
     expect(html).toContain('<html lang="ko">');
@@ -279,6 +299,8 @@ describe("the page of an address", () => {
     // for the common clients, and what the agent is told when it connects.
     const t = messagesFor("ko");
     expect(html).toContain("Skills for the whole team.");
+    expect(html).toContain(t.mount.search.hint);
+    expect(html).toContain('aria-describedby="mount-search-hint"');
     expect(html).toContain(t.connect.title);
     expect(html.indexOf(t.connect.title)).toBeLessThan(html.indexOf(">review<"));
     // One tab per client; the first tab's steps are in the HTML, the others render on a click.
@@ -291,17 +313,56 @@ describe("the page of an address", () => {
     expect(html).not.toContain("This server serves");
   });
 
+  it("renders a scoped folder from browse data and keeps the connection address", () => {
+    const { html, indexable } = renderAddressPage(TEMPLATE, {
+      language: "en",
+      origin: "https://skills.example",
+      pathname: "/gh/acme/skills",
+      search: "?path=team-a",
+      data: {
+        mount: { ready: MOUNT },
+        browse: {
+          ready: {
+            ...BROWSE,
+            path: "team-a",
+            entries: [
+              {
+                kind: "skill",
+                path: "team-a/review/SKILL.md",
+                name: "Team review",
+                description: "Review this team's changes.",
+                skillCount: 1,
+                documentCount: 0,
+                size: null,
+                manifestPath: null,
+                language: "en",
+              },
+            ],
+          },
+        },
+      },
+    });
+    expect(indexable).toBe(false);
+    expect(html).toContain('href="/gh/acme/skills?skill=team-a%2Freview%2FSKILL.md"');
+    expect(html).toContain("https://skills.example/gh/acme/skills");
+    expect(html).not.toContain("https://skills.example/gh/acme/skills/team-a");
+    expect(html.indexOf(">Team review<")).toBeLessThan(
+      html.indexOf(messagesFor("en").connect.title),
+    );
+  });
+
   it("renders one skill with its instructions, and says so when the index is not there yet", () => {
     const skill = renderAddressPage(TEMPLATE, {
       language: "en",
       origin: "https://skills.example",
       pathname: "/gh/acme/skills",
-      search: "?skill=review",
+      search: "?skill=review%2FSKILL.md",
       data: { mount: { ready: MOUNT }, skill: { ready: SKILL } },
     });
     expect(skill.indexable).toBe(true);
     expect(skill.html).toContain("<strong>regressions</strong>");
     expect(skill.html).toContain("review · Acme/skills | SkillCDN");
+    expect(skill.html).not.toContain(messagesFor("en").skill.translationNote);
 
     const t = messagesFor("en");
     const indexing = renderAddressPage(TEMPLATE, {
@@ -314,6 +375,74 @@ describe("the page of an address", () => {
     expect(indexing.indexable).toBe(false);
     expect(indexing.html).toContain(t.mount.indexing.title);
     expect(indexing.html).toContain('content="noindex,follow"');
+  });
+
+  it("labels translated skill summaries while preserving the original name and instructions", () => {
+    for (const language of LANGUAGES) {
+      const translated = renderAddressPage(TEMPLATE, {
+        language,
+        origin: "https://skills.example",
+        pathname: "/gh/acme/skills",
+        search: "?skill=review%2FSKILL.md",
+        data: {
+          mount: { ready: MOUNT },
+          skill: {
+            ready: {
+              ...SKILL,
+              skill: {
+                ...SKILL.skill,
+                translations: {
+                  [language]: { title: "Display review", description: "Display summary." },
+                },
+              },
+            },
+          },
+        },
+      });
+      expect(translated.html).toContain(">Display review</h2>");
+      expect(translated.html).toContain(">Display summary.</p>");
+      expect(translated.html).toContain(messagesFor(language).skill.translationNote);
+      expect(translated.html).toContain("<dd>review</dd>");
+      expect(translated.html).toContain("<strong>regressions</strong>");
+    }
+  });
+
+  it("labels a description-only translation in search and keeps original-language search guidance", () => {
+    const t = messagesFor("en");
+    const { html } = renderAddressPage(TEMPLATE, {
+      language: "en",
+      origin: "https://skills.example",
+      pathname: "/gh/acme/skills",
+      search: "?q=review",
+      data: {
+        mount: { ready: MOUNT },
+        find: {
+          ready: {
+            status: "ready",
+            query: "review",
+            path: "",
+            nextCursor: null,
+            totals: null,
+            items: [
+              {
+                kind: "skill",
+                name: "review",
+                directory: "review",
+                description: "Reviews changes.",
+                translations: { en: { title: null, description: "Display summary." } },
+                files: [],
+                moreFiles: 0,
+              },
+            ],
+          },
+        },
+      },
+    });
+    expect(html).toContain(">review</span>");
+    expect(html).toContain(">Display summary.</span>");
+    expect(html).toContain(t.skill.translationNote);
+    expect(html).toContain(t.mount.search.hint);
+    expect(html).toContain('href="/gh/acme/skills?skill=review%2FSKILL.md"');
   });
 
   it("explains an address that is nothing, or not an address, with the status left to the server", () => {
@@ -349,7 +478,7 @@ describe("the page of an address", () => {
       origin: "https://skills.example",
       pathname: "/gh/acme/skills",
       search: "",
-      data: { mount: { ready: MOUNT } },
+      data: { mount: { ready: MOUNT }, browse: { ready: BROWSE } },
     });
     expect(html).toContain('<html lang="ko">');
     expect(html).toContain('data-prerendered="mount" data-lang="ko"');

@@ -96,6 +96,22 @@ describe("isServedPath", () => {
     expect(repoManifestPath(path(""))).toBe("SKILLCDN.md");
     expect(repoManifestPath(path("packages/a"))).toBe("packages/a/SKILLCDN.md");
   });
+
+  it("opens hidden roots only through explicit declarations, not further hidden descendants", () => {
+    const declared: ServedScope = {
+      skillDirectories: new Set([path(".agents/.curated/write")]),
+      manifestDirectories: new Set([path("")]),
+      documentDirectories: new Map([[path(""), [path(".guides")]]]),
+      includedFiles: new Set([path(".agents/.curated/write/.data/guide.md")]),
+    };
+    expect(isServedPath(path(".agents/.curated/write/SKILL.md"), declared)).toBe(true);
+    expect(isServedPath(path(".agents/.curated/write/references/style.md"), declared)).toBe(true);
+    expect(isServedPath(path(".agents/.curated/write/.data/guide.md"), declared)).toBe(true);
+    expect(isServedPath(path(".agents/.curated/write/.data/other.md"), declared)).toBe(false);
+    expect(isServedPath(path(".guides/guide.md"), declared)).toBe(true);
+    expect(isServedPath(path(".guides/.drafts/guide.md"), declared)).toBe(false);
+    expect(isServedPath(path(".other/guide.md"), declared)).toBe(false);
+  });
 });
 
 describe("classifyRepoFile", () => {

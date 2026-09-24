@@ -2,6 +2,7 @@ import { createMcpHandler } from "@modelcontextprotocol/server";
 import {
   type Address,
   formatAddress,
+  MAX_QUERY_LENGTH,
   MAX_REPO_PATH_LENGTH,
   parseAddress,
   REST_MOUNT_LIST_LIMIT,
@@ -10,15 +11,19 @@ import { type Database, getSchemaStatus, listTopRepositories, usageDayOf } from 
 import { type Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
+import * as z from "zod";
 import type { SnapshotService } from "../indexer/snapshot-service.js";
 import type { Logger } from "../logger.js";
 import { createMountServer, type ToolDependencies } from "../mcp/tools.js";
+import { ReaderInputError } from "../mounts/continuation.js";
 import type { MountReader } from "../mounts/mount-reader.js";
 import { type Mount, MountError, type MountService } from "../mounts/mount-service.js";
 import type { ClientAddressResolver } from "./client-address.js";
 import { type AppEnv, requestContext } from "./request-context.js";
 import {
+  browseBody,
   CORS_MAX_AGE_SECONDS,
+  findBody,
   hostFailure,
   mountBody,
   registerRest,
@@ -50,6 +55,13 @@ export interface AppDependencies {
 
 /** JSON-RPC messages are small. This is the ceiling for anything a client may send. */
 const MAX_REQUEST_BYTES = 1024 * 1024;
+const pageQuery = z.object({
+  skill: z.string().min(1).max(MAX_REPO_PATH_LENGTH).optional(),
+  file: z.string().min(1).max(MAX_REPO_PATH_LENGTH).optional(),
+  path: z.string().max(MAX_REPO_PATH_LENGTH).optional(),
+  q: z.string().max(MAX_QUERY_LENGTH).optional(),
+  query: z.string().max(MAX_QUERY_LENGTH).optional(),
+});
 
 const STATUS_BY_REASON = {
   repo_not_found: 404,
@@ -201,6 +213,22 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
       // The page explains what is wrong with the address; the status says it is nothing.
       return bundle.address(request, {}, 404);
     }
+    const query = pageQuery.safeParse(c.req.query());
+    if (!query.success) {
+      return bundle.address(
+        request,
+        {
+          mount: {
+            error: {
+              status: 400,
+              code: "request.invalid",
+              message: "Missing or malformed page parameters.",
+            },
+          },
+        },
+        400,
+      );
+    }
     let mount: Mount;
     try {
       mount = await mounts.resolve(parsed.value);
@@ -217,12 +245,17 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
       throw error;
     }
     try {
-      const data: { mount: AddressData["mount"]; skill?: AddressData["skill"] } = {
+      const data: {
+        mount: AddressData["mount"];
+        skill?: AddressData["skill"];
+        browse?: AddressData["browse"];
+        find?: AddressData["find"];
+      } = {
         mount: { ready: mountBody(mount, await reader.overview(mount, REST_MOUNT_LIST_LIMIT)) },
       };
-      const wanted = request.url.searchParams.get("skill");
-      if (wanted !== null && wanted.length > 0 && wanted.length <= MAX_REPO_PATH_LENGTH) {
-        const outcome = skillOutcome(await reader.skill(mount, wanted, 0));
+      const wanted = query.data.skill;
+      if (wanted !== undefined) {
+        const outcome = skillOutcome(await reader.skill(mount, wanted, 0, undefined, true));
         data.skill =
           "body" in outcome
             ? { ready: outcome.body }
@@ -237,8 +270,24 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
                 },
               };
       }
+      if (wanted === undefined && query.data.file === undefined) {
+        const path = query.data.path;
+        const search = query.data.q ?? query.data.query;
+        if (search !== undefined && search.trim().length > 0)
+          data.find = { ready: findBody(await reader.find(mount, { query: search, path }, 0)) };
+        else data.browse = { ready: browseBody(await reader.browse(mount, { path }, 0)) };
+      }
       return bundle.address(request, data);
     } catch (error) {
+      if (error instanceof ReaderInputError) {
+        return bundle.address(
+          request,
+          {
+            mount: { error: { status: 400, code: error.code, message: error.message } },
+          },
+          400,
+        );
+      }
       const known = hostFailure(error);
       if (known === undefined) {
         throw error;

@@ -68,6 +68,7 @@ export const en = {
     copied: "Copied",
     loading: "Loading…",
     retry: "Try again",
+    reload: "Reload from the beginning",
     back: "Back",
   },
 
@@ -149,13 +150,22 @@ export const en = {
       lead: "These manifests were not served. Fix them and push: the next commit is indexed again.",
     },
     warnings: (count: number) => (count === 1 ? "1 warning" : `${count} warnings`),
+    browse: {
+      title: "Explore this repository",
+      root: "Repository root",
+      breadcrumb: "Repository folders",
+      empty: "No skills or files in this folder.",
+      counts: (skills: number, documents: number) =>
+        `${skills === 1 ? "1 skill" : `${skills} skills`} · ${documents === 1 ? "1 document" : `${documents} documents`}`,
+    },
     search: {
-      label: "Search this mount",
-      placeholder: "Search skills and documents…",
+      label: "Search this folder and its subfolders",
+      placeholder: "Search in this folder…",
+      hint: "Search in the original language, usually English. Display translations are not searched.",
       submit: "Search",
       clear: "Clear",
-      resultsFor: (query: string) => `What find returns for “${query}”`,
-      none: "Nothing matches. find matches when any word of the query matches.",
+      resultsFor: (query: string) => `Results for “${query}”`,
+      none: "Nothing matches in this folder. Try another word or a broader folder.",
     },
     kinds: { skill: "Skill", document: "Document" },
     partOfSkill: (directory: string) => `Part of the skill at ${directory}`,
@@ -163,6 +173,7 @@ export const en = {
 
   skill: {
     all: "All skills and documents",
+    translationNote: "Translated for display. Your agent uses the original skill.",
     name: "Name",
     directory: "Directory",
     license: "License",
@@ -171,12 +182,17 @@ export const en = {
     metadata: "Metadata",
     files: "Files of this skill",
     filesTruncated: "Only the first files are listed.",
+    browseFiles: "Browse all supporting files",
+    browseChildren: "Browse files and nested skills",
+    incomplete:
+      "This skill’s instructions are not fully loaded. Continue to read all inherited rules and required context.",
+    moreContext: "Load remaining instructions",
     noFiles: "This skill has no supporting files.",
     included: "Comes with the skill",
     warnings: "Warnings for the author",
     root: "(repository root)",
-    rules: "Rules for every skill in this repository",
-    rulesSource: (path: string) => `From ${path}. The agent receives them with every skill.`,
+    rules: "Inherited rules",
+    rulesSource: (path: string) => `From ${path}. Applied to this skill.`,
     rulesAbove:
       "From the repository's manifest, above the mounted directory. The agent receives them with every skill.",
     rulesTruncated: "Only the beginning is shown here; the manifest has the whole text.",
@@ -188,6 +204,7 @@ export const en = {
     showing: (from: number, to: number, total: number) =>
       `Characters ${from.toLocaleString("en")} to ${to.toLocaleString("en")} of ${total.toLocaleString("en")}`,
     more: "Load more",
+    referenceUnavailable: "This reference cannot be read from this connection.",
     imageOmitted: "image not loaded",
     directory: "Directory",
     bytes: (count: number) => `${count.toLocaleString("en")} bytes`,

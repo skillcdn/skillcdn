@@ -31,6 +31,8 @@ Integration tests (`*.int.test.ts`) create a database per test file, apply the r
 
 ## Data model
 
+Index entry front-matter also stores resolved local Markdown references (`href` and repository-root `path`), `linkedOnly` for files made readable by links without entering the document catalog or search, and `manifestError` for repository manifests whose presence defines a closed boundary despite an unreadable body. These are optional JSON fields; they do not add database columns.
+
 Primary keys are `uuid DEFAULT uuidv7()` and timestamps are `timestamptz`, with one exception noted below. Tenant-scoped tables carry `account_id`, and every query on them takes the account.
 
 | Table | What a row is | Keys and indexes |
@@ -50,7 +52,7 @@ How it behaves:
 
 - **Claiming a snapshot** is one atomic `UPDATE`: it succeeds for a `pending` row, for an `indexing` row whose lease expired, and for a `failed` row whose `retry_at` has passed. Exactly one process wins. The winner renews its lease while it works and releases the row on shutdown.
 - **Writing an index** replaces the entries and marks the snapshot `ready` in one transaction, so readers see no index or a complete one. It refuses when the caller no longer holds the snapshot.
-- **Search vector**: weight A for the skill name and the document title, B for the description, C for the words of the path, D for the first 200,000 characters of the body. The configuration is `english` for both indexing and querying; words in other languages are indexed as they are.
+- **Search vector**: weight A for the original skill name and document title, B for the original description, C for the words of the path, D for the first 200,000 characters of the parsed body. Markdown front-matter is excluded from body search, so display translations do not become search aliases. The configuration is `english` for both indexing and querying; original words in other languages are indexed as they are.
 - **Search** matches any word of the query and orders by rank, with skills boosted over plain documents. A query without usable words returns nothing. The mount path is matched with `starts_with`, so `%` and `_` in a path are ordinary characters. Result order uses the `C` collation and is the same on every database.
 - **Usage counters** are written with an upsert that adds, so every process reports what it counted without knowing about the others. **Distinct clients** are rows of `usage_clients` inserted with "do nothing" on conflict; `foldUsageClients` moves every day before the given one into `client` counts and deletes the rows and their keys in the same statement, so processes that fold at once each move their own share and the totals still add up. `getRepoUsage` is scoped to an account like everything else. `listTopRepositories` deliberately is not: it is what a public ranking is made of, and the rule that keeps it safe is in the query itself, which reads only repositories that are public right now. A repository that goes private drops out of it with all its history.
 - A transferred repository moves to its new account; snapshots written under the old account are no longer visible and the repository is indexed again.

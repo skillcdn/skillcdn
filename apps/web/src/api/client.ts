@@ -1,11 +1,13 @@
 import {
   type Address,
   REST_ROUTES,
+  type RestBrowse,
   type RestFeatured,
   type RestFile,
   type RestFind,
   type RestMount,
   type RestSkill,
+  restBrowseSchema,
   restErrorSchema,
   restFeaturedSchema,
   restFileSchema,
@@ -85,11 +87,35 @@ export const api = {
   mount: (address: Address, signal: AbortSignal): Promise<RestMount> =>
     getJson(restPath("mounts", address), {}, restMountSchema, signal),
 
-  find: (address: Address, query: string, signal: AbortSignal): Promise<RestFind> =>
-    getJson(restPath("find", address), { query, limit: "25" }, restFindSchema, signal),
+  browse: (
+    address: Address,
+    path: string,
+    signal: AbortSignal,
+    cursor?: string,
+  ): Promise<RestBrowse> =>
+    getJson(restPath("browse", address), { path, cursor, limit: "40" }, restBrowseSchema, signal),
 
-  skill: (address: Address, name: string, signal: AbortSignal): Promise<RestSkill> =>
-    getJson(restPath("skills", address), { name }, restSkillSchema, signal),
+  find: (
+    address: Address,
+    query: string,
+    path: string,
+    signal: AbortSignal,
+    cursor?: string,
+  ): Promise<RestFind> =>
+    getJson(
+      restPath("find", address),
+      { query, path, cursor, limit: "25" },
+      restFindSchema,
+      signal,
+    ),
+
+  skill: (
+    address: Address,
+    path: string,
+    signal: AbortSignal,
+    cursor?: string,
+  ): Promise<RestSkill> =>
+    getJson(restPath("skills", address), { path, cursor }, restSkillSchema, signal),
 
   file: (address: Address, path: string, offset: number, signal: AbortSignal): Promise<RestFile> =>
     getJson(

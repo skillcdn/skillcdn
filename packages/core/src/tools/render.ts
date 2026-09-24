@@ -1,5 +1,7 @@
 import type {
+  BrowseResult,
   DirectoryResult,
+  FileReference,
   FileResult,
   FindItem,
   FindResult,
@@ -7,6 +9,29 @@ import type {
   MountSummary,
   SkillResult,
 } from "./results.js";
+
+function renderReferences(references: readonly FileReference[] | undefined): string | undefined {
+  return references === undefined || references.length === 0
+    ? undefined
+    : `Resolved references:\n${references.map((reference) => `- ${reference.source === undefined ? "" : `${reference.source}: `}${reference.href} -> ${reference.path} (${reference.status})`).join("\n")}`;
+}
+
+export function renderBrowseResult(result: BrowseResult): string {
+  return joinSections([
+    `Folder: ${result.path || "repository root"}\nSource: ${describeMount(result.mount)}`,
+    result.entries
+      .map(
+        (entry) =>
+          `- ${entry.kind}: ${entry.path}${entry.name === null ? "" : ` (${entry.name})`}${entry.kind === "file" ? "" : `; ${entry.skillCount} skills, ${entry.documentCount} documents`}${entry.browsePath === undefined ? "" : `; browse ${JSON.stringify({ path: entry.browsePath })} for nested skills and files`}${entry.description === null ? "" : `\n  ${entry.description}`}`,
+      )
+      .join("\n"),
+    renderDiagnostics(result.diagnostics ?? [], true),
+    result.nextCursor === undefined
+      ? "End of this folder. Use get_skill with a SKILL.md path, or browse a child folder."
+      : `More entries: call browse with the same path and cursor ${JSON.stringify(result.nextCursor)}.`,
+    notices(result.mount).join("\n"),
+  ]);
+}
 
 // Tool results are text written for a model: a short header from us, then repository content.
 
@@ -68,7 +93,7 @@ export function renderDiagnostics(
     return undefined;
   }
   if (!detailed) {
-    return `Note: ${plural(count, "manifest")} could not be read and ${count === 1 ? "is" : "are"} not served; find without a query says which.`;
+    return `Note: ${plural(count, "index issue")} reported; browse provides details.`;
   }
   const lines = diagnostics
     .slice(0, MAX_LISTED_DIAGNOSTICS)
@@ -76,17 +101,19 @@ export function renderDiagnostics(
   if (count > MAX_LISTED_DIAGNOSTICS) {
     lines.push(`- ... (${count - MAX_LISTED_DIAGNOSTICS} more)`);
   }
-  return `Manifests that could not be read, so what they declare is not served (fix them and push; the next commit is indexed anew):\n${lines.join("\n")}`;
+  return `Index diagnostics (fix the source or its limits; the next index reports the result):\n${lines.join("\n")}`;
 }
 
 function renderFindItem(item: FindItem, number: number): string {
   if (item.kind === "skill") {
     const lines = [
-      `${number}. skill: ${item.name} (${item.directory.length === 0 ? "." : item.directory})`,
+      `${number}. skill: ${item.name} (${item.directory.length === 0 ? "SKILL.md" : `${item.directory}/SKILL.md`})`,
       `   ${item.description}`,
     ];
     if (item.files.length > 0) {
-      lines.push("   Its files that match as well (get loads the skill; read_file reads one):");
+      lines.push(
+        "   Its files that match as well (get_skill loads the skill; read_file reads one):",
+      );
       for (const file of item.files) {
         lines.push(`   - ${file.path}${file.title === undefined ? "" : ` - ${file.title}`}`);
       }
@@ -101,7 +128,7 @@ function renderFindItem(item: FindItem, number: number): string {
   const owner =
     item.skillDirectory === undefined
       ? ""
-      : `\n   Belongs to the skill at ${item.skillDirectory.length === 0 ? "the mounted root" : item.skillDirectory}; get loads that skill with its files.`;
+      : `\n   Belongs to the skill at ${item.skillDirectory.length === 0 ? "the repository root" : item.skillDirectory}; get_skill loads that skill with its files.`;
   return `${number}. document: ${item.path}${title}${summary}${owner}`;
 }
 
@@ -120,28 +147,24 @@ export function renderFindResult(result: FindResult): string {
         : `${plural(totals.skills, "skill")} and ${plural(totals.documents, "document")} in ${where}:`;
     if (totals.skills > skillsListed) {
       more.push(
-        `${totals.skills - skillsListed} more skills are not listed here; search for them with find.`,
+        `${totals.skills - skillsListed} skills are outside this page; continue with nextCursor.`,
       );
     }
     if (totals.documents > documentsListed) {
       more.push(
-        `${totals.documents - documentsListed} more documents are not listed here; search for them with find, or raise the limit.`,
+        `${totals.documents - documentsListed} documents are outside this page; continue with nextCursor.`,
       );
     }
   } else if (count === 0) {
     heading =
       `No results for ${JSON.stringify(result.query)} in ${where}. ` +
       "Try fewer or different keywords, in the language the repository is written in, or call " +
-      "find without a query to list what is available.";
+      "browse to list what is available.";
   } else {
     heading = `${count} result${count === 1 ? "" : "s"} for ${JSON.stringify(result.query)} in ${where}:`;
   }
 
   const items = result.items.map((item, index) => renderFindItem(item, index + 1));
-  const next =
-    count === 0
-      ? undefined
-      : 'Next: get {"name": "<skill name>"} loads a skill; read_file {"path": "<path>"} reads a document.';
   // A listing, and a search that found nothing, say in full what could not be read: it may be
   // the very skill that is missing. Among results, one line is enough.
   const diagnostics = renderDiagnostics(
@@ -153,7 +176,9 @@ export function renderFindResult(result: FindResult): string {
     items.join("\n"),
     more.join("\n"),
     diagnostics,
-    next,
+    result.nextCursor === undefined
+      ? undefined
+      : `More results: repeat search with the same query and path, cursor ${JSON.stringify(result.nextCursor)}.`,
     notices(result.mount).join("\n"),
   ]);
 }
@@ -178,7 +203,9 @@ export function renderSkillResult(result: SkillResult): string {
   const includedPaths = new Set(result.included.map((file) => file.path));
   let files: string | undefined;
   if (result.files.length > 0) {
-    const more = result.filesTruncated ? "\n- ... (more files not listed)" : "";
+    const more = result.filesTruncated
+      ? `\n- ... (browse ${JSON.stringify({ path: result.directory })} for all supporting files)`
+      : "";
     const listed = result.files.map(
       (file) => `- ${file}${includedPaths.has(file) ? " (included below)" : ""}`,
     );
@@ -200,6 +227,14 @@ export function renderSkillResult(result: SkillResult): string {
       : "";
     rules = `--- rules for every skill in this repository (from ${source}) ---\n${body.trim()}${cut}`;
   }
+  if (result.ruleChain !== undefined) {
+    rules = result.ruleChain
+      .map(
+        (rule) =>
+          `--- applicable rules: ${rule.path} ---\n${rule.body}${rule.truncated ? "\n(Continues in the next get_skill page.)" : ""}`,
+      )
+      .join("\n\n");
+  }
 
   // The files the skill needs on every run follow the instructions, which point to them.
   const included = result.included.map((file) => {
@@ -207,20 +242,22 @@ export function renderSkillResult(result: SkillResult): string {
     if (file.content === undefined) {
       return `${header}\n(Not at hand here; read_file has it.)`;
     }
-    const cut = file.truncated
-      ? `\n(Cut at the size limit for included files; read_file ${file.path} from offset ${file.content.length} has the rest.)`
-      : "";
-    return `${header}\n${file.content.trim()}${cut}`;
+    const cut = file.truncated ? "\n(Continues in the next get_skill page.)" : "";
+    return `${header}\n${file.content}${cut}`;
   });
 
   return joinSections([
     header.join("\n"),
+    result.complete === false
+      ? `Skill context is incomplete.${result.nextCursor === undefined ? " Resolve the warnings before using this skill." : ` Continue get_skill with path ${JSON.stringify(result.path)} and cursor ${JSON.stringify(result.nextCursor)} before using it.`}`
+      : undefined,
     files,
     warnings,
     notices(result.mount).join("\n"),
     rules,
-    `--- instructions ---\n${result.body.trim()}`,
+    `--- instructions ---\n${result.body}`,
     ...included,
+    renderReferences(result.references),
   ]);
 }
 
@@ -257,5 +294,6 @@ export function renderFileResult(result: FileResult): string {
     header.join("\n"),
     notices(result.mount).join("\n"),
     `--- content ---\n${result.content}`,
+    renderReferences(result.references),
   ]);
 }

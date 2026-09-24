@@ -70,7 +70,11 @@ function indexablePathOf(route: Route, data: PageData | undefined): string | und
       if (address.ref !== undefined || data?.mount?.index.status !== "ready") {
         return undefined;
       }
-      if (view.kind === "overview" && view.query === undefined) {
+      if (
+        view.kind === "overview" &&
+        view.query === undefined &&
+        (view.path === undefined || view.path === address.path)
+      ) {
         return mountHref(address, view);
       }
       if (view.kind === "skill" && data.skill?.status === "ready") {
@@ -102,7 +106,7 @@ function mountText(
     const skill = data?.skill?.status === "ready" ? data.skill.skill : undefined;
     return {
       title: t.meta.mount.skillTitle(
-        skill === undefined ? view.name : skillTitle(skill, language),
+        skill === undefined ? view.path : skillTitle(skill, language),
         repository,
       ),
       description:

@@ -51,6 +51,9 @@ Parsing never consults the repository. An address means the same thing whatever 
 
 ## Semantics
 
+- **Connect the repository root by default.** One connection can browse different areas of work and read shared references. A sub-path remains a supported access boundary, not a different path notation.
+- **Content paths are repository-root paths.** On `/gh/acme/library/marketing`, `get_skill` still takes `marketing/skills/ad-copy/SKILL.md`, and file reads retain that same prefix. Names and shortened directory aliases are not content identifiers. Paths outside the mount are rejected. Applicable ancestor rules are delivered only through skill-context pages, without allowing arbitrary file reads above the mount ([tools](tools.md)).
+- **Pagination identifies one indexed view.** Cursors bind to the commit's snapshot and reading-rule version, mount and request. A changed snapshot or request requires restarting the page sequence.
 - **Pinned** addresses (full commit hash) always serve the same content and may be cached indefinitely.
 - **Moving** addresses resolve to a commit at request time. Resolution is cached briefly and invalidated by push webhooks where the App is installed.
 - **A short commit hash** is accepted wherever the host resolves it, but it is a moving ref: a prefix that is unique today can become ambiguous later, so it is never cached as immutable.

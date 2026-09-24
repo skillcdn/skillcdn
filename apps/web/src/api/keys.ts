@@ -5,7 +5,10 @@ import { type Address, formatAddress } from "@skillcdn/core";
 
 export const resourceKeys = {
   mount: (address: Address): string => formatAddress(address),
-  find: (address: Address, query: string): string => `${formatAddress(address)} find ${query}`,
-  skill: (address: Address, name: string): string => `${formatAddress(address)} skill ${name}`,
+  browse: (address: Address, path: string = address.path): string =>
+    `${formatAddress(address)} browse ${JSON.stringify(path)}`,
+  find: (address: Address, query: string, path: string = address.path): string =>
+    `${formatAddress(address)} find ${JSON.stringify([path, query])}`,
+  skill: (address: Address, path: string): string => `${formatAddress(address)} skill ${path}`,
   file: (address: Address, path: string): string => `${formatAddress(address)} file ${path}`,
 } as const;

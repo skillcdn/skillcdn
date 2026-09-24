@@ -51,6 +51,7 @@ describe("language packs", () => {
       "Codex CLI",
       "Gemini CLI",
       "Open MCP config file",
+      "browse · search · get_skill · read_file",
     ]);
     const english = new Set(
       stringsOf(messagesFor("en")).filter((text) => text.includes(" ") && !names.has(text)),

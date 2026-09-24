@@ -6,7 +6,7 @@ The single deployable. One build, one container image, several process roles ([A
 |---|---|---|---|
 | `api` | `node dist/main.js api` | MCP over HTTP and the [REST API](../../docs/specs/rest.md) for public repositories. Stateless. Later: OAuth, webhooks. | implemented |
 | `migrate` | `node dist/main.js migrate` | Apply pending database migrations, then exit. | implemented |
-| `check` | `node dist/main.js check [directory]` | Read a directory as the indexer reads a commit and print what an agent would get: for repository authors, before they push ([convention](../../docs/specs/skill-repo.md), "Checking a repository before pushing"). Needs no database and no git host; exits with `1` when a manifest cannot be read. From this checkout: `pnpm --filter @skillcdn/server run start check ../examples`. | implemented |
+| `check` | `node dist/main.js check [directory]` | Read a directory as the indexer reads a commit and print what an agent would get: for repository authors, before they push ([convention](../../docs/specs/skill-repo.md), "Checking a repository before pushing"). Needs no database and no git host; exits with `1` when index diagnostics are present. From this checkout: `pnpm --filter @skillcdn/server run start check ../examples`. | implemented |
 | `worker` | `node dist/main.js worker` | Webhook-driven and scheduled re-indexing. | not yet; `api` indexes lazily until then |
 
 ## Running locally
@@ -69,7 +69,7 @@ Create directories when they get their first file. Do not add empty scaffolding.
 2. `MountService` resolves the repository and the commit. Facts come from the database while they are fresh, from the git host otherwise, and from a slightly stale row when the host cannot be asked. Private, missing and forbidden repositories are one `404`.
 3. Indexing of that commit starts in the background if nobody has done it ([ADR-0007](../../docs/adr/0007-snapshot-rows-coordinate-indexing.md)), or if what exists was built under older reading rules (`INDEX_VERSION` in `src/indexer/build-index.ts`). The indexer lists the tree, asks the blob store which bodies it lacks, and fetches those: through one archive download when there are several, per file otherwise. A body from the archive counts only when it hashes to what the tree says.
 4. `MountReader` answers from the index: what is there, one skill with the files it declares as needed on every run, one file, a search with a skill's files folded under the skill, and the manifests that could not be read. The MCP tools render its answers as text for a model; the REST API returns the same answers as JSON and never waits for the index.
-5. The MCP handler builds a server for this one request, bound to the mount ([ADR-0006](../../docs/adr/0006-mcp-sdk-v2-per-request-servers.md)). `find` and `get` wait for the index within a budget; `read_file` never waits.
+5. The MCP handler builds a server for this one request, bound to the mount ([ADR-0006](../../docs/adr/0006-mcp-sdk-v2-per-request-servers.md)). `browse`, `search` and `get_skill` wait for the index within a budget; `read_file` never waits.
 
 ## Process contract
 
@@ -84,5 +84,6 @@ Create directories when they get their first file. Do not add empty scaffolding.
 - `src/api.int.test.ts` runs the real app against real PostgreSQL with the MCP client SDK and a git host backed by [`fixtures/.repositories/`](fixtures/.repositories/). It covers both protocol eras, sub-path mounts, hostile repositories, the indexing budget and the error surface. It needs the compose database, like the `db` integration tests.
 - `src/rest.int.test.ts` does the same for the REST API and parses every response with the schemas in `@skillcdn/core`, which are what the web UI parses with.
 - `src/roles/check.test.ts` runs the `check` role over the fixtures and over a made-up working tree.
+- `src/indexer/build-index.test.ts` verifies publication through skill declarations, document directories and bounded local Markdown links, including hidden paths and manifest boundaries retained when reads or indexing limits fail. Linked reference files are readable without becoming standalone search results. The working-tree check includes hidden skill roots while skipping `.git`, `node_modules` and symbolic links.
 - `src/web.int.test.ts` and `src/http/web.test.ts` cover serving a web build: language variants, the public origin, caching, the content security policy, the sitemap with its featured and popular repositories, and an address answering a browser with a rendered page and everyone else with MCP. They use a small fake build with a fake render module (`src/testing/web-build.ts`), not `apps/web`.
 - `src/testing/harness.ts` wires the app for all of them. Every test file has a database of its own; tests inside a file share it.

@@ -34,4 +34,10 @@ if (parsed.ok) {
 
 Parsers return a `Result` and never throw. A `RepoPath` can only come from `parseRepoPath`, so a function that takes one does not need to think about traversal.
 
+`extractMarkdownReferences(sourcePath, markdown)` recognizes local `.md` links in prose and resolves them to repository-root paths. It ignores code and external URLs and bounds input size and reference count. `resolveMarkdownReference` exposes the same path resolution for a single destination. These helpers identify references; the indexer decides whether their destinations may be served.
+
+`inspectMarkdownReferences` also reports when those inspection bounds are reached. `browseCatalogFiles` builds immediate folder entries and descendant counts from already published files; both the server and the working-tree check use it.
+
+`isServedPath` combines skill declarations, the nearest repository manifest's document directories, and explicit includes. A valid `SKILL.md` can declare a skill anywhere, including a hidden directory. A declaration permits ordinary descendants; further hidden descendants need their own declaration or a Markdown link.
+
 Everything public is exported from `src/index.ts`. There are no deep imports.

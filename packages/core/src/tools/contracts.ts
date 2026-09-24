@@ -12,6 +12,42 @@ export const FIND_MAX_SKILL_FILES = 5;
 export const MAX_QUERY_LENGTH = 500;
 export const READ_FILE_DEFAULT_LIMIT = 40_000;
 export const READ_FILE_MAX_LIMIT = 100_000;
+export const BROWSE_DEFAULT_LIMIT = 50;
+export const BROWSE_MAX_LIMIT = 200;
+export const SKILL_PAGE_BYTES = 16_384;
+const cursor = z
+  .string()
+  .max(4096)
+  .optional()
+  .describe("Opaque continuation returned by the previous call. Keep the same path and query.");
+const scopePath = z
+  .string()
+  .max(MAX_REPO_PATH_LENGTH)
+  .optional()
+  .describe("Folder path from the repository root. Omit to use the mounted folder.");
+export const browseInputSchema = z.object({
+  path: scopePath,
+  cursor,
+  limit: z.number().int().min(1).max(BROWSE_MAX_LIMIT).optional(),
+});
+export const searchInputSchema = z.object({
+  query: z
+    .string()
+    .min(1)
+    .max(MAX_QUERY_LENGTH)
+    .refine((value) => value.trim().length > 0),
+  path: scopePath,
+  cursor,
+  limit: z.number().int().min(1).max(FIND_MAX_LIMIT).optional(),
+});
+export const getSkillInputSchema = z.object({
+  path: z
+    .string()
+    .min(1)
+    .max(MAX_REPO_PATH_LENGTH)
+    .describe("Exact repository-root path of SKILL.md, as browse or search returns it."),
+  cursor,
+});
 
 export const findInputSchema = z.object({
   query: z
@@ -49,8 +85,7 @@ export const readFileInputSchema = z.object({
     .min(1)
     .max(MAX_REPO_PATH_LENGTH)
     .describe(
-      "A file or directory path relative to the mounted root, for example " +
-        'skills/ads/references/guide.md. A directory is listed; "." names the mounted root.',
+      "A file path from the repository root, for example skills/ads/references/guide.md. No ./ or ../ segments. Use browse for a folder.",
     ),
   offset: z.number().int().min(0).optional().describe("Character offset to start from. Default 0."),
   limit: z
@@ -99,10 +134,34 @@ export const readFileTool: ToolContract<typeof readFileInputSchema> = {
   name: "read_file",
   title: "Read a file",
   description:
-    "Read a text file of the mounted repository by its path relative to the mounted root. Long " +
-    "files come in pages: pass the next offset from the previous page to continue. Given a " +
-    "directory, it lists what the directory contains.",
+    "Read a text file by its repository-root path. Long files come in pages; pass the next offset to continue. Use browse for folders and get_skill to load a skill with its applicable rules.",
   inputSchema: readFileInputSchema,
 };
 
-export const TOOL_NAMES = [findTool.name, getTool.name, readFileTool.name] as const;
+export const browseTool: ToolContract<typeof browseInputSchema> = {
+  name: "browse",
+  title: "Browse skills and documents",
+  description:
+    "Explore a repository folder. Returns child folders with descriptions and skill counts, skills with their exact SKILL.md paths, and documents. Follow nextCursor for more entries. Paths always start at the repository root.",
+  inputSchema: browseInputSchema,
+};
+export const searchTool: ToolContract<typeof searchInputSchema> = {
+  name: "search",
+  title: "Search skills and documents",
+  description:
+    "Search words in the original content's language, usually English. Display translations are not searched. Optionally restrict to a folder path. Results keep relevance order, with matching support files under their skill. Follow nextCursor for more results; use get_skill with the returned SKILL.md path.",
+  inputSchema: searchInputSchema,
+};
+export const getSkillTool: ToolContract<typeof getSkillInputSchema> = {
+  name: "get_skill",
+  title: "Load a skill",
+  description:
+    "Load a skill by its exact repository-root SKILL.md path, with inherited rules and required files. Follow nextCursor until complete before applying it. References have resolved repository-root paths; read further files with read_file.",
+  inputSchema: getSkillInputSchema,
+};
+export const TOOL_NAMES = [
+  browseTool.name,
+  searchTool.name,
+  getSkillTool.name,
+  readFileTool.name,
+] as const;

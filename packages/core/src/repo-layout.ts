@@ -1,4 +1,4 @@
-import { joinRepoPath, type RepoPath, ROOT_PATH } from "./repo-path.js";
+import { joinRepoPath, type RepoPath, ROOT_PATH, relativeRepoPath } from "./repo-path.js";
 
 // How SkillCDN reads a repository; see docs/specs/skill-repo.md.
 
@@ -30,9 +30,8 @@ export function parentDirectory(path: RepoPath): RepoPath {
 }
 
 /**
- * Hidden entries are never listed, searched or read: any file with a segment that starts with a
- * dot, such as `.github/workflows/ci.yml`, `.editorconfig` or `.claude/settings.json`. They are
- * tooling for the repository, not content for an agent.
+ * Hidden paths require a publication declaration: a skill root, document directory, include,
+ * or local Markdown link. A declaration does not implicitly open further hidden descendants.
  */
 export function isHiddenPath(path: RepoPath): boolean {
   return path.split("/").some((segment) => segment.startsWith("."));
@@ -98,11 +97,14 @@ export interface ServedScope {
   readonly manifestDirectories: ReadonlySet<RepoPath>;
   /** Per manifest directory, the document directories it declares, as absolute paths. */
   readonly documentDirectories: ReadonlyMap<RepoPath, readonly RepoPath[]>;
+  /** Explicit `skillcdn.include` files, in repository-root coordinates. */
+  readonly includedFiles?: ReadonlySet<RepoPath>;
 }
 
 /** Whether `path` is in `directory`; the root holds everything. */
-function isUnder(path: RepoPath, directory: RepoPath): boolean {
-  return directory === ROOT_PATH || path.startsWith(`${directory}/`);
+function isPublicDescendant(path: RepoPath, directory: RepoPath): boolean {
+  const relative = relativeRepoPath(directory, path);
+  return relative !== undefined && relative.length > 0 && !isHiddenPath(relative);
 }
 
 /**
@@ -112,16 +114,17 @@ function isUnder(path: RepoPath, directory: RepoPath): boolean {
  * is read as if its root declared the default directories: `docs`, and nothing else.
  */
 export function isServedPath(path: RepoPath, scope: ServedScope): boolean {
-  if (owningSkillDirectory(path, scope.skillDirectories) !== undefined) {
+  const skill = owningSkillDirectory(path, scope.skillDirectories);
+  if ((skill !== undefined && isPublicDescendant(path, skill)) || scope.includedFiles?.has(path)) {
     return true;
   }
   const governing = nearestDirectoryAtOrAbove(parentDirectory(path), scope.manifestDirectories);
   if (governing === undefined) {
-    return DEFAULT_DOCUMENT_DIRECTORIES.some((directory) => isUnder(path, directory));
+    return DEFAULT_DOCUMENT_DIRECTORIES.some((directory) => isPublicDescendant(path, directory));
   }
   if (path === repoManifestPath(governing)) {
     return true;
   }
   const declared = scope.documentDirectories.get(governing) ?? [];
-  return declared.some((directory) => isUnder(path, directory));
+  return declared.some((directory) => isPublicDescendant(path, directory));
 }

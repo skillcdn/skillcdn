@@ -9,6 +9,7 @@ import { type Address, formatAddress, GIT_HOST_KEYS } from "../address.js";
 /** One prefix per operation, so that the address keeps the rest of the path to itself. */
 export const REST_ROUTES = {
   mounts: "/api/v1/mounts",
+  browse: "/api/v1/browse",
   find: "/api/v1/find",
   skills: "/api/v1/skills",
   files: "/api/v1/files",
@@ -22,7 +23,7 @@ export const REST_FEATURED_SKILL_NAMES = 5;
 
 /** The REST path of an operation on an address, without a query string. */
 export function restPath(
-  operation: "mounts" | "find" | "skills" | "files",
+  operation: "mounts" | "browse" | "find" | "skills" | "files",
   address: Address,
 ): string {
   return `${REST_ROUTES[operation]}${formatAddress(address)}`;
@@ -32,6 +33,46 @@ const count = z.int().check(z.nonnegative());
 
 const indexing = z.object({ status: z.literal("indexing") });
 const failed = z.object({ status: z.literal("failed"), errorCode: z.string() });
+
+export const restDiagnosticSchema = z.object({
+  path: z.string(),
+  code: z.string(),
+  message: z.string(),
+});
+
+export const restReferenceSchema = z.object({
+  source: z.optional(z.string()),
+  href: z.string(),
+  path: z.string(),
+  status: z.enum(["available", "outside_mount", "missing", "blocked"]),
+});
+export const restBrowseEntrySchema = z.object({
+  browsePath: z.optional(z.string()),
+  kind: z.enum(["directory", "skill", "file"]),
+  path: z.string(),
+  name: z.nullable(z.string()),
+  description: z.nullable(z.string()),
+  skillCount: count,
+  documentCount: count,
+  size: z.nullable(count),
+  manifestPath: z.nullable(z.string()),
+  language: z.nullable(z.string()),
+});
+export const restBrowseSchema = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("ready"),
+    commit: z.string(),
+    path: z.string(),
+    entries: z.array(restBrowseEntrySchema),
+    diagnostics: z.optional(z.array(restDiagnosticSchema)),
+    nextCursor: z.nullable(z.string()),
+  }),
+  indexing,
+  failed,
+]);
+export type RestBrowse = z.infer<typeof restBrowseSchema>;
+export type RestBrowseEntry = z.infer<typeof restBrowseEntrySchema>;
+export type RestReference = z.infer<typeof restReferenceSchema>;
 
 export const restRepositorySchema = z.object({
   host: z.enum(GIT_HOST_KEYS),
@@ -61,6 +102,7 @@ export const restRepoTranslationSchema = z.object({
 export const restRepoTranslationsSchema = z.record(z.string(), restRepoTranslationSchema);
 
 export const restSkillSummarySchema = z.object({
+  path: z.optional(z.string()),
   name: z.string(),
   directory: z.string(),
   description: z.string(),
@@ -74,15 +116,9 @@ export const restDocumentSummarySchema = z.object({
   summary: z.nullable(z.string()),
 });
 
-export const restDiagnosticSchema = z.object({
-  path: z.string(),
-  code: z.string(),
-  message: z.string(),
-});
-
 /** What the repository manifest (SKILLCDN.md) says about the mount. */
 export const restManifestSchema = z.object({
-  /** The manifest, relative to the mounted root, or `null` when it lies above the mount. */
+  /** The canonical repository-root path of the applicable manifest. */
   path: z.nullable(z.string()),
   /** `null`: the repository goes by the name its git host gives it. */
   name: z.nullable(z.string()),
@@ -111,6 +147,7 @@ export const restMountSchema = z.object({
       skills: z.array(restSkillSummarySchema),
       documents: z.array(restDocumentSummarySchema),
       diagnostics: z.array(restDiagnosticSchema),
+      groups: z.optional(z.array(restBrowseEntrySchema)),
     }),
     indexing,
     failed,
@@ -120,6 +157,7 @@ export const restMountSchema = z.object({
 export const restFindItemSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("skill"),
+    path: z.optional(z.string()),
     name: z.string(),
     directory: z.string(),
     description: z.string(),
@@ -143,7 +181,11 @@ export const restFindSchema = z.discriminatedUnion("status", [
   z.object({
     status: z.literal("ready"),
     query: z.nullable(z.string()),
+    commit: z.optional(z.string()),
+    path: z.optional(z.string()),
+    nextCursor: z.optional(z.nullable(z.string())),
     items: z.array(restFindItemSchema),
+    diagnostics: z.optional(z.array(restDiagnosticSchema)),
     /** Without a query: how many skills, and how many documents outside the skills, there are. */
     totals: z.nullable(z.object({ skills: count, documents: count })),
   }),
@@ -155,6 +197,18 @@ export const restSkillSchema = z.discriminatedUnion("status", [
   z.object({
     status: z.literal("ready"),
     skill: z.object({
+      path: z.optional(z.string()),
+      ruleChain: z.optional(
+        z.array(z.object({ path: z.string(), body: z.string(), truncated: z.boolean() })),
+      ),
+      references: z.optional(z.array(restReferenceSchema)),
+      complete: z.optional(z.boolean()),
+      nextCursor: z.optional(z.nullable(z.string())),
+      includedContents: z.optional(
+        z.array(
+          z.object({ path: z.string(), content: z.nullable(z.string()), truncated: z.boolean() }),
+        ),
+      ),
       name: z.string(),
       directory: z.string(),
       description: z.string(),
@@ -165,14 +219,14 @@ export const restSkillSchema = z.discriminatedUnion("status", [
       body: z.string(),
       files: z.array(z.string()),
       filesTruncated: z.boolean(),
-      /** The files the skill declares as needed on every run; `get` returns their text. */
+      /** The files the skill declares as needed on every run; `get_skill` returns their text. */
       included: z.array(z.string()),
       warnings: z.array(z.string()),
       translations: restSkillTranslationsSchema,
       /** The repository's rules from its manifest, or `null` when there are none. */
       rules: z.nullable(
         z.object({
-          /** The manifest, relative to the mounted root, or `null` when it lies above the mount. */
+          /** The canonical repository-root path of the applicable manifest. */
           path: z.nullable(z.string()),
           body: z.string(),
           truncated: z.boolean(),
@@ -195,6 +249,7 @@ export const restDirectoryEntrySchema = z.object({
 export const restFileSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("file"),
+    references: z.optional(z.array(restReferenceSchema)),
     path: z.string(),
     content: z.string(),
     offset: count,

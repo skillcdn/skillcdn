@@ -392,6 +392,38 @@ describe("search", () => {
     expect(results.map((result) => result.path)).toEqual(["skills/incident-review/SKILL.md"]);
   });
 
+  it("indexes a supplied search body instead of raw presentation metadata", async () => {
+    const canonical = await readySnapshot(
+      [
+        entry({
+          path: "skills/compose/SKILL.md",
+          kind: "skill",
+          blobSha: "body-search-override",
+          name: "compose",
+          description: "Practical copper guidance.",
+          searchBody: "Plan a storyboard.",
+        }),
+        entry({
+          path: "docs/empty.md",
+          blobSha: "body-empty-override",
+          searchBody: "",
+        }),
+      ],
+      {
+        "body-search-override": "Presentationonlyquartz is a translated label.",
+        "body-empty-override": "Presentationonlyquartz must not enter the search vector.",
+      },
+    );
+    for (const query of ["compose", "copper", "storyboard"])
+      expect((await searchEntries(database, canonical, "", query)).map((row) => row.path)).toEqual([
+        "skills/compose/SKILL.md",
+      ]);
+    expect(await searchEntries(database, canonical, "", "presentationonlyquartz")).toEqual([]);
+    expect(await createBlobStore(database).read("body-search-override")).toContain(
+      "Presentationonlyquartz",
+    );
+  });
+
   it("finds files by the words in their path", async () => {
     const results = await searchEntries(database, scope, "", "style", 10);
     expect(results[0]?.path).toBe("skills/release-notes/references/style.md");

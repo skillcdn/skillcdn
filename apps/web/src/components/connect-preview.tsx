@@ -236,7 +236,7 @@ export function ConnectPreview({
                   <span className={styles.afterClick}>{p.enabled}</span>
                   <div className={styles.serverCard}>
                     {p.tools}
-                    <code>find · get · read_file</code>
+                    <code>{p.toolNames}</code>
                   </div>
                 </>
               )}

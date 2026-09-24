@@ -61,7 +61,7 @@ Process contract: `GET /healthz` reports liveness, `GET /readyz` reports readine
 
 ## Request paths
 
-**Public repo.** Parse the address (`core`), resolve the repository and the ref to a commit (from the database while fresh, from the git host otherwise; later invalidated by webhooks), and answer tool calls from the index for that `(repo, commit)`. An unknown repository or ref is a `404` at connect time. The first request for an unseen commit starts indexing in the background; `find` and `get` wait for it within a budget and otherwise say that indexing is still running, while `read_file` answers from the commit's tree without waiting ([specs/tools.md](specs/tools.md), [ADR-0007](adr/0007-snapshot-rows-coordinate-indexing.md)). The index is shared by every user of that repo.
+**Public repo.** Parse the address (`core`), resolve the repository and ref to a commit, and answer from the shared index for that `(repo, commit)`. An unknown repository or ref is a `404` at connect time. The first request starts indexing; `browse`, `search` and `get_skill` wait within a budget, while `read_file` uses conservative eligibility without waiting ([tools](specs/tools.md), [ADR-0007](adr/0007-snapshot-rows-coordinate-indexing.md)). All content paths stay relative to the repository root. A sub-path mount clips the served set; it does not redefine identity or recompute reference reachability.
 
 **A browser.** When the deployment serves the web UI, a `GET` that accepts HTML is answered with a page: a prerendered one for the static routes, in the language the `lang` parameter names, else the one the request's `Accept-Language` asks for ([ADR-0009](adr/0009-web-ui-prerendered-per-language.md), [ADR-0021](adr/0021-a-url-without-a-language-is-served-in-the-language-asked-for.md)), and for an address a page rendered on the spot by the build's render module with what the address serves, the same answers the REST API gives ([ADR-0011](adr/0011-address-pages-rendered-on-the-server.md), [specs/rest.md](specs/rest.md)). Serving the page of an address resolves it and starts indexing, like the API. The server reads the build's manifest and knows nothing else about the UI.
 
@@ -74,9 +74,11 @@ Details and open questions live in [specs/](specs/).
 PostgreSQL is the only stateful dependency and plays four roles: content index with full-text search, permission cache, job queue, and later vector search. Conceptual entities (the actual schema is documented in [`packages/db/README.md`](../packages/db/README.md)):
 
 - **Account**: an organization or user on a git host. Everything tenant-scoped hangs off an account.
-- **Repo**, **ref → commit** resolution, and **index entries** per `(repo, commit)`: path, kind, front-matter, search vector, blob hash. Index entries for a commit are immutable.
+- **Repo**, **ref → commit** resolution, and **index entries** per `(repo, commit)`: canonical path, kind, front-matter, discoverability, readability, reference targets, search vector and blob hash. Index entries for a commit are immutable. The reading-rule version invalidates indexes when interpretation changes.
 - **Installation**, **project token** (stored as a hash), **git-host user token** (encrypted at rest), **permission cache** `(user, repo) → boolean` with an expiry.
 - **Jobs**, owned by the queue library in its own schema.
+
+Indexing first identifies declaration boundaries, then reads manifests and skills, discovers declared documents, and expands local Markdown references within bounded work. A failed manifest retains its boundary even when its body exceeds limits. Valid skills may declare hidden roots; individual links never expose siblings. Linked-only files are readable without becoming independent search results. Applicable rules are computed by ancestry and delivered completely through `get_skill` pages, including ancestor rules above a sub-path mount. These pages do not grant general reads outside the mount ([ADR-0022](adr/0022-repository-paths-and-progressive-skill-loading.md)).
 
 **Usage statistics** are daily counters per public repository: connections, tool calls per tool, loads per skill, and distinct clients. Each `api` process adds up what it sees and writes the totals every few seconds with an additive upsert, so replicas need no coordination and a request never waits for a write. Distinct clients are told apart by a keyed hash of the client's address under a key that exists for one UTC day; when the day is over the hashes become a count and are deleted together with the key ([ADR-0010](adr/0010-distinct-clients-by-daily-keyed-hash.md)). No address, user agent or other identifier is stored, and repositories that are not public are not counted. They feed rankings; they are not the `UsageSink` port, which carries metering events for whoever operates a deployment.
 
@@ -89,7 +91,7 @@ Identifiers are UUIDv7; timestamps are `timestamptz`. File bodies are stored und
 | Runtime | Node.js 24 LTS, TypeScript 7, ESM only. pnpm pins both itself and the Node.js runtime in the lockfile. |
 | Monorepo | pnpm workspaces with a catalog, Turborepo, TypeScript project references. Packages compile to `dist/`. |
 | HTTP | Hono on the Node.js adapter. |
-| MCP | The official MCP TypeScript SDK, v2, over Streamable HTTP. One server instance per request, no sessions, so no affinity is needed ([ADR-0006](adr/0006-mcp-sdk-v2-per-request-servers.md)). Besides the three tools, a server tells the client what the mount holds as it connects and offers every skill as a prompt ([ADR-0012](adr/0012-what-a-client-is-told-and-offered.md)). |
+| MCP | The official MCP TypeScript SDK, v2, over Streamable HTTP. One server instance per request, no sessions or selected-role state ([ADR-0006](adr/0006-mcp-sdk-v2-per-request-servers.md)). Four tools return text and structured data; one `use_skill(path)` prompt loads any exact skill. Connection instructions introduce folders ([ADR-0022](adr/0022-repository-paths-and-progressive-skill-loading.md)). |
 | Validation | Zod at every boundary. |
 | Database | PostgreSQL 18: `tsvector` + GIN full-text search, JSONB, native `uuidv7()`; pgvector later. |
 | Data access | Drizzle ORM on the `pg` driver; migrations are generated, reviewed SQL files. The ORM never leaves `packages/db`. |
@@ -124,7 +126,7 @@ Infrastructure-level caching, DNS, TLS and edge configuration are outside this r
 ## Security model
 
 - **Untrusted input:** repository content, every request, and webhook payloads until their signature is verified (constant-time comparison, replay protection on the delivery id).
-- **No execution.** Repository content is parsed as data with size and depth limits, safe YAML, normalized paths, no traversal and no symlink following. Markdown is returned as text.
+- **No execution.** Repository content is parsed as data with size and depth limits, safe YAML, normalized paths, no traversal and no symlink following. Local Markdown references are resolved against the indexed tree; linked URLs never cause outbound fetches. Markdown is returned as text.
 - **Fail closed.** No permission answer means no access. A repo that does not exist and a repo the caller may not see produce the same response.
 - **Tokens.** Git-host user tokens are encrypted at rest and never leave the server. Project tokens are stored as hashes. Our own access tokens are short-lived. Tokens and authorization headers are never logged.
 - **Outbound requests.** Host adapters connect only to operator-configured base URLs, never to a URL taken from user input.
@@ -148,7 +150,7 @@ Because old and new versions overlap during a rollout:
 
 - migrations follow expand, then contract, across separate releases;
 - job payloads stay backward compatible for at least one release;
-- public contracts (address scheme, tool names and schemas, REST) change additively.
+- public contracts (address scheme, tool names and schemas, REST) change additively unless an ADR defines a breaking transition; [ADR-0022](adr/0022-repository-paths-and-progressive-skill-loading.md) records the pre-alpha path and tool replacement.
 
 ## Observability
 

@@ -12,6 +12,7 @@ import { useI18n } from "../i18n/index.js";
 import { Link } from "../navigation.js";
 import { mountHref } from "../router.js";
 import styles from "./mount.module.css";
+import { contentHref, MountPath, parentDirectory } from "./mount-path.js";
 
 const MARKDOWN_FILE = /\.(md|markdown)$/i;
 /** YAML front-matter at the top of a file. It is shown as it is, not rendered as Markdown. */
@@ -42,7 +43,13 @@ function DirectoryView(props: { readonly address: Address; readonly listing: Dir
       <ul className={styles.files}>
         {listing.entries.map((entry) => (
           <li key={entry.path} className={styles.entry}>
-            <Link href={mountHref(address, { kind: "file", path: entry.path })}>
+            <Link
+              href={
+                entry.kind === "directory"
+                  ? mountHref(address, { kind: "overview", path: entry.path, query: undefined })
+                  : contentHref(address, entry.path)
+              }
+            >
               <code>{entry.kind === "directory" ? `${entry.path}/` : entry.path}</code>
             </Link>
             {entry.size !== null && (
@@ -72,13 +79,7 @@ export function MountFile(props: { readonly address: Address; readonly path: str
   // Pages loaded for another file are not this file's.
   const more = later.key === key ? later : { key, pages: [], loading: false, error: undefined };
 
-  const back = (
-    <p>
-      <Link className={styles.back} href={mountHref(address)}>
-        ← {t.skill.all}
-      </Link>
-    </p>
-  );
+  const back = <MountPath address={address} path={parentDirectory(path)} />;
 
   if (first.state === "loading") {
     return (
@@ -176,7 +177,8 @@ export function MountFile(props: { readonly address: Address; readonly path: str
           <Markdown
             source={frontMatter === undefined ? content : content.slice(frontMatter.length)}
             baseDirectory={directory}
-            fileHref={(target) => mountHref(address, { kind: "file", path: target })}
+            references={pages.flatMap((page) => page.references ?? [])}
+            fileHref={(target) => contentHref(address, target)}
           />
         </div>
       ) : (

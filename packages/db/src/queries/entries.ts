@@ -5,6 +5,7 @@ import { indexEntries, type SkillFrontMatter } from "../schema.js";
 import { SEARCH_CONFIG, type SnapshotScope } from "./snapshots.js";
 
 export interface EntryRecord {
+  readonly searchable: boolean;
   readonly path: string;
   readonly kind: RepoFileKind;
   readonly size: number;
@@ -17,6 +18,7 @@ export interface EntryRecord {
 }
 
 const entryColumns = {
+  searchable: sql<boolean>`${indexEntries.search} is not null`,
   path: indexEntries.path,
   kind: indexEntries.kind,
   size: indexEntries.size,
@@ -59,14 +61,14 @@ export async function searchEntries(
   scope: SnapshotScope,
   mountPath: string,
   query: string,
-  limit: number,
+  limit?: number,
 ): Promise<EntryRecord[]> {
   // plainto_tsquery normalizes the words and joins them with "&"; any-word matching wants "|".
   // Lexemes never contain spaces, so replacing " & " only ever touches operators.
   // A scalar subquery without table references is evaluated once per statement, not per row.
   const tsquery = sql`(select replace(plainto_tsquery(${SEARCH_CONFIG}::regconfig, ${query})::text, ' & ', ' | ')::tsquery)`;
   const rank = sql<number>`ts_rank('{0.05, 0.2, 0.6, 1.0}', ${indexEntries.search}, ${tsquery}, 1) * case when ${indexEntries.kind} = 'skill' then 1.5 else 1 end`;
-  return drizzleOf(database)
+  const queryRows = drizzleOf(database)
     .select(entryColumns)
     .from(indexEntries)
     .where(
@@ -78,8 +80,20 @@ export async function searchEntries(
         sql`${indexEntries.search} @@ ${tsquery}`,
       ),
     )
-    .orderBy(sql`${rank} desc`, BY_PATH)
-    .limit(limit);
+    .orderBy(sql`${rank} desc`, BY_PATH);
+  return limit === undefined ? queryRows : queryRows.limit(limit);
+}
+
+/** The bounded index's served tree, shared by browsing, reference resolution and rule ancestry. */
+export async function servedEntries(
+  database: Database,
+  scope: SnapshotScope,
+): Promise<EntryRecord[]> {
+  return drizzleOf(database)
+    .select(entryColumns)
+    .from(indexEntries)
+    .where(and(inSnapshot(scope), VISIBLE))
+    .orderBy(BY_PATH);
 }
 
 const IS_SKILL = eq(indexEntries.kind, "skill");

@@ -1,6 +1,9 @@
 import {
   type Address,
+  BROWSE_MAX_LIMIT,
+  type BrowseResult,
   FIND_MAX_LIMIT,
+  type FindResult,
   formatAddress,
   GitHostError,
   isPinnedAddress,
@@ -11,6 +14,7 @@ import {
   REST_MOUNT_LIST_LIMIT,
   REST_ROUTES,
   type RepoTranslation,
+  type RestBrowse,
   type RestFeatured,
   type RestFile,
   type RestFind,
@@ -25,6 +29,7 @@ import type { Context, Hono } from "hono";
 import { cors } from "hono/cors";
 import * as z from "zod";
 import type { Logger } from "../logger.js";
+import { ReaderInputError } from "../mounts/continuation.js";
 import type { MountOverview, MountReader, NotReady, SkillLookup } from "../mounts/mount-reader.js";
 import type { Mount } from "../mounts/mount-service.js";
 import type { AppEnv } from "./request-context.js";
@@ -45,10 +50,23 @@ export interface RestDependencies {
 const FEATURED_CACHE_MS = 30_000;
 
 const findQuery = z.object({
+  path: z.string().max(MAX_REPO_PATH_LENGTH).optional(),
+  cursor: z.string().max(4096).optional(),
   query: z.string().max(MAX_QUERY_LENGTH).optional(),
   limit: z.coerce.number().int().min(1).max(FIND_MAX_LIMIT).optional(),
 });
-const skillQuery = z.object({ name: z.string().min(1).max(MAX_REPO_PATH_LENGTH) });
+const browseQuery = z.object({
+  path: z.string().max(MAX_REPO_PATH_LENGTH).optional(),
+  cursor: z.string().max(4096).optional(),
+  limit: z.coerce.number().int().min(1).max(BROWSE_MAX_LIMIT).optional(),
+});
+const skillQuery = z
+  .object({
+    path: z.string().min(1).max(MAX_REPO_PATH_LENGTH).optional(),
+    name: z.string().min(1).max(MAX_REPO_PATH_LENGTH).optional(),
+    cursor: z.string().max(4096).optional(),
+  })
+  .refine((value) => value.path !== undefined || value.name !== undefined);
 const fileQuery = z.object({
   path: z.string().min(1).max(MAX_REPO_PATH_LENGTH),
   offset: z.coerce.number().int().min(0).optional(),
@@ -98,6 +116,61 @@ function repoTranslations(
   );
 }
 
+export function browseBody(
+  answer: NotReady | { readonly status: "ready"; readonly result: BrowseResult },
+): RestBrowse {
+  return answer.status !== "ready"
+    ? notReadyBody(answer)
+    : {
+        status: "ready",
+        commit: answer.result.mount.commit,
+        path: answer.result.path,
+        diagnostics: [...(answer.result.diagnostics ?? [])],
+        entries: [...answer.result.entries],
+        nextCursor: answer.result.nextCursor ?? null,
+      };
+}
+
+export function findBody(
+  answer: NotReady | { readonly status: "ready"; readonly result: FindResult },
+): RestFind {
+  if (answer.status !== "ready") return notReadyBody(answer);
+  const result = answer.result;
+  return {
+    status: "ready",
+    commit: result.mount.commit,
+    path: result.path ?? result.mount.path,
+    nextCursor: result.nextCursor ?? null,
+    query: result.query ?? null,
+    totals: result.totals ?? null,
+    diagnostics: [...result.diagnostics],
+    items: result.items.map((item) =>
+      item.kind === "skill"
+        ? {
+            kind: "skill",
+            name: item.name,
+            path: item.directory.length === 0 ? "SKILL.md" : `${item.directory}/SKILL.md`,
+            directory: item.directory,
+            description: item.description,
+            translations: skillTranslations(item.translations),
+            files: item.files.map((file) => ({
+              path: file.path,
+              title: file.title ?? null,
+              summary: file.summary ?? null,
+            })),
+            moreFiles: item.moreFiles,
+          }
+        : {
+            kind: "document",
+            path: item.path,
+            title: item.title ?? null,
+            summary: item.summary ?? null,
+            skillDirectory: item.skillDirectory ?? null,
+          },
+    ),
+  };
+}
+
 /** What an address serves, as the API says it: shared with the page rendered for browsers. */
 export function mountBody(
   mount: Mount,
@@ -132,6 +205,7 @@ export function mountBody(
             documentCount: answer.overview.documentCount,
             skills: answer.overview.skills.map((skill) => ({
               name: skill.name,
+              path: skill.directory.length === 0 ? "SKILL.md" : `${skill.directory}/SKILL.md`,
               directory: skill.directory,
               description: skill.description,
               warnings: [...skill.warnings],
@@ -147,6 +221,7 @@ export function mountBody(
               code: diagnostic.code,
               message: diagnostic.message,
             })),
+            groups: [...(answer.overview.groups ?? [])],
           },
   };
 }
@@ -173,7 +248,7 @@ export function skillOutcome(
         failure: {
           status: 404,
           code: "skill.not_found",
-          message: "No skill by that name in this mount.",
+          message: "No skill at that SKILL.md path in this mount.",
         },
       };
     case "ambiguous":
@@ -199,6 +274,20 @@ export function skillOutcome(
         body: {
           status: "ready",
           skill: {
+            path: skill.path ?? (skill.directory ? `${skill.directory}/SKILL.md` : "SKILL.md"),
+            ruleChain: (skill.ruleChain ?? []).map((rule) => ({
+              path: rule.path ?? "SKILLCDN.md",
+              body: rule.body,
+              truncated: rule.truncated,
+            })),
+            references: [...(skill.references ?? [])],
+            complete: skill.complete ?? true,
+            nextCursor: skill.nextCursor ?? null,
+            includedContents: skill.included.map((file) => ({
+              path: file.path,
+              content: file.content ?? null,
+              truncated: file.truncated,
+            })),
             name: skill.name,
             directory: skill.directory,
             description: skill.description,
@@ -275,6 +364,7 @@ export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies):
 
   /** Failures of the git host are the caller's to retry; anything else is ours to look at. */
   const failure = (c: Context<AppEnv>, error: unknown): Response => {
+    if (error instanceof ReaderInputError) return c.json(errorBody(error.code, error.message), 400);
     const known = hostFailure(error);
     if (known !== undefined) {
       if (known.retryAfterSeconds !== undefined) {
@@ -324,39 +414,7 @@ export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies):
       return mount;
     }
     try {
-      const found = await reader.find(mount, query, 0);
-      const body: RestFind =
-        found.status !== "ready"
-          ? notReadyBody(found)
-          : {
-              status: "ready",
-              query: found.result.query ?? null,
-              items: found.result.items.map((item) =>
-                item.kind === "skill"
-                  ? {
-                      kind: "skill",
-                      name: item.name,
-                      directory: item.directory,
-                      description: item.description,
-                      translations: skillTranslations(item.translations),
-                      files: item.files.map((file) => ({
-                        path: file.path,
-                        title: file.title ?? null,
-                        summary: file.summary ?? null,
-                      })),
-                      moreFiles: item.moreFiles,
-                    }
-                  : {
-                      kind: "document",
-                      path: item.path,
-                      title: item.title ?? null,
-                      summary: item.summary ?? null,
-                      skillDirectory: item.skillDirectory ?? null,
-                    },
-              ),
-              totals: found.result.totals ?? null,
-            };
-      return c.json(body);
+      return c.json(findBody(await reader.find(mount, query, 0)));
     } catch (error) {
       return failure(c, error);
     }
@@ -372,7 +430,15 @@ export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies):
       return mount;
     }
     try {
-      const outcome = skillOutcome(await reader.skill(mount, query.name, 0));
+      const outcome = skillOutcome(
+        await reader.skill(
+          mount,
+          query.path ?? query.name ?? "",
+          0,
+          query.cursor,
+          query.path !== undefined,
+        ),
+      );
       if ("body" in outcome) {
         return c.json(outcome.body);
       }
@@ -412,24 +478,13 @@ export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies):
           );
         case "not_text":
           return c.json(errorBody("file.not_text", "The file is not UTF-8 text."), 415);
-        case "directory": {
-          const { directory } = lookup;
-          const body: RestFile = {
-            kind: "directory",
-            path: directory.path,
-            entries: directory.entries.map((entry) => ({
-              path: entry.path,
-              kind: entry.kind,
-              size: entry.size ?? null,
-            })),
-            truncated: directory.truncated,
-          };
-          return c.json(body);
-        }
+        case "directory":
+          return c.json(errorBody("request.invalid", "Use browse for directories."), 400);
         case "found": {
           const { file } = lookup;
           const body: RestFile = {
             kind: "file",
+            references: [...(file.references ?? [])],
             path: file.path,
             content: file.content,
             offset: file.offset,
@@ -439,6 +494,18 @@ export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies):
           return c.json(body);
         }
       }
+    } catch (error) {
+      return failure(c, error);
+    }
+  });
+
+  app.get(`${REST_ROUTES.browse}/*`, async (c) => {
+    const query = queryOf(c, browseQuery);
+    if (query instanceof Response) return query;
+    const mount = await mountAt(c, REST_ROUTES.browse);
+    if (mount instanceof Response) return mount;
+    try {
+      return c.json(browseBody(await reader.browse(mount, query, 0)));
     } catch (error) {
       return failure(c, error);
     }

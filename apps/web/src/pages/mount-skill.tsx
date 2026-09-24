@@ -1,49 +1,47 @@
 import type { Address, RestSkill } from "@skillcdn/core";
 import { useEffect } from "react";
-import { api } from "../api/client.js";
+import { ApiError, api } from "../api/client.js";
 import { resourceKeys } from "../api/keys.js";
+import { useMorePages } from "../api/use-more-pages.js";
 import { useResource } from "../api/use-resource.js";
 import { ErrorCallout } from "../components/error-callout.js";
 import { Markdown } from "../components/markdown.js";
-import { Badge, Callout, Skeleton } from "../components/ui.js";
+import { Badge, Button, Callout, Skeleton } from "../components/ui.js";
 import { useI18n } from "../i18n/index.js";
 import { skillDescription, skillTitle } from "../i18n/repository-text.js";
 import { Link } from "../navigation.js";
 import { mountHref } from "../router.js";
 import styles from "./mount.module.css";
+import { contentHref, MountPath, parentDirectory } from "./mount-path.js";
 
-/** The directory of a file of the mount; the root when the file is not in the mount. */
-function directoryOf(path: string | null): string {
-  const slash = path?.lastIndexOf("/") ?? -1;
-  return path === null || slash < 0 ? "" : path.slice(0, slash);
-}
+type ReadySkill = Extract<RestSkill, { status: "ready" }>;
 
-/** One skill as `get` returns it: front-matter, instructions and the files next to it. */
+/** One skill and its inherited rules, continued until every context page has been loaded. */
 export function MountSkill(props: {
   readonly address: Address;
-  readonly name: string;
+  readonly path: string;
   /** Told what was loaded, or that nothing is, so that the page can say so in its head. */
   readonly onLoaded?: (skill: RestSkill | undefined) => void;
 }) {
   const { t, language } = useI18n();
-  const { address, name, onLoaded } = props;
+  const { address, path, onLoaded } = props;
   const answer = useResource(
-    resourceKeys.skill(address, name),
-    (signal) => api.skill(address, name, signal),
+    resourceKeys.skill(address, path),
+    (signal) => api.skill(address, path, signal),
     (value) => value.status === "indexing",
   );
+  const more = useMorePages<ReadySkill>(async (cursor, signal) => {
+    const page = await api.skill(address, path, signal, cursor);
+    if (page.status !== "ready")
+      throw new ApiError(0, "index.not_ready", "The index is not ready.");
+    return page;
+  });
   const loaded =
     answer.state === "ready" && answer.value.status === "ready" ? answer.value : undefined;
   useEffect(() => {
     onLoaded?.(loaded);
   }, [onLoaded, loaded]);
-  const back = (
-    <p>
-      <Link className={styles.back} href={mountHref(address)}>
-        ← {t.skill.all}
-      </Link>
-    </p>
-  );
+  const back = <MountPath address={address} path={parentDirectory(path)} />;
 
   if (answer.state === "loading" || (answer.state === "ready" && answer.value.status !== "ready")) {
     return (
@@ -64,7 +62,10 @@ export function MountSkill(props: {
               <li key={directory}>
                 <Link
                   className={styles.item}
-                  href={mountHref(address, { kind: "skill", name: directory })}
+                  href={mountHref(address, {
+                    kind: "skill",
+                    path: directory === "" ? "SKILL.md" : `${directory}/SKILL.md`,
+                  })}
                 >
                   <span className={styles.itemPath}>{directory}</span>
                 </Link>
@@ -79,12 +80,28 @@ export function MountSkill(props: {
     return null;
   }
 
+  const pages = [answer.value, ...more.pages];
   const { skill } = answer.value;
-  // A translated title stands in for the name; the name is then a fact, since get takes it.
+  const last = (pages.at(-1) ?? answer.value).skill;
+  const body = pages.map((page) => page.skill.body).join("");
+  const rules = new Map<string, string>();
+  const includedContents = new Map<string, string>();
+  for (const page of pages) {
+    for (const file of page.skill.includedContents ?? []) {
+      if (file.content !== null)
+        includedContents.set(file.path, (includedContents.get(file.path) ?? "") + file.content);
+    }
+    for (const rule of page.skill.ruleChain ?? []) {
+      rules.set(rule.path, (rules.get(rule.path) ?? "") + rule.body);
+    }
+  }
+  // Keep the original name visible alongside a translated title.
   const title = skillTitle(skill, language);
+  const description = skillDescription(skill, language);
+  const translated = title !== skill.name || description !== skill.description;
   const facts: (readonly [string, string])[] = [
     ...(title === skill.name ? [] : [[t.skill.name, skill.name] as const]),
-    [t.skill.directory, skill.directory === "" ? t.skill.root : skill.directory],
+    [t.mount.path, skill.path ?? path],
     ...(skill.license === null ? [] : [[t.skill.license, skill.license] as const]),
     ...(skill.compatibility === null
       ? []
@@ -99,7 +116,8 @@ export function MountSkill(props: {
       <header>
         <p className={styles.kicker}>{t.mount.kinds.skill}</p>
         <h2 className={styles.viewTitle}>{title}</h2>
-        <p className={styles.viewLead}>{skillDescription(skill, language)}</p>
+        <p className={styles.viewLead}>{description}</p>
+        {translated && <p className={styles.note}>{t.skill.translationNote}</p>}
       </header>
 
       <dl className={styles.meta}>
@@ -121,30 +139,66 @@ export function MountSkill(props: {
         </Callout>
       )}
 
-      {skill.rules !== null && (
-        <section>
+      {[...rules].map(([rulePath, ruleBody]) => (
+        <section key={rulePath}>
           <h3 className={styles.subheading}>{t.skill.rules}</h3>
-          <p className={styles.note}>
-            {skill.rules.path === null ? t.skill.rulesAbove : t.skill.rulesSource(skill.rules.path)}
-          </p>
+          <p className={styles.note}>{t.skill.rulesSource(rulePath)}</p>
           <div className={styles.document}>
             <Markdown
-              source={skill.rules.body}
-              baseDirectory={directoryOf(skill.rules.path)}
-              fileHref={(path) => mountHref(address, { kind: "file", path })}
+              source={ruleBody}
+              baseDirectory={parentDirectory(rulePath)}
+              fileHref={(target) => contentHref(address, target)}
             />
           </div>
-          {skill.rules.truncated && <p className={styles.note}>{t.skill.rulesTruncated}</p>}
         </section>
-      )}
+      ))}
 
       <div className={styles.document}>
         <Markdown
-          source={skill.body}
+          source={body}
           baseDirectory={skill.directory}
-          fileHref={(path) => mountHref(address, { kind: "file", path })}
+          references={pages.flatMap((page) => page.skill.references ?? [])}
+          fileHref={(target) => contentHref(address, target)}
         />
       </div>
+
+      {[...includedContents].map(([filePath, content]) => (
+        <section key={filePath}>
+          <h3 className={styles.subheading}>
+            <code>{filePath}</code>
+          </h3>
+          <div className={styles.document}>
+            <Markdown
+              source={content}
+              baseDirectory={parentDirectory(filePath)}
+              fileHref={(target) => contentHref(address, target)}
+            />
+          </div>
+        </section>
+      ))}
+      {last.complete === false && <Callout tone="warning">{t.skill.incomplete}</Callout>}
+      {more.error !== undefined && (
+        <>
+          <ErrorCallout error={more.error} onRetry={() => more.loadMore(last.nextCursor ?? null)} />
+          <p>
+            <Button
+              onClick={() => {
+                more.reset();
+                answer.reload();
+              }}
+            >
+              {t.common.reload}
+            </Button>
+          </p>
+        </>
+      )}
+      {last.nextCursor != null && (
+        <p>
+          <Button onClick={() => more.loadMore(last.nextCursor ?? null)} disabled={more.loading}>
+            {more.loading ? t.common.loading : t.skill.moreContext}
+          </Button>
+        </p>
+      )}
 
       <section>
         <h3 className={styles.subheading}>{t.skill.files}</h3>
@@ -154,7 +208,7 @@ export function MountSkill(props: {
           <ul className={styles.files}>
             {skill.files.map((file) => (
               <li key={file}>
-                <Link href={mountHref(address, { kind: "file", path: file })}>
+                <Link href={contentHref(address, file)}>
                   <code>{file}</code>
                 </Link>
                 {skill.included.includes(file) && (
@@ -168,6 +222,13 @@ export function MountSkill(props: {
           </ul>
         )}
         {skill.filesTruncated && <p className={styles.note}>{t.skill.filesTruncated}</p>}
+        <p className={styles.note}>
+          <Link
+            href={mountHref(address, { kind: "overview", path: skill.directory, query: undefined })}
+          >
+            {t.skill.browseFiles}
+          </Link>
+        </p>
       </section>
     </article>
   );

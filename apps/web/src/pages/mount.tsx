@@ -137,9 +137,15 @@ function MountBody(props: {
     );
   }
   return view.kind === "skill" ? (
-    <MountSkill address={address} name={view.name} onLoaded={props.onSkill} />
+    <MountSkill key={view.path} address={address} path={view.path} onLoaded={props.onSkill} />
   ) : (
-    <MountOverview address={address} index={mount.index} query={view.query} />
+    <MountOverview
+      key={`${view.path ?? address.path} ${view.query ?? ""}`}
+      address={address}
+      index={mount.index}
+      query={view.query}
+      path={view.path ?? address.path}
+    />
   );
 }
 
@@ -201,7 +207,9 @@ export function MountPage(props: MountPageProps) {
   return (
     <Container className={styles.page}>
       <MountHeader address={address} mount={loaded} />
-      {view.kind === "overview" ? (
+      {view.kind === "overview" &&
+      view.query === undefined &&
+      (view.path === undefined || view.path === address.path) ? (
         <>
           {guide}
           {content}

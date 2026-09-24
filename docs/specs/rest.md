@@ -1,142 +1,100 @@
 # Spec: REST API
 
-- Status: **Draft.** Version 1 serves the web UI; expect additions.
-- Contracts (response schemas) live in `packages/core`; handlers live in `apps/server`. The web UI is the first client and uses nothing else.
+- Status: **Draft.** Version 1 serves the web UI.
+- Response schemas live in `packages/core`; handlers live in `apps/server`. The web UI uses this API.
 
-The REST API shows a person what an agent gets from an address. It is anonymous and read-only, serves public repositories only, and answers from the same index and with the same rules as the [tools](tools.md): nothing here can reach outside the mounted `(repo, ref, path)`.
+The API shows a person what an agent gets from an address. It is anonymous, read-only and limited to public repositories. It shares the index, canonical paths and reading rules of the [tools](tools.md). [ADR-0022](../adr/0022-repository-paths-and-progressive-skill-loading.md) explicitly changes the pre-alpha v1 path and skill contracts; future changes are additive unless another ADR defines a breaking transition.
 
 ## Conventions
 
-- Base path `/api/v1`. JSON in UTF-8. Changes within a version are additive.
-- `<address>` is an address exactly as in the [address spec](address.md), for example `/api/v1/mounts/gh/acme/skills@v2/ads`. It is parsed from the raw path, so percent-escapes follow the address rules.
-- Paths inside responses are relative to the mounted root, like paths in tool results.
-- Responses are `cache-control: no-store` for now.
-- A page on any origin may call the API from a browser: responses say `access-control-allow-origin: *`, preflight `OPTIONS` requests are answered, no credentials are used or accepted, and `x-request-id` and `retry-after` are readable by the page.
-- Errors have one shape, shared with the MCP endpoint: `{ "error": { "code": "...", "message": "..." } }`.
+- Base path `/api/v1`; UTF-8 JSON.
+- `<address>` follows the [address spec](address.md), for example `/api/v1/mounts/gh/acme/library@v2/marketing`. Address percent-escapes are parsed from the raw path.
+- Every content path is an actual repository-root path, including on sub-path connections. A skill's `path` ends in `SKILL.md`; its `directory` is the containing folder. Names do not identify skills.
+- Ordinary reads and listings remain inside the mount. Applicable ancestor rules may arrive through skill-context continuation without permitting arbitrary reads above the mount.
+- Responses use `cache-control: no-store` for now.
+- CORS allows `*` without credentials, answers `OPTIONS`, and exposes `x-request-id` and `retry-after`.
+- Errors have `{ "error": { "code": "...", "message": "..." } }`.
 
 | Status | `code` | When |
 |---|---|---|
-| 400 | `address.*` | The address does not parse. The code names the rule. |
-| 400 | `request.invalid` | A query parameter is missing or malformed. |
-| 404 | `mount.repo_not_found` | The repository does not exist or is not public. The two are indistinguishable. |
+| 400 | `address.*` | The address does not parse. |
+| 400 | `request.invalid` | A query parameter or cursor is invalid, or its snapshot or request no longer matches. Restart pagination. |
+| 404 | `mount.repo_not_found` | The repository does not exist or is not public; these are indistinguishable. |
 | 404 | `mount.ref_not_found` | The ref does not exist in the repository. |
 | 403 | `mount.not_allowed` | The deployment does not serve this repository. |
-| 503 | `mount.rate_limited`, `mount.unavailable` | The git host cannot be asked right now. `retry-after` is set when known. |
-| 503 | `skill.unavailable` | The skill is indexed but its content cannot be read right now. |
-| 404 | `skill.not_found`, `file.not_found` | Nothing by that name or at that path in the mount. |
-| 409 | `skill.ambiguous` | Several skills share the name; `error.directories` lists them. |
-| 413 | `file.too_large` | The file is over the readable size limit. |
+| 503 | `mount.rate_limited`, `mount.unavailable` | The git host cannot be asked now; `retry-after` is set when known. |
+| 503 | `skill.unavailable` | Indexed skill content cannot be read now. |
+| 404 | `skill.not_found`, `file.not_found` | No eligible content at that path inside the mount. |
+| 413 | `file.too_large` | The file exceeds the readable size limit. |
 | 415 | `file.not_text` | The file is not UTF-8 text. |
 
-## Index state
+## Index state and paging
 
-Asking about an address starts indexing its commit, as connecting an MCP client does. The REST API never waits for it. Endpoints that need the index answer `200` with `"status": "indexing"` (ask again shortly) or `"status": "failed"` with an `errorCode` (retried automatically after a backoff) instead of their normal body, which has `"status": "ready"`.
+Resolving an address starts indexing. REST never waits: endpoints needing the index answer `200` with `status: "indexing"`, or `status: "failed"` and `errorCode`, instead of their usual `status: "ready"` result. Failed indexing retries after backoff.
+
+Paged results identify their commit and return `nextCursor`, or `null` when the page is last. Cursors bind to the snapshot and reading-rule version, mount, operation and request parameters. They cannot be reused with another path or query. If a moving ref changes, restart from the first page; pin a full commit hash for a stable workflow. An index marked `truncated` is partial independently of pagination.
 
 ## Endpoints
 
 ### `GET /api/v1/mounts/<address>`
 
-What the address serves.
+Repository identity and a bounded overview of the mount:
 
-```json
-{
-  "address": "/gh/acme/skills@v2/ads",
-  "repository": { "host": "gh", "owner": "Acme", "name": "skills", "defaultBranch": "main", "description": "Skills for every team" },
-  "ref": "v2",
-  "pinned": false,
-  "commit": "0123456789abcdef0123456789abcdef01234567",
-  "path": "ads",
-  "verified": false,
-  "index": {
-    "status": "ready",
-    "truncated": false,
-    "manifest": {
-      "path": "SKILLCDN.md", "name": "Acme playbooks", "description": "...", "language": "en",
-      "translations": { "ko": { "name": "Acme 플레이북", "description": "..." } }
-    },
-    "skillCount": 2,
-    "documentCount": 1,
-    "skills": [{
-      "name": "ad-copy", "directory": "ad-copy", "description": "...", "warnings": [],
-      "translations": { "ko": { "title": "광고 문구", "description": "..." } }
-    }],
-    "documents": [{ "path": "docs/ads.md", "title": "Ads", "summary": "..." }],
-    "diagnostics": [{ "path": "broken/SKILL.md", "code": "missing_description", "message": "..." }]
-  }
-}
-```
+| Field | Meaning |
+|---|---|
+| `address` | Canonical address. |
+| `repository` | Host, owner, name, default branch and host description. |
+| `ref`, `pinned`, `commit`, `path` | Requested ref (`null` for default), whether it is a full commit hash, resolved commit, and mounted repository-root directory. |
+| `verified` | Whether the operator or, later, the owner vouches for the repository ([tools](tools.md)). |
+| `index` | State, or a ready overview with manifest metadata, skill/document counts, bounded listings and diagnostics. |
 
-- `address` is the canonical form. `ref` is `null` for the default branch. `pinned` is true for a full commit hash.
-- `verified` is true when the repository's owner has verified it with the service, or the operator has listed it as one it vouches for ([tools](tools.md), "Rules"); the page shows a warning otherwise.
-- `repository.description` is what the host shows as the description of the repository, on one line, or `null`.
-- `manifest` is what the repository's manifest says about the mount ([convention](skill-repo.md), "The repository manifest"), or `null` when there is none: `name` (`null` when the repository goes by the name its host gives it), `description`, `path`, the manifest relative to the mount, or `null` when it lies above the mounted directory, `language`, the tag of the language the repository says it is written in, or `null`, and `translations`, by language tag, with `name` and `description` (`null` for a field the author did not translate). With a manifest, the counts and the listings cover only what it declares.
-- `skills` and `documents` list at most 200 entries each; the counts are complete. `documents` are the Markdown and JSON files that do not belong to a skill; a skill's own files are listed by the skills endpoint. A skill's `translations` carry a `title` (what people see instead of the name in that language) and a `description`, by language tag; the web UI shows them in the visitor's language.
-- `diagnostics` are the findings of the [convention parser](skill-repo.md) for the repository author: manifests that were skipped, and why. Only manifests inside the mounted path are listed.
-- `truncated` is true when the repository was larger than the indexing limits.
+The overview's manifest carries its own canonical `path`, `name`, `description`, `language` and `translations`, or is absent when no applicable manifest exists. An ancestor manifest's path remains its actual repository path even if ordinary file reading cannot reach it from this mount. Names, descriptions and translations belong to their declaring manifest; language inherits from the nearest ancestor that declares it.
 
-### `GET /api/v1/find/<address>?query=&limit=`
+Skill listings expose exact `path`, `directory`, `name`, `description`, warnings and translations. Document listings expose canonical path, title and summary. Overview lists are bounded; clients use `browse` and `find` continuations to explore further. Counts cover eligible content, not every file in the git tree. Diagnostics explain unreadable manifests, and `truncated` identifies indexing limits.
 
-The `find` tool. `query` is optional (at most 500 characters); `limit` is 1 to 25, default 10. Without a query the answer lists every skill (up to 100), then up to `limit` documents that do not belong to a skill, and `totals` says how many of each there are; with a query, `totals` is `null` and `limit` bounds the results.
+### `GET /api/v1/browse/<address>?path=&cursor=&limit=`
 
-```json
-{ "status": "ready", "query": "blameless review", "items": [
-  { "kind": "skill", "name": "incident-review", "directory": "skills/incident-review", "description": "...", "translations": {},
-    "files": [{ "path": "skills/incident-review/assets/timeline.json", "title": null, "summary": null }], "moreFiles": 0 },
-  { "kind": "document", "path": "docs/getting-started.md", "title": "Getting started", "summary": "...", "skillDirectory": null }
-], "totals": null }
-```
+The `browse` tool's immediate-folder view. `path` is an optional canonical directory (default: mounted directory); `limit` is 1 to 200, default 50. `cursor` continues the same listing.
 
-A skill's own files that match a query are folded under the skill, as the `find` tool folds them: `files` lists up to five of them, best first, and `moreFiles` counts the rest; a skill whose file matched is listed even when the skill itself did not. Without a query `files` is empty. `skillDirectory` names the skill a document belongs to, when it belongs to one inside the mount and could not be folded under it.
+Entries preserve the real folder tree, name their canonical paths, distinguish files and directories, and identify skill folders and manifest metadata when available. Counts help a client choose a subtree without loading every skill. A manifest adds context to its folder; it creates no shortened path or alias. The response carries diagnostics, commit and `nextCursor`.
 
-### `GET /api/v1/skills/<address>?name=`
+### `GET /api/v1/find/<address>?query=&path=&cursor=&limit=`
 
-The `get` tool: one skill by name or by directory.
+The `search` tool's ranked search. `query` is nonblank text of at most 500 characters; `path` restricts the search subtree, defaulting to the mount. `limit` is 1 to 25, default 10, and bounds final results after folding. Use `browse` for directory discovery.
 
-```json
-{ "status": "ready", "skill": {
-  "name": "incident-review", "directory": "skills/incident-review", "description": "...",
-  "license": "Apache-2.0", "compatibility": null, "allowedTools": null, "metadata": {},
-  "body": "# Incident review\n...", "files": ["skills/incident-review/assets/timeline.json"],
-  "filesTruncated": false, "included": ["skills/incident-review/assets/timeline.json"], "warnings": [],
-  "rules": { "path": "SKILLCDN.md", "body": "# Rules for every skill\n...", "truncated": false },
-  "translations": { "ko": { "title": "인시던트 리뷰", "description": "..." } }
-} }
-```
+A skill result carries its exact `path`, `directory`, name, description and translations. Matching supporting files are folded into the owning skill before pagination, with up to five matching file summaries and `moreFiles` for the rest. A skill occupies its best-ranked member's position, even when only a supporting file matched. Independent document results have canonical path, title and summary. Results remain in relevance order across folders; linked-only references are not independent search results.
 
-`rules` is the body of the repository's manifest, which holds for every skill, or `null` when there is none; `path` is `null` when the manifest lies above the mounted directory, and `truncated` is true when the body was cut at the limit `get` applies. `included` names the files the skill declares as needed on every run, which the `get` tool returns inline; here they are paths, and the files endpoint has their text. `translations` are what people see in another language, by language tag.
+The response carries the query, result items, diagnostics, resolved `commit` and `nextCursor`.
+
+### `GET /api/v1/skills/<address>?path=&cursor=`
+
+The `get_skill` tool. `path` is required and is an exact canonical `SKILL.md` path. `cursor` continues that skill's context; names and directory aliases are not the canonical API.
+
+The ready response's `skill` contains:
+
+- `path`, `directory`, `name`, `description`, known front-matter fields, warnings and translations.
+- `ruleChain`: applicable manifest bodies in repository-root-to-nearest order, with canonical source paths and fragment information.
+- `body`: the skill-body content on this page.
+- Supporting-file paths, included-file information and canonical `references` for optional reads.
+- `complete` and `nextCursor`, indicating whether the context requires another call.
+
+Context text is bounded to 16 KiB of UTF-8 per page: root-to-nearest rules first, then the skill body, then declared include files. Metadata and response structure add to that size. A page may contain only part of one rule or file and identifies the fragment. Continue until complete before treating the skill as loaded. Missing required content leaves `complete: false` with a diagnostic; `nextCursor` is absent when pagination cannot repair the failure. Ancestor rules above the mount are delivered through these pages; their paths do not become general file-read permissions. Translations are for the page's visitor, not alternate skill identifiers or search aliases.
 
 ### `GET /api/v1/files/<address>?path=&offset=&limit=`
 
-The `read_file` tool: a page of a UTF-8 text file. `path` is relative to the mounted root; `offset` and `limit` are in characters (`limit` 1 to 100,000, default 40,000). It does not need the index.
+The `read_file` tool. `path` is a canonical file path inside the mount. `offset` and `limit` are character counts (`limit` 1 to 100,000, default 40,000). Reads do not wait for indexing; eligibility is conservative until the index is ready.
 
 ```json
-{ "kind": "file", "path": "docs/getting-started.md", "content": "...", "offset": 0, "nextOffset": null, "totalLength": 1234 }
+{ "kind": "file", "path": "marketing/docs/guide.md", "content": "...", "offset": 0, "nextOffset": null, "totalLength": 1234 }
 ```
 
-When `path` names a directory (`.` is the mounted root), the answer is what it contains, subdirectories first, at most 200 entries:
-
-```json
-{ "kind": "directory", "path": "docs", "entries": [
-  { "path": "docs/images", "kind": "directory", "size": null },
-  { "path": "docs/getting-started.md", "kind": "file", "size": 1234 }
-], "truncated": false }
-```
+A file page never splits a character. Use the browse endpoint for directories. Raw files do not add inherited rules or stand in for loading a skill.
 
 ### `GET /api/v1/featured`
 
-The addresses the operator chose to show on the explorer's front page (`FEATURED_ADDRESSES`), each with what is known about it right now. Addresses that do not resolve are left out.
-
-```json
-{ "items": [
-  { "address": "/gh/acme/skills", "repository": { "host": "gh", "owner": "Acme", "name": "skills", "defaultBranch": "main", "description": null },
-    "manifest": { "name": "Acme skills", "description": "...", "translations": {} },
-    "status": "ready", "skillCount": 12, "skills": ["ad-copy", "incident-review"] }
-] }
-```
-
-`manifest` is the name and description the repository gives itself, with their translations, once it is indexed, or `null`. `skills` holds at most 5 names. There is deliberately no endpoint that lists every indexed repository: anyone can have any public repository indexed by asking for it once, so such a list needs a listing policy first.
+The addresses the operator selects for the explorer (`FEATURED_ADDRESSES`), with their repository metadata, manifest introduction when available, index status, skill count and a few skill names. Unresolvable addresses are omitted. There is no public enumeration of every indexed repository: asking for an address alone does not opt its author into a catalog.
 
 ## Open questions
 
-- Caching: pinned addresses could be served as immutable.
-- Rate limiting is left to whatever sits in front of the server, as for the MCP endpoint.
+- Pinned addresses could support immutable caching.
+- Rate limiting is left to the layer in front of the server, as for MCP.

@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
+  restBrowseSchema,
   restErrorSchema,
   restFeaturedSchema,
   restFileSchema,
@@ -29,12 +30,13 @@ describe("the fixture API", () => {
       const parsed = restMountSchema.parse(mount.body);
       expect(parsed.repository.name, key).toBe(repository.name);
 
+      expect(restBrowseSchema.safeParse(ask(`/api/v1/browse/gh/${key}`).body).success).toBe(true);
       expect(
         restFindSchema.safeParse(ask(`/api/v1/find/gh/${key}?query=review`).body).success,
       ).toBe(true);
       for (const skill of repository.skills.slice(0, 5)) {
         const answer = ask(
-          `/api/v1/skills/gh/${key}?name=${encodeURIComponent(skill.directory)}`,
+          `/api/v1/skills/gh/${key}?path=${encodeURIComponent(skill.path ?? `${skill.directory}/SKILL.md`)}`,
           10_000,
         );
         expect(restSkillSchema.safeParse(answer.body).success, skill.directory).toBe(true);
@@ -71,7 +73,7 @@ describe("the fixture API", () => {
     }
   });
 
-  it("shows paths relative to the mounted directory", () => {
+  it("keeps repository-root paths when a subdirectory is mounted", () => {
     const mount = restMountSchema.parse(
       ask("/api/v1/mounts/gh/acme/skills@v2/skills/release-notes").body,
     );
@@ -79,9 +81,97 @@ describe("the fixture API", () => {
     if (mount.index.status !== "ready") {
       throw new Error("expected a ready index");
     }
-    expect(mount.index.skills.map((skill) => skill.directory)).toEqual([""]);
+    expect(mount.index.skills.map((skill) => skill.directory)).toEqual(["skills/release-notes"]);
     // The mount is one skill: its files belong to the skill and are not documents of the mount.
     expect(mount.index.documents).toEqual([]);
+  });
+
+  it("browses described groups and pages every skill inside a folder", () => {
+    const root = restBrowseSchema.parse(ask("/api/v1/browse/gh/acme/skills").body);
+    expect(root).toMatchObject({
+      status: "ready",
+      path: "",
+      entries: expect.arrayContaining([
+        expect.objectContaining({
+          kind: "directory",
+          path: "team-a",
+          name: "Engineering",
+          skillCount: 1,
+        }),
+      ]),
+    });
+    let cursor: string | null = null;
+    const seen: string[] = [];
+    do {
+      const page = restBrowseSchema.parse(
+        ask(
+          `/api/v1/browse/gh/demo/long?path=skills/generated&limit=40${cursor === null ? "" : `&cursor=${cursor}`}`,
+        ).body,
+      );
+      if (page.status !== "ready") throw new Error("Expected ready browse");
+      seen.push(...page.entries.map((entry) => entry.path));
+      cursor = page.nextCursor;
+    } while (cursor !== null);
+    expect(seen).toHaveLength(230);
+    expect(new Set(seen).size).toBe(230);
+    expect(seen.every((path) => path.endsWith("/SKILL.md"))).toBe(true);
+    const skill = restSkillSchema.parse(
+      ask("/api/v1/skills/gh/acme/skills/team-a?path=team-a/review/SKILL.md").body,
+    );
+    expect(skill).toMatchObject({
+      status: "ready",
+      skill: {
+        path: "team-a/review/SKILL.md",
+        ruleChain: [
+          expect.objectContaining({ path: "SKILLCDN.md" }),
+          expect.objectContaining({ path: "team-a/SKILLCDN.md" }),
+        ],
+      },
+    });
+  });
+
+  it("scopes search to the selected folder and keeps complete result pages", () => {
+    const scoped = restFindSchema.parse(
+      ask("/api/v1/find/gh/acme/skills?query=review&path=team-a").body,
+    );
+    expect(scoped).toMatchObject({
+      status: "ready",
+      path: "team-a",
+      items: [expect.objectContaining({ kind: "skill", directory: "team-a/review" })],
+    });
+    const first = restFindSchema.parse(
+      ask("/api/v1/find/gh/demo/long?query=Generated&path=skills/generated&limit=25").body,
+    );
+    if (first.status !== "ready") throw new Error("Expected ready search");
+    expect(first.items).toHaveLength(25);
+    const next = restFindSchema.parse(
+      ask(
+        `/api/v1/find/gh/demo/long?query=Generated&path=skills/generated&limit=25&cursor=${first.nextCursor}`,
+      ).body,
+    );
+    if (next.status !== "ready") throw new Error("Expected ready search");
+    expect(next.items).toHaveLength(25);
+    expect(next.items[0]).not.toEqual(first.items[0]);
+  });
+
+  it("continues inherited rules, instructions and required contents without losing fragments", () => {
+    const first = restSkillSchema.parse(
+      ask("/api/v1/skills/gh/demo/context?path=review/SKILL.md").body,
+    );
+    if (first.status !== "ready") throw new Error("Expected ready skill");
+    expect(first.skill.complete).toBe(false);
+    expect(first.skill.body).toBe("");
+    const next = restSkillSchema.parse(
+      ask(`/api/v1/skills/gh/demo/context?path=review/SKILL.md&cursor=${first.skill.nextCursor}`)
+        .body,
+    );
+    if (next.status !== "ready") throw new Error("Expected ready skill");
+    expect(next.skill.complete).toBe(true);
+    expect(`${first.skill.ruleChain?.[0]?.body}${next.skill.ruleChain?.[0]?.body}`).toBe(
+      FIXTURE_REPOSITORIES["demo/context"]?.manifest?.rules,
+    );
+    expect(next.skill.body).toContain("Instructions after all inherited rules.");
+    expect(next.skill.includedContents?.[0]?.content).toContain("Required file received in full.");
   });
 
   it("pages a long file and moves from indexing to ready", () => {

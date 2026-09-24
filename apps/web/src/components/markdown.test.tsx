@@ -8,13 +8,19 @@ describe("resolveRelativePath", () => {
     expect(resolveRelativePath("docs", "./a/../b.md#section")).toBe("docs/b.md");
     expect(resolveRelativePath("skills/notes", "../../README.md?plain=1")).toBe("README.md");
     expect(resolveRelativePath("", "docs/a%20b.md")).toBe("docs/a b.md");
+    expect(resolveRelativePath("team/skills", "/docs/shared.md")).toBe("docs/shared.md");
+    expect(resolveRelativePath("docs", "%2e%2e/README.md")).toBe("README.md");
   });
 
-  it("refuses what leaves the mounted root or is not a plain path", () => {
+  it("refuses what leaves the repository root or is not a plain path", () => {
     for (const href of [
       "../../secret.md",
       "../../../etc/passwd",
-      "/etc/passwd",
+      "//example.com/file.md",
+      "%2e%2e/%2e%2e/secret.md",
+      "a%2Fb.md",
+      "a%5Cb.md",
+      "a%00b.md",
       "a\\b.md",
       "%zz.md",
       "",
@@ -69,6 +75,21 @@ describe("Markdown", () => {
     expect(html).not.toContain("outside.md");
     expect(html).not.toMatch(/href="(javascript|data|vbscript):/i);
     expect(html).toContain("<span>script</span>");
+  });
+
+  it("does not link references that the server marks outside the connection", () => {
+    const html = renderToStaticMarkup(
+      <Markdown
+        source="[Shared](/shared/guide.md)"
+        baseDirectory="team/skills"
+        fileHref={(path) => `/gh/acme/skills/team?file=${path}`}
+        references={[
+          { href: "/shared/guide.md", path: "shared/guide.md", status: "outside_mount" },
+        ]}
+      />,
+    );
+    expect(html).toContain("Shared");
+    expect(html).not.toContain("href=");
   });
 
   it("never loads an image", () => {
