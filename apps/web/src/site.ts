@@ -30,8 +30,8 @@ export const LINKS = {
  * picture of its star.
  */
 export const FEATURED_VIDEO = {
-  address: "/gh/skillcdn/examples",
-  href: "/gh/skillcdn/examples",
+  address: "/gh/skillcdn/skills",
+  href: "/gh/skillcdn/skills",
   clip: "/showcase/explorer-ad.mp4",
   animation: "/showcase/explorer-ad.avif",
   poster: "/showcase/explorer-ad.webp",
@@ -47,10 +47,10 @@ export const FEATURED_VIDEO = {
 } as const;
 
 /**
- * Addresses to try under the field: the examples repository of this project, written in the
+ * Addresses to try under the field: the reference repository of this project, written in the
  * SkillCDN Format (docs/specs/skill-repo.md) and kept working.
  */
-export const EXAMPLE_ADDRESSES = ["skillcdn/examples"] as const;
+export const EXAMPLE_ADDRESSES = ["skillcdn/skills"] as const;
 
 /**
  * The origin to show in URLs a visitor copies. In the browser it comes from the meta tag the

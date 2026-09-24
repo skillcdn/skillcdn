@@ -107,13 +107,13 @@ describe("prerendered pages", () => {
     });
     const items = [
       FEATURED_VIDEO.address,
-      "/gh/SkillCDN/examples",
+      "/gh/SkillCDN/skills",
       "/gh/acme/useful",
       "/gh/Acme/useful",
       "/gh/skillcdn/skillcdn@release/1.2:skills/hostile",
       "/gh/skillcdn/skillcdn@main/skills/single-skill/references",
       "/gh/skillcdn/skillcdn/skills/hostile-tools",
-      "/gh/skillcdn/examples@v1",
+      "/gh/skillcdn/skills@v1",
     ].map(item);
     const body = renderToString(
       <App
@@ -125,9 +125,9 @@ describe("prerendered pages", () => {
     expect(body.match(/href="\/gh\/acme\/useful"/g)).toHaveLength(1);
     expect(body).not.toContain('skills/hostile"');
     expect(body).not.toContain("single-skill/references");
-    expect(body).not.toContain('href="/gh/SkillCDN/examples"');
+    expect(body).not.toContain('href="/gh/SkillCDN/skills"');
     expect(body).toContain('href="/gh/skillcdn/skillcdn/skills/hostile-tools"');
-    expect(body).toContain('href="/gh/skillcdn/examples@v1"');
+    expect(body).toContain('href="/gh/skillcdn/skills@v1"');
   });
 
   it("offers the real editorial skill before repository setup on both public pages", () => {

@@ -42,7 +42,7 @@ packages/
   core/       pure domain logic and ports; no I/O, no Node APIs
   db/         PostgreSQL schema, migrations, query layer
   github/     GitHub implementation of the git-host port
-apps/server/fixtures/.repositories/  test-only repository fixtures; public examples live in skillcdn/examples
+apps/server/fixtures/.repositories/  test-only repository fixtures; the public reference repository is skillcdn/skills
 deploy/       Dockerfile, compose files, the contract for whoever operates the image
 docs/         architecture, specs, ADRs, roadmap
 ```

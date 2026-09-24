@@ -1,7 +1,7 @@
 # Spec: the SkillCDN Format
 
 - Status: **Draft.**
-- Implemented by: `packages/core` (`parseSkillManifest`, `parseRepoManifest`, `classifyRepoFile`, `isServedPath`, `summarizeMarkdown`). Fixtures live in [`apps/server/fixtures/.repositories/`](../../apps/server/fixtures/.repositories/); the reference repository, written in the format and served live, is `skillcdn/examples`.
+- Implemented by: `packages/core` (`parseSkillManifest`, `parseRepoManifest`, `classifyRepoFile`, `isServedPath`, `summarizeMarkdown`). Fixtures live in [`apps/server/fixtures/.repositories/`](../../apps/server/fixtures/.repositories/); the reference repository, written in the format and served live, is `skillcdn/skills`.
 
 How SkillCDN reads a repository, and how a repository is written so that an agent uses it well. The layout is the [Agent Skills](https://agentskills.io/specification) layout: a repository that already works as a skills folder works here unchanged. That layout, together with the conventions that grow around it (what sits next to `SKILL.md`, what the repository root says, how plain documents are written), is the **SkillCDN Format**. This file is its specification; user documentation will be rendered from it.
 
@@ -16,6 +16,11 @@ repo/
     <name>/references/      documents the body points to
     <name>/assets/          small data files the skill reads
     <name>/scripts/         optional helpers; served as text, never run
+  <area>/                   or one folder per area of work (marketing/, engineering/, ...)
+    SKILLCDN.md             the area's manifest: who its skills are for, the rules they add
+    README.md               the area's optional introduction
+    skills/<name>/SKILL.md  the area's skills, laid out as above
+    docs/                   the area's documents, discovered next to its manifest
   docs/                     plain documents: listed, searched and read without a skill;
                             other directories may be declared or individual Markdown files linked
   .agents/skills/<name>/    hidden ancestors do not hide an explicitly declared SKILL.md
@@ -140,24 +145,26 @@ A file named exactly `SKILLCDN.md` supplies metadata for its folder and a Markdo
 
 ```markdown
 ---
-name: SkillCDN examples
-description: Example skills and document sets, served live through SkillCDN. Use to see how a skill that drives a given tool is written.
+name: SkillCDN skills
+description: Skills for everyday work, one folder per area (marketing, product, engineering, and more as they are added), served live through SkillCDN. Use to run a skill that drives a tool for a task in one of these areas, or to see how a skill repository in the SkillCDN Format is written.
 documents:
   - docs
 language: en
 translations:
   ko:
-    name: SkillCDN 예제
-    description: SkillCDN으로 실시간 제공되는 예제 스킬과 문서 모음입니다. 특정 도구를 다루는 스킬이 어떻게 쓰이는지 볼 때 쓰세요.
+    name: SkillCDN 스킬
+    description: 업무 분야별 폴더(마케팅, 기획, 개발, 그리고 앞으로 추가될 분야)로 정리된 일상 업무용 스킬 모음입니다. SkillCDN을 통해 실시간으로 제공됩니다. 각 분야의 도구를 다루는 스킬을 실행하거나, SkillCDN 포맷의 스킬 저장소가 어떻게 쓰이는지 볼 때 쓰세요.
 license: MIT
 metadata:
   author: skillcdn
 ---
 # Rules for every skill in this repository
 
-- Ask when a choice changes the result; ask once, batched, only for what is missing.
-- Anything that costs the user money is estimated first and started only after they agree.
-- ...
+**Ask only what cannot be derived.** A skill asks for the inputs it cannot get from the request, in one short message, and derives everything else from those inputs and sensible defaults.
+
+**Spend only with consent.** Anything that costs the user money or credits is estimated first and started only after they agree.
+
+...
 ```
 
 | Field | Required | Rule |
@@ -214,7 +221,7 @@ The served set and reference graph are computed once per repository and commit. 
 The server image has a `check` role that reads a directory as the indexer reads a commit, with the same parsers and the same limits, and prints what an agent would get: the manifest, every skill with its files and warnings, the documents outside the skills, linked references, what is not served, index diagnostics, and the instructions a client is told on connect. It needs no database and no git host, executes nothing from the directory, and exits with `1` when index diagnostics are present, so it can gate a push.
 
 ```sh
-pnpm --filter @skillcdn/server run start check ../examples    # from a checkout of this repository
+pnpm --filter @skillcdn/server run start check ../skills      # from a checkout of this repository
 node dist/main.js check /path/to/repository                    # from the image
 ```
 
