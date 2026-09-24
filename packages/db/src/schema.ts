@@ -189,12 +189,16 @@ export interface SkillFrontMatter {
   readonly translations?: Readonly<Record<string, StoredTranslation>>;
   /** Repository manifest only: the directories it serves, relative to its own directory. */
   readonly documents?: readonly string[];
+  /** Repository manifest only: relative files or subtrees never published. Empty means self. */
+  readonly exclude?: readonly string[];
   /** Repository manifest only: the tag of the language the repository is written in. */
   readonly language?: string;
   /** Local Markdown destinations, normalized to repository-root paths. */
   readonly references?: readonly { readonly href: string; readonly path: string }[];
   /** Readable through a link, without becoming an independent catalog/search document. */
   readonly linkedOnly?: boolean;
+  /** Readable as a directory introduction, without creating a catalog/search document. */
+  readonly overviewOnly?: boolean;
   /** A present but unreadable repository manifest still defines a closed boundary. */
   readonly manifestError?: string;
 }

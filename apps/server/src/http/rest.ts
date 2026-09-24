@@ -125,6 +125,14 @@ export function browseBody(
         status: "ready",
         commit: answer.result.mount.commit,
         path: answer.result.path,
+        overview:
+          answer.result.overview === undefined
+            ? undefined
+            : {
+                path: answer.result.overview.path,
+                title: answer.result.overview.title ?? null,
+                description: answer.result.overview.description ?? null,
+              },
         diagnostics: [...(answer.result.diagnostics ?? [])],
         entries: [...answer.result.entries],
         nextCursor: answer.result.nextCursor ?? null,
@@ -464,6 +472,17 @@ export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies):
     try {
       const lookup = await reader.file(mount, query);
       switch (lookup.kind) {
+        case "not_ready":
+          return c.json(
+            errorBody(
+              lookup.outcome.status === "indexing" ? "index.indexing" : "index.failed",
+              lookup.outcome.status === "indexing"
+                ? "The repository is being indexed. Try again shortly."
+                : "The repository could not be indexed. Try again later.",
+            ),
+            503,
+            { "retry-after": "2" },
+          );
         case "invalid_path":
           return c.json(errorBody("request.invalid", `Not a valid path: ${lookup.reason}.`), 400);
         case "not_found":

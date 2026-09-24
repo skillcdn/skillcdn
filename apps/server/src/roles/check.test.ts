@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -34,9 +34,10 @@ describe("the check role", () => {
     expect(report).toContain(
       "Documents outside the skills: 1\n- docs/guide.md - Using the playbooks",
     );
-    expect(report).toContain(
-      "Not served: 3 files (README.md, notes/private.md, scripts/check.mjs)",
-    );
+    expect(report).toContain("Not served: 2 files (notes/private.md, scripts/check.mjs)");
+    expect(report).toContain("Optional overview files: 1 (README.md)");
+    expect(report).toContain("Optional overview: read_file README.md");
+    expect(report).not.toContain("README.md: Acme playbooks.");
     expect(report).toContain("Index diagnostics: 0");
     expect(report).toContain("What a client is told on connect (");
     expect(report).toContain("  Skills and documents from with-manifest");
@@ -83,6 +84,63 @@ describe("the check role", () => {
     const { code, report } = await check(join(FIXTURES, "does-not-exist"));
     expect(code).toBe(2);
     expect(report).toContain("not a directory that can be read");
+  });
+
+  it("keeps a symlink policy closed without reading or walking its target", async () => {
+    const root = await mkdtemp(join(tmpdir(), "skillcdn-check-policy-link-"));
+    const target = await mkdtemp(join(tmpdir(), "skillcdn-check-policy-target-"));
+    await mkdir(join(root, "team", "write"), { recursive: true });
+    await writeFile(
+      join(root, "team", "write", "SKILL.md"),
+      "---\nname: write\ndescription: A skill behind an unreadable policy.\n---\nWrite a draft.\n",
+    );
+    await writeFile(join(target, "target.md"), "This target must never be read.\n");
+    // Junctions need no symlink privilege on Windows; neither kind may become a policy.
+    await symlink(target, join(root, "team", "SKILLCDN.md"), "junction");
+    const { code, report } = await check(root);
+    expect(code).toBe(1);
+    expect(report).toContain("Skills: 0");
+    expect(report).toContain("Index diagnostics: 1");
+    expect(report).toContain("team/SKILLCDN.md (unsupported_type)");
+    expect(report).not.toContain("target.md");
+    expect(report).not.toContain("This target must never be read.");
+  });
+
+  it("uses README introductions without adding searchable documents", async () => {
+    const root = await mkdtemp(join(tmpdir(), "skillcdn-check-overview-"));
+    await mkdir(join(root, "team", "write"), { recursive: true });
+    await writeFile(
+      join(root, "README.md"),
+      "# Writing library\n\nFind the right writing skill.\n\nDetailed setup stays optional.\n",
+    );
+    await writeFile(join(root, "team", "README.md"), "# Editors\n\nTeam writing workflows.\n");
+    await writeFile(
+      join(root, "team", "write", "SKILL.md"),
+      "---\nname: write\ndescription: Write a draft.\n---\nDraft the message.\n",
+    );
+    const { code, report } = await check(root);
+    expect(code).toBe(0);
+    expect(report).toContain("Skills: 1");
+    expect(report).toContain("Documents outside the skills: 0");
+    expect(report).toContain("Optional overview files: 2");
+    const connection = report.split("What a client is told on connect")[1];
+    expect(connection).toContain("Writing library: Find the right writing skill.");
+    expect(connection).toContain("team/: Editors. Team writing workflows. 1 skills");
+    expect(connection).toContain("Optional overview: read_file README.md");
+    expect(connection).not.toContain("Detailed setup stays optional");
+    expect(connection).not.toContain("team/README.md:");
+  });
+
+  it("honors exclusion at a fixture root without publishing its own policy metadata", async () => {
+    const { code, report } = await check(FIXTURES);
+    expect(code).toBe(0);
+    expect(report).toContain("Skills: 0");
+    expect(report).toContain("Documents outside the skills: 0");
+    expect(report).toContain("Index diagnostics: 0");
+    expect(report).toContain("Repository manifest: none.");
+    expect(report).not.toContain("Internal repository fixtures used by the server test suites.");
+    expect(report).not.toContain("missing_front_matter");
+    expect(report).not.toContain("invalid_front_matter");
   });
 
   it("shows folder metadata on connect and distinguishes published support from linked references", async () => {

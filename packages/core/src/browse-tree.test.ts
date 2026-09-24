@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { browseCatalogFiles, type CatalogFile } from "./browse-tree.js";
+import { browseCatalogFiles, type CatalogFile, folderOverview } from "./browse-tree.js";
 import { parentDirectory } from "./repo-layout.js";
 import { parseRepoPath, type RepoPath, ROOT_PATH } from "./repo-path.js";
 
@@ -22,6 +22,76 @@ function skill(value: string): CatalogFile {
 }
 
 describe("browsing a published repository tree", () => {
+  it("adds folder introductions without turning overview-only files into listed documents", () => {
+    const files = [
+      skill("team/write/SKILL.md"),
+      file("team/README.md", {
+        overviewOnly: true,
+        searchable: false,
+        title: "Team",
+        description: "Write useful copy.",
+      }),
+      file("README.md", { overviewOnly: true, searchable: false, title: "Library" }),
+      file("unused/README.md", { overviewOnly: true, searchable: false }),
+    ];
+    expect(browseCatalogFiles(files, ROOT_PATH)).toMatchObject([
+      {
+        path: "team",
+        name: "Team",
+        description: "Write useful copy.",
+        overviewPath: "team/README.md",
+        skillCount: 1,
+        documentCount: 0,
+      },
+    ]);
+    expect(browseCatalogFiles(files, ROOT_PATH)).toHaveLength(1);
+    expect(browseCatalogFiles(files, path("team"))).toHaveLength(1);
+    expect(folderOverview(files, ROOT_PATH)).toEqual({
+      path: "README.md",
+      title: "Library",
+      description: undefined,
+    });
+  });
+
+  it("keeps independently published READMEs discoverable and prefers explicit folder metadata", () => {
+    const files = [
+      skill("team/write/SKILL.md"),
+      file("team/SKILLCDN.md", {
+        kind: "manifest",
+        name: "Explicit title",
+        description: "Explicit summary.",
+      }),
+      file("team/README.md", { title: "README title", description: "README summary." }),
+    ];
+    expect(browseCatalogFiles(files, ROOT_PATH)).toMatchObject([
+      {
+        path: "team",
+        name: "Explicit title",
+        description: "Explicit summary.",
+        overviewPath: "team/README.md",
+        documentCount: 1,
+      },
+    ]);
+    expect(browseCatalogFiles(files, path("team")).map((entry) => entry.path)).toContain(
+      "team/README.md",
+    );
+  });
+
+  it("selects a deterministic original README without choosing a display translation", () => {
+    const files = [
+      file("README.ko.md", { title: "Translation" }),
+      file("readme.mdx", { title: "MDX" }),
+      file("ReadMe.markdown", { title: "Markdown" }),
+      file("readme.md", { title: "Lowercase" }),
+      file("README.md", { title: "Original" }),
+    ];
+    expect(folderOverview(files, ROOT_PATH)?.title).toBe("Original");
+    expect(folderOverview([...files].reverse(), ROOT_PATH)).toEqual(
+      folderOverview(files, ROOT_PATH),
+    );
+    expect(folderOverview([files[0] as CatalogFile], ROOT_PATH)).toBeUndefined();
+  });
+
   it("preserves real folders and counts descendant skills without flattening or duplicate identities", () => {
     const files = [
       skill("marketing/skills/write/SKILL.md"),

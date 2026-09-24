@@ -18,6 +18,12 @@ export interface FixtureRepository {
   readonly defaultBranch: string;
   /** What the host shows as the repository's description. */
   readonly description?: string;
+  readonly overviews?: Readonly<
+    Record<
+      string,
+      { readonly path: string; readonly title: string | null; readonly description: string | null }
+    >
+  >;
   /** The repository's manifest (SKILLCDN.md): the name and description it gives itself. */
   readonly manifest?: {
     readonly path: string;
@@ -215,6 +221,13 @@ const ACME_SKILLS: FixtureRepository = {
   name: "skills",
   defaultBranch: "main",
   description: "The skills Acme's teams share: release notes, incident reviews and more.",
+  overviews: {
+    "": {
+      path: "README.md",
+      title: "Acme skills",
+      description: "Skills and playbooks of the Acme platform team.",
+    },
+  },
   manifest: {
     path: "SKILLCDN.md",
     name: "Acme skills",
@@ -291,7 +304,7 @@ const ACME_SKILLS: FixtureRepository = {
     skill("team-a/review", "review", "Code review checklist of team A."),
     skill("team-b/review", "review", "Code review checklist of team B."),
   ],
-  // The manifest declares docs/ only, so README.md is readable on the host but not served.
+  // An overview is readable separately from discoverable documents.
   documents: [
     {
       path: "docs/getting-started.md",
@@ -376,6 +389,18 @@ export const FIXTURE_REPOSITORIES: Readonly<Record<string, FixtureRepository>> =
     name: "handbook",
     defaultBranch: "trunk",
     description: "How Acme works, as plain documents.",
+    overviews: {
+      "": {
+        path: "README.md",
+        title: "Acme handbook",
+        description: "Start here to find the team's working agreements.",
+      },
+      "docs/engineering": {
+        path: "docs/engineering/README.md",
+        title: "Engineering",
+        description: "How engineers support and operate the service.",
+      },
+    },
     commit: "b7e1d2c3a4f5968778695a4b3c2d1e0f9a8b7c6d",
     state: "ready",
     skills: [],
@@ -390,6 +415,10 @@ export const FIXTURE_REPOSITORIES: Readonly<Record<string, FixtureRepository>> =
     ],
     diagnostics: [],
     files: {
+      "README.md":
+        "# Acme handbook\n\nStart here to find the team's working agreements.\n\n[Handbook](docs/handbook.md)\n",
+      "docs/engineering/README.md":
+        "# Engineering\n\nHow engineers support and operate the service.\n\n[On call](on-call.md)\n",
       "docs/handbook.md": "# Handbook\n\nHow we work.\n",
       "docs/engineering/on-call.md": "# On call\n\nAcknowledge, assess, communicate.\n",
     },
@@ -432,6 +461,7 @@ export const FIXTURE_REPOSITORIES: Readonly<Record<string, FixtureRepository>> =
     owner: "demo",
     name: "context",
     groups: {},
+    overviews: {},
     manifest: {
       path: "SKILLCDN.md",
       name: "Long instructions",

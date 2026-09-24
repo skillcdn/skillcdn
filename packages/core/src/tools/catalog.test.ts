@@ -42,6 +42,49 @@ const folder = (value: string): BrowseEntry => ({
   language: "en",
 });
 describe("repository instructions", () => {
+  it("introduces repositories without a manifest using README metadata and an optional read", () => {
+    const text = renderInstructions({
+      status: "ready",
+      catalog: {
+        ...base,
+        description: "Host fallback.",
+        overview: {
+          path: path("README.md"),
+          title: "Cloud skills",
+          description: "Automate cloud workloads.",
+        },
+      },
+    });
+    expect(text).toContain("Cloud skills: Automate cloud workloads.");
+    expect(text).toContain("Optional overview: read_file README.md.");
+    expect(text).not.toContain("Host fallback");
+    expect(text).not.toContain("applicable rules");
+    expect(text.length).toBeLessThanOrEqual(INSTRUCTIONS_MAX_LENGTH);
+    expect(
+      describeFindTool({ status: "ready", catalog: { ...base, description: "Host fallback." } }),
+    ).toContain("Host fallback.");
+  });
+
+  it("prefers explicit manifest metadata while keeping README readable", () => {
+    const catalog: MountCatalog = {
+      ...base,
+      description: "Host fallback.",
+      overview: { path: path("README.md"), title: "README title", description: "README summary." },
+      manifest: {
+        name: "Author title",
+        description: "Author description.",
+        path: path("SKILLCDN.md"),
+        language: undefined,
+        hasRules: true,
+      },
+    };
+    const text = renderInstructions({ status: "ready", catalog });
+    expect(text).toContain("Author title: Author description.");
+    expect(text).toContain("read_file README.md");
+    expect(text).not.toContain("README summary");
+    expect(describeFindTool({ status: "ready", catalog })).toContain("Author description.");
+  });
+
   it("introduces real folders without loading their skills or rules", () => {
     const text = renderInstructions({
       status: "ready",

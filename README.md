@@ -52,7 +52,7 @@ Headless agents get a **project token**: repo-scoped, read-only, expiring, revoc
 
 One `use_skill(path)` prompt starts loading a skill. The server introduces the repository and its folders when an agent connects; browse and search provide the rest. Names are display metadata, and every content path keeps its actual spelling from the repository root.
 
-Connect the repository root by default, so one connection reaches skills for different tasks and their shared Markdown references. Sub-path connections remain available when a narrower scope is wanted. Optional `SKILLCDN.md` files describe folders and add common rules; nested rules arrive with each skill in order. Repositories without those manifests still work through their real folder structure.
+Connect the repository root by default, so one connection reaches skills for different tasks and their shared Markdown references. Sub-path connections remain available when a narrower scope is wanted. Optional `SKILLCDN.md` files describe folders, add common rules and explicitly exclude files or subtrees; nested rules arrive with each skill in order. Repositories without those manifests still work through their real folder structure and optional README introductions. Discovery stays brief; agents load instructions and references only when needed.
 
 The repo declares things; it never ships code that we execute. This is a deliberate security boundary: SkillCDN runs no third-party code, on the server or on the user's machine.
 

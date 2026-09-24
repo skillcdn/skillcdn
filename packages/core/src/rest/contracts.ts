@@ -48,6 +48,7 @@ export const restReferenceSchema = z.object({
 });
 export const restBrowseEntrySchema = z.object({
   browsePath: z.optional(z.string()),
+  overviewPath: z.optional(z.string()),
   kind: z.enum(["directory", "skill", "file"]),
   path: z.string(),
   name: z.nullable(z.string()),
@@ -58,11 +59,17 @@ export const restBrowseEntrySchema = z.object({
   manifestPath: z.nullable(z.string()),
   language: z.nullable(z.string()),
 });
+export const restFolderOverviewSchema = z.object({
+  path: z.string(),
+  title: z.nullable(z.string()),
+  description: z.nullable(z.string()),
+});
 export const restBrowseSchema = z.discriminatedUnion("status", [
   z.object({
     status: z.literal("ready"),
     commit: z.string(),
     path: z.string(),
+    overview: z.optional(restFolderOverviewSchema),
     entries: z.array(restBrowseEntrySchema),
     diagnostics: z.optional(z.array(restDiagnosticSchema)),
     nextCursor: z.nullable(z.string()),
@@ -73,6 +80,7 @@ export const restBrowseSchema = z.discriminatedUnion("status", [
 export type RestBrowse = z.infer<typeof restBrowseSchema>;
 export type RestBrowseEntry = z.infer<typeof restBrowseEntrySchema>;
 export type RestReference = z.infer<typeof restReferenceSchema>;
+export type RestFolderOverview = z.infer<typeof restFolderOverviewSchema>;
 
 export const restRepositorySchema = z.object({
   host: z.enum(GIT_HOST_KEYS),
@@ -142,6 +150,7 @@ export const restMountSchema = z.object({
       truncated: z.boolean(),
       /** `null` when the mount has no manifest. */
       manifest: z.nullable(restManifestSchema),
+      overview: z.optional(restFolderOverviewSchema),
       skillCount: count,
       documentCount: count,
       skills: z.array(restSkillSummarySchema),

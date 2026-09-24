@@ -115,10 +115,7 @@ function MountBody(props: {
   const { t } = useI18n();
   const { address, view, mount } = props;
 
-  // A file can be read while the index is still being built; everything else needs the index.
-  if (view.kind === "file") {
-    return <MountFile address={address} path={view.path} />;
-  }
+  // Every read needs the indexed publication policy, including direct README links.
   if (mount.index.status === "indexing") {
     return (
       <Callout
@@ -135,6 +132,9 @@ function MountBody(props: {
         {t.mount.failed.body(mount.index.errorCode)}
       </Callout>
     );
+  }
+  if (view.kind === "file") {
+    return <MountFile address={address} path={view.path} />;
   }
   return view.kind === "skill" ? (
     <MountSkill key={view.path} address={address} path={view.path} onLoaded={props.onSkill} />

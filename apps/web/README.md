@@ -51,6 +51,8 @@ Styles are CSS modules: a class is local to its component, so renaming or restyl
 
 The overview uses `browse` to display folders, descriptions, descendant counts, skills and documents. `?path=marketing` selects a folder within the existing connection; breadcrumbs and scoped search never change the connected address. Every returned path is relative to the repository root, including when the address mounts a subdirectory. A skill opens with `?skill=marketing/skills/campaign/SKILL.md`; names are display text, not identifiers.
 
+When a folder has a README overview, its short introduction and a link to the original appear in the explorer, with or without a manifest. The link opens the existing file view; the page does not preload the full README or choose a translated source from the UI language. Overview-only files do not inflate search results or document counts.
+
 Browse and search have continuation pages, including repositories with more skills than fit in the initial overview. The skill view renders each inherited manifest in order, appends context pages until complete, and shows required file contents. Supporting files remain accessible through folder browsing. Markdown resolves a leading slash from the repository root, rejects traversal outside it, and respects unavailable references reported by the REST API. The underlying tool contract is `browse`, `search`, `get_skill` and `read_file`; see the [REST specification](../../docs/specs/rest.md).
 
 `dev/fixtures.ts` includes nested team groups, duplicate skill names and a folder with 230 skills. The development states page links to scoped searches and pagination. Server rendering receives `browse` or `find` alongside `mount` and seeds the same keys the browser requests in `src/api/keys.ts`.

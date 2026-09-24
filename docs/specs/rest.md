@@ -24,6 +24,7 @@ The API shows a person what an agent gets from an address. It is anonymous, read
 | 403 | `mount.not_allowed` | The deployment does not serve this repository. |
 | 503 | `mount.rate_limited`, `mount.unavailable` | The git host cannot be asked now; `retry-after` is set when known. |
 | 503 | `skill.unavailable` | Indexed skill content cannot be read now. |
+| 503 | `index.indexing`, `index.failed` | A file read cannot establish the publication policy until indexing is ready. Retry later. |
 | 404 | `skill.not_found`, `file.not_found` | No eligible content at that path inside the mount. |
 | 413 | `file.too_large` | The file exceeds the readable size limit. |
 | 415 | `file.not_text` | The file is not UTF-8 text. |
@@ -58,6 +59,8 @@ The `browse` tool's immediate-folder view. `path` is an optional canonical direc
 
 Entries preserve the real folder tree, name their canonical paths, distinguish files and directories, and identify skill folders and manifest metadata when available. Counts help a client choose a subtree without loading every skill. A manifest adds context to its folder; it creates no shortened path or alias. The response carries diagnostics, commit and `nextCursor`.
 
+The optional `overview` describes a readable README of the current folder as `{ path, title, description }`, with nullable title and description. An entry can carry an optional `overviewPath`. These introductions work without manifests, stay in their original language and open through the files endpoint. Their full text is not part of browse results or required skill context. Overview-only files do not add independent search results or document counts; [format rules](skill-repo.md#readme-introductions) determine which README is selected and whether it has another discovery role.
+
 ### `GET /api/v1/find/<address>?query=&path=&cursor=&limit=`
 
 The `search` tool's ranked search. `query` is nonblank text of at most 500 characters; `path` restricts the search subtree, defaulting to the mount. `limit` is 1 to 25, default 10, and bounds final results after folding. Use `browse` for directory discovery.
@@ -82,13 +85,15 @@ Context text is bounded to 16 KiB of UTF-8 per page: root-to-nearest rules first
 
 ### `GET /api/v1/files/<address>?path=&offset=&limit=`
 
-The `read_file` tool. `path` is a canonical file path inside the mount. `offset` and `limit` are character counts (`limit` 1 to 100,000, default 40,000). Reads do not wait for indexing; eligibility is conservative until the index is ready.
+The `read_file` tool. `path` is a canonical file path inside the mount. `offset` and `limit` are character counts (`limit` 1 to 100,000, default 40,000). Reads do not wait for indexing: they return HTTP 503 with `index.indexing` or `index.failed` until the served set, including exclusions, is known. All reading routes enforce ancestor exclusions and failed policy boundaries.
 
 ```json
 { "kind": "file", "path": "marketing/docs/guide.md", "content": "...", "offset": 0, "nextOffset": null, "totalLength": 1234 }
 ```
 
 A file page never splits a character. Use the browse endpoint for directories. Raw files do not add inherited rules or stand in for loading a skill.
+
+MCP additionally bounds its complete serialized tool result and can return shorter pages than these REST limits. The byte budget and continuation behavior are defined in [tools](tools.md#results-and-continuations).
 
 ### `GET /api/v1/featured`
 

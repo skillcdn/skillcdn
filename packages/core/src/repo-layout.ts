@@ -99,6 +99,57 @@ export interface ServedScope {
   readonly documentDirectories: ReadonlyMap<RepoPath, readonly RepoPath[]>;
   /** Explicit `skillcdn.include` files, in repository-root coordinates. */
   readonly includedFiles?: ReadonlySet<RepoPath>;
+  /** Exact files or subtrees withheld by any ancestor, in repository-root coordinates. */
+  readonly excludedPaths?: ReadonlySet<RepoPath>;
+  /** Unreadable policies deny all descendants except their own diagnostic manifest. */
+  readonly brokenManifestDirectories?: ReadonlySet<RepoPath>;
+}
+
+/** Ancestor exclusions cannot be reopened by a nearer declaration, include, overview or link. */
+export function isExcludedPath(
+  path: RepoPath,
+  scope: Pick<ServedScope, "excludedPaths" | "brokenManifestDirectories">,
+): boolean {
+  let current = path;
+  while (true) {
+    if (scope.excludedPaths?.has(current)) return true;
+    if (scope.brokenManifestDirectories?.has(current) && path !== repoManifestPath(current))
+      return true;
+    if (current === ROOT_PATH) return false;
+    current = parentDirectory(current);
+  }
+}
+
+/** Conventional original overview names; locale suffixes are deliberately not inferred. */
+export function isReadmePath(path: RepoPath): boolean {
+  return /^readme\.(?:md|markdown|mdx)$/i.test(baseName(path));
+}
+
+/** One deterministic overview per already discoverable directory. */
+export function selectReadmePaths(
+  paths: Iterable<RepoPath>,
+  directories: ReadonlySet<RepoPath>,
+): ReadonlySet<RepoPath> {
+  const selected = new Map<RepoPath, RepoPath>();
+  const rank = (path: RepoPath): number => {
+    const name = baseName(path);
+    if (name === "README.md") return 0;
+    if (name === "readme.md") return 1;
+    const extension = name.toLowerCase().slice(name.lastIndexOf("."));
+    return extension === ".md" ? 2 : extension === ".markdown" ? 3 : 4;
+  };
+  for (const path of paths) {
+    const directory = parentDirectory(path);
+    if (!directories.has(directory) || !isReadmePath(path)) continue;
+    const previous = selected.get(directory);
+    if (
+      previous === undefined ||
+      rank(path) < rank(previous) ||
+      (rank(path) === rank(previous) && path < previous)
+    )
+      selected.set(directory, path);
+  }
+  return new Set(selected.values());
 }
 
 /** Whether `path` is in `directory`; the root holds everything. */
@@ -114,6 +165,7 @@ function isPublicDescendant(path: RepoPath, directory: RepoPath): boolean {
  * is read as if its root declared the default directories: `docs`, and nothing else.
  */
 export function isServedPath(path: RepoPath, scope: ServedScope): boolean {
+  if (isExcludedPath(path, scope)) return false;
   const skill = owningSkillDirectory(path, scope.skillDirectories);
   if ((skill !== undefined && isPublicDescendant(path, skill)) || scope.includedFiles?.has(path)) {
     return true;

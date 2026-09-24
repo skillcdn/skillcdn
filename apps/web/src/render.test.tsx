@@ -377,6 +377,76 @@ describe("the page of an address", () => {
     expect(indexing.html).toContain('content="noindex,follow"');
   });
 
+  it("offers original introductions in each UI language without a repository manifest", () => {
+    for (const language of LANGUAGES) {
+      const { html } = renderAddressPage(TEMPLATE, {
+        language,
+        origin: "https://skills.example",
+        pathname: "/gh/acme/skills",
+        search: "",
+        data: {
+          mount: { ready: MOUNT },
+          browse: {
+            ready: {
+              ...BROWSE,
+              overview: {
+                path: "README.md",
+                title: "Original introduction",
+                description: "Choose a skill for the task at hand.",
+              },
+              entries: [
+                {
+                  kind: "directory",
+                  path: "engineering",
+                  name: "Engineering",
+                  description: null,
+                  skillCount: 1,
+                  documentCount: 0,
+                  size: null,
+                  manifestPath: null,
+                  language: null,
+                  overviewPath: "engineering/README.md",
+                },
+              ],
+            },
+          },
+        },
+      });
+      expect(html).toContain(messagesFor(language).mount.browse.introduction);
+      expect(html).toContain("Choose a skill for the task at hand.");
+      expect(html).toContain('href="/gh/acme/skills?file=README.md"');
+      expect(html).toContain('href="/gh/acme/skills?file=engineering%2FREADME.md"');
+      expect(html).not.toContain("file=README.ko.md");
+    }
+  });
+
+  it("shows indexing for a direct README link until publication is known", () => {
+    const { html } = renderAddressPage(TEMPLATE, {
+      language: "en",
+      origin: "https://skills.example",
+      pathname: "/gh/acme/skills",
+      search: "?file=README.md",
+      data: {
+        mount: { ready: { ...MOUNT, index: { status: "indexing" } } },
+      },
+    });
+    expect(html).toContain(messagesFor("en").mount.indexing.title);
+    expect(html).not.toContain(messagesFor("en").errors.generic);
+    const ready = renderAddressPage(TEMPLATE, {
+      language: "en",
+      origin: "https://skills.example",
+      pathname: "/gh/acme/skills",
+      search: "?file=README.md",
+      data: { mount: { ready: MOUNT } },
+    });
+    expect(ready.html).not.toContain(messagesFor("en").mount.indexing.title);
+    expect(ready.html).not.toContain(messagesFor("en").errors.generic);
+    expect(ready.html).toContain('aria-label="Repository folders"');
+    expect(ready.html).toContain(
+      `<span class="visually-hidden">${messagesFor("en").common.loading}</span>`,
+    );
+  });
+
   it("labels translated skill summaries while preserving the original name and instructions", () => {
     for (const language of LANGUAGES) {
       const translated = renderAddressPage(TEMPLATE, {

@@ -14,6 +14,9 @@ export const READ_FILE_DEFAULT_LIMIT = 40_000;
 export const READ_FILE_MAX_LIMIT = 100_000;
 export const BROWSE_DEFAULT_LIMIT = 50;
 export const BROWSE_MAX_LIMIT = 200;
+/** Smaller discovery pages for agents; REST retains its existing defaults. */
+export const MCP_BROWSE_DEFAULT_LIMIT = 20;
+export const MCP_SEARCH_DEFAULT_LIMIT = 5;
 export const SKILL_PAGE_BYTES = 16_384;
 const cursor = z
   .string()
@@ -134,7 +137,7 @@ export const readFileTool: ToolContract<typeof readFileInputSchema> = {
   name: "read_file",
   title: "Read a file",
   description:
-    "Read a text file by its repository-root path. Long files come in pages; pass the next offset to continue. Use browse for folders and get_skill to load a skill with its applicable rules.",
+    "Read a reference or optional README by repository-root path. Continue long files with nextOffset. Use get_skill for a skill and its required rules.",
   inputSchema: readFileInputSchema,
 };
 
@@ -142,21 +145,21 @@ export const browseTool: ToolContract<typeof browseInputSchema> = {
   name: "browse",
   title: "Browse skills and documents",
   description:
-    "Explore a repository folder. Returns child folders with descriptions and skill counts, skills with their exact SKILL.md paths, and documents. Follow nextCursor for more entries. Paths always start at the repository root.",
+    "List a folder's children, skill counts and optional README path. Load exact SKILL.md paths with get_skill. Follow nextCursor for more entries. Paths start at the repository root.",
   inputSchema: browseInputSchema,
 };
 export const searchTool: ToolContract<typeof searchInputSchema> = {
   name: "search",
   title: "Search skills and documents",
   description:
-    "Search words in the original content's language, usually English. Display translations are not searched. Optionally restrict to a folder path. Results keep relevance order, with matching support files under their skill. Follow nextCursor for more results; use get_skill with the returned SKILL.md path.",
+    "Search words in original content, usually English; display translations are excluded. Optional path scopes results. Matching files appear under their skill. Follow nextCursor for more; load the returned SKILL.md path with get_skill.",
   inputSchema: searchInputSchema,
 };
 export const getSkillTool: ToolContract<typeof getSkillInputSchema> = {
   name: "get_skill",
   title: "Load a skill",
   description:
-    "Load a skill by its exact repository-root SKILL.md path, with inherited rules and required files. Follow nextCursor until complete before applying it. References have resolved repository-root paths; read further files with read_file.",
+    "Load an exact SKILL.md path with inherited rules and required files. Follow nextCursor until complete before applying it. Read optional supporting files with read_file only when needed.",
   inputSchema: getSkillInputSchema,
 };
 export const TOOL_NAMES = [

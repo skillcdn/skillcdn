@@ -406,6 +406,7 @@ describe("GET /api/v1/files/<address>", () => {
 
   it("pages a text file and explains what it cannot read", async () => {
     const host = createFixtureHost("rest-files");
+    const release = host.holdTrees();
     host.addFile("docs/long.md", new TextEncoder().encode(`# Long\n\n${"0123456789".repeat(200)}`));
     host.addFile("docs/huge.md", new Uint8Array(5000).fill(0x61));
     host.addFile("assets/logo.png", new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0, 1, 2, 0xff]));
@@ -413,7 +414,15 @@ describe("GET /api/v1/files/<address>", () => {
     const address = `/gh/acme/single-skill@${fixtureCommits("rest-files").main}`;
     const fileUrl = (query: string) => `/api/v1/files${address}?${query}`;
 
-    // Without an index yet: reading a file never waits for one.
+    // File reads return promptly, but cannot bypass publication policy before indexing.
+    try {
+      const pending = await h.request(fileUrl("path=docs/long.md&limit=1000"));
+      expect(pending.status).toBe(503);
+      expect((await errorOf(pending)).code).toBe("index.indexing");
+    } finally {
+      release();
+    }
+    await indexed(h, address);
     const first = restFileSchema.parse(
       await (await h.request(fileUrl("path=docs/long.md&limit=1000"))).json(),
     );

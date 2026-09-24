@@ -9,7 +9,7 @@ How SkillCDN reads a repository, and how a repository is written so that an agen
 repo/
   SKILLCDN.md               the repository manifest: name, description, which directories hold
                             documents, and the rules that hold for every skill
-  README.md                 introduction for people; readable when declared or linked
+  README.md                 optional introduction, summarized for discovery and read on demand
   SKILL.md                  a single-skill repo, or
   skills/
     <name>/SKILL.md         a multi-skill repo; front-matter carries name, description, ...
@@ -28,8 +28,10 @@ What the indexer does with a repository. These hold for every repository, whethe
 - **A skill is a directory that holds a valid file named exactly `SKILL.md`**, at any depth, including under hidden ancestors. The exact file declares the skill; no repository-specific folder names or allowlists are needed. A file belongs to the nearest skill directory above it, so a nested skill owns its own files. A root `SKILL.md` declares a root skill without suppressing nested skills.
 - `SKILL.md` is YAML front-matter followed by a Markdown body. Everything else in the skill directory is a supporting file the body may point to.
 - **Documents are discovered in `docs`**, at the repository root or next to the nearest governing manifest; a manifest can declare different directories ([the repository manifest](#the-repository-manifest-skillcdnmd)). These are bulk discovery roots, not a denylist. Linked Markdown files outside them can also be read ([references](#markdown-references)).
+- **READMEs introduce visible folders.** The repository root and folders already exposed through skills or documents can supply an optional README overview, even without `SKILLCDN.md`. Discovery carries a short summary and canonical path; the full text is read only when needed. Overview eligibility alone does not add a searchable document or increase document counts ([introductions](#readme-introductions)).
 - A repository without any skill still works as a document endpoint through `browse`, `search` and `read_file`.
 - **Hidden paths require a declaration.** A valid `SKILL.md` declares its skill even under hidden ancestors. Ordinary supporting descendants are eligible, but additional hidden children require `skillcdn.include`, an explicit document-directory declaration or a Markdown link. A file link exposes that file, never its siblings. Unrelated hidden files remain excluded.
+- **Explicit exclusions take precedence.** A manifest's `exclude` removes the named files or subtrees from every discovery and reading route, including valid skills, README overviews, includes and references. Descendant declarations cannot reopen excluded paths ([exclusions](#excluding-files-and-subtrees)).
 - **Folders retain their real paths.** `browse` shows the same hierarchy whether or not manifests exist. A `SKILLCDN.md` adds metadata and rules to its folder. A skill belongs directly to the nearest manifest folder; ancestor counts include descendants without duplicating their identities.
 - **Repositories declare; they never ship code that we execute.** Composition ("take this input, call these tools in this order") will be declared in Markdown or YAML. Scripts in a repo are files like any other: readable, never run. `allowed-tools` is passed through as text and grants nothing.
 - Indexed content: skill manifests, Markdown (`.md`, `.markdown`, `.mdx`) and small JSON. Every other file is listed and can be read, but is not searched. Binary and oversized files are skipped. Limits are configuration with safe defaults.
@@ -87,7 +89,7 @@ A repository is in the SkillCDN Format when all of these hold. They are what the
 3. **References make dependencies explicit.** Use Markdown links for repository files needed by the workflow. Shared `.md` references outside the skill work through a repository-root connection. A sub-path connection cannot read references outside its mount; keep a skill self-contained when it must also work alone.
 4. **Everything an agent must read is Markdown or small JSON.** Other files are listed and readable, never searched; rendered media and binaries are not part of a skill.
 5. **Nothing has to run.** A skill works from its `SKILL.md` and the documents it points to. Scripts may be shipped as help for agents that run locally, and are served as text.
-6. **Shared rules have a `SKILLCDN.md` at their scope.** A root manifest states repository-wide rules; nested manifests add rules for their descendants. A manifest is optional when the repository needs no extra metadata, rules or document roots. `README.md` remains the introduction for people on the git host.
+6. **Shared rules have a `SKILLCDN.md` at their scope.** A root manifest states repository-wide rules; nested manifests add rules for their descendants. A manifest is optional when the repository needs no extra metadata, rules, document roots or exclusions. README introductions are available separately and do not become shared rules.
 7. **No secrets, no private hostnames, no real people's identity or likeness**, in any file. The repository is served to whoever holds the address.
 
 ### Recommended
@@ -118,7 +120,19 @@ Plain documents (a document set is a directory of Markdown without a `SKILL.md`)
 
 ### A repository without a manifest
 
-A client is told the repository, commit and mounted path, with a bounded folder overview ([tools](tools.md)). The name of a mount is its address; its description comes from the git host ([REST](rest.md)). Valid skills are discovered at any depth, documents in root `docs` are independently discoverable, and local Markdown references can add readable files. The folder tree needs no inferred aliases or descriptions. A repository adds manifests only where metadata, common rules or other document roots are useful.
+A client is told the repository, commit and mounted path, with a bounded folder overview ([tools](tools.md)). README summaries provide orientation without loading the introduction; the git-host description is the fallback when no local description is available. Valid skills are discovered at any depth, documents in root `docs` are independently discoverable, and local Markdown references can add readable files. The folder tree needs no inferred aliases. A repository adds manifests only where metadata, common rules, other document roots or exclusions are useful.
+
+### README introductions
+
+A README at the repository root or in a directory already exposed through skills, documents or their ancestors can be read with `read_file`. A README alone does not expose an unrelated hidden folder or make every folder in a repository discoverable. The same size, text, symlink, mount and exclusion rules apply as for other files.
+
+The basename is `README` without a language suffix, matched case-insensitively, and the extension is `.md`, `.markdown` or `.mdx`. Choose one overview per directory: exact `README.md`, then `readme.md`, then other `.md` spellings, `.markdown`, and `.mdx`, with lexical order breaking ties. The canonical path preserves the file's actual spelling.
+
+`browse` returns the current folder's optional `overview` with its canonical path, title and short description, and can identify a child folder's `overviewPath`. Titles and summaries use the normal Markdown summary parser. The manifest's explicit name and description take precedence when describing its folder; a README summary fills a missing introduction, followed by the git-host description for the repository root. Reading the overview remains optional: its body is never appended to connection instructions, inherited rules or a skill's required context.
+
+The selected README is the original, without choosing a language variant from the UI language. Authors should write this original in English by default and link human-facing translations themselves. Reading an exact eligible translation path still returns that file as written.
+
+Overview-only files stay out of independent search and document counts. A README independently eligible as a document or supporting file keeps that eligibility. Its local Markdown links follow the ordinary bounded reference rules below, allowing an agent to read a relevant linked guide on demand.
 
 ### The repository manifest: `SKILLCDN.md`
 
@@ -151,6 +165,7 @@ metadata:
 | `name` | no | 1 to 100 characters on one line. Default: the repository's name on the git host. |
 | `description` | yes | 1 to 1024 characters. Who should use the skills in this folder and for which tasks. Shown with the folder and in connection context when space permits. |
 | `documents` | no | At most 20 directories relative to the manifest (`docs`, `docs/` or `.` for its own directory), no `..`; invalid entries are dropped and reported. Their Markdown and JSON are discoverable, and their eligible text files can be read. Default: `docs` next to the manifest. An empty sequence disables bulk document discovery; it does not block explicit file references. An explicitly named hidden directory is allowed. |
+| `exclude` | no | At most 100 exact file or subtree paths relative to this manifest; `.` excludes its entire scope. Omitted or empty: no exclusions. A trailing `/` is allowed. No globs, negation, absolute paths or `..`. Ancestor exclusions accumulate and cannot be overridden. Any invalid entry fails the manifest closed rather than silently dropping the policy. |
 | `language` | no | The tag of the language the original content is written in (`en`, `ko`, `pt-BR`); English is the recommended authoring default. Told to the client on connect, so that a model searches in that language; on the page, text shown as the author wrote it is marked as being in it. It does not select a translation. A tag that is not one is ignored and reported. |
 | `translations` | no | A mapping from a language tag to a mapping with `name` (1 to 100 characters on one line) and `description` (1 to 1024 characters): display text for people reading the page in that language. At most 32 languages. These are not search aliases or agent context; agents read the original `name`, `description` and rules. |
 | `license` | no | Short text, as in `SKILL.md`. |
@@ -162,15 +177,31 @@ The nearest manifest determines bulk document discovery for a file outside skill
 
 Rules are different: `get_skill` returns every ancestor manifest's body in root-to-nearest order, labeled by canonical source path, before the skill body. Only `language` automatically inherits among metadata fields, with a nearer declaration overriding it. Names, descriptions, translations, licenses and metadata remain attached to the manifest that declares them.
 
-A failed manifest retains its boundary and is reported. Its scope does not fall back to broader document discovery, and links do not expand through that failed scope. Skills and the manifest remain available when readable; a missing common rule is explicitly reported. Manifests needed to govern declared skills are considered even under hidden ancestors. While indexing is incomplete, reads use conservative eligibility rather than guessing declarations.
+A failed manifest retains its boundary and is reported. Its descendant scope is closed to discovery and reads because its publication policy could not be established. Neither nested declarations, includes, README overviews nor links reopen it. The policy's diagnostic identifies the problem without exposing descendants. Manifests are considered even under hidden ancestors so exclusions can govern hidden skills. While indexing is incomplete, reads report indexing rather than guessing the policy.
 
 A sub-path connection retains applicable ancestor rules through `get_skill` continuation, but ordinary `read_file` cannot read outside the mount. All source paths remain repository-root paths.
 
+### Excluding files and subtrees
+
+Place the policy at the narrowest relevant scope. For example, to keep test repositories out of a repository's served skills, add this `SKILLCDN.md` inside the directory that contains those fixtures:
+
+```markdown
+---
+description: Internal test repositories.
+exclude:
+  - .
+---
+```
+
+To omit only some descendants, name their paths instead, such as `templates` or `references/draft.md`. Exclusions match complete path segments, so `templates` does not exclude `templates-public`. They use repository path spelling and never escape the manifest directory. A sub-path connection inside an excluded subtree does not bypass an ancestor's policy.
+
+Exclusions govern the served set before parsing descendant skills and walking references. Intentionally excluded fixtures therefore produce neither skills nor irrelevant manifest diagnostics. This is publication control within SkillCDN, not confidentiality: files in a public git repository remain public on the git host.
+
 ### Markdown references
 
-The index resolves local Markdown links from valid skills, applicable rules and served Markdown documents, recursively following targets ending in `.md`. Inline and reference-style links are supported. Relative links are resolved against their source file; a leading `/` means the repository root. Fragments are removed. External URLs and anchor-only links are not repository references. A filename mentioned only in prose or code is not a declaration.
+The index resolves local Markdown links from valid skills, applicable rules, README overviews and served Markdown documents, recursively following targets ending in `.md`. Inline and reference-style links are supported. Relative links are resolved against their source file; a leading `/` means the repository root. Fragments are removed. External URLs, directory links and anchor-only links are not repository file references. A filename mentioned only in prose or code is not a declaration.
 
-Every resolved target remains inside the repository and refers to the same commit. Normalized paths prevent traversal; symlinks and submodules are not followed. A visited set prevents cycles, and file, byte and traversal limits bound the work. Failed manifest scopes block expansion. A link to another skill or manifest preserves that file's identity and does not make its rules apply to the source skill.
+Every resolved target remains inside the repository and refers to the same commit. Normalized paths prevent traversal; symlinks and submodules are not followed. A visited set prevents cycles, and file, byte and traversal limits bound the work. Excluded paths and failed manifest scopes block expansion. A link to another skill or manifest preserves that file's identity and does not make its rules apply to the source skill.
 
 Reference inspection reads at most 262,144 characters and records at most 200 local destinations per source file. Expansion follows at most eight edges beyond already served content, within the repository's file and byte budgets. Hitting these limits marks the index partial; per-file inspection limits also produce a diagnostic.
 

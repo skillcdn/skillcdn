@@ -13,7 +13,7 @@ export {
   MAX_ADDRESS_LENGTH,
   parseAddress,
 } from "./address.js";
-export { browseCatalogFiles, type CatalogFile } from "./browse-tree.js";
+export { browseCatalogFiles, type CatalogFile, folderOverview } from "./browse-tree.js";
 export { contextPage } from "./context-page.js";
 export { DomainError } from "./errors.js";
 export {
@@ -62,7 +62,9 @@ export { discardUsage, type UsageEvent, type UsageSink } from "./ports/usage-sin
 export {
   baseName,
   classifyRepoFile,
+  isExcludedPath,
   isHiddenPath,
+  isReadmePath,
   isServedPath,
   nearestDirectoryAtOrAbove,
   owningSkillDirectory,
@@ -72,9 +74,11 @@ export {
   repoManifestPath,
   type ServedScope,
   SKILL_MANIFEST_FILE,
+  selectReadmePaths,
 } from "./repo-layout.js";
 export {
   MAX_DOCUMENT_DIRECTORIES,
+  MAX_EXCLUDED_PATHS,
   MAX_REPO_DESCRIPTION_LENGTH,
   MAX_REPO_MANIFEST_LENGTH,
   MAX_REPO_NAME_LENGTH,
@@ -112,6 +116,7 @@ export {
   type RestFile,
   type RestFind,
   type RestFindItem,
+  type RestFolderOverview,
   type RestManifest,
   type RestMount,
   type RestReference,
@@ -130,6 +135,7 @@ export {
   restFileSchema,
   restFindItemSchema,
   restFindSchema,
+  restFolderOverviewSchema,
   restMountSchema,
   restPath,
   restReferenceSchema,
@@ -164,6 +170,7 @@ export {
   type CatalogManifest,
   type CatalogSkill,
   type CatalogState,
+  catalogDescription,
   describeFindTool,
   FIND_DESCRIPTION_MAX_LENGTH,
   INSTRUCTIONS_MAX_LENGTH,
@@ -188,6 +195,8 @@ export {
   getSkillTool,
   getTool,
   MAX_QUERY_LENGTH,
+  MCP_BROWSE_DEFAULT_LIMIT,
+  MCP_SEARCH_DEFAULT_LIMIT,
   READ_FILE_DEFAULT_LIMIT,
   READ_FILE_MAX_LIMIT,
   type ReadFileInput,
@@ -209,7 +218,14 @@ export {
   renderFindResult,
   renderSkillResult,
 } from "./tools/render.js";
-export type { BrowseEntry, BrowseResult, FileReference } from "./tools/results.js";
+export {
+  BROWSE_DESCRIPTION_MAX_LENGTH,
+  compactSummary,
+  MCP_RESULT_MAX_BYTES,
+  SEARCH_DESCRIPTION_MAX_LENGTH,
+  serializedResultBytes,
+} from "./tools/response-budget.js";
+export type { BrowseEntry, BrowseResult, FileReference, FolderOverview } from "./tools/results.js";
 export {
   type DirectoryEntry,
   type DirectoryResult,

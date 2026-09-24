@@ -144,6 +144,7 @@ export const ko: Messages = {
       title: "저장소 둘러보기",
       root: "저장소 루트",
       breadcrumb: "저장소 폴더",
+      introduction: "소개 읽기",
       empty: "이 폴더에 스킬이나 파일이 없습니다.",
       counts: (skills: number, documents: number) => `스킬 ${skills}개 · 문서 ${documents}개`,
     },
@@ -205,6 +206,14 @@ export const ko: Messages = {
     generic: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.",
     network: "서버에 연결하지 못했습니다. 네트워크 상태를 확인하고 다시 시도해 주세요.",
     codes: {
+      "index.indexing": {
+        title: "이 커밋을 색인하는 중…",
+        body: "색인이 완료되면 파일을 읽을 수 있습니다. 잠시 후 다시 시도해 주세요.",
+      },
+      "index.failed": {
+        title: "이 커밋을 색인하지 못했습니다",
+        body: "아직 파일을 읽을 수 없습니다. 색인은 자동으로 다시 시도하니 잠시 후 다시 확인해 주세요.",
+      },
       "mount.repo_not_found": {
         title: "저장소를 찾을 수 없습니다",
         body: "존재하지 않거나 공개 저장소가 아닙니다. 비공개 저장소는 아직 지원하지 않습니다.",

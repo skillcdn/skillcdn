@@ -557,21 +557,37 @@ describe("repository-root publication and progressive loading", () => {
     await changed.close();
   });
 
-  it("reports incomplete rules and blocks linked documents behind a failed manifest", async () => {
+  it("withholds skills and linked documents behind a failed policy manifest", async () => {
     const { h, address } = await repository("failed-boundary", {
       "SKILLCDN.md": manifest("[Restricted](/restricted/docs/guide.md)"),
       "restricted/SKILLCDN.md": "---\nname: Broken\n---\nNo description.",
       "restricted/docs/guide.md": "# Not published\n",
       "restricted/skills/write/SKILL.md": skill("Perform the task."),
+      "restricted/reopened/SKILLCDN.md": manifest(
+        "A nearer policy cannot reopen a failed boundary.",
+      ),
+      "restricted/reopened/SKILL.md": skill("Still not published.", "reopened"),
     });
-    const loaded = await load(h, address, "restricted/skills/write/SKILL.md");
-    expect(loaded.complete).toBe(false);
-    expect(loaded.warnings.join("\n")).toContain("restricted/SKILLCDN.md");
+    for (const path of ["restricted/skills/write/SKILL.md", "restricted/reopened/SKILL.md"]) {
+      expect((await h.request(`/api/v1/skills${address}?path=${path}`)).status).toBe(404);
+      expect((await h.request(`/api/v1/files${address}?path=${path}`)).status).toBe(404);
+    }
     expect((await h.request(`/api/v1/files${address}?path=restricted/docs/guide.md`)).status).toBe(
       404,
     );
     expect((await h.request(`/api/v1/files${address}?path=restricted/SKILLCDN.md`)).status).toBe(
       200,
     );
+    expect(
+      (await h.request(`/api/v1/files${address}?path=restricted/reopened/SKILLCDN.md`)).status,
+    ).toBe(404);
+    const restricted = restBrowseSchema.parse(
+      await (await h.request(`/api/v1/browse${address}?path=restricted`)).json(),
+    );
+    expect(restricted.status === "ready" ? restricted.entries : undefined).toEqual([]);
+    const nested = restBrowseSchema.parse(
+      await (await h.request(`/api/v1/browse${address}/restricted?path=restricted`)).json(),
+    );
+    expect(nested.status === "ready" ? nested.entries : undefined).toEqual([]);
   });
 });

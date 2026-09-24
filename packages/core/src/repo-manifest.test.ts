@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   MAX_DOCUMENT_DIRECTORIES,
+  MAX_EXCLUDED_PATHS,
   MAX_REPO_DESCRIPTION_LENGTH,
   MAX_REPO_MANIFEST_LENGTH,
   MAX_REPO_NAME_LENGTH,
@@ -56,6 +57,7 @@ describe("parseRepoManifest", () => {
     const { manifest } = parsed("---\ndescription: Playbooks.\n---\n");
     expect(manifest.name).toBeUndefined();
     expect(manifest.documents).toEqual(["docs"]);
+    expect(manifest.exclude).toEqual([]);
     expect(manifest.language).toBeUndefined();
     expect(manifest.translations).toEqual({});
     expect(manifest.body).toBe("");
@@ -123,6 +125,38 @@ describe("parseRepoManifest", () => {
     expect(
       parsed("---\ndescription: D.\ndocuments: ['.', docs]\n---\n").manifest.documents,
     ).toEqual(["", "docs"]);
+  });
+
+  it("normalizes exact exclusion paths and allows excluding its own scope", () => {
+    expect(
+      parsed("---\ndescription: D.\nexclude: [fixtures, fixtures/, .data/file.md, '.']\n---\n")
+        .manifest.exclude,
+    ).toEqual(["fixtures", ".data/file.md", ""]);
+    expect(parsed("---\ndescription: D.\nexclude: []\n---\n").manifest.exclude).toEqual([]);
+  });
+
+  it.each([
+    "fixtures",
+    "null",
+    "['']",
+    "['../up']",
+    "['/absolute']",
+    "['C:/absolute']",
+    "['a/../b']",
+    "['a//b']",
+    "['a//']",
+    "['**/SKILL.md']",
+    "['file?.md']",
+    "['[abc]']",
+    "['{one,two}']",
+    "['!keep']",
+    "[{path: x}]",
+    "['a\\b']",
+    `[${Array.from({ length: MAX_EXCLUDED_PATHS + 1 }, (_, i) => `file${i}`).join(",")}]`,
+    `['${"a".repeat(1025)}']`,
+    `['a${String.fromCodePoint(0x200b)}b']`,
+  ])("fails closed instead of dropping invalid exclusions: %s", (value) => {
+    expect(errorCode(`---\ndescription: D.\nexclude: ${value}\n---\n`)).toBe("invalid_exclude");
   });
 
   it("drops directories it cannot trust, and says so", () => {

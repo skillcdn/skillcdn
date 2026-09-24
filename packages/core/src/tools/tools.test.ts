@@ -15,6 +15,7 @@ import {
 import {
   INDEXING_NOTICE,
   PROVENANCE_NOTICE,
+  renderBrowseResult,
   renderDiagnostics,
   renderDirectoryResult,
   renderFileResult,
@@ -167,6 +168,62 @@ describe("pageOfText", () => {
 });
 
 describe("rendering", () => {
+  it("uses brief discovery hints while keeping complete skill instructions untouched", () => {
+    const long = "A detailed instruction. ".repeat(80);
+    const browse = renderBrowseResult({
+      mount,
+      path: path(""),
+      entries: [
+        {
+          kind: "skill",
+          path: path("write/SKILL.md"),
+          browsePath: path("write"),
+          overviewPath: path("write/README.md"),
+          name: "Write",
+          description: long,
+          skillCount: 1,
+          documentCount: 0,
+          size: 100,
+          manifestPath: null,
+          language: null,
+        },
+      ],
+      overview: {
+        path: path("README.md"),
+        title: "Library",
+        description: "Original skill instructions.",
+      },
+      nextCursor: undefined,
+    });
+    expect(browse).toContain("read_file README.md");
+    expect(browse).toContain("overview: write/README.md");
+    expect(browse).not.toContain('browse {"path"');
+    expect(browse).not.toContain(long);
+    expect(browse.length).toBeLessThan(600);
+    const source = skillResult({
+      body: long,
+      ruleChain: [{ path: path("SKILLCDN.md"), body: long, truncated: false }],
+      included: [{ path: path("required.md"), content: long, truncated: false }],
+    });
+    const text = renderSkillResult(source);
+    expect(text.split(long)).toHaveLength(4);
+    expect(source.body).toBe(long);
+  });
+
+  it("marks abbreviated optional metadata without implying required context is missing", () => {
+    const text = renderSkillResult(
+      skillResult({
+        path: path("SKILL.md"),
+        complete: true,
+        detailsTruncated: true,
+        referencesTruncated: true,
+      }),
+    );
+    expect(text).toContain("read_file SKILL.md has the source");
+    expect(text).toContain("Reference list abbreviated");
+    expect(text).not.toContain("Skill context is incomplete");
+  });
+
   it("lists search results with a skill's matching files under the skill", () => {
     const text = renderFindResult({
       mount,
@@ -200,7 +257,7 @@ describe("rendering", () => {
         "",
         "1. skill: release-notes (skills/release-notes/SKILL.md)",
         "   Drafts release notes.",
-        "   Its files that match as well (get_skill loads the skill; read_file reads one):",
+        "   Matching files:",
         "   - skills/release-notes/references/style.md - Style guide",
         "   - ... (1 more)",
         "2. document: docs/getting-started.md - Getting started",
@@ -233,9 +290,9 @@ describe("rendering", () => {
       diagnostics: [],
     });
     expect(text).toContain(
-      "1. document: skills/release-notes/references/style.md - Style guide\n   Lead with the benefit.\n   Belongs to the skill at skills/release-notes; get_skill loads that skill with its files.",
+      "1. document: skills/release-notes/references/style.md - Style guide\n   Lead with the benefit.\n   Skill: skills/release-notes/SKILL.md",
     );
-    expect(text).toContain("Belongs to the skill at the repository root;");
+    expect(text).toContain("Skill: SKILL.md");
   });
 
   it("lists what a mount has, with the totals and what was left out", () => {
@@ -302,7 +359,7 @@ describe("rendering", () => {
     });
     expect(listing).toContain(
       [
-        "Index diagnostics (fix the source or its limits; the next index reports the result):",
+        "Index diagnostics:",
         `- skills/broken/SKILL.md (invalid_front_matter): ${skipped.message}`,
       ].join("\n"),
     );
@@ -329,7 +386,8 @@ describe("rendering", () => {
       ...skipped,
       path: path(`skills/broken-${index}/SKILL.md`),
     }));
-    expect(renderDiagnostics(many, true)).toContain("- ... (2 more)");
+    expect(renderDiagnostics(many, true)).toContain("- ... (2 more; inspect the source manifests)");
+    expect(renderDiagnostics([skipped], true, 12)).toContain("Index diagnostics (1 of 12)");
   });
 
   it("adds the provenance notice for unverified repositories and the truncation notice", () => {
@@ -525,6 +583,7 @@ describe("rendering", () => {
   });
 
   it("has a notice for a commit that is still being indexed", () => {
-    expect(INDEXING_NOTICE).toContain("few seconds");
+    expect(INDEXING_NOTICE).toContain("Retry shortly");
+    expect(INDEXING_NOTICE).toContain("publication rules have been checked");
   });
 });

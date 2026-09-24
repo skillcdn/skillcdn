@@ -21,6 +21,7 @@ export const MAX_REPO_MANIFEST_LENGTH = 262_144;
 export const MAX_REPO_NAME_LENGTH = 100;
 export const MAX_REPO_DESCRIPTION_LENGTH = 1024;
 export const MAX_DOCUMENT_DIRECTORIES = 20;
+export const MAX_EXCLUDED_PATHS = 100;
 
 /** What people see in one language instead of the name and the description. */
 export interface RepoTranslation {
@@ -38,6 +39,8 @@ export interface RepoManifest {
    * when it is an empty sequence. Nothing else outside the skills is served.
    */
   readonly documents: readonly RepoPath[];
+  /** Files or subtrees never served, relative to this manifest; the root means its whole scope. */
+  readonly exclude: readonly RepoPath[];
   readonly license: string | undefined;
   readonly metadata: Readonly<Record<string, string>>;
   /** The tag of the language the repository is written in, when it says. */
@@ -53,9 +56,10 @@ export type RepoManifestErrorCode =
   | "missing_front_matter"
   | "unterminated_front_matter"
   | "invalid_front_matter"
-  | "invalid_description";
+  | "invalid_description"
+  | "invalid_exclude";
 
-/** Why a manifest could not be read. The repository then serves its skills and nothing else. */
+/** Why a manifest could not be read. Its descendants remain closed until the policy is valid. */
 export interface RepoManifestError {
   readonly code: RepoManifestErrorCode;
   readonly message: string;
@@ -114,6 +118,8 @@ export function parseRepoManifest(text: string): Result<ParsedRepoManifest, Repo
       `"description" must be 1 to ${MAX_REPO_DESCRIPTION_LENGTH} characters of text`,
     );
   }
+  const exclude = readExclude(fields.get("exclude"), fields.has("exclude"));
+  if (!exclude.ok) return exclude;
 
   const warnings: RepoManifestWarning[] = [];
   const ignored = (message: string): void => {
@@ -133,6 +139,7 @@ export function parseRepoManifest(text: string): Result<ParsedRepoManifest, Repo
       name,
       description,
       documents: readDocuments(fields.get("documents"), warnings),
+      exclude: exclude.value,
       license: optionalText(fields, "license", MAX_OPTIONAL_FIELD_LENGTH, ignored),
       metadata: readMetadata(fields.get("metadata"), ignored),
       language: optionalLanguage(fields, ignored),
@@ -141,6 +148,32 @@ export function parseRepoManifest(text: string): Result<ParsedRepoManifest, Repo
     },
     warnings,
   });
+}
+
+/** Exclusions are policy: silently dropping a typo could publish content the author withheld. */
+function readExclude(
+  value: unknown,
+  present: boolean,
+): Result<readonly RepoPath[], RepoManifestError> {
+  if (!present) return ok([]);
+  const invalid = (): Result<readonly RepoPath[], RepoManifestError> =>
+    err({
+      code: "invalid_exclude",
+      message: `"exclude" must be a sequence of at most ${MAX_EXCLUDED_PATHS} relative file or directory paths, or ".", without globs, negation or traversal`,
+    });
+  if (!Array.isArray(value) || value.length > MAX_EXCLUDED_PATHS) return invalid();
+  const paths = new Set<RepoPath>();
+  for (const item of value) {
+    if (typeof item !== "string") return invalid();
+    const text = item.trim().replace(/\/$/, "");
+    if (text.length === 0 || /[*?[\]{}]/.test(text) || /^(?:!|[A-Za-z]:)/.test(text)) {
+      return invalid();
+    }
+    const parsed = text === "." ? ok(ROOT_PATH) : parseRepoPath(text);
+    if (!parsed.ok) return invalid();
+    paths.add(parsed.value);
+  }
+  return ok([...paths]);
 }
 
 /**

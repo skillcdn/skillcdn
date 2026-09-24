@@ -1,6 +1,11 @@
-import { parentDirectory, type RepoFileKind, SKILL_MANIFEST_FILE } from "./repo-layout.js";
+import {
+  parentDirectory,
+  type RepoFileKind,
+  SKILL_MANIFEST_FILE,
+  selectReadmePaths,
+} from "./repo-layout.js";
 import { type RepoPath, ROOT_PATH } from "./repo-path.js";
-import type { BrowseEntry } from "./tools/results.js";
+import type { BrowseEntry, FolderOverview } from "./tools/results.js";
 
 /** One already-published file, independent of storage or transport representation. */
 export interface CatalogFile {
@@ -13,7 +18,23 @@ export interface CatalogFile {
   readonly searchable: boolean;
   readonly size: number;
   readonly linkedOnly?: boolean | undefined;
+  readonly overviewOnly?: boolean | undefined;
   readonly language?: string | undefined;
+}
+
+/** Returns only overview metadata; its body is read explicitly through read_file. */
+export function folderOverview(
+  files: readonly CatalogFile[],
+  path: RepoPath,
+): FolderOverview | undefined {
+  const selected = selectReadmePaths(
+    files.map((file) => file.path),
+    new Set([path]),
+  );
+  const file = files.find((file) => selected.has(file.path));
+  return file === undefined
+    ? undefined
+    : { path: file.path, title: file.title, description: file.description };
 }
 
 interface Child {
@@ -26,9 +47,17 @@ interface Child {
 /** Immediate canonical children, with descendant counts and inherited manifest language. */
 export function browseCatalogFiles(files: readonly CatalogFile[], path: RepoPath): BrowseEntry[] {
   const manifests = new Map<RepoPath, CatalogFile>();
+  const overviews = new Map<RepoPath, CatalogFile>();
+  const directories = new Set(files.map((file) => parentDirectory(file.path)));
+  const overviewPaths = selectReadmePaths(
+    files.map((file) => file.path),
+    directories,
+  );
   const children = new Map<RepoPath, Child>();
   const prefix = path.length === 0 ? "" : `${path}/`;
   for (const file of files) {
+    if (overviewPaths.has(file.path)) overviews.set(parentDirectory(file.path), file);
+    if (file.overviewOnly === true) continue;
     if (file.linkedOnly === true) continue;
     if (file.kind === "manifest") manifests.set(parentDirectory(file.path), file);
     if (!file.path.startsWith(prefix)) continue;
@@ -63,6 +92,7 @@ export function browseCatalogFiles(files: readonly CatalogFile[], path: RepoPath
     const { direct, skill } = child;
     if (direct?.kind === "manifest") continue;
     const ownManifest = manifests.get(childPath);
+    const overview = overviews.get(skill === undefined ? childPath : parentDirectory(skill.path));
     let ancestor = childPath;
     let language: string | null = null;
     while (true) {
@@ -76,10 +106,16 @@ export function browseCatalogFiles(files: readonly CatalogFile[], path: RepoPath
     }
     result.push({
       ...(skill === undefined ? {} : { browsePath: parentDirectory(skill.path) }),
+      ...(overview === undefined ? {} : { overviewPath: overview.path }),
       kind: skill !== undefined ? "skill" : direct === undefined ? "directory" : "file",
       path: skill?.path ?? childPath,
-      name: skill?.name ?? ownManifest?.name ?? direct?.title ?? null,
-      description: skill?.description ?? ownManifest?.description ?? direct?.description ?? null,
+      name: skill?.name ?? ownManifest?.name ?? direct?.title ?? overview?.title ?? null,
+      description:
+        skill?.description ??
+        ownManifest?.description ??
+        direct?.description ??
+        overview?.description ??
+        null,
       skillCount: child.skillCount,
       documentCount: child.documentCount,
       size: (skill ?? direct)?.size ?? null,

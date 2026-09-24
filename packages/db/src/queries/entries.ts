@@ -338,6 +338,7 @@ export async function getManifest(
       and(
         inSnapshot(scope),
         eq(indexEntries.kind, "manifest"),
+        VISIBLE,
         inArray(indexEntries.path, candidates),
       ),
     )

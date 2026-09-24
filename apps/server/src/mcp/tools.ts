@@ -2,18 +2,18 @@ import { McpServer } from "@modelcontextprotocol/server";
 import {
   browseTool,
   type Clock,
+  catalogDescription,
+  compactSummary,
   formatAddress,
   GitHostError,
   getSkillInputSchema,
   getSkillTool,
   INDEXING_NOTICE,
+  MCP_BROWSE_DEFAULT_LIMIT,
+  MCP_SEARCH_DEFAULT_LIMIT,
   readFileTool,
-  renderBrowseResult,
   renderDiagnostics,
-  renderFileResult,
-  renderFindResult,
   renderInstructions,
-  renderSkillResult,
   searchTool,
   type UsageSink,
 } from "@skillcdn/core";
@@ -23,6 +23,16 @@ import type { MountReader, NotReady } from "../mounts/mount-reader.js";
 import type { Mount } from "../mounts/mount-service.js";
 import type { UsageStats } from "../stats/usage-recorder.js";
 import { SERVER_NAME, SERVER_VERSION } from "../version.js";
+import {
+  browseReply,
+  fileReply,
+  fitsReply,
+  problem,
+  reply,
+  searchReply,
+  skillReply,
+  type ToolReply,
+} from "./replies.js";
 
 export interface ToolDependencies {
   readonly reader: MountReader;
@@ -33,16 +43,6 @@ export interface ToolDependencies {
   readonly indexWaitMs: number;
   readonly publicUrl: string | undefined;
 }
-interface ToolReply {
-  [key: string]: unknown;
-  content: { type: "text"; text: string }[];
-  isError?: boolean;
-}
-const reply = (text: string, data?: object): ToolReply => ({
-  content: [{ type: "text", text }],
-  ...(data === undefined ? {} : { structuredContent: data }),
-});
-const problem = (text: string): ToolReply => ({ content: [{ type: "text", text }], isError: true });
 const READ_ONLY = { readOnlyHint: true, idempotentHint: true, openWorldHint: false };
 function notReady(outcome: NotReady): ToolReply {
   return outcome.status === "indexing"
@@ -70,7 +70,12 @@ export async function createMountServer(
       name: SERVER_NAME,
       version: SERVER_VERSION,
       title: manifest?.name ?? `${repository}${mount.address.path ? `/${mount.address.path}` : ""}`,
-      description: manifest?.description ?? `Skills and documents from ${repository}.`,
+      description: compactSummary(
+        (catalog.status === "ready" ? catalogDescription(catalog.catalog) : undefined) ??
+          mount.repo.repository.description ??
+          `Skills and documents from ${repository}.`,
+        360,
+      ),
       websiteUrl: `${request.origin}${formatAddress(mount.address)}`,
     },
     { capabilities: { prompts: {} }, instructions: renderInstructions(catalog) },
@@ -90,7 +95,12 @@ export async function createMountServer(
       });
       stats.count(mount, "tool_call", tool);
       try {
-        return await handler(input);
+        const result = await handler(input);
+        return fitsReply(result)
+          ? result
+          : problem(
+              "This result exceeds the context budget. Use a narrower folder or read an exact source file.",
+            );
       } catch (error) {
         if (error instanceof ReaderInputError) return problem(error.message);
         if (error instanceof GitHostError && error.kind === "rate_limited")
@@ -103,38 +113,44 @@ export async function createMountServer(
     browseTool.name,
     { ...browseTool, annotations: READ_ONLY },
     guarded(browseTool.name, async (input) => {
-      const answer = await reader.browse(mount, input, indexWaitMs);
-      return answer.status === "ready"
-        ? reply(renderBrowseResult(answer.result), answer.result)
-        : notReady(answer);
+      const answer = await reader.browse(
+        mount,
+        { ...input, limit: input.limit ?? MCP_BROWSE_DEFAULT_LIMIT },
+        indexWaitMs,
+        (result) => fitsReply(browseReply(result)),
+      );
+      return answer.status === "ready" ? browseReply(answer.result) : notReady(answer);
     }),
   );
   server.registerTool(
     searchTool.name,
     { ...searchTool, annotations: READ_ONLY },
     guarded(searchTool.name, async (input) => {
-      const answer = await reader.find(mount, input, indexWaitMs);
-      return answer.status === "ready"
-        ? reply(renderFindResult(answer.result), {
-            ...answer.result,
-            items: answer.result.items.map((item) => {
-              if (item.kind !== "skill") return item;
-              const { translations: _translations, ...canonical } = item;
-              return canonical;
-            }),
-          })
-        : notReady(answer);
+      const answer = await reader.find(
+        mount,
+        { ...input, limit: input.limit ?? MCP_SEARCH_DEFAULT_LIMIT },
+        indexWaitMs,
+        (result) => fitsReply(searchReply(result)),
+      );
+      return answer.status === "ready" ? searchReply(answer.result) : notReady(answer);
     }),
   );
   const loadSkill = guarded<{ path: string; cursor?: string }>(getSkillTool.name, async (input) => {
-    const answer = await reader.skill(mount, input.path, indexWaitMs, input.cursor, true);
+    const continuation = input.cursor !== undefined;
+    const answer = await reader.skill(
+      mount,
+      input.path,
+      indexWaitMs,
+      input.cursor,
+      true,
+      (result) => fitsReply(skillReply(result, continuation)),
+    );
     if (answer.status !== "ready") return notReady(answer);
     const { lookup } = answer;
     switch (lookup.kind) {
       case "found": {
         if (input.cursor === undefined) stats.count(mount, "skill_load", lookup.skill.directory);
-        const { translations: _translations, rules: _legacyRules, ...canonical } = lookup.skill;
-        return reply(renderSkillResult(lookup.skill), canonical);
+        return skillReply(lookup.skill, continuation);
       }
       case "not_found":
         return problem(
@@ -151,10 +167,12 @@ export async function createMountServer(
     readFileTool.name,
     { ...readFileTool, annotations: READ_ONLY },
     guarded(readFileTool.name, async (input) => {
-      const lookup = await reader.file(mount, input);
+      const lookup = await reader.file(mount, input, (result) => fitsReply(fileReply(result)));
       switch (lookup.kind) {
+        case "not_ready":
+          return notReady(lookup.outcome);
         case "found":
-          return reply(renderFileResult(lookup.file), lookup.file);
+          return fileReply(lookup.file);
         case "directory":
           return problem(
             `This path is a folder. Call browse with path ${JSON.stringify(lookup.directory.path)}.`,
@@ -165,7 +183,7 @@ export async function createMountServer(
           );
         case "not_found":
           return problem(
-            `No file at ${lookup.path}. Use browse, or get_skill for resolved references.${lookup.suggestions?.length ? ` Candidates: ${lookup.suggestions.join(", ")}.` : ""}`,
+            `No readable file at ${lookup.path} in this mount. Use browse, or get_skill for resolved references.${lookup.suggestions?.length ? ` Candidates: ${lookup.suggestions.join(", ")}.` : ""}`,
           );
         case "too_large":
           return problem(

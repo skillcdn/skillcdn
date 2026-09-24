@@ -198,8 +198,17 @@ function BrowseResults(props: { readonly address: Address; readonly path: string
   const pages = [found.value, ...more.pages];
   const entries = pages.flatMap((page) => page.entries);
   const cursor = (pages.at(-1) ?? found.value).nextCursor ?? null;
+  const overview = found.value.overview;
   return (
     <section className={styles.stack} aria-live="polite" aria-busy={more.loading}>
+      {overview !== undefined && (
+        <div className={styles.stack}>
+          {overview.description !== null && <p>{overview.description}</p>}
+          <p>
+            <Link href={contentHref(address, overview.path)}>{t.mount.browse.introduction}</Link>
+          </p>
+        </div>
+      )}
       {entries.length === 0 ? (
         <EmptyState title={t.mount.browse.empty} />
       ) : (
@@ -240,17 +249,24 @@ function BrowseResults(props: { readonly address: Address; readonly path: string
                   )}
                 </span>
               </Link>
-              {entry.kind === "skill" && (
+              {(entry.kind === "skill" || entry.overviewPath !== undefined) && (
                 <p className={styles.itemActions}>
-                  <Link
-                    href={mountHref(address, {
-                      kind: "overview",
-                      path: parentDirectory(entry.path),
-                      query: undefined,
-                    })}
-                  >
-                    {entry.skillCount > 1 ? t.skill.browseChildren : t.skill.browseFiles}
-                  </Link>
+                  {entry.kind === "skill" && (
+                    <Link
+                      href={mountHref(address, {
+                        kind: "overview",
+                        path: parentDirectory(entry.path),
+                        query: undefined,
+                      })}
+                    >
+                      {entry.skillCount > 1 ? t.skill.browseChildren : t.skill.browseFiles}
+                    </Link>
+                  )}
+                  {entry.overviewPath !== undefined && (
+                    <Link href={contentHref(address, entry.overviewPath)}>
+                      {t.mount.browse.introduction}
+                    </Link>
+                  )}
                 </p>
               )}
             </li>

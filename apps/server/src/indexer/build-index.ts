@@ -6,9 +6,10 @@ import {
   GitHostError,
   type IndexLimits,
   inspectMarkdownReferences,
+  isExcludedPath,
+  isReadmePath,
   isServedPath,
   joinRepoPath,
-  nearestDirectoryAtOrAbove,
   owningSkillDirectory,
   parentDirectory,
   parseRepoManifest,
@@ -16,7 +17,9 @@ import {
   type RepoCoordinates,
   type RepoFileKind,
   type RepoPath,
+  ROOT_PATH,
   type ServedScope,
+  selectReadmePaths,
   splitFrontMatter,
   summarizeMarkdown,
   type TreeEntry,
@@ -37,7 +40,7 @@ import { decodeText } from "./text.js";
  * is rebuilt when it is next asked for (`ensureSnapshot` in @skillcdn/db); without the bump, a
  * deployment keeps serving what the old rules produced until the repository moves on.
  */
-export const INDEX_VERSION = 4;
+export const INDEX_VERSION = 5;
 
 const MAX_DIAGNOSTICS = 50;
 const FETCH_CONCURRENCY = 8;
@@ -137,10 +140,14 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
     const kind = classifyRepoFile(path);
     return kind === "manifest" ? 0 : kind === "skill" ? 1 : 2;
   };
+  const depth = (path: RepoPath): number => path.split("/").length;
   const files = tree.entries
-    .filter((entry) => entry.type === "file")
+    .filter((entry) => entry.type === "file" || classifyRepoFile(entry.path) === "manifest")
     .sort(
-      (a, b) => declarationRank(a.path) - declarationRank(b.path) || (a.path < b.path ? -1 : 1),
+      (a, b) =>
+        declarationRank(a.path) - declarationRank(b.path) ||
+        (classifyRepoFile(a.path) === "manifest" ? depth(a.path) - depth(b.path) : 0) ||
+        (a.path < b.path ? -1 : 1),
     );
   if (files.length > limits.maxTreeEntries) {
     files.length = limits.maxTreeEntries;
@@ -267,11 +274,16 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
     return inspected.references;
   };
 
-  // Round one: what declares. Manifests before skills, so that a manifest survives the limits.
+  // Resolve policies from ancestors downward before fetching their descendants. A rejected
+  // scope cannot spend the remaining budget or produce diagnostics for its private fixtures.
   const declaring = candidates
     .filter(({ kind }) => kind === "manifest" || kind === "skill")
-    .sort((a, b) => Number(b.kind === "manifest") - Number(a.kind === "manifest") || byPath(a, b));
-  await fetchBodies(declaring.filter(admit));
+    .sort(
+      (a, b) =>
+        Number(b.kind === "manifest") - Number(a.kind === "manifest") ||
+        (a.kind === "manifest" ? depth(a.entry.path) - depth(b.entry.path) : 0) ||
+        byPath(a, b),
+    );
 
   const manifests = new Map<RepoPath, NewIndexEntry>();
   const skills = new Map<RepoPath, NewIndexEntry>();
@@ -281,128 +293,160 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
   /** Per manifest directory, the document directories it declares. A broken one declares none. */
   const documentDirectories = new Map<RepoPath, readonly RepoPath[]>();
   const brokenManifestDirectories = new Set<RepoPath>();
+  const excludedPaths = new Set<RepoPath>();
+  const policy = { excludedPaths, brokenManifestDirectories };
+  const rounds: Candidate[][] = [];
+  for (const candidate of declaring) {
+    const previous = rounds.at(-1);
+    const first = previous?.[0];
+    if (
+      first === undefined ||
+      candidate.kind !== first.kind ||
+      (candidate.kind === "manifest" && depth(candidate.entry.path) !== depth(first.entry.path))
+    ) {
+      rounds.push([candidate]);
+    } else {
+      previous?.push(candidate);
+    }
+  }
 
-  for (const { entry, kind } of declaring) {
-    const directory = parentDirectory(entry.path);
-    const text = admitted.has(entry.path) ? texts.get(entry.hash) : undefined;
-    const base = {
-      path: entry.path,
-      size: entry.size,
-      blobSha: entry.hash,
-      skillDir: undefined,
-      visible: true,
-    };
-    if (kind === "manifest") {
-      // A manifest that cannot be read still governs its directory: fail closed, and say why.
-      documentDirectories.set(directory, []);
-      const broken = (code: string, message: string): void => {
-        brokenManifestDirectories.add(directory);
-        report(entry.path, code, message);
+  for (const round of rounds) {
+    const permitted = round.filter(({ entry }) => !isExcludedPath(entry.path, policy));
+    await fetchBodies(permitted.filter(({ entry }) => entry.type === "file").filter(admit));
+    for (const { entry, kind } of permitted) {
+      const directory = parentDirectory(entry.path);
+      const text = admitted.has(entry.path) ? texts.get(entry.hash) : undefined;
+      const base = {
+        path: entry.path,
+        size: entry.size,
+        blobSha: entry.hash,
+        skillDir: undefined,
+        visible: true,
+      };
+      if (kind === "manifest") {
+        // A manifest that cannot be read still governs its directory: fail closed, and say why.
+        documentDirectories.set(directory, []);
+        const broken = (code: string, message: string): void => {
+          brokenManifestDirectories.add(directory);
+          report(entry.path, code, message);
+          manifests.set(entry.path, {
+            ...base,
+            kind: "manifest",
+            name: undefined,
+            title: undefined,
+            description: undefined,
+            frontMatter: { metadata: {}, warnings: [], manifestError: code },
+            searchable: false,
+          });
+        };
+        if (entry.type !== "file") {
+          broken(
+            "unsupported_type",
+            "the manifest must be a regular file; symlinks and submodules are not followed",
+          );
+          continue;
+        }
+        if (text === undefined) {
+          broken(
+            admitted.has(entry.path) ? "unavailable" : "index_limit",
+            admitted.has(entry.path)
+              ? "the manifest could not be read"
+              : "the manifest exceeds the indexing limits",
+          );
+          continue;
+        }
+        const parsed = parseRepoManifest(text);
+        if (!parsed.ok) {
+          broken(parsed.error.code, parsed.error.message);
+          continue;
+        }
+        const { manifest, warnings } = parsed.value;
+        for (const excluded of manifest.exclude) {
+          excludedPaths.add(joinRepoPath(directory, excluded));
+        }
+        documentDirectories.set(
+          directory,
+          manifest.documents.map((declared) => joinRepoPath(directory, declared)),
+        );
+        if (isExcludedPath(entry.path, policy)) continue;
         manifests.set(entry.path, {
           ...base,
           kind: "manifest",
-          name: undefined,
+          name: manifest.name,
           title: undefined,
-          description: undefined,
-          frontMatter: { metadata: {}, warnings: [], manifestError: code },
+          description: manifest.description,
+          frontMatter: {
+            ...(manifest.license === undefined ? {} : { license: manifest.license }),
+            metadata: { ...manifest.metadata },
+            warnings: warnings.map((warning) => warning.message),
+            documents: [...manifest.documents],
+            exclude: [...manifest.exclude],
+            references: referencesOf(entry.path, text),
+            ...(manifest.language === undefined ? {} : { language: manifest.language }),
+            ...(storedTranslations(manifest.translations) === undefined
+              ? {}
+              : { translations: storedTranslations(manifest.translations) }),
+          },
           searchable: false,
         });
-      };
+        continue;
+      }
       if (text === undefined) {
-        broken(
+        report(
+          entry.path,
           admitted.has(entry.path) ? "unavailable" : "index_limit",
           admitted.has(entry.path)
-            ? "the manifest could not be read"
-            : "the manifest exceeds the indexing limits",
+            ? "the skill manifest could not be read"
+            : "the skill manifest exceeds the indexing limits",
         );
         continue;
       }
-      const parsed = parseRepoManifest(text);
-      if (!parsed.ok) {
-        broken(parsed.error.code, parsed.error.message);
+      const parsed = parseSkillManifest(text, {
+        directoryName: directory.length === 0 ? undefined : baseName(directory),
+      });
+      if (parsed.ok) {
+        const { manifest, warnings } = parsed.value;
+        skills.set(directory, {
+          ...base,
+          kind: "skill",
+          name: manifest.name,
+          title: undefined,
+          description: manifest.description,
+          frontMatter: {
+            ...(manifest.license === undefined ? {} : { license: manifest.license }),
+            ...(manifest.compatibility === undefined
+              ? {}
+              : { compatibility: manifest.compatibility }),
+            ...(manifest.allowedTools === undefined ? {} : { allowedTools: manifest.allowedTools }),
+            metadata: { ...manifest.metadata },
+            warnings: warnings.map((warning) => warning.message),
+            references: referencesOf(entry.path, text),
+            ...(manifest.include.length === 0 ? {} : { include: [...manifest.include] }),
+            ...(storedTranslations(manifest.translations) === undefined
+              ? {}
+              : { translations: storedTranslations(manifest.translations) }),
+          },
+          searchable: true,
+          searchBody: manifest.body,
+        });
         continue;
       }
-      const { manifest, warnings } = parsed.value;
-      documentDirectories.set(
-        directory,
-        manifest.documents.map((declared) => joinRepoPath(directory, declared)),
-      );
-      manifests.set(entry.path, {
+      report(entry.path, parsed.error.code, parsed.error.message);
+      // A SKILL.md that cannot be read as a skill is a document: readable wherever it is, so that
+      // the author can see what was found, and listed and searched only where a document would be.
+      unreadSkills.add(entry.path);
+      const summary = summarizeSearchableMarkdown(text);
+      documents.set(entry.path, {
         ...base,
-        kind: "manifest",
-        name: manifest.name,
-        title: undefined,
-        description: manifest.description,
-        frontMatter: {
-          ...(manifest.license === undefined ? {} : { license: manifest.license }),
-          metadata: { ...manifest.metadata },
-          warnings: warnings.map((warning) => warning.message),
-          documents: [...manifest.documents],
-          references: referencesOf(entry.path, text),
-          ...(manifest.language === undefined ? {} : { language: manifest.language }),
-          ...(storedTranslations(manifest.translations) === undefined
-            ? {}
-            : { translations: storedTranslations(manifest.translations) }),
-        },
-        searchable: false,
-      });
-      continue;
-    }
-    if (text === undefined) {
-      report(
-        entry.path,
-        admitted.has(entry.path) ? "unavailable" : "index_limit",
-        admitted.has(entry.path)
-          ? "the skill manifest could not be read"
-          : "the skill manifest exceeds the indexing limits",
-      );
-      continue;
-    }
-    const parsed = parseSkillManifest(text, {
-      directoryName: directory.length === 0 ? undefined : baseName(directory),
-    });
-    if (parsed.ok) {
-      const { manifest, warnings } = parsed.value;
-      skills.set(directory, {
-        ...base,
-        kind: "skill",
-        name: manifest.name,
-        title: undefined,
-        description: manifest.description,
-        frontMatter: {
-          ...(manifest.license === undefined ? {} : { license: manifest.license }),
-          ...(manifest.compatibility === undefined
-            ? {}
-            : { compatibility: manifest.compatibility }),
-          ...(manifest.allowedTools === undefined ? {} : { allowedTools: manifest.allowedTools }),
-          metadata: { ...manifest.metadata },
-          warnings: warnings.map((warning) => warning.message),
-          references: referencesOf(entry.path, text),
-          ...(manifest.include.length === 0 ? {} : { include: [...manifest.include] }),
-          ...(storedTranslations(manifest.translations) === undefined
-            ? {}
-            : { translations: storedTranslations(manifest.translations) }),
-        },
+        kind: "markdown",
+        name: undefined,
+        title: summary.title,
+        description: summary.description,
+        frontMatter: undefined,
         searchable: true,
-        searchBody: manifest.body,
+        searchBody: summary.body,
       });
-      continue;
     }
-    report(entry.path, parsed.error.code, parsed.error.message);
-    // A SKILL.md that cannot be read as a skill is a document: readable wherever it is, so that
-    // the author can see what was found, and listed and searched only where a document would be.
-    unreadSkills.add(entry.path);
-    const summary = summarizeSearchableMarkdown(text);
-    documents.set(entry.path, {
-      ...base,
-      kind: "markdown",
-      name: undefined,
-      title: summary.title,
-      description: summary.description,
-      frontMatter: undefined,
-      searchable: true,
-      searchBody: summary.body,
-    });
   }
 
   const skillDirectories = new Set(skills.keys());
@@ -417,13 +461,27 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
     manifestDirectories: new Set(documentDirectories.keys()),
     documentDirectories,
     includedFiles,
+    ...policy,
   };
   const linkedFiles = new Set<RepoPath>();
-  const served = (path: RepoPath): boolean => isServedPath(path, scope) || linkedFiles.has(path);
-  const permitsLinks = (path: RepoPath): boolean => {
-    const governing = nearestDirectoryAtOrAbove(parentDirectory(path), scope.manifestDirectories);
-    return governing === undefined || !brokenManifestDirectories.has(governing);
-  };
+  const overviewDirectories = new Set<RepoPath>([ROOT_PATH]);
+  for (const { entry } of candidates) {
+    if (isReadmePath(entry.path) || !isServedPath(entry.path, scope)) continue;
+    let directory = parentDirectory(entry.path);
+    while (!overviewDirectories.has(directory)) {
+      overviewDirectories.add(directory);
+      directory = parentDirectory(directory);
+    }
+  }
+  const overviewFiles = selectReadmePaths(
+    candidates
+      .filter(({ entry }) => !isExcludedPath(entry.path, scope))
+      .map(({ entry }) => entry.path),
+    overviewDirectories,
+  );
+  const served = (path: RepoPath): boolean =>
+    !isExcludedPath(path, scope) &&
+    (isServedPath(path, scope) || linkedFiles.has(path) || overviewFiles.has(path));
 
   // Round two: the documents that are served. The others are known to the index and nothing else.
   const reading = candidates
@@ -438,6 +496,7 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
       return;
     }
     const summary = kind === "json" ? undefined : summarizeSearchableMarkdown(text);
+    const overviewOnly = overviewFiles.has(entry.path) && !isServedPath(entry.path, scope);
     documents.set(entry.path, {
       path: entry.path,
       size: entry.size,
@@ -452,8 +511,9 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
         warnings: [],
         ...(kind === "json" ? {} : { references: referencesOf(entry.path, text) }),
         ...(linkedOnly ? { linkedOnly: true } : {}),
+        ...(overviewOnly ? { overviewOnly: true } : {}),
       },
-      searchable: !linkedOnly,
+      searchable: !linkedOnly && !overviewOnly,
       ...(summary === undefined ? {} : { searchBody: summary.body }),
       visible: true,
     });
@@ -471,12 +531,12 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
     const next: Candidate[] = [];
     for (const source of frontier) {
       const sourcePath = source.path as RepoPath;
-      if (visited.has(sourcePath) || !permitsLinks(sourcePath) || !served(sourcePath)) continue;
+      if (visited.has(sourcePath) || !served(sourcePath)) continue;
       visited.add(sourcePath);
       for (const reference of source.frontMatter?.references ?? []) {
         const path = reference.path as RepoPath;
         const candidate = byCandidatePath.get(path);
-        if (candidate === undefined || served(path) || !permitsLinks(path)) continue;
+        if (candidate === undefined || served(path) || isExcludedPath(path, scope)) continue;
         // A SKILL.md or SKILLCDN.md keeps its declaration identity; a link cannot turn a
         // failed declaration into an ordinary document or bypass its boundary.
         if (candidate.kind !== "markdown") continue;
@@ -519,9 +579,12 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
       name: undefined,
       title: undefined,
       description: undefined,
-      frontMatter: linkedFiles.has(entry.path)
-        ? { metadata: {}, warnings: [], linkedOnly: true }
-        : undefined,
+      frontMatter:
+        overviewFiles.has(entry.path) && !isServedPath(entry.path, scope)
+          ? { metadata: {}, warnings: [], overviewOnly: true }
+          : linkedFiles.has(entry.path)
+            ? { metadata: {}, warnings: [], linkedOnly: true }
+            : undefined,
       searchable: false,
       visible,
     };

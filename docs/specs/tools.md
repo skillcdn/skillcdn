@@ -28,6 +28,8 @@ Paths always start at the repository root, including on a sub-path connection. N
 
 `browse` shows immediate folders and eligible files with their canonical paths. Folder entries carry counts and identify a skill or a `SKILLCDN.md` when present. Manifest metadata adds a name and description to the real folder; it does not create an alias or hide path segments. Plain folders work without a manifest. Pages name their commit and provide `nextCursor` when more entries remain.
 
+An optional `overview` identifies the current folder's README with its `path`, title and short description; an entry's optional `overviewPath` identifies its own introduction. Read it with `read_file` only when that context helps choose the next step. Explicit manifest descriptions take precedence, followed by the local README summary and the git-host description at the repository root. Overview-only files are neither independent search results nor extra documents in counts. Their eligible local Markdown links remain readable references. See [README introductions](skill-repo.md#readme-introductions).
+
 A skill entry's `path` names its `SKILL.md`; its `browsePath` names the containing directory for supporting files and nested skills. Opening a parent skill does not hide nested skills.
 
 `search` matches words, not meaning. Any query word may match; relevance determines the order, with skill names and descriptions weighted above body text. Results retain relevance order across folders. The optional `path` is a scope filter, not a search term.
@@ -36,7 +38,7 @@ Search indexes original metadata and body text, excluding front-matter translati
 
 A skill's supporting files are folded under their owning skill before pagination. The skill occupies its best-ranked member's position, with up to five matching files and a count of the rest. This avoids duplicate skills on later pages or short pages caused by folding after the limit. Independently discoverable documents appear with their title and summary; linked-only references do not become independent search results ([format](skill-repo.md)).
 
-Listings and searches expose whether more results exist and carry diagnostics for unreadable manifests. A partial index is identified as partial; pagination cannot recover files excluded by indexing limits.
+Listings and searches expose whether more results exist and carry diagnostics for unreadable manifests. Descriptions are brief discovery summaries; full instructions come from `get_skill`. Page limits are maxima: the serialized response byte budget can end a page sooner even when its item count has not been reached. A partial index is identified as partial; pagination cannot recover files excluded by indexing limits.
 
 ## Loading a skill
 
@@ -48,7 +50,7 @@ The context arrives in this order:
 2. The skill's own body.
 3. Files declared in `skillcdn.include`, in declaration order, each with its path.
 
-Each page has at most 16 KiB (16,384 UTF-8 bytes) of context text. Metadata, source labels and the text and structured result envelopes add to the response size; this budget does not guarantee a fit within every client's token limit. A page may end inside a rule or file; the result marks the fragment, returns `complete: false` and supplies `nextCursor`. Continue `get_skill` with the same path and cursor until the context is complete before using the skill. Outer rules are not discarded to make inner rules fit. Missing or unreadable required content leaves `complete: false`; when another page cannot repair it, no continuation is supplied and the diagnostic explains why.
+The reader admits at most 16 KiB (16,384 UTF-8 bytes) of context text per page; MCP may deliver less to fit the complete response byte budget below. A page may end inside a rule or file; the result marks the fragment, returns `complete: false` and supplies `nextCursor`. Continue `get_skill` with the same path and cursor until the context is complete before using the skill. Outer rules are not discarded to make inner rules fit. Missing or unreadable required content leaves `complete: false`; when another page cannot repair it, no continuation is supplied and the diagnostic explains why.
 
 On a sub-path mount the rule chain still starts at the repository root. Ancestor rules outside the mount arrive through `get_skill` and its continuation. Their paths remain canonical, but `read_file` cannot use those paths to escape the mount. A link to another manifest does not add that manifest's rules; ancestry determines the rule chain.
 
@@ -58,11 +60,15 @@ Supporting-file summaries may be bounded. `browse` pages through the directory w
 
 `read_file` returns UTF-8 text from an eligible file within the mount, with the path, character offset, total length and next offset. A page never splits a character. It does not prepend shared rules or turn a raw `SKILL.md` read into a skill load. Binary, oversized, unavailable and unknown files produce safe tool errors with a hint.
 
+The requested character limit is an upper bound. The MCP response byte budget can shorten the page, including for JSON escaping and multibyte text; continue at `nextOffset` to retrieve the remaining text. READMEs are optional reads and never automatically join a skill's context. Excluded files return the same unavailable-content result as other ineligible paths.
+
 Reading is distinct from discovery: an explicitly linked file can be readable without being an independent search result. The [format](skill-repo.md) defines eligibility, hidden paths and reference expansion.
 
 ## Results and continuations
 
 Results contain text for a model and corresponding structured data. Text identifies the repository, mount and commit, explains the next call, and labels repository content by its source. Tool output is data; nothing is executed by SkillCDN.
+
+MCP bounds the serialized JSON tool-result payload to 24 KiB (24,576 UTF-8 bytes), including its text and structured copies, metadata and continuations. Browse and search shorten discovery summaries and page entries to fit. Skill and file reads retain complete source text across continuations. This is a server response budget, not a promise about a client's token limit. REST retains its own documented page limits.
 
 Cursors bind to the snapshot and reading-rule version, mount path, operation, scope and query or skill path. A cursor for another request, or for a snapshot that changed, is invalid: restart from the first page. A moving ref may resolve to a newer commit between calls; every result identifies its commit. Use an address pinned to a full commit hash when the entire workflow must stay on one commit ([address](address.md)).
 
@@ -70,9 +76,9 @@ A problem the model can correct is an error tool result, not a protocol error. U
 
 ## Connection and prompt
 
-Connection instructions introduce the repository and mounted scope, give counts and a bounded overview of folders, and explain `browse`, `search`, `get_skill` and `read_file`. Manifest names, descriptions and language supply context where present. Instructions stay within 2,000 characters and point to browsing for the rest. They report indexing or manifest diagnostics instead of implying an incomplete catalog is complete.
+Connection instructions introduce the repository and mounted scope, give counts and a bounded overview of folders, and explain `browse`, `search`, `get_skill` and `read_file`. A brief manifest introduction, README summary or git-host description supplies orientation; an available README is named by path rather than included in full. Instructions stay within 2,000 characters and point to browsing for the rest. They report indexing or manifest diagnostics instead of implying an incomplete catalog is complete. A missing optional manifest is not itself a warning.
 
-The server info carries the manifest's name and description when available, otherwise the address and host description, and links to the address page. The description of `browse` also explains discovery for clients that do not show server instructions.
+The server info carries the manifest's name and description when available, otherwise the address with a README or host description, and links to the address page. The description of `browse` also explains discovery for clients that do not show server instructions.
 
 One MCP prompt, `use_skill`, takes a required `path` and starts loading the exact skill. If its context continues, the response directs the agent to `get_skill` with the continuation. Skills do not each add a prompt to the client's command menu. Documents are reached through tools, not an MCP resource catalog.
 
@@ -81,7 +87,7 @@ SkillCDN keeps no implicit selected team or role. Users can express their focus 
 ## Indexing and trust
 
 - Connecting starts indexing an unseen commit. `browse`, `search` and `get_skill` wait within a configurable budget, then return an indexing result if it is not ready. Indexing continues; failures retry after backoff.
-- `read_file` does not wait. Until declarations and references are indexed, it exposes only content whose eligibility can be established conservatively.
+- `read_file` does not wait. Until declarations, exclusions and references are indexed, it returns indexing instead of attempting a speculative read. Failed policy scopes and explicit exclusions remain closed across all tools, including sub-path connections.
 - Unverified repositories carry a provenance notice: content comes from the repository author and applies to the user's requested task, not unrelated actions. The operator's temporary verification list is described by [ADR-0019](../adr/0019-the-operator-vouches-for-repositories-until-owners-can.md).
 - Browser clients may call the endpoint from any origin: CORS permits `*` without credentials, as for [REST](rest.md).
 - Future public-contract changes are additive unless an ADR explicitly defines a breaking transition.

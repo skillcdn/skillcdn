@@ -253,6 +253,7 @@ function browseEntries(
   ]);
   for (const file of files) {
     if (!file.startsWith(prefix) || below(address.path, file) === undefined) continue;
+    if (repository.overviews?.[path]?.path === file) continue;
     const relative = file.slice(prefix.length);
     const slash = relative.indexOf("/");
     const childPath = slash < 0 ? file : `${prefix}${relative.slice(0, slash)}`;
@@ -289,6 +290,7 @@ function browseEntries(
       size: slash < 0 ? (repository.files[file]?.length ?? null) : null,
       manifestPath: group === undefined ? null : `${childPath}/SKILLCDN.md`,
       language: group?.language ?? repository.manifest?.language ?? null,
+      overviewPath: repository.overviews?.[skill?.directory ?? childPath]?.path,
     });
   }
   return [...entries.values()].sort(
@@ -311,6 +313,7 @@ function browseBody(
     status: "ready",
     commit: repository.commit,
     path,
+    overview: repository.overviews?.[path],
     entries: entries.slice(offset, offset + limit),
     nextCursor: offset + limit < entries.length ? String(offset + limit) : null,
   };
@@ -563,6 +566,14 @@ export function handleFixtureRequest(
     return { status: 200, body: mountBody(address, key, repository, now) };
   }
   if (operation === "files") {
+    const state = stateOf(key, repository, now);
+    if (state !== "ready") {
+      return problem(
+        503,
+        `index.${state}`,
+        "The publication policy is not ready. Try again later.",
+      );
+    }
     return fileAnswer(address, repository, url.searchParams);
   }
   const state = stateOf(key, repository, now);

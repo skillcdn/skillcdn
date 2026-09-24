@@ -40,4 +40,6 @@ Parsers return a `Result` and never throw. A `RepoPath` can only come from `pars
 
 `isServedPath` combines skill declarations, the nearest repository manifest's document directories, and explicit includes. A valid `SKILL.md` can declare a skill anywhere, including a hidden directory. A declaration permits ordinary descendants; further hidden descendants need their own declaration or a Markdown link.
 
+Ancestor `exclude` paths and unreadable manifest scopes take precedence over publication. `selectReadmePaths` and `folderOverview` supply optional original-language introductions without loading their bodies or adding search results. MCP discovery summaries and serialized response budgets keep selection separate from full context loading; REST retains full metadata.
+
 Everything public is exported from `src/index.ts`. There are no deep imports.

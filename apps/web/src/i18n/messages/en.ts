@@ -154,6 +154,7 @@ export const en = {
       title: "Explore this repository",
       root: "Repository root",
       breadcrumb: "Repository folders",
+      introduction: "Read introduction",
       empty: "No skills or files in this folder.",
       counts: (skills: number, documents: number) =>
         `${skills === 1 ? "1 skill" : `${skills} skills`} · ${documents === 1 ? "1 document" : `${documents} documents`}`,
@@ -216,6 +217,14 @@ export const en = {
     generic: "The request could not be served. Try again in a moment.",
     network: "The server could not be reached. Check your connection and try again.",
     codes: {
+      "index.indexing": {
+        title: "Indexing this commit…",
+        body: "This file will be available when indexing finishes. Try again in a moment.",
+      },
+      "index.failed": {
+        title: "This commit could not be indexed",
+        body: "The file cannot be read yet. Indexing is retried automatically; try again later.",
+      },
       "mount.repo_not_found": {
         title: "Repository not found",
         body: "It does not exist, or it is not public. Private repositories are not supported yet.",

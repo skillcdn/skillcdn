@@ -9,6 +9,7 @@ export interface FileReference {
 }
 export interface BrowseEntry {
   readonly browsePath?: RepoPath;
+  readonly overviewPath?: RepoPath;
   readonly kind: "directory" | "skill" | "file";
   readonly path: RepoPath;
   readonly name: string | null;
@@ -19,8 +20,16 @@ export interface BrowseEntry {
   readonly manifestPath: string | null;
   readonly language: string | null;
 }
+/** An optional introduction, read explicitly instead of inherited as skill rules. */
+export interface FolderOverview {
+  readonly path: RepoPath;
+  readonly title: string | undefined;
+  readonly description: string | undefined;
+}
 export interface BrowseResult {
   readonly diagnostics?: readonly IndexDiagnostic[];
+  readonly diagnosticsTotal?: number;
+  readonly overview?: FolderOverview;
   readonly mount: MountSummary;
   readonly path: RepoPath;
   readonly entries: readonly BrowseEntry[];
@@ -82,6 +91,7 @@ export type FindItem =
     };
 
 export interface FindResult {
+  readonly diagnosticsTotal?: number;
   readonly path?: RepoPath;
   readonly nextCursor?: string | undefined;
   readonly mount: MountSummary;
@@ -118,6 +128,9 @@ export interface IncludedFile {
 }
 
 export interface SkillResult {
+  readonly referencesTruncated?: boolean;
+  /** Optional metadata or author warnings were abbreviated; source content is unchanged. */
+  readonly detailsTruncated?: boolean;
   readonly path?: RepoPath;
   readonly ruleChain?: readonly SkillRules[];
   readonly references?: readonly FileReference[];
@@ -145,6 +158,7 @@ export interface SkillResult {
 }
 
 export interface FileResult {
+  readonly referencesTruncated?: boolean;
   readonly references?: readonly FileReference[];
   readonly mount: MountSummary;
   readonly path: RepoPath;

@@ -5,7 +5,9 @@ import {
   type BlobStore,
   BROWSE_DEFAULT_LIMIT,
   browseCatalogFiles,
+  type CatalogFile,
   FIND_LIST_SKILLS_MAX,
+  folderOverview,
   type GitHost,
   GitHostError,
   INSTRUCTIONS_MAX_LENGTH,
@@ -56,8 +58,9 @@ function pathOf(text: string): RepoPath {
 }
 
 /**
- * The files of a directory as tree entries: `.git`, `node_modules` and symbolic links
- * are left out. Hidden skills and explicitly referenced files follow the indexer's rules. A
+ * The files of a directory as tree entries: `.git`, `node_modules` and ordinary symbolic links
+ * are left out. A symlink policy remains an unreadable boundary, without following its target.
+ * Hidden skills and explicitly referenced files follow the indexer's rules. A
  * file too large to be indexed gets a stand-in hash: nothing ever asks for its body.
  */
 async function readWorkingTree(
@@ -70,11 +73,28 @@ async function readWorkingTree(
     const entries = await readdir(directory, { withFileTypes: true });
     entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
     for (const entry of entries) {
-      if (entry.isSymbolicLink() || isSkipped(entry.name)) {
+      if (isSkipped(entry.name)) {
         skipped += 1;
         continue;
       }
       const path = prefix.length === 0 ? entry.name : `${prefix}/${entry.name}`;
+      if (entry.isSymbolicLink()) {
+        const parsed = entry.name === "SKILLCDN.md" ? parseRepoPath(path) : undefined;
+        if (parsed?.ok === true) {
+          files.push({
+            entry: {
+              path: parsed.value,
+              type: "symlink",
+              size: 0,
+              hash: createHash("sha1").update(`unread policy link ${path}`).digest("hex"),
+            },
+            bytes: undefined,
+          });
+        } else {
+          skipped += 1;
+        }
+        continue;
+      }
       const absolute = join(directory, entry.name);
       if (entry.isDirectory()) {
         await walk(absolute, path);
@@ -175,7 +195,7 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
 
   const byPath = (a: NewIndexEntry, b: NewIndexEntry): number => (a.path < b.path ? -1 : 1);
   const manifest = index.entries.find(
-    (entry) => entry.kind === "manifest" && entry.path === "SKILLCDN.md",
+    (entry) => entry.visible && entry.kind === "manifest" && entry.path === "SKILLCDN.md",
   );
   const skills = index.entries
     .filter((entry) => entry.visible && entry.kind === "skill")
@@ -200,6 +220,22 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
     const split = text === undefined ? undefined : splitFrontMatter(text);
     return split?.kind === "found" ? split.body.trim() : "";
   };
+  const catalogFiles: CatalogFile[] = index.entries
+    .filter((entry) => entry.visible)
+    .map((entry) => ({
+      path: pathOf(entry.path),
+      kind: entry.kind,
+      name: entry.name,
+      title: entry.title,
+      description: entry.description,
+      skillDir: entry.skillDir === undefined ? undefined : pathOf(entry.skillDir),
+      searchable: entry.searchable,
+      size: entry.size,
+      linkedOnly: entry.frontMatter?.linkedOnly,
+      overviewOnly: entry.frontMatter?.overviewOnly,
+      language: entry.frontMatter?.language,
+    }));
+  const overview = folderOverview(catalogFiles, ROOT_PATH);
 
   write(
     `Read ${root} as SkillCDN would index it: ${files.length} files` +
@@ -209,8 +245,8 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
 
   if (manifest === undefined) {
     write(
-      "Repository manifest: none. The skills and docs/ are served; a SKILLCDN.md at the root names " +
-        "the repository, declares its document directories and states the rules for every skill.\n\n",
+      "Repository manifest: none. Skills, docs/ and optional folder READMEs are served. " +
+        "A SKILLCDN.md can declare metadata, document directories, exclusions and shared rules.\n\n",
     );
   } else {
     const rules = rulesOf(manifest);
@@ -265,6 +301,12 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
   const linked = index.entries.filter(
     (entry) => entry.visible && entry.frontMatter?.linkedOnly === true,
   );
+  const overviews = index.entries.filter(
+    (entry) => entry.visible && entry.frontMatter?.overviewOnly === true,
+  );
+  write(
+    `Optional overview files: ${overviews.length}${overviews.length === 0 ? "" : ` (${overviews.map((entry) => entry.path).join(", ")})`}\n\n`,
+  );
   write(`Linked reference files: ${linked.length}\n\n`);
   write(`Index diagnostics: ${diagnostics.length}\n`);
   for (const diagnostic of diagnostics) {
@@ -273,23 +315,8 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
   write("\n");
 
   const catalog: MountCatalog = {
-    groups: browseCatalogFiles(
-      index.entries
-        .filter((entry) => entry.visible)
-        .map((entry) => ({
-          path: pathOf(entry.path),
-          kind: entry.kind,
-          name: entry.name,
-          title: entry.title,
-          description: entry.description,
-          skillDir: entry.skillDir === undefined ? undefined : pathOf(entry.skillDir),
-          searchable: entry.searchable,
-          size: entry.size,
-          linkedOnly: entry.frontMatter?.linkedOnly,
-          language: entry.frontMatter?.language,
-        })),
-      ROOT_PATH,
-    ).slice(0, BROWSE_DEFAULT_LIMIT),
+    overview,
+    groups: browseCatalogFiles(catalogFiles, ROOT_PATH).slice(0, BROWSE_DEFAULT_LIMIT),
     mount: {
       repository: basename(root),
       ref: undefined,

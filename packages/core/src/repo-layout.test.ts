@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   baseName,
   classifyRepoFile,
+  isExcludedPath,
   isHiddenPath,
   isServedPath,
   nearestDirectoryAtOrAbove,
@@ -9,6 +10,7 @@ import {
   parentDirectory,
   repoManifestPath,
   type ServedScope,
+  selectReadmePaths,
 } from "./repo-layout.js";
 import { parseRepoPath, type RepoPath } from "./repo-path.js";
 
@@ -111,6 +113,64 @@ describe("isServedPath", () => {
     expect(isServedPath(path(".guides/guide.md"), declared)).toBe(true);
     expect(isServedPath(path(".guides/.drafts/guide.md"), declared)).toBe(false);
     expect(isServedPath(path(".other/guide.md"), declared)).toBe(false);
+  });
+
+  it("gives exact exclusions precedence over declarations and includes", () => {
+    const closed: ServedScope = {
+      ...scope,
+      includedFiles: new Set([path("packages/a/skills/one/keep.md")]),
+      excludedPaths: new Set([path("packages/a"), path("docs/private.md")]),
+    };
+    for (const input of [
+      "packages/a/SKILLCDN.md",
+      "packages/a/skills/one/SKILL.md",
+      "packages/a/skills/one/keep.md",
+      "docs/private.md",
+    ]) {
+      expect(isServedPath(path(input), closed)).toBe(false);
+    }
+    expect(isServedPath(path("docs/private.md-extra"), closed)).toBe(true);
+    expect(isExcludedPath(path("packages/ab/file.md"), closed)).toBe(false);
+    expect(
+      isServedPath(path("SKILLCDN.md"), { ...closed, excludedPaths: new Set([path("")]) }),
+    ).toBe(false);
+  });
+
+  it("keeps only the outer broken manifest diagnostic readable", () => {
+    const closed: ServedScope = {
+      ...scope,
+      brokenManifestDirectories: new Set([path("packages"), path("packages/a")]),
+      manifestDirectories: new Set([path("packages"), path("packages/a")]),
+    };
+    expect(isServedPath(path("packages/SKILLCDN.md"), closed)).toBe(true);
+    expect(isServedPath(path("packages/a/SKILLCDN.md"), closed)).toBe(false);
+    expect(isServedPath(path("packages/a/skills/one/SKILL.md"), closed)).toBe(false);
+  });
+});
+
+describe("selectReadmePaths", () => {
+  it("selects deterministic conventional names only in allowed directories", () => {
+    const files = [
+      "README.mdx",
+      "README.markdown",
+      "ReadMe.MD",
+      "readme.md",
+      "README.md",
+      "README.ko.md",
+      "docs/README.MARKDOWN",
+      "docs/readme.mdx",
+      "hidden/README.md",
+    ].map(path);
+    const directories = new Set([path(""), path("docs")]);
+    expect([...selectReadmePaths(files, directories)]).toEqual([
+      "README.md",
+      "docs/README.MARKDOWN",
+    ]);
+    expect([...selectReadmePaths([...files].reverse(), directories)].sort()).toEqual([
+      "README.md",
+      "docs/README.MARKDOWN",
+    ]);
+    expect([...selectReadmePaths([path("README.ko.md")], directories)]).toEqual([]);
   });
 });
 

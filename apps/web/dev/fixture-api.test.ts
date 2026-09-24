@@ -43,7 +43,8 @@ describe("the fixture API", () => {
       }
       for (const path of Object.keys(repository.files)) {
         const answer = ask(`/api/v1/files/gh/${key}?path=${encodeURIComponent(path)}`);
-        expect(restFileSchema.safeParse(answer.body).success, path).toBe(true);
+        const schema = answer.status === 503 ? restErrorSchema : restFileSchema;
+        expect(schema.safeParse(answer.body).success, path).toBe(true);
       }
     }
     expect(restFeaturedSchema.safeParse(ask("/api/v1/featured").body).success).toBe(true);
@@ -154,6 +155,31 @@ describe("the fixture API", () => {
     expect(next.items[0]).not.toEqual(first.items[0]);
   });
 
+  it("offers introductions without a manifest and reads them only when requested", () => {
+    const root = restBrowseSchema.parse(ask("/api/v1/browse/gh/acme/handbook").body);
+    expect(root).toMatchObject({
+      status: "ready",
+      overview: { path: "README.md", title: "Acme handbook" },
+    });
+    const folder = restBrowseSchema.parse(ask("/api/v1/browse/gh/acme/handbook?path=docs").body);
+    expect(folder).toMatchObject({
+      status: "ready",
+      entries: expect.arrayContaining([
+        expect.objectContaining({
+          path: "docs/engineering",
+          overviewPath: "docs/engineering/README.md",
+        }),
+      ]),
+    });
+    const read = restFileSchema.parse(ask("/api/v1/files/gh/acme/handbook?path=README.md").body);
+    expect(read).toMatchObject({
+      kind: "file",
+      content: expect.stringContaining("# Acme handbook"),
+    });
+    const found = restFindSchema.parse(ask("/api/v1/find/gh/acme/handbook?query=agreements").body);
+    expect(found).toMatchObject({ status: "ready", items: [] });
+  });
+
   it("continues inherited rules, instructions and required contents without losing fragments", () => {
     const first = restSkillSchema.parse(
       ask("/api/v1/skills/gh/demo/context?path=review/SKILL.md").body,
@@ -202,6 +228,16 @@ describe("the fixture API", () => {
     const early = restMountSchema.parse(ask("/api/v1/mounts/gh/demo/slow", 1_000_000).body);
     const later = restMountSchema.parse(ask("/api/v1/mounts/gh/demo/slow", 1_010_000).body);
     expect([early.index.status, later.index.status]).toEqual(["indexing", "ready"]);
+  });
+
+  it("waits for a publication policy before reading even a known README", () => {
+    resetFixtureState();
+    const early = ask("/api/v1/files/gh/demo/slow?path=README.md", 1_000_000);
+    expect(early.status).toBe(503);
+    expect(restErrorSchema.parse(early.body).error.code).toBe("index.indexing");
+    const later = ask("/api/v1/files/gh/demo/slow?path=README.md", 1_010_000);
+    expect(later.status).toBe(200);
+    expect(restFileSchema.parse(later.body)).toMatchObject({ kind: "file", path: "README.md" });
   });
 
   it("leaves everything that is not the REST API to the development server", () => {
