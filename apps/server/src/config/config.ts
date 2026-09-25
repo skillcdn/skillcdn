@@ -55,9 +55,6 @@ const cidrList = z
     return networks;
   });
 
-/** The origin of the hosted service: what pages describe themselves as when nothing is configured. */
-export const HOSTED_ORIGIN = "https://skillcdn.ai";
-
 const indexLimitFields = {
   INDEX_MAX_TREE_ENTRIES: integer(INDEX_LIMIT_DEFAULTS.maxTreeEntries, 1, 1_000_000),
   INDEX_MAX_FILES: integer(INDEX_LIMIT_DEFAULTS.maxIndexedFiles, 1, 100_000),
@@ -188,7 +185,7 @@ export interface Config {
   readonly web: {
     /** Directory of a web UI build to serve. Left out, there is no UI. */
     readonly root: string | undefined;
-    /** The origin visitors use. Unset: the hosted origin in production, else the origin of each request. */
+    /** The origin visitors use. Unset: the origin of each request. */
     readonly publicUrl: string | undefined;
     /** Tags written into the head of every page, for search consoles and analytics. */
     readonly tags: WebTags;
@@ -302,9 +299,9 @@ export function loadConfig(
     github: { apiUrl: env.GITHUB_API_URL, token: env.GITHUB_TOKEN },
     web: {
       root: env.WEB_ROOT,
-      // The image describes its pages as the hosted service unless told otherwise; while
-      // developing, pages are written for whatever origin the request came in on.
-      publicUrl: env.PUBLIC_URL ?? (env.NODE_ENV === "production" ? HOSTED_ORIGIN : undefined),
+      // Unset, pages are written for whatever origin the request came in on. No default names
+      // another deployment: an installation is its own.
+      publicUrl: env.PUBLIC_URL,
       tags: {
         googleSiteVerification: env.GOOGLE_SITE_VERIFICATION,
         googleAnalyticsId: env.GOOGLE_ANALYTICS_ID,

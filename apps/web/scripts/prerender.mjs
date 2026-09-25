@@ -37,7 +37,6 @@ for (const marker of Object.values(TEMPLATE_MARKERS)) {
   }
 }
 
-// biome-ignore lint/style/noProcessEnv: a build script; there is no config module to go through
 const publicUrl = process.env.SKILLCDN_PUBLIC_URL?.replace(/\/+$/, "");
 const withOrigin = (text) =>
   publicUrl === undefined || publicUrl === ""

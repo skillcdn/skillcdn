@@ -14,7 +14,7 @@ The typeface that draws Hangul in the web UI (`apps/web`), shipped as unmodified
 
 The OpenAI, Claude, Cursor, Windsurf, Codex and Gemini marks in `apps/web/public/clients/` identify the clients supported by the connection guide.
 
-- Source: [Lobe Icons](https://github.com/lobehub/lobe-icons/tree/2e76c48721e91b9aaa40803a0fa2eb8aca7399c4/packages/static-svg/icons), snapshot `2e76c48721e91b9aaa40803a0fa2eb8aca7399c4`. Claude and Gemini use the color variants. Redundant inline style attributes are removed for the content security policy; paths and colors are preserved.
+- Source: [Lobe Icons](https://github.com/lobehub/lobe-icons/tree/2e76c48721e91b9aaa40803a0fa2eb8aca7399c4/packages/static-svg/icons), snapshot `2e76c48721e91b9aaa40803a0fa2eb8aca7399c4`. Claude and Gemini use the color variants (`claude-color.svg`, `gemini-color.svg`). The files are byte for byte as the source ships them; the pages show them as images, so nothing in them meets the content security policy.
 - Copyright (c) 2023 LobeHub. License: MIT; the complete notice ships as [`licenses/lobe-icons.txt`](apps/web/public/licenses/lobe-icons.txt).
 - Product names and marks belong to their respective owners. Their use identifies interoperability and does not imply endorsement.
 
@@ -22,6 +22,14 @@ The OpenAI, Claude, Cursor, Windsurf, Codex and Gemini marks in `apps/web/public
 
 The VS Code mark in `apps/web/public/clients/vscode.svg`.
 
-- Source: [Devicon, vscode-original.svg](https://github.com/devicons/devicon/blob/master/icons/vscode/vscode-original.svg), retrieved September 23, 2026.
+- Source: [Devicon, vscode-original.svg](https://github.com/devicons/devicon/blob/65476530e1afea9b1f850efb1cc0efec19ee0ef0/icons/vscode/vscode-original.svg), as of commit `65476530e1afea9b1f850efb1cc0efec19ee0ef0`, retrieved September 26, 2026, unmodified.
 - Copyright (c) 2015 konpa. License: MIT; the complete notice ships as [`licenses/devicon.txt`](apps/web/public/licenses/devicon.txt).
 - The mark identifies the supported client; trademark rights remain with its owner.
+
+## npm packages in the web build
+
+The pages bundle npm packages, each under its own permissive license. The build writes their licenses and notices to `licenses/npm.txt` in the web build (`apps/web/scripts/collect-licenses.mjs`), which every page links to from its footer, and `pnpm check` refuses a production dependency whose license is not on the allowlist (`scripts/check-licenses.mjs`). The server's own dependencies travel with it in `node_modules`, licenses included.
+
+## Showcase media
+
+The concept clip and the pictures in `apps/web/public/showcase/` are original AI-generated concept media made for this project on September 23, 2026 and re-encoded for the web. They depict no real product, run or person, and the page says so next to the clip. The originals carry content credentials that the re-encoding did not keep; a regenerated clip must carry them through, which is on the [roadmap](docs/roadmap.md).

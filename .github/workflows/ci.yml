@@ -133,6 +133,9 @@ jobs:
           curl -sS -H 'accept: text/html' 'http://127.0.0.1:11188/gh/skillcdn' | grep -q 'data-prerendered="bad-address"'
           curl -fsS 'http://127.0.0.1:11188/sitemap.xml' | grep -q 'hreflang="ko"'
           curl -fsS 'http://127.0.0.1:11188/api/v1/featured' | grep -q '"items"'
+          # The notices ship with the pages and with the image.
+          curl -fsS 'http://127.0.0.1:11188/licenses/npm.txt' | grep -q '^react '
+          docker run --rm --entrypoint sh skillcdn:ci -c 'test -s /app/LICENSE.md && test -s /app/THIRD-PARTY-NOTICES.md'
           docker stop --time 30 api
           test "$(docker inspect --format '{{.State.ExitCode}}' api)" -eq 0
           docker logs api

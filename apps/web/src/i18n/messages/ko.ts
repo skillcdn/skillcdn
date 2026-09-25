@@ -280,6 +280,7 @@ export const ko: Messages = {
     license: "라이선스",
     trademarks: "상표",
     security: "보안",
+    notices: "제3자 고지",
     terms: "이용약관",
     privacy: "개인정보 처리방침",
     report: "콘텐츠 신고",

@@ -116,14 +116,14 @@ export const connectKo: typeof connectEn = {
       note: "이 컴퓨터에 VS Code가 설치되어 있고, Copilot 대화를 사용할 수 있어야 해요.",
     },
     windsurf: {
-      label: "Windsurf",
+      label: "Devin Desktop",
       titles: ["Cascade 설정을 여세요", "설정 코드를 저장하세요", "도구를 켜고 대화해 보세요"],
       steps: [
         "Cascade에서 … 메뉴를 열고 Open MCP config file을 선택하세요.",
         "mcp_config.json에 아래 설정 코드를 추가하고 저장하세요. 이미 쓰고 있는 서버 설정은 그대로 두세요.",
         "MCPs로 돌아가 서버와 도구를 켠 다음, Cascade에서 아래 첫 질문을 보내세요.",
       ],
-      note: "기존 Cascade 화면을 기준으로 안내해요. 새 버전은 설정 방법이 다를 수 있어요.",
+      note: "예전 이름은 Windsurf예요. Cascade 화면을 기준으로 안내하며, 새 버전은 설정 방법이 다를 수 있어요.",
     },
     claudeCode: {
       label: "Claude Code",

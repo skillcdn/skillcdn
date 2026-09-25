@@ -48,6 +48,7 @@ describe("language packs", () => {
     const names = new Set([
       "Claude Code",
       "VS Code",
+      "Devin Desktop",
       "Codex CLI",
       "Gemini CLI",
       "Open MCP config file",

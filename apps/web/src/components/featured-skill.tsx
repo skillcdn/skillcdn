@@ -96,6 +96,7 @@ export function FeaturedSkill() {
           <ArrowIcon />
         </Link>
         <p className={styles.requirement}>{copy.requirement}</p>
+        <p className={styles.requirement}>{copy.generated}</p>
       </div>
     </article>
   );

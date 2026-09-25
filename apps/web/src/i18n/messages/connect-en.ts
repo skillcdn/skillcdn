@@ -117,14 +117,14 @@ export const connectEn = {
       note: "Have VS Code and access to Copilot chat ready on this computer.",
     },
     windsurf: {
-      label: "Windsurf",
+      label: "Devin Desktop",
       titles: three("Open Cascade’s settings", "Save the configuration", "Enable the tools"),
       steps: three(
         "In Cascade, open the … Actions menu and choose Open MCP config file.",
         "Add the configuration below to mcp_config.json and save the file. Keep any servers you already have.",
         "Return to MCPs, enable the server and its tools, then send the first message in Cascade.",
       ),
-      note: "This guide is for the legacy Cascade interface. Newer versions may use a different setup.",
+      note: "Formerly Windsurf. This guide follows the Cascade interface; newer versions may use a different setup.",
     },
     claudeCode: {
       label: "Claude Code",

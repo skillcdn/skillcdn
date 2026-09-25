@@ -85,6 +85,21 @@
           }
         }
       }
+    },
+    {
+      "includes": ["scripts/**/*.mjs", "apps/*/scripts/**/*.mjs"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noProcessEnv": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["apps/web/public/clients/**"],
+      "linter": { "enabled": false },
+      "formatter": { "enabled": false }
     }
   ]
 }

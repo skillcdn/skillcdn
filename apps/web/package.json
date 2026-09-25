@@ -6,7 +6,7 @@
   "license": "FSL-1.1-ALv2",
   "type": "module",
   "scripts": {
-    "build": "vite build && vite build --ssr src/entry-server.tsx --outDir dist/render && node scripts/prerender.mjs",
+    "build": "vite build && vite build --ssr src/entry-server.tsx --outDir dist/render && node scripts/prerender.mjs && node scripts/collect-licenses.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json --noEmit",
     "test": "vitest run --passWithNoTests",
     "dev": "vite",

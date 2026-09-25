@@ -20,6 +20,8 @@ export const landingEn = {
       /** What the concept clip shows, for whoever cannot see it play. */
       clip: "A short concept film in the shape of an outdoor ad, starring a small brass explorer robot with a glowing blue visor: on a mossy rock in a misty stream at dawn, in the rain, with frost forming on its visor, and by a campfire under the stars.",
       credit: "Made by SkillCDN",
+      /** Said next to the clip, never over it: what it is and what it is not. */
+      generated: "An AI-generated concept clip, not a recording of a run.",
     },
   },
   how: {

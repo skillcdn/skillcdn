@@ -64,6 +64,9 @@ export function Layout(props: { readonly children: ReactNode }) {
               <li>
                 <a href={LINKS.security}>{t.footer.security}</a>
               </li>
+              <li>
+                <a href={LINKS.notices}>{t.footer.notices}</a>
+              </li>
               {legal.termsUrl !== undefined && (
                 <li>
                   <a href={legal.termsUrl}>{t.footer.terms}</a>

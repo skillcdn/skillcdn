@@ -40,7 +40,7 @@ The server is configured only through environment variables. [`.env.example`](..
 | `GITHUB_API_URL` | `api`, `worker` | no | no | Default `https://api.github.com`. GitHub Enterprise Server: `https://<host>/api/v3`. |
 | `GITHUB_TOKEN` | `api`, `worker` | no | **yes** | Optional, no scopes needed. Raises the GitHub rate limit for public-repo reads; without it the anonymous limit applies to the whole deployment. |
 | `WEB_ROOT` | `api` | no | no | Directory of a web UI build. The image sets `/app/web`; set it to an empty value to run without a UI. The build's render module runs inside the server, so only ever point this at a build made from this repository. |
-| `PUBLIC_URL` | `api` | no | no | The origin visitors use, such as `https://skills.example.com`. Goes into canonical links, the sitemap and the URLs pages show. Default `https://skillcdn.ai`, the hosted service, under `NODE_ENV=production` (which the image sets); otherwise the origin of each request. Self-hosting: set your own origin, or canonical links and the sitemap point at the hosted service. |
+| `PUBLIC_URL` | `api` | no | no | The origin visitors use, such as `https://skills.example.com`. Goes into canonical links, the sitemap and the URLs pages show. Unset: the origin of each request, which is right behind one hostname and wrong behind several; set it for any public deployment. |
 | `ADMIN_TOKEN` | `api` | no | **yes** | Bearer token of the [admin API](#the-admin-api). At least 32 characters. Unset: the admin API does not exist. |
 | `GOOGLE_SITE_VERIFICATION` | `api` | no | no | The content of the `google-site-verification` meta tag a search console asks for; written into the head of every page. |
 | `GOOGLE_ANALYTICS_ID` | `api` | no | no | A Google Analytics measurement id (`G-...`). Set, every page loads the analytics script, and the content security policy allows its sources and nothing else new. Whether visitors must consent first depends on where they are; the UI ships no consent banner. |
@@ -110,6 +110,8 @@ This repository does not publish images. Whatever deploys the product builds the
 1. Pin a commit of this repository, preferably one whose `CI` run is green. `main` is kept releasable, so any green commit is a candidate.
 2. Build `deploy/Dockerfile` from the repository root for the platforms you run (`docker buildx build --platform linux/arm64 -f deploy/Dockerfile .`). The build needs no secrets and no build arguments.
 3. Tag the image with the commit it was built from, keep tags immutable in your registry, and deploy by digest.
+
+The image carries what it is distributed under at `/app`: `LICENSE.md`, `THIRD-PARTY-NOTICES.md` and `TRADEMARKS.md`; the web build carries the licenses of its bundled packages at `/licenses/npm.txt`, linked from every page, and the notices of its fonts and icons next to it.
 
 ## Rollout contract
 

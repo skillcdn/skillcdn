@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ConfigError, HOSTED_ORIGIN, loadConfig, loadIndexLimits } from "./config.js";
+import { ConfigError, loadConfig, loadIndexLimits } from "./config.js";
 
 const DATABASE_URL = "postgres://user:not-a-real-password@db.internal:5432/skillcdn";
 const noFiles = (): string => {
@@ -126,10 +126,11 @@ describe("loadConfig", () => {
     expect(() => loadIndexLimits({ INDEX_MAX_FILES: "many" })).toThrow(ConfigError);
   });
 
-  it("reads where the web UI is and what the public origin is", () => {
+  it("reads where the web UI is and what the public origin is, with no default origin", () => {
+    // No installation is described as another: without PUBLIC_URL, pages follow the request.
     expect(loadConfig({ DATABASE_URL }, noFiles).web).toMatchObject({
       root: undefined,
-      publicUrl: HOSTED_ORIGIN,
+      publicUrl: undefined,
     });
     expect(loadConfig({ DATABASE_URL, NODE_ENV: "development" }, noFiles).web.publicUrl).toBe(
       undefined,

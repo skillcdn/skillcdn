@@ -291,6 +291,7 @@ export const en = {
     license: "License",
     trademarks: "Trademarks",
     security: "Security",
+    notices: "Third-party notices",
     terms: "Terms",
     privacy: "Privacy",
     report: "Report content",

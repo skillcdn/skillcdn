@@ -23,14 +23,15 @@
     "test": "turbo run test",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
-    "check": "biome ci . && node scripts/check-text-safety.mjs && turbo run build typecheck test",
+    "check": "biome ci . && node scripts/check-text-safety.mjs && node scripts/check-licenses.mjs && turbo run build typecheck test",
     "dev": "turbo run dev dev:tsc --filter=!@skillcdn/web",
     "dev:web": "turbo run dev --filter=@skillcdn/web",
     "dev:web:api": "turbo run dev:api --filter=@skillcdn/web",
     "dev:web:live": "turbo run dev:live --filter=@skillcdn/web",
     "dev:tsc": "tsc -b --watch --preserveWatchOutput",
     "clean": "turbo run clean",
-    "check:text": "node scripts/check-text-safety.mjs"
+    "check:text": "node scripts/check-text-safety.mjs",
+    "check:licenses": "node scripts/check-licenses.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.13",

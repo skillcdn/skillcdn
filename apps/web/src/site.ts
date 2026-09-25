@@ -19,6 +19,8 @@ export const LINKS = {
   license: `${REPOSITORY_URL}/blob/main/LICENSE.md`,
   trademarks: `${REPOSITORY_URL}/blob/main/TRADEMARKS.md`,
   security: `${REPOSITORY_URL}/blob/main/SECURITY.md`,
+  /** Written by the build: the licenses of the npm packages bundled into these pages. */
+  notices: "/licenses/npm.txt",
 } as const;
 
 /**

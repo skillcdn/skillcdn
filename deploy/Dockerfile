@@ -39,6 +39,8 @@ WORKDIR /app
 COPY --from=build --chown=node:node /out ./
 # The web UI is static files next to the server. Unset WEB_ROOT to run without it.
 COPY --from=build --chown=node:node /repo/apps/web/dist ./web
+# What the image is distributed under, and what it carries of others: the notices travel with it.
+COPY --from=build --chown=node:node /repo/LICENSE.md /repo/THIRD-PARTY-NOTICES.md /repo/TRADEMARKS.md ./
 ENV WEB_ROOT=/app/web
 USER node
 EXPOSE 11188
