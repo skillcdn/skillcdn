@@ -10,6 +10,7 @@ The source code in this repository is licensed under [FSL-1.1-ALv2](LICENSE.md).
 - Run unmodified or internally modified SkillCDN inside your organization and call it SkillCDN.
 - Link to `skillcdn.ai` and to this repository, and write about, review or teach SkillCDN.
 - Keep the Marks where they already appear in the source code, license notices and attribution.
+- Use the file name `SKILLCDN.md`, the `skillcdn` front-matter key and the name of the SkillCDN Format to write a repository in the format or a reader of it, and say truthfully that something is in the format or compatible with it. The specification of the format is licensed on its own terms ([`docs/specs/LICENSE`](docs/specs/LICENSE)).
 
 ## You may not, without written permission
 
