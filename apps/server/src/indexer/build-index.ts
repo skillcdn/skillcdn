@@ -324,7 +324,26 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
     }
   }
 
+  // A policy cannot be taken away from the files it governs: an excluded manifest withholds its
+  // whole directory. Excluding the directory says the same thing on purpose; excluding the
+  // manifest alone is reported, as the author probably meant something else.
+  const withholdExcludedManifest = (path: RepoPath): void => {
+    const directory = parentDirectory(path);
+    if (isExcludedPath(directory, policy)) return;
+    excludedPaths.add(directory);
+    report(
+      path,
+      "excluded_policy",
+      "the manifest is excluded while its directory is not; a policy cannot be removed from what it governs, so the whole directory is withheld",
+    );
+  };
+
   for (const round of rounds) {
+    for (const { entry, kind } of round) {
+      if (kind === "manifest" && isExcludedPath(entry.path, policy)) {
+        withholdExcludedManifest(entry.path);
+      }
+    }
     const permitted = round.filter(({ entry }) => !isExcludedPath(entry.path, policy));
     await fetchBodies(permitted.filter(({ entry }) => entry.type === "file").filter(admit));
     for (const { entry, kind } of permitted) {
@@ -382,7 +401,10 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
           directory,
           manifest.documents.map((declared) => joinRepoPath(directory, declared)),
         );
-        if (isExcludedPath(entry.path, policy)) continue;
+        if (isExcludedPath(entry.path, policy)) {
+          withholdExcludedManifest(entry.path);
+          continue;
+        }
         manifests.set(entry.path, {
           ...base,
           kind: "manifest",

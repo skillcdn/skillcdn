@@ -202,6 +202,8 @@ exclude:
 
 To omit only some descendants, name their paths instead, such as `templates` or `references/draft.md`. Exclusions match complete path segments, so `templates` does not exclude `templates-public`. They use repository path spelling and never escape the manifest directory. A sub-path connection inside an excluded subtree does not bypass an ancestor's policy.
 
+A manifest cannot be excluded on its own: a policy stays with the files it governs, so excluding a `SKILLCDN.md`, from an ancestor or from itself, withholds its whole directory. Excluding the directory says the same thing on purpose; excluding only the manifest is reported as `excluded_policy`.
+
 Exclusions govern the served set before parsing descendant skills and walking references. Intentionally excluded fixtures therefore produce neither skills nor irrelevant manifest diagnostics. This is publication control within SkillCDN, not confidentiality: files in a public git repository remain public on the git host.
 
 ### Markdown references

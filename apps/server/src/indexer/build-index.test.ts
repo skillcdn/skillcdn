@@ -300,6 +300,49 @@ describe("repository publication and link indexing", () => {
     expect(result.fetched).toHaveLength(4);
   });
 
+  it("withholds the whole directory of a manifest that an ancestor excludes by name", async () => {
+    const files = {
+      "team/SKILLCDN.md": manifest("Team rules.", "documents: [.]\n"),
+      "team/skills/deploy/SKILL.md": skill(),
+      "team/guide.md": "# Guide\n",
+      "skills/other/SKILL.md": skill(),
+    };
+    const named = await index({
+      ...files,
+      "SKILLCDN.md": manifest("", "documents: [team]\nexclude: [team/SKILLCDN.md]\n"),
+    });
+    for (const name of ["team/SKILLCDN.md", "team/skills/deploy/SKILL.md", "team/guide.md"]) {
+      expect(named.byPath.get(name)?.visible).toBe(false);
+    }
+    expect(named.byPath.get("skills/other/SKILL.md")?.visible).toBe(true);
+    expect(named.diagnostics).toEqual([
+      { path: "team/SKILLCDN.md", code: "excluded_policy", message: expect.any(String) },
+    ]);
+    // Excluding the directory says the same thing the intended way, without a diagnostic.
+    const intended = await index({
+      ...files,
+      "SKILLCDN.md": manifest("", "documents: [team]\nexclude: [team]\n"),
+    });
+    expect(intended.byPath.get("team/skills/deploy/SKILL.md")?.visible).toBe(false);
+    expect(intended.diagnostics).toEqual([]);
+  });
+
+  it("withholds the directory of a manifest that excludes its own file", async () => {
+    const result = await index({
+      "team/SKILLCDN.md": manifest("Team rules.", "documents: [.]\nexclude: [SKILLCDN.md]\n"),
+      "team/skills/deploy/SKILL.md": skill(),
+      "team/guide.md": "# Guide\n",
+      "skills/other/SKILL.md": skill(),
+    });
+    for (const name of ["team/SKILLCDN.md", "team/skills/deploy/SKILL.md", "team/guide.md"]) {
+      expect(result.byPath.get(name)?.visible).toBe(false);
+    }
+    expect(result.byPath.get("skills/other/SKILL.md")?.visible).toBe(true);
+    expect(result.diagnostics).toEqual([
+      { path: "team/SKILLCDN.md", code: "excluded_policy", message: expect.any(String) },
+    ]);
+  });
+
   it("excludes a hidden fixture container locally without changing independently mounted children", async () => {
     const fixture = { "SKILL.md": skill(), "references/guide.md": "# Fixture reference\n" };
     const prefix = "apps/server/fixtures/.repositories";
