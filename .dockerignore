@@ -29,4 +29,8 @@
 tmp
 docs
 **/*.md
+# What the image carries of the repository itself: its overview and its notices (deploy/Dockerfile).
 !README.md
+!LICENSE.md
+!THIRD-PARTY-NOTICES.md
+!TRADEMARKS.md

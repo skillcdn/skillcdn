@@ -11,3 +11,7 @@ Read the root [`CLAUDE.md`](../CLAUDE.md) first. These rules also cover `.github
 - **Compose files are for development and self-hosting.** Bind ports to `127.0.0.1`; label throwaway credentials as such.
 - **Verify what you change.** Build the image and run the smoke test locally (`docker build -f deploy/Dockerfile .`), and bring compose changes up and down once. A workflow edit you could not run must say so in the commit message.
 - Keep `deploy/README.md` in step: the environment table, how to build a release and the rollout contract are read by whoever operates the service.
+
+## Gotchas
+
+- `.dockerignore` drops every `*.md` except the root `README.md` and the three notices. A Markdown file the image must carry has to be re-included there, or the `COPY` fails only in the image job of CI: `pnpm check` never builds the image, so build the image locally before pushing a Dockerfile change.
