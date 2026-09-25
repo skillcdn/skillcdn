@@ -38,7 +38,7 @@ Design points still open (record the outcome in the spec or an ADR):
 - Pinned commits that the host serves through a repository without being part of its history (see the open questions in the address spec).
 - Abuse controls for the anonymous endpoints. The server bounds its own work: request and index size limits, bounded indexing per process, a short in-process memory of names that do not exist. Limiting requests per client is the job of whatever sits in front of the server. Still missing here: a negative cache shared between replicas.
 
-## Next: milestone 4, ready for public operation
+## Now: milestone 4, ready for public operation
 
 Goal: a deployment that serves other people's repositories can say what it does with their content, honor their licenses, take content down, and show its visitors what it must. Nothing in it is specific to one operator; every switch has an off default that suits a private installation.
 
