@@ -48,7 +48,7 @@ export const getSkillInputSchema = z.object({
     .string()
     .min(1)
     .max(MAX_REPO_PATH_LENGTH)
-    .describe("Exact repository-root path of SKILL.md, as browse or search returns it."),
+    .describe("Exact repository-root path of SKILL.md, as browse_repo or search_repo returns it."),
   cursor,
 });
 
@@ -58,7 +58,7 @@ export const readFileInputSchema = z.object({
     .min(1)
     .max(MAX_REPO_PATH_LENGTH)
     .describe(
-      "A file path from the repository root, for example skills/ads/references/guide.md. No ./ or ../ segments. Use browse for a folder.",
+      "A file path from the repository root, for example skills/ads/references/guide.md. No ./ or ../ segments. Use browse_repo for a folder.",
     ),
   offset: z.number().int().min(0).optional().describe("Character offset to start from. Default 0."),
   limit: z
