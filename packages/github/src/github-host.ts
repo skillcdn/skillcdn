@@ -260,7 +260,12 @@ export function createGitHubHost(options: GitHubHostOptions): GitHost {
       if (response.body === null) {
         return;
       }
-      const unpacked = Readable.fromWeb(response.body).pipe(createGunzip());
+      const source = Readable.fromWeb(response.body);
+      const unpacked = createGunzip();
+      // `pipe` passes data on and failures not: a connection that breaks midway would be an
+      // error nobody listens for. The failure goes to the consumer instead.
+      source.on("error", (error) => unpacked.destroy(error));
+      source.pipe(unpacked);
       try {
         // Archive paths start with one directory named after the repository and the commit.
         const files = readTar(upTo(unpacked, request.maxArchiveBytes), (tarPath, size) => {
@@ -287,6 +292,9 @@ export function createGitHubHost(options: GitHubHostOptions): GitHost {
         );
       } finally {
         unpacked.destroy();
+        // A consumer that stops early leaves the rest of the download unread; cancelling the
+        // source releases the connection.
+        source.destroy();
       }
     },
   };

@@ -471,6 +471,50 @@ describe("readArchive", () => {
     expect(await collect(github, { maxArchiveBytes: 100_000 })).toEqual({ "first.md": "kept" });
   });
 
+  it("reports a download that breaks midway as transient, without an unhandled error", async () => {
+    const compressed = gzipSync(sample);
+    const broken = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(compressed.subarray(0, 64));
+      },
+      pull(controller) {
+        controller.error(new Error("connection reset"));
+      },
+    });
+    const fetchLike: FetchLike = async (input) =>
+      new URL(input).pathname === ARCHIVE_PATH
+        ? new Response(null, { status: 302, headers: { location: `${DOWNLOAD_ORIGIN}/x` } })
+        : new Response(broken, { status: 200 });
+    const github = host(fetchLike, { downloadOrigins: [DOWNLOAD_ORIGIN] });
+    expect((await failureOf(collect(github))).kind).toBe("transient");
+  });
+
+  it("cancels the download when it stops reading before the end", async () => {
+    const bomb = gzipSync(
+      tarArchive([
+        { path: "repo/first.md", data: "kept" },
+        { path: "repo/zeros.bin", data: new Uint8Array(5_000_000) },
+      ]),
+    );
+    let cancelled = false;
+    // The body never closes: as far as the reader can tell, the download goes on.
+    const endless = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bomb);
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    const fetchLike: FetchLike = async (input) =>
+      new URL(input).pathname === ARCHIVE_PATH
+        ? new Response(null, { status: 302, headers: { location: `${DOWNLOAD_ORIGIN}/x` } })
+        : new Response(endless, { status: 200 });
+    const github = host(fetchLike, { downloadOrigins: [DOWNLOAD_ORIGIN] });
+    expect(await collect(github, { maxArchiveBytes: 100_000 })).toEqual({ "first.md": "kept" });
+    expect(cancelled).toBe(true);
+  });
+
   it("reports a corrupt archive as invalid", async () => {
     const { github } = archiveHost(
       new TextEncoder().encode("this is not a tar archive".repeat(40)),
