@@ -801,6 +801,26 @@ describe("a client running in a browser, on another origin", () => {
 });
 
 describe("clients from the previous protocol era", () => {
+  it("refuses a JSON-RPC batch, which no revision it speaks needs", async () => {
+    const { request } = harness();
+    const post = (body: string) =>
+      request("/gh/acme/single-skill", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+        },
+        body,
+      });
+    const ping = { jsonrpc: "2.0", id: 1, method: "ping" };
+    for (const body of [JSON.stringify([ping, { ...ping, id: 2 }]), " \n[]"]) {
+      const response = await post(body);
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({ jsonrpc: "2.0", error: { code: -32600 } });
+    }
+    expect((await post(JSON.stringify(ping))).status).toBe(200);
+  });
+
   it("serves stateless JSON-RPC without a session", async () => {
     const { request } = harness();
     const post = async (message: unknown) => {

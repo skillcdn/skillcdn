@@ -331,17 +331,32 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
       if (mount instanceof Response) {
         return mount;
       }
-      // Every MCP message is a POST, whichever protocol revision the client speaks; a client
-      // that sent one used this repository today.
+      let request = c.req.raw;
       if (c.req.method === "POST") {
+        // A JSON-RPC batch would let one request carry thousands of calls, and no protocol
+        // revision the server speaks needs one: an array body is refused before the handler.
+        const body = await c.req.text();
+        if (/^\s*\[/.test(body)) {
+          return c.json(
+            {
+              jsonrpc: "2.0",
+              id: null,
+              error: { code: -32600, message: "JSON-RPC batches are not supported." },
+            },
+            400,
+          );
+        }
+        request = new Request(c.req.raw.url, { method: "POST", headers: c.req.raw.headers, body });
+        // Every MCP message is a POST, whichever protocol revision the client speaks; a client
+        // that sent one used this repository today.
         tools.stats.client(mount, c.get("clientAddress"));
       }
-      resolvedFor.set(c.req.raw, {
+      resolvedFor.set(request, {
         mount,
         requestId: c.get("requestId"),
         origin: originOf(c.req.url),
       });
-      const response = await mcp.fetch(c.req.raw);
+      const response = await mcp.fetch(request);
       // Public content, but a moving ref: caches between us and the client must not pin it.
       response.headers.set("cache-control", "no-store");
       return response;
