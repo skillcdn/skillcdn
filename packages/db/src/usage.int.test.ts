@@ -7,13 +7,12 @@ import {
   type Database,
   foldUsageClients,
   getRepoUsage,
-  getUsageClientKey,
   listTopRepositories,
   type RepoScope,
   saveRepository,
   usageDayOf,
 } from "./index.js";
-import { usageClientKeys, usageClients } from "./schema.js";
+import { usageClients } from "./schema.js";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "./testing.js";
 
 let testDatabase: TestDatabase;
@@ -129,21 +128,6 @@ describe("distinct clients", () => {
   it("are keyed hashes for a day, folded into a count when the day is over", async () => {
     const one = await repository("One");
     const two = await repository("Two");
-    let made = 0;
-    const newKey = () => {
-      made += 1;
-      return `key-${made}`;
-    };
-    // Several processes ask for the key of a day at once: one key, whoever made it.
-    const keys = await Promise.all([
-      getUsageClientKey(database, "2026-08-01", newKey, NOW),
-      getUsageClientKey(database, "2026-08-01", newKey, NOW),
-      getUsageClientKey(database, "2026-08-01", newKey, NOW),
-    ]);
-    expect(new Set(keys).size).toBe(1);
-    expect(await getUsageClientKey(database, "2026-08-01", newKey, NOW)).toBe(keys[0]);
-    expect(await getUsageClientKey(database, "2026-08-02", newKey, NOW)).not.toBe(keys[0]);
-
     const seen = (scope: RepoScope, day: string, client: string) => ({ scope, day, client });
     await addUsageClients(
       database,
@@ -164,7 +148,7 @@ describe("distinct clients", () => {
     );
     await addUsageClients(database, [], NOW);
 
-    // The day being counted is not folded; the days before it are, key included.
+    // The day being counted is not folded; the days before it are.
     await foldUsageClients(database, "2026-08-02", NOW);
     const range = { from: "2026-08-01", to: "2026-08-02" };
     expect(await getRepoUsage(database, one, range)).toEqual([
@@ -177,11 +161,6 @@ describe("distinct clients", () => {
     expect(
       (await handle.select({ day: usageClients.day }).from(usageClients)).map((row) => row.day),
     ).toEqual(["2026-08-02", "2026-08-02"]);
-    expect(
-      (await handle.select({ day: usageClientKeys.day }).from(usageClientKeys)).map(
-        (row) => row.day,
-      ),
-    ).toEqual(["2026-08-02"]);
 
     // Folding again moves nothing and changes nothing; the next day adds to the counts.
     await foldUsageClients(database, "2026-08-02", NOW);

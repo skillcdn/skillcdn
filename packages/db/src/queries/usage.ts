@@ -1,6 +1,6 @@
-import { and, between, desc, eq, gte, lt, sql } from "drizzle-orm";
+import { and, between, desc, eq, gte, sql } from "drizzle-orm";
 import { type Database, drizzleOf } from "../client.js";
-import { accounts, repos, usageClientKeys, usageClients, usageDaily } from "../schema.js";
+import { accounts, repos, usageClients, usageDaily } from "../schema.js";
 import type { RepoScope } from "./repos.js";
 
 /** `client` is how many distinct clients used the repository that day; it appears once the day is folded. */
@@ -75,32 +75,6 @@ export async function addUsage(
   }
 }
 
-/**
- * The key under which client addresses are hashed on one day, made on first use. Every process
- * asks; the first to ask on a day makes the key, and the others get that one.
- */
-export async function getUsageClientKey(
-  database: Database,
-  day: UsageDay,
-  newKey: () => string,
-  now: Date,
-): Promise<string> {
-  const handle = drizzleOf(database);
-  await handle
-    .insert(usageClientKeys)
-    .values({ day, key: newKey(), createdAt: now })
-    .onConflictDoNothing({ target: usageClientKeys.day });
-  const [row] = await handle
-    .select({ key: usageClientKeys.key })
-    .from(usageClientKeys)
-    .where(eq(usageClientKeys.day, day))
-    .limit(1);
-  if (row === undefined) {
-    throw new Error(`no usage client key for ${day}`);
-  }
-  return row.key;
-}
-
 export interface UsageClient {
   readonly scope: RepoScope;
   readonly day: UsageDay;
@@ -139,7 +113,7 @@ export async function addUsageClients(
 
 /**
  * Turns the clients of every day before `before` into `client` counts in `usage_daily`, and
- * deletes the rows and the keys of those days. The move is one statement, so processes that fold
+ * deletes the rows of those days. The move is one statement, so processes that fold
  * at the same time each move their own share and the totals still add up.
  */
 export async function foldUsageClients(
@@ -161,7 +135,6 @@ export async function foldUsageClients(
     on conflict (repo_id, day, metric, subject)
     do update set count = ${usageDaily}.count + excluded.count, updated_at = excluded.updated_at
   `);
-  await handle.delete(usageClientKeys).where(lt(usageClientKeys.day, before));
 }
 
 export interface UsageTotal {

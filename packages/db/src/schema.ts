@@ -325,8 +325,9 @@ export const usageDaily = pgTable(
 
 /**
  * The distinct clients that used a repository on one day (UTC), while that day is being counted.
- * `client` is a keyed hash of the client's network address under the day's key in
- * `usage_client_keys`; it can be matched within the day and means nothing once the key is gone.
+ * `client` is a keyed hash of the client's network address under the key of the day, which is
+ * derived from the deployment's secret and stored nowhere (ADR-0027); it can be matched within the
+ * day by whoever holds the secret and means nothing once the day is folded.
  * Rows and the key are deleted together when the day is folded into `usage_daily` as `client`.
  */
 export const usageClients = pgTable(
@@ -348,18 +349,6 @@ export const usageClients = pgTable(
     index("usage_clients_day_idx").on(table.day),
     index("usage_clients_account_idx").on(table.accountId),
   ],
-);
-
-/** The key under which client addresses are hashed on one day. Random, and gone with the day. */
-export const usageClientKeys = pgTable(
-  "usage_client_keys",
-  {
-    id: id(),
-    day: date({ mode: "string" }).notNull(),
-    key: text().notNull(),
-    createdAt: createdAt(),
-  },
-  (table) => [uniqueIndex("usage_client_keys_day_key").on(table.day)],
 );
 
 /**

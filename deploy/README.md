@@ -32,7 +32,7 @@ The server is configured only through environment variables. [`.env.example`](..
 | `HOST`, `PORT` | `api` | no | no | Defaults `0.0.0.0` and `11188`. |
 | `SHUTDOWN_GRACE_SECONDS` | `api` | no | no | Default `20`. Keep the platform's stop timeout above it. |
 | `HTTP_KEEP_ALIVE_SECONDS`, `HTTP_REQUEST_TIMEOUT_SECONDS` | `api` | no | no | Defaults `65` and `60`. See [Behind a reverse proxy](#behind-a-reverse-proxy). |
-| `ACCESS_LOG` | `api` | no | no | Default `true`: one log line per request, probes excluded. |
+| `ACCESS_LOG` | `api` | no | no | Default `true`: one log line per request, probes excluded. Each line carries the client address and user agent: keep the log only as long as your privacy policy says, or turn it off. The usage statistics hold neither. |
 | `TRUSTED_PROXIES` | `api` | no | no | Addresses or CIDR networks whose forwarding headers are believed. Default: none. |
 | `CLIENT_IP_HEADER`, `REQUEST_ID_HEADER` | `api` | no | no | Defaults `x-forwarded-for` and `x-request-id`. Read only from trusted proxies. |
 | `DATABASE_URL` | all | yes | **yes** | PostgreSQL connection string. |
@@ -43,10 +43,11 @@ The server is configured only through environment variables. [`.env.example`](..
 | `PUBLIC_URL` | `api` | no | no | The origin visitors use, such as `https://skills.example.com`. Goes into canonical links, the sitemap and the URLs pages show. Unset: the origin of each request, which is right behind one hostname and wrong behind several; set it for any public deployment. |
 | `ADMIN_TOKEN` | `api` | no | **yes** | Bearer token of the [admin API](#the-admin-api). At least 32 characters. Unset: the admin API does not exist. |
 | `GOOGLE_SITE_VERIFICATION` | `api` | no | no | The content of the `google-site-verification` meta tag a search console asks for; written into the head of every page. |
-| `GOOGLE_ANALYTICS_ID` | `api` | no | no | A Google Analytics measurement id (`G-...`). Set, every page loads the analytics script, and the content security policy allows its sources and nothing else new. Whether visitors must consent first depends on where they are; the UI ships no consent banner. |
+| `GOOGLE_ANALYTICS_ID` | `api` | no | no | A Google Analytics measurement id (`G-...`). Set, every page asks the visitor once, in a banner, and loads the analytics script only after they agree; consent mode starts with everything denied, and a browser that signals Global Privacy Control or Do Not Track is never asked and never loads it. The content security policy allows the script's sources and nothing else new. |
 | `TERMS_URL`, `PRIVACY_URL` | `api` | no | no | Where the deployment's terms of service and privacy policy are. Each is written into the head of every page as a standard link type and shown in the footer, only when set. See [Operating a public deployment](#operating-a-public-deployment). |
 | `CONTACT_EMAIL` | `api` | no | no | Whom to write to about content: takedown requests and reports. Shown in the footer as a link, only when set. |
-| `USAGE_STATS`, `USAGE_STATS_FLUSH_SECONDS` | `api` | no | no | Daily counts per public repository (connections, tool calls, skill loads, distinct clients), without anything that identifies a client: addresses are hashed under a key that is deleted with the day. Defaults `true` and `15`. |
+| `USAGE_STATS`, `USAGE_STATS_FLUSH_SECONDS` | `api` | no | no | Daily counts per public repository (connections, tool calls, skill loads, distinct clients), without anything that identifies a client: addresses are hashed under the key of the day, and the rows of a day are folded into a count and deleted when it is over. Defaults `true` and `15`. |
+| `USAGE_HASH_SECRET` | `api` | no | **yes** | What client hashes are keyed from ([ADR-0027](../docs/adr/0027-client-hashes-are-keyed-from-a-configured-secret-and-the-day.md)); at least 32 characters. Unset, each process makes its own at start, and replicas or restarts within a day count a client more than once. Set it for more than one replica, or for exact counts. |
 | `REPO_TTL_SECONDS`, `REF_TTL_SECONDS` | `api` | no | no | How long repository facts and moving refs are trusted before revalidation. Default `60` each. |
 | `INDEX_WAIT_MS` | `api` | no | no | How long a tool call waits for a new commit's index. Default `20000`. |
 | `INDEX_CONCURRENCY`, `INDEX_LEASE_SECONDS` | `api`, `worker` | no | no | Commits indexed at once per process, and the lifetime of an indexing claim. `INDEX_CONCURRENCY=0` makes a process index nothing and serve only what another process, on any version, has indexed. |
@@ -84,8 +85,8 @@ Everything above suits a private installation as it comes. A deployment that ser
 - Publish terms of service and a privacy policy, and set `TERMS_URL` and `PRIVACY_URL`; set `CONTACT_EMAIL` to an address that reads takedown requests and content reports. The pages show all three in the footer and carry them in the head.
 - Know what the service does with content, and say it where your visitors can read it: it reads, indexes and serves what a repository publishes, keeps copies only to serve them, and serves or describes a skill by the license it carries ([format](../docs/specs/skill-repo.md#licenses)). A takedown is one entry on the blocked list and one purge through the [admin API](#the-admin-api); keep `ADMIN_TOKEN` where only the operator can reach it.
 - Decide what you vouch for. A `verified` repository is served in full on its default branch whatever its license says, and carries no provenance notice: put only repositories there whose owners agreed.
-- Analytics need consent where your visitors are: `GOOGLE_ANALYTICS_ID` loads the analytics script on every page. Leave it unset until the pages ask first.
-- The access log (`ACCESS_LOG`) holds client addresses. Give it a retention that your privacy policy states, or turn it off; the usage statistics hold none (ADR-0010).
+- Analytics load only after the visitor agrees in the banner the pages show, and never for a browser that signals a privacy preference. Say in your privacy policy what `GOOGLE_ANALYTICS_ID` sends where, or leave it unset.
+- The access log (`ACCESS_LOG`) holds client addresses. Give it a retention that your privacy policy states, or turn it off. The usage statistics hold none: set `USAGE_HASH_SECRET` so that distinct clients count once across replicas, and keep it with your other secrets (ADR-0027).
 - Put TLS, caching and rate limiting in front of the image ([below](#behind-a-reverse-proxy)), and a token without scopes in `GITHUB_TOKEN` so that the anonymous rate limit of the git host is not what your visitors get.
 
 ## Behind a reverse proxy

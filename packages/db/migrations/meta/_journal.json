@@ -71,6 +71,13 @@
       "when": 1790358513051,
       "tag": "0009_licenses",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790360257915,
+      "tag": "0010_drop-usage-client-keys",
+      "breakpoints": true
     }
   ]
 }

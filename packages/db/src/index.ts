@@ -61,7 +61,6 @@ export {
   addUsageClients,
   foldUsageClients,
   getRepoUsage,
-  getUsageClientKey,
   listTopRepositories,
   type RepositoryUsage,
   type UsageClient,

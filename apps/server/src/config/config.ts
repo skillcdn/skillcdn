@@ -5,9 +5,9 @@ import { type Cidr, parseCidr } from "../http/client-address.js";
 
 // The only module that reads the environment. Contract: .env.example and deploy/README.md.
 
-const SECRET_NAMES = ["DATABASE_URL", "GITHUB_TOKEN", "ADMIN_TOKEN"] as const;
-/** Shorter than this, a token is guessable enough to be a mistake. */
-const MIN_ADMIN_TOKEN_LENGTH = 32;
+const SECRET_NAMES = ["DATABASE_URL", "GITHUB_TOKEN", "ADMIN_TOKEN", "USAGE_HASH_SECRET"] as const;
+/** Shorter than this, a token or a secret is guessable enough to be a mistake. */
+const MIN_SECRET_LENGTH = 32;
 
 /** The limits on the work one repository may cause, unless the `INDEX_*` variables say otherwise. */
 export const INDEX_LIMIT_DEFAULTS: IndexLimits = {
@@ -99,7 +99,7 @@ const environmentSchema = z.object({
 
   ADMIN_TOKEN: z
     .string()
-    .min(MIN_ADMIN_TOKEN_LENGTH, `must be at least ${MIN_ADMIN_TOKEN_LENGTH} characters`)
+    .min(MIN_SECRET_LENGTH, `must be at least ${MIN_SECRET_LENGTH} characters`)
     .optional(),
   WEB_ROOT: z.string().min(1).optional(),
   PUBLIC_URL: z
@@ -131,6 +131,10 @@ const environmentSchema = z.object({
 
   USAGE_STATS: flag(true),
   USAGE_STATS_FLUSH_SECONDS: integer(15, 1, 3600),
+  USAGE_HASH_SECRET: z
+    .string()
+    .min(MIN_SECRET_LENGTH, `must be at least ${MIN_SECRET_LENGTH} characters`)
+    .optional(),
 
   REPO_TTL_SECONDS: integer(60, 0, 86_400),
   REF_TTL_SECONDS: integer(60, 0, 86_400),
@@ -199,6 +203,8 @@ export interface Config {
     readonly enabled: boolean;
     /** How often a process writes what it counted. */
     readonly flushMs: number;
+    /** What client hashes are keyed from (ADR-0027); unset, each process makes its own. */
+    readonly hashSecret: string | undefined;
   };
   readonly mounts: {
     /** How long what the host said about a repository name is trusted. */
@@ -311,7 +317,11 @@ export function loadConfig(
       },
     },
     admin: { token: env.ADMIN_TOKEN },
-    stats: { enabled: env.USAGE_STATS, flushMs: env.USAGE_STATS_FLUSH_SECONDS * 1000 },
+    stats: {
+      enabled: env.USAGE_STATS,
+      flushMs: env.USAGE_STATS_FLUSH_SECONDS * 1000,
+      hashSecret: env.USAGE_HASH_SECRET,
+    },
     mounts: {
       repoTtlMs: env.REPO_TTL_SECONDS * 1000,
       refTtlMs: env.REF_TTL_SECONDS * 1000,

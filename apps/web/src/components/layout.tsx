@@ -4,6 +4,7 @@ import { Link } from "../navigation.js";
 import { PATHS } from "../router.js";
 import { type LegalLinks, LINKS, readLegalLinks } from "../site.js";
 import { BrandSymbol } from "./brand.js";
+import { ConsentBanner } from "./consent-banner.js";
 import { LanguageSwitcher } from "./language-switcher.js";
 import styles from "./layout.module.css";
 
@@ -87,6 +88,7 @@ export function Layout(props: { readonly children: ReactNode }) {
           <p className={styles.footerNote}>{t.footer.tagline}</p>
         </div>
       </footer>
+      <ConsentBanner />
     </div>
   );
 }

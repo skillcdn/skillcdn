@@ -164,7 +164,7 @@ export async function runApi(config: Config, logger: Logger): Promise<void> {
   }
 
   const recorder = config.stats.enabled
-    ? new UsageRecorder({ database, clock: systemClock, logger })
+    ? new UsageRecorder({ database, clock: systemClock, logger, secret: config.stats.hashSecret })
     : undefined;
   recorder?.start(config.stats.flushMs);
 

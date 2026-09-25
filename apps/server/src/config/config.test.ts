@@ -206,12 +206,29 @@ describe("loadConfig", () => {
     }
   });
 
-  it("counts usage unless told not to", () => {
-    expect(loadConfig({ DATABASE_URL }, noFiles).stats).toEqual({ enabled: true, flushMs: 15_000 });
+  it("counts usage unless told not to, and keys client hashes from a secret when given one", () => {
+    expect(loadConfig({ DATABASE_URL }, noFiles).stats).toEqual({
+      enabled: true,
+      flushMs: 15_000,
+      hashSecret: undefined,
+    });
     expect(
       loadConfig({ DATABASE_URL, USAGE_STATS: "false", USAGE_STATS_FLUSH_SECONDS: "60" }, noFiles)
         .stats,
-    ).toEqual({ enabled: false, flushMs: 60_000 });
+    ).toMatchObject({ enabled: false, flushMs: 60_000 });
+    const secret = "s".repeat(32);
+    expect(loadConfig({ DATABASE_URL, USAGE_HASH_SECRET: secret }, noFiles).stats.hashSecret).toBe(
+      secret,
+    );
+    expect(
+      loadConfig(
+        { DATABASE_URL, USAGE_HASH_SECRET_FILE: "/run/secrets/usage" },
+        () => `${secret}\n`,
+      ).stats.hashSecret,
+    ).toBe(secret);
+    expect(problemsOf({ DATABASE_URL, USAGE_HASH_SECRET: "short" }).problems).toEqual([
+      "USAGE_HASH_SECRET: must be at least 32 characters",
+    ]);
   });
 
   it("reads secrets from files", () => {

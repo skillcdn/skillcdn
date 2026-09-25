@@ -285,6 +285,14 @@ export const en = {
     home: "Go to the front page",
   },
 
+  consent: {
+    label: "Analytics consent",
+    text: "This site can use analytics cookies to learn which pages help. Nothing is set until you say yes.",
+    privacy: "Privacy policy",
+    accept: "Allow analytics",
+    decline: "No thanks",
+  },
+
   footer: {
     tagline: "Skills for the AI you already use.",
     source: "Source on GitHub",

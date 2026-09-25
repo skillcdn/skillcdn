@@ -167,14 +167,22 @@ function headTags(tags: PageTags): { readonly html: string; readonly inlineScrip
     );
   }
   if (tags.googleAnalyticsId !== undefined) {
-    const id = tags.googleAnalyticsId;
-    // The bootstrap the analytics documentation gives, as one line so that its hash is stable.
-    const bootstrap = `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config",${JSON.stringify(id)})`;
+    // Consent first: consent mode starts with everything denied, nothing is loaded and nothing is
+    // stored until the visitor agrees in the banner the pages show, and a browser that signals a
+    // privacy preference (Global Privacy Control, Do Not Track) is never asked and never loads it.
+    // One line, so that its hash in the policy is stable; the banner talks to `skillcdnAnalytics`.
+    const bootstrap = [
+      "window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}window.gtag=gtag;",
+      'gtag("consent","default",{ad_storage:"denied",ad_user_data:"denied",ad_personalization:"denied",analytics_storage:"denied"});',
+      `(function(){var id=${JSON.stringify(tags.googleAnalyticsId)};var key="skillcdn-consent";`,
+      'var refused=navigator.globalPrivacyControl===true||navigator.doNotTrack==="1";',
+      "var stored=null;try{stored=localStorage.getItem(key)}catch(e){}",
+      'function load(){gtag("consent","update",{analytics_storage:"granted"});var s=document.createElement("script");s.async=true;s.src="https://www.googletagmanager.com/gtag/js?id="+encodeURIComponent(id);document.head.appendChild(s);gtag("js",new Date());gtag("config",id)}',
+      'window.skillcdnAnalytics={ask:!refused&&stored===null,decide:function(granted){try{localStorage.setItem(key,granted?"granted":"denied")}catch(e){}if(granted&&!refused){load()}}};',
+      'if(!refused&&stored==="granted"){load()}})()',
+    ].join("");
     inlineScripts.push(bootstrap);
-    elements.push(
-      `<script async src="https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(id)}"></script>`,
-      `<script>${bootstrap}</script>`,
-    );
+    elements.push(`<script>${bootstrap}</script>`);
   }
   return { html: elements.join("\n"), inlineScripts };
 }

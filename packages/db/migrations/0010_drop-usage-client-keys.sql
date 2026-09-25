@@ -1,0 +1,1 @@
+DROP TABLE "usage_client_keys" CASCADE;

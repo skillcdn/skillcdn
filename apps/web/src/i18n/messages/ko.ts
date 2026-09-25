@@ -274,6 +274,14 @@ export const ko: Messages = {
     home: "첫 페이지로 가기",
   },
 
+  consent: {
+    label: "분석 동의",
+    text: "어떤 페이지가 도움이 되는지 알기 위해 분석 쿠키를 사용할 수 있어요. 동의하기 전에는 아무것도 저장하지 않아요.",
+    privacy: "개인정보 처리방침",
+    accept: "분석 허용",
+    decline: "괜찮아요",
+  },
+
   footer: {
     tagline: "쓰던 AI에 더하는 스킬.",
     source: "GitHub의 소스",

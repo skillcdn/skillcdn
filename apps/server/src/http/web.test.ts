@@ -332,8 +332,14 @@ describe("the tags an operator configures", () => {
       '<link rel="privacy-policy" href="https://skills.example/privacy?v=2&amp;x=&quot;">',
     );
     expect(html).toContain('<meta name="skillcdn-contact" content="content@skills.example">');
-    expect(html).toContain('src="https://www.googletagmanager.com/gtag/js?id=G-ABC123XYZ"');
-    expect(html).toContain('gtag("config","G-ABC123XYZ")');
+    // Analytics are consent-gated: consent mode starts denied, the script is loaded by the page
+    // after the visitor agrees, and a privacy signal keeps it off (deploy/README.md).
+    expect(html).toContain('var id="G-ABC123XYZ"');
+    expect(html).toContain('gtag("consent","default",{ad_storage:"denied"');
+    expect(html).toContain("navigator.globalPrivacyControl===true");
+    expect(html).toContain('"https://www.googletagmanager.com/gtag/js?id="+encodeURIComponent(id)');
+    expect(html).toContain("window.skillcdnAnalytics={ask:");
+    expect(html).not.toContain('<script async src="https://www.googletagmanager.com');
     const policy = response?.headers.get("content-security-policy") ?? "";
     expect(policy).toMatch(
       /script-src 'self' https:\/\/\*\.googletagmanager\.com 'sha256-[A-Za-z0-9+/=]+'/,
@@ -345,7 +351,7 @@ describe("the tags an operator configures", () => {
       .address(request("/gh/acme/skills"), { mount: { ready: { index: { status: "ready" } } } })
       .text();
     expect(page).toContain('<meta name="google-site-verification"');
-    expect(page).toContain("gtag/js?id=G-ABC123XYZ");
+    expect(page).toContain('var id="G-ABC123XYZ"');
     // Not into what is not a page.
     expect(await tagged.respond(request("/llms.txt"))?.text()).not.toContain("gtag");
   });
