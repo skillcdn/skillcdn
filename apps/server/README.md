@@ -7,7 +7,7 @@ The single deployable. One build, one container image, several process roles ([A
 | `api` | `node dist/main.js api` | MCP over HTTP and the [REST API](../../docs/specs/rest.md) for public repositories. Stateless. Later: OAuth, webhooks. | implemented |
 | `migrate` | `node dist/main.js migrate` | Apply pending database migrations, then exit. | implemented |
 | `check` | `node dist/main.js check [directory]` | Read a directory as the indexer reads a commit and print what an agent would get: for repository authors, before they push ([convention](../../docs/specs/skill-repo.md), "Checking a repository before pushing"). Needs no database and no git host; exits with `1` when index diagnostics are present. From this checkout: `pnpm --filter @skillcdn/server run start check ../skills`. | implemented |
-| `worker` | `node dist/main.js worker` | Webhook-driven and scheduled re-indexing. | not yet; `api` indexes lazily until then |
+| `worker` | `node dist/main.js worker` | Webhook-driven and scheduled re-indexing. | not yet; `api` indexes lazily until then, unless `INDEX_CONCURRENCY=0` leaves indexing to another process |
 
 ## Running locally
 

@@ -36,6 +36,8 @@ export interface Harness {
 
 export interface HarnessOptions {
   readonly indexWaitMs?: number;
+  /** Commits indexed at once by this process; 0 leaves indexing to another process. */
+  readonly indexConcurrency?: number;
   readonly entitlements?: Entitlements;
   readonly host?: FixtureHost;
   readonly trustedProxies?: readonly string[];
@@ -80,7 +82,7 @@ export function createHarness(testDatabase: TestDatabase, options: HarnessOption
       web: { featured: (options.featured ?? []).map(addressOf) },
       indexing: {
         waitMs: options.indexWaitMs ?? 10_000,
-        concurrency: 2,
+        concurrency: options.indexConcurrency ?? 2,
         leaseMs: 60_000,
         limits: {
           maxTreeEntries: 1000,

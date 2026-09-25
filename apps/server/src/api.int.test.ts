@@ -1010,3 +1010,28 @@ describe("clients from the previous protocol era", () => {
     expect(getRequest.status).toBe(405);
   });
 });
+
+describe("a process that indexes nothing", () => {
+  it("serves what another process indexed and asks the git host for nothing itself", async () => {
+    const host = createFixtureHost("no-indexing");
+    const address = `/gh/acme/single-skill@${fixtureCommits("no-indexing").main}`;
+    const reader = harness({ host, indexConcurrency: 0, indexWaitMs: 50 });
+    const waiting = await reader.connect(address);
+    expect(waiting.getInstructions()).toContain("The commit is being indexed");
+    expect((await call(waiting, "browse")).text).toContain(INDEXING_NOTICE);
+    expect(host.calls.getTree).toBe(0);
+    await waiting.close();
+
+    // Another process, on the same database and git host, does the indexing.
+    const indexer = harness({ host });
+    const other = await indexer.connect(address);
+    await other.close();
+    await indexer.snapshots.idle();
+    expect(host.calls.getTree).toBe(1);
+
+    const served = await reader.connect(address);
+    expect(served.getInstructions()).toContain("SKILL.md: Writes commit messages");
+    expect((await call(served, "browse")).text).toContain("SKILL.md");
+    await served.close();
+  });
+});

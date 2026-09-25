@@ -185,7 +185,8 @@ const environmentSchema = z.object({
   VERIFIED_REPOSITORIES: repositoryList,
 
   INDEX_WAIT_MS: integer(20_000, 0, 120_000),
-  INDEX_CONCURRENCY: integer(2, 1, 64),
+  // 0: this process indexes nothing and serves only what another process has indexed.
+  INDEX_CONCURRENCY: integer(2, 0, 64),
   INDEX_LEASE_SECONDS: integer(120, 10, 3600),
   ...indexLimitFields,
 });
