@@ -82,6 +82,7 @@ export function createApi(
     limits,
     concurrency: config.indexing.concurrency,
     leaseMs: config.indexing.leaseMs,
+    newLeaseOwner: randomUUID,
   });
 
   const reader = new MountReader({ database, blobStore, gitHost, snapshots, limits });

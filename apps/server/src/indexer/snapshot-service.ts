@@ -39,6 +39,8 @@ export interface SnapshotServiceOptions {
   /** Indexing runs at once in this process. More than that stays pending for someone else. */
   readonly concurrency: number;
   readonly leaseMs: number;
+  /** A token for each claim, which nothing else must be able to guess or repeat. */
+  readonly newLeaseOwner: () => string;
   /** How often a waiting request looks at the database. */
   readonly pollMs?: number;
 }
@@ -139,12 +141,13 @@ export class SnapshotService {
       return snapshot;
     }
     const scope = { accountId: snapshot.accountId, snapshotId: snapshot.id };
-    const claimed = await claimSnapshot(database, scope, clock.now(), leaseMs);
+    const owner = this.#options.newLeaseOwner();
+    const claimed = await claimSnapshot(database, scope, owner, clock.now(), leaseMs);
     if (claimed === undefined) {
       return snapshot;
     }
     const abort = new AbortController();
-    const done = this.#index(mount, scope, abort.signal)
+    const done = this.#index(mount, scope, owner, abort.signal)
       .catch((error: unknown) => {
         // Indexing records its own failures. Whatever still escapes, such as the database going
         // away while a failure is recorded, must not become an unhandled rejection.
@@ -160,7 +163,12 @@ export class SnapshotService {
     return claimed;
   }
 
-  async #index(mount: Mount, scope: SnapshotScope, signal: AbortSignal): Promise<void> {
+  async #index(
+    mount: Mount,
+    scope: SnapshotScope,
+    owner: string,
+    signal: AbortSignal,
+  ): Promise<void> {
     const { database, gitHost, blobStore, clock, usage, logger, leaseMs } = this.#options;
     const log = logger.child({
       repo: `${mount.coordinates.owner}/${mount.coordinates.repo}`,
@@ -169,7 +177,7 @@ export class SnapshotService {
     });
     const started = clock.now().getTime();
     const renewal = setInterval(() => {
-      renewSnapshotLease(database, scope, clock.now(), leaseMs).catch((error: unknown) => {
+      renewSnapshotLease(database, scope, owner, clock.now(), leaseMs).catch((error: unknown) => {
         log.warn({ err: error }, "could not renew the indexing lease");
       });
     }, leaseMs / 3);
@@ -184,7 +192,7 @@ export class SnapshotService {
         signal,
       });
       signal.throwIfAborted();
-      const written = await writeSnapshotIndex(database, scope, index, clock.now());
+      const written = await writeSnapshotIndex(database, scope, owner, index, clock.now());
       if (!written) {
         log.warn("lost the indexing lease before the index was written");
         return;
@@ -211,7 +219,7 @@ export class SnapshotService {
       });
     } catch (error) {
       if (signal.aborted) {
-        await releaseSnapshot(database, scope, clock.now()).catch(() => {});
+        await releaseSnapshot(database, scope, owner, clock.now()).catch(() => {});
         log.info("indexing interrupted; the snapshot was handed back");
         return;
       }
@@ -223,7 +231,7 @@ export class SnapshotService {
       const backoff = Math.min(FIRST_RETRY_MS * 2 ** (attempts - 1), MAX_RETRY_MS);
       const retryInMs = Math.max(backoff, (hinted ?? 0) * 1000);
       const errorCode = error instanceof DomainError ? error.code : "indexer.failed";
-      await failSnapshot(database, scope, {
+      await failSnapshot(database, scope, owner, {
         errorCode,
         retryAt: new Date(clock.now().getTime() + retryInMs),
         now: clock.now(),

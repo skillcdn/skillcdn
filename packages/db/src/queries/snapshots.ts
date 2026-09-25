@@ -115,10 +115,14 @@ export async function getSnapshot(
  * Takes the right to index a snapshot, atomically. Succeeds when nobody has started, when the
  * previous holder's lease ran out, or when a failed attempt is due for a retry. Returns
  * `undefined` when someone else holds it or there is nothing to do.
+ *
+ * `owner` names the claim: renewing, writing, failing and releasing take the same token, so a
+ * holder whose lease ran out while it was paused cannot undo what its successor did.
  */
 export async function claimSnapshot(
   database: Database,
   scope: SnapshotScope,
+  owner: string,
   now: Date,
   leaseMs: number,
 ): Promise<SnapshotRecord | undefined> {
@@ -128,6 +132,7 @@ export async function claimSnapshot(
       status: "indexing",
       attempts: sql`${snapshots.attempts} + 1`,
       leaseExpiresAt: new Date(now.getTime() + leaseMs),
+      leaseOwner: owner,
       retryAt: null,
       errorCode: null,
       updatedAt: now,
@@ -146,17 +151,23 @@ export async function claimSnapshot(
   return row;
 }
 
-/** Extends the lease of a snapshot this process is indexing. False when the lease was lost. */
+/** The snapshot while the claim named `owner` holds it. */
+function heldBy(scope: SnapshotScope, owner: string) {
+  return and(scoped(scope), eq(snapshots.status, "indexing"), eq(snapshots.leaseOwner, owner));
+}
+
+/** Extends the lease of a snapshot this claim is indexing. False when the lease was lost. */
 export async function renewSnapshotLease(
   database: Database,
   scope: SnapshotScope,
+  owner: string,
   now: Date,
   leaseMs: number,
 ): Promise<boolean> {
   const rows = await drizzleOf(database)
     .update(snapshots)
     .set({ leaseExpiresAt: new Date(now.getTime() + leaseMs), updatedAt: now })
-    .where(and(scoped(scope), eq(snapshots.status, "indexing")))
+    .where(heldBy(scope, owner))
     .returning({ id: snapshots.id });
   return rows.length > 0;
 }
@@ -165,17 +176,19 @@ export async function renewSnapshotLease(
 export async function releaseSnapshot(
   database: Database,
   scope: SnapshotScope,
+  owner: string,
   now: Date,
 ): Promise<void> {
   await drizzleOf(database)
     .update(snapshots)
-    .set({ status: "pending", leaseExpiresAt: null, updatedAt: now })
-    .where(and(scoped(scope), eq(snapshots.status, "indexing")));
+    .set({ status: "pending", leaseExpiresAt: null, leaseOwner: null, updatedAt: now })
+    .where(heldBy(scope, owner));
 }
 
 export async function failSnapshot(
   database: Database,
   scope: SnapshotScope,
+  owner: string,
   failure: { readonly errorCode: string; readonly retryAt: Date; readonly now: Date },
 ): Promise<void> {
   await drizzleOf(database)
@@ -185,9 +198,10 @@ export async function failSnapshot(
       errorCode: failure.errorCode,
       retryAt: failure.retryAt,
       leaseExpiresAt: null,
+      leaseOwner: null,
       updatedAt: failure.now,
     })
-    .where(and(scoped(scope), eq(snapshots.status, "indexing")));
+    .where(heldBy(scope, owner));
 }
 
 export interface NewIndexEntry {
@@ -226,11 +240,12 @@ const ENTRY_BATCH_SIZE = 200;
 /**
  * Replaces the entries of a snapshot and marks it ready, in one transaction, so readers see
  * either no index or a complete one. Bodies must already be in the blob store. Returns false,
- * and writes nothing, when this process no longer holds the snapshot.
+ * and writes nothing, when the claim named `owner` no longer holds the snapshot.
  */
 export async function writeSnapshotIndex(
   database: Database,
   scope: SnapshotScope,
+  owner: string,
   index: SnapshotIndex,
   now: Date,
 ): Promise<boolean> {
@@ -238,7 +253,7 @@ export async function writeSnapshotIndex(
     const [held] = await tx
       .select({ id: snapshots.id })
       .from(snapshots)
-      .where(and(scoped(scope), eq(snapshots.status, "indexing")))
+      .where(heldBy(scope, owner))
       .for("update")
       .limit(1);
     if (held === undefined) {
@@ -287,6 +302,7 @@ export async function writeSnapshotIndex(
         indexedBytes: index.indexedBytes,
         diagnostics: [...index.diagnostics],
         leaseExpiresAt: null,
+        leaseOwner: null,
         indexedAt: now,
         updatedAt: now,
       })

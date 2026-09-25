@@ -129,6 +129,11 @@ export const snapshots = pgTable(
     attempts: integer().notNull().default(0),
     /** While indexing: after this instant another process may take over. */
     leaseExpiresAt: instant(),
+    /**
+     * While indexing: the claim that holds it. Renewing, writing, failing and releasing need it,
+     * so a holder whose lease ran out cannot undo what its successor did.
+     */
+    leaseOwner: text(),
     /** After a failure: not before this instant. */
     retryAt: instant(),
     errorCode: text(),

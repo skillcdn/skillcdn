@@ -75,11 +75,12 @@ async function readySnapshot(entries: NewIndexEntry[], bodies: Record<string, st
   for (const [sha, content] of Object.entries(bodies)) {
     await store.write(sha, content);
   }
-  expect(await claimSnapshot(database, scope, T0, 60_000)).toBeDefined();
+  expect(await claimSnapshot(database, scope, "builder", T0, 60_000)).toBeDefined();
   expect(
     await writeSnapshotIndex(
       database,
       scope,
+      "builder",
       { entries, truncated: false, indexedBytes: 0, diagnostics: [], version: 1 },
       T0,
     ),
@@ -202,30 +203,54 @@ describe("snapshot lifecycle", () => {
   it("lets exactly one claimant in, until the lease runs out", async () => {
     const scope = await pendingSnapshot();
     const claims = await Promise.all(
-      Array.from({ length: 5 }, () => claimSnapshot(database, scope, T0, 60_000)),
+      Array.from({ length: 5 }, (_, i) => claimSnapshot(database, scope, `p${i}`, T0, 60_000)),
     );
     expect(claims.filter((claim) => claim !== undefined)).toHaveLength(1);
+    const winner = `p${claims.findIndex((claim) => claim !== undefined)}`;
 
-    expect(await claimSnapshot(database, scope, minutes(0.5), 60_000)).toBeUndefined();
-    expect(await renewSnapshotLease(database, scope, minutes(0.5), 60_000)).toBe(true);
-    expect(await claimSnapshot(database, scope, minutes(1.2), 60_000)).toBeUndefined();
+    expect(await claimSnapshot(database, scope, "late", minutes(0.5), 60_000)).toBeUndefined();
+    expect(await renewSnapshotLease(database, scope, winner, minutes(0.5), 60_000)).toBe(true);
+    expect(await claimSnapshot(database, scope, "late", minutes(1.2), 60_000)).toBeUndefined();
 
-    const takeover = await claimSnapshot(database, scope, minutes(2), 60_000);
+    const takeover = await claimSnapshot(database, scope, "late", minutes(2), 60_000);
     expect(takeover).toMatchObject({ status: "indexing", attempts: 2 });
+  });
+
+  it("keeps a holder whose lease ran out from touching what its successor holds", async () => {
+    const scope = await pendingSnapshot();
+    const index = { entries: [], truncated: false, indexedBytes: 0, diagnostics: [], version: 1 };
+    expect(await claimSnapshot(database, scope, "first", T0, 60_000)).toBeDefined();
+    expect(await claimSnapshot(database, scope, "second", minutes(2), 60_000)).toMatchObject({
+      status: "indexing",
+      attempts: 2,
+    });
+    // The first holder, back from a long pause, can neither extend, finish, fail nor release it.
+    expect(await renewSnapshotLease(database, scope, "first", minutes(2), 60_000)).toBe(false);
+    expect(await writeSnapshotIndex(database, scope, "first", index, minutes(2))).toBe(false);
+    await failSnapshot(database, scope, "first", {
+      errorCode: "indexer.failed",
+      retryAt: minutes(9),
+      now: minutes(2),
+    });
+    await releaseSnapshot(database, scope, "first", minutes(2));
+    expect(await getSnapshot(database, scope)).toMatchObject({ status: "indexing", attempts: 2 });
+    expect(await renewSnapshotLease(database, scope, "second", minutes(2), 60_000)).toBe(true);
+    expect(await writeSnapshotIndex(database, scope, "second", index, minutes(3))).toBe(true);
+    expect(await getSnapshot(database, scope)).toMatchObject({ status: "ready", attempts: 2 });
   });
 
   it("hands a released snapshot to the next claimant", async () => {
     const scope = await pendingSnapshot();
-    await claimSnapshot(database, scope, T0, 60_000);
-    await releaseSnapshot(database, scope, T0);
+    await claimSnapshot(database, scope, "first", T0, 60_000);
+    await releaseSnapshot(database, scope, "first", T0);
     expect((await getSnapshot(database, scope))?.status).toBe("pending");
-    expect(await claimSnapshot(database, scope, T0, 60_000)).toBeDefined();
+    expect(await claimSnapshot(database, scope, "second", T0, 60_000)).toBeDefined();
   });
 
   it("retries a failed snapshot only when it is due", async () => {
     const scope = await pendingSnapshot();
-    await claimSnapshot(database, scope, T0, 60_000);
-    await failSnapshot(database, scope, {
+    await claimSnapshot(database, scope, "first", T0, 60_000);
+    await failSnapshot(database, scope, "first", {
       errorCode: "git_host.rate_limited",
       retryAt: minutes(10),
       now: T0,
@@ -235,8 +260,8 @@ describe("snapshot lifecycle", () => {
       errorCode: "git_host.rate_limited",
       retryAt: minutes(10),
     });
-    expect(await claimSnapshot(database, scope, minutes(9), 60_000)).toBeUndefined();
-    expect(await claimSnapshot(database, scope, minutes(10), 60_000)).toMatchObject({
+    expect(await claimSnapshot(database, scope, "second", minutes(9), 60_000)).toBeUndefined();
+    expect(await claimSnapshot(database, scope, "second", minutes(10), 60_000)).toMatchObject({
       status: "indexing",
       errorCode: null,
     });
@@ -245,21 +270,22 @@ describe("snapshot lifecycle", () => {
   it("refuses to write an index for a snapshot it no longer holds", async () => {
     const scope = await pendingSnapshot();
     const index = { entries: [], truncated: false, indexedBytes: 0, diagnostics: [], version: 1 };
-    expect(await writeSnapshotIndex(database, scope, index, T0)).toBe(false);
-    expect(await renewSnapshotLease(database, scope, T0, 60_000)).toBe(false);
+    expect(await writeSnapshotIndex(database, scope, "nobody", index, T0)).toBe(false);
+    expect(await renewSnapshotLease(database, scope, "nobody", T0, 60_000)).toBe(false);
 
     const stranger = { ...scope, accountId: "00000000-0000-7000-8000-000000000000" };
-    expect(await claimSnapshot(database, stranger, T0, 60_000)).toBeUndefined();
+    expect(await claimSnapshot(database, stranger, "stranger", T0, 60_000)).toBeUndefined();
     expect(await getSnapshot(database, stranger)).toBeUndefined();
   });
 
   it("replaces the entries of an earlier attempt and records the outcome", async () => {
     const scope = await pendingSnapshot();
-    await claimSnapshot(database, scope, T0, 60_000);
+    await claimSnapshot(database, scope, "first", T0, 60_000);
     const diagnostics = [{ path: "skills/x/SKILL.md", code: "invalid_name", message: "bad" }];
     await writeSnapshotIndex(
       database,
       scope,
+      "first",
       {
         entries: [entry({ path: "a.md" })],
         truncated: true,
@@ -277,7 +303,7 @@ describe("snapshot lifecycle", () => {
     expect(await getSnapshotDiagnostics(database, scope)).toEqual(diagnostics);
     expect(await getEntry(database, scope, "a.md")).toMatchObject({ path: "a.md" });
     // Once ready, nobody can claim it again.
-    expect(await claimSnapshot(database, scope, minutes(60), 60_000)).toBeUndefined();
+    expect(await claimSnapshot(database, scope, "second", minutes(60), 60_000)).toBeUndefined();
   });
 
   it("sends an index that older reading rules built back for a rebuild", async () => {
@@ -298,8 +324,8 @@ describe("snapshot lifecycle", () => {
     });
     const first = await ensureSnapshot(database, scope, commit, 1, T0);
     const snapshot = { accountId: repo.accountId, snapshotId: first.id };
-    await claimSnapshot(database, snapshot, T0, 60_000);
-    await writeSnapshotIndex(database, snapshot, built(1), T0);
+    await claimSnapshot(database, snapshot, "older", T0, 60_000);
+    await writeSnapshotIndex(database, snapshot, "older", built(1), T0);
     expect(await ensureSnapshot(database, scope, commit, 1, T0)).toMatchObject({
       status: "ready",
       indexVersion: 1,
@@ -310,11 +336,11 @@ describe("snapshot lifecycle", () => {
       status: "pending",
       indexVersion: 1,
     });
-    expect(await claimSnapshot(database, snapshot, minutes(1), 60_000)).toMatchObject({
+    expect(await claimSnapshot(database, snapshot, "newer", minutes(1), 60_000)).toMatchObject({
       status: "indexing",
       attempts: 2,
     });
-    await writeSnapshotIndex(database, snapshot, built(2), minutes(1));
+    await writeSnapshotIndex(database, snapshot, "newer", built(2), minutes(1));
     // Older rules never undo a newer index.
     expect(await ensureSnapshot(database, scope, commit, 1, minutes(2))).toMatchObject({
       status: "ready",
