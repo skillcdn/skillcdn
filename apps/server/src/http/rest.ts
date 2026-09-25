@@ -41,7 +41,8 @@ export interface RestDependencies {
   readonly mountAt: (c: Context<AppEnv>, prefix: string) => Promise<Mount | Response>;
   /** Resolves an address without a request around it. `undefined` when it does not resolve. */
   readonly mountOf: (address: Address) => Promise<Mount | undefined>;
-  readonly featured: readonly Address[];
+  /** The addresses the operator features, as the lists say right now. */
+  readonly featured: () => Promise<readonly Address[]>;
   /** Milliseconds from a clock that never goes backwards. */
   readonly now: () => number;
 }
@@ -73,7 +74,7 @@ const fileQuery = z.object({
   limit: z.coerce.number().int().min(1).max(READ_FILE_MAX_LIMIT).optional(),
 });
 
-function errorBody(code: string, message: string, extra: Record<string, unknown> = {}) {
+export function errorBody(code: string, message: string, extra: Record<string, unknown> = {}) {
   return { error: { code, message, ...extra } };
 }
 
@@ -534,7 +535,7 @@ export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies):
 
   const loadFeatured = async (): Promise<RestFeatured> => {
     const items = await Promise.all(
-      featured.map(async (address): Promise<RestFeatured["items"]> => {
+      (await featured()).map(async (address): Promise<RestFeatured["items"]> => {
         try {
           const mount = await mountOf(address);
           if (mount === undefined) {

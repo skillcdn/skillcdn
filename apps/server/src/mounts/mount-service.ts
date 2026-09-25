@@ -79,8 +79,8 @@ export interface MountServiceOptions {
   readonly refTtlMs: number;
   /** How much older than its TTL a fact may be when the host cannot be asked. */
   readonly staleGraceMs: number;
-  /** Repositories the operator vouches for, as {@link repositoryKey} spells them. */
-  readonly verifiedRepositories: ReadonlySet<string>;
+  /** Whether the operator vouches for a repository, by the key {@link repositoryKey} gives it. */
+  readonly isVerified: (key: string) => Promise<boolean>;
 }
 
 const MAX_REMEMBERED_MISSING = 10_000;
@@ -150,10 +150,16 @@ export class MountService {
       repository: {
         hostRepoId: repo.repository.hostRepoId,
         visibility: repo.repository.visibility,
+        host: address.host,
+        owner: repo.repository.owner.login,
+        name: repo.repository.name,
       },
     });
     if (!decision.allowed) {
-      throw new MountError("not_allowed", decision.reason);
+      throw new MountError(
+        decision.hidden === true ? "repo_not_found" : "not_allowed",
+        decision.reason,
+      );
     }
 
     const refKey =
@@ -179,7 +185,9 @@ export class MountService {
       repo,
       commit: resolved.commit,
       limits: decision.limits ?? {},
-      verified: this.#options.verifiedRepositories.has(repositoryKey(address)),
+      // Whoever vouched for the repository vouched for its default branch (ADR-0026).
+      verified:
+        address.ref === undefined && (await this.#options.isVerified(repositoryKey(address))),
       trustedUntil: resolved.trustedUntil,
     };
   }

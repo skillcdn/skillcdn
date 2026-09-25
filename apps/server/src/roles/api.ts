@@ -23,6 +23,8 @@ import { SnapshotService } from "../indexer/snapshot-service.js";
 import type { Logger } from "../logger.js";
 import { MountReader } from "../mounts/mount-reader.js";
 import { MountService } from "../mounts/mount-service.js";
+import { createOperatorEntitlements } from "../operator/entitlements.js";
+import { OperatorLists } from "../operator/lists.js";
 import { noUsageStats, UsageRecorder, type UsageStats } from "../stats/usage-recorder.js";
 import { SERVER_NAME, SERVER_VERSION } from "../version.js";
 
@@ -44,8 +46,9 @@ export interface ApiPorts {
 }
 
 export type ApiConfig = Pick<Config, "mounts" | "indexing"> & {
-  /** Left out, there are no operator-configured featured addresses. */
-  readonly web?: Pick<Config["web"], "featured"> & { readonly publicUrl?: string | undefined };
+  readonly web?: { readonly publicUrl?: string | undefined };
+  /** Left out, there is no admin API. */
+  readonly admin?: Config["admin"];
   /** Left out, no proxy is trusted and every request is logged. */
   readonly http?: Pick<
     Config["http"],
@@ -57,11 +60,18 @@ export type ApiConfig = Pick<Config, "mounts" | "indexing"> & {
 export function createApi(
   config: ApiConfig,
   ports: ApiPorts,
-): { readonly app: Hono<AppEnv>; readonly snapshots: SnapshotService } {
-  const { database, gitHost, clock, entitlements, usage, logger } = ports;
+): {
+  readonly app: Hono<AppEnv>;
+  readonly snapshots: SnapshotService;
+  readonly lists: OperatorLists;
+} {
+  const { database, gitHost, clock, usage, logger } = ports;
   const blobStore = createBlobStore(database);
   const limits: IndexLimits = config.indexing.limits;
 
+  // The operator's deny list decides first; whatever the port was given decides the rest.
+  const lists = new OperatorLists({ database, clock });
+  const entitlements = createOperatorEntitlements(lists, ports.entitlements);
   const mounts = new MountService({
     database,
     gitHost,
@@ -70,7 +80,7 @@ export function createApi(
     repoTtlMs: config.mounts.repoTtlMs,
     refTtlMs: config.mounts.refTtlMs,
     staleGraceMs: Math.max(config.mounts.repoTtlMs, config.mounts.refTtlMs) * STALE_GRACE_FACTOR,
-    verifiedRepositories: config.mounts.verifiedRepositories,
+    isVerified: (key) => lists.isVerified(key),
   });
   const snapshots = new SnapshotService({
     database,
@@ -92,7 +102,8 @@ export function createApi(
     mounts,
     snapshots,
     reader,
-    featured: config.web?.featured ?? [],
+    lists,
+    admin: config.admin?.token === undefined ? undefined : { token: config.admin.token },
     web: ports.web,
     logger,
     isShuttingDown: ports.isShuttingDown,
@@ -116,7 +127,7 @@ export function createApi(
       publicUrl: config.web?.publicUrl,
     },
   });
-  return { app, snapshots };
+  return { app, snapshots, lists };
 }
 
 /**

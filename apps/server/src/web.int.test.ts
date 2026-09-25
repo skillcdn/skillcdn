@@ -1,4 +1,3 @@
-import { addUsage, findRepoByAlias, usageDayOf } from "@skillcdn/db";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadWebBundle, type WebBundle } from "./http/web.js";
@@ -175,55 +174,22 @@ describe("a server with a web build", () => {
     expect((await inputOf(bad)).data).toEqual({});
   });
 
-  it("lists the featured and the popular repositories in the sitemap", async () => {
-    const host = createFixtureHost("web-sitemap");
-    const h = createHarness(testDatabase, {
-      web,
-      host,
-      featured: ["/gh/acme/multi-skill/skills"],
-    });
-    // Make the repositories known, then give one of them enough distinct clients to count.
-    await h.request(`/gh/acme/multi-skill@${fixtureCommits("web-sitemap").main}`, {
-      headers: BROWSER,
-    });
-    await h.request(`/gh/acme/single-skill@${fixtureCommits("web-sitemap").main}`, {
-      headers: BROWSER,
-    });
-    await h.snapshots.idle();
-    const day = usageDayOf(new Date());
-    for (const [name, count] of [
-      ["multi-skill", 3],
-      ["single-skill", 1],
-    ] as const) {
-      const repo = await findRepoByAlias(testDatabase.database, {
-        host: "gh",
-        owner: "acme",
-        repo: name,
-      });
-      if (repo === undefined) {
-        throw new Error(`${name} was not saved`);
-      }
-      await addUsage(
-        testDatabase.database,
-        [
-          {
-            scope: { accountId: repo.accountId, repoId: repo.id },
-            day,
-            metric: "client",
-            subject: "",
-            count,
-          },
-        ],
-        new Date(),
-      );
-    }
-
+  it("lists the featured and the vouched-for repositories in the sitemap, and nothing else", async () => {
+    const h = createHarness(testDatabase, { web });
+    await h.lists.add("featured", "/gh/acme/multi-skill/skills");
+    await h.lists.add("verified", "/gh/Acme/single-skill");
+    await h.lists.add("featured", "/gh/acme/single-skill@main");
+    // A blocked repository is never listed, whatever else says so.
+    await h.lists.add("featured", "/gh/acme/private-repo");
+    await h.lists.add("blocked", "/gh/acme/private-repo");
+    // The sitemap comes from the lists alone; nothing has to be indexed or visited first.
     const xml = await (await h.request("/sitemap.xml")).text();
     expect(xml).toContain("<loc>https://skills.example/gh/acme/multi-skill/skills</loc>");
-    expect(xml).toContain("<loc>https://skills.example/gh/acme/multi-skill</loc>");
-    expect(xml).toContain("<loc>https://skills.example/gh/acme/multi-skill?lang=ko</loc>");
-    // One client is not popularity.
-    expect(xml).not.toContain("single-skill");
+    expect(xml).toContain("<loc>https://skills.example/gh/acme/multi-skill/skills?lang=ko</loc>");
+    expect(xml).toContain("<loc>https://skills.example/gh/acme/single-skill</loc>");
+    expect(xml).toContain("<loc>https://skills.example/gh/acme/single-skill@main</loc>");
+    expect(xml).not.toContain("private-repo");
+    expect(xml).not.toContain("<loc>https://skills.example/gh/acme/multi-skill</loc>");
     expect((await h.request("/robots.txt")).status).toBe(200);
   });
 

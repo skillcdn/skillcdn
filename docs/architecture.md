@@ -54,6 +54,7 @@ Where new things go:
 | `worker` | Consumes the job queue and runs schedules. Jobs are idempotent and resumable, so a worker may be stopped at any moment. | Any number; interruptible capacity is fine. |
 | `migrate` | Applies pending migrations, then exits. | Run once, before a new version rolls out. |
 | `check` | Reads a directory as the indexer reads a commit and prints what an agent would get; for repository authors, before they push ([ADR-0020](adr/0020-a-check-role-reads-a-working-tree-with-the-indexer.md)). Needs no database and no git host. | Runs on an author's machine or in a repository's CI, then exits. |
+| `purge` | Removes what was indexed for one repository, then exits ([ADR-0026](adr/0026-serving-follows-the-license-and-the-operators-lists.md)). The same purge is a route of the admin API. | Runs from an operator's shell when content must go. |
 
 For a single-container install, a configuration flag lets `api` run the worker loop in-process.
 
@@ -130,7 +131,7 @@ Infrastructure-level caching, DNS, TLS and edge configuration are outside this r
 - **Fail closed.** No permission answer means no access. A repo that does not exist and a repo the caller may not see produce the same response.
 - **Tokens.** Git-host user tokens are encrypted at rest and never leave the server. Project tokens are stored as hashes. Our own access tokens are short-lived. Tokens and authorization headers are never logged.
 - **Outbound requests.** Host adapters connect only to operator-configured base URLs, never to a URL taken from user input.
-- **Provenance.** Repos whose owner has verified them, or that the operator lists as ones it vouches for until owners can ([ADR-0019](adr/0019-the-operator-vouches-for-repositories-until-owners-can.md)), are *verified*; responses from every other repo carry a provenance notice that warns about what the content says beyond the user's task.
+- **Provenance.** Repos whose owner has verified them, or that the operator lists as ones it vouches for until owners can ([ADR-0019](adr/0019-the-operator-vouches-for-repositories-until-owners-can.md)), are *verified* on their default branch; responses from every other mount carry a provenance notice that warns about what the content says beyond the user's task. The operator's lists live in the database behind a token-protected admin API, and a repository on its blocked list answers like one that does not exist ([ADR-0026](adr/0026-serving-follows-the-license-and-the-operators-lists.md)).
 - **Supply chain.** Lockfile with integrity hashes, a minimum release age for new dependency versions, an allow-list for install scripts, actions pinned by commit, secret scanning, and provenance plus SBOM attestations on published images.
 
 ## Extension points
@@ -138,7 +139,7 @@ Infrastructure-level caching, DNS, TLS and edge configuration are outside this r
 The business model is not in this codebase. What the code provides is structure that commercial and enterprise builds can attach to without forking:
 
 - **Account** is the tenant unit and maps to a git-host organization or user, so the same model serves teams and individuals.
-- **`Entitlements` port:** answers "may this account do X, and within what limits". The default implementation allows everything. Enforcement points ask this port and never branch on a plan name.
+- **`Entitlements` port:** answers "may this account do X, and within what limits". The default implementation allows everything; the composition root wraps it with the operator's blocked list, which denies as if the repository did not exist. Enforcement points ask this port and never branch on a plan name.
 - **`UsageSink` port:** receives neutral usage events (what happened, for which account, how much). The default implementation discards them.
 - **Extension registry** at the composition root: a build may register alternative port implementations and additional routes, modules and jobs. Such builds layer their own packages on top of this image; this repository has no knowledge of them.
 

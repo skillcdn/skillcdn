@@ -20,6 +20,16 @@ export {
   servedEntries,
 } from "./queries/entries.js";
 export {
+  addOperatorRepository,
+  listOperatorRepositories,
+  OPERATOR_LIST_KINDS,
+  type OperatorListKind,
+  type OperatorRepository,
+  type PurgeResult,
+  purgeRepository,
+  removeOperatorRepository,
+} from "./queries/operator.js";
+export {
   type CachedRef,
   deleteRepoAlias,
   findCachedRef,

@@ -2,6 +2,7 @@ import type { HostRepository } from "@skillcdn/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { drizzleOf } from "./client.js";
 import {
+  addOperatorRepository,
   claimSnapshot,
   countEntries,
   createBlobStore,
@@ -19,10 +20,13 @@ import {
   getSnapshotDiagnostics,
   listDirectory,
   listEntries,
+  listOperatorRepositories,
   listSkillFiles,
   migrateDatabase,
   type NewIndexEntry,
+  purgeRepository,
   releaseSnapshot,
+  removeOperatorRepository,
   renewSnapshotLease,
   type SnapshotScope,
   saveCachedRef,
@@ -705,5 +709,81 @@ describe("blob store", () => {
     await store.write("hash-legacy", encode("text only"));
     expect(await store.missing(["hash-legacy"])).toEqual(new Set());
     expect(await store.read("hash-legacy")).toBe("text only");
+  });
+});
+
+describe("the operator's lists", () => {
+  it("keep one entry per kind and address, idempotently", async () => {
+    await addOperatorRepository(database, "featured", "/gh/acme/skills");
+    await addOperatorRepository(database, "featured", "/gh/acme/skills");
+    await addOperatorRepository(database, "verified", "/gh/acme/skills");
+    await addOperatorRepository(database, "blocked", "/gh/acme/private");
+    expect(
+      (await listOperatorRepositories(database)).map((entry) => [entry.kind, entry.address]),
+    ).toEqual([
+      ["featured", "/gh/acme/skills"],
+      ["verified", "/gh/acme/skills"],
+      ["blocked", "/gh/acme/private"],
+    ]);
+    expect(
+      (await listOperatorRepositories(database, "blocked")).map((entry) => entry.address),
+    ).toEqual(["/gh/acme/private"]);
+    expect(await removeOperatorRepository(database, "featured", "/gh/acme/skills")).toBe(true);
+    expect(await removeOperatorRepository(database, "featured", "/gh/acme/skills")).toBe(false);
+    expect((await listOperatorRepositories(database, "featured")).length).toBe(0);
+  });
+});
+
+describe("purging a repository", () => {
+  it("removes its snapshots and the bodies nothing references, and nothing else", async () => {
+    const store = createBlobStore(database);
+    await store.write("shared-body", new TextEncoder().encode("shared"));
+    await store.write("own-body", new TextEncoder().encode("own"));
+    const kept = await readySnapshot([entry({ path: "keep.md", blobSha: "shared-body" })]);
+    const alias = { host: "gh" as const, owner: `owner${nextHostId}`, repo: "skills" };
+    const repo = await saveRepository(database, alias, hostRepository(), T0);
+    const snapshot = await ensureSnapshot(
+      database,
+      { accountId: repo.accountId, repoId: repo.id },
+      "b".repeat(40),
+      1,
+      T0,
+    );
+    const scope = { accountId: repo.accountId, snapshotId: snapshot.id };
+    await claimSnapshot(database, scope, "builder", T0, 60_000);
+    await writeSnapshotIndex(
+      database,
+      scope,
+      "builder",
+      {
+        entries: [
+          entry({ path: "a.md", blobSha: "shared-body" }),
+          entry({ path: "b.md", blobSha: "own-body" }),
+        ],
+        truncated: false,
+        indexedBytes: 0,
+        diagnostics: [],
+        version: 1,
+      },
+      T0,
+    );
+    await saveCachedRef(
+      database,
+      { accountId: repo.accountId, repoId: repo.id },
+      "",
+      "b".repeat(40),
+      T0,
+    );
+
+    expect(await purgeRepository(database, { ...alias, repo: "never" })).toBeUndefined();
+    expect(await purgeRepository(database, alias)).toEqual({ snapshots: 1, blobs: 1 });
+    expect(await getSnapshot(database, scope)).toBeUndefined();
+    expect(
+      await findCachedRef(database, { accountId: repo.accountId, repoId: repo.id }, ""),
+    ).toBeUndefined();
+    expect(await store.read("shared-body")).toBe("shared");
+    expect(await store.read("own-body")).toBeUndefined();
+    expect(await getEntry(database, kept, "keep.md")).toBeDefined();
+    expect(await findRepoByAlias(database, alias)).toBeDefined();
   });
 });

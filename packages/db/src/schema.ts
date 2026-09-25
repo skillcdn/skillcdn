@@ -343,6 +343,29 @@ export const usageClientKeys = pgTable(
 );
 
 /**
+ * The operator's lists (ADR-0026): repositories it vouches for, addresses it features, and
+ * repositories it does not serve. Operator data, not tenant data: written through the admin
+ * API, read by every process.
+ */
+export const operatorRepositories = pgTable(
+  "operator_repositories",
+  {
+    id: id(),
+    kind: text({ enum: ["verified", "featured", "blocked"] }).notNull(),
+    /** Canonical: `/gh/owner/repo`; a featured entry may carry a ref and a path. */
+    address: text().notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex("operator_repositories_kind_address_key").on(table.kind, table.address),
+    check(
+      "operator_repositories_kind_check",
+      sql`${table.kind} in ('verified', 'featured', 'blocked')`,
+    ),
+  ],
+);
+
+/**
  * File bodies keyed by git blob hash: content-addressed, so the hash is the primary key and one
  * row serves every commit, ref and fork. Not tenant data; reads go through an index entry.
  */

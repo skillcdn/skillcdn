@@ -29,13 +29,23 @@ export interface EntitlementQuery {
   readonly action: EntitlementAction;
   /** The account that owns the repository. */
   readonly account: HostAccount;
-  readonly repository: { readonly hostRepoId: string; readonly visibility: "public" | "private" };
+  readonly repository: {
+    readonly hostRepoId: string;
+    readonly visibility: "public" | "private";
+    /** The repository as an address names it: the host key, the owner and the name. */
+    readonly host: string;
+    readonly owner: string;
+    readonly name: string;
+  };
 }
 
 export type EntitlementDecision =
   | { readonly allowed: true; readonly limits?: Partial<IndexLimits> }
-  /** `reason` is shown to the caller: keep it free of anything account-specific. */
-  | { readonly allowed: false; readonly reason: string };
+  /**
+   * `reason` is shown to the caller: keep it free of anything account-specific. A `hidden`
+   * refusal is answered as if the repository did not exist, which is what a deny list needs.
+   */
+  | { readonly allowed: false; readonly reason: string; readonly hidden?: boolean };
 
 /**
  * Answers "may this account do X, and within what limits". Enforcement points ask this port and

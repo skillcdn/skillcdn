@@ -41,12 +41,11 @@ The server is configured only through environment variables. [`.env.example`](..
 | `GITHUB_TOKEN` | `api`, `worker` | no | **yes** | Optional, no scopes needed. Raises the GitHub rate limit for public-repo reads; without it the anonymous limit applies to the whole deployment. |
 | `WEB_ROOT` | `api` | no | no | Directory of a web UI build. The image sets `/app/web`; set it to an empty value to run without a UI. The build's render module runs inside the server, so only ever point this at a build made from this repository. |
 | `PUBLIC_URL` | `api` | no | no | The origin visitors use, such as `https://skills.example.com`. Goes into canonical links, the sitemap and the URLs pages show. Default `https://skillcdn.ai`, the hosted service, under `NODE_ENV=production` (which the image sets); otherwise the origin of each request. Self-hosting: set your own origin, or canonical links and the sitemap point at the hosted service. |
-| `FEATURED_ADDRESSES` | `api` | no | no | Additional featured repository addresses in the explorer, comma-separated (`/gh/owner/repo`). At most 24. Default: none. |
+| `ADMIN_TOKEN` | `api` | no | **yes** | Bearer token of the [admin API](#the-admin-api). At least 32 characters. Unset: the admin API does not exist. |
 | `GOOGLE_SITE_VERIFICATION` | `api` | no | no | The content of the `google-site-verification` meta tag a search console asks for; written into the head of every page. |
 | `GOOGLE_ANALYTICS_ID` | `api` | no | no | A Google Analytics measurement id (`G-...`). Set, every page loads the analytics script, and the content security policy allows its sources and nothing else new. Whether visitors must consent first depends on where they are; the UI ships no consent banner. |
 | `USAGE_STATS`, `USAGE_STATS_FLUSH_SECONDS` | `api` | no | no | Daily counts per public repository (connections, tool calls, skill loads, distinct clients), without anything that identifies a client: addresses are hashed under a key that is deleted with the day. Defaults `true` and `15`. |
 | `REPO_TTL_SECONDS`, `REF_TTL_SECONDS` | `api` | no | no | How long repository facts and moving refs are trusted before revalidation. Default `60` each. |
-| `VERIFIED_REPOSITORIES` | `api` | no | no | Repositories the operator vouches for, comma-separated as `/gh/owner/repo`: results from them carry no provenance notice, and their pages no warning ([ADR-0019](../docs/adr/0019-the-operator-vouches-for-repositories-until-owners-can.md)). Default: none. |
 | `INDEX_WAIT_MS` | `api` | no | no | How long a tool call waits for a new commit's index. Default `20000`. |
 | `INDEX_CONCURRENCY`, `INDEX_LEASE_SECONDS` | `api`, `worker` | no | no | Commits indexed at once per process, and the lifetime of an indexing claim. `INDEX_CONCURRENCY=0` makes a process index nothing and serve only what another process, on any version, has indexed. |
 | `INDEX_MAX_*`, `READ_MAX_FILE_BYTES` | `api`, `worker`, `check` | no | no | Limits on the work one repository may cause, including the unpacked size of a commit archive; see [`.env.example`](../.env.example). A skill with a file over `READ_MAX_FILE_BYTES` is not listed through the MCP skills extension. `check` reads these and nothing else. |
@@ -54,6 +53,26 @@ The server is configured only through environment variables. [`.env.example`](..
 Invalid configuration stops the process with exit code `78` and a message that names the variable and the rule, never the value.
 
 Every secret `NAME` may instead be provided as `NAME_FILE`, a path to a file holding the value, so secret mounts work. Secrets are injected at runtime by the platform (for example a task definition that references a secret store). They are never build arguments, image layers or committed files.
+
+## The admin API
+
+The operator's lists and the takedown ([ADR-0026](../docs/adr/0026-serving-follows-the-license-and-the-operators-lists.md)) are managed through `/admin/v1`, which exists only while `ADMIN_TOKEN` is set and answers to nothing else than that token as a bearer token. Keep it off the public internet where you can: it is meant for an operator's shell, not for browsers. Every answer is JSON and never cached.
+
+| Request | What it does |
+|---|---|
+| `GET /admin/v1/repositories[?kind=verified|featured|blocked]` | The lists, in the order entries were added. |
+| `PUT /admin/v1/repositories/<kind>/gh/<owner>/<repo>[][/path]` | Adds an entry and answers with the address it was stored under. A `verified` or `blocked` entry names a repository, without a ref or a path; a `featured` one is any address. Adding what is already there changes nothing. |
+| `DELETE /admin/v1/repositories/<kind>/gh/<owner>/<repo>[][/path]` | Removes an entry; `404` when there was none. |
+| `POST /admin/v1/purge/gh/<owner>/<repo>` | Removes what was indexed for the repository: its snapshots, their index entries, its cached refs, and the file bodies nothing references any more. Answers with the counts, or `404` when the repository was never indexed. The next request for the repository indexes it again, unless it is blocked as well. |
+
+What the lists do: a `verified` repository carries no provenance notice on its default branch; a `featured` address is shown by the explorer; a `blocked` repository answers exactly like one that does not exist. The sitemap lists the featured addresses and the verified repositories, minus anything blocked. A process sees a change made through another process within thirty seconds.
+
+```sh
+curl -X PUT -H "Authorization: Bearer $ADMIN_TOKEN" https://skills.example.com/admin/v1/repositories/blocked/gh/owner/repo
+curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" https://skills.example.com/admin/v1/purge/gh/owner/repo
+```
+
+The same purge runs without the API, from a shell with the database configured: `node dist/main.js purge /gh/owner/repo`.
 
 ## Behind a reverse proxy
 

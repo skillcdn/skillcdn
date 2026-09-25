@@ -645,8 +645,9 @@ describe("a repository with a manifest", () => {
 });
 
 describe("a repository the operator vouches for", () => {
-  it("carries no provenance notice, while every other repository does", async () => {
-    const h = harness({ verified: ["/gh/Acme/single-skill"] });
+  it("carries no provenance notice on its default branch, while every other mount does", async () => {
+    const h = harness();
+    await h.lists.add("verified", "/gh/Acme/single-skill");
     const vouched = await h.connect("/gh/acme/single-skill");
     const skill = await call(vouched, "load_skill", { path: "SKILL.md" });
     expect(skill.isError).toBe(false);
@@ -656,9 +657,35 @@ describe("a repository the operator vouches for", () => {
     );
     await vouched.close();
 
+    // The word given holds for the default branch; another ref is whatever it is.
+    const release = await h.connect("/gh/acme/single-skill@release/1.2:");
+    expect((await call(release, "browse_repo")).text).toContain(PROVENANCE_NOTICE);
+    await release.close();
+
     const other = await h.connect("/gh/acme/multi-skill");
     expect((await call(other, "browse_repo")).text).toContain(PROVENANCE_NOTICE);
     await other.close();
+
+    await h.lists.remove("verified", "/gh/Acme/single-skill");
+    const withdrawn = await h.connect("/gh/acme/single-skill");
+    expect((await call(withdrawn, "browse_repo")).text).toContain(PROVENANCE_NOTICE);
+    await withdrawn.close();
+  });
+});
+
+describe("a repository the operator blocks", () => {
+  it("answers exactly as one that does not exist, for every route", async () => {
+    const h = harness();
+    const missing = await h.request("/gh/acme/does-not-exist", { method: "POST", body: "{}" });
+    await h.lists.add("blocked", "/gh/acme/multi-skill");
+    const blocked = await h.request("/gh/acme/multi-skill", { method: "POST", body: "{}" });
+    expect(blocked.status).toBe(missing.status);
+    expect(await blocked.text()).toBe(await missing.text());
+    const rest = await h.request("/api/v1/mounts/gh/acme/multi-skill");
+    expect(rest.status).toBe(404);
+    expect(await rest.json()).toMatchObject({ error: { code: "mount.repo_not_found" } });
+    await h.lists.remove("blocked", "/gh/acme/multi-skill");
+    expect((await h.request("/api/v1/mounts/gh/acme/multi-skill")).status).toBe(200);
   });
 });
 

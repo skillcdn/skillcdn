@@ -483,14 +483,14 @@ describe("GET /api/v1/files/<address>", () => {
 describe("GET /api/v1/featured", () => {
   it("shows the configured addresses that resolve, and leaves the others out", async () => {
     const commit = fixtureCommits("rest-featured").main;
-    const h = harness({
-      host: createFixtureHost("rest-featured"),
-      featured: [
-        `/gh/acme/multi-skill@${commit}`,
-        "/gh/acme/no-such-repo",
-        "/gh/acme/private-repo",
-      ],
-    });
+    const h = harness({ host: createFixtureHost("rest-featured") });
+    for (const address of [
+      `/gh/acme/multi-skill@${commit}`,
+      "/gh/acme/no-such-repo",
+      "/gh/acme/private-repo",
+    ]) {
+      await h.lists.add("featured", address);
+    }
     await indexed(h, `/gh/acme/multi-skill@${commit}`);
 
     const response = await h.request("/api/v1/featured");
@@ -516,10 +516,12 @@ describe("GET /api/v1/featured", () => {
   });
 
   it("names a featured repository as its manifest does", async () => {
-    const h = harness({ featured: ["/gh/acme/with-manifest"] });
+    const h = harness();
+    await h.lists.add("featured", "/gh/acme/with-manifest");
     await indexed(h, "/gh/acme/with-manifest");
     const body = restFeaturedSchema.parse(await (await h.request("/api/v1/featured")).json());
-    expect(body.items[0]?.manifest).toEqual({
+    const item = body.items.find((candidate) => candidate.address === "/gh/acme/with-manifest");
+    expect(item?.manifest).toEqual({
       name: "Acme playbooks",
       description:
         "The playbooks every Acme team runs. Use them for greetings, and for anything else the skills here cover.",
@@ -533,8 +535,13 @@ describe("GET /api/v1/featured", () => {
     });
   });
 
-  it("is empty when nothing is configured", async () => {
-    const response = await harness().request("/api/v1/featured");
+  it("is empty when the operator features nothing", async () => {
+    const h = harness();
+    await h.lists.remove("featured", "/gh/acme/with-manifest");
+    for (const entry of await h.lists.all("featured")) {
+      await h.lists.remove("featured", entry.address);
+    }
+    const response = await h.request("/api/v1/featured");
     expect(await response.json()).toEqual({ items: [] });
   });
 });

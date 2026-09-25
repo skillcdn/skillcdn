@@ -1,12 +1,13 @@
 import { readFileSync } from "node:fs";
-import { type Address, type IndexLimits, parseAddress } from "@skillcdn/core";
+import type { IndexLimits } from "@skillcdn/core";
 import * as z from "zod";
 import { type Cidr, parseCidr } from "../http/client-address.js";
-import { repositoryKey } from "../mounts/mount-service.js";
 
 // The only module that reads the environment. Contract: .env.example and deploy/README.md.
 
-const SECRET_NAMES = ["DATABASE_URL", "GITHUB_TOKEN"] as const;
+const SECRET_NAMES = ["DATABASE_URL", "GITHUB_TOKEN", "ADMIN_TOKEN"] as const;
+/** Shorter than this, a token is guessable enough to be a mistake. */
+const MIN_ADMIN_TOKEN_LENGTH = 32;
 
 /** The limits on the work one repository may cause, unless the `INDEX_*` variables say otherwise. */
 export const INDEX_LIMIT_DEFAULTS: IndexLimits = {
@@ -54,61 +55,6 @@ const cidrList = z
     return networks;
   });
 
-const MAX_FEATURED_ADDRESSES = 24;
-
-/** A comma-separated list of addresses, as they would be written after the service host. */
-const addressList = z
-  .string()
-  .default("")
-  .transform((value, context) => {
-    const addresses: Address[] = [];
-    for (const entry of value.split(",").filter((part) => part.trim().length > 0)) {
-      // With or without the leading slash: some shells rewrite a value that starts with one.
-      const text = entry.trim();
-      const parsed = parseAddress(text.startsWith("/") ? text : `/${text}`);
-      if (!parsed.ok) {
-        context.addIssue({
-          code: "custom",
-          message: "must be a list of addresses such as /gh/owner/repo",
-        });
-        return z.NEVER;
-      }
-      addresses.push(parsed.value);
-    }
-    if (addresses.length > MAX_FEATURED_ADDRESSES) {
-      context.addIssue({
-        code: "custom",
-        message: `must list at most ${MAX_FEATURED_ADDRESSES} addresses`,
-      });
-      return z.NEVER;
-    }
-    return addresses;
-  });
-
-/**
- * A comma-separated list of repositories, each written as an address without a ref or a path:
- * the repositories the operator vouches for.
- */
-const repositoryList = z
-  .string()
-  .default("")
-  .transform((value, context) => {
-    const keys = new Set<string>();
-    for (const entry of value.split(",").filter((part) => part.trim().length > 0)) {
-      const text = entry.trim();
-      const parsed = parseAddress(text.startsWith("/") ? text : `/${text}`);
-      if (!parsed.ok || parsed.value.ref !== undefined || parsed.value.path.length > 0) {
-        context.addIssue({
-          code: "custom",
-          message: "must be a list of repositories such as /gh/owner/repo, without a ref or a path",
-        });
-        return z.NEVER;
-      }
-      keys.add(repositoryKey(parsed.value));
-    }
-    return keys;
-  });
-
 /** The origin of the hosted service: what pages describe themselves as when nothing is configured. */
 export const HOSTED_ORIGIN = "https://skillcdn.ai";
 
@@ -154,7 +100,10 @@ const environmentSchema = z.object({
   GITHUB_API_URL: z.url({ protocol: /^https?$/ }).default("https://api.github.com"),
   GITHUB_TOKEN: z.string().min(1).optional(),
 
-  FEATURED_ADDRESSES: addressList,
+  ADMIN_TOKEN: z
+    .string()
+    .min(MIN_ADMIN_TOKEN_LENGTH, `must be at least ${MIN_ADMIN_TOKEN_LENGTH} characters`)
+    .optional(),
   WEB_ROOT: z.string().min(1).optional(),
   PUBLIC_URL: z
     .url({ protocol: /^https?$/ })
@@ -182,7 +131,6 @@ const environmentSchema = z.object({
 
   REPO_TTL_SECONDS: integer(60, 0, 86_400),
   REF_TTL_SECONDS: integer(60, 0, 86_400),
-  VERIFIED_REPOSITORIES: repositoryList,
 
   INDEX_WAIT_MS: integer(20_000, 0, 120_000),
   // 0: this process indexes nothing and serves only what another process has indexed.
@@ -230,10 +178,12 @@ export interface Config {
     readonly root: string | undefined;
     /** The origin visitors use. Unset: the hosted origin in production, else the origin of each request. */
     readonly publicUrl: string | undefined;
-    /** Addresses shown on the front page of the explorer. */
-    readonly featured: readonly Address[];
     /** Tags written into the head of every page, for search consoles and analytics. */
     readonly tags: WebTags;
+  };
+  readonly admin: {
+    /** The bearer token of the admin API. Unset, the admin API does not exist. */
+    readonly token: string | undefined;
   };
   readonly stats: {
     /** Count connections, tool calls and skill loads per public repository and day. */
@@ -246,11 +196,6 @@ export interface Config {
     readonly repoTtlMs: number;
     /** How long a moving ref is trusted. */
     readonly refTtlMs: number;
-    /**
-     * Repositories the operator vouches for, as `/gh/owner/repo`. Results from every other
-     * repository carry a provenance notice, until owners can verify their repositories themselves.
-     */
-    readonly verifiedRepositories: ReadonlySet<string>;
   };
   readonly indexing: {
     /** How long a tool call waits for an index before answering "still indexing". */
@@ -348,17 +293,16 @@ export function loadConfig(
       // The image describes its pages as the hosted service unless told otherwise; while
       // developing, pages are written for whatever origin the request came in on.
       publicUrl: env.PUBLIC_URL ?? (env.NODE_ENV === "production" ? HOSTED_ORIGIN : undefined),
-      featured: env.FEATURED_ADDRESSES,
       tags: {
         googleSiteVerification: env.GOOGLE_SITE_VERIFICATION,
         googleAnalyticsId: env.GOOGLE_ANALYTICS_ID,
       },
     },
+    admin: { token: env.ADMIN_TOKEN },
     stats: { enabled: env.USAGE_STATS, flushMs: env.USAGE_STATS_FLUSH_SECONDS * 1000 },
     mounts: {
       repoTtlMs: env.REPO_TTL_SECONDS * 1000,
       refTtlMs: env.REF_TTL_SECONDS * 1000,
-      verifiedRepositories: env.VERIFIED_REPOSITORIES,
     },
     indexing: {
       waitMs: env.INDEX_WAIT_MS,

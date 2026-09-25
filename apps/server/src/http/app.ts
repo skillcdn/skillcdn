@@ -1,13 +1,12 @@
 import { createMcpHandler } from "@modelcontextprotocol/server";
 import {
-  type Address,
   formatAddress,
   MAX_QUERY_LENGTH,
   MAX_REPO_PATH_LENGTH,
   parseAddress,
   REST_MOUNT_LIST_LIMIT,
 } from "@skillcdn/core";
-import { type Database, getSchemaStatus, listTopRepositories, usageDayOf } from "@skillcdn/db";
+import { type Database, getSchemaStatus } from "@skillcdn/db";
 import { type Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
@@ -18,6 +17,8 @@ import { createMountServer, type ToolDependencies } from "../mcp/tools.js";
 import { ReaderInputError } from "../mounts/continuation.js";
 import type { MountReader } from "../mounts/mount-reader.js";
 import { type Mount, MountError, type MountService } from "../mounts/mount-service.js";
+import type { OperatorLists } from "../operator/lists.js";
+import { purgeByAddress, registerAdmin } from "./admin.js";
 import type { ClientAddressResolver } from "./client-address.js";
 import { type AppEnv, requestContext } from "./request-context.js";
 import {
@@ -37,8 +38,10 @@ export interface AppDependencies {
   readonly snapshots: SnapshotService;
   readonly reader: MountReader;
   readonly tools: ToolDependencies;
-  /** Addresses shown on the front page of the explorer. */
-  readonly featured: readonly Address[];
+  /** The operator's lists: what is featured, vouched for and blocked (ADR-0026). */
+  readonly lists: OperatorLists;
+  /** The admin API, when a token is configured; without one it does not exist. */
+  readonly admin: { readonly token: string } | undefined;
   /** A build of the web UI to serve. Left out, the server is MCP and REST only. */
   readonly web: WebBundle | undefined;
   readonly logger: Logger;
@@ -72,15 +75,10 @@ const STATUS_BY_REASON = {
 } as const;
 
 /**
- * What the sitemap lists besides the pages of the build: the featured addresses, and the
- * repositories that the most distinct clients used lately. One client is not popularity, and
- * would let anyone put a repository into the sitemap by asking for it once.
+ * The sitemap lists the pages of the build, the featured addresses and the repositories the
+ * operator vouches for (ADR-0026): asking for an address puts nothing into it.
  */
-const SITEMAP_DAYS = 30;
-const SITEMAP_TOP_REPOSITORIES = 500;
-const SITEMAP_MIN_CLIENTS = 2;
 const SITEMAP_CACHE_MS = 10 * 60_000;
-const DAY_MS = 86_400_000;
 
 function errorBody(code: string, message: string) {
   return { error: { code, message } };
@@ -197,9 +195,17 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
         throw error;
       }
     },
-    featured: dependencies.featured,
+    featured: () => dependencies.lists.featured(),
     now: dependencies.requests.now,
   });
+  if (dependencies.admin !== undefined) {
+    registerAdmin(app, {
+      token: dependencies.admin.token,
+      lists: dependencies.lists,
+      purge: purgeByAddress(database),
+      logger,
+    });
+  }
 
   /**
    * The page of an address for a browser, rendered with what the address serves: the same
@@ -369,28 +375,14 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
     const bundle = web;
     let listed: { readonly until: number; readonly addresses: Promise<string[]> } | undefined;
 
-    /** The addresses the sitemap lists: featured ones, then the popular ones, without repeats. */
+    /** The addresses the sitemap lists: the featured ones and the vouched-for repositories. */
     const listedAddresses = async (): Promise<string[]> => {
-      const paths = new Set(dependencies.featured.map(formatAddress));
       try {
-        const now = tools.clock.now();
-        const top = await listTopRepositories(database, {
-          metric: "client",
-          from: usageDayOf(new Date(now.getTime() - SITEMAP_DAYS * DAY_MS)),
-          to: usageDayOf(now),
-          limit: SITEMAP_TOP_REPOSITORIES,
-          minimum: SITEMAP_MIN_CLIENTS,
-        });
-        for (const repository of top) {
-          const parsed = parseAddress(`/${repository.host}/${repository.owner}/${repository.name}`);
-          if (parsed.ok) {
-            paths.add(formatAddress(parsed.value));
-          }
-        }
+        return (await dependencies.lists.listed()).map(formatAddress);
       } catch (error) {
-        logger.warn({ err: error }, "popular repositories could not be listed for the sitemap");
+        logger.warn({ err: error }, "the operator's lists could not be read for the sitemap");
+        return [];
       }
-      return [...paths];
     };
 
     app.get("/sitemap.xml", async (c) => {

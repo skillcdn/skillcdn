@@ -98,7 +98,7 @@ MCP additionally bounds its complete serialized tool result and can return short
 
 ### `GET /api/v1/featured`
 
-The addresses the operator selects for the explorer (`FEATURED_ADDRESSES`), with their repository metadata, manifest introduction when available, index status, skill count and a few skill names. Unresolvable addresses are omitted. There is no public enumeration of every indexed repository: asking for an address alone does not opt its author into a catalog.
+The addresses the operator selects for the explorer (the featured list of the [admin API](../../deploy/README.md#the-admin-api)), with their repository metadata, manifest introduction when available, index status, skill count and a few skill names. Unresolvable addresses are omitted. There is no public enumeration of every indexed repository: asking for an address alone does not opt its author into a catalog.
 
 ## Open questions
 

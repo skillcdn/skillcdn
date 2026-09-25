@@ -105,46 +105,17 @@ describe("loadConfig", () => {
     ]);
   });
 
-  it("reads the featured addresses and rejects what is not an address", () => {
-    expect(loadConfig({ DATABASE_URL }, noFiles).web.featured).toEqual([]);
-    const config = loadConfig(
-      { DATABASE_URL, FEATURED_ADDRESSES: "/gh/Acme/skills, gh/acme/docs@v2/guides," },
-      noFiles,
-    );
-    expect(config.web.featured).toMatchObject([
-      { host: "gh", owner: "acme", repo: "skills", path: "" },
-      {
-        host: "gh",
-        owner: "acme",
-        repo: "docs",
-        ref: { kind: "name", name: "v2" },
-        path: "guides",
-      },
+  it("reads the admin token, which must be long enough not to be guessed", () => {
+    expect(loadConfig({ DATABASE_URL }, noFiles).admin.token).toBeUndefined();
+    const token = "a".repeat(32);
+    expect(loadConfig({ DATABASE_URL, ADMIN_TOKEN: token }, noFiles).admin.token).toBe(token);
+    expect(problemsOf({ DATABASE_URL, ADMIN_TOKEN: "short" }).problems).toEqual([
+      "ADMIN_TOKEN: must be at least 32 characters",
     ]);
     expect(
-      problemsOf({ DATABASE_URL, FEATURED_ADDRESSES: "/gh/acme/skills,https://example.test/x" })
-        .problems,
-    ).toEqual(["FEATURED_ADDRESSES: must be a list of addresses such as /gh/owner/repo"]);
-    const tooMany = Array.from({ length: 25 }, (_, index) => `/gh/acme/repo-${index}`).join(",");
-    expect(problemsOf({ DATABASE_URL, FEATURED_ADDRESSES: tooMany }).problems).toEqual([
-      "FEATURED_ADDRESSES: must list at most 24 addresses",
-    ]);
-  });
-
-  it("reads the repositories the operator vouches for, as addresses without a ref or a path", () => {
-    expect(loadConfig({ DATABASE_URL }, noFiles).mounts.verifiedRepositories).toEqual(new Set());
-    const config = loadConfig(
-      { DATABASE_URL, VERIFIED_REPOSITORIES: "/gh/Acme/skills, gh/acme/docs," },
-      noFiles,
-    );
-    expect(config.mounts.verifiedRepositories).toEqual(
-      new Set(["/gh/acme/skills", "/gh/acme/docs"]),
-    );
-    for (const value of ["/gh/acme/skills@v2", "/gh/acme/skills/guides", "https://example.test"]) {
-      expect(problemsOf({ DATABASE_URL, VERIFIED_REPOSITORIES: value }).problems).toEqual([
-        "VERIFIED_REPOSITORIES: must be a list of repositories such as /gh/owner/repo, without a ref or a path",
-      ]);
-    }
+      loadConfig({ DATABASE_URL, ADMIN_TOKEN_FILE: "/run/secrets/admin" }, () => `${token}\n`).admin
+        .token,
+    ).toBe(token);
   });
 
   it("reads the indexing limits on their own, for the role that needs nothing else", () => {

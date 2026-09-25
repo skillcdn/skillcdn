@@ -57,6 +57,13 @@
       "when": 1790355093126,
       "tag": "0007_served-bytes-and-listing",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790356639240,
+      "tag": "0008_operator-lists",
+      "breakpoints": true
     }
   ]
 }

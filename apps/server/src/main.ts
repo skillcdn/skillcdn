@@ -15,7 +15,7 @@ function reportConfigError(error: unknown): boolean {
   return false;
 }
 
-async function run(role: Exclude<Role, "check">): Promise<void> {
+async function run(role: Exclude<Role, "check">, argument: string | undefined): Promise<void> {
   let config: ReturnType<typeof loadConfig>;
   try {
     config = loadConfig();
@@ -35,6 +35,14 @@ async function run(role: Exclude<Role, "check">): Promise<void> {
     } else if (role === "migrate") {
       const { runMigrate } = await import("./roles/migrate.js");
       await runMigrate(config, logger);
+    } else if (role === "purge") {
+      if (argument === undefined) {
+        process.stderr.write("usage: node dist/main.js purge /gh/owner/repo\n");
+        process.exitCode = 64;
+        return;
+      }
+      const { runPurge } = await import("./roles/purge.js");
+      process.exitCode = await runPurge(config, logger, argument);
     } else {
       logger.fatal({ role }, "this role is not implemented yet");
       process.exitCode = 70;
@@ -77,11 +85,11 @@ async function runCheck(directory: string): Promise<void> {
 const role = parseRole(process.argv[2]);
 if (role === undefined) {
   process.stderr.write(
-    `usage: node dist/main.js <${ROLES.join("|")}>\n       node dist/main.js check [directory]\n`,
+    `usage: node dist/main.js <${ROLES.join("|")}>\n       node dist/main.js check [directory]\n       node dist/main.js purge /gh/owner/repo\n`,
   );
   process.exitCode = 64;
 } else if (role === "check") {
   await runCheck(process.argv[3] ?? ".");
 } else {
-  await run(role);
+  await run(role, process.argv[3]);
 }

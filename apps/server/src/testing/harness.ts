@@ -1,11 +1,5 @@
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
-import {
-  type Address,
-  allowEverything,
-  type Entitlements,
-  parseAddress,
-  type UsageEvent,
-} from "@skillcdn/core";
+import { allowEverything, type Entitlements, type UsageEvent } from "@skillcdn/core";
 import type { TestDatabase } from "@skillcdn/db/testing";
 import type { Hono } from "hono";
 import { pino } from "pino";
@@ -13,7 +7,7 @@ import { parseCidr } from "../http/client-address.js";
 import type { AppEnv } from "../http/request-context.js";
 import type { WebBundle } from "../http/web.js";
 import type { SnapshotService } from "../indexer/snapshot-service.js";
-import { repositoryKey } from "../mounts/mount-service.js";
+import type { OperatorLists } from "../operator/lists.js";
 import { createApi } from "../roles/api.js";
 import type { UsageStats } from "../stats/usage-recorder.js";
 import { createFixtureHost, type FixtureHost } from "./fixture-host.js";
@@ -28,6 +22,8 @@ export interface Harness {
   /** Access-log lines and everything else the server logged, as parsed JSON. */
   readonly logs: Record<string, unknown>[];
   readonly snapshots: SnapshotService;
+  /** The operator's lists, for a test to vouch for, feature or block a repository. */
+  readonly lists: OperatorLists;
   readonly usage: UsageEvent[];
   /** An MCP client connected to an address, from `peer` (the socket address) when given. */
   connect(address: string, options?: { readonly peer?: string }): Promise<Client>;
@@ -42,44 +38,28 @@ export interface HarnessOptions {
   readonly host?: FixtureHost;
   readonly trustedProxies?: readonly string[];
   readonly clientIpHeader?: string;
-  /** Addresses for the front page of the explorer, as they are written in configuration. */
-  readonly featured?: readonly string[];
-  /** Repositories the operator vouches for, as they are written in configuration. */
-  readonly verified?: readonly string[];
+  /** The admin API's bearer token. Left out, there is no admin API. */
+  readonly adminToken?: string;
   /** A loaded web build. Left out, the server has no UI. */
   readonly web?: WebBundle;
   /** Left out, nothing is counted. */
   readonly stats?: UsageStats;
 }
 
-function addressOf(text: string): Address {
-  const parsed = parseAddress(text);
-  if (!parsed.ok) {
-    throw new Error(`not an address: ${text}`);
-  }
-  return parsed.value;
-}
-
 export function createHarness(testDatabase: TestDatabase, options: HarnessOptions = {}): Harness {
   const host = options.host ?? createFixtureHost();
   const usage: UsageEvent[] = [];
   const logs: Record<string, unknown>[] = [];
-  const { app, snapshots } = createApi(
+  const { app, snapshots, lists } = createApi(
     {
-      mounts: {
-        repoTtlMs: 60_000,
-        refTtlMs: 60_000,
-        verifiedRepositories: new Set(
-          (options.verified ?? []).map((text) => repositoryKey(addressOf(text))),
-        ),
-      },
+      mounts: { repoTtlMs: 60_000, refTtlMs: 60_000 },
       http: {
         trustedProxies: (options.trustedProxies ?? []).flatMap((text) => parseCidr(text) ?? []),
         clientIpHeader: options.clientIpHeader ?? "x-forwarded-for",
         requestIdHeader: "x-request-id",
         accessLog: true,
       },
-      web: { featured: (options.featured ?? []).map(addressOf) },
+      admin: { token: options.adminToken },
       indexing: {
         waitMs: options.indexWaitMs ?? 10_000,
         concurrency: options.indexConcurrency ?? 2,
@@ -116,6 +96,7 @@ export function createHarness(testDatabase: TestDatabase, options: HarnessOption
     host,
     logs,
     snapshots,
+    lists,
     usage,
     request,
     async connect(address, options = {}) {
