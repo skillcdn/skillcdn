@@ -567,6 +567,40 @@ describe("the page of an address", () => {
     expect(html).not.toContain("<!--app-");
     expect(html).not.toContain("skillcdn-data");
   });
+
+  it("writes repository text that looks like a replacement pattern as it is", () => {
+    // `$&`, `$'` and the like mean something to a string replacement; a page must not.
+    const patterns = "Prices in $& and $` or $' for $$1 $<name>";
+    const html = renderDocument(TEMPLATE, {
+      htmlLang: "en",
+      head: `<title>${patterns}</title>`,
+      body: `<p>${patterns}</p>`,
+      routeName: "landing",
+    });
+    expect(html).toContain(`<title>${patterns}</title>`);
+    expect(html).toContain(`<p>${patterns}</p>`);
+    expect(html.match(/<head>/g)).toHaveLength(1);
+    expect(html.match(/<body>/g)).toHaveLength(1);
+
+    const address = renderAddressPage(TEMPLATE, {
+      language: "en",
+      origin: "https://skills.example",
+      pathname: "/gh/acme/skills",
+      search: "",
+      data: {
+        mount: {
+          ready: {
+            ...MOUNT,
+            repository: { ...MOUNT.repository, description: patterns },
+          },
+        },
+      },
+    });
+    // The same text once as JSON for the browser (with `<` escaped) and once as HTML.
+    expect(address.html).toContain('"description":"Prices in $& and $` or $\' for $$1 $');
+    expect(address.html).toContain("Prices in $&amp; and $` or $&#x27; for $$1 $&lt;name&gt;");
+    expect(address.html.match(/<body>/g)).toHaveLength(1);
+  });
 });
 
 describe("llms.txt", () => {

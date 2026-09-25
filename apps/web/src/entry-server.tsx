@@ -93,12 +93,15 @@ export function renderNotFound(language: Language): RenderedPage {
  */
 export function renderDocument(template: string, page: RenderedPage): string {
   const data = page.initialData === undefined ? "" : renderInitialData(page.initialData);
+  // The page holds repository text, and a replacement string would read `$&` and its kin in it
+  // as instructions; a replacement function inserts the text as it is.
   return template
-    .replace(TEMPLATE_MARKERS.htmlLang, `<html lang="${page.htmlLang}">`)
-    .replace(TEMPLATE_MARKERS.head, page.head)
+    .replace(TEMPLATE_MARKERS.htmlLang, () => `<html lang="${page.htmlLang}">`)
+    .replace(TEMPLATE_MARKERS.head, () => page.head)
     .replace(
       TEMPLATE_MARKERS.root,
-      `<div id="root" data-prerendered="${page.routeName}" data-lang="${page.htmlLang}">${page.body}</div>${data}`,
+      () =>
+        `<div id="root" data-prerendered="${page.routeName}" data-lang="${page.htmlLang}">${page.body}</div>${data}`,
     );
 }
 
