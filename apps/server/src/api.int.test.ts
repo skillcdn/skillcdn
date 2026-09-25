@@ -5,9 +5,17 @@ import {
   INSTRUCTIONS_MAX_LENGTH,
   PROVENANCE_NOTICE,
 } from "@skillcdn/core";
-import { createDatabase } from "@skillcdn/db";
+import {
+  claimSnapshot,
+  createDatabase,
+  ensureSnapshot,
+  findRepoByAlias,
+  type NewIndexEntry,
+  writeSnapshotIndex,
+} from "@skillcdn/db";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { INDEX_VERSION } from "./indexer/build-index.js";
 import { createFixtureHost, fixtureCommits } from "./testing/fixture-host.js";
 import { createHarness, type HarnessOptions } from "./testing/harness.js";
 
@@ -776,6 +784,73 @@ describe("when indexing fails", () => {
     } finally {
       process.off("unhandledRejection", onRejection);
     }
+  });
+});
+
+describe("an index rebuilt under newer reading rules", () => {
+  it("is read fresh, not from what was cached for the same snapshot", async () => {
+    const host = createFixtureHost("rebuilt");
+    const commit = fixtureCommits("rebuilt").main;
+    const address = `/gh/acme/single-skill@${commit}`;
+    const h = harness({ host });
+    const first = await h.connect(address);
+    await first.close();
+    await h.snapshots.idle();
+    const cached = await h.connect(address);
+    expect(cached.getInstructions()).toContain("SKILL.md: Writes commit messages");
+    await cached.close();
+
+    // A process with newer rules sends the snapshot back and rebuilds it under the same id.
+    const { database } = testDatabase;
+    const found = await findRepoByAlias(database, {
+      host: "gh",
+      owner: "acme",
+      repo: "single-skill",
+    });
+    if (found === undefined) throw new Error("the repository was not saved");
+    const now = new Date();
+    const snapshot = await ensureSnapshot(
+      database,
+      { accountId: found.accountId, repoId: found.id },
+      commit,
+      INDEX_VERSION + 1,
+      now,
+    );
+    const scope = { accountId: snapshot.accountId, snapshotId: snapshot.id };
+    expect(await claimSnapshot(database, scope, "newer-process", now, 60_000)).toBeDefined();
+    const rebuilt: NewIndexEntry = {
+      path: "SKILL.md",
+      kind: "skill",
+      size: 1,
+      blobSha: "a".repeat(40),
+      skillDir: "",
+      name: "commit-messages",
+      title: undefined,
+      description: "Rebuilt under newer rules.",
+      frontMatter: { metadata: {}, warnings: [] },
+      searchable: true,
+      searchBody: "Rebuilt.",
+      visible: true,
+    };
+    expect(
+      await writeSnapshotIndex(
+        database,
+        scope,
+        "newer-process",
+        {
+          entries: [rebuilt],
+          truncated: false,
+          indexedBytes: 1,
+          diagnostics: [],
+          version: INDEX_VERSION + 1,
+        },
+        now,
+      ),
+    ).toBe(true);
+
+    const fresh = await h.connect(address);
+    expect(fresh.getInstructions()).toContain("SKILL.md: Rebuilt under newer rules.");
+    await fresh.close();
   });
 });
 

@@ -143,6 +143,19 @@ export interface MountOverview {
   readonly diagnostics: readonly IndexDiagnostic[];
 }
 
+/**
+ * What a read is scoped to: the snapshot, and the version of the reading rules its index was
+ * written with. A rebuilt index keeps its snapshot id, so everything cached keys on both.
+ */
+interface ReadScope extends SnapshotScope {
+  readonly indexVersion: number;
+}
+const scopeOf = (snapshot: SnapshotRecord): ReadScope => ({
+  accountId: snapshot.accountId,
+  snapshotId: snapshot.id,
+  indexVersion: snapshot.indexVersion,
+});
+
 const MAX_LISTED_SKILL_FILES = 50;
 const MAX_SUGGESTED_SKILLS = 20;
 const MAX_CACHED_TREES = 8;
@@ -221,8 +234,8 @@ export class MountReader {
   readonly #dependencies: MountReaderDependencies;
   readonly #entries = new Map<string, Promise<readonly EntryRecord[]>>();
 
-  #entriesOf(scope: SnapshotScope): Promise<readonly EntryRecord[]> {
-    const key = `${scope.accountId} ${scope.snapshotId}`;
+  #entriesOf(scope: ReadScope): Promise<readonly EntryRecord[]> {
+    const key = `${scope.accountId} ${scope.snapshotId} ${scope.indexVersion}`;
     let loading = this.#entries.get(key);
     if (loading === undefined) {
       loading = servedEntries(this.#dependencies.database, scope);
@@ -258,7 +271,7 @@ export class MountReader {
 
   async #references(
     mount: Mount,
-    scope: SnapshotScope,
+    scope: ReadScope,
     references: readonly { href: string; path: string }[],
   ): Promise<FileReference[]> {
     const entries = await this.#entriesOf(scope);
@@ -278,7 +291,7 @@ export class MountReader {
     });
   }
 
-  async #catalogFiles(scope: SnapshotScope): Promise<CatalogFile[]> {
+  async #catalogFiles(scope: ReadScope): Promise<CatalogFile[]> {
     const rows = await this.#entriesOf(scope);
     return rows.map((row) => ({
       path: row.path as RepoPath,
@@ -295,11 +308,11 @@ export class MountReader {
     }));
   }
 
-  async #browseEntries(scope: SnapshotScope, path: RepoPath): Promise<BrowseEntry[]> {
+  async #browseEntries(scope: ReadScope, path: RepoPath): Promise<BrowseEntry[]> {
     return browseCatalogFiles(await this.#catalogFiles(scope), path);
   }
 
-  async #overviewOf(scope: SnapshotScope, path: RepoPath): Promise<FolderOverview | undefined> {
+  async #overviewOf(scope: ReadScope, path: RepoPath): Promise<FolderOverview | undefined> {
     const files = await this.#catalogFiles(scope);
     const overview = folderOverview(files, path);
     if (overview === undefined) return undefined;
@@ -326,7 +339,7 @@ export class MountReader {
     const path = this.#scopePath(mount, input.path);
     const outcome = await this.#dependencies.snapshots.ready(mount, waitMs);
     if (outcome.status !== "ready") return outcome;
-    const scope = { accountId: outcome.snapshot.accountId, snapshotId: outcome.snapshot.id };
+    const scope = scopeOf(outcome.snapshot);
     const key = this.#pageKey(mount, outcome.snapshot, "browse", path);
     const offset = continuationOffset(input.cursor, key);
     const entries = await this.#browseEntries(scope, path);
@@ -363,8 +376,8 @@ export class MountReader {
    * The repository manifest that governs a mount: the one in the mounted directory, else the
    * nearest above it. Its rules come from the blob store, so that `get` can hand them over.
    */
-  #manifestOf(mount: Mount, scope: SnapshotScope): Promise<MountManifest | undefined> {
-    const key = `${scope.snapshotId} ${mount.address.path}`;
+  #manifestOf(mount: Mount, scope: ReadScope): Promise<MountManifest | undefined> {
+    const key = `${scope.snapshotId} ${scope.indexVersion} ${mount.address.path}`;
     const cached = this.#manifests.get(key);
     if (cached !== undefined) {
       return cached;
@@ -398,7 +411,7 @@ export class MountReader {
   }
 
   /** The manifests inside the mount that could not be read. Findings above the mount are not ours. */
-  async #diagnosticsOf(mount: Mount, scope: SnapshotScope): Promise<IndexDiagnostic[]> {
+  async #diagnosticsOf(mount: Mount, scope: ReadScope): Promise<IndexDiagnostic[]> {
     const all = await getSnapshotDiagnostics(this.#dependencies.database, scope);
     return all.flatMap((diagnostic) => {
       const below = belowMount(mount, diagnostic.path);
@@ -422,9 +435,9 @@ export class MountReader {
         description: mount.repo.repository.description,
       };
     }
-    const scope = { accountId: outcome.snapshot.accountId, snapshotId: outcome.snapshot.id };
+    const scope = scopeOf(outcome.snapshot);
     const path = mount.address.path;
-    const key = `${outcome.snapshot.id} ${path}`;
+    const key = `${scope.snapshotId} ${scope.indexVersion} ${path}`;
     let loading = this.#catalogs.get(key);
     if (loading === undefined) {
       loading = Promise.all([
@@ -496,7 +509,7 @@ export class MountReader {
     if (outcome.status !== "ready") {
       return outcome;
     }
-    const scope = { accountId: outcome.snapshot.accountId, snapshotId: outcome.snapshot.id };
+    const scope = scopeOf(outcome.snapshot);
     const trimmed = input.query?.trim();
     const query = trimmed === undefined || trimmed.length === 0 ? undefined : trimmed;
     const limit = input.limit ?? FIND_DEFAULT_LIMIT;
@@ -542,11 +555,7 @@ export class MountReader {
    * takes the place of its best-ranked member, so that a model loads the skill rather than a
    * fragment of it. A skill whose files matched, but that did not match itself, is looked up.
    */
-  async #fold(
-    mount: Mount,
-    scope: SnapshotScope,
-    rows: readonly EntryRecord[],
-  ): Promise<FindItem[]> {
+  async #fold(mount: Mount, scope: ReadScope, rows: readonly EntryRecord[]): Promise<FindItem[]> {
     interface Group {
       skill: EntryRecord | undefined;
       readonly files: EntryRecord[];
@@ -630,7 +639,7 @@ export class MountReader {
     if (outcome.status !== "ready") {
       return outcome;
     }
-    const scope = { accountId: outcome.snapshot.accountId, snapshotId: outcome.snapshot.id };
+    const scope = scopeOf(outcome.snapshot);
     const name = exactPath ? wanted : wanted.trim();
     const asDirectory = parseRepoPath(name);
     const directory =
@@ -811,7 +820,7 @@ export class MountReader {
    */
   async #includedFiles(
     mount: Mount,
-    scope: SnapshotScope,
+    scope: ReadScope,
     skillDir: string,
     include: readonly string[],
   ): Promise<IncludedFile[]> {
@@ -889,7 +898,7 @@ export class MountReader {
     if (outcome.status !== "ready") return { kind: "not_ready", outcome };
     let file: { readonly size: number; readonly hash: string } | undefined;
     let children: readonly DirectoryListing[] = [];
-    const scope = { accountId: outcome.snapshot.accountId, snapshotId: outcome.snapshot.id };
+    const scope = scopeOf(outcome.snapshot);
     const entry = below.length === 0 ? undefined : await getEntry(database, scope, path);
     if (entry?.frontMatter?.manifestError === "unsupported_type")
       return { kind: "not_found", path };
@@ -905,12 +914,7 @@ export class MountReader {
           : [{ path: childPath, kind: child.kind, size: child.size ?? undefined }];
       });
       if (entries.length === 0) {
-        const suggestions = (
-          await this.#entriesOf({
-            accountId: outcome.snapshot.accountId,
-            snapshotId: outcome.snapshot.id,
-          })
-        )
+        const suggestions = (await this.#entriesOf(scopeOf(outcome.snapshot)))
           .filter(
             (entry) =>
               belowMount(mount, entry.path) !== undefined && entry.path.endsWith(`/${below}`),
@@ -955,14 +959,9 @@ export class MountReader {
       outcome.status === "ready"
         ? await this.#references(
             mount,
-            { accountId: outcome.snapshot.accountId, snapshotId: outcome.snapshot.id },
-            (
-              await getEntry(
-                database,
-                { accountId: outcome.snapshot.accountId, snapshotId: outcome.snapshot.id },
-                path,
-              )
-            )?.frontMatter?.references ?? [],
+            scopeOf(outcome.snapshot),
+            (await getEntry(database, scopeOf(outcome.snapshot), path))?.frontMatter?.references ??
+              [],
           )
         : [];
     const make = (length: number): FileResult => ({
@@ -988,7 +987,7 @@ export class MountReader {
     if (outcome.status !== "ready") {
       return outcome;
     }
-    const scope = { accountId: outcome.snapshot.accountId, snapshotId: outcome.snapshot.id };
+    const scope = scopeOf(outcome.snapshot);
     const path = mount.address.path;
     const [counts, skills, documents, diagnostics, manifest, groups] = await Promise.all([
       countEntries(database, scope, path),
