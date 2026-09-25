@@ -232,6 +232,31 @@ describe("getTree", () => {
       { path: "docs/link.md", type: "symlink", size: 0, hash: sha },
       { path: "vendor/lib", type: "submodule", size: 0, hash: sha },
     ]);
+    // Files it cannot name are left out; none of them could have governed the others.
+    expect(tree.truncated).toBe(false);
+  });
+
+  it.each([
+    { path: "../SKILLCDN.md", why: "a manifest it cannot name", sha: "b".repeat(40) },
+    {
+      path: `${"d".repeat(1030)}/SKILLCDN.md`,
+      why: "a manifest whose path is too long",
+      sha: "b".repeat(40),
+    },
+    { path: "SKILLCDN.md", why: "a manifest without a full hash", sha: "abc" },
+  ])("reports a listing that lost $why as truncated", async ({ path, sha }) => {
+    const key = `GET /repos/skillcdn/skillcdn/git/trees/${fixture.commit}?recursive=1`;
+    const { fetchLike } = replay({
+      [key]: json(200, {
+        truncated: false,
+        tree: [
+          { path: "docs/guide.md", mode: "100644", type: "blob", sha: "a".repeat(40), size: 12 },
+          { path, mode: "100644", type: "blob", sha, size: 1 },
+        ],
+      }),
+    });
+    const tree = await host(fetchLike).getTree(repo, fixture.commit);
+    expect(tree.entries.map((entry) => entry.path)).toEqual(["docs/guide.md"]);
     expect(tree.truncated).toBe(true);
   });
 

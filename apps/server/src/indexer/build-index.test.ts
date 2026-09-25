@@ -27,7 +27,12 @@ const manifest = (body = "", extra = "documents: []\n"): string =>
 
 async function index(
   files: Record<string, string>,
-  options: { limits?: Partial<IndexLimits>; unreadable?: string[]; symlinks?: string[] } = {},
+  options: {
+    limits?: Partial<IndexLimits>;
+    unreadable?: string[];
+    symlinks?: string[];
+    truncated?: boolean;
+  } = {},
 ) {
   const bytes = new Map<string, Uint8Array>();
   const entries: TreeEntry[] = Object.entries(files).map(([name, body]) => {
@@ -47,7 +52,7 @@ async function index(
   const fetched: string[] = [];
   const gitHost: Pick<GitHost, "getTree" | "readBlob"> = {
     async getTree() {
-      return { entries, truncated: false };
+      return { entries, truncated: options.truncated ?? false };
     },
     async readBlob(_coordinates, hash) {
       fetched.push(hash);
@@ -411,6 +416,30 @@ describe("repository publication and link indexing", () => {
     expect(result.byPath.get("SKILLCDN.md")?.kind).toBe("manifest");
     expect(result.byPath.get("docs/guide.md")?.visible).toBe(false);
     expect(result.byPath.has("linked.md")).toBe(false);
+  });
+
+  it("publishes nothing from a listing that may be missing a manifest", async () => {
+    await expect(
+      index({ "docs/guide.md": "# Guide\n" }, { truncated: true }),
+    ).rejects.toMatchObject({ code: "indexer.tree_truncated" });
+    const manifests = Object.fromEntries(
+      Array.from({ length: 4 }, (_, i) => [`team-${i}/SKILLCDN.md`, manifest()]),
+    );
+    await expect(
+      index({ ...manifests, "docs/guide.md": "# Guide\n" }, { limits: { maxTreeEntries: 3 } }),
+    ).rejects.toMatchObject({ code: "indexer.tree_truncated" });
+    // Over the limit without losing a manifest, the index is partial and says so.
+    const partial = await index(
+      {
+        "SKILLCDN.md": manifest("", "documents: [docs]\n"),
+        "docs/a.md": "# A\n",
+        "docs/b.md": "# B\n",
+      },
+      { limits: { maxTreeEntries: 2 } },
+    );
+    expect(partial.truncated).toBe(true);
+    expect(partial.byPath.get("docs/a.md")?.visible).toBe(true);
+    expect(partial.byPath.has("docs/b.md")).toBe(false);
   });
 
   it("retains a symlink policy as a closed boundary without fetching its target or descendants", async () => {

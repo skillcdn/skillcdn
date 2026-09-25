@@ -41,7 +41,11 @@ export interface TreeEntry {
 
 export interface RepoTree {
   readonly entries: readonly TreeEntry[];
-  /** True when the host could not list the whole tree. */
+  /**
+   * True when entries that may govern others are missing: the host cut the listing short, or a
+   * repository manifest could not be represented. Other entries an adapter cannot name safely are
+   * simply left out. Nothing is published from a truncated tree.
+   */
   readonly truncated: boolean;
 }
 

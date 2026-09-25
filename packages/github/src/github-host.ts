@@ -10,6 +10,7 @@ import {
   hasForbiddenCodePoint,
   isFullCommitHash,
   parseRepoPath,
+  REPO_MANIFEST_FILE,
   type RepoCoordinates,
   type RepoTree,
   type TreeEntry,
@@ -147,6 +148,11 @@ function toTreeEntry(entry: z.infer<typeof treeSchema>["tree"][number]): TreeEnt
   return { path: path.value, type: "file", size: entry.size ?? 0, hash: entry.sha };
 }
 
+/** The last segment of a raw host path, before any validation. */
+function baseNameOf(rawPath: string): string {
+  return rawPath.slice(rawPath.lastIndexOf("/") + 1);
+}
+
 /** The GitHub implementation of the git-host port, for repositories readable with one credential. */
 export function createGitHubHost(options: GitHubHostOptions): GitHost {
   const baseUrl = options.baseUrl ?? GITHUB_API_BASE_URL;
@@ -216,16 +222,18 @@ export function createGitHubHost(options: GitHubHostOptions): GitHost {
       });
       const tree = decodeJson(reply.body, treeSchema);
       const entries: TreeEntry[] = [];
-      let dropped = 0;
+      // An entry that cannot be named or trusted is left out. When it would have declared a
+      // policy, the listing is reported as incomplete, as nothing below it can be published.
+      let lostDeclaration = false;
       for (const raw of tree.tree) {
         const entry = toTreeEntry(raw);
         if (entry !== undefined) {
           entries.push(entry);
-        } else if (raw.type !== "tree") {
-          dropped += 1;
+        } else if (raw.type !== "tree" && baseNameOf(raw.path) === REPO_MANIFEST_FILE) {
+          lostDeclaration = true;
         }
       }
-      return { entries, truncated: tree.truncated || dropped > 0 };
+      return { entries, truncated: tree.truncated || lostDeclaration };
     },
 
     async readBlob(

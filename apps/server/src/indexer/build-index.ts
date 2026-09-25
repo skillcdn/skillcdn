@@ -2,6 +2,7 @@ import {
   type BlobStore,
   baseName,
   classifyRepoFile,
+  DomainError,
   type GitHost,
   GitHostError,
   type IndexLimits,
@@ -132,8 +133,13 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
   const { gitHost, blobStore, coordinates, commit, limits, signal } = options;
   const tree = await gitHost.getTree(coordinates, commit);
   signal.throwIfAborted();
+  // A listing that may be missing a manifest cannot be published: a manifest that was never seen
+  // would not withhold what it governs, and the defaults would publish in its place.
+  if (tree.truncated) {
+    throw new DomainError("indexer.tree_truncated", "the tree listing is incomplete");
+  }
 
-  let truncated = tree.truncated;
+  let truncated = false;
   // Declarations survive tree admission before support files. Their presence is a boundary even
   // if their bodies exceed a later limit. An exact SKILL.md also declares a hidden skill root.
   const declarationRank = (path: RepoPath): number => {
@@ -150,6 +156,14 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
         (a.path < b.path ? -1 : 1),
     );
   if (files.length > limits.maxTreeEntries) {
+    // Manifests sort first, so the first entry over the limit says whether one would be lost.
+    const first = files[limits.maxTreeEntries];
+    if (first !== undefined && classifyRepoFile(first.path) === "manifest") {
+      throw new DomainError(
+        "indexer.tree_truncated",
+        "the tree holds more manifests than the tree limit admits",
+      );
+    }
     files.length = limits.maxTreeEntries;
     truncated = true;
   }
