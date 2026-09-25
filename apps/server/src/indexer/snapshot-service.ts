@@ -144,9 +144,18 @@ export class SnapshotService {
       return snapshot;
     }
     const abort = new AbortController();
-    const done = this.#index(mount, scope, abort.signal).finally(() => {
-      this.#running.delete(snapshot.id);
-    });
+    const done = this.#index(mount, scope, abort.signal)
+      .catch((error: unknown) => {
+        // Indexing records its own failures. Whatever still escapes, such as the database going
+        // away while a failure is recorded, must not become an unhandled rejection.
+        this.#options.logger.error(
+          { err: error, snapshot: snapshot.id },
+          "indexing failed outside its own handling",
+        );
+      })
+      .finally(() => {
+        this.#running.delete(snapshot.id);
+      });
     this.#running.set(snapshot.id, { done, abort });
     return claimed;
   }
@@ -206,7 +215,10 @@ export class SnapshotService {
         log.info("indexing interrupted; the snapshot was handed back");
         return;
       }
-      const attempts = (await getSnapshot(database, scope))?.attempts ?? 1;
+      const attempts = await getSnapshot(database, scope).then(
+        (row) => row?.attempts ?? 1,
+        () => 1,
+      );
       const hinted = error instanceof GitHostError ? error.retryAfterSeconds : undefined;
       const backoff = Math.min(FIRST_RETRY_MS * 2 ** (attempts - 1), MAX_RETRY_MS);
       const retryInMs = Math.max(backoff, (hinted ?? 0) * 1000);

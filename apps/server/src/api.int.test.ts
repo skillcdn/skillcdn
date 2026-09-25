@@ -1,5 +1,11 @@
 import type { Client } from "@modelcontextprotocol/client";
-import { INDEXING_NOTICE, INSTRUCTIONS_MAX_LENGTH, PROVENANCE_NOTICE } from "@skillcdn/core";
+import {
+  GitHostError,
+  INDEXING_NOTICE,
+  INSTRUCTIONS_MAX_LENGTH,
+  PROVENANCE_NOTICE,
+} from "@skillcdn/core";
+import { createDatabase } from "@skillcdn/db";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createFixtureHost, fixtureCommits } from "./testing/fixture-host.js";
@@ -727,6 +733,42 @@ describe("while a commit is being indexed", () => {
     const late = await call(client, "search", { query: "fresh" });
     expect(late.text).toContain("document: docs/only-here.md - Only here");
     await client.close();
+  });
+});
+
+describe("when indexing fails", () => {
+  it("survives the database going away while the failure is recorded", async () => {
+    const fixture = createFixtureHost("database-gone");
+    const commit = fixtureCommits("database-gone").main;
+    const release = fixture.holdTrees();
+    const host = {
+      ...fixture,
+      async getTree(...args: Parameters<typeof fixture.getTree>) {
+        await fixture.getTree(...args);
+        throw new GitHostError("transient", "the host went away");
+      },
+    };
+    // A pool of its own, so that closing it leaves the other tests alone.
+    const database = createDatabase({
+      connectionString: testDatabase.connectionString,
+      maxConnections: 2,
+    });
+    const h = createHarness({ ...testDatabase, database }, { host });
+    const rejections: unknown[] = [];
+    const onRejection = (reason: unknown) => rejections.push(reason);
+    process.on("unhandledRejection", onRejection);
+    try {
+      const started = await h.request(`/api/v1/mounts/gh/acme/multi-skill@${commit}`);
+      expect(started.status).toBe(200);
+      await database.close();
+      release();
+      await h.snapshots.idle();
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(rejections).toEqual([]);
+      expect(h.logs.some((line) => line.msg === "indexing failed")).toBe(true);
+    } finally {
+      process.off("unhandledRejection", onRejection);
+    }
   });
 });
 
