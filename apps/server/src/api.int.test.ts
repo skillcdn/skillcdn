@@ -240,6 +240,11 @@ describe("a multi-skill repository", () => {
       title: "Acme/multi-skill/skills",
       websiteUrl: `http://skillcdn.test/gh/acme/multi-skill@${commit}/skills`,
     });
+    // Nothing changes within a connection, so no client is invited to watch for changes.
+    expect(client.getServerCapabilities()).toMatchObject({
+      tools: { listChanged: false },
+      prompts: { listChanged: false },
+    });
     const find = (await client.listTools()).tools.find((tool) => tool.name === "browse");
     expect(find?.description).toContain("List a folder's children");
     await client.close();
@@ -775,13 +780,17 @@ describe("a client running in a browser, on another origin", () => {
       headers: {
         origin: "https://app.example",
         "access-control-request-method": "POST",
-        "access-control-request-headers": "content-type, mcp-protocol-version",
+        "access-control-request-headers":
+          "content-type, mcp-protocol-version, mcp-method, mcp-name",
       },
     });
     expect(preflight.status).toBe(204);
     expect(preflight.headers.get("access-control-allow-origin")).toBe("*");
     expect(preflight.headers.get("access-control-allow-methods")).toContain("POST");
-    expect(preflight.headers.get("access-control-allow-headers")).toContain("mcp-protocol-version");
+    // The current protocol revision names the method and the tool in headers of its own.
+    for (const header of ["mcp-protocol-version", "mcp-method", "mcp-name"]) {
+      expect(preflight.headers.get("access-control-allow-headers")).toContain(header);
+    }
     expect(preflight.headers.get("access-control-max-age")).toBe("86400");
 
     const listed = await request("/gh/acme/single-skill", {

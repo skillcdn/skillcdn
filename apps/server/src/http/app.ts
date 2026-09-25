@@ -308,6 +308,8 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
         "accept",
         "authorization",
         "content-type",
+        "mcp-method",
+        "mcp-name",
         "mcp-protocol-version",
         "mcp-session-id",
       ],

@@ -78,7 +78,12 @@ export async function createMountServer(
       ),
       websiteUrl: `${request.origin}${formatAddress(mount.address)}`,
     },
-    { capabilities: { prompts: {} }, instructions: renderInstructions(catalog) },
+    {
+      // The surface of a mount never changes within a connection, so no client needs to
+      // subscribe to list changes; the SDK would advertise them otherwise.
+      capabilities: { prompts: { listChanged: false }, tools: { listChanged: false } },
+      instructions: renderInstructions(catalog),
+    },
   );
   server.server.oninitialized = () => stats.count(mount, "connection");
   const guarded =
