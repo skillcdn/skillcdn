@@ -2,6 +2,7 @@ import {
   assembleSkillDocument,
   type BlobStore,
   baseName,
+  classifyLicenseFile,
   classifyRepoFile,
   DomainError,
   decodeText,
@@ -16,15 +17,19 @@ import {
   isServedPath,
   isWithinRepoPath,
   joinRepoPath,
+  type LicenseFact,
+  MAX_LICENSE_TEXT_LENGTH,
   owningSkillDirectory,
   parentDirectory,
   parseRepoManifest,
   parseSkillManifest,
+  preferredLicenseFile,
   type RepoCoordinates,
   type RepoFileKind,
   type RepoPath,
   ROOT_PATH,
   relativeRepoPath,
+  resolveLicense,
   type ServedScope,
   type SkillListingProblem,
   selectReadmePaths,
@@ -49,7 +54,7 @@ import { gitBlobHash, sha256Hex } from "./git-hash.js";
  * is rebuilt when it is next asked for (`ensureSnapshot` in @skillcdn/db); without the bump, a
  * deployment keeps serving what the old rules produced until the repository moves on.
  */
-export const INDEX_VERSION = 6;
+export const INDEX_VERSION = 7;
 
 const MAX_DIAGNOSTICS = 50;
 const FETCH_CONCURRENCY = 8;
@@ -608,6 +613,59 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
     });
   }
 
+  // The licenses (ADR-0026): the repository's own file, and the file a skill's directory holds.
+  // A license file is read to be classified; what it says decides how its skills are served.
+  const licenseFiles = new Map<RepoPath, Candidate>();
+  for (const directory of [ROOT_PATH, ...skillDirectories]) {
+    const chosen = preferredLicenseFile(
+      candidates
+        .filter(({ entry }) => parentDirectory(entry.path) === directory)
+        .map(({ entry }) => entry.path),
+    );
+    const candidate = chosen === undefined ? undefined : byCandidatePath.get(chosen);
+    if (candidate !== undefined) licenseFiles.set(directory, candidate);
+  }
+  await fetchBodies(
+    [...licenseFiles.values()].filter(
+      (candidate) =>
+        !texts.has(candidate.entry.hash) &&
+        candidate.entry.size <= MAX_LICENSE_TEXT_LENGTH &&
+        admit(candidate, MAX_LICENSE_TEXT_LENGTH),
+    ),
+    MAX_LICENSE_TEXT_LENGTH,
+  );
+  const licenseFacts = new Map<RepoPath, LicenseFact>();
+  for (const [directory, { entry }] of licenseFiles) {
+    licenseFacts.set(directory, classifyLicenseFile(entry.path, texts.get(entry.hash)));
+  }
+  /** The `license` fields of the manifests above a directory, nearest first. */
+  const manifestFieldsAbove = (directory: RepoPath) =>
+    [...manifests.values()]
+      .filter(
+        (manifest) =>
+          manifest.frontMatter?.license !== undefined &&
+          isWithinRepoPath(parentDirectory(manifest.path as RepoPath), directory),
+      )
+      .sort((a, b) => b.path.length - a.path.length)
+      .map((manifest) => ({
+        path: manifest.path as RepoPath,
+        value: manifest.frontMatter?.license ?? "",
+      }));
+  const licenseOf = (directory: RepoPath, skill: NewIndexEntry): LicenseFact =>
+    resolveLicense({
+      skillFile: licenseFacts.get(directory),
+      skillField:
+        skill.frontMatter?.license === undefined
+          ? undefined
+          : { path: skill.path as RepoPath, value: skill.frontMatter.license },
+      manifestFields: manifestFieldsAbove(directory),
+      rootFile: licenseFacts.get(ROOT_PATH),
+    });
+  const repositoryLicense = resolveLicense({
+    manifestFields: manifestFieldsAbove(ROOT_PATH),
+    rootFile: licenseFacts.get(ROOT_PATH),
+  });
+
   // Round three: every served file of a skill the skills extension may list, whatever its kind,
   // so that each has a digest, then the document each such skill is served as (ADR-0025). A
   // skill a host cannot hold as a whole stays with the tools, and its entry says why.
@@ -740,22 +798,26 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
     listing.document = { digest: sha256Hex(bytes), size: bytes.byteLength };
   }
   const listedSkills = new Map<string, NewIndexEntry>();
-  for (const { skill, problem, detail, document } of listings) {
+  for (const { directory, skill, problem, detail, document } of listings) {
     const frontMatter = skill.frontMatter ?? { metadata: {}, warnings: [] };
+    const license = licenseOf(directory, skill);
     listedSkills.set(skill.path, {
       ...skill,
       ...(document === undefined ? {} : { digest: document.digest, servedSize: document.size }),
       listed: problem === undefined && document !== undefined,
+      licenseKind: license.kind,
       // A copy that is listed once, and a hidden skill next to visible ones, leave search too.
       searchable: skill.searchable && problem !== "duplicate" && problem !== "hidden",
-      frontMatter:
-        problem === undefined
+      frontMatter: {
+        ...(problem === undefined
           ? frontMatter
           : {
               ...frontMatter,
               warnings: [...frontMatter.warnings, describeListingProblem(problem, detail)],
               unlisted: problem,
-            },
+            }),
+        licenseFact: license,
+      },
     });
   }
 
@@ -796,5 +858,12 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
     };
   });
 
-  return { entries, truncated, indexedBytes, diagnostics, version: INDEX_VERSION };
+  return {
+    entries,
+    truncated,
+    indexedBytes,
+    diagnostics,
+    license: repositoryLicense,
+    version: INDEX_VERSION,
+  };
 }

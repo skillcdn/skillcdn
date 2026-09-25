@@ -25,6 +25,8 @@ describe("the check role", () => {
     const { code, report } = await check(join(FIXTURES, "with-manifest"));
     expect(code).toBe(0);
     expect(report).toContain("Repository manifest: SKILLCDN.md");
+    expect(report).toContain("License: MIT (SKILLCDN.md)\n");
+    expect(report).toContain("  license: MIT (SKILLCDN.md)\n");
     expect(report).toContain("  name: Acme playbooks");
     expect(report).toContain("  language: en");
     expect(report).toContain("  translations: ko");
@@ -51,6 +53,9 @@ describe("the check role", () => {
     const { code, report } = await check(join(FIXTURES, "hostile"));
     expect(code).toBe(1);
     expect(report).toContain("Repository manifest: none.");
+    expect(report).toContain(
+      "License: none declared (served with its provenance; never featured)\n",
+    );
     expect(report).toContain("Skills: 3 (2 listed through the MCP skills extension)\n");
     expect(report).toContain("  extension: not listed (name_directory_mismatch)\n");
     expect(report).toContain(
@@ -58,6 +63,20 @@ describe("the check role", () => {
     );
     expect(report).toContain('- the value of "description" is cut at " #"');
     expect(report).toContain("7 index issue(s) found");
+  });
+
+  it("tells the author which skills a deployment describes rather than serves", async () => {
+    const { code, report } = await check(join(FIXTURES, "licensed"));
+    expect(code).toBe(0);
+    expect(report).toContain("License: MIT (LICENSE)\n");
+    expect(report).toContain("- open (skills/open)\n");
+    expect(report).toContain("  license: MIT (LICENSE)\n");
+    expect(report).toContain(
+      "  license: All rights reserved (skills/reserved/LICENSE) (described only, unless the repository is verified)\n",
+    );
+    expect(report).toContain(
+      "  license: CC-BY-NC-4.0 (skills/declared/SKILL.md) (described only, unless the repository is verified)\n",
+    );
   });
 
   it("reads hidden skill declarations while skipping .git and node_modules", async () => {

@@ -116,6 +116,7 @@ export const en = {
     pinned: "pinned",
     commit: "Commit",
     path: "Path",
+    license: "License",
     unverified: "Unverified",
     unverifiedHint:
       "This content comes straight from the repository and has not been verified by its owner with SkillCDN. Review it before you trust it.",
@@ -178,6 +179,12 @@ export const en = {
     name: "Name",
     directory: "Directory",
     license: "License",
+    licenseNone: "None declared",
+    licenseUnrecognized: "Unrecognized license",
+    licenseSource: (source: string) => `from ${source}`,
+    describedOnly:
+      "This skill is described here, not served. Its license lets SkillCDN say that the skill exists, not pass its content on.",
+    readAtSource: "Read it at the source",
     compatibility: "Compatibility",
     allowedTools: "Allowed tools",
     metadata: "Metadata",

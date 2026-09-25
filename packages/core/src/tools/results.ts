@@ -1,3 +1,4 @@
+import type { LicenseFact } from "../license.js";
 import type { RepoPath } from "../repo-path.js";
 import type { SkillTranslation } from "../skill-manifest.js";
 
@@ -10,6 +11,10 @@ export interface FileReference {
 export interface BrowseEntry {
   readonly browsePath?: RepoPath;
   readonly overviewPath?: RepoPath;
+  /** A skill's license (ADR-0026). */
+  readonly license?: LicenseFact;
+  /** True for a skill this mount describes without serving its content: see `license`. */
+  readonly describedOnly?: boolean;
   readonly kind: "directory" | "skill" | "file";
   readonly path: RepoPath;
   readonly name: string | null;
@@ -82,6 +87,10 @@ export type FindItem =
       readonly moreFiles: number;
       /** For people: the title and the description in other languages. Not rendered for a model. */
       readonly translations: Readonly<Record<string, SkillTranslation>>;
+      /** The skill's license (ADR-0026). */
+      readonly license?: LicenseFact;
+      /** True when this mount describes the skill without serving its content: see `license`. */
+      readonly describedOnly?: boolean;
     }
   | {
       readonly kind: "document";
@@ -157,6 +166,17 @@ export interface SkillResult {
   readonly rules: SkillRules | undefined;
   /** For people: the title and the description in other languages. Not rendered for a model. */
   readonly translations: Readonly<Record<string, SkillTranslation>>;
+  /** How the skill is served, from the license it carries (ADR-0026). */
+  readonly serving?: SkillServing;
+}
+
+/** What a mount does with a skill: serves it in full, or describes it and points at the source. */
+export interface SkillServing {
+  readonly license: LicenseFact;
+  /** False when the license allows a description only: body, rules and files are withheld. */
+  readonly full: boolean;
+  /** Where the skill's manifest can be read at its host, in the commit served. */
+  readonly sourceUrl: string;
 }
 
 export interface FileResult {

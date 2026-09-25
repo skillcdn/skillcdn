@@ -106,6 +106,7 @@ export const ko: Messages = {
     pinned: "고정됨",
     commit: "커밋",
     path: "경로",
+    license: "라이선스",
     unverified: "미확인",
     unverifiedHint:
       "이 콘텐츠는 저장소에서 그대로 가져온 것이며, 저장소 소유자가 SkillCDN에서 확인 절차를 거치지 않았습니다. 신뢰하기 전에 직접 검토하세요.",
@@ -167,6 +168,12 @@ export const ko: Messages = {
     name: "이름",
     directory: "디렉터리",
     license: "라이선스",
+    licenseNone: "선언되지 않음",
+    licenseUnrecognized: "알 수 없는 라이선스",
+    licenseSource: (source: string) => `${source} 기준`,
+    describedOnly:
+      "이 스킬은 여기서 설명만 제공되고 내용은 제공되지 않습니다. 라이선스가 SkillCDN에 허용하는 것은 스킬이 있다고 알리는 것까지이며, 내용을 전달하는 것은 아닙니다.",
+    readAtSource: "원본에서 읽기",
     compatibility: "호환성",
     allowedTools: "허용된 도구",
     metadata: "메타데이터",

@@ -21,6 +21,7 @@ const FIXTURE_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "multi-skill": "Two skills and the documents next to them.",
   "single-skill": "One skill at the root of the repository.",
   "with-manifest": "What the host says, which the manifest replaces.",
+  licensed: "Skills under different licenses.",
 };
 
 /**

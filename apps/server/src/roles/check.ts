@@ -7,6 +7,7 @@ import {
   browseCatalogFiles,
   type CatalogFile,
   decodeText,
+  describeLicense,
   FIND_LIST_SKILLS_MAX,
   folderOverview,
   type GitHost,
@@ -277,6 +278,11 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
     );
   }
 
+  // The license decides what a deployment may pass on (ADR-0026); the author sees it as read.
+  write(
+    `License: ${describeLicense(index.license)}${index.license.kind === "none" ? " (served with its provenance; never featured)" : index.license.kind === "restrictive" ? " (described only, unless the repository is verified)" : ""}\n\n`,
+  );
+
   const listed = skills.filter((skill) => skill.listed === true);
   write(
     `Skills: ${skills.length}${skills.length === 0 ? "" : ` (${listed.length} listed through the MCP skills extension)`}\n`,
@@ -287,11 +293,15 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
       (entry) => entry.visible && entry.skillDir === directory && entry.kind !== "skill",
     );
     const included = skill.frontMatter?.include ?? [];
+    const license = skill.frontMatter?.licenseFact;
     write(
       `- ${skill.name ?? "?"} (${directory === "" ? "." : directory})\n` +
         `  ${skill.description ?? ""}\n` +
         `  files: ${owned.length}${included.length === 0 ? "" : ` (${included.length} returned with the skill)`}\n` +
         `  extension: ${skill.listed === true ? `listed, ${skill.servedSize ?? 0} bytes as served` : `not listed (${skill.frontMatter?.unlisted ?? "unknown"})`}\n` +
+        (license === undefined
+          ? ""
+          : `  license: ${describeLicense(license)}${license.kind === "restrictive" ? " (described only, unless the repository is verified)" : ""}\n`) +
         translationsLine(skill, "  ") +
         warningsLine(skill, "  "),
     );

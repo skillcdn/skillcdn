@@ -1,4 +1,4 @@
-import type { HostRepository } from "@skillcdn/core";
+import { type HostRepository, NO_LICENSE } from "@skillcdn/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { drizzleOf } from "./client.js";
 import {
@@ -87,7 +87,14 @@ async function readySnapshot(entries: NewIndexEntry[], bodies: Record<string, st
       database,
       scope,
       "builder",
-      { entries, truncated: false, indexedBytes: 0, diagnostics: [], version: 1 },
+      {
+        entries,
+        truncated: false,
+        indexedBytes: 0,
+        diagnostics: [],
+        license: NO_LICENSE,
+        version: 1,
+      },
       T0,
     ),
   ).toBe(true);
@@ -224,7 +231,14 @@ describe("snapshot lifecycle", () => {
 
   it("keeps a holder whose lease ran out from touching what its successor holds", async () => {
     const scope = await pendingSnapshot();
-    const index = { entries: [], truncated: false, indexedBytes: 0, diagnostics: [], version: 1 };
+    const index = {
+      entries: [],
+      truncated: false,
+      indexedBytes: 0,
+      diagnostics: [],
+      license: NO_LICENSE,
+      version: 1,
+    };
     expect(await claimSnapshot(database, scope, "first", T0, 60_000)).toBeDefined();
     expect(await claimSnapshot(database, scope, "second", minutes(2), 60_000)).toMatchObject({
       status: "indexing",
@@ -275,7 +289,14 @@ describe("snapshot lifecycle", () => {
 
   it("refuses to write an index for a snapshot it no longer holds", async () => {
     const scope = await pendingSnapshot();
-    const index = { entries: [], truncated: false, indexedBytes: 0, diagnostics: [], version: 1 };
+    const index = {
+      entries: [],
+      truncated: false,
+      indexedBytes: 0,
+      diagnostics: [],
+      license: NO_LICENSE,
+      version: 1,
+    };
     expect(await writeSnapshotIndex(database, scope, "nobody", index, T0)).toBe(false);
     expect(await renewSnapshotLease(database, scope, "nobody", T0, 60_000)).toBe(false);
 
@@ -297,6 +318,7 @@ describe("snapshot lifecycle", () => {
         truncated: true,
         indexedBytes: 10,
         diagnostics,
+        license: NO_LICENSE,
         version: 1,
       },
       T0,
@@ -326,6 +348,7 @@ describe("snapshot lifecycle", () => {
       truncated: false,
       indexedBytes: 0,
       diagnostics: [],
+      license: NO_LICENSE,
       version,
     });
     const first = await ensureSnapshot(database, scope, commit, 1, T0);
@@ -763,6 +786,7 @@ describe("purging a repository", () => {
         truncated: false,
         indexedBytes: 0,
         diagnostics: [],
+        license: NO_LICENSE,
         version: 1,
       },
       T0,

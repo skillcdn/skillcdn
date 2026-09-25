@@ -64,6 +64,13 @@
       "when": 1790356639240,
       "tag": "0008_operator-lists",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790358513051,
+      "tag": "0009_licenses",
+      "breakpoints": true
     }
   ]
 }

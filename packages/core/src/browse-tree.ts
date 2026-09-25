@@ -1,3 +1,4 @@
+import type { LicenseFact } from "./license.js";
 import {
   parentDirectory,
   type RepoFileKind,
@@ -9,6 +10,8 @@ import type { BrowseEntry, FolderOverview } from "./tools/results.js";
 
 /** One already-published file, independent of storage or transport representation. */
 export interface CatalogFile {
+  /** A skill's license (ADR-0026). */
+  readonly license?: LicenseFact | undefined;
   readonly path: RepoPath;
   readonly kind: RepoFileKind;
   readonly name?: string | undefined;
@@ -107,6 +110,7 @@ export function browseCatalogFiles(files: readonly CatalogFile[], path: RepoPath
     result.push({
       ...(skill === undefined ? {} : { browsePath: parentDirectory(skill.path) }),
       ...(overview === undefined ? {} : { overviewPath: overview.path }),
+      ...(skill?.license === undefined ? {} : { license: skill.license }),
       kind: skill !== undefined ? "skill" : direct === undefined ? "directory" : "file",
       path: skill?.path ?? childPath,
       name: skill?.name ?? ownManifest?.name ?? direct?.title ?? overview?.title ?? null,

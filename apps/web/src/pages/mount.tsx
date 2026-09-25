@@ -10,6 +10,7 @@ import { useI18n } from "../i18n/index.js";
 import { repositoryDescription, repositoryName, translationFor } from "../i18n/repository-text.js";
 import type { MountView } from "../router.js";
 import { applyHead, buildHead } from "../seo/head.js";
+import { licenseLabel } from "./license-text.js";
 import styles from "./mount.module.css";
 import { MountFile } from "./mount-file.js";
 import { MountOverview } from "./mount-overview.js";
@@ -91,6 +92,12 @@ function MountHeader(props: { readonly address: Address; readonly mount: RestMou
               <li className={styles.fact}>
                 <span className={styles.factLabel}>{t.mount.path}</span>
                 <code>{mount.path}</code>
+              </li>
+            )}
+            {mount.index.status === "ready" && mount.index.license !== undefined && (
+              <li className={styles.fact}>
+                <span className={styles.factLabel}>{t.mount.license}</span>
+                <code>{licenseLabel(t.skill, mount.index.license)}</code>
               </li>
             )}
           </ul>

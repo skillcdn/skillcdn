@@ -288,4 +288,58 @@ describe("the MCP skills extension", () => {
       await h.snapshots.idle();
     }
   });
+
+  it("lists a skill under a restrictive license only where the repository is verified", async () => {
+    const h = createHarness(database, { indexWaitMs: 100 });
+    const address = "/gh/acme/licensed";
+    await ready(h, address);
+    const prefix = "skill://gh/acme/licensed";
+    const client = await h.connect(address);
+    try {
+      const listed = listSchema.parse(
+        await client.request({ method: "skills/list", params: {} }, listSchema),
+      );
+      // A described skill is not a skill a host can hold, so its URI names nothing (ADR-0026).
+      expect(listed.skills.map((item) => item.uri)).toEqual([`${prefix}/skills/open/SKILL.md`]);
+      for (const uri of [
+        `${prefix}/skills/reserved/SKILL.md`,
+        `${prefix}/skills/reserved/references/secret.md`,
+        `${prefix}/skills/declared/SKILL.md`,
+      ]) {
+        await expect(
+          client.request({ method: "skills/get", params: { uri } }, getSchema),
+        ).rejects.toMatchObject({ code: -32602 });
+        await expect(client.readResource({ uri })).rejects.toMatchObject({ code: -32602 });
+      }
+      await expect(
+        client.request(
+          { method: "resources/directory/read", params: { uri: `${prefix}/skills/reserved` } },
+          directorySchema,
+        ),
+      ).rejects.toMatchObject({ code: -32602 });
+    } finally {
+      await client.close();
+    }
+
+    await h.lists.add("verified", address);
+    const vouched = await createHarness(database, { indexWaitMs: 100 }).connect(address);
+    try {
+      const listed = listSchema.parse(
+        await vouched.request({ method: "skills/list", params: {} }, listSchema),
+      );
+      expect(listed.skills.map((item) => item.uri)).toEqual([
+        `${prefix}/skills/declared/SKILL.md`,
+        `${prefix}/skills/open/SKILL.md`,
+        `${prefix}/skills/reserved/SKILL.md`,
+      ]);
+      expect(listed.cacheScope).toBe("public");
+      const secret = await vouched.readResource({
+        uri: `${prefix}/skills/reserved/references/secret.md`,
+      });
+      expect((secret.contents[0] as { text?: string }).text).toContain("three taps");
+    } finally {
+      await vouched.close();
+      await h.lists.remove("verified", address);
+    }
+  });
 });

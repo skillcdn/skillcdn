@@ -28,8 +28,11 @@ import {
   type IndexLimits,
   isWithinRepoPath,
   joinRepoPath,
+  type LicenseFact,
+  licenseOfPath,
   type MountCatalog,
   type MountSummary,
+  NO_LICENSE,
   pageOfText,
   parentDirectory,
   parseFrontMatter,
@@ -42,9 +45,12 @@ import {
   SKILL_PAGE_BYTES,
   type SkillResult,
   type SkillRules,
+  type SkillServing,
   type SkillTranslation,
+  servesInFull,
   skillDocumentInput,
   skillUriPrefix,
+  sourceFileUrl,
   splitFrontMatter,
 } from "@skillcdn/core";
 import {
@@ -118,7 +124,14 @@ export type FileLookup =
       readonly size: number;
       readonly limit: number;
     }
-  | { readonly kind: "not_text"; readonly path: RepoPath };
+  | { readonly kind: "not_text"; readonly path: RepoPath }
+  /** The license allows a description of the file's skill or repository, not a copy (ADR-0026). */
+  | {
+      readonly kind: "not_served";
+      readonly path: RepoPath;
+      readonly license: LicenseFact;
+      readonly sourceUrl: string;
+    };
 
 export interface SkillListing {
   readonly name: string;
@@ -146,6 +159,8 @@ export interface MountOverview {
   readonly groups?: readonly BrowseEntry[];
   readonly mount: MountSummary;
   readonly manifest: MountManifest | undefined;
+  /** The license that governs the mounted directory outside its skills (ADR-0026). */
+  readonly license: LicenseFact;
   readonly skillCount: number;
   readonly documentCount: number;
   readonly skills: readonly SkillListing[];
@@ -383,11 +398,51 @@ export class MountReader {
       linkedOnly: row.frontMatter?.linkedOnly,
       overviewOnly: row.frontMatter?.overviewOnly,
       language: row.frontMatter?.language,
+      license: row.frontMatter?.licenseFact,
     }));
   }
 
   async #browseEntries(scope: ReadScope, path: RepoPath): Promise<BrowseEntry[]> {
     return browseCatalogFiles(await this.#catalogFiles(scope), path);
+  }
+
+  /** The license of the skill that owns a path, when one does. */
+  async #skillLicenseAt(scope: ReadScope, path: RepoPath): Promise<LicenseFact | undefined> {
+    const owner = (await this.#entriesOf(scope))
+      .filter(
+        (row) =>
+          row.kind === "skill" &&
+          row.skillDir !== null &&
+          isWithinRepoPath(row.skillDir as RepoPath, path),
+      )
+      .sort((a, b) => (b.skillDir?.length ?? 0) - (a.skillDir?.length ?? 0))[0];
+    return owner?.frontMatter?.licenseFact;
+  }
+
+  /** The license that governs a path: its skill's own, else the repository's (ADR-0026). */
+  async #licenseAt(
+    scope: ReadScope,
+    snapshot: SnapshotRecord,
+    path: RepoPath,
+  ): Promise<LicenseFact> {
+    const owned = await this.#skillLicenseAt(scope, path);
+    if (owned !== undefined) return owned;
+    const entries = (await this.#entriesOf(scope)).map((row) => ({
+      path: row.path,
+      kind: row.kind,
+      license: row.frontMatter?.license,
+    }));
+    return licenseOfPath(entries, path, snapshot.license ?? NO_LICENSE);
+  }
+
+  /** Where a file can be read at the host, for a reader sent to the source. */
+  #sourceUrl(mount: Mount, path: RepoPath): string {
+    const { repository } = mount.repo;
+    return sourceFileUrl(
+      { host: mount.coordinates.host, owner: repository.owner.login, name: repository.name },
+      mount.commit,
+      path,
+    );
   }
 
   async #overviewOf(scope: ReadScope, path: RepoPath): Promise<FolderOverview | undefined> {
@@ -420,7 +475,11 @@ export class MountReader {
     const scope = scopeOf(outcome.snapshot);
     const key = this.#pageKey(mount, outcome.snapshot, "browse", path);
     const offset = continuationOffset(input.cursor, key);
-    const entries = await this.#browseEntries(scope, path);
+    const entries = (await this.#browseEntries(scope, path)).map((entry) =>
+      entry.license !== undefined && !servesInFull(entry.license, mount.verified)
+        ? { ...entry, describedOnly: true }
+        : entry,
+    );
     const limit = input.limit ?? BROWSE_DEFAULT_LIMIT;
     const overview = await this.#overviewOf(scope, path);
     const diagnostics = await this.#diagnosticsOf(mount, scope);
@@ -658,7 +717,9 @@ export class MountReader {
     const limit = input.limit ?? SKILLS_PAGE_SIZE;
     const [root, page] = await Promise.all([
       this.#rootSkill(scope),
-      listListedSkills(database, scope, mount.address.path, offset, limit),
+      listListedSkills(database, scope, mount.address.path, offset, limit, {
+        includeRestricted: mount.verified,
+      }),
     ]);
     const skills = (
       await Promise.all(page.skills.map((skill) => this.#skillEntry(mount, scope, root, skill)))
@@ -692,6 +753,10 @@ export class MountReader {
         ? undefined
         : await getEntry(database, scope, path);
     if (entry?.kind !== "skill" || !entry.listed) return { status: "ready", skill: undefined };
+    // A described skill is not listed here, so its URI names nothing (ADR-0026).
+    if (!servesInFull(entry.frontMatter?.licenseFact ?? NO_LICENSE, mount.verified)) {
+      return { status: "ready", skill: undefined };
+    }
     return {
       status: "ready",
       skill: await this.#skillEntry(mount, scope, await this.#rootSkill(scope), entry),
@@ -715,6 +780,8 @@ export class MountReader {
         : await getEntry(database, scope, path);
     if (entry === undefined || entry.digest === null)
       return { status: "ready", resource: undefined };
+    const license = await this.#licenseAt(scope, outcome.snapshot, entry.path as RepoPath);
+    if (!servesInFull(license, mount.verified)) return { status: "ready", resource: undefined };
     if (entry.kind === "skill") {
       const document = await this.#assembledDocument(mount, scope, entry);
       return {
@@ -754,6 +821,10 @@ export class MountReader {
     const root = await this.#rootSkill(scope);
     const path = await this.#pathOfUri(mount, scope, uri);
     if (path === undefined || !isWithinRepoPath(mount.address.path, path)) {
+      return { status: "ready", entries: undefined };
+    }
+    const owned = await this.#skillLicenseAt(scope, path);
+    if (owned !== undefined && !servesInFull(owned, mount.verified)) {
       return { status: "ready", entries: undefined };
     }
     const children = await listDirectory(database, scope, path, MAX_DIRECTORY_ENTRIES);
@@ -1001,13 +1072,55 @@ export class MountReader {
       };
     }
 
-    const text = await blobStore.read(skill.blobSha);
     const skillDirectory = belowMount(mount, skill.skillDir);
-    if (text === undefined || skillDirectory === undefined || skill.name === null) {
+    if (skillDirectory === undefined || skill.name === null) {
+      return { status: "ready", lookup: { kind: "unavailable" } };
+    }
+    const skillName = skill.name;
+    const license = skill.frontMatter?.licenseFact ?? NO_LICENSE;
+    const serving: SkillServing = {
+      license,
+      full: servesInFull(license, mount.verified),
+      sourceUrl: this.#sourceUrl(mount, skill.path as RepoPath),
+    };
+    if (!serving.full) {
+      // The license lets the reader know that the skill exists and where; the rest stays at the
+      // source (ADR-0026).
+      return {
+        status: "ready",
+        lookup: {
+          kind: "found",
+          skill: {
+            mount: this.summary(mount, outcome.snapshot),
+            path: skill.path as RepoPath,
+            ruleChain: [],
+            references: [],
+            complete: true,
+            nextCursor: undefined,
+            name: skillName,
+            directory: skillDirectory,
+            description: skill.description ?? "",
+            license: skill.frontMatter?.license,
+            compatibility: skill.frontMatter?.compatibility,
+            allowedTools: skill.frontMatter?.allowedTools,
+            metadata: skill.frontMatter?.metadata ?? {},
+            body: "",
+            files: [],
+            filesTruncated: false,
+            included: [],
+            warnings: [...(skill.frontMatter?.warnings ?? [])],
+            rules: undefined,
+            translations: skillTranslationsOf(skill.frontMatter?.translations),
+            serving,
+          },
+        },
+      };
+    }
+    const text = await blobStore.read(skill.blobSha);
+    if (text === undefined) {
       return { status: "ready", lookup: { kind: "unavailable" } };
     }
     const split = splitFrontMatter(text);
-    const skillName = skill.name;
     const [files, entries, included] = await Promise.all([
       listSkillFiles(database, scope, skill.skillDir ?? "", MAX_LISTED_SKILL_FILES + 1),
       this.#entriesOf(scope),
@@ -1131,6 +1244,7 @@ export class MountReader {
         warnings,
         rules: pagedRules[0],
         translations: skillTranslationsOf(skill.frontMatter?.translations),
+        serving,
       };
     };
     const result = boundedPage(SKILL_PAGE_BYTES, make, fits);
@@ -1259,6 +1373,10 @@ export class MountReader {
         },
       };
     }
+    const license = await this.#licenseAt(scope, outcome.snapshot, path);
+    if (!servesInFull(license, mount.verified)) {
+      return { kind: "not_served", path: below, license, sourceUrl: this.#sourceUrl(mount, path) };
+    }
     if (file.size > limits.maxReadableFileBytes) {
       return {
         kind: "too_large",
@@ -1330,6 +1448,7 @@ export class MountReader {
         mount: this.summary(mount, outcome.snapshot),
         groups: groups.filter((entry) => entry.kind === "directory").slice(0, BROWSE_DEFAULT_LIMIT),
         manifest,
+        license: await this.#licenseAt(scope, outcome.snapshot, path),
         skillCount: counts.skills,
         documentCount: counts.documents,
         skills: skills.flatMap((row) => {
@@ -1378,6 +1497,14 @@ function toFindItem(mount: Mount, row: EntryRecord): FindItem | undefined {
           files: [],
           moreFiles: 0,
           translations: skillTranslationsOf(row.frontMatter?.translations),
+          ...(row.frontMatter?.licenseFact === undefined
+            ? {}
+            : {
+                license: row.frontMatter.licenseFact,
+                ...(servesInFull(row.frontMatter.licenseFact, mount.verified)
+                  ? {}
+                  : { describedOnly: true }),
+              }),
         };
   }
   const path = belowMount(mount, row.path);

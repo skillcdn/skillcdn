@@ -11,6 +11,7 @@ import { useI18n } from "../i18n/index.js";
 import { skillDescription, skillTitle } from "../i18n/repository-text.js";
 import { Link } from "../navigation.js";
 import { mountHref } from "../router.js";
+import { licenseLabel } from "./license-text.js";
 import styles from "./mount.module.css";
 import { contentHref, MountPath, parentDirectory } from "./mount-path.js";
 
@@ -95,6 +96,7 @@ export function MountSkill(props: {
       rules.set(rule.path, (rules.get(rule.path) ?? "") + rule.body);
     }
   }
+  const described = skill.serving !== undefined && !skill.serving.full;
   // Keep the original name visible alongside a translated title.
   const title = skillTitle(skill, language);
   const description = skillDescription(skill, language);
@@ -102,7 +104,11 @@ export function MountSkill(props: {
   const facts: (readonly [string, string])[] = [
     ...(title === skill.name ? [] : [[t.skill.name, skill.name] as const]),
     [t.mount.path, skill.path ?? path],
-    ...(skill.license === null ? [] : [[t.skill.license, skill.license] as const]),
+    ...(skill.serving !== undefined
+      ? [[t.skill.license, licenseLabel(t.skill, skill.serving.license)] as const]
+      : skill.license === null
+        ? []
+        : [[t.skill.license, skill.license] as const]),
     ...(skill.compatibility === null
       ? []
       : [[t.skill.compatibility, skill.compatibility] as const]),
@@ -139,28 +145,41 @@ export function MountSkill(props: {
         </Callout>
       )}
 
-      {[...rules].map(([rulePath, ruleBody]) => (
-        <section key={rulePath}>
-          <h3 className={styles.subheading}>{t.skill.rules}</h3>
-          <p className={styles.note}>{t.skill.rulesSource(rulePath)}</p>
-          <div className={styles.document}>
-            <Markdown
-              source={ruleBody}
-              baseDirectory={parentDirectory(rulePath)}
-              fileHref={(target) => contentHref(address, target)}
-            />
-          </div>
-        </section>
-      ))}
+      {described && (
+        // The license lets the page say that the skill exists and where; the rest is at the source.
+        <Callout tone="warning">
+          {t.skill.describedOnly}{" "}
+          <a href={skill.serving?.sourceUrl} target="_blank" rel="noopener noreferrer">
+            {t.skill.readAtSource}
+          </a>
+        </Callout>
+      )}
 
-      <div className={styles.document}>
-        <Markdown
-          source={body}
-          baseDirectory={skill.directory}
-          references={pages.flatMap((page) => page.skill.references ?? [])}
-          fileHref={(target) => contentHref(address, target)}
-        />
-      </div>
+      {!described &&
+        [...rules].map(([rulePath, ruleBody]) => (
+          <section key={rulePath}>
+            <h3 className={styles.subheading}>{t.skill.rules}</h3>
+            <p className={styles.note}>{t.skill.rulesSource(rulePath)}</p>
+            <div className={styles.document}>
+              <Markdown
+                source={ruleBody}
+                baseDirectory={parentDirectory(rulePath)}
+                fileHref={(target) => contentHref(address, target)}
+              />
+            </div>
+          </section>
+        ))}
+
+      {!described && (
+        <div className={styles.document}>
+          <Markdown
+            source={body}
+            baseDirectory={skill.directory}
+            references={pages.flatMap((page) => page.skill.references ?? [])}
+            fileHref={(target) => contentHref(address, target)}
+          />
+        </div>
+      )}
 
       {[...includedContents].map(([filePath, content]) => (
         <section key={filePath}>

@@ -6,6 +6,7 @@ import {
   type GitHost,
   GitHostError,
   type IndexLimits,
+  MAX_LICENSE_TEXT_LENGTH,
   MAX_LINK_MARKDOWN_LENGTH,
   MAX_MARKDOWN_REFERENCES,
   parseRepoPath,
@@ -698,5 +699,101 @@ describe("what the skills extension lists", () => {
     });
     const fine = await index({ "SKILL.md": skill("Root."), "references/a.md": "# A\n" });
     expect(fine.byPath.get("SKILL.md")).toMatchObject({ listed: true });
+  });
+});
+
+describe("licenses (ADR-0026)", () => {
+  const MIT =
+    "MIT License\n\nCopyright (c) 2026 Acme\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software...";
+
+  it("resolves each skill's license from the nearest source, and the repository's from the root", async () => {
+    const result = await index({
+      LICENSE: MIT,
+      "SKILLCDN.md": manifest("", "documents: []\nlicense: Apache-2.0\n"),
+      "skills/inherits/SKILL.md": skill("Inherits."),
+      "skills/own-file/SKILL.md": skill("Own file."),
+      "skills/own-file/LICENSE": "Copyright (c) 2026 Acme. All rights reserved.",
+      "skills/own-field/SKILL.md": skill("Own field.", "license: CC-BY-NC-4.0\n"),
+      "skills/pointer/SKILL.md": skill("Pointer.", "license: See LICENSE\n"),
+      "group/SKILLCDN.md": manifest("", "documents: []\nlicense: Proprietary\n"),
+      "group/nested/SKILL.md": skill("Nested."),
+    });
+    const factOf = (path: string) => result.byPath.get(path)?.frontMatter?.licenseFact;
+    // The file at the root outranks the root manifest's field.
+    expect(result.license).toEqual({ kind: "permissive", name: "MIT", source: "LICENSE" });
+    expect(factOf("skills/inherits/SKILL.md")).toEqual(result.license);
+    expect(result.byPath.get("skills/inherits/SKILL.md")).toMatchObject({
+      licenseKind: "permissive",
+    });
+    expect(factOf("skills/own-file/SKILL.md")).toEqual({
+      kind: "restrictive",
+      name: "All rights reserved",
+      source: "skills/own-file/LICENSE",
+    });
+    expect(result.byPath.get("skills/own-file/SKILL.md")).toMatchObject({
+      licenseKind: "restrictive",
+    });
+    expect(factOf("skills/own-field/SKILL.md")).toEqual({
+      kind: "restrictive",
+      name: "CC-BY-NC-4.0",
+      source: "skills/own-field/SKILL.md",
+    });
+    expect(factOf("skills/pointer/SKILL.md")).toEqual(result.license);
+    expect(factOf("group/nested/SKILL.md")).toEqual({
+      kind: "restrictive",
+      name: "Proprietary",
+      source: "group/SKILLCDN.md",
+    });
+  });
+
+  it("falls back to the root manifest's field, and says when there is none", async () => {
+    const declared = await index({
+      "SKILLCDN.md": manifest("", "documents: []\nlicense: Apache-2.0\n"),
+      "skills/a/SKILL.md": skill("A."),
+    });
+    expect(declared.license).toEqual({
+      kind: "permissive",
+      name: "Apache-2.0",
+      source: "SKILLCDN.md",
+    });
+    const none = await index({ "skills/a/SKILL.md": skill("A.") });
+    expect(none.license).toEqual({ kind: "none", name: undefined, source: undefined });
+    expect(none.byPath.get("skills/a/SKILL.md")).toMatchObject({
+      licenseKind: "none",
+      frontMatter: { licenseFact: { kind: "none" } },
+    });
+  });
+
+  it("treats a license file it cannot read, or does not know, as restrictive", async () => {
+    const unknown = await index({ LICENSE: "Ask first.", "skills/a/SKILL.md": skill("A.") });
+    expect(unknown.license).toEqual({ kind: "restrictive", name: undefined, source: "LICENSE" });
+    const unreadable = await index(
+      { LICENSE: MIT, "skills/a/SKILL.md": skill("A.") },
+      { unreadable: ["LICENSE"] },
+    );
+    expect(unreadable.license).toEqual({
+      kind: "restrictive",
+      name: undefined,
+      source: "LICENSE",
+    });
+    const huge = await index({
+      LICENSE: `${MIT}${"x".repeat(MAX_LICENSE_TEXT_LENGTH)}`,
+      "skills/a/SKILL.md": skill("A."),
+    });
+    expect(huge.license).toEqual({ kind: "restrictive", name: undefined, source: "LICENSE" });
+    expect(huge.truncated).toBe(false);
+  });
+
+  it("takes the plainest of several license files, and ignores what only looks like one", async () => {
+    const result = await index({
+      "LICENSE.md": "Copyright (c) 2026 Acme. All rights reserved.",
+      LICENSE: MIT,
+      "skills/a/SKILL.md": skill("A."),
+      "skills/a/LICENSE_PLATE.jpg": "not a license",
+    });
+    expect(result.license).toEqual({ kind: "permissive", name: "MIT", source: "LICENSE" });
+    expect(result.byPath.get("skills/a/SKILL.md")?.frontMatter?.licenseFact).toEqual(
+      result.license,
+    );
   });
 });

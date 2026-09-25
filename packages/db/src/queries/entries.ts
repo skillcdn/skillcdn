@@ -1,5 +1,5 @@
-import type { RepoFileKind } from "@skillcdn/core";
-import { and, eq, inArray, ne, not, or, type SQL, sql } from "drizzle-orm";
+import type { LicenseKind, RepoFileKind } from "@skillcdn/core";
+import { and, eq, inArray, isNull, ne, not, or, type SQL, sql } from "drizzle-orm";
 import { type Database, drizzleOf } from "../client.js";
 import { indexEntries, type SkillFrontMatter } from "../schema.js";
 import { SEARCH_CONFIG, type SnapshotScope } from "./snapshots.js";
@@ -20,6 +20,8 @@ export interface EntryRecord {
   readonly servedSize: number | null;
   /** True for a skill the MCP skills extension lists. */
   readonly listed: boolean;
+  /** For a skill: what its license allows (ADR-0026); null for every other file. */
+  readonly licenseKind: LicenseKind | null;
 }
 
 const entryColumns = {
@@ -36,6 +38,7 @@ const entryColumns = {
   digest: indexEntries.digest,
   servedSize: indexEntries.servedSize,
   listed: indexEntries.listed,
+  licenseKind: indexEntries.licenseKind,
 };
 
 function inSnapshot(scope: SnapshotScope): SQL | undefined {
@@ -237,13 +240,18 @@ export async function listListedSkills(
   mountPath: string,
   offset: number,
   limit: number,
+  options: { readonly includeRestricted: boolean },
 ): Promise<{ readonly skills: EntryRecord[]; readonly total: number }> {
+  // A restrictive skill is listed only where the repository is verified (ADR-0026).
   const where = and(
     inSnapshot(scope),
     underPath(indexEntries.path, mountPath),
     VISIBLE,
     IS_SKILL,
     eq(indexEntries.listed, true),
+    options.includeRestricted
+      ? undefined
+      : or(isNull(indexEntries.licenseKind), ne(indexEntries.licenseKind, "restrictive")),
   );
   const db = drizzleOf(database);
   const [skills, [counted]] = await Promise.all([

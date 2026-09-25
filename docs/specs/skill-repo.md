@@ -218,6 +218,25 @@ An otherwise undiscovered target becomes readable, including a hidden file expli
 
 The served set and reference graph are computed once per repository and commit. A sub-path mount clips the result to its path; it does not recompute graph reachability from local sources. References outside that mount cannot be read there. Repository-root connections can use shared reference directories without copying their contents into every skill.
 
+## Licenses
+
+What a deployment may pass on follows the license it finds ([ADR-0026](../adr/0026-serving-follows-the-license-and-the-operators-lists.md)). For each skill the reader takes the first of these that says something:
+
+1. A license file in the skill's directory: `LICENSE`, `LICENSE.md`, `LICENSE-MIT`, `LICENCE`, `COPYING`, `UNLICENSE` and the like, the plainest name when there are several.
+2. The skill's `license` field. `MIT`, `Apache-2.0`, `CC-BY-4.0`, `GPL-3.0-or-later` and the usual ways of writing them are recognized; `MIT OR Apache-2.0` is as closed as its most closed part; a field that only points elsewhere (`See LICENSE`) is skipped.
+3. The `license` field of each manifest between the skill and the repository root, nearest first.
+4. The repository's license file.
+5. The root manifest's `license` field.
+
+Files outside the skills follow the same list from step 3. A license is **permissive** when it allows copies to be passed on with its notice: the usual open-source licenses, public-domain dedications and Creative Commons Attribution, ShareAlike included; copyleft conditions bind what the reader does next, not the serving. It is **restrictive** when it reserves all rights, forbids redistribution or derivatives, allows non-commercial use only, or is a text the reader does not know, which is the safe mistake; a license file that cannot be read, or is over 64 KiB, counts as unrecognized. A repository that says nothing has **no license**.
+
+- A permissive skill is served in full, and results name the license and where it was found: `License: MIT (LICENSE)`.
+- A restrictive skill is **described only**: `browse_repo` and `search_repo` list it and say so, `load_skill` returns its name, description, license and a link to its source and nothing else, `read_repo_file` refuses the files of its directory, and the skills extension does not list it. A verified repository is served in full on its default branch: the owner, once owners can verify, or the operator lifts the restriction by vouching for it ([tools](tools.md#indexing-and-trust)).
+- Files outside the skills under a restrictive license are listed and refused the same way.
+- A skill without a license is served in full with its provenance notice, and a repository without one is never featured.
+
+`check` prints the repository's license and each skill's, with `(described only, unless the repository is verified)` where that applies.
+
 ## What the skills extension serves
 
 A host that implements the MCP skills extension receives the skills of a mount as skills, with every file digested ([tools](tools.md#the-skills-extension)). What it lists is decided when the commit is indexed ([ADR-0024](../adr/0024-skills-travel-through-the-mcp-skills-extension.md), [ADR-0025](../adr/0025-a-skill-on-the-wire-is-assembled-from-its-sources.md)):
@@ -231,7 +250,7 @@ The `SKILL.md` a listed skill is served as is assembled from its sources, and it
 
 ## Checking a repository before pushing
 
-The server image has a `check` role that reads a directory as the indexer reads a commit, with the same parsers and the same limits, and prints what an agent would get: the manifest, every skill with its files, warnings and whether the skills extension lists it, the documents outside the skills, linked references, what is not served, index diagnostics, and the instructions a client is told on connect. It needs no database and no git host, executes nothing from the directory, and exits with `1` when index diagnostics are present, so it can gate a push.
+The server image has a `check` role that reads a directory as the indexer reads a commit, with the same parsers and the same limits, and prints what an agent would get: the manifest, the repository's license, every skill with its files, warnings, its license and whether the skills extension lists it, the documents outside the skills, linked references, what is not served, index diagnostics, and the instructions a client is told on connect. It needs no database and no git host, executes nothing from the directory, and exits with `1` when index diagnostics are present, so it can gate a push.
 
 ```sh
 pnpm --filter @skillcdn/server run start check ../skills      # from a checkout of this repository

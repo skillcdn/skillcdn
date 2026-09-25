@@ -29,6 +29,7 @@ The API shows a person what an agent gets from an address. It is anonymous, read
 | 409 | `skill.ambiguous` | More than one skill answers to the request; the response lists the `directories` to choose from. |
 | 413 | `file.too_large` | The file exceeds the readable size limit. |
 | 415 | `file.not_text` | The file is not UTF-8 text. |
+| 403 | `file.not_served` | The license of the file's skill or repository allows a description, not a copy ([licenses](skill-repo.md#licenses)); `sourceUrl` links to the file at its host. |
 
 ## Index state and paging
 
@@ -48,7 +49,7 @@ Repository identity and a bounded overview of the mount:
 | `repository` | Host, owner, name, default branch and host description. |
 | `ref`, `pinned`, `commit`, `path` | Requested ref (`null` for default), whether it is a full commit hash, resolved commit, and mounted repository-root directory. |
 | `verified` | Whether the operator or, later, the owner vouches for the repository ([tools](tools.md)). |
-| `index` | State, or a ready overview with manifest metadata, skill/document counts, bounded listings and diagnostics. |
+| `index` | State, or a ready overview with manifest metadata, the `license` that governs the mounted directory outside its skills (`kind`, `name`, `source`), skill/document counts, bounded listings and diagnostics. |
 
 The overview's manifest carries its own canonical `path`, `name`, `description`, `language` and `translations`, or is absent when no applicable manifest exists. An ancestor manifest's path remains its actual repository path even if ordinary file reading cannot reach it from this mount. Names, descriptions and translations belong to their declaring manifest; language inherits from the nearest ancestor that declares it.
 
@@ -58,7 +59,7 @@ Skill listings expose exact `path`, `directory`, `name`, `description`, warnings
 
 The `browse_repo` tool's immediate-folder view. `path` is an optional canonical directory (default: mounted directory); `limit` is 1 to 200, default 50. `cursor` continues the same listing.
 
-Entries preserve the real folder tree, name their canonical paths, distinguish files and directories, and identify skill folders and manifest metadata when available. Counts help a client choose a subtree without loading every skill. A manifest adds context to its folder; it creates no shortened path or alias. The response carries diagnostics, commit and `nextCursor`.
+Entries preserve the real folder tree, name their canonical paths, distinguish files and directories, and identify skill folders and manifest metadata when available. Counts help a client choose a subtree without loading every skill. A manifest adds context to its folder; it creates no shortened path or alias. A skill entry carries its `license` and, when this mount only describes the skill, `describedOnly: true` ([licenses](skill-repo.md#licenses)). The response carries diagnostics, commit and `nextCursor`.
 
 The optional `overview` describes a readable README of the current folder as `{ path, title, description }`, with nullable title and description. An entry can carry an optional `overviewPath`. These introductions work without manifests, stay in their original language and open through the files endpoint. Their full text is not part of browse results or required skill context. Overview-only files do not add independent search results or document counts; [format rules](skill-repo.md#readme-introductions) determine which README is selected and whether it has another discovery role.
 
@@ -66,7 +67,7 @@ The optional `overview` describes a readable README of the current folder as `{ 
 
 The `search_repo` tool's ranked search. `query` is nonblank text of at most 500 characters; `path` restricts the search subtree, defaulting to the mount. `limit` is 1 to 25, default 10, and bounds final results after folding. Use the browse endpoint for directory discovery.
 
-A skill result carries its exact `path`, `directory`, name, description and translations. Matching supporting files are folded into the owning skill before pagination, with up to five matching file summaries and `moreFiles` for the rest. A skill occupies its best-ranked member's position, even when only a supporting file matched. Independent document results have canonical path, title and summary. Results remain in relevance order across folders; linked-only references are not independent search results.
+A skill result carries its exact `path`, `directory`, name, description and translations, its `license`, and `describedOnly: true` when this mount only describes the skill ([licenses](skill-repo.md#licenses)). Matching supporting files are folded into the owning skill before pagination, with up to five matching file summaries and `moreFiles` for the rest. A skill occupies its best-ranked member's position, even when only a supporting file matched. Independent document results have canonical path, title and summary. Results remain in relevance order across folders; linked-only references are not independent search results.
 
 The response carries the query, result items, diagnostics, resolved `commit` and `nextCursor`.
 
@@ -77,6 +78,7 @@ The `load_skill` tool. `path` is required and is an exact canonical `SKILL.md` p
 The ready response's `skill` contains:
 
 - `path`, `directory`, `name`, `description`, known front-matter fields, warnings and translations.
+- `serving`: the `license` the reader resolved for the skill (`kind`, `name`, `source`), whether the skill is served in `full`, and the `sourceUrl` of its manifest at the host. With `full` false the skill is described only ([licenses](skill-repo.md#licenses)): `body` is empty and the rules, files and references are absent.
 - `ruleChain`: applicable manifest bodies in repository-root-to-nearest order, with canonical source paths and fragment information.
 - `body`: the skill-body content on this page.
 - Supporting-file paths, included-file information and canonical `references` for optional reads.
@@ -98,7 +100,7 @@ MCP additionally bounds its complete serialized tool result and can return short
 
 ### `GET /api/v1/featured`
 
-The addresses the operator selects for the explorer (the featured list of the [admin API](../../deploy/README.md#the-admin-api)), with their repository metadata, manifest introduction when available, index status, skill count and a few skill names. Unresolvable addresses are omitted. There is no public enumeration of every indexed repository: asking for an address alone does not opt its author into a catalog.
+The addresses the operator selects for the explorer (the featured list of the [admin API](../../deploy/README.md#the-admin-api)), with their repository metadata, manifest introduction when available, index status, skill count and a few skill names. Unresolvable addresses are omitted, and so is a repository whose index found no license ([ADR-0026](../adr/0026-serving-follows-the-license-and-the-operators-lists.md)). There is no public enumeration of every indexed repository: asking for an address alone does not opt its author into a catalog.
 
 ## Open questions
 

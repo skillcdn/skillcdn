@@ -46,9 +46,23 @@ export const restReferenceSchema = z.object({
   path: z.string(),
   status: z.enum(["available", "outside_mount", "missing", "blocked"]),
 });
+/** The license a skill or a repository carries, as the index classified it (ADR-0026). */
+export const restLicenseSchema = z.object({
+  kind: z.enum(["permissive", "restrictive", "none"]),
+  /** The SPDX identifier when recognized, else the declared text; `null` for none. */
+  name: z.nullable(z.string()),
+  /** The repository-root path of the license file or manifest that said so; `null` for none. */
+  source: z.nullable(z.string()),
+});
+export type RestLicense = z.infer<typeof restLicenseSchema>;
+
 export const restBrowseEntrySchema = z.object({
   browsePath: z.optional(z.string()),
   overviewPath: z.optional(z.string()),
+  /** A skill's license. */
+  license: z.optional(restLicenseSchema),
+  /** True for a skill this mount describes without serving its content. */
+  describedOnly: z.optional(z.boolean()),
   kind: z.enum(["directory", "skill", "file"]),
   path: z.string(),
   name: z.nullable(z.string()),
@@ -148,6 +162,8 @@ export const restMountSchema = z.object({
     z.object({
       status: z.literal("ready"),
       truncated: z.boolean(),
+      /** The license that governs the mounted directory outside its skills. */
+      license: z.optional(restLicenseSchema),
       /** `null` when the mount has no manifest. */
       manifest: z.nullable(restManifestSchema),
       overview: z.optional(restFolderOverviewSchema),
@@ -175,6 +191,9 @@ export const restFindItemSchema = z.discriminatedUnion("kind", [
     files: z.array(restDocumentSummarySchema),
     /** How many more of its files matched than are listed. */
     moreFiles: count,
+    license: z.optional(restLicenseSchema),
+    /** True when this mount describes the skill without serving its content. */
+    describedOnly: z.optional(z.boolean()),
   }),
   z.object({
     kind: z.literal("document"),
@@ -232,6 +251,13 @@ export const restSkillSchema = z.discriminatedUnion("status", [
       included: z.array(z.string()),
       warnings: z.array(z.string()),
       translations: restSkillTranslationsSchema,
+      /**
+       * How the skill is served, from the license it carries (ADR-0026). With `full` false the
+       * body, rules and files are withheld, and `sourceUrl` is where to read the skill instead.
+       */
+      serving: z.optional(
+        z.object({ license: restLicenseSchema, full: z.boolean(), sourceUrl: z.string() }),
+      ),
       /** The repository's rules from its manifest, or `null` when there are none. */
       rules: z.nullable(
         z.object({

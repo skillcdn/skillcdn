@@ -1,3 +1,4 @@
+import { describeLicense } from "../license.js";
 import { renderSkillSections } from "../skill-document.js";
 import {
   BROWSE_DESCRIPTION_MAX_LENGTH,
@@ -39,7 +40,7 @@ export function renderBrowseResult(result: BrowseResult): string {
     result.entries
       .map(
         (entry) =>
-          `- ${entry.kind}: ${entry.path}${entry.name === null ? "" : ` (${compactSummary(entry.name, 120)})`}${entry.kind === "file" ? "" : `; ${plural(entry.skillCount, "skill")}${entry.documentCount === 0 ? "" : `, ${plural(entry.documentCount, "document")}`}`}${entry.overviewPath === undefined ? "" : `; overview: ${entry.overviewPath}`}${entry.description === null ? "" : `\n  ${compactSummary(entry.description, BROWSE_DESCRIPTION_MAX_LENGTH)}`}`,
+          `- ${entry.kind}: ${entry.path}${entry.name === null ? "" : ` (${compactSummary(entry.name, 120)})`}${entry.kind === "file" ? "" : `; ${plural(entry.skillCount, "skill")}${entry.documentCount === 0 ? "" : `, ${plural(entry.documentCount, "document")}`}`}${entry.overviewPath === undefined ? "" : `; overview: ${entry.overviewPath}`}${describedOnlyNote(entry)}${entry.description === null ? "" : `\n  ${compactSummary(entry.description, BROWSE_DESCRIPTION_MAX_LENGTH)}`}`,
       )
       .join("\n"),
     renderDiagnostics(result.diagnostics ?? [], true, result.diagnosticsTotal),
@@ -75,6 +76,16 @@ export function describeMount(mount: MountSummary): string {
   const ref = mount.ref === undefined ? "" : `@${mount.ref}`;
   const path = mount.path.length === 0 ? "" : `, under ${mount.path}`;
   return `${mount.repository}${ref} (commit ${mount.commit.slice(0, 7)}${path})`;
+}
+
+/** A skill this mount describes without serving: the license says so (ADR-0026). */
+function describedOnlyNote(item: {
+  readonly describedOnly?: boolean;
+  readonly license?: { readonly kind: string; readonly name: string | undefined };
+}): string {
+  return item.describedOnly === true
+    ? `; described only (license: ${item.license?.name ?? "unrecognized"})`
+    : "";
 }
 
 function notices(mount: MountSummary): string[] {
@@ -124,7 +135,7 @@ export function renderDiagnostics(
 function renderFindItem(item: FindItem, number: number): string {
   if (item.kind === "skill") {
     const lines = [
-      `${number}. skill: ${item.name} (${item.directory.length === 0 ? "SKILL.md" : `${item.directory}/SKILL.md`})`,
+      `${number}. skill: ${item.name} (${item.directory.length === 0 ? "SKILL.md" : `${item.directory}/SKILL.md`})${describedOnlyNote(item)}`,
       `   ${compactSummary(item.description, SEARCH_DESCRIPTION_MAX_LENGTH)}`,
     ];
     if (item.files.length > 0) {
@@ -210,7 +221,11 @@ export function renderSkillResult(result: SkillResult): string {
     `Skill: ${result.name}`,
     `Source: ${describeMount(result.mount)}`,
     result.description.length === 0 ? undefined : `Description: ${result.description}`,
-    result.license === undefined ? undefined : `License: ${result.license}`,
+    result.serving !== undefined
+      ? `License: ${describeLicense(result.serving.license)}`
+      : result.license === undefined
+        ? undefined
+        : `License: ${result.license}`,
     result.compatibility === undefined ? undefined : `Compatibility: ${result.compatibility}`,
     result.allowedTools === undefined ? undefined : `Allowed tools: ${result.allowedTools}`,
     Object.keys(result.metadata).length === 0
@@ -220,6 +235,16 @@ export function renderSkillResult(result: SkillResult): string {
           .join("; ")}`,
     `Relative paths in the instructions start at ${directory}.`,
   ].filter((line) => line !== undefined);
+
+  // A described skill ends here: the license lets the reader know that it exists and where,
+  // not take a copy of it from this server (ADR-0026).
+  if (result.serving !== undefined && !result.serving.full) {
+    return joinSections([
+      header.join("\n"),
+      `Described only: the license allows SkillCDN to say that this skill exists, not to pass its content on. Read it at its source: ${result.serving.sourceUrl}`,
+      notices(result.mount).join("\n"),
+    ]);
+  }
 
   const includedPaths = new Set(result.included.map((file) => file.path));
   let files: string | undefined;

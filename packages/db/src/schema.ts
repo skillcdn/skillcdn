@@ -1,3 +1,4 @@
+import type { LicenseFact } from "@skillcdn/core";
 import { sql } from "drizzle-orm";
 import {
   bigint,
@@ -150,6 +151,11 @@ export const snapshots = pgTable(
     /** Skipped manifests and similar findings for the repository author. Capped by the writer. */
     diagnostics: jsonb().$type<SnapshotDiagnostic[]>().notNull().default([]),
     /**
+     * The license that governs the repository outside its skills (ADR-0026): its license file,
+     * else its root manifest's field. Null before the index is written.
+     */
+    license: jsonb().$type<LicenseFact>(),
+    /**
      * The version of the reading rules the index was written with; 0 before it is written. An
      * index below the rules in force goes back to `pending` when it is next asked for.
      */
@@ -213,6 +219,11 @@ export interface SkillFrontMatter {
   readonly manifestError?: string;
   /** Skill only: why the MCP skills extension does not list it (ADR-0025), when it does not. */
   readonly unlisted?: string;
+  /**
+   * The license that governs the file (ADR-0026): for a skill, the one resolved for it; for a
+   * license file, what the file itself says.
+   */
+  readonly licenseFact?: LicenseFact;
 }
 
 /** One file of a snapshot. Immutable: rows are inserted and deleted, never updated. */
@@ -255,6 +266,11 @@ export const indexEntries = pgTable(
     servedSize: integer(),
     /** True for a skill the MCP skills extension lists; the reason it is not is in `front_matter`. */
     listed: boolean().notNull().default(false),
+    /**
+     * For a skill: what its license allows (ADR-0026). A restrictive skill is described, not
+     * served, unless the repository is verified, and the extension lists it only then.
+     */
+    licenseKind: text({ enum: ["permissive", "restrictive", "none"] }),
     createdAt: createdAt(),
   },
   (table) => [
@@ -266,6 +282,10 @@ export const indexEntries = pgTable(
     check(
       "index_entries_kind_check",
       sql`${table.kind} in ('skill', 'manifest', 'markdown', 'json', 'other')`,
+    ),
+    check(
+      "index_entries_license_kind_check",
+      sql`${table.licenseKind} is null or ${table.licenseKind} in ('permissive', 'restrictive', 'none')`,
     ),
   ],
 );

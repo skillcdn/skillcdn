@@ -3,6 +3,7 @@ import {
   GitHostError,
   INDEXING_NOTICE,
   INSTRUCTIONS_MAX_LENGTH,
+  NO_LICENSE,
   PROVENANCE_NOTICE,
 } from "@skillcdn/core";
 import {
@@ -876,6 +877,7 @@ describe("an index rebuilt under newer reading rules", () => {
           truncated: false,
           indexedBytes: 1,
           diagnostics: [],
+          license: NO_LICENSE,
           version: INDEX_VERSION + 1,
         },
         now,
@@ -1067,5 +1069,91 @@ describe("a process that indexes nothing", () => {
     expect(served.getInstructions()).toContain("SKILL.md: Writes commit messages");
     expect((await call(served, "browse_repo")).text).toContain("SKILL.md");
     await served.close();
+  });
+});
+
+describe("content policy (ADR-0026)", () => {
+  it("serves what a permissive license allows and describes what a restrictive one keeps", async () => {
+    const h = harness();
+    const client = await h.connect("/gh/acme/licensed");
+    const open = await call(client, "load_skill", { path: "skills/open/SKILL.md" });
+    expect(open.isError).toBe(false);
+    expect(open.text).toContain("License: MIT (LICENSE)");
+    expect(open.text).toContain("--- instructions ---");
+    expect(open.data).toMatchObject({
+      serving: { full: true, license: { kind: "permissive", name: "MIT", source: "LICENSE" } },
+    });
+
+    const reserved = await call(client, "load_skill", { path: "skills/reserved/SKILL.md" });
+    expect(reserved.isError).toBe(false);
+    expect(reserved.text).toContain("License: All rights reserved (skills/reserved/LICENSE)");
+    expect(reserved.text).toContain("Described only");
+    expect(reserved.text).toContain("https://github.com/Acme/licensed/blob/");
+    expect(reserved.text).not.toContain("--- instructions ---");
+    expect(reserved.text).not.toContain("handshake");
+    expect(reserved.data).toMatchObject({
+      body: "",
+      files: [],
+      serving: { full: false, license: { kind: "restrictive", name: "All rights reserved" } },
+    });
+
+    const declared = await call(client, "load_skill", { path: "skills/declared/SKILL.md" });
+    expect(declared.text).toContain("License: CC-BY-NC-4.0 (skills/declared/SKILL.md)");
+    expect(declared.text).toContain("Described only");
+
+    // The files of a described skill stay at the source; the rest of the repository is MIT.
+    const secret = await call(client, "read_repo_file", {
+      path: "skills/reserved/references/secret.md",
+    });
+    expect(secret.isError).toBe(true);
+    expect(secret.text).toContain("described, not served");
+    expect(secret.text).toContain("https://github.com/Acme/licensed/blob/");
+    expect(secret.text).not.toContain("handshake");
+    expect(
+      (await call(client, "read_repo_file", { path: "skills/reserved/SKILL.md" })).isError,
+    ).toBe(true);
+    expect((await call(client, "read_repo_file", { path: "docs/guide.md" })).isError).toBe(false);
+    expect(
+      (await call(client, "read_repo_file", { path: "skills/open/references/notes.md" })).isError,
+    ).toBe(false);
+
+    // Discovery says which skills are described only, so that a model does not load them for nothing.
+    const listing = await call(client, "search_repo", { query: "skill" });
+    expect(listing.text).toContain(
+      "skill: reserved (skills/reserved/SKILL.md); described only (license: All rights reserved)",
+    );
+    expect(listing.text).toContain(
+      "skill: declared (skills/declared/SKILL.md); described only (license: CC-BY-NC-4.0)",
+    );
+    expect(listing.text).not.toContain("skill: open (skills/open/SKILL.md);");
+    const browse = await call(client, "browse_repo", { path: "skills" });
+    expect(browse.text).toContain(
+      "skill: skills/reserved/SKILL.md (reserved); 1 skill; described only (license: All rights reserved)",
+    );
+    expect(browse.text).toContain("skill: skills/open/SKILL.md (open); 1 skill\n");
+    await client.close();
+  });
+
+  it("serves everything once the operator vouches for the repository", async () => {
+    const h = harness();
+    await h.lists.add("verified", "/gh/acme/licensed");
+    try {
+      const client = await h.connect("/gh/acme/licensed");
+      const reserved = await call(client, "load_skill", { path: "skills/reserved/SKILL.md" });
+      expect(reserved.text).toContain("--- instructions ---");
+      expect(reserved.text).not.toContain("Described only");
+      expect(reserved.data).toMatchObject({ serving: { full: true } });
+      const secret = await call(client, "read_repo_file", {
+        path: "skills/reserved/references/secret.md",
+      });
+      expect(secret.isError).toBe(false);
+      expect(secret.text).toContain("three taps");
+      expect((await call(client, "search_repo", { query: "skill" })).text).not.toContain(
+        "described only",
+      );
+      await client.close();
+    } finally {
+      await h.lists.remove("verified", "/gh/acme/licensed");
+    }
   });
 });

@@ -1,4 +1,4 @@
-import type { RepoFileKind } from "@skillcdn/core";
+import type { LicenseFact, LicenseKind, RepoFileKind } from "@skillcdn/core";
 import { and, eq, lt, lte, or, sql } from "drizzle-orm";
 import { type Database, drizzleOf } from "../client.js";
 import {
@@ -23,6 +23,8 @@ export interface SnapshotRecord {
   readonly retryAt: Date | null;
   /** The reading rules the index was written with; 0 until it is. See `ensureSnapshot`. */
   readonly indexVersion: number;
+  /** The license that governs the repository outside its skills (ADR-0026); null until indexed. */
+  readonly license: LicenseFact | null;
 }
 
 export interface SnapshotScope {
@@ -38,6 +40,7 @@ const snapshotColumns = {
   status: snapshots.status,
   attempts: snapshots.attempts,
   truncated: snapshots.truncated,
+  license: snapshots.license,
   errorCode: snapshots.errorCode,
   retryAt: snapshots.retryAt,
   indexVersion: snapshots.indexVersion,
@@ -226,6 +229,8 @@ export interface NewIndexEntry {
   readonly servedSize?: number;
   /** True for a skill the MCP skills extension lists. */
   readonly listed?: boolean;
+  /** For a skill: what its license allows (ADR-0026). */
+  readonly licenseKind?: LicenseKind;
 }
 
 export interface SnapshotIndex {
@@ -233,6 +238,8 @@ export interface SnapshotIndex {
   readonly truncated: boolean;
   readonly indexedBytes: number;
   readonly diagnostics: readonly SnapshotDiagnostic[];
+  /** The license that governs the repository outside its skills (ADR-0026). */
+  readonly license: LicenseFact;
   /** The version of the reading rules that built it; see `ensureSnapshot`. */
   readonly version: number;
 }
@@ -273,7 +280,7 @@ export async function writeSnapshotIndex(
       const rows = sql.join(
         batch.map(
           (entry) =>
-            sql`(${entry.path}, ${entry.kind}, ${entry.size}::integer, ${entry.blobSha}, ${entry.skillDir ?? null}, ${entry.name ?? null}, ${entry.title ?? null}, ${entry.description ?? null}, ${entry.frontMatter === undefined ? null : JSON.stringify(entry.frontMatter)}::jsonb, ${entry.searchable}::boolean, ${entry.visible}::boolean, ${entry.searchBody?.slice(0, MAX_SEARCHED_BODY_LENGTH) ?? null}::text, ${entry.digest ?? null}::text, ${entry.servedSize ?? null}::integer, ${entry.listed ?? false}::boolean)`,
+            sql`(${entry.path}, ${entry.kind}, ${entry.size}::integer, ${entry.blobSha}, ${entry.skillDir ?? null}, ${entry.name ?? null}, ${entry.title ?? null}, ${entry.description ?? null}, ${entry.frontMatter === undefined ? null : JSON.stringify(entry.frontMatter)}::jsonb, ${entry.searchable}::boolean, ${entry.visible}::boolean, ${entry.searchBody?.slice(0, MAX_SEARCHED_BODY_LENGTH) ?? null}::text, ${entry.digest ?? null}::text, ${entry.servedSize ?? null}::integer, ${entry.listed ?? false}::boolean, ${entry.licenseKind ?? null}::text)`,
         ),
         sql`, `,
       );
@@ -282,7 +289,7 @@ export async function writeSnapshotIndex(
       // not decode are never searchable, and rows from before bytes were stored hold text.
       await tx.execute(sql`
         insert into index_entries
-          (account_id, snapshot_id, path, kind, size, blob_sha, skill_dir, name, title, description, front_matter, search, visible, digest, served_size, listed)
+          (account_id, snapshot_id, path, kind, size, blob_sha, skill_dir, name, title, description, front_matter, search, visible, digest, served_size, listed, license_kind)
         select
           ${scope.accountId}::uuid, ${scope.snapshotId}::uuid,
           v.path, v.kind, v.size, v.blob_sha, v.skill_dir, v.name, v.title, v.description, v.front_matter,
@@ -292,9 +299,9 @@ export async function writeSnapshotIndex(
             setweight(to_tsvector(${SEARCH_CONFIG}::regconfig, translate(v.path, '/._-', '    ')), 'C') ||
             setweight(to_tsvector(${SEARCH_CONFIG}::regconfig, coalesce(v.search_body, left(coalesce(b.content, convert_from(b.bytes, 'UTF8')), ${MAX_SEARCHED_BODY_LENGTH}::integer), '')), 'D')
           end,
-          v.visible, v.digest, v.served_size, v.listed
+          v.visible, v.digest, v.served_size, v.listed, v.license_kind
         from (values ${rows})
-          as v (path, kind, size, blob_sha, skill_dir, name, title, description, front_matter, searchable, visible, search_body, digest, served_size, listed)
+          as v (path, kind, size, blob_sha, skill_dir, name, title, description, front_matter, searchable, visible, search_body, digest, served_size, listed, license_kind)
         left join blobs b on b.sha = v.blob_sha and v.searchable
       `);
     }
@@ -309,6 +316,7 @@ export async function writeSnapshotIndex(
         indexedFileCount: index.entries.filter((entry) => entry.searchable).length,
         indexedBytes: index.indexedBytes,
         diagnostics: [...index.diagnostics],
+        license: index.license,
         leaseExpiresAt: null,
         leaseOwner: null,
         indexedAt: now,

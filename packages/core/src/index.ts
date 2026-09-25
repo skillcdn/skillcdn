@@ -26,6 +26,24 @@ export {
   splitFrontMatter,
 } from "./front-matter.js";
 export { isFullCommitHash, isValidRefName, MAX_REF_LENGTH } from "./git-ref.js";
+export {
+  classifyLicenseField,
+  classifyLicenseFile,
+  classifyLicenseText,
+  describeLicense,
+  isLicenseFileName,
+  type LicensedEntry,
+  type LicenseFact,
+  type LicenseKind,
+  type LicenseSources,
+  licenseOfPath,
+  MAX_LICENSE_TEXT_LENGTH,
+  NO_LICENSE,
+  preferredLicenseFile,
+  resolveLicense,
+  servesInFull,
+  sourceFileUrl,
+} from "./license.js";
 export { isLanguageTag, MAX_TRANSLATIONS } from "./manifest-fields.js";
 export { type MarkdownSummary, summarizeMarkdown } from "./markdown.js";
 export {
@@ -118,6 +136,7 @@ export {
   type RestFind,
   type RestFindItem,
   type RestFolderOverview,
+  type RestLicense,
   type RestManifest,
   type RestMount,
   type RestReference,
@@ -137,6 +156,7 @@ export {
   restFindItemSchema,
   restFindSchema,
   restFolderOverviewSchema,
+  restLicenseSchema,
   restMountSchema,
   restPath,
   restReferenceSchema,
@@ -267,4 +287,5 @@ export {
   pageOfText,
   type SkillResult,
   type SkillRules,
+  type SkillServing,
 } from "./tools/results.js";

@@ -2,11 +2,13 @@ import {
   type Address,
   BROWSE_MAX_LIMIT,
   type BrowseResult,
+  describeLicense,
   FIND_MAX_LIMIT,
   type FindResult,
   formatAddress,
   GitHostError,
   isPinnedAddress,
+  type LicenseFact,
   MAX_QUERY_LENGTH,
   MAX_REPO_PATH_LENGTH,
   READ_FILE_MAX_LIMIT,
@@ -18,6 +20,7 @@ import {
   type RestFeatured,
   type RestFile,
   type RestFind,
+  type RestLicense,
   type RestMount,
   type RestRepository,
   type RestRepoTranslation,
@@ -117,6 +120,20 @@ function repoTranslations(
   );
 }
 
+const restLicense = (license: LicenseFact): RestLicense => ({
+  kind: license.kind,
+  name: license.name ?? null,
+  source: license.source ?? null,
+});
+
+/** The license of a skill entry or item, and whether this mount only describes it. */
+function licensing(item: { readonly license?: LicenseFact; readonly describedOnly?: boolean }) {
+  return {
+    ...(item.license === undefined ? {} : { license: restLicense(item.license) }),
+    ...(item.describedOnly === true ? { describedOnly: true } : {}),
+  };
+}
+
 export function browseBody(
   answer: NotReady | { readonly status: "ready"; readonly result: BrowseResult },
 ): RestBrowse {
@@ -135,7 +152,10 @@ export function browseBody(
                 description: answer.result.overview.description ?? null,
               },
         diagnostics: [...(answer.result.diagnostics ?? [])],
-        entries: [...answer.result.entries],
+        entries: answer.result.entries.map(({ license, describedOnly, ...entry }) => ({
+          ...entry,
+          ...licensing({ license, describedOnly }),
+        })),
         nextCursor: answer.result.nextCursor ?? null,
       };
 }
@@ -168,6 +188,7 @@ export function findBody(
               summary: file.summary ?? null,
             })),
             moreFiles: item.moreFiles,
+            ...licensing(item),
           }
         : {
             kind: "document",
@@ -200,6 +221,7 @@ export function mountBody(
         : {
             status: "ready",
             truncated: answer.overview.mount.truncated,
+            license: restLicense(answer.overview.license),
             manifest:
               answer.overview.manifest === undefined
                 ? null
@@ -230,7 +252,10 @@ export function mountBody(
               code: diagnostic.code,
               message: diagnostic.message,
             })),
-            groups: [...(answer.overview.groups ?? [])],
+            groups: (answer.overview.groups ?? []).map(({ license, describedOnly, ...entry }) => ({
+              ...entry,
+              ...licensing({ license, describedOnly }),
+            })),
           },
   };
 }
@@ -310,6 +335,15 @@ export function skillOutcome(
             included: skill.included.map((file) => file.path),
             warnings: [...skill.warnings],
             translations: skillTranslations(skill.translations),
+            ...(skill.serving === undefined
+              ? {}
+              : {
+                  serving: {
+                    license: restLicense(skill.serving.license),
+                    full: skill.serving.full,
+                    sourceUrl: skill.serving.sourceUrl,
+                  },
+                }),
             rules:
               skill.rules === undefined
                 ? null
@@ -498,6 +532,15 @@ export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies):
           );
         case "not_text":
           return c.json(errorBody("file.not_text", "The file is not UTF-8 text."), 415);
+        case "not_served":
+          return c.json(
+            errorBody(
+              "file.not_served",
+              `The file is described, not served: its license (${describeLicense(lookup.license)}) allows SkillCDN to say that it exists, not to pass its content on. Read it at its source: ${lookup.sourceUrl}`,
+              { sourceUrl: lookup.sourceUrl },
+            ),
+            403,
+          );
         case "directory":
           return c.json(errorBody("request.invalid", "Use browse for directories."), 400);
         case "found": {
@@ -542,6 +585,15 @@ export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies):
             return [];
           }
           const answer = await reader.overview(mount, REST_FEATURED_SKILL_NAMES);
+          // A repository without a license is served with its provenance, never promoted
+          // (ADR-0026). The operator sees why in the log, not the visitor.
+          if (answer.status === "ready" && answer.overview.license.kind === "none") {
+            logger.info(
+              { address: formatAddress(address) },
+              "featured repository has no license and is not shown",
+            );
+            return [];
+          }
           return [
             {
               address: formatAddress(address),

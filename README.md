@@ -58,6 +58,10 @@ Connect the repository root by default, so one connection reaches skills for dif
 
 The repo declares things; it never ships code that we execute. This is a deliberate security boundary: SkillCDN runs no third-party code, on the server or on the user's machine.
 
+### What we do with content
+
+SkillCDN reads, indexes and serves what a repository publishes, keeps copies only to serve them, and takes them down on request. The license a skill carries decides whether its content is passed on or only described with a link to its source: permissive licenses are served with their notice, restrictive ones are described unless the repository is verified, and a repository without a license is served with its provenance and never featured ([licenses](docs/specs/skill-repo.md#licenses)). Where to send a takedown request is part of each deployment's own pages.
+
 Specifications: [address scheme](docs/specs/address.md) · [skill-repo convention](docs/specs/skill-repo.md) · [tools](docs/specs/tools.md).
 
 ## Architecture

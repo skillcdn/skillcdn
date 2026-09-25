@@ -38,7 +38,7 @@ Search indexes original metadata and body text, excluding front-matter translati
 
 A skill's supporting files are folded under their owning skill before pagination. The skill occupies its best-ranked member's position, with up to five matching files and a count of the rest. This avoids duplicate skills on later pages or short pages caused by folding after the limit. Independently discoverable documents appear with their title and summary; linked-only references do not become independent search results ([format](skill-repo.md)).
 
-Identical copies of a skill are listed and searched once, and a skill under a hidden directory is listed and searched only when the repository has no visible skill ([what the extension lists](skill-repo.md#what-the-skills-extension-serves)). Every declared skill stays loadable by its exact path.
+Identical copies of a skill are listed and searched once, and a skill under a hidden directory is listed and searched only when the repository has no visible skill ([what the extension lists](skill-repo.md#what-the-skills-extension-serves)). Every declared skill stays loadable by its exact path. A skill this mount describes without serving is marked `described only (license: ...)` in browse entries and search results, and carries `license` and `describedOnly` in the structured result, so that a model does not load it for its content ([licenses](skill-repo.md#licenses)).
 
 Listings and searches expose whether more results exist and carry diagnostics for unreadable manifests. Descriptions are brief discovery summaries; full instructions come from `load_skill`. Page limits are maxima: the serialized response byte budget can end a page sooner even when its item count has not been reached. A partial index is identified as partial; pagination cannot recover files excluded by indexing limits.
 
@@ -52,7 +52,9 @@ The context is the body of the document the skills extension serves for the skil
 2. The skill's own body, under `--- instructions ---`.
 3. Files declared in `skillcdn.include`, in declaration order, each under `--- included file: <path> ---`.
 
-The front matter of the document is not repeated as YAML; its fields are the header lines of the result (`Skill`, `Description`, `License`, `Compatibility`, `Allowed tools`, `Metadata`).
+The front matter of the document is not repeated as YAML; its fields are the header lines of the result (`Skill`, `Description`, `License`, `Compatibility`, `Allowed tools`, `Metadata`). The `License` line names the license the reader resolved for the skill and where it found it, which may be a file rather than the field ([licenses](skill-repo.md#licenses)).
+
+A skill whose license keeps its content at the source is **described only** ([licenses](skill-repo.md#licenses)): the result has the header lines, a `Described only:` line with a link to the skill's manifest at its host, and no rules, body, files or references. The structured result says the same in `serving` (`full: false`, `license`, `sourceUrl`). A verified repository's default branch is served in full.
 
 The reader admits at most 16 KiB (16,384 UTF-8 bytes) of context text per page; MCP may deliver less to fit the complete response byte budget below. A page may end inside a rule or file; the result marks the fragment, returns `complete: false` and supplies `nextCursor`. Continue `load_skill` with the same path and cursor until the context is complete before using the skill. Outer rules are not discarded to make inner rules fit. Missing or unreadable required content leaves `complete: false`; when another page cannot repair it, no continuation is supplied and the diagnostic explains why.
 
@@ -62,7 +64,7 @@ Supporting-file summaries may be bounded. `browse_repo` pages through the direct
 
 ## Raw files
 
-`read_repo_file` returns UTF-8 text from an eligible file within the mount, with the path, character offset, total length and next offset. A page never splits a character. It does not prepend shared rules or turn a raw `SKILL.md` read into a skill load: it returns the source as written, `skillcdn` key included. Binary, oversized, unavailable and unknown files produce safe tool errors with a hint.
+`read_repo_file` returns UTF-8 text from an eligible file within the mount, with the path, character offset, total length and next offset. A page never splits a character. It does not prepend shared rules or turn a raw `SKILL.md` read into a skill load: it returns the source as written, `skillcdn` key included. Binary, oversized, unavailable and unknown files produce safe tool errors with a hint. So does a file whose license keeps it at the source, a described skill's directory or a restrictive repository license outside the skills: the error names the license and links to the file at its host ([licenses](skill-repo.md#licenses)).
 
 The requested character limit is an upper bound. The MCP response byte budget can shorten the page, including for JSON escaping and multibyte text; continue at `nextOffset` to retrieve the remaining text. READMEs are optional reads and never automatically join a skill's context. Excluded files return the same unavailable-content result as other ineligible paths.
 
@@ -106,11 +108,14 @@ Every list and read result carries the cache fields of the current protocol revi
 
 Skills that are not listed stay available through the tools, and say why they are not listed in their warnings; `check` reports it before a push ([format](skill-repo.md#checking-a-repository-before-pushing)).
 
+A skill this mount describes without serving is not listed by the extension, and its URIs name nothing ([licenses](skill-repo.md#licenses)).
+
 ## Indexing and trust
 
 - Connecting starts indexing an unseen commit. `browse_repo`, `search_repo`, `load_skill` and the extension's methods wait within a configurable budget, then return an indexing result if it is not ready. Indexing continues; failures retry after backoff.
 - `read_repo_file` does not wait. Until declarations, exclusions and references are indexed, it returns indexing instead of attempting a speculative read. Failed policy scopes and explicit exclusions remain closed across all tools, including sub-path connections.
-- Unverified repositories carry a provenance notice: content comes from the repository author and applies to the user's requested task, not unrelated actions. The operator's temporary verification list is described by [ADR-0019](../adr/0019-the-operator-vouches-for-repositories-until-owners-can.md).
+- Unverified repositories carry a provenance notice: content comes from the repository author and applies to the user's requested task, not unrelated actions. The operator vouches for repositories until owners can ([ADR-0019](../adr/0019-the-operator-vouches-for-repositories-until-owners-can.md)), through the lists of [ADR-0026](../adr/0026-serving-follows-the-license-and-the-operators-lists.md); only the default branch of a vouched-for repository is verified.
+- The license a skill carries decides whether its content is served or only described with a link to the source ([licenses](skill-repo.md#licenses)). A verified repository's default branch is served in full whatever its license says; every other mount describes restrictive skills.
 - Browser clients may call the endpoint from any origin: CORS permits `*` without credentials, as for [REST](rest.md).
 - Public-contract changes are additive from this surface on, unless an ADR explicitly defines a breaking transition; [ADR-0024](../adr/0024-skills-travel-through-the-mcp-skills-extension.md) records the last pre-alpha replacement.
 

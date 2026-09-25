@@ -376,6 +376,71 @@ describe("GET /api/v1/skills/<address>", () => {
     expect(unnamed.status).toBe(400);
     expect((await errorOf(unnamed)).code).toBe("request.invalid");
   });
+
+  it("says how a skill is served, and withholds what a restrictive license keeps at the source", async () => {
+    const h = harness();
+    await indexed(h, "/gh/acme/licensed");
+    const skillAt = async (path: string) => {
+      const answer = restSkillSchema.parse(
+        await (await h.request(`/api/v1/skills/gh/acme/licensed?path=${path}`)).json(),
+      );
+      if (answer.status !== "ready") throw new Error("expected a ready index");
+      return answer.skill;
+    };
+    const open = await skillAt("skills/open/SKILL.md");
+    expect(open.serving).toEqual({
+      license: { kind: "permissive", name: "MIT", source: "LICENSE" },
+      full: true,
+      sourceUrl: expect.stringMatching(
+        /^https:\/\/github\.com\/Acme\/licensed\/blob\/[0-9a-f]{40}\/skills\/open\/SKILL\.md$/,
+      ),
+    });
+    expect(open.body).toContain("# Open");
+    const reserved = await skillAt("skills/reserved/SKILL.md");
+    expect(reserved).toMatchObject({
+      body: "",
+      files: [],
+      ruleChain: [],
+      complete: true,
+      serving: {
+        full: false,
+        license: {
+          kind: "restrictive",
+          name: "All rights reserved",
+          source: "skills/reserved/LICENSE",
+        },
+      },
+    });
+
+    const file = await h.request(
+      "/api/v1/files/gh/acme/licensed?path=skills/reserved/references/secret.md",
+    );
+    expect(file.status).toBe(403);
+    const error = await errorOf(file);
+    expect(error.code).toBe("file.not_served");
+    expect(error.message).not.toContain("three taps");
+    expect((await h.request("/api/v1/files/gh/acme/licensed?path=docs/guide.md")).status).toBe(200);
+
+    const mount = restMountSchema.parse(
+      await (await h.request("/api/v1/mounts/gh/acme/licensed")).json(),
+    );
+    expect(mount.index).toMatchObject({
+      license: { kind: "permissive", name: "MIT", source: "LICENSE" },
+    });
+    const find = restFindSchema.parse(
+      await (await h.request("/api/v1/find/gh/acme/licensed")).json(),
+    );
+    if (find.status !== "ready") throw new Error("expected a ready index");
+    const items = Object.fromEntries(
+      find.items.flatMap((item) => (item.kind === "skill" ? [[item.name, item]] : [])),
+    );
+    expect(items.reserved).toMatchObject({
+      describedOnly: true,
+      license: { kind: "restrictive", name: "All rights reserved" },
+    });
+    expect(items.open).toMatchObject({ license: { kind: "permissive", name: "MIT" } });
+    expect(items.open).not.toHaveProperty("describedOnly");
+  });
 });
 
 describe("GET /api/v1/files/<address>", () => {

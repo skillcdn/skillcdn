@@ -4,6 +4,7 @@ import {
   type Clock,
   catalogDescription,
   compactSummary,
+  describeLicense,
   formatAddress,
   GitHostError,
   getSkillInputSchema,
@@ -225,6 +226,10 @@ export async function createMountServer(
           );
         case "not_text":
           return problem(`${lookup.path} is not a UTF-8 text file.`);
+        case "not_served":
+          return problem(
+            `${lookup.path} is described, not served: its license (${describeLicense(lookup.license)}) allows SkillCDN to say that it exists, not to pass its content on. Read it at its source: ${lookup.sourceUrl}`,
+          );
       }
     }),
   );
