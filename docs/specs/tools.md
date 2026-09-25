@@ -11,11 +11,11 @@ A mounted address exposes four read-only, idempotent tools. Actual folders organ
 |---|---|---|
 | `browse` | `path` | Optional directory path. Omitted: the mounted directory. Lists immediate entries, not the entire subtree. |
 | | `cursor` | Optional opaque continuation from the preceding page of this request. |
-| | `limit` | Optional integer, 1 to 200. Default 50. |
+| | `limit` | Optional integer, 1 to 200. Default 20 over MCP, where a page also has to fit the response budget below; the [REST API](rest.md) defaults to 50. |
 | `search` | `query` | Required nonblank text, at most 500 characters. Use words in the original content's language, usually English. Display translations are not search aliases. |
 | | `path` | Optional directory path restricting search to that subtree; omitted: the mounted directory. |
 | | `cursor` | Optional continuation of the same search. |
-| | `limit` | Optional integer, 1 to 25. Default 10, after folding supporting files under skills. |
+| | `limit` | Optional integer, 1 to 25, after folding supporting files under skills. Default 5 over MCP; the REST API defaults to 10. |
 | `get_skill` | `path` | Required exact path of a `SKILL.md`, such as `marketing/skills/ad-copy/SKILL.md`. A name or directory is not a skill identifier. |
 | | `cursor` | Optional continuation of the same skill's context. |
 | `read_file` | `path` | Required exact file path. Directories are browsed with `browse`. |

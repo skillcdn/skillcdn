@@ -26,6 +26,7 @@ The API shows a person what an agent gets from an address. It is anonymous, read
 | 503 | `skill.unavailable` | Indexed skill content cannot be read now. |
 | 503 | `index.indexing`, `index.failed` | A file read cannot establish the publication policy until indexing is ready. Retry later. |
 | 404 | `skill.not_found`, `file.not_found` | No eligible content at that path inside the mount. |
+| 409 | `skill.ambiguous` | More than one skill answers to the request; the response lists the `directories` to choose from. |
 | 413 | `file.too_large` | The file exceeds the readable size limit. |
 | 415 | `file.not_text` | The file is not UTF-8 text. |
 
