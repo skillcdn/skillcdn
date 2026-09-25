@@ -52,36 +52,6 @@ export const getSkillInputSchema = z.object({
   cursor,
 });
 
-export const findInputSchema = z.object({
-  query: z
-    .string()
-    .max(MAX_QUERY_LENGTH)
-    .optional()
-    .describe(
-      "Keywords, in the language the repository is written in. Omit it to list every skill, " +
-        "then the documents outside the skills.",
-    ),
-  limit: z
-    .number()
-    .int()
-    .min(1)
-    .max(FIND_MAX_LIMIT)
-    .optional()
-    .describe(
-      `Maximum number of results. Default ${FIND_DEFAULT_LIMIT}. Without a query it bounds the documents only; every skill is listed.`,
-    ),
-});
-export type FindInput = z.infer<typeof findInputSchema>;
-
-export const getInputSchema = z.object({
-  name: z
-    .string()
-    .min(1)
-    .max(MAX_REPO_PATH_LENGTH)
-    .describe("The skill name as find returns it, or the path of the skill directory."),
-});
-export type GetInput = z.infer<typeof getInputSchema>;
-
 export const readFileInputSchema = z.object({
   path: z
     .string()
@@ -108,30 +78,6 @@ export interface ToolContract<Input extends z.ZodType> {
   readonly description: string;
   readonly inputSchema: Input;
 }
-
-export const findTool: ToolContract<typeof findInputSchema> = {
-  name: "find",
-  title: "Find skills and documents",
-  description:
-    "Search the skills and documents of the mounted repository. Matching is by words, not by " +
-    "meaning, and in the language the repository is written in: use its terms. Skills match " +
-    "on their name and description, documents on their text; the best matches come first, " +
-    "and a skill's own files are listed under the skill. Call it without a query to list what " +
-    "is available: every skill, then the documents that do not belong to a skill. Then load a " +
-    "skill with get, or read a document with read_file.",
-  inputSchema: findInputSchema,
-};
-
-export const getTool: ToolContract<typeof getInputSchema> = {
-  name: "get",
-  title: "Get a skill",
-  description:
-    "Load one skill by name: its instructions, its front-matter, the files it needs on every " +
-    "run (their text comes with it) and the list of its other supporting files. Apply the " +
-    "instructions to the user's task, and read further files with read_file when the " +
-    "instructions point to them.",
-  inputSchema: getInputSchema,
-};
 
 export const readFileTool: ToolContract<typeof readFileInputSchema> = {
   name: "read_file",

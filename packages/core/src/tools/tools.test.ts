@@ -2,14 +2,15 @@ import { describe, expect, it } from "vitest";
 import * as z from "zod";
 import { parseRepoPath, type RepoPath } from "../repo-path.js";
 import {
-  findInputSchema,
-  findTool,
-  getInputSchema,
-  getTool,
+  browseInputSchema,
+  browseTool,
+  getSkillInputSchema,
+  getSkillTool,
   READ_FILE_MAX_LIMIT,
   readFileInputSchema,
   readFileTool,
   searchInputSchema,
+  searchTool,
   TOOL_NAMES,
 } from "./contracts.js";
 import {
@@ -92,29 +93,32 @@ describe("tool contracts", () => {
   });
 
   it("exports input schemas that convert to JSON Schema objects", () => {
-    for (const tool of [findTool, getTool, readFileTool]) {
+    for (const tool of [browseTool, searchTool, getSkillTool, readFileTool]) {
       const schema = z.toJSONSchema(tool.inputSchema);
       expect(schema.type).toBe("object");
       expect(tool.description.length).toBeGreaterThan(40);
     }
-    expect(z.toJSONSchema(getInputSchema).required).toEqual(["name"]);
+    expect(z.toJSONSchema(getSkillInputSchema).required).toEqual(["path"]);
     expect(z.toJSONSchema(readFileInputSchema).required).toEqual(["path"]);
-    expect(z.toJSONSchema(findInputSchema).required).toBeUndefined();
+    expect(z.toJSONSchema(searchInputSchema).required).toEqual(["query"]);
+    expect(z.toJSONSchema(browseInputSchema).required).toBeUndefined();
   });
 
-  it("tells the model that search is by words, in the language of the repository", () => {
-    expect(findTool.description).toContain("by words, not by meaning");
-    expect(findTool.description).toContain("language the repository is written in");
-    expect(getTool.description).toContain("files it needs on every run");
+  it("tells the model that search is by words, in the language of the content", () => {
+    expect(searchTool.description).toContain("original content");
+    expect(searchTool.description).toContain("translations are excluded");
+    expect(getSkillTool.description).toContain("inherited rules and required files");
   });
 
   it("accepts the documented inputs", () => {
-    expect(findInputSchema.parse({})).toEqual({});
-    expect(findInputSchema.parse({ query: "release", limit: 5 })).toEqual({
+    expect(browseInputSchema.parse({})).toEqual({});
+    expect(searchInputSchema.parse({ query: "release", limit: 5 })).toEqual({
       query: "release",
       limit: 5,
     });
-    expect(getInputSchema.parse({ name: "release-notes" })).toEqual({ name: "release-notes" });
+    expect(getSkillInputSchema.parse({ path: "skills/release-notes/SKILL.md" })).toEqual({
+      path: "skills/release-notes/SKILL.md",
+    });
     expect(readFileInputSchema.parse({ path: "docs/a.md", offset: 10 })).toEqual({
       path: "docs/a.md",
       offset: 10,
@@ -122,11 +126,12 @@ describe("tool contracts", () => {
   });
 
   it.each([
-    ["an oversized query", findInputSchema, { query: "q".repeat(501) }],
-    ["a limit of zero", findInputSchema, { limit: 0 }],
-    ["a fractional limit", findInputSchema, { limit: 2.5 }],
-    ["a query that is not text", findInputSchema, { query: ["a"] }],
-    ["an empty skill name", getInputSchema, { name: "" }],
+    ["an oversized query", searchInputSchema, { query: "q".repeat(501) }],
+    ["a missing query", searchInputSchema, {}],
+    ["a limit of zero", searchInputSchema, { query: "a", limit: 0 }],
+    ["a fractional limit", browseInputSchema, { limit: 2.5 }],
+    ["a query that is not text", searchInputSchema, { query: ["a"] }],
+    ["an empty skill path", getSkillInputSchema, { path: "" }],
     ["a missing path", readFileInputSchema, {}],
     ["a negative offset", readFileInputSchema, { path: "a", offset: -1 }],
     ["an oversized page", readFileInputSchema, { path: "a", limit: READ_FILE_MAX_LIMIT + 1 }],
