@@ -14,7 +14,7 @@ One short file per decision that has lasting consequences and that a future cont
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0001](0001-license-and-trademarks.md) | FSL-1.1-ALv2 license, separate trademark policy | Accepted |
+| [0001](0001-license-and-trademarks.md) | FSL-1.1-ALv2 license, separate trademark policy | Accepted; ADR-0025 applies its directory-license clause to `docs/specs` |
 | [0002](0002-toolchain.md) | Node.js 24, pnpm-pinned toolchain, compiled TypeScript packages | Accepted |
 | [0003](0003-one-image-several-roles.md) | One deployable with `api`, `worker` and `migrate` roles | Accepted |
 | [0004](0004-postgresql-only-state.md) | PostgreSQL as the only stateful dependency | Accepted |
@@ -24,16 +24,19 @@ One short file per decision that has lasting consequences and that a future cont
 | [0008](0008-repository-ends-at-an-image-that-builds.md) | This repository ends at an image that builds; publishing and deployment are outside | Accepted |
 | [0009](0009-web-ui-prerendered-per-language.md) | The web UI is prerendered per language and served by the `api` role; `?lang=` selects the language | Accepted |
 | [0010](0010-distinct-clients-by-daily-keyed-hash.md) | Distinct clients are counted by a keyed hash of the address under a key that dies with the day | Accepted |
-| [0011](0011-address-pages-rendered-on-the-server.md) | The page of an address is rendered on the server with its data and may be indexed; the sitemap lists featured and popular repositories | Accepted |
-| [0012](0012-what-a-client-is-told-and-offered.md) | The catalog travels with the connection; skills are prompts, documents are not resources, results stay text; the endpoint answers any origin | Accepted |
+| [0011](0011-address-pages-rendered-on-the-server.md) | The page of an address is rendered on the server with its data and may be indexed; the sitemap lists featured and popular repositories | Accepted; point 4, the sitemap, is superseded by 0026 |
+| [0012](0012-what-a-client-is-told-and-offered.md) | The catalog travels with the connection; skills are prompts, documents are not resources, results stay text; the endpoint answers any origin | Accepted; points 1 to 3 are superseded by 0022 |
 | [0013](0013-language-decided-in-the-browser-without-changing-the-url.md) | A URL without a language is shown in the visitor's language without the URL changing; `?lang=` forces one | Accepted |
-| [0014](0014-the-repository-manifest-decides-what-a-mount-serves.md) | `SKILLCDN.md` names and describes a repository, states the rules of its skills, and decides what a mount serves | Accepted |
+| [0014](0014-the-repository-manifest-decides-what-a-mount-serves.md) | `SKILLCDN.md` names and describes a repository, states the rules of its skills, and decides what a mount serves | Accepted; point 2 is amended by 0016, the scope and hidden-entry decisions are superseded by 0022 |
 | [0015](0015-a-forced-language-holds-for-one-page.md) | A forced language holds for one page; links inside the app carry no language | Accepted |
-| [0016](0016-without-a-manifest-a-repository-serves-its-skills-and-docs.md) | Without a manifest, a repository serves its skills and `docs`; the reading rules are versioned | Accepted |
+| [0016](0016-without-a-manifest-a-repository-serves-its-skills-and-docs.md) | Without a manifest, a repository serves its skills and `docs`; the reading rules are versioned | Accepted; the exclusive served-set rule is superseded by 0022 |
 | [0017](0017-a-forced-language-becomes-the-preference.md) | A language the URL forces becomes the visitor's preference, as a click in the switcher does | Accepted |
-| [0018](0018-skillcdn-fields-in-skill-md-under-one-key.md) | What SkillCDN adds to `SKILL.md` lives under `skillcdn`: the files that come with the skill, and translations for people | Accepted |
-| [0019](0019-the-operator-vouches-for-repositories-until-owners-can.md) | The provenance notice warns about what goes beyond the task; the operator vouches for repositories until owners can | Accepted |
+| [0018](0018-skillcdn-fields-in-skill-md-under-one-key.md) | What SkillCDN adds to `SKILL.md` lives under `skillcdn`: the files that come with the skill, and translations for people | Accepted; the hidden-file restriction on includes is superseded by 0022, and the key leaves the wire under 0025 |
+| [0019](0019-the-operator-vouches-for-repositories-until-owners-can.md) | The provenance notice warns about what goes beyond the task; the operator vouches for repositories until owners can | Accepted; the environment list of point 2 moves into the operator's lists of 0026 |
 | [0020](0020-a-check-role-reads-a-working-tree-with-the-indexer.md) | A `check` role reads a working tree with the indexer; whatever the indexer skips is reported everywhere | Accepted |
 | [0021](0021-a-url-without-a-language-is-served-in-the-language-asked-for.md) | A URL without a language is served in the language the request asks for, and says it varies; `?lang=` still forces one | Accepted |
-| [0022](0022-repository-paths-and-progressive-skill-loading.md) | Canonical repository paths, four paged tools, complete inherited rules, declared hidden skills and local Markdown references; partially supersedes 0012, 0014, 0016 and 0018 | Accepted |
+| [0022](0022-repository-paths-and-progressive-skill-loading.md) | Canonical repository paths, four paged tools, complete inherited rules, declared hidden skills and local Markdown references; partially supersedes 0012, 0014, 0016 and 0018 | Accepted; skills inside failed manifest scopes are superseded by 0023, the tool names and the listing under hidden ancestors by 0024 |
 | [0023](0023-optional-introductions-and-explicit-publication.md) | Optional README introductions, response byte budgets and explicit scoped publication exclusions; partially supersedes 0022 | Accepted |
+| [0024](0024-skills-travel-through-the-mcp-skills-extension.md) | Skills are served through the MCP skills extension under `skill://gh/<owner>/<repo>/<path>`; the tools discover and serve hosts without it, under their final names; identical hidden copies are listed once; changes are additive from here | Accepted |
+| [0025](0025-a-skill-on-the-wire-is-assembled-from-its-sources.md) | A skill on the wire is a plain Agent Skills skill assembled from its sources, digested as served, without the `skillcdn` key; the specifications are Apache-2.0 and the format's names are free to use | Accepted |
+| [0026](0026-serving-follows-the-license-and-the-operators-lists.md) | The license a skill carries decides whether it is served or only described; the operator keeps verified, featured and blocked lists; only the default branch is verified | Accepted |

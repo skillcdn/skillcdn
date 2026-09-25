@@ -91,7 +91,7 @@ Identifiers are UUIDv7; timestamps are `timestamptz`. File bodies are stored und
 | Runtime | Node.js 24 LTS, TypeScript 7, ESM only. pnpm pins both itself and the Node.js runtime in the lockfile. |
 | Monorepo | pnpm workspaces with a catalog, Turborepo, TypeScript project references. Packages compile to `dist/`. |
 | HTTP | Hono on the Node.js adapter. |
-| MCP | The official MCP TypeScript SDK, v2, over Streamable HTTP. One server instance per request, no sessions or selected-role state ([ADR-0006](adr/0006-mcp-sdk-v2-per-request-servers.md)). Four tools return text and structured data; one `use_skill(path)` prompt loads any exact skill. Connection instructions introduce folders ([ADR-0022](adr/0022-repository-paths-and-progressive-skill-loading.md)). |
+| MCP | The official MCP TypeScript SDK, v2, over Streamable HTTP. One server instance per request, no sessions or selected-role state ([ADR-0006](adr/0006-mcp-sdk-v2-per-request-servers.md)). Four tools return text and structured data; one `use_skill(path)` prompt loads any exact skill. Connection instructions introduce folders ([ADR-0022](adr/0022-repository-paths-and-progressive-skill-loading.md)). Skills also travel through the MCP skills extension, assembled from their sources and digested as served ([ADR-0024](adr/0024-skills-travel-through-the-mcp-skills-extension.md), [ADR-0025](adr/0025-a-skill-on-the-wire-is-assembled-from-its-sources.md)); the [roadmap](roadmap.md) says when. |
 | Validation | Zod at every boundary. |
 | Database | PostgreSQL 18: `tsvector` + GIN full-text search, JSONB, native `uuidv7()`; pgvector later. |
 | Data access | Drizzle ORM on the `pg` driver; migrations are generated, reviewed SQL files. The ORM never leaves `packages/db`. |
@@ -150,7 +150,7 @@ Because old and new versions overlap during a rollout:
 
 - migrations follow expand, then contract, across separate releases;
 - job payloads stay backward compatible for at least one release;
-- public contracts (address scheme, tool names and schemas, REST) change additively unless an ADR defines a breaking transition; [ADR-0022](adr/0022-repository-paths-and-progressive-skill-loading.md) records the pre-alpha path and tool replacement.
+- public contracts (address scheme, tool names and schemas, skill URIs, REST) change additively unless an ADR defines a breaking transition; [ADR-0022](adr/0022-repository-paths-and-progressive-skill-loading.md) records the pre-alpha path and tool replacement, and [ADR-0024](adr/0024-skills-travel-through-the-mcp-skills-extension.md) the last one.
 
 ## Observability
 

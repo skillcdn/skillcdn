@@ -1,6 +1,6 @@
 # ADR-0001: FSL-1.1-ALv2 license with a separate trademark policy
 
-- Status: Accepted
+- Status: Accepted; ADR-0025 applies the directory-license clause of point 1 to `docs/specs`
 - Date: 2026-09-21
 
 ## Context

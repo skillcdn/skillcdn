@@ -1,6 +1,6 @@
 # ADR-0012: What a client is told on connect, and what it is offered
 
-- Status: Accepted
+- Status: Accepted; points 1 to 3 are superseded by ADR-0022
 - Date: 2026-09-22
 
 ## Context

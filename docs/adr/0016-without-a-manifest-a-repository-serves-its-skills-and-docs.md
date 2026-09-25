@@ -1,6 +1,6 @@
 # ADR-0016: Without a manifest, a repository serves its skills and `docs`
 
-- Status: Accepted; amends point 2 of ADR-0014
+- Status: Accepted; amends point 2 of ADR-0014; the exclusive served-set rule is superseded by ADR-0022
 - Date: 2026-09-22
 
 ## Context

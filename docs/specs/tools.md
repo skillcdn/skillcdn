@@ -1,6 +1,6 @@
 # Spec: tools exposed to the agent
 
-- Status: **Draft.**
+- Status: **Draft.** [ADR-0024](../adr/0024-skills-travel-through-the-mcp-skills-extension.md) renames the tools and adds the MCP skills extension next to them; this file follows when that lands ([roadmap](../roadmap.md)).
 - Contracts (names, descriptions, input schemas, result shapes and text rendering) live in `packages/core`; handlers live in `apps/server`.
 
 A mounted address exposes four read-only, idempotent tools. Actual folders organize discovery; names are labels, and exact repository-root paths identify content. [ADR-0022](../adr/0022-repository-paths-and-progressive-skill-loading.md) records this pre-alpha replacement of `find` and `get`.
@@ -90,7 +90,7 @@ SkillCDN keeps no implicit selected team or role. Users can express their focus 
 - `read_file` does not wait. Until declarations, exclusions and references are indexed, it returns indexing instead of attempting a speculative read. Failed policy scopes and explicit exclusions remain closed across all tools, including sub-path connections.
 - Unverified repositories carry a provenance notice: content comes from the repository author and applies to the user's requested task, not unrelated actions. The operator's temporary verification list is described by [ADR-0019](../adr/0019-the-operator-vouches-for-repositories-until-owners-can.md).
 - Browser clients may call the endpoint from any origin: CORS permits `*` without credentials, as for [REST](rest.md).
-- Future public-contract changes are additive unless an ADR explicitly defines a breaking transition.
+- Public-contract changes are additive from the surface [ADR-0024](../adr/0024-skills-travel-through-the-mcp-skills-extension.md) defines on, unless an ADR explicitly defines a breaking transition; that ADR records the last pre-alpha replacement.
 
 ## Open questions
 

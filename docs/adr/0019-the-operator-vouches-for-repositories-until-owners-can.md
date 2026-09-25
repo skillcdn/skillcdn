@@ -1,6 +1,6 @@
 # ADR-0019: The operator vouches for repositories until owners can
 
-- Status: Accepted
+- Status: Accepted; the environment list of point 2 moves into the operator's lists of ADR-0026
 - Date: 2026-09-23
 
 ## Context

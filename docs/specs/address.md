@@ -1,6 +1,6 @@
 # Spec: address scheme
 
-- Status: **Draft.** Normative once milestone 1 ships; until then expect changes.
+- Status: **Draft.** The grammar has not changed since milestone 1 and becomes normative with the surface of [ADR-0024](../adr/0024-skills-travel-through-the-mcp-skills-extension.md); the open questions below remain open.
 - Implemented by: `packages/core` (`parseAddress`, `formatAddress`). Nothing else parses addresses.
 
 An address identifies what an agent mounts. It is the path of the MCP endpoint URL, so the whole onboarding is one URL.
@@ -59,6 +59,10 @@ Parsing never consults the repository. An address means the same thing whatever 
 - **A short commit hash** is accepted wherever the host resolves it, but it is a moving ref: a prefix that is unique today can become ambiguous later, so it is never cached as immutable.
 - **Repository identity.** After the first resolution a repository is identified by the host's immutable numeric id. The `owner/repo` spelling is a lookup alias that is re-pointed after a rename or a transfer, so an index survives both and a recycled name never inherits another repository's index.
 - The parser is pure and total: every input yields either a parsed address or a typed error. It never throws on hostile input and never touches the network.
+
+## As a skill URI
+
+Over the MCP skills extension, a file of a skill is named by the address without its ref: `skill://gh/<owner>/<repo>/<path>`, with the file's repository-root path, and `skill://gh/<owner>/<repo>/<name>/SKILL.md` for a root-level skill ([ADR-0024](../adr/0024-skills-travel-through-the-mcp-skills-extension.md)). The ref stays with the connection, so the same URI names the same file at whatever commit the address serves. The [tools](tools.md) say when this is served.
 
 ## In a browser
 

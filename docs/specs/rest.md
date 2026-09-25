@@ -3,7 +3,7 @@
 - Status: **Draft.** Version 1 serves the web UI.
 - Response schemas live in `packages/core`; handlers live in `apps/server`. The web UI uses this API.
 
-The API shows a person what an agent gets from an address. It is anonymous, read-only and limited to public repositories. It shares the index, canonical paths and reading rules of the [tools](tools.md). [ADR-0022](../adr/0022-repository-paths-and-progressive-skill-loading.md) explicitly changes the pre-alpha v1 path and skill contracts; future changes are additive unless another ADR defines a breaking transition.
+The API shows a person what an agent gets from an address. It is anonymous, read-only and limited to public repositories. It shares the index, canonical paths and reading rules of the [tools](tools.md). [ADR-0022](../adr/0022-repository-paths-and-progressive-skill-loading.md) explicitly changed the pre-alpha v1 path and skill contracts, and [ADR-0024](../adr/0024-skills-travel-through-the-mcp-skills-extension.md) records the last such replacement; from its surface on, changes are additive unless an ADR defines a breaking transition.
 
 ## Conventions
 

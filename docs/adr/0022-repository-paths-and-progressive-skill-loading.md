@@ -1,6 +1,6 @@
 # ADR-0022: Repository paths identify content and skills load progressively
 
-- Status: Accepted
+- Status: Accepted; the availability of skills inside failed manifest scopes is superseded by ADR-0023, the tool names of point 2 and the listing under hidden ancestors of point 4 by ADR-0024
 - Date: 2026-09-24
 - Supersedes the catalog, prompt and text-only decisions in ADR-0012; the scope and hidden-entry decisions in ADR-0014; the exclusive served-set rule in ADR-0016; and the hidden-file restriction on includes in ADR-0018. The remaining decisions stand.
 

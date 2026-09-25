@@ -1,6 +1,6 @@
 # ADR-0011: The page of an address is rendered on the server and may be indexed
 
-- Status: Accepted
+- Status: Accepted; point 4 (what the sitemap lists) is superseded by ADR-0026
 - Date: 2026-09-22
 
 ## Context
