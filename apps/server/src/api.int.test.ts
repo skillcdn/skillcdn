@@ -381,7 +381,14 @@ describe("a multi-skill repository", () => {
 
 describe("other repository shapes", () => {
   it("treats a root manifest as one skill that owns the repository", async () => {
-    const client = await harness().connect("/gh/acme/single-skill");
+    const h = harness();
+    const early = await h.connect("/gh/acme/single-skill");
+    await early.close();
+    await h.snapshots.idle();
+    const client = await h.connect("/gh/acme/single-skill");
+    // The skill is in no folder, so the instructions introduce it by name.
+    expect(client.getInstructions()).toContain("1 skill, ");
+    expect(client.getInstructions()).toContain("SKILL.md: Writes commit messages");
     const skill = await call(client, "get_skill", { path: "SKILL.md" });
     expect(skill.text).toContain("Relative paths in the instructions start at the mounted root.");
     expect(skill.text).toContain("- references/checklist.md");

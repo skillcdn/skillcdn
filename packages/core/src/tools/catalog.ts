@@ -72,16 +72,18 @@ export function renderInstructions(state: CatalogState): string {
           .map((item) => compactSummary(item.path, 80))
           .join(", ")}); browse reports diagnostics.`;
   const summary = `${head} ${plural(catalog.skillCount, "skill")}, ${plural(catalog.documentCount, "document")}.${language}${diagnostics}`;
+  const skillRow = (skill: CatalogSkill): string =>
+    `${skill.directory ? `${skill.directory}/` : ""}SKILL.md: ${compactSummary(skill.description, 90)}`;
+  const groupRow = (entry: BrowseEntry): string =>
+    `${entry.path}${entry.kind === "directory" ? "/" : ""}: ${entry.name === null ? "" : `${compactSummary(entry.name, 80)}. `}${entry.description === null ? "" : `${compactSummary(entry.description, 100)} `}${entry.skillCount} skills`;
   const rows =
     catalog.groups === undefined
-      ? catalog.skills.map(
-          (skill) =>
-            `${skill.directory ? `${skill.directory}/` : ""}SKILL.md: ${compactSummary(skill.description, 90)}`,
-        )
-      : catalog.groups.map(
-          (entry) =>
-            `${entry.path}${entry.kind === "directory" ? "/" : ""}: ${entry.name === null ? "" : `${compactSummary(entry.name, 80)}. `}${entry.description === null ? "" : `${compactSummary(entry.description, 100)} `}${entry.skillCount} skills`,
-        );
+      ? catalog.skills.map(skillRow)
+      : [
+          // A skill at the mounted directory itself belongs to no folder: it is introduced by name.
+          ...catalog.skills.filter((skill) => skill.directory.length === 0).map(skillRow),
+          ...catalog.groups.map(groupRow),
+        ];
   const ending = `browse returns the full folder contents with continuation.\n${HOW_TO}`;
   let result = `${compactSummary(summary, INSTRUCTIONS_MAX_LENGTH - ending.length - 1)}\n`;
   const overview =

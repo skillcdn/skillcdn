@@ -109,6 +109,28 @@ describe("repository instructions", () => {
     expect(text).toContain("until complete");
     expect(text).toContain("repository root");
   });
+  it("introduces a skill at the mounted directory itself, with or without folders beside it", () => {
+    const root = { name: "release", directory: path(""), description: "Cut a release." };
+    const alone = renderInstructions({
+      status: "ready",
+      catalog: { ...base, groups: [], skills: [root], skillCount: 1 },
+    });
+    expect(alone).toContain("SKILL.md: Cut a release.");
+
+    const beside = renderInstructions({
+      status: "ready",
+      catalog: {
+        ...base,
+        groups: [folder("extras")],
+        skills: [root, { name: "more", directory: path("extras/more"), description: "More." }],
+        skillCount: 2,
+      },
+    });
+    expect(beside).toContain("SKILL.md: Cut a release.");
+    expect(beside).toContain("extras/: Team skills.");
+    expect(beside).not.toContain("extras/more/SKILL.md");
+  });
+
   it("always preserves discovery instructions within the budget, even for long paths", () => {
     const text = renderInstructions({
       status: "ready",
