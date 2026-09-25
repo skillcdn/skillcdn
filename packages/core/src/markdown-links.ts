@@ -156,6 +156,40 @@ function destinationAt(text: string, start: number): { href: string; end: number
 
 const labelKey = (label: string): string => label.trim().replace(/\s+/g, " ").toLowerCase();
 
+const MAX_LABEL_LENGTH = 999;
+
+/**
+ * Every `[label]` whose label has one to {@link MAX_LABEL_LENGTH} characters and no closing
+ * bracket or line break inside, left to right and without overlap: what the pattern
+ * `\[([^\]\n]{1,999})\]` finds, in linear time. The pattern itself rescans up to the length bound
+ * from every opening bracket, which a text of brackets that never close turns into a quadratic
+ * cost; here the next closing bracket and line break are found once and reused.
+ */
+function* bracketedLabels(
+  text: string,
+): Generator<{ readonly index: number; readonly end: number; readonly label: string }> {
+  // The end of the text stands for "none", so that a search that found nothing is not repeated.
+  const nextOrEnd = (needle: string, from: number): number => {
+    const found = text.indexOf(needle, from);
+    return found < 0 ? text.length : found;
+  };
+  let closing = -1;
+  let lineBreak = -1;
+  let at = text.indexOf("[");
+  while (at >= 0) {
+    if (closing < at) closing = nextOrEnd("]", at + 1);
+    if (closing === text.length) return;
+    if (lineBreak < at) lineBreak = nextOrEnd("\n", at + 1);
+    const length = closing - at - 1;
+    if (length >= 1 && length <= MAX_LABEL_LENGTH && lineBreak > closing) {
+      yield { index: at, end: closing + 1, label: text.slice(at + 1, closing) };
+      at = text.indexOf("[", closing + 1);
+    } else {
+      at = text.indexOf("[", at + 1);
+    }
+  }
+}
+
 /**
  * Local .md links in prose: inline, full/collapsed reference, and shortcut reference links.
  * Images, code, external URLs, malformed encodings and paths outside the repository are ignored.
@@ -187,8 +221,7 @@ export function inspectMarkdownReferences(
   );
   const references: MarkdownReference[] = [];
   const seen = new Set<string>();
-  const labels = /\[([^\]\n]{1,999})\]/g;
-  for (const match of withoutDefinitions.matchAll(labels)) {
+  for (const match of bracketedLabels(withoutDefinitions)) {
     const at = match.index;
     if (
       escaped(withoutDefinitions, at) ||
@@ -196,7 +229,7 @@ export function inspectMarkdownReferences(
       withoutDefinitions[at - 1] === "]"
     )
       continue;
-    const after = at + match[0].length;
+    const after = match.end;
     let href: string | undefined;
     if (withoutDefinitions[after] === "(") {
       const found = destinationAt(withoutDefinitions, after + 1);
@@ -210,9 +243,9 @@ export function inspectMarkdownReferences(
       }
     } else if (withoutDefinitions[after] === "[") {
       const reference = /^\[([^\]\n]{0,999})\]/.exec(withoutDefinitions.slice(after, after + 1001));
-      if (reference !== null) href = definitions.get(labelKey(reference[1] || match[1] || ""));
+      if (reference !== null) href = definitions.get(labelKey(reference[1] || match.label));
     } else {
-      href = definitions.get(labelKey(match[1] ?? ""));
+      href = definitions.get(labelKey(match.label));
     }
     if (href === undefined || seen.has(href)) continue;
     const path = resolveMarkdownReference(source, href);

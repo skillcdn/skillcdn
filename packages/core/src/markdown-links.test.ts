@@ -166,6 +166,20 @@ describe("Markdown references", () => {
     expect(exceeded.references).toEqual(extractMarkdownReferences(source, links));
   });
 
+  it("stays fast on brackets that never close, and still finds the link at the end", () => {
+    const hostile = `${"[".repeat(MAX_LINK_MARKDOWN_LENGTH - 20)}](/late.md)`;
+    const started = Date.now();
+    expect(inspectMarkdownReferences(source, hostile)).toEqual({
+      references: [{ href: "/late.md", path: "late.md" }],
+      truncated: false,
+    });
+    expect(Date.now() - started).toBeLessThan(250);
+    // A label never spans a line, however close the next closing bracket is.
+    expect(extractMarkdownReferences(source, "[a\n](/x.md) [b](/y.md)")).toEqual([
+      { href: "/y.md", path: "y.md" },
+    ]);
+  });
+
   it("reports input that could not be inspected within the Markdown size bound", () => {
     expect(inspectMarkdownReferences(source, "a".repeat(MAX_LINK_MARKDOWN_LENGTH + 1))).toEqual({
       references: [],

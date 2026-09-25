@@ -163,4 +163,18 @@ describe("summarizeMarkdown with hostile input", () => {
     summarizeMarkdown(hostile);
     expect(Date.now() - started).toBeLessThan(1000);
   });
+
+  it("stays fast on a paragraph of many lines that never close a bracket", () => {
+    // Each line stays under the heading bound; together they made one long paragraph.
+    const hostile = `# T\n\n${`${"[".repeat(999)}\n`.repeat(200)}`;
+    const started = Date.now();
+    expect(summarizeMarkdown(hostile).description).toMatch(/^\[+…$/);
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+
+  it("reads the glimpse from the start of a long paragraph", () => {
+    const summary = summarizeMarkdown(`# T\n\n[Guide](guide.md) first. ${"more ".repeat(2000)}\n`);
+    expect(summary.description?.startsWith("Guide first. more more")).toBe(true);
+    expect(summary.description).toHaveLength(200);
+  });
 });

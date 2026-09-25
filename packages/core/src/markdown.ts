@@ -5,6 +5,12 @@ const MAX_TITLE_LENGTH = 200;
 const MAX_SUMMARY_LENGTH = 500;
 /** A summary taken from the body is a glimpse, not the document. */
 const MAX_SNIPPET_LENGTH = 200;
+/**
+ * How much of a paragraph the glimpse is taken from. Stripping markup can shorten text, so more
+ * than the snippet is read, but not the whole paragraph: the patterns below cost quadratic time
+ * on a paragraph made of brackets that never close.
+ */
+const MAX_SNIPPET_SOURCE_LENGTH = 4096;
 /** A title and an introduction are near the top or they are not that; this also bounds the scan. */
 const MAX_LINES_SCANNED = 200;
 /** Longer lines are not headings, and short lines keep the patterns below cheap on hostile input. */
@@ -119,7 +125,10 @@ function plainText(markdown: string): string {
 }
 
 function snippet(paragraph: string | undefined): string | undefined {
-  const text = shortText(paragraph === undefined ? undefined : plainText(paragraph), Infinity);
+  const text = shortText(
+    paragraph === undefined ? undefined : plainText(paragraph.slice(0, MAX_SNIPPET_SOURCE_LENGTH)),
+    Infinity,
+  );
   if (text === undefined) {
     return undefined;
   }
