@@ -28,7 +28,7 @@ interface LaterPages {
   readonly error: ApiError | undefined;
 }
 
-/** A directory as `read_file` lists it: what it contains, subdirectories first. */
+/** A directory as `read_repo_file` lists it: what it contains, subdirectories first. */
 function DirectoryView(props: { readonly address: Address; readonly listing: DirectoryListing }) {
   const { t } = useI18n();
   const { address, listing } = props;
@@ -63,7 +63,7 @@ function DirectoryView(props: { readonly address: Address; readonly listing: Dir
   );
 }
 
-/** One text file as `read_file` returns it, a page at a time. */
+/** One text file as `read_repo_file` returns it, a page at a time. */
 export function MountFile(props: { readonly address: Address; readonly path: string }) {
   const { t } = useI18n();
   const { address, path } = props;

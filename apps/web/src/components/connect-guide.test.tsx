@@ -147,7 +147,7 @@ describe("connection onboarding", () => {
     expect(install).toContain(messagesFor("en").connect.preview.install);
     expect(install).toContain("https://skills.example/gh/acme/skills");
     expect(enabled).toContain(messagesFor("en").connect.preview.enabled);
-    expect(enabled).toContain("read_file");
+    expect(enabled).toContain("read_repo_file");
     expect(enabled).not.toContain(".cursor/mcp.json");
   });
 });

@@ -52,11 +52,11 @@ Repository identity and a bounded overview of the mount:
 
 The overview's manifest carries its own canonical `path`, `name`, `description`, `language` and `translations`, or is absent when no applicable manifest exists. An ancestor manifest's path remains its actual repository path even if ordinary file reading cannot reach it from this mount. Names, descriptions and translations belong to their declaring manifest; language inherits from the nearest ancestor that declares it.
 
-Skill listings expose exact `path`, `directory`, `name`, `description`, warnings and translations. Document listings expose canonical path, title and summary. Overview lists are bounded; clients use `browse` and `find` continuations to explore further. Counts cover eligible content, not every file in the git tree. Diagnostics explain unreadable manifests, and `truncated` identifies indexing limits.
+Skill listings expose exact `path`, `directory`, `name`, `description`, warnings and translations. Document listings expose canonical path, title and summary. Overview lists are bounded; clients use the browse and find endpoints' continuations to explore further. Counts cover eligible content, not every file in the git tree. Diagnostics explain unreadable manifests, and `truncated` identifies indexing limits.
 
 ### `GET /api/v1/browse/<address>?path=&cursor=&limit=`
 
-The `browse` tool's immediate-folder view. `path` is an optional canonical directory (default: mounted directory); `limit` is 1 to 200, default 50. `cursor` continues the same listing.
+The `browse_repo` tool's immediate-folder view. `path` is an optional canonical directory (default: mounted directory); `limit` is 1 to 200, default 50. `cursor` continues the same listing.
 
 Entries preserve the real folder tree, name their canonical paths, distinguish files and directories, and identify skill folders and manifest metadata when available. Counts help a client choose a subtree without loading every skill. A manifest adds context to its folder; it creates no shortened path or alias. The response carries diagnostics, commit and `nextCursor`.
 
@@ -64,7 +64,7 @@ The optional `overview` describes a readable README of the current folder as `{ 
 
 ### `GET /api/v1/find/<address>?query=&path=&cursor=&limit=`
 
-The `search` tool's ranked search. `query` is nonblank text of at most 500 characters; `path` restricts the search subtree, defaulting to the mount. `limit` is 1 to 25, default 10, and bounds final results after folding. Use `browse` for directory discovery.
+The `search_repo` tool's ranked search. `query` is nonblank text of at most 500 characters; `path` restricts the search subtree, defaulting to the mount. `limit` is 1 to 25, default 10, and bounds final results after folding. Use the browse endpoint for directory discovery.
 
 A skill result carries its exact `path`, `directory`, name, description and translations. Matching supporting files are folded into the owning skill before pagination, with up to five matching file summaries and `moreFiles` for the rest. A skill occupies its best-ranked member's position, even when only a supporting file matched. Independent document results have canonical path, title and summary. Results remain in relevance order across folders; linked-only references are not independent search results.
 
@@ -72,7 +72,7 @@ The response carries the query, result items, diagnostics, resolved `commit` and
 
 ### `GET /api/v1/skills/<address>?path=&cursor=`
 
-The `get_skill` tool. `path` is required and is an exact canonical `SKILL.md` path. `cursor` continues that skill's context; names and directory aliases are not the canonical API.
+The `load_skill` tool. `path` is required and is an exact canonical `SKILL.md` path. `cursor` continues that skill's context; names and directory aliases are not the canonical API.
 
 The ready response's `skill` contains:
 
@@ -86,7 +86,7 @@ Context text is bounded to 16 KiB of UTF-8 per page: root-to-nearest rules first
 
 ### `GET /api/v1/files/<address>?path=&offset=&limit=`
 
-The `read_file` tool. `path` is a canonical file path inside the mount. `offset` and `limit` are character counts (`limit` 1 to 100,000, default 40,000). Reads do not wait for indexing: they return HTTP 503 with `index.indexing` or `index.failed` until the served set, including exclusions, is known. All reading routes enforce ancestor exclusions and failed policy boundaries.
+The `read_repo_file` tool. `path` is a canonical file path inside the mount. `offset` and `limit` are character counts (`limit` 1 to 100,000, default 40,000). Reads do not wait for indexing: they return HTTP 503 with `index.indexing` or `index.failed` until the served set, including exclusions, is known. All reading routes enforce ancestor exclusions and failed policy boundaries.
 
 ```json
 { "kind": "file", "path": "marketing/docs/guide.md", "content": "...", "offset": 0, "nextOffset": null, "totalLength": 1234 }

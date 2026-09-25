@@ -14,6 +14,7 @@ export {
   parseAddress,
 } from "./address.js";
 export { browseCatalogFiles, type CatalogFile, folderOverview } from "./browse-tree.js";
+export { decodeText } from "./bytes.js";
 export { contextPage } from "./context-page.js";
 export { DomainError } from "./errors.js";
 export {
@@ -149,6 +150,29 @@ export {
 } from "./rest/contracts.js";
 export { err, ok, type Result } from "./result.js";
 export {
+  assembleSkillDocument,
+  frontMatterObject,
+  type IncludedFileSection,
+  provenanceLine,
+  renderSkillSections,
+  SKILLCDN_KEY,
+  type SkillDocumentInput,
+  type SkillRulesSection,
+  type SkillSections,
+  serializeFrontMatter,
+} from "./skill-document.js";
+export { type SkillDocumentSources, skillDocumentInput } from "./skill-document-sources.js";
+export {
+  describeListingProblem,
+  isHiddenSkill,
+  SKILL_LISTING_MAX_BYTES,
+  SKILL_LISTING_MAX_FILES,
+  type SkillListingFile,
+  type SkillListingInput,
+  type SkillListingProblem,
+  skillListingProblem,
+} from "./skill-listing.js";
+export {
   MAX_INCLUDED_FILES,
   MAX_SKILL_COMPATIBILITY_LENGTH,
   MAX_SKILL_DESCRIPTION_LENGTH,
@@ -165,6 +189,14 @@ export {
   type SkillManifestWarningCode,
   type SkillTranslation,
 } from "./skill-manifest.js";
+export {
+  formatSkillUri,
+  type ParsedSkillUri,
+  parseSkillUri,
+  SKILL_URI_SCHEME,
+  type SkillUriAddress,
+  skillUriPrefix,
+} from "./skill-uri.js";
 export { hasForbiddenCodePoint } from "./text-safety.js";
 export {
   type CatalogManifest,

@@ -49,7 +49,7 @@ The server is configured only through environment variables. [`.env.example`](..
 | `VERIFIED_REPOSITORIES` | `api` | no | no | Repositories the operator vouches for, comma-separated as `/gh/owner/repo`: results from them carry no provenance notice, and their pages no warning ([ADR-0019](../docs/adr/0019-the-operator-vouches-for-repositories-until-owners-can.md)). Default: none. |
 | `INDEX_WAIT_MS` | `api` | no | no | How long a tool call waits for a new commit's index. Default `20000`. |
 | `INDEX_CONCURRENCY`, `INDEX_LEASE_SECONDS` | `api`, `worker` | no | no | Commits indexed at once per process, and the lifetime of an indexing claim. `INDEX_CONCURRENCY=0` makes a process index nothing and serve only what another process, on any version, has indexed. |
-| `INDEX_MAX_*`, `READ_MAX_FILE_BYTES` | `api`, `worker`, `check` | no | no | Limits on the work one repository may cause, including the unpacked size of a commit archive; see [`.env.example`](../.env.example). `check` reads these and nothing else. |
+| `INDEX_MAX_*`, `READ_MAX_FILE_BYTES` | `api`, `worker`, `check` | no | no | Limits on the work one repository may cause, including the unpacked size of a commit archive; see [`.env.example`](../.env.example). A skill with a file over `READ_MAX_FILE_BYTES` is not listed through the MCP skills extension. `check` reads these and nothing else. |
 
 Invalid configuration stops the process with exit code `78` and a message that names the variable and the rule, never the value.
 

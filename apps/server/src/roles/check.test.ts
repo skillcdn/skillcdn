@@ -29,14 +29,17 @@ describe("the check role", () => {
     expect(report).toContain("  language: en");
     expect(report).toContain("  translations: ko");
     expect(report).toContain("  documents: docs");
-    expect(report).toContain("Skills: 1\n- greeting (skills/greeting)\n");
+    expect(report).toContain(
+      "Skills: 1 (1 listed through the MCP skills extension)\n- greeting (skills/greeting)\n",
+    );
+    expect(report).toMatch(/ {2}extension: listed, \d+ bytes as served\n/);
     expect(report).toContain("  files: 1 (1 returned with the skill)");
     expect(report).toContain(
       "Documents outside the skills: 1\n- docs/guide.md - Using the playbooks",
     );
     expect(report).toContain("Not served: 2 files (notes/private.md, scripts/check.mjs)");
     expect(report).toContain("Optional overview files: 1 (README.md)");
-    expect(report).toContain("Optional overview: read_file README.md");
+    expect(report).toContain("Optional overview: read_repo_file README.md");
     expect(report).not.toContain("README.md: Acme playbooks.");
     expect(report).toContain("Index diagnostics: 0");
     expect(report).toContain("What a client is told on connect (");
@@ -48,7 +51,8 @@ describe("the check role", () => {
     const { code, report } = await check(join(FIXTURES, "hostile"));
     expect(code).toBe(1);
     expect(report).toContain("Repository manifest: none.");
-    expect(report).toContain("Skills: 3\n");
+    expect(report).toContain("Skills: 3 (2 listed through the MCP skills extension)\n");
+    expect(report).toContain("  extension: not listed (name_directory_mismatch)\n");
     expect(report).toContain(
       '- skills/colon-in-description/SKILL.md (invalid_front_matter): front-matter is not valid YAML (BLOCK_AS_IMPLICIT_KEY): the value of "description" contains ": "',
     );
@@ -126,7 +130,7 @@ describe("the check role", () => {
     const connection = report.split("What a client is told on connect")[1];
     expect(connection).toContain("Writing library: Find the right writing skill.");
     expect(connection).toContain("team/: Editors. Team writing workflows. 1 skills");
-    expect(connection).toContain("Optional overview: read_file README.md");
+    expect(connection).toContain("Optional overview: read_repo_file README.md");
     expect(connection).not.toContain("Detailed setup stays optional");
     expect(connection).not.toContain("team/README.md:");
   });

@@ -95,12 +95,12 @@ describe("repository-root publication and progressive loading", () => {
     });
     const client = await h.connect(address);
     for (const query of ["compose", "copper", "storyboard", original]) {
-      const found = await tool(client, "search", { query, path: "media" });
+      const found = await tool(client, "search_repo", { query, path: "media" });
       expect(found.error).toBe(false);
       expect(found.data?.items).toEqual([expect.objectContaining({ kind: "skill", path })]);
     }
     for (const query of [translated, "presentationonlyquartz"]) {
-      const found = await tool(client, "search", { query, path: "media" });
+      const found = await tool(client, "search_repo", { query, path: "media" });
       expect(found.error).toBe(false);
       expect(found.data?.items).toEqual([]);
       const params = new URLSearchParams({ query, path: "media" });
@@ -223,7 +223,7 @@ describe("repository-root publication and progressive loading", () => {
     let count = 0;
     do {
       const result = await client.callTool({
-        name: "get_skill",
+        name: "load_skill",
         arguments: { path, ...(cursor === undefined ? {} : { cursor }) },
       });
       expect(result.isError).not.toBe(true);
@@ -540,20 +540,21 @@ describe("repository-root publication and progressive loading", () => {
       expect(restErrorSchema.parse(await response.json()).error.code).toBe("request.invalid");
     }
     const client = await h.connect(`${address}/team`);
-    expect((await tool(client, "browse", { path: "skills" })).error).toBe(true);
-    expect((await tool(client, "get_skill", { path: "skills/release-notes/SKILL.md" })).error).toBe(
-      true,
-    );
+    expect((await tool(client, "browse_repo", { path: "skills" })).error).toBe(true);
     expect(
-      (await tool(client, "read_file", { path: "team/../skills/release-notes/SKILL.md" })).error,
+      (await tool(client, "load_skill", { path: "skills/release-notes/SKILL.md" })).error,
+    ).toBe(true);
+    expect(
+      (await tool(client, "read_repo_file", { path: "team/../skills/release-notes/SKILL.md" }))
+        .error,
     ).toBe(true);
     await client.close();
     const changed = await h.connect(
       `/gh/acme/multi-skill@${fixtureCommits("cursor-validation").release}`,
     );
-    expect((await tool(changed, "browse", { path: "team", cursor: first.nextCursor })).error).toBe(
-      true,
-    );
+    expect(
+      (await tool(changed, "browse_repo", { path: "team", cursor: first.nextCursor })).error,
+    ).toBe(true);
     await changed.close();
   });
 

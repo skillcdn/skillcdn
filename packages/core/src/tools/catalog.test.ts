@@ -21,6 +21,7 @@ const mount: MountSummary = {
   path: path(""),
   verified: true,
   truncated: false,
+  skillUri: "skill://gh/acme/skills",
 };
 const base: MountCatalog = {
   mount,
@@ -56,7 +57,7 @@ describe("repository instructions", () => {
       },
     });
     expect(text).toContain("Cloud skills: Automate cloud workloads.");
-    expect(text).toContain("Optional overview: read_file README.md.");
+    expect(text).toContain("Optional overview: read_repo_file README.md.");
     expect(text).not.toContain("Host fallback");
     expect(text).not.toContain("applicable rules");
     expect(text.length).toBeLessThanOrEqual(INSTRUCTIONS_MAX_LENGTH);
@@ -80,7 +81,7 @@ describe("repository instructions", () => {
     };
     const text = renderInstructions({ status: "ready", catalog });
     expect(text).toContain("Author title: Author description.");
-    expect(text).toContain("read_file README.md");
+    expect(text).toContain("read_repo_file README.md");
     expect(text).not.toContain("README summary");
     expect(describeFindTool({ status: "ready", catalog })).toContain("Author description.");
   });
@@ -105,7 +106,7 @@ describe("repository instructions", () => {
     expect(text).toContain("engineering/");
     expect(text).toContain("128 skills");
     expect(text).toContain("Use for releases and incidents.");
-    expect(text).toContain("get_skill");
+    expect(text).toContain("load_skill");
     expect(text).toContain("until complete");
     expect(text).toContain("repository root");
   });
@@ -155,7 +156,7 @@ describe("repository instructions", () => {
       },
     });
     expect(text.length).toBeLessThanOrEqual(INSTRUCTIONS_MAX_LENGTH);
-    expect(text).toContain("browse returns the full folder contents");
+    expect(text).toContain("browse_repo returns the full folder contents");
     expect(text).toContain("until complete");
     expect(text).toContain("Written in ko");
   });
@@ -187,7 +188,7 @@ describe("repository instructions", () => {
     });
     expect(text).toContain("0 skills, 7 documents");
     expect(text).toContain("team/SKILLCDN.md");
-    expect(text).toContain("browse reports diagnostics");
+    expect(text).toContain("browse_repo reports diagnostics");
     expect(renderInstructions({ status: "indexing", mount })).toContain("being indexed");
     expect(renderInstructions({ status: "failed", mount })).toContain("could not be indexed");
   });

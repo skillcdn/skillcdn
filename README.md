@@ -43,14 +43,16 @@ Headless agents get a **project token**: repo-scoped, read-only, expiring, revoc
 
 | Tool | Purpose |
 |---|---|
-| `browse` | page through the repository's real folders, with descriptions and counts |
-| `search` | search skills and documents within the mount or a chosen folder |
-| `get_skill` | load an exact `SKILL.md` path, its inherited rules and required files through bounded pages |
-| `read_file` | read a raw text file by its repository-root path |
+| `browse_repo` | page through the repository's real folders, with descriptions and counts |
+| `search_repo` | search skills and documents within the mount or a chosen folder |
+| `load_skill` | load an exact `SKILL.md` path, its inherited rules and required files through bounded pages |
+| `read_repo_file` | read a raw text file by its repository-root path |
 | `intake` | *(later)* walk a non-expert through the questions a skill declares |
 | `describe` / `run` | *(later)* composed tools declared in Markdown or YAML |
 
-One `use_skill(path)` prompt starts loading a skill. The server introduces the repository and its folders when an agent connects; browse and search provide the rest. Names are display metadata, and every content path keeps its actual spelling from the repository root.
+One `use_skill(path)` prompt starts loading a skill. The server introduces the repository and its folders when an agent connects; browsing and search provide the rest. Names are display metadata, and every content path keeps its actual spelling from the repository root.
+
+An agent whose host implements the [MCP skills extension](docs/specs/tools.md#the-skills-extension) receives the same skills as skills: listed with a digest for every file, and each `SKILL.md` served as a plain Agent Skills document with its inherited rules and required files inside it, under `skill://gh/<owner>/<repo>/<path>`.
 
 Connect the repository root by default, so one connection reaches skills for different tasks and their shared Markdown references. Sub-path connections remain available when a narrower scope is wanted. Optional `SKILLCDN.md` files describe folders, add common rules and explicitly exclude files or subtrees; nested rules arrive with each skill in order. Repositories without those manifests still work through their real folder structure and optional README introductions. Discovery stays brief; agents load instructions and references only when needed.
 

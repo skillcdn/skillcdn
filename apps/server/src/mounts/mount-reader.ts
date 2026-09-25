@@ -1,4 +1,5 @@
 import {
+  assembleSkillDocument,
   type BlobStore,
   BROWSE_DEFAULT_LIMIT,
   type BrowseEntry,
@@ -8,6 +9,7 @@ import {
   type CatalogState,
   contextPage,
   type DirectoryResult,
+  decodeText,
   FIND_DEFAULT_LIMIT,
   FIND_LIST_SKILLS_MAX,
   FIND_MAX_SKILL_FILES,
@@ -18,6 +20,8 @@ import {
   type FindResult,
   type FolderOverview,
   folderOverview,
+  formatSkillUri,
+  frontMatterObject,
   type GitHost,
   type IncludedFile,
   type IndexDiagnostic,
@@ -28,7 +32,9 @@ import {
   type MountSummary,
   pageOfText,
   parentDirectory,
+  parseFrontMatter,
   parseRepoPath,
+  parseSkillUri,
   READ_FILE_DEFAULT_LIMIT,
   type RepoPath,
   type RepoTranslation,
@@ -37,6 +43,8 @@ import {
   type SkillResult,
   type SkillRules,
   type SkillTranslation,
+  skillDocumentInput,
+  skillUriPrefix,
   splitFrontMatter,
 } from "@skillcdn/core";
 import {
@@ -51,7 +59,9 @@ import {
   getSnapshotDiagnostics,
   listDirectory,
   listEntries,
+  listListedSkills,
   listSkillFiles,
+  listSkillResources,
   type SnapshotRecord,
   type SnapshotScope,
   type StoredTranslation,
@@ -59,7 +69,7 @@ import {
   servedEntries,
 } from "@skillcdn/db";
 import type { SnapshotOutcome, SnapshotService } from "../indexer/snapshot-service.js";
-import { decodeText } from "../indexer/text.js";
+
 import {
   continuationKey,
   continuationOffset,
@@ -155,6 +165,74 @@ const scopeOf = (snapshot: SnapshotRecord): ReadScope => ({
   snapshotId: snapshot.id,
   indexVersion: snapshot.indexVersion,
 });
+
+/** One entry of `skills/list`, as the MCP skills extension defines it. */
+export interface SkillEntry {
+  readonly uri: string;
+  readonly frontmatter: Record<string, unknown>;
+  readonly resources: readonly {
+    readonly uri: string;
+    readonly digest: string;
+    readonly size: number;
+  }[];
+}
+
+export interface SkillsPage {
+  readonly skills: readonly SkillEntry[];
+  readonly nextCursor: string | undefined;
+  readonly total: number;
+}
+
+/** What `resources/read` answers: text or bytes, and the digest the listing declared. */
+export interface Resource {
+  readonly uri: string;
+  readonly mimeType: string;
+  readonly text?: string;
+  readonly blob?: string;
+  readonly digest: string;
+}
+
+export interface ResourceEntry {
+  readonly uri: string;
+  readonly name: string;
+  readonly mimeType: string;
+}
+
+/** Skills per page of `skills/list`; a page is a whole number of entries. */
+const SKILLS_PAGE_SIZE = 20;
+
+const MIME_TYPES: Readonly<Record<string, string>> = {
+  md: "text/markdown",
+  markdown: "text/markdown",
+  mdx: "text/markdown",
+  json: "application/json",
+  yaml: "application/yaml",
+  yml: "application/yaml",
+  txt: "text/plain",
+  csv: "text/csv",
+  html: "text/html",
+  xml: "application/xml",
+  js: "text/javascript",
+  mjs: "text/javascript",
+  ts: "text/x-typescript",
+  py: "text/x-python",
+  sh: "application/x-sh",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  svg: "image/svg+xml",
+  webp: "image/webp",
+  pdf: "application/pdf",
+};
+
+/** A media type from the extension, else by whether the bytes are text. */
+function mimeTypeOf(path: RepoPath, isText: boolean): string {
+  const name = path.slice(path.lastIndexOf("/") + 1);
+  const dot = name.lastIndexOf(".");
+  const extension = dot < 0 ? "" : name.slice(dot + 1).toLowerCase();
+  return MIME_TYPES[extension] ?? (isText ? "text/plain" : "application/octet-stream");
+}
 
 const MAX_LISTED_SKILL_FILES = 50;
 const MAX_SUGGESTED_SKILLS = 20;
@@ -490,7 +568,255 @@ export class MountReader {
       path: mount.address.path,
       verified: mount.verified,
       truncated: snapshot?.truncated ?? false,
+      skillUri: skillUriPrefix(mount.address),
     };
+  }
+
+  // The MCP skills extension (ADR-0024): the same index, served as skills and resources.
+
+  /**
+   * The repository-root path a skill URI names inside this mount, or `undefined` when the URI
+   * is not one of this repository's. A root skill's files carry its name as a directory segment
+   * the repository does not have; a real path of that spelling comes first.
+   */
+  async #pathOfUri(mount: Mount, scope: ReadScope, uri: string): Promise<RepoPath | undefined> {
+    const parsed = parseSkillUri(uri);
+    if (
+      parsed === undefined ||
+      parsed.address.host !== mount.address.host ||
+      parsed.address.owner !== mount.address.owner ||
+      parsed.address.repo !== mount.address.repo
+    ) {
+      return undefined;
+    }
+    const root = await this.#rootSkill(scope);
+    if (root !== undefined && (parsed.path === root || parsed.path.startsWith(`${root}/`))) {
+      const real = await getEntry(this.#dependencies.database, scope, parsed.path);
+      if (real === undefined) {
+        const below = parsed.path === root ? ROOT_PATH : parsed.path.slice(root.length + 1);
+        const path = parseRepoPath(below);
+        return path.ok ? path.value : undefined;
+      }
+    }
+    return parsed.path;
+  }
+
+  /** The name of the skill at the repository root, when there is one. */
+  async #rootSkill(scope: ReadScope): Promise<string | undefined> {
+    const root = await getEntry(this.#dependencies.database, scope, "SKILL.md");
+    return root?.kind === "skill" && root.name !== null ? root.name : undefined;
+  }
+
+  /** The URI of a repository-root path, with a root skill's name segment in front. */
+  #uriOf(mount: Mount, root: string | undefined, path: RepoPath): string {
+    const named = root === undefined ? path : joinRepoPath(root as RepoPath, path);
+    return formatSkillUri(mount.address, named);
+  }
+
+  /** What the listing says about one listed skill: its URI, its front matter and its files. */
+  async #skillEntry(
+    mount: Mount,
+    scope: ReadScope,
+    root: string | undefined,
+    skill: EntryRecord,
+  ): Promise<SkillEntry | undefined> {
+    const { database, blobStore } = this.#dependencies;
+    const text = await blobStore.read(skill.blobSha);
+    const split = text === undefined ? undefined : splitFrontMatter(text);
+    const fields = split?.kind === "found" ? parseFrontMatter(split.source) : undefined;
+    if (fields === undefined || !fields.ok) return undefined;
+    const files = await listSkillResources(database, scope, skill.skillDir ?? "");
+    return {
+      uri: this.#uriOf(mount, root, skill.path as RepoPath),
+      frontmatter: frontMatterObject(fields.value),
+      resources: files.flatMap((file) =>
+        file.digest === null || file.servedSize === null
+          ? []
+          : [
+              {
+                uri: this.#uriOf(mount, root, file.path as RepoPath),
+                digest: `sha256:${file.digest}`,
+                size: file.servedSize,
+              },
+            ],
+      ),
+    };
+  }
+
+  /** A page of the skills the extension lists inside the mount. */
+  async listSkills(
+    mount: Mount,
+    input: { readonly cursor?: string | undefined; readonly limit?: number | undefined },
+    waitMs: number,
+  ): Promise<NotReady | { readonly status: "ready"; readonly result: SkillsPage }> {
+    const { database, snapshots } = this.#dependencies;
+    const outcome = await snapshots.ready(mount, waitMs);
+    if (outcome.status !== "ready") return outcome;
+    const scope = scopeOf(outcome.snapshot);
+    const key = this.#pageKey(mount, outcome.snapshot, "skills/list", mount.address.path);
+    const offset = continuationOffset(input.cursor, key);
+    const limit = input.limit ?? SKILLS_PAGE_SIZE;
+    const [root, page] = await Promise.all([
+      this.#rootSkill(scope),
+      listListedSkills(database, scope, mount.address.path, offset, limit),
+    ]);
+    const skills = (
+      await Promise.all(page.skills.map((skill) => this.#skillEntry(mount, scope, root, skill)))
+    ).filter((entry) => entry !== undefined);
+    return {
+      status: "ready",
+      result: {
+        skills,
+        nextCursor:
+          offset + page.skills.length < page.total
+            ? nextContinuation(key, offset + page.skills.length)
+            : undefined,
+        total: page.total,
+      },
+    };
+  }
+
+  /** One listed skill by URI; `undefined` when the URI names no listed skill of this mount. */
+  async getSkill(
+    mount: Mount,
+    uri: string,
+    waitMs: number,
+  ): Promise<NotReady | { readonly status: "ready"; readonly skill: SkillEntry | undefined }> {
+    const { database, snapshots } = this.#dependencies;
+    const outcome = await snapshots.ready(mount, waitMs);
+    if (outcome.status !== "ready") return outcome;
+    const scope = scopeOf(outcome.snapshot);
+    const path = await this.#pathOfUri(mount, scope, uri);
+    const entry =
+      path === undefined || !isWithinRepoPath(mount.address.path, path)
+        ? undefined
+        : await getEntry(database, scope, path);
+    if (entry?.kind !== "skill" || !entry.listed) return { status: "ready", skill: undefined };
+    return {
+      status: "ready",
+      skill: await this.#skillEntry(mount, scope, await this.#rootSkill(scope), entry),
+    };
+  }
+
+  /** The bytes a URI names, as the listing digested them; `undefined` when it names nothing served. */
+  async readResource(
+    mount: Mount,
+    uri: string,
+    waitMs: number,
+  ): Promise<NotReady | { readonly status: "ready"; readonly resource: Resource | undefined }> {
+    const { database, blobStore, snapshots } = this.#dependencies;
+    const outcome = await snapshots.ready(mount, waitMs);
+    if (outcome.status !== "ready") return outcome;
+    const scope = scopeOf(outcome.snapshot);
+    const path = await this.#pathOfUri(mount, scope, uri);
+    const entry =
+      path === undefined || !isWithinRepoPath(mount.address.path, path)
+        ? undefined
+        : await getEntry(database, scope, path);
+    if (entry === undefined || entry.digest === null)
+      return { status: "ready", resource: undefined };
+    if (entry.kind === "skill") {
+      const document = await this.#assembledDocument(mount, scope, entry);
+      return {
+        status: "ready",
+        resource:
+          document === undefined
+            ? undefined
+            : { uri, mimeType: "text/markdown", text: document, digest: entry.digest },
+      };
+    }
+    const bytes = await blobStore.readBytes(entry.blobSha);
+    if (bytes === undefined) return { status: "ready", resource: undefined };
+    const text = decodeText(bytes);
+    return {
+      status: "ready",
+      resource: {
+        uri,
+        mimeType: mimeTypeOf(entry.path as RepoPath, text !== undefined),
+        ...(text === undefined ? { blob: Buffer.from(bytes).toString("base64") } : { text }),
+        digest: entry.digest,
+      },
+    };
+  }
+
+  /** The direct children of a directory URI, or `undefined` when it names no directory served here. */
+  async readDirectory(
+    mount: Mount,
+    uri: string,
+    waitMs: number,
+  ): Promise<
+    NotReady | { readonly status: "ready"; readonly entries: readonly ResourceEntry[] | undefined }
+  > {
+    const { database, snapshots } = this.#dependencies;
+    const outcome = await snapshots.ready(mount, waitMs);
+    if (outcome.status !== "ready") return outcome;
+    const scope = scopeOf(outcome.snapshot);
+    const root = await this.#rootSkill(scope);
+    const path = await this.#pathOfUri(mount, scope, uri);
+    if (path === undefined || !isWithinRepoPath(mount.address.path, path)) {
+      return { status: "ready", entries: undefined };
+    }
+    const children = await listDirectory(database, scope, path, MAX_DIRECTORY_ENTRIES);
+    if (children.length === 0) return { status: "ready", entries: undefined };
+    return {
+      status: "ready",
+      entries: children.map((child) => ({
+        uri: this.#uriOf(mount, root, child.path as RepoPath),
+        name: child.path.slice(child.path.lastIndexOf("/") + 1),
+        mimeType:
+          child.kind === "directory" ? "inode/directory" : mimeTypeOf(child.path as RepoPath, true),
+      })),
+    };
+  }
+
+  /** The document a listed skill's `SKILL.md` is served as, assembled as it was digested. */
+  async #assembledDocument(
+    mount: Mount,
+    scope: ReadScope,
+    skill: EntryRecord,
+  ): Promise<string | undefined> {
+    const { database, blobStore } = this.#dependencies;
+    const text = await blobStore.read(skill.blobSha);
+    if (text === undefined || skill.skillDir === null) return undefined;
+    const directory = skill.skillDir as RepoPath;
+    const manifests = (await this.#entriesOf(scope))
+      .filter(
+        (row) =>
+          row.kind === "manifest" &&
+          row.frontMatter?.manifestError === undefined &&
+          isWithinRepoPath(parentDirectory(row.path as RepoPath), directory),
+      )
+      .sort((a, b) => a.path.length - b.path.length);
+    const rules = await Promise.all(
+      manifests.map(async (row) => ({
+        path: row.path as RepoPath,
+        text: await blobStore.read(row.blobSha),
+      })),
+    );
+    const included = await Promise.all(
+      (skill.frontMatter?.include ?? []).map(async (relative) => {
+        const parsed = parseRepoPath(relative);
+        const path = parsed.ok ? joinRepoPath(directory, parsed.value) : undefined;
+        const entry = path === undefined ? undefined : await getEntry(database, scope, path);
+        return {
+          path: path ?? directory,
+          text: entry === undefined ? undefined : await blobStore.read(entry.blobSha),
+        };
+      }),
+    );
+    if (
+      rules.some((rule) => rule.text === undefined) ||
+      included.some((file) => file.text === undefined)
+    ) {
+      return undefined;
+    }
+    const input = skillDocumentInput({
+      commit: mount.commit,
+      skill: { path: skill.path as RepoPath, text },
+      manifests: rules.map((rule) => ({ path: rule.path, text: rule.text ?? "" })),
+      included: included.map((file) => ({ path: file.path, text: file.text ?? "" })),
+    });
+    return input === undefined ? undefined : assembleSkillDocument(input);
   }
 
   async find(
@@ -949,11 +1275,11 @@ export class MountReader {
         file.hash,
         limits.maxReadableFileBytes,
       );
+      await blobStore.write(file.hash, bytes);
       text = decodeText(bytes);
       if (text === undefined) {
         return { kind: "not_text", path: below };
       }
-      await blobStore.write(file.hash, text);
     }
     const refsOutcome =
       outcome.status === "ready"

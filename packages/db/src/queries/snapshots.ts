@@ -220,6 +220,12 @@ export interface NewIndexEntry {
   readonly searchBody?: string;
   /** False for a file outside the skills and the document directories: known, never served. */
   readonly visible: boolean;
+  /** SHA-256 of the served bytes, in hex, when they are stored (ADR-0025). */
+  readonly digest?: string;
+  /** The size of what is served; for an assembled `SKILL.md` it differs from `size`. */
+  readonly servedSize?: number;
+  /** True for a skill the MCP skills extension lists. */
+  readonly listed?: boolean;
 }
 
 export interface SnapshotIndex {
@@ -267,14 +273,16 @@ export async function writeSnapshotIndex(
       const rows = sql.join(
         batch.map(
           (entry) =>
-            sql`(${entry.path}, ${entry.kind}, ${entry.size}::integer, ${entry.blobSha}, ${entry.skillDir ?? null}, ${entry.name ?? null}, ${entry.title ?? null}, ${entry.description ?? null}, ${entry.frontMatter === undefined ? null : JSON.stringify(entry.frontMatter)}::jsonb, ${entry.searchable}::boolean, ${entry.visible}::boolean, ${entry.searchBody?.slice(0, MAX_SEARCHED_BODY_LENGTH) ?? null}::text)`,
+            sql`(${entry.path}, ${entry.kind}, ${entry.size}::integer, ${entry.blobSha}, ${entry.skillDir ?? null}, ${entry.name ?? null}, ${entry.title ?? null}, ${entry.description ?? null}, ${entry.frontMatter === undefined ? null : JSON.stringify(entry.frontMatter)}::jsonb, ${entry.searchable}::boolean, ${entry.visible}::boolean, ${entry.searchBody?.slice(0, MAX_SEARCHED_BODY_LENGTH) ?? null}::text, ${entry.digest ?? null}::text, ${entry.servedSize ?? null}::integer, ${entry.listed ?? false}::boolean)`,
         ),
         sql`, `,
       );
-      // Name and title weigh most, then the description, then the path, then the body.
+      // Name and title weigh most, then the description, then the path, then the body. A body
+      // that is searched without a parsed search body is text by construction: bytes that did
+      // not decode are never searchable, and rows from before bytes were stored hold text.
       await tx.execute(sql`
         insert into index_entries
-          (account_id, snapshot_id, path, kind, size, blob_sha, skill_dir, name, title, description, front_matter, search, visible)
+          (account_id, snapshot_id, path, kind, size, blob_sha, skill_dir, name, title, description, front_matter, search, visible, digest, served_size, listed)
         select
           ${scope.accountId}::uuid, ${scope.snapshotId}::uuid,
           v.path, v.kind, v.size, v.blob_sha, v.skill_dir, v.name, v.title, v.description, v.front_matter,
@@ -282,11 +290,11 @@ export async function writeSnapshotIndex(
             setweight(to_tsvector(${SEARCH_CONFIG}::regconfig, coalesce(v.name, '') || ' ' || coalesce(v.title, '')), 'A') ||
             setweight(to_tsvector(${SEARCH_CONFIG}::regconfig, coalesce(v.description, '')), 'B') ||
             setweight(to_tsvector(${SEARCH_CONFIG}::regconfig, translate(v.path, '/._-', '    ')), 'C') ||
-            setweight(to_tsvector(${SEARCH_CONFIG}::regconfig, coalesce(v.search_body, left(b.content, ${MAX_SEARCHED_BODY_LENGTH}::integer), '')), 'D')
+            setweight(to_tsvector(${SEARCH_CONFIG}::regconfig, coalesce(v.search_body, left(coalesce(b.content, convert_from(b.bytes, 'UTF8')), ${MAX_SEARCHED_BODY_LENGTH}::integer), '')), 'D')
           end,
-          v.visible
+          v.visible, v.digest, v.served_size, v.listed
         from (values ${rows})
-          as v (path, kind, size, blob_sha, skill_dir, name, title, description, front_matter, searchable, visible, search_body)
+          as v (path, kind, size, blob_sha, skill_dir, name, title, description, front_matter, searchable, visible, search_body, digest, served_size, listed)
         left join blobs b on b.sha = v.blob_sha and v.searchable
       `);
     }

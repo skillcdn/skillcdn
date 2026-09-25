@@ -62,7 +62,7 @@ Parsing never consults the repository. An address means the same thing whatever 
 
 ## As a skill URI
 
-Over the MCP skills extension, a file of a skill is named by the address without its ref: `skill://gh/<owner>/<repo>/<path>`, with the file's repository-root path, and `skill://gh/<owner>/<repo>/<name>/SKILL.md` for a root-level skill ([ADR-0024](../adr/0024-skills-travel-through-the-mcp-skills-extension.md)). The ref stays with the connection, so the same URI names the same file at whatever commit the address serves. The [tools](tools.md) say when this is served.
+Over the MCP skills extension, a file of a skill is named by the address without its ref: `skill://gh/<owner>/<repo>/<path>`, with the file's repository-root path, and `skill://gh/<owner>/<repo>/<name>/SKILL.md` for a root-level skill ([ADR-0024](../adr/0024-skills-travel-through-the-mcp-skills-extension.md)). The ref stays with the connection, so the same URI names the same file at whatever commit the address serves. The part after the scheme is an address without a ref, so this grammar decides what is a valid URI; `parseSkillUri` and `formatSkillUri` in `packages/core` implement it ([tools](tools.md#the-skills-extension)).
 
 ## In a browser
 

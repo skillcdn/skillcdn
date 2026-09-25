@@ -48,6 +48,8 @@ export interface MountSummary {
   readonly verified: boolean;
   /** True when the repository was too large to index completely. */
   readonly truncated: boolean;
+  /** What every skill URI of the repository starts with: `skill://gh/<owner>/<repo>`. */
+  readonly skillUri: string;
 }
 
 /**
@@ -103,7 +105,7 @@ export interface FindResult {
   readonly diagnostics: readonly IndexDiagnostic[];
 }
 
-/** Legacy rendering bound; current get_skill context uses SKILL_PAGE_BYTES. */
+/** Legacy rendering bound; current load_skill context uses SKILL_PAGE_BYTES. */
 export const MAX_SKILL_RULES_LENGTH = 8_000;
 /** How much text the files a skill declares as needed on every run may add to it, together. */
 export const MAX_SKILL_INCLUDED_LENGTH = 100_000;
@@ -145,7 +147,7 @@ export interface SkillResult {
   readonly allowedTools: string | undefined;
   readonly metadata: Readonly<Record<string, string>>;
   readonly body: string;
-  /** Supporting files of the skill, ready to pass to `read_file`. */
+  /** Supporting files of the skill, ready to pass to `read_repo_file`. */
   readonly files: readonly RepoPath[];
   readonly filesTruncated: boolean;
   /** The files the skill declares as needed on every run, with their text. */
@@ -177,7 +179,7 @@ export interface DirectoryEntry {
   readonly size: number | undefined;
 }
 
-/** What `read_file` answers for a directory: its immediate entries, subdirectories first. */
+/** What `read_repo_file` answers for a directory: its immediate entries, subdirectories first. */
 export interface DirectoryResult {
   readonly mount: MountSummary;
   /** Relative to the mounted root; empty for the root itself. */

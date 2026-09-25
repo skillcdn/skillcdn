@@ -45,6 +45,7 @@ const mount: MountSummary = {
   path: path(""),
   verified: true,
   truncated: false,
+  skillUri: "skill://gh/acme/skills",
 };
 
 const skillItem = (name: string, description = `About ${name}.`) => ({
@@ -89,7 +90,7 @@ describe("tool contracts", () => {
     expect(searchInputSchema.safeParse({ query: "release notes" }).success).toBe(true);
   });
   it("keeps the public tool names stable", () => {
-    expect(TOOL_NAMES).toEqual(["browse", "search", "get_skill", "read_file"]);
+    expect(TOOL_NAMES).toEqual(["browse_repo", "search_repo", "load_skill", "read_repo_file"]);
   });
 
   it("exports input schemas that convert to JSON Schema objects", () => {
@@ -200,9 +201,9 @@ describe("rendering", () => {
       },
       nextCursor: undefined,
     });
-    expect(browse).toContain("read_file README.md");
+    expect(browse).toContain("read_repo_file README.md");
     expect(browse).toContain("overview: write/README.md");
-    expect(browse).not.toContain('browse {"path"');
+    expect(browse).not.toContain('browse_repo {"path"');
     expect(browse).not.toContain(long);
     expect(browse.length).toBeLessThan(600);
     const source = skillResult({
@@ -224,7 +225,7 @@ describe("rendering", () => {
         referencesTruncated: true,
       }),
     );
-    expect(text).toContain("read_file SKILL.md has the source");
+    expect(text).toContain("read_repo_file SKILL.md has the source");
     expect(text).toContain("Reference list abbreviated");
     expect(text).not.toContain("Skill context is incomplete");
   });
@@ -375,7 +376,7 @@ describe("rendering", () => {
       totals: undefined,
       diagnostics: [skipped],
     });
-    expect(results).toContain("Note: 1 index issue reported; browse provides details.");
+    expect(results).toContain("Note: 1 index issue reported; browse_repo provides details.");
     expect(results).not.toContain("invalid_front_matter");
     const nothing = renderFindResult({
       mount,
@@ -439,9 +440,9 @@ describe("rendering", () => {
         "License: Apache-2.0",
         "Relative paths in the instructions start at skills/release-notes/.",
         "",
-        "Supporting files, readable with read_file:",
+        "Supporting files, readable with read_repo_file:",
         "- skills/release-notes/references/style.md",
-        '- ... (browse {"path":"skills/release-notes"} for all supporting files)',
+        '- ... (browse_repo {"path":"skills/release-notes"} for all supporting files)',
         "",
         "Warnings for the skill author:",
         '- "name" should match the directory',
@@ -475,7 +476,7 @@ describe("rendering", () => {
         "Description: Writes commit messages.",
         "Relative paths in the instructions start at the mounted root.",
         "",
-        "Supporting files, readable with read_file:",
+        "Supporting files, readable with read_repo_file:",
         "- references/style.md (included below)",
         "- references/other.md (included below)",
         "- assets/a.json (included below)",
@@ -494,10 +495,10 @@ describe("rendering", () => {
         "",
         "--- included file: assets/a.json ---",
         '{"a": 1',
-        "(Continues in the next get_skill page.)",
+        "(Continues in the next load_skill page.)",
         "",
         "--- included file: references/other.md ---",
-        "(Not at hand here; read_file has it.)",
+        "(Not at hand here; read_repo_file has it.)",
       ].join("\n"),
     );
   });
@@ -511,30 +512,37 @@ describe("rendering", () => {
     expect(text).toContain("Relative paths in the instructions start at the mounted root.");
   });
 
-  it("puts the repository's rules before the instructions of a skill", () => {
+  it("puts the applicable rules before the instructions, as the served document has them", () => {
     const inside = renderSkillResult(
       skillResult({
-        rules: { path: path("SKILLCDN.md"), body: "\n# Rules\n\n- Ask first.\n", truncated: true },
+        ruleChain: [
+          { path: path("SKILLCDN.md"), body: "# Rules\n\n- Ask first.", truncated: true },
+        ],
       }),
     );
     expect(inside).toContain(
       [
-        "--- rules for every skill in this repository (from SKILLCDN.md) ---",
+        "--- applicable rules: SKILLCDN.md ---",
         "# Rules",
         "",
         "- Ask first.",
-        "(The rules continue; read_file SKILLCDN.md has the whole text.)",
+        "(Continues in the next load_skill page.)",
         "",
         "--- instructions ---",
         "# Commit messages",
       ].join("\n"),
     );
+    // The legacy single-rule field is no longer rendered: the chain is complete on its own.
     const above = renderSkillResult(
-      skillResult({ rules: { path: undefined, body: "- Ask first.", truncated: false } }),
+      skillResult({
+        rules: { path: undefined, body: "- Ask first.", truncated: false },
+        ruleChain: [{ path: undefined, body: "- Ask first.", truncated: false }],
+      }),
     );
     expect(above).toContain(
-      "--- rules for every skill in this repository (from the repository manifest above the mounted directory) ---\n- Ask first.\n\n--- instructions ---",
+      "--- applicable rules: the repository manifest above the mounted directory ---\n- Ask first.\n\n--- instructions ---",
     );
+    expect(above).not.toContain("rules for every skill in this repository");
   });
 
   it("lists a directory without a hint the model does not need", () => {
@@ -576,7 +584,7 @@ describe("rendering", () => {
       [
         "File: docs/a.md (characters 0 to 4 of 10)",
         "Source: acme/skills@main (commit 0123456)",
-        "More follows: call read_file with offset 4.",
+        "More follows: call read_repo_file with offset 4.",
         "",
         "--- content ---",
         "0123",

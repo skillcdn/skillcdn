@@ -3,7 +3,7 @@ import type { Messages } from "./en.js";
 import { landingKo } from "./landing-ko.js";
 
 // Korean pack. Language packs are the one place where committed text is not English.
-// Keep technical terms that readers search for in their original form: MCP, SKILL.md, browse, search, get_skill.
+// Keep technical terms that readers search for in their original form: MCP, SKILL.md, browse_repo, search_repo, load_skill.
 
 export const ko: Messages = {
   meta: {

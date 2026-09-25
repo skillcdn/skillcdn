@@ -15,6 +15,11 @@ export interface EntryRecord {
   readonly title: string | null;
   readonly description: string | null;
   readonly frontMatter: SkillFrontMatter | null;
+  /** SHA-256 of the served bytes, in hex; null when they are not stored. */
+  readonly digest: string | null;
+  readonly servedSize: number | null;
+  /** True for a skill the MCP skills extension lists. */
+  readonly listed: boolean;
 }
 
 const entryColumns = {
@@ -28,6 +33,9 @@ const entryColumns = {
   title: indexEntries.title,
   description: indexEntries.description,
   frontMatter: indexEntries.frontMatter,
+  digest: indexEntries.digest,
+  servedSize: indexEntries.servedSize,
+  listed: indexEntries.listed,
 };
 
 function inSnapshot(scope: SnapshotScope): SQL | undefined {
@@ -214,6 +222,61 @@ export async function getSkillsAt(
         eq(indexEntries.kind, "skill"),
         VISIBLE,
         inArray(indexEntries.skillDir, [...directories]),
+      ),
+    )
+    .orderBy(BY_PATH);
+}
+
+/**
+ * The skills the MCP skills extension lists inside a mount, in path order: a page of them from
+ * `offset`, and how many there are in all.
+ */
+export async function listListedSkills(
+  database: Database,
+  scope: SnapshotScope,
+  mountPath: string,
+  offset: number,
+  limit: number,
+): Promise<{ readonly skills: EntryRecord[]; readonly total: number }> {
+  const where = and(
+    inSnapshot(scope),
+    underPath(indexEntries.path, mountPath),
+    VISIBLE,
+    IS_SKILL,
+    eq(indexEntries.listed, true),
+  );
+  const db = drizzleOf(database);
+  const [skills, [counted]] = await Promise.all([
+    db
+      .select(entryColumns)
+      .from(indexEntries)
+      .where(where)
+      .orderBy(BY_PATH)
+      .offset(offset)
+      .limit(limit),
+    db.select({ total: sql<number>`count(*)::integer` }).from(indexEntries).where(where),
+  ]);
+  return { skills, total: counted?.total ?? 0 };
+}
+
+/**
+ * Every served file inside a skill directory whose bytes are stored, its own manifest and the
+ * files of nested skills included, in path order: what the extension lists for the skill.
+ */
+export async function listSkillResources(
+  database: Database,
+  scope: SnapshotScope,
+  skillDir: string,
+): Promise<EntryRecord[]> {
+  return drizzleOf(database)
+    .select(entryColumns)
+    .from(indexEntries)
+    .where(
+      and(
+        inSnapshot(scope),
+        underPath(indexEntries.path, skillDir),
+        VISIBLE,
+        sql`${indexEntries.digest} is not null`,
       ),
     )
     .orderBy(BY_PATH);

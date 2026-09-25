@@ -20,6 +20,11 @@ import {
 const tsvector = customType<{ data: string }>({
   dataType: () => "tsvector",
 });
+const bytea = customType<{ data: Uint8Array; driverData: Buffer }>({
+  dataType: () => "bytea",
+  toDriver: (value) => Buffer.from(value.buffer, value.byteOffset, value.byteLength),
+  fromDriver: (value) => new Uint8Array(value.buffer, value.byteOffset, value.byteLength),
+});
 
 const id = () => uuid().primaryKey().default(sql`uuidv7()`);
 const instant = () => timestamp({ withTimezone: true, mode: "date" });
@@ -206,6 +211,8 @@ export interface SkillFrontMatter {
   readonly overviewOnly?: boolean;
   /** A present but unreadable repository manifest still defines a closed boundary. */
   readonly manifestError?: string;
+  /** Skill only: why the MCP skills extension does not list it (ADR-0025), when it does not. */
+  readonly unlisted?: string;
 }
 
 /** One file of a snapshot. Immutable: rows are inserted and deleted, never updated. */
@@ -239,6 +246,15 @@ export const indexEntries = pgTable(
      * (docs/specs/skill-repo.md).
      */
     visible: boolean().notNull().default(true),
+    /**
+     * SHA-256 of the bytes the file is served as, in hex, when they are stored: for a listed
+     * skill's `SKILL.md` the assembled document, otherwise the body itself (ADR-0025).
+     */
+    digest: text(),
+    /** The size of what is served, which differs from `size` for an assembled `SKILL.md`. */
+    servedSize: integer(),
+    /** True for a skill the MCP skills extension lists; the reason it is not is in `front_matter`. */
+    listed: boolean().notNull().default(false),
     createdAt: createdAt(),
   },
   (table) => [
@@ -327,12 +343,18 @@ export const usageClientKeys = pgTable(
 );
 
 /**
- * UTF-8 file bodies keyed by git blob hash: content-addressed, so the hash is the primary key and
- * one row serves every commit, ref and fork. Not tenant data; reads go through an index entry.
+ * File bodies keyed by git blob hash: content-addressed, so the hash is the primary key and one
+ * row serves every commit, ref and fork. Not tenant data; reads go through an index entry.
  */
 export const blobs = pgTable("blobs", {
   sha: text().primaryKey(),
-  content: text().notNull(),
+  /**
+   * The body as the repository has it. Rows written before bytes were stored hold `content` only
+   * and are read from it until they are written again.
+   */
+  bytes: bytea(),
+  /** The body as text, for rows from before `bytes`; no longer written. */
+  content: text(),
   size: integer().notNull(),
   createdAt: createdAt(),
 });

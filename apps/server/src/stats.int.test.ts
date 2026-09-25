@@ -43,18 +43,18 @@ describe("usage statistics", () => {
 
     const client = await h.connect(`/gh/acme/multi-skill@${commit}/skills`);
     await client.listTools();
-    await client.callTool({ name: "browse", arguments: {} });
-    await client.callTool({ name: "search", arguments: { query: "release" } });
+    await client.callTool({ name: "browse_repo", arguments: {} });
+    await client.callTool({ name: "search_repo", arguments: { query: "release" } });
     await client.callTool({
-      name: "get_skill",
+      name: "load_skill",
       arguments: { path: "skills/release-notes/SKILL.md" },
     });
     await client.callTool({
-      name: "get_skill",
+      name: "load_skill",
       arguments: { path: "skills/no-such-skill/SKILL.md" },
     });
     await client.callTool({
-      name: "read_file",
+      name: "read_repo_file",
       arguments: { path: "skills/release-notes/SKILL.md" },
     });
     await client.close();
@@ -79,10 +79,10 @@ describe("usage statistics", () => {
       { metric: "connection", subject: "", count: 2 },
       // By where the skill lives in the repository, not by how it was mounted.
       { metric: "skill_load", subject: "skills/release-notes", count: 1 },
-      { metric: "tool_call", subject: "browse", count: 1 },
-      { metric: "tool_call", subject: "get_skill", count: 2 },
-      { metric: "tool_call", subject: "read_file", count: 1 },
-      { metric: "tool_call", subject: "search", count: 1 },
+      { metric: "tool_call", subject: "browse_repo", count: 1 },
+      { metric: "tool_call", subject: "load_skill", count: 2 },
+      { metric: "tool_call", subject: "read_repo_file", count: 1 },
+      { metric: "tool_call", subject: "search_repo", count: 1 },
     ]);
 
     // Counting on: totals add up, they do not replace.
@@ -118,7 +118,7 @@ describe("usage statistics", () => {
     // Two clients at one address, one of them twice; a client that says nothing about itself.
     for (const peer of ["203.0.113.7", "203.0.113.7", "2001:db8::1", undefined]) {
       const client = await h.connect(address, peer === undefined ? {} : { peer });
-      await client.callTool({ name: "browse", arguments: {} });
+      await client.callTool({ name: "browse_repo", arguments: {} });
       await client.close();
     }
     await h.snapshots.idle();
@@ -158,8 +158,8 @@ describe("usage statistics", () => {
     const { stats, logs } = recorder({ maxBuffered: 2 });
     const h = createHarness(testDatabase, { host: createFixtureHost("stats-early"), stats });
     const client = await h.connect(`/gh/acme/single-skill@${fixtureCommits("stats-early").main}`);
-    await client.callTool({ name: "browse", arguments: {} });
-    await client.callTool({ name: "read_file", arguments: { path: "SKILL.md" } });
+    await client.callTool({ name: "browse_repo", arguments: {} });
+    await client.callTool({ name: "read_repo_file", arguments: { path: "SKILL.md" } });
     await client.close();
     await h.snapshots.idle();
     await stats.flush();
@@ -194,6 +194,7 @@ describe("usage statistics", () => {
       commit: "c".repeat(40),
       limits: {},
       verified: false,
+      trustedUntil: undefined,
     };
     lost.count(mount, "connection");
     await expect(lost.close()).resolves.toBeUndefined();

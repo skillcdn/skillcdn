@@ -34,6 +34,11 @@ export interface Mount {
    * that exists, or the operator through configuration until then. Results say so when nobody has.
    */
   readonly verified: boolean;
+  /**
+   * Until when the ref's resolution is trusted; `undefined` for a pinned commit, which never
+   * changes. What a client may cache what it reads is bounded by it.
+   */
+  readonly trustedUntil: Date | undefined;
 }
 
 /** How a repository is named in the operator's list of verified repositories: `/gh/owner/repo`. */
@@ -79,6 +84,11 @@ export interface MountServiceOptions {
 }
 
 const MAX_REMEMBERED_MISSING = 10_000;
+
+interface ResolvedCommit {
+  readonly commit: string;
+  readonly trustedUntil: Date | undefined;
+}
 
 function refNotFound(address: Address): MountError {
   const ref = address.ref?.kind === "name" ? address.ref.name : undefined;
@@ -152,9 +162,9 @@ export class MountService {
         : address.ref.kind === "commit"
           ? address.ref.hash
           : address.ref.name;
-    let commit: string;
+    let resolved: ResolvedCommit;
     try {
-      commit = await this.#singleFlight(`ref ${repo.id} ${refKey}`, () =>
+      resolved = await this.#singleFlight(`ref ${repo.id} ${refKey}`, () =>
         this.#resolveCommit(address, coordinates, repo, refKey),
       );
     } catch (error) {
@@ -167,9 +177,10 @@ export class MountService {
       address,
       coordinates,
       repo,
-      commit,
+      commit: resolved.commit,
       limits: decision.limits ?? {},
       verified: this.#options.verifiedRepositories.has(repositoryKey(address)),
+      trustedUntil: resolved.trustedUntil,
     };
   }
 
@@ -211,21 +222,24 @@ export class MountService {
     coordinates: RepoCoordinates,
     repo: RepoRecord,
     refKey: string,
-  ): Promise<string> {
+  ): Promise<ResolvedCommit> {
     const { database, gitHost, clock, refTtlMs, staleGraceMs } = this.#options;
     const scope = { accountId: repo.accountId, repoId: repo.id };
     const cached = await findCachedRef(database, scope, refKey);
     const pinned = address.ref?.kind === "commit";
+    const trustedUntil = (checkedAt: Date): Date | undefined =>
+      pinned ? undefined : new Date(checkedAt.getTime() + refTtlMs);
     const age =
       cached === undefined ? undefined : clock.now().getTime() - cached.checkedAt.getTime();
     // A pinned commit that the host confirmed once is confirmed for good.
     if (cached !== undefined && (pinned || (age !== undefined && age < refTtlMs))) {
-      return cached.commitSha;
+      return { commit: cached.commitSha, trustedUntil: trustedUntil(cached.checkedAt) };
     }
     try {
       const commit = await gitHost.resolveRef(coordinates, address.ref);
-      await saveCachedRef(database, scope, refKey, commit, clock.now());
-      return commit;
+      const now = clock.now();
+      await saveCachedRef(database, scope, refKey, commit, now);
+      return { commit, trustedUntil: trustedUntil(now) };
     } catch (error) {
       if (!(error instanceof GitHostError)) {
         throw error;
@@ -234,7 +248,8 @@ export class MountService {
         throw refNotFound(address);
       }
       if (cached !== undefined && age !== undefined && age < refTtlMs + staleGraceMs) {
-        return cached.commitSha;
+        // Served on borrowed time: nothing downstream should keep it longer than now.
+        return { commit: cached.commitSha, trustedUntil: pinned ? undefined : clock.now() };
       }
       throw hostUnavailable(error);
     }

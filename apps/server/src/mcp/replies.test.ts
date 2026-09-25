@@ -11,6 +11,7 @@ const skill = (patch: Partial<SkillResult> = {}): SkillResult => ({
     path: "" as RepoPath,
     verified: true,
     truncated: false,
+    skillUri: "skill://gh/acme/skills",
   },
   name: "write",
   directory: "skills/write" as RepoPath,

@@ -1,5 +1,8 @@
+import { createHash } from "node:crypto";
 import {
+  assembleSkillDocument,
   type BlobStore,
+  decodeText,
   type GitHost,
   GitHostError,
   type IndexLimits,
@@ -7,6 +10,7 @@ import {
   MAX_MARKDOWN_REFERENCES,
   parseRepoPath,
   type RepoPath,
+  skillDocumentInput,
   type TreeEntry,
 } from "@skillcdn/core";
 import { describe, expect, it } from "vitest";
@@ -62,13 +66,17 @@ async function index(
       return data;
     },
   };
-  const stored = new Map<string, string>();
+  const stored = new Map<string, Uint8Array>();
   const blobStore: BlobStore = {
     async read(hash) {
+      const body = stored.get(hash);
+      return body === undefined ? undefined : decodeText(body);
+    },
+    async readBytes(hash) {
       return stored.get(hash);
     },
-    async write(hash, text) {
-      stored.set(hash, text);
+    async write(hash, body) {
+      stored.set(hash, body);
     },
     async missing(hashes) {
       return new Set(hashes.filter((hash) => !stored.has(hash)));
@@ -573,5 +581,122 @@ describe("repository publication and link indexing", () => {
       message: expect.any(String),
     });
     expect(result.byPath.get("docs/large.md")?.visible).toBe(true);
+  });
+});
+
+describe("what the skills extension lists", () => {
+  const digestOf = (text: string): string => createHash("sha256").update(text).digest("hex");
+
+  it("digests every served file, and a listed skill as the document it is served as", async () => {
+    const rules = manifest("# Rules\n\nAsk first.", "documents: [docs]\n");
+    const write = skill("Write it.", "skillcdn:\n  include: [notes.md]\n");
+    const result = await index({
+      "SKILLCDN.md": rules,
+      "skills/example/SKILL.md": write,
+      "skills/example/notes.md": "Notes.",
+      "docs/guide.md": "# Guide\n",
+    });
+    const input = skillDocumentInput({
+      commit: "a".repeat(40),
+      skill: { path: path("skills/example/SKILL.md"), text: write },
+      manifests: [{ path: path("SKILLCDN.md"), text: rules }],
+      included: [{ path: path("skills/example/notes.md"), text: "Notes." }],
+    });
+    if (input === undefined) throw new Error("the skill must assemble");
+    const document = assembleSkillDocument(input);
+    expect(result.byPath.get("skills/example/SKILL.md")).toMatchObject({
+      listed: true,
+      digest: digestOf(document),
+      servedSize: Buffer.byteLength(document),
+    });
+    expect(result.byPath.get("skills/example/notes.md")).toMatchObject({
+      digest: digestOf("Notes."),
+      servedSize: 6,
+    });
+    expect(result.byPath.get("SKILLCDN.md")?.digest).toBe(digestOf(rules));
+    expect(result.byPath.get("docs/guide.md")?.digest).toBe(digestOf("# Guide\n"));
+  });
+
+  it("keeps a skill with the tools, and says why, when a host could not hold it whole", async () => {
+    const result = await index(
+      {
+        "skills/ad-copy/SKILL.md": skill("Named example, in a directory that is not."),
+        "skills/example/SKILL.md": skill("Fine."),
+        "skills/example/big.bin": "x".repeat(5000),
+      },
+      { limits: { maxReadableFileBytes: 4096 } },
+    );
+    expect(result.byPath.get("skills/ad-copy/SKILL.md")).toMatchObject({
+      listed: false,
+      searchable: true,
+      frontMatter: { unlisted: "name_directory_mismatch" },
+    });
+    expect(result.byPath.get("skills/ad-copy/SKILL.md")?.frontMatter?.warnings).toContainEqual(
+      expect.stringContaining("directory must be named after the skill"),
+    );
+    expect(result.byPath.get("skills/example/SKILL.md")).toMatchObject({
+      listed: false,
+      searchable: true,
+      frontMatter: { unlisted: "file_unavailable" },
+    });
+    expect(result.byPath.get("skills/example/SKILL.md")?.frontMatter?.warnings).toContainEqual(
+      expect.stringContaining("skills/example/big.bin"),
+    );
+    expect(result.byPath.get("skills/example/big.bin")?.digest).toBeUndefined();
+  });
+
+  it("lists identical copies once, and hidden skills only when nothing visible is there", async () => {
+    const other = "---\nname: other\ndescription: Another skill.\n---\nOther.";
+    const result = await index({
+      "skills/example/SKILL.md": skill("Same."),
+      ".claude/skills/example/SKILL.md": skill("Same."),
+      ".agents/skills/example/SKILL.md": skill("Same."),
+      ".agents/skills/other/SKILL.md": other,
+    });
+    expect(result.byPath.get("skills/example/SKILL.md")).toMatchObject({
+      listed: true,
+      searchable: true,
+    });
+    for (const copy of [".claude/skills/example/SKILL.md", ".agents/skills/example/SKILL.md"]) {
+      expect(result.byPath.get(copy)).toMatchObject({
+        listed: false,
+        searchable: false,
+        visible: true,
+        frontMatter: { unlisted: "duplicate" },
+      });
+      expect(result.byPath.get(copy)?.frontMatter?.warnings).toContainEqual(
+        expect.stringContaining("as skills/example/SKILL.md"),
+      );
+    }
+    expect(result.byPath.get(".agents/skills/other/SKILL.md")).toMatchObject({
+      listed: false,
+      searchable: false,
+      frontMatter: { unlisted: "hidden" },
+    });
+
+    const alone = await index({
+      ".claude/skills/example/SKILL.md": skill("Same."),
+      ".agents/skills/example/SKILL.md": skill("Same."),
+      ".agents/skills/other/SKILL.md": other,
+    });
+    expect(alone.byPath.get(".agents/skills/example/SKILL.md")).toMatchObject({ listed: true });
+    expect(alone.byPath.get(".claude/skills/example/SKILL.md")).toMatchObject({
+      listed: false,
+      frontMatter: { unlisted: "duplicate" },
+    });
+    expect(alone.byPath.get(".agents/skills/other/SKILL.md")).toMatchObject({ listed: true });
+  });
+
+  it("does not list a root skill whose name is also a directory of the repository", async () => {
+    const result = await index({
+      "SKILL.md": skill("Root."),
+      "example/readme.md": "# Not the skill\n",
+    });
+    expect(result.byPath.get("SKILL.md")).toMatchObject({
+      listed: false,
+      frontMatter: { unlisted: "uri_collision" },
+    });
+    const fine = await index({ "SKILL.md": skill("Root."), "references/a.md": "# A\n" });
+    expect(fine.byPath.get("SKILL.md")).toMatchObject({ listed: true });
   });
 });

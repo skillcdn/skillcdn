@@ -13,7 +13,9 @@ export {
   getSkillsAt,
   listDirectory,
   listEntries,
+  listListedSkills,
   listSkillFiles,
+  listSkillResources,
   searchEntries,
   servedEntries,
 } from "./queries/entries.js";

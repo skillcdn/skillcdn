@@ -1,3 +1,4 @@
+import { renderSkillSections } from "../skill-document.js";
 import {
   BROWSE_DESCRIPTION_MAX_LENGTH,
   compactSummary,
@@ -33,7 +34,7 @@ export function renderBrowseResult(result: BrowseResult): string {
           result.overview.description === undefined
             ? undefined
             : compactSummary(result.overview.description, BROWSE_DESCRIPTION_MAX_LENGTH),
-          `Optional overview: read_file ${result.overview.path}.`,
+          `Optional overview: read_repo_file ${result.overview.path}.`,
         ]),
     result.entries
       .map(
@@ -108,7 +109,7 @@ export function renderDiagnostics(
     return undefined;
   }
   if (!detailed) {
-    return `Note: ${plural(total, "index issue")} reported; browse provides details.`;
+    return `Note: ${plural(total, "index issue")} reported; browse_repo provides details.`;
   }
   const lines = diagnostics
     .slice(0, MAX_LISTED_DIAGNOSTICS)
@@ -178,7 +179,7 @@ export function renderFindResult(result: FindResult): string {
     heading =
       `No results for ${JSON.stringify(result.query)} in ${where}. ` +
       "Try fewer or different keywords, in the language the repository is written in, or call " +
-      "browse to list what is available.";
+      "browse_repo to list what is available.";
   } else {
     heading = `${count} result${count === 1 ? "" : "s"} for ${JSON.stringify(result.query)} in ${where}:`;
   }
@@ -224,65 +225,48 @@ export function renderSkillResult(result: SkillResult): string {
   let files: string | undefined;
   if (result.files.length > 0) {
     const more = result.filesTruncated
-      ? `\n- ... (browse ${JSON.stringify({ path: result.directory })} for all supporting files)`
+      ? `\n- ... (browse_repo ${JSON.stringify({ path: result.directory })} for all supporting files)`
       : "";
     const listed = result.files.map(
       (file) => `- ${file}${includedPaths.has(file) ? " (included below)" : ""}`,
     );
-    files = `Supporting files, readable with read_file:\n${listed.join("\n")}${more}`;
+    files = `Supporting files, readable with read_repo_file:\n${listed.join("\n")}${more}`;
   }
   const warnings =
     result.warnings.length === 0
       ? undefined
       : `Warnings for the skill author:\n${result.warnings.map((warning) => `- ${warning}`).join("\n")}`;
 
-  // The repository's rules come before the skill, as its author meant them to be read.
-  let rules: string | undefined;
-  if (result.rules !== undefined) {
-    const { path, body, truncated } = result.rules;
-    const source =
-      path === undefined ? "the repository manifest above the mounted directory" : path;
-    const cut = truncated
-      ? `\n(The rules continue${path === undefined ? "" : `; read_file ${path} has the whole text`}.)`
-      : "";
-    rules = `--- rules for every skill in this repository (from ${source}) ---\n${body.trim()}${cut}`;
-  }
-  if (result.ruleChain !== undefined) {
-    rules = result.ruleChain
-      .map(
-        (rule) =>
-          `--- applicable rules: ${rule.path} ---\n${rule.body}${rule.truncated ? "\n(Continues in the next get_skill page.)" : ""}`,
-      )
-      .join("\n\n");
-  }
-
-  // The files the skill needs on every run follow the instructions, which point to them.
-  const included = result.included.map((file) => {
-    const header = `--- included file: ${file.path} ---`;
-    if (file.content === undefined) {
-      return `${header}\n(Not at hand here; read_file has it.)`;
-    }
-    const cut = file.truncated ? "\n(Continues in the next get_skill page.)" : "";
-    return `${header}\n${file.content}${cut}`;
-  });
+  // The rules come before the skill, as its author meant them to be read: the same sections,
+  // in the same order, as the document the skills extension serves (ADR-0025).
+  const document = renderSkillSections(
+    {
+      rules: (result.ruleChain ?? []).map((rule) => ({
+        path: rule.path ?? "the repository manifest above the mounted directory",
+        body: rule.body,
+        truncated: rule.truncated,
+      })),
+      body: result.body,
+      included: result.included,
+    },
+    { tool: "load_skill", reader: "read_repo_file" },
+  );
 
   return joinSections([
     header.join("\n"),
     result.complete === false
-      ? `Skill context is incomplete.${result.nextCursor === undefined ? " Resolve the warnings before using this skill." : ` Continue get_skill with path ${JSON.stringify(result.path)} and cursor ${JSON.stringify(result.nextCursor)} before using it.`}`
+      ? `Skill context is incomplete.${result.nextCursor === undefined ? " Resolve the warnings before using this skill." : ` Continue load_skill with path ${JSON.stringify(result.path)} and cursor ${JSON.stringify(result.nextCursor)} before using it.`}`
       : undefined,
     files,
     warnings,
     result.detailsTruncated
-      ? `Optional details abbreviated; read_file ${result.path ?? `${result.directory.length === 0 ? "" : `${result.directory}/`}SKILL.md`} has the source.`
+      ? `Optional details abbreviated; read_repo_file ${result.path ?? `${result.directory.length === 0 ? "" : `${result.directory}/`}SKILL.md`} has the source.`
       : undefined,
     notices(result.mount).join("\n"),
-    rules,
-    result.body.length === 0 ? undefined : `--- instructions ---\n${result.body}`,
-    ...included,
+    document,
     renderReferences(result.references),
     result.referencesTruncated
-      ? "Reference list abbreviated; consult source links or browse the skill folder."
+      ? "Reference list abbreviated; consult source links or browse_repo the skill folder."
       : undefined,
   ]);
 }
@@ -313,7 +297,7 @@ export function renderFileResult(result: FileResult): string {
     `Source: ${describeMount(result.mount)}`,
     result.nextOffset === undefined
       ? undefined
-      : `More follows: call read_file with offset ${result.nextOffset}.`,
+      : `More follows: call read_repo_file with offset ${result.nextOffset}.`,
   ].filter((line) => line !== undefined);
 
   return joinSections([

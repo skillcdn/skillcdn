@@ -54,7 +54,7 @@ export const connectEn = {
     addConnector: "Add custom connector",
     add: "Add",
     tools: "Tools",
-    toolNames: "browse · search · get_skill · read_file",
+    toolNames: "browse_repo · search_repo · load_skill · read_repo_file",
     enabled: "Enabled",
     newChat: "New chat",
     ask: "What skills can you help me with?",

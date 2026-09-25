@@ -42,4 +42,6 @@ Parsers return a `Result` and never throw. A `RepoPath` can only come from `pars
 
 Ancestor `exclude` paths and unreadable manifest scopes take precedence over publication. `selectReadmePaths` and `folderOverview` supply optional original-language introductions without loading their bodies or adding search results. MCP discovery summaries and serialized response budgets keep selection separate from full context loading; REST retains full metadata.
 
+For the MCP skills extension: `skillDocumentInput` and `assembleSkillDocument` turn a skill's sources into the one document it is served as, so that the indexer's digest and the reader's bytes agree; `renderSkillSections` gives the tools the same sections; `skillListingProblem` says why a skill cannot be listed; `formatSkillUri` and `parseSkillUri` implement the URI grammar; `decodeText` is the one UTF-8 decoder every adapter uses.
+
 Everything public is exported from `src/index.ts`. There are no deep imports.

@@ -79,33 +79,35 @@ export interface ToolContract<Input extends z.ZodType> {
   readonly inputSchema: Input;
 }
 
+// The names say what the tools act on, so that they do not collide with a host's own (ADR-0024).
+
 export const readFileTool: ToolContract<typeof readFileInputSchema> = {
-  name: "read_file",
-  title: "Read a file",
+  name: "read_repo_file",
+  title: "Read a repository file",
   description:
-    "Read a reference or optional README by repository-root path. Continue long files with nextOffset. Use get_skill for a skill and its required rules.",
+    "Read a reference or optional README by repository-root path. Continue long files with nextOffset. Use load_skill for a skill and its required rules.",
   inputSchema: readFileInputSchema,
 };
 
 export const browseTool: ToolContract<typeof browseInputSchema> = {
-  name: "browse",
-  title: "Browse skills and documents",
+  name: "browse_repo",
+  title: "Browse the repository",
   description:
-    "List a folder's children, skill counts and optional README path. Load exact SKILL.md paths with get_skill. Follow nextCursor for more entries. Paths start at the repository root.",
+    "List a folder's children, skill counts and optional README path. Load exact SKILL.md paths with load_skill. Follow nextCursor for more entries. Paths start at the repository root.",
   inputSchema: browseInputSchema,
 };
 export const searchTool: ToolContract<typeof searchInputSchema> = {
-  name: "search",
-  title: "Search skills and documents",
+  name: "search_repo",
+  title: "Search the repository",
   description:
-    "Search words in original content, usually English; display translations are excluded. Optional path scopes results. Matching files appear under their skill. Follow nextCursor for more; load the returned SKILL.md path with get_skill.",
+    "Search words in original content, usually English; display translations are excluded. Optional path scopes results. Matching files appear under their skill. Follow nextCursor for more; load the returned SKILL.md path with load_skill.",
   inputSchema: searchInputSchema,
 };
 export const getSkillTool: ToolContract<typeof getSkillInputSchema> = {
-  name: "get_skill",
+  name: "load_skill",
   title: "Load a skill",
   description:
-    "Load an exact SKILL.md path with inherited rules and required files. Follow nextCursor until complete before applying it. Read optional supporting files with read_file only when needed.",
+    "Load an exact SKILL.md path with inherited rules and required files, assembled as one document. Follow nextCursor until complete before applying it. Read optional supporting files with read_repo_file only when needed.",
   inputSchema: getSkillInputSchema,
 };
 export const TOOL_NAMES = [

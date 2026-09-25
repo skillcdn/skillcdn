@@ -1,5 +1,6 @@
 import type { HostRepository } from "@skillcdn/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { drizzleOf } from "./client.js";
 import {
   claimSnapshot,
   countEntries,
@@ -29,6 +30,7 @@ import {
   searchEntries,
   writeSnapshotIndex,
 } from "./index.js";
+import { blobs } from "./schema.js";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "./testing.js";
 
 let testDatabase: TestDatabase;
@@ -73,7 +75,7 @@ async function readySnapshot(entries: NewIndexEntry[], bodies: Record<string, st
   const scope: SnapshotScope = { accountId: repo.accountId, snapshotId: snapshot.id };
   const store = createBlobStore(database);
   for (const [sha, content] of Object.entries(bodies)) {
-    await store.write(sha, content);
+    await store.write(sha, new TextEncoder().encode(content));
   }
   expect(await claimSnapshot(database, scope, "builder", T0, 60_000)).toBeDefined();
   expect(
@@ -668,15 +670,40 @@ describe("a repository manifest", () => {
 });
 
 describe("blob store", () => {
-  it("stores text by hash, idempotently, and reports what is missing", async () => {
+  const encode = (text: string): Uint8Array => new TextEncoder().encode(text);
+
+  it("stores bytes by hash, idempotently, and reports what is missing", async () => {
     const store = createBlobStore(database);
     expect(await store.read("missing-hash")).toBeUndefined();
-    await store.write("hash-1", "first body with unicode: 한글 ✓");
-    await store.write("hash-1", "a second write must not replace the first");
+    expect(await store.readBytes("missing-hash")).toBeUndefined();
+    await store.write("hash-1", encode("first body with unicode: 한글 ✓"));
+    await store.write("hash-1", encode("a second write must not replace the first"));
     expect(await store.read("hash-1")).toBe("first body with unicode: 한글 ✓");
+    expect(await store.readBytes("hash-1")).toEqual(encode("first body with unicode: 한글 ✓"));
     expect(await store.missing(["hash-1", "hash-2", "hash-2", "hash-3"])).toEqual(
       new Set(["hash-2", "hash-3"]),
     );
     expect(await store.missing([])).toEqual(new Set());
+  });
+
+  it("keeps bytes that are not text, and reads them as no text at all", async () => {
+    const store = createBlobStore(database);
+    const binary = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x00, 0xff, 0xfe]);
+    await store.write("hash-binary", binary);
+    expect(await store.readBytes("hash-binary")).toEqual(binary);
+    expect(await store.read("hash-binary")).toBeUndefined();
+  });
+
+  it("reads a row from before bytes were stored, counts it as missing, and fills it in", async () => {
+    const store = createBlobStore(database);
+    await drizzleOf(database)
+      .insert(blobs)
+      .values({ sha: "hash-legacy", content: "text only", size: 9 });
+    expect(await store.read("hash-legacy")).toBe("text only");
+    expect(await store.readBytes("hash-legacy")).toEqual(encode("text only"));
+    expect(await store.missing(["hash-legacy"])).toEqual(new Set(["hash-legacy"]));
+    await store.write("hash-legacy", encode("text only"));
+    expect(await store.missing(["hash-legacy"])).toEqual(new Set());
+    expect(await store.read("hash-legacy")).toBe("text only");
   });
 });

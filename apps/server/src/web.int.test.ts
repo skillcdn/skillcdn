@@ -120,7 +120,7 @@ describe("a server with a web build", () => {
     const h = createHarness(testDatabase, { web, host });
     const address = `/gh/acme/multi-skill@${fixtureCommits("web-invalid-scope").main}/skills/release-notes`;
     const client = await h.connect(address);
-    await client.callTool({ name: "browse", arguments: {} });
+    await client.callTool({ name: "browse_repo", arguments: {} });
     await client.close();
     const browse = await inputOf(await h.request(address, { headers: BROWSER }));
     expect(browse.data).toMatchObject({

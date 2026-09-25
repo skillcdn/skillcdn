@@ -4,3 +4,8 @@ import { createHash } from "node:crypto";
 export function gitBlobHash(bytes: Uint8Array): string {
   return createHash("sha1").update(`blob ${bytes.byteLength}\0`).update(bytes).digest("hex");
 }
+
+/** The digest the MCP skills extension declares for served bytes, in hex (ADR-0025). */
+export function sha256Hex(bytes: Uint8Array): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}

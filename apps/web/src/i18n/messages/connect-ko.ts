@@ -53,7 +53,7 @@ export const connectKo: typeof connectEn = {
     addConnector: "사용자 정의 커넥터 추가",
     add: "추가",
     tools: "도구",
-    toolNames: "browse · search · get_skill · read_file",
+    toolNames: "browse_repo · search_repo · load_skill · read_repo_file",
     enabled: "사용 중",
     newChat: "새 대화",
     ask: "어떤 스킬로 나를 도와줄 수 있어?",

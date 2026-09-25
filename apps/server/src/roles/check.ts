@@ -6,6 +6,7 @@ import {
   BROWSE_DEFAULT_LIMIT,
   browseCatalogFiles,
   type CatalogFile,
+  decodeText,
   FIND_LIST_SKILLS_MAX,
   folderOverview,
   type GitHost,
@@ -18,6 +19,7 @@ import {
   type RepoPath,
   ROOT_PATH,
   renderInstructions,
+  skillUriPrefix,
   splitFrontMatter,
   type TreeEntry,
 } from "@skillcdn/core";
@@ -172,16 +174,25 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
       return file.bytes;
     },
   };
-  const texts = new Map<string, string>();
+  const bodies = new Map<string, Uint8Array>();
+  const texts = {
+    get: (hash: string): string | undefined => {
+      const body = bodies.get(hash);
+      return body === undefined ? undefined : decodeText(body);
+    },
+  };
   const blobStore: BlobStore = {
     async read(hash) {
       return texts.get(hash);
     },
-    async write(hash, content) {
-      texts.set(hash, content);
+    async readBytes(hash) {
+      return bodies.get(hash);
+    },
+    async write(hash, body) {
+      bodies.set(hash, body);
     },
     async missing(hashes) {
-      return new Set(hashes.filter((hash) => !texts.has(hash)));
+      return new Set(hashes.filter((hash) => !bodies.has(hash)));
     },
   };
   const index = await buildSnapshotIndex({
@@ -266,7 +277,10 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
     );
   }
 
-  write(`Skills: ${skills.length}\n`);
+  const listed = skills.filter((skill) => skill.listed === true);
+  write(
+    `Skills: ${skills.length}${skills.length === 0 ? "" : ` (${listed.length} listed through the MCP skills extension)`}\n`,
+  );
   for (const skill of skills) {
     const directory = skill.skillDir ?? "";
     const owned = index.entries.filter(
@@ -277,6 +291,7 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
       `- ${skill.name ?? "?"} (${directory === "" ? "." : directory})\n` +
         `  ${skill.description ?? ""}\n` +
         `  files: ${owned.length}${included.length === 0 ? "" : ` (${included.length} returned with the skill)`}\n` +
+        `  extension: ${skill.listed === true ? `listed, ${skill.servedSize ?? 0} bytes as served` : `not listed (${skill.frontMatter?.unlisted ?? "unknown"})`}\n` +
         translationsLine(skill, "  ") +
         warningsLine(skill, "  "),
     );
@@ -324,6 +339,7 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
       path: ROOT_PATH,
       verified: true,
       truncated: index.truncated,
+      skillUri: skillUriPrefix({ host: "gh", owner: "local", repo: basename(root) }),
     },
     manifest:
       manifest?.description === undefined
