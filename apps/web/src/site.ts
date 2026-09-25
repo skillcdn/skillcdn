@@ -71,6 +71,41 @@ export function readOrigin(): string {
     : declared;
 }
 
+/**
+ * The deployment's legal surface, as the server wrote it into the head: its terms and privacy
+ * pages as standard link types, and whom to write to about content as one meta. Prerendered
+ * pages carry none of it, so it is read after mount and shown only where it is set.
+ */
+export const LEGAL_TAGS = {
+  terms: "terms-of-service",
+  privacy: "privacy-policy",
+  contact: "skillcdn-contact",
+} as const;
+
+export interface LegalLinks {
+  readonly termsUrl?: string;
+  readonly privacyUrl?: string;
+  readonly contactEmail?: string;
+}
+
+export function readLegalLinks(): LegalLinks {
+  if (typeof document === "undefined") {
+    return {};
+  }
+  const href = (rel: string): string | undefined => {
+    const value = document.querySelector(`link[rel="${rel}"]`)?.getAttribute("href");
+    return value === null || value === undefined || value === "" ? undefined : value;
+  };
+  const contact = document
+    .querySelector(`meta[name="${LEGAL_TAGS.contact}"]`)
+    ?.getAttribute("content");
+  return {
+    termsUrl: href(LEGAL_TAGS.terms),
+    privacyUrl: href(LEGAL_TAGS.privacy),
+    contactEmail: contact === null || contact === undefined || contact === "" ? undefined : contact,
+  };
+}
+
 /** `https://host/path` without the scheme, the way an address is usually written down. */
 export function hostOf(origin: string): string {
   return origin.replace(/^https?:\/\//, "");

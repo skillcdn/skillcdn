@@ -44,6 +44,8 @@ The server is configured only through environment variables. [`.env.example`](..
 | `ADMIN_TOKEN` | `api` | no | **yes** | Bearer token of the [admin API](#the-admin-api). At least 32 characters. Unset: the admin API does not exist. |
 | `GOOGLE_SITE_VERIFICATION` | `api` | no | no | The content of the `google-site-verification` meta tag a search console asks for; written into the head of every page. |
 | `GOOGLE_ANALYTICS_ID` | `api` | no | no | A Google Analytics measurement id (`G-...`). Set, every page loads the analytics script, and the content security policy allows its sources and nothing else new. Whether visitors must consent first depends on where they are; the UI ships no consent banner. |
+| `TERMS_URL`, `PRIVACY_URL` | `api` | no | no | Where the deployment's terms of service and privacy policy are. Each is written into the head of every page as a standard link type and shown in the footer, only when set. See [Operating a public deployment](#operating-a-public-deployment). |
+| `CONTACT_EMAIL` | `api` | no | no | Whom to write to about content: takedown requests and reports. Shown in the footer as a link, only when set. |
 | `USAGE_STATS`, `USAGE_STATS_FLUSH_SECONDS` | `api` | no | no | Daily counts per public repository (connections, tool calls, skill loads, distinct clients), without anything that identifies a client: addresses are hashed under a key that is deleted with the day. Defaults `true` and `15`. |
 | `REPO_TTL_SECONDS`, `REF_TTL_SECONDS` | `api` | no | no | How long repository facts and moving refs are trusted before revalidation. Default `60` each. |
 | `INDEX_WAIT_MS` | `api` | no | no | How long a tool call waits for a new commit's index. Default `20000`. |
@@ -73,6 +75,18 @@ curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" https://skills.example.com/
 ```
 
 The same purge runs without the API, from a shell with the database configured: `node dist/main.js purge /gh/owner/repo`.
+
+## Operating a public deployment
+
+Everything above suits a private installation as it comes. A deployment that serves other people's repositories to the public has more to say and to answer for. Before opening one up:
+
+- Set `PUBLIC_URL` to the origin visitors use, so that canonical links and the sitemap are yours.
+- Publish terms of service and a privacy policy, and set `TERMS_URL` and `PRIVACY_URL`; set `CONTACT_EMAIL` to an address that reads takedown requests and content reports. The pages show all three in the footer and carry them in the head.
+- Know what the service does with content, and say it where your visitors can read it: it reads, indexes and serves what a repository publishes, keeps copies only to serve them, and serves or describes a skill by the license it carries ([format](../docs/specs/skill-repo.md#licenses)). A takedown is one entry on the blocked list and one purge through the [admin API](#the-admin-api); keep `ADMIN_TOKEN` where only the operator can reach it.
+- Decide what you vouch for. A `verified` repository is served in full on its default branch whatever its license says, and carries no provenance notice: put only repositories there whose owners agreed.
+- Analytics need consent where your visitors are: `GOOGLE_ANALYTICS_ID` loads the analytics script on every page. Leave it unset until the pages ask first.
+- The access log (`ACCESS_LOG`) holds client addresses. Give it a retention that your privacy policy states, or turn it off; the usage statistics hold none (ADR-0010).
+- Put TLS, caching and rate limiting in front of the image ([below](#behind-a-reverse-proxy)), and a token without scopes in `GITHUB_TOKEN` so that the anonymous rate limit of the git host is not what your visitors get.
 
 ## Behind a reverse proxy
 

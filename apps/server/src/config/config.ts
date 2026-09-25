@@ -125,6 +125,12 @@ const environmentSchema = z.object({
     .string()
     .regex(/^G-[A-Z0-9]{4,20}$/, "must be a measurement id such as G-XXXXXXXXXX")
     .optional(),
+  TERMS_URL: z.url({ protocol: /^https?$/ }).optional(),
+  PRIVACY_URL: z.url({ protocol: /^https?$/ }).optional(),
+  CONTACT_EMAIL: z
+    .string()
+    .regex(/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/, "must be an email address")
+    .optional(),
 
   USAGE_STATS: flag(true),
   USAGE_STATS_FLUSH_SECONDS: integer(15, 1, 3600),
@@ -144,6 +150,12 @@ export interface WebTags {
   readonly googleSiteVerification: string | undefined;
   /** A Google Analytics measurement id (`G-...`). Set, the pages load the analytics script. */
   readonly googleAnalyticsId: string | undefined;
+  /** Where the deployment's terms of service are; shown only when set (ADR-0026). */
+  readonly termsUrl: string | undefined;
+  /** Where the deployment's privacy policy is; shown only when set. */
+  readonly privacyUrl: string | undefined;
+  /** Whom to write to about content, takedown requests included; shown only when set. */
+  readonly contactEmail: string | undefined;
 }
 
 export interface Config {
@@ -296,6 +308,9 @@ export function loadConfig(
       tags: {
         googleSiteVerification: env.GOOGLE_SITE_VERIFICATION,
         googleAnalyticsId: env.GOOGLE_ANALYTICS_ID,
+        termsUrl: env.TERMS_URL,
+        privacyUrl: env.PRIVACY_URL,
+        contactEmail: env.CONTACT_EMAIL,
       },
     },
     admin: { token: env.ADMIN_TOKEN },

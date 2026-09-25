@@ -313,13 +313,25 @@ describe("the tags an operator configures", () => {
   it("go into the head of every page, with the policy widened for exactly them", async () => {
     const tagged = await loadWebBundle(build.root, {
       publicUrl: "https://skills.example",
-      tags: { googleSiteVerification: 'abc"><script>x</script>', googleAnalyticsId: "G-ABC123XYZ" },
+      tags: {
+        googleSiteVerification: 'abc"><script>x</script>',
+        googleAnalyticsId: "G-ABC123XYZ",
+        termsUrl: "https://skills.example/terms",
+        privacyUrl: 'https://skills.example/privacy?v=2&x="',
+        contactEmail: "content@skills.example",
+      },
     });
     const response = tagged.respond(request("/?lang=ko"));
     const html = (await response?.text()) ?? "";
     expect(html).toContain(
       '<head>\n<meta name="google-site-verification" content="abc&quot;>&lt;script>x&lt;/script>">',
     );
+    // The deployment's own pages, as standard link types, and its contact for the footer.
+    expect(html).toContain('<link rel="terms-of-service" href="https://skills.example/terms">');
+    expect(html).toContain(
+      '<link rel="privacy-policy" href="https://skills.example/privacy?v=2&amp;x=&quot;">',
+    );
+    expect(html).toContain('<meta name="skillcdn-contact" content="content@skills.example">');
     expect(html).toContain('src="https://www.googletagmanager.com/gtag/js?id=G-ABC123XYZ"');
     expect(html).toContain('gtag("config","G-ABC123XYZ")');
     const policy = response?.headers.get("content-security-policy") ?? "";
@@ -342,6 +354,9 @@ describe("the tags an operator configures", () => {
     const html = await answer("/").text();
     expect(html).not.toContain("gtag");
     expect(html).not.toContain("google-site-verification");
+    expect(html).not.toContain("terms-of-service");
+    expect(html).not.toContain("privacy-policy");
+    expect(html).not.toContain("skillcdn-contact");
     expect(answer("/").headers.get("content-security-policy")).toContain("script-src 'self';");
   });
 });

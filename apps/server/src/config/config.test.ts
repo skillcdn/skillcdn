@@ -150,8 +150,39 @@ describe("loadConfig", () => {
     }
   });
 
+  it("takes the deployment's own pages and contact, each only when set", () => {
+    const none = loadConfig({ DATABASE_URL }, noFiles).web.tags;
+    expect([none.termsUrl, none.privacyUrl, none.contactEmail]).toEqual([
+      undefined,
+      undefined,
+      undefined,
+    ]);
+    const config = loadConfig(
+      {
+        DATABASE_URL,
+        TERMS_URL: "https://skills.example.com/terms",
+        PRIVACY_URL: "https://skills.example.com/privacy",
+        CONTACT_EMAIL: "content@skills.example.com",
+      },
+      noFiles,
+    );
+    expect(config.web.tags).toMatchObject({
+      termsUrl: "https://skills.example.com/terms",
+      privacyUrl: "https://skills.example.com/privacy",
+      contactEmail: "content@skills.example.com",
+    });
+    for (const bad of [
+      { TERMS_URL: "skills.example.com/terms" },
+      { PRIVACY_URL: "ftp://skills.example.com/privacy" },
+      { CONTACT_EMAIL: "not an address" },
+      { CONTACT_EMAIL: "<content@skills.example.com>" },
+    ]) {
+      expect(problemsOf({ DATABASE_URL, ...bad }).problems).toHaveLength(1);
+    }
+  });
+
   it("takes the tags for search consoles and analytics, and refuses what is not one", () => {
-    expect(loadConfig({ DATABASE_URL }, noFiles).web.tags).toEqual({
+    expect(loadConfig({ DATABASE_URL }, noFiles).web.tags).toMatchObject({
       googleSiteVerification: undefined,
       googleAnalyticsId: undefined,
     });
@@ -164,7 +195,7 @@ describe("loadConfig", () => {
         },
         noFiles,
       ).web.tags,
-    ).toEqual({ googleSiteVerification: "abc_DEF-123", googleAnalyticsId: "G-ABC123XYZ" });
+    ).toMatchObject({ googleSiteVerification: "abc_DEF-123", googleAnalyticsId: "G-ABC123XYZ" });
     for (const bad of [
       { GOOGLE_SITE_VERIFICATION: '<meta content="x">' },
       { GOOGLE_ANALYTICS_ID: "UA-12345-1" },

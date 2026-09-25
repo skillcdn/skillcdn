@@ -81,11 +81,25 @@ const CONTENT_TYPES: Readonly<Record<string, string>> = {
   ".woff2": "font/woff2",
 };
 
-/** Tags an operator adds to every page: a search console's proof of ownership, analytics. */
+/**
+ * Tags an operator adds to every page: a search console's proof of ownership, analytics, and
+ * the deployment's legal surface (ADR-0026): where its terms and privacy pages are, and whom
+ * to write to about content. The pages show each of these only when it is set.
+ */
 export interface PageTags {
   readonly googleSiteVerification?: string | undefined;
   readonly googleAnalyticsId?: string | undefined;
+  readonly termsUrl?: string | undefined;
+  readonly privacyUrl?: string | undefined;
+  readonly contactEmail?: string | undefined;
 }
+
+/** How the legal surface travels into a page: standard link types, and one meta for the contact. */
+export const LEGAL_TAGS = {
+  terms: "terms-of-service",
+  privacy: "privacy-policy",
+  contact: "skillcdn-contact",
+} as const;
 
 /** Where the analytics script comes from and talks to, as its documentation lists them. */
 const ANALYTICS_SOURCES = {
@@ -139,6 +153,17 @@ function headTags(tags: PageTags): { readonly html: string; readonly inlineScrip
   if (tags.googleSiteVerification !== undefined) {
     elements.push(
       `<meta name="google-site-verification" content="${escapeAttribute(tags.googleSiteVerification)}">`,
+    );
+  }
+  if (tags.termsUrl !== undefined) {
+    elements.push(`<link rel="${LEGAL_TAGS.terms}" href="${escapeAttribute(tags.termsUrl)}">`);
+  }
+  if (tags.privacyUrl !== undefined) {
+    elements.push(`<link rel="${LEGAL_TAGS.privacy}" href="${escapeAttribute(tags.privacyUrl)}">`);
+  }
+  if (tags.contactEmail !== undefined) {
+    elements.push(
+      `<meta name="${LEGAL_TAGS.contact}" content="${escapeAttribute(tags.contactEmail)}">`,
     );
   }
   if (tags.googleAnalyticsId !== undefined) {
