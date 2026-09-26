@@ -14,6 +14,7 @@ export const REST_ROUTES = {
   skills: "/api/v1/skills",
   files: "/api/v1/files",
   featured: "/api/v1/featured",
+  showcase: "/api/v1/showcase",
 } as const;
 
 /** How many skills and how many documents a mount overview lists. The counts are complete. */

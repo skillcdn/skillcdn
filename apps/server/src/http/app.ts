@@ -3,8 +3,10 @@ import {
   formatAddress,
   MAX_QUERY_LENGTH,
   MAX_REPO_PATH_LENGTH,
+  MEDIA_ROUTE,
   parseAddress,
   REST_MOUNT_LIST_LIMIT,
+  type RestShowcase,
 } from "@skillcdn/core";
 import { type Database, getSchemaStatus } from "@skillcdn/db";
 import { type Context, Hono } from "hono";
@@ -18,6 +20,7 @@ import { ReaderInputError } from "../mounts/continuation.js";
 import type { MountReader } from "../mounts/mount-reader.js";
 import { type Mount, MountError, type MountService } from "../mounts/mount-service.js";
 import type { OperatorLists } from "../operator/lists.js";
+import type { Showcase } from "../operator/showcase.js";
 import { purgeByAddress, registerAdmin } from "./admin.js";
 import type { ClientAddressResolver } from "./client-address.js";
 import { type AppEnv, requestContext } from "./request-context.js";
@@ -30,7 +33,13 @@ import {
   registerRest,
   skillOutcome,
 } from "./rest.js";
-import { type AddressData, type WebBundle, type WebRequest, wantsHtml } from "./web.js";
+import {
+  type AddressData,
+  bytesResponse,
+  type WebBundle,
+  type WebRequest,
+  wantsHtml,
+} from "./web.js";
 
 export interface AppDependencies {
   readonly database: Database;
@@ -40,6 +49,8 @@ export interface AppDependencies {
   readonly tools: ToolDependencies;
   /** The operator's lists: what is featured, vouched for and blocked (ADR-0026). */
   readonly lists: OperatorLists;
+  /** The landing showcase and its uploads (ADR-0028). */
+  readonly showcase: Showcase;
   /** The admin API, when a token is configured; without one it does not exist. */
   readonly admin: { readonly token: string } | undefined;
   /** A build of the web UI to serve. Left out, the server is MCP and REST only. */
@@ -196,16 +207,34 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
       }
     },
     featured: () => dependencies.lists.featured(),
+    showcase: () => dependencies.showcase.list(),
     now: dependencies.requests.now,
   });
   if (dependencies.admin !== undefined) {
     registerAdmin(app, {
       token: dependencies.admin.token,
       lists: dependencies.lists,
+      showcase: dependencies.showcase,
       purge: purgeByAddress(database),
       logger,
     });
   }
+
+  // An upload of the showcase, named by its content: it never changes, so caches may keep it for
+  // as long as they like. The name is checked before the database is asked.
+  app.on(["GET", "HEAD"], `${MEDIA_ROUTE}/:sha`, async (c) => {
+    const sha = c.req.param("sha");
+    const media = await dependencies.showcase.media(sha);
+    if (media === undefined) {
+      return c.notFound();
+    }
+    return bytesResponse(webRequestOf(c), {
+      bytes: media.bytes,
+      contentType: media.contentType,
+      etag: `"${sha}"`,
+      cacheControl: "public, max-age=31536000, immutable",
+    });
+  });
 
   /**
    * The page of an address for a browser, rendered with what the address serves: the same
@@ -393,6 +422,38 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
       }
       return bundle.sitemap(webRequestOf(c), await listed.addresses);
     });
+
+    /**
+     * The operator's showcase, when there is one (ADR-0028). Without one, and when it cannot be
+     * read, the prerendered front page shows the build's own.
+     */
+    const showcaseAnswer = async (): Promise<{ readonly ready: RestShowcase } | undefined> => {
+      try {
+        const list = await dependencies.showcase.list();
+        return list.items.length === 0 ? undefined : { ready: list };
+      } catch (error) {
+        logger.warn({ err: error }, "the showcase could not be read for the front page");
+        return undefined;
+      }
+    };
+    const withShowcase = async (
+      c: Context<AppEnv>,
+      render: (
+        request: WebRequest,
+        showcase: { readonly ready: RestShowcase },
+      ) => Response | undefined,
+    ): Promise<Response> => {
+      const request = webRequestOf(c);
+      const showcase = await showcaseAnswer();
+      const rendered = showcase === undefined ? undefined : render(request, showcase);
+      return rendered ?? bundle.respond(request) ?? c.notFound();
+    };
+    app.on(["GET", "HEAD"], "/", (c) =>
+      withShowcase(c, (request, showcase) => bundle.landing(request, showcase)),
+    );
+    app.on(["GET", "HEAD"], "/llms.txt", (c) =>
+      withShowcase(c, (request, showcase) => bundle.llmsTxt(request, showcase.ready)),
+    );
 
     app.on(["GET", "HEAD"], "*", (c) => bundle.respond(webRequestOf(c)) ?? c.notFound());
   }

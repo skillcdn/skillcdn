@@ -1,4 +1,11 @@
-import type { RestBrowse, RestFeatured, RestMount, RestSkill } from "@skillcdn/core";
+import {
+  REFERENCE_REPOSITORY_ADDRESS,
+  type RestBrowse,
+  type RestFeatured,
+  type RestMount,
+  type RestShowcase,
+  type RestSkill,
+} from "@skillcdn/core";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { App } from "./app.js";
@@ -7,6 +14,7 @@ import {
   ORIGIN_PLACEHOLDER,
   renderAddressPage,
   renderDocument,
+  renderLandingPage,
   renderLlmsTxt,
   renderNotFound,
   renderPage,
@@ -15,7 +23,8 @@ import {
   TEMPLATE_MARKERS,
 } from "./entry-server.js";
 import { messagesFor } from "./i18n/index.js";
-import { FEATURED_VIDEO } from "./site.js";
+import { defaultShowcase } from "./showcase.js";
+import { DEFAULT_SHOWCASE_MEDIA } from "./site.js";
 
 const TEMPLATE = `<!doctype html>\n${TEMPLATE_MARKERS.htmlLang}<head>${TEMPLATE_MARKERS.head}</head><body>${TEMPLATE_MARKERS.root}</body></html>`;
 
@@ -93,6 +102,71 @@ const SKILL: RestSkill = {
   },
 };
 
+const MEDIA_URL = (letter: string) => `/media/${letter.repeat(64)}`;
+
+/** An operator's showcase: one entry with a clip, words in two languages, and a demo in one. */
+const SHOWCASE: RestShowcase = {
+  items: [
+    {
+      id: "spring-ad",
+      address: "/gh/acme/skills",
+      position: 0,
+      width: 640,
+      height: 480,
+      durationMs: 8000,
+      published: "2026-10-01",
+      media: {
+        clip: { url: MEDIA_URL("a"), type: "video/mp4" },
+        animation: null,
+        poster: { url: MEDIA_URL("b"), type: "image/webp" },
+        reference: { url: MEDIA_URL("c"), type: "image/webp" },
+        picture: null,
+        social: { url: MEDIA_URL("d"), type: "image/png" },
+      },
+      texts: {
+        en: {
+          title: "A spring ad from one picture",
+          body: "Show it a picture of your product and get an ad for the season.",
+          tags: ["One picture in", "Ready to post"],
+          action: "Make one",
+          requirement: "Uses a video tool",
+          clip: "A bottle on a garden table in spring light.",
+          credit: "Made by Acme",
+          note: "An AI-generated concept clip.",
+          demo: {
+            title: "A spring ad",
+            prompt: "Make a spring ad from this picture.",
+            reference: "Reference picture",
+            picture: "Product picture",
+            question: "What should it say?",
+            answer: "Keep it light.",
+            plan: "Three scenes in a garden. Here is the plan.",
+            approval: "Plan reviewed",
+            consent: "Go ahead.",
+            working: "Making it…",
+            result: "Your spring ad.",
+            resultDetail: "Short ad",
+            resultLabel: "Example result",
+            stages: ["Your picture", "A few words", "The ad"],
+            action: "Try the spring skill",
+          },
+        },
+        ko: {
+          title: "사진 한 장으로 만드는 봄 광고",
+          body: "제품 사진을 보여 주면 계절에 맞는 광고가 나옵니다.",
+          tags: [],
+          action: "만들어 보기",
+          requirement: null,
+          clip: null,
+          credit: null,
+          note: null,
+          demo: null,
+        },
+      },
+    },
+  ],
+};
+
 // What the build writes into the prerendered files, rendered here without a browser.
 
 describe("prerendered pages", () => {
@@ -106,7 +180,7 @@ describe("prerendered pages", () => {
       skills: ["review"],
     });
     const items = [
-      FEATURED_VIDEO.address,
+      REFERENCE_REPOSITORY_ADDRESS,
       "/gh/SkillCDN/skills",
       "/gh/acme/useful",
       "/gh/Acme/useful",
@@ -123,6 +197,9 @@ describe("prerendered pages", () => {
       />,
     );
     expect(body.match(/href="\/gh\/acme\/useful"/g)).toHaveLength(1);
+    // One card for the reference repository, whichever way it was written (the address form
+    // links to it as well, as the example to try).
+    expect(body.match(/>\/gh\/skillcdn\/skills</g)).toHaveLength(1);
     expect(body).not.toContain('skills/hostile"');
     expect(body).not.toContain("single-skill/references");
     expect(body).not.toContain('href="/gh/SkillCDN/skills"');
@@ -130,33 +207,88 @@ describe("prerendered pages", () => {
     expect(body).toContain('href="/gh/skillcdn/skills@v1"');
   });
 
-  it("offers the real editorial skill before repository setup on both public pages", () => {
+  it("leads the front page with the build's own showcase, before repository setup", () => {
     for (const language of LANGUAGES) {
       const t = messagesFor(language);
-      for (const path of ["/", "/explore"]) {
-        const { body } = renderPage(path, language);
-        expect(body).toContain(`href="${FEATURED_VIDEO.href}"`);
-        expect(body).toContain(t.landing.featured.video.title);
-        expect(body.indexOf(t.landing.featured.video.title)).toBeLessThan(
-          body.indexOf('inputMode="url"'),
-        );
-        expect(body).not.toMatch(/href="\/gh\/skillcdn\/skillcdn/);
-        // The clip is local, waits to be seen before it loads, and plays without sound.
-        expect(body).toMatch(/<video[^>]+src="\/showcase\/[^"]+\.mp4"/);
-        expect(body).toContain(`src="${FEATURED_VIDEO.clip}"`);
-        expect(body).toContain(`poster="${FEATURED_VIDEO.poster}"`);
-        expect(body).toMatch(/<video[^>]+preload="none"/);
-        expect(body).toMatch(/<video[^>]+muted=""/);
-        expect(body).not.toMatch(/<video[^>]+autoplay/i);
-        expect(body).toContain(t.landing.featured.video.clip);
-        expect(body).not.toMatch(/style="|<(?:img|video)[^>]+src="https?:/);
-        // The animated image is for a browser that refuses the video, so it is not in the page
-        // until one does, and nothing is laid over the clip.
-        expect(body).not.toContain(FEATURED_VIDEO.animation);
-        const card = body.slice(body.indexOf("<article"), body.indexOf("</article>"));
-        expect(card).not.toContain("<button");
-      }
+      const { body } = renderPage("/", language);
+      expect(body).toContain(`href="${REFERENCE_REPOSITORY_ADDRESS}"`);
+      expect(body).toContain(t.landing.featured.video.title);
+      expect(body.indexOf(t.landing.featured.video.title)).toBeLessThan(
+        body.indexOf('inputMode="url"'),
+      );
+      expect(body).not.toMatch(/href="\/gh\/skillcdn\/skillcdn/);
+      // The clip is local, waits to be seen before it loads, and plays without sound.
+      expect(body).toMatch(/<video[^>]+src="\/showcase\/[^"]+\.mp4"/);
+      expect(body).toContain(`src="${DEFAULT_SHOWCASE_MEDIA.clip}"`);
+      expect(body).toContain(`poster="${DEFAULT_SHOWCASE_MEDIA.poster}"`);
+      expect(body).toMatch(/<video[^>]+preload="none"/);
+      expect(body).toMatch(/<video[^>]+muted=""/);
+      expect(body).not.toMatch(/<video[^>]+autoplay/i);
+      expect(body).toContain(t.landing.featured.video.clip);
+      expect(body).toContain(t.landing.featured.video.generated);
+      expect(body).not.toMatch(/style="|<(?:img|video)[^>]+src="https?:/);
+      // The animated image is for a browser that refuses the video, so it is not in the page
+      // until one does, and nothing is laid over the clip.
+      expect(body).not.toContain(DEFAULT_SHOWCASE_MEDIA.animation);
+      const card = body.slice(body.indexOf("<article"), body.indexOf("</article>"));
+      expect(card).not.toContain("<button");
+      // The explorer has its own list and no showcase card (ADR-0028).
+      const explore = renderPage("/explore", language).body;
+      expect(explore).not.toContain("<video");
+      expect(explore).not.toContain(t.landing.featured.video.title);
     }
+  });
+
+  it("shows the operator's showcase on the front page instead of the build's own", () => {
+    const t = messagesFor("ko");
+    const { html, indexable } = renderLandingPage(TEMPLATE, {
+      language: "ko",
+      origin: "https://skills.example",
+      pathname: "/",
+      search: "?lang=ko",
+      data: { showcase: { ready: SHOWCASE } },
+    });
+    expect(indexable).toBe(true);
+    expect(html).toContain('<html lang="ko">');
+    expect(html).toContain('data-prerendered="landing" data-lang="ko"');
+    // The entry's words in the visitor's language, its media, and its address; not the build's.
+    expect(html).toContain("사진 한 장으로 만드는 봄 광고");
+    expect(html).toContain(`src="${MEDIA_URL("a")}"`);
+    expect(html).toContain(`poster="${MEDIA_URL("b")}"`);
+    expect(html).toContain('href="/gh/acme/skills"');
+    expect(html).not.toContain(DEFAULT_SHOWCASE_MEDIA.clip);
+    expect(html).not.toContain(t.landing.featured.video.title);
+    // No example conversation in Korean: the build's own stands in, with its own media.
+    expect(html).toContain(t.landing.demo.prompt);
+    expect(html).toContain(DEFAULT_SHOWCASE_MEDIA.poster);
+    // The browser continues from the same answer, and the head describes the entry's clip.
+    expect(html).toContain('<script type="application/json" id="skillcdn-data">');
+    expect(html).toContain(`"contentUrl":"https://skills.example${MEDIA_URL("a")}"`);
+    expect(html).toContain(`content="https://skills.example${MEDIA_URL("d")}"`);
+
+    // In English the entry brings its own conversation, and the link under the steps follows it.
+    const english = renderLandingPage(TEMPLATE, {
+      language: "en",
+      origin: "https://skills.example",
+      pathname: "/",
+      search: "",
+      data: { showcase: { ready: SHOWCASE } },
+    }).html;
+    expect(english).toContain("Make a spring ad from this picture.");
+    expect(english).toContain(">Try the spring skill<");
+    expect(english).not.toContain(messagesFor("en").landing.demo.prompt);
+    expect(english).not.toContain(DEFAULT_SHOWCASE_MEDIA.poster);
+
+    // An empty showcase is the build's own, as the prerendered page has it.
+    const empty = renderLandingPage(TEMPLATE, {
+      language: "en",
+      origin: "https://skills.example",
+      pathname: "/",
+      search: "",
+      data: { showcase: { ready: { items: [] } } },
+    }).html;
+    expect(empty).toContain(`src="${DEFAULT_SHOWCASE_MEDIA.clip}"`);
+    expect(empty).toContain(defaultShowcase().texts.en?.title ?? "missing");
   });
 
   it("shows the spending consent without animation, and keeps the whole conversation for assistive technology", () => {
@@ -615,9 +747,18 @@ describe("llms.txt", () => {
       expect(text).toContain(`${ORIGIN_PLACEHOLDER}/gh/owner/repo`);
       // What the site is, in one plain sentence, and what there is to make, with its address.
       expect(text).toContain(t.meta.landing.about);
-      expect(text).toContain(`${ORIGIN_PLACEHOLDER}${FEATURED_VIDEO.href}`);
+      expect(text).toContain(`${ORIGIN_PLACEHOLDER}${REFERENCE_REPOSITORY_ADDRESS}`);
       expect(text).toContain(t.landing.featured.video.title);
       expect(text).not.toContain("</");
     }
+  });
+
+  it("names the operator's showcase when there is one", () => {
+    const text = renderLlmsTxt("en", SHOWCASE);
+    expect(text).toContain(
+      `- [A spring ad from one picture](${ORIGIN_PLACEHOLDER}/gh/acme/skills): Show it a picture`,
+    );
+    expect(text).toContain("Uses a video tool.");
+    expect(text).not.toContain(messagesFor("en").landing.featured.video.title);
   });
 });

@@ -1,3 +1,5 @@
+import { REFERENCE_REPOSITORY_ADDRESS } from "@skillcdn/core";
+
 // Facts about the site that are not copy: where things link to, and how the public origin
 // travels from the server into the page.
 
@@ -24,16 +26,16 @@ export const LINKS = {
 } as const;
 
 /**
- * Editorial selection shared by the landing page and explorer. Its media is bundled with the
- * site: an original AI-generated concept clip of the kind of result the skill is for (not a
- * recording of a run of it), the same clip as an animated image for where the video will not
- * play, its first frame as the poster that stands in for both, and what the clip was made from,
- * which the example conversation attaches: a frame of the ad it took its look from, and the
- * picture of its star.
+ * The media of the build's own showcase (ADR-0028), which the front page leads with until the
+ * operator writes a showcase of its own through the admin API. It is bundled with the site: an
+ * original AI-generated concept clip of the kind of result the reference repository's skill is
+ * for (not a recording of a run of it), the same clip as an animated image for where the video
+ * will not play, its first frame as the poster that stands in for both, and what the clip was
+ * made from, which the example conversation attaches: a frame of the ad it took its look from,
+ * and the picture of its star. The words are in the language packs (`showcase.ts` puts the two
+ * together).
  */
-export const FEATURED_VIDEO = {
-  address: "/gh/skillcdn/skills",
-  href: "/gh/skillcdn/skills",
+export const DEFAULT_SHOWCASE_MEDIA = {
   clip: "/showcase/explorer-ad.mp4",
   animation: "/showcase/explorer-ad.avif",
   poster: "/showcase/explorer-ad.webp",
@@ -52,7 +54,7 @@ export const FEATURED_VIDEO = {
  * Addresses to try under the field: the reference repository of this project, written in the
  * SkillCDN Format (docs/specs/skill-repo.md) and kept working.
  */
-export const EXAMPLE_ADDRESSES = ["skillcdn/skills"] as const;
+export const EXAMPLE_ADDRESSES = [REFERENCE_REPOSITORY_ADDRESS.replace(/^\/gh\//, "")] as const;
 
 /**
  * The origin to show in URLs a visitor copies. In the browser it comes from the meta tag the

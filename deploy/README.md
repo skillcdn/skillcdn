@@ -67,8 +67,14 @@ The operator's lists and the takedown ([ADR-0026](../docs/adr/0026-serving-follo
 | `PUT /admin/v1/repositories/<kind>/gh/<owner>/<repo>[][/path]` | Adds an entry and answers with the address it was stored under. A `verified` or `blocked` entry names a repository, without a ref or a path; a `featured` one is any address. Adding what is already there changes nothing. |
 | `DELETE /admin/v1/repositories/<kind>/gh/<owner>/<repo>[][/path]` | Removes an entry; `404` when there was none. |
 | `POST /admin/v1/purge/gh/<owner>/<repo>` | Removes what was indexed for the repository: its snapshots, their index entries, its cached refs, and the file bodies nothing references any more. Answers with the counts, or `404` when the repository was never indexed. The next request for the repository indexes it again, unless it is blocked as well. |
+| `GET /admin/v1/showcase` | The entries the front page leads with ([ADR-0028](../docs/adr/0028-the-front-page-and-the-explorer-are-operator-content.md)), as `GET /api/v1/showcase` shows them to everyone. |
+| `PUT /admin/v1/showcase/<id>` | Writes the entry named `<id>` (a lowercase slug) from a JSON body, replacing what was there; the body is described below. Answers with the entry as the pages read it, or `400` with `problems` that say what is wrong. |
+| `DELETE /admin/v1/showcase/<id>` | Removes the entry. Its uploads stay. |
+| `GET /admin/v1/media` | The uploads: hash, type, size, URL, and which entries use each. |
+| `POST /admin/v1/media` | Stores the request body as an upload of the `content-type` sent: `video/mp4`, `video/webm`, `image/avif`, `image/webp`, `image/png`, `image/jpeg` or `image/gif`, at most 16 MiB. Answers with its `sha`, the SHA-256 of the bytes, and the `url` it is served at for everyone, `/media/<sha>`, immutably. The same bytes are the same upload. |
+| `DELETE /admin/v1/media/<sha>` | Removes an upload; `409` while an entry uses it. |
 
-What the lists do: a `verified` repository carries no provenance notice on its default branch; a `featured` address is shown by the explorer; a `blocked` repository answers exactly like one that does not exist. The sitemap lists the featured addresses and the verified repositories, minus anything blocked. A process sees a change made through another process within thirty seconds.
+What the lists do: a `verified` repository carries no provenance notice on its default branch; a `featured` address is shown by the explorer, and while there is none the reference repository of this project is; a `blocked` repository answers exactly like one that does not exist. The sitemap lists the featured addresses and the verified repositories, minus anything blocked. A process sees a change made through another process within thirty seconds.
 
 ```sh
 curl -X PUT -H "Authorization: Bearer $ADMIN_TOKEN" https://skills.example.com/admin/v1/repositories/blocked/gh/owner/repo
@@ -76,6 +82,42 @@ curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" https://skills.example.com/
 ```
 
 The same purge runs without the API, from a shell with the database configured: `node dist/main.js purge /gh/owner/repo`.
+
+What the front page leads with is the showcase: a list of entries the operator writes, each a card with media and words, in order. Until the operator writes one, the page shows the build's own showcase of the reference repository. Upload the media first, then write the entry that names it:
+
+```sh
+curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" -H "content-type: image/webp" --data-binary @poster.webp https://skills.example.com/admin/v1/media
+curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" -H "content-type: video/mp4" --data-binary @clip.mp4 https://skills.example.com/admin/v1/media
+curl -X PUT -H "Authorization: Bearer $ADMIN_TOKEN" -H "content-type: application/json" --data @entry.json https://skills.example.com/admin/v1/showcase/spring-ad
+```
+
+An entry is a JSON document:
+
+- `address`: where the card leads, any address such as `/gh/owner/repo` or `/gh/owner/repo@main/skills/ad`.
+- `position`: its place in the list, lowest first; `0` when left out.
+- `width` and `height`: the pixel size of the clip and its poster.
+- `media`: uploads by hash. `poster` is required; `clip` (a video), `animation` (the clip as an animated image, for browsers that will not play video), `reference` and `picture` (what the example conversation attaches) and `social` (a 1200 x 630 picture for link previews) are optional. A `clip` needs `durationMs`, one pass of it, and `published`, its date as `YYYY-MM-DD`.
+- `texts`: the words by language tag (`en`, `ko`), at least one language. Each has `title`, `body` and `action` (the button), and optionally `tags` (up to four), `requirement` (what the skill needs besides the AI app), `clip` (what the clip shows, for whoever cannot see it), `credit`, `note` (said next to the clip, such as that it is an AI-generated concept), and `demo`, the example conversation: `title`, `prompt`, `reference`, `picture`, `question`, `answer`, `plan`, `approval`, `consent`, `working`, `result`, `resultDetail`, `resultLabel`, three `stages`, and `action` (the link under the steps). A visitor is shown their language, else the default language of the pages; an entry without a `demo` in the visitor's language shows the build's own conversation.
+
+```json
+{
+  "address": "/gh/owner/repo",
+  "width": 752,
+  "height": 560,
+  "durationMs": 9500,
+  "published": "2026-10-01",
+  "media": { "poster": "<sha of poster.webp>", "clip": "<sha of clip.mp4>" },
+  "texts": {
+    "en": {
+      "title": "The ad you love, with your star in it.",
+      "body": "Show it an ad you admire and a picture of your product.",
+      "tags": ["A video and a picture in", "Ready to post"],
+      "action": "Make something like this",
+      "note": "An AI-generated concept clip, not a recording of a run."
+    }
+  }
+}
+```
 
 ## Operating a public deployment
 

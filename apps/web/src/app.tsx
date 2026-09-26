@@ -88,10 +88,11 @@ function Routed(props: {
   const i18n = useMemo(() => ({ language, t: messagesFor(language) }), [language]);
   const route = matchRoute(location.pathname, location.search, import.meta.env.DEV);
 
-  // The view of an address writes its own head once it knows what it shows (pages/mount.tsx).
+  // The view of an address and the front page write their own heads once they know what they
+  // show (pages/mount.tsx, pages/landing.tsx).
   // biome-ignore lint/correctness/useExhaustiveDependencies: the route is a function of the location
   useEffect(() => {
-    if (route.name !== "mount") {
+    if (route.name !== "mount" && route.name !== "landing") {
       applyHead(buildHead(route, language, props.origin));
     }
   }, [location.pathname, location.search, language, props.origin]);

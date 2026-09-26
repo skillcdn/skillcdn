@@ -1,4 +1,4 @@
-import type { LicenseFact } from "@skillcdn/core";
+import type { LicenseFact, ShowcaseTexts } from "@skillcdn/core";
 import { sql } from "drizzle-orm";
 import {
   bigint,
@@ -10,6 +10,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -390,3 +391,73 @@ export const blobs = pgTable("blobs", {
   size: integer().notNull(),
   createdAt: createdAt(),
 });
+
+/**
+ * Media the operator uploaded for the landing showcase (ADR-0028), keyed by the SHA-256 of the
+ * bytes: content-addressed, so the hash is the primary key and the name the file is served under,
+ * which never changes. Operator data, not tenant data; served to everyone.
+ */
+export const operatorMedia = pgTable("operator_media", {
+  sha: text().primaryKey(),
+  contentType: text().notNull(),
+  size: integer().notNull(),
+  bytes: bytea().notNull(),
+  createdAt: createdAt(),
+});
+
+/**
+ * An entry of the landing showcase (ADR-0028): what the front page leads with, in the operator's
+ * words, in every language the operator wrote. Operator data, not tenant data.
+ */
+export const showcaseEntries = pgTable(
+  "showcase_entries",
+  {
+    id: id(),
+    /** The entry's name in the admin API and in the pages. */
+    slug: text().notNull(),
+    position: integer().notNull().default(0),
+    /** Canonical, as the address grammar prints it; a ref and a path are allowed. */
+    address: text().notNull(),
+    /** Pixel size of the clip and its poster. */
+    width: integer().notNull(),
+    height: integer().notNull(),
+    durationMs: integer(),
+    published: date({ mode: "string" }),
+    /** By language tag: the words of the card and of the example conversation. */
+    texts: jsonb().$type<Record<string, ShowcaseTexts>>().notNull(),
+    createdAt: createdAt(),
+    updatedAt: instant().notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("showcase_entries_slug_key").on(table.slug),
+    index("showcase_entries_position_idx").on(table.position, table.slug),
+  ],
+);
+
+/**
+ * The upload in each slot of a showcase entry. An entry takes its rows with it; an upload that
+ * an entry still shows cannot be deleted.
+ */
+export const showcaseMedia = pgTable(
+  "showcase_media",
+  {
+    entryId: uuid()
+      .notNull()
+      .references(() => showcaseEntries.id, { onDelete: "cascade" }),
+    slot: text({
+      enum: ["clip", "animation", "poster", "reference", "picture", "social"],
+    }).notNull(),
+    sha: text()
+      .notNull()
+      .references(() => operatorMedia.sha, { onDelete: "restrict" }),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.entryId, table.slot] }),
+    index("showcase_media_sha_idx").on(table.sha),
+    check(
+      "showcase_media_slot_check",
+      sql`${table.slot} in ('clip', 'animation', 'poster', 'reference', 'picture', 'social')`,
+    ),
+  ],
+);

@@ -1,4 +1,10 @@
-import { type Address, type Clock, formatAddress, parseAddress } from "@skillcdn/core";
+import {
+  type Address,
+  type Clock,
+  formatAddress,
+  parseAddress,
+  REFERENCE_REPOSITORY_ADDRESS,
+} from "@skillcdn/core";
 import {
   addOperatorRepository,
   type Database,
@@ -11,6 +17,15 @@ import { repositoryKey } from "../mounts/mount-service.js";
 
 /** How long a process trusts what it read of the lists; a change made elsewhere shows within it. */
 const LISTS_TTL_MS = 30_000;
+
+/**
+ * What a fresh deployment features until the operator features something: the reference
+ * repository of this project (ADR-0028). It leaves the list the moment the operator adds an entry.
+ */
+const DEFAULT_FEATURED: readonly Address[] = (() => {
+  const parsed = parseAddress(REFERENCE_REPOSITORY_ADDRESS);
+  return parsed.ok ? [parsed.value] : [];
+})();
 
 export class OperatorListError extends Error {
   readonly code = "operator.invalid_address";
@@ -60,33 +75,41 @@ export class OperatorLists {
     return (await this.#keys("blocked")).has(key);
   }
 
-  /** The featured addresses, in the order they were added. */
+  /** The featured addresses, in the order they were added; the default while there are none. */
   async featured(): Promise<readonly Address[]> {
-    return (await this.all("featured")).flatMap((entry) => {
+    const listed = (await this.all("featured")).flatMap((entry) => {
       const parsed = parseAddress(entry.address);
       return parsed.ok ? [parsed.value] : [];
     });
+    return listed.length > 0 ? listed : DEFAULT_FEATURED;
   }
 
   /**
-   * What the operator points the public at: the featured addresses and the vouched-for
-   * repositories, without duplicates and without anything blocked. A blocked repository does not
-   * exist for callers, so no list may name it.
+   * What the operator points the public at: the featured addresses (the default while there are
+   * none) and the vouched-for repositories, without duplicates and without anything blocked. A
+   * blocked repository does not exist for callers, so no list may name it.
    */
   async listed(): Promise<readonly Address[]> {
     const blocked = await this.#keys("blocked");
+    const entries = await this.#entries();
+    const candidates: Address[] = entries.some((entry) => entry.kind === "featured")
+      ? []
+      : [...DEFAULT_FEATURED];
+    for (const entry of entries) {
+      const parsed = entry.kind === "blocked" ? undefined : parseAddress(entry.address);
+      if (parsed?.ok) {
+        candidates.push(parsed.value);
+      }
+    }
     const seen = new Set<string>();
     const addresses: Address[] = [];
-    for (const entry of await this.#entries()) {
-      const parsed = entry.kind === "blocked" ? undefined : parseAddress(entry.address);
-      if (parsed === undefined || !parsed.ok || blocked.has(repositoryKey(parsed.value))) {
+    for (const address of candidates) {
+      const written = formatAddress(address);
+      if (blocked.has(repositoryKey(address)) || seen.has(written)) {
         continue;
       }
-      const written = formatAddress(parsed.value);
-      if (!seen.has(written)) {
-        seen.add(written);
-        addresses.push(parsed.value);
-      }
+      seen.add(written);
+      addresses.push(address);
     }
     return addresses;
   }

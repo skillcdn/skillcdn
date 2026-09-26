@@ -13,6 +13,7 @@ import {
   type RestFind,
   type RestFindItem,
   type RestMount,
+  type RestShowcase,
   type RestSkill,
 } from "@skillcdn/core";
 import {
@@ -541,6 +542,11 @@ export function handleFixtureRequest(
 ): FixtureAnswer | undefined {
   if (url.pathname === REST_ROUTES.featured) {
     return { status: 200, body: featuredBody(now) };
+  }
+  if (url.pathname === REST_ROUTES.showcase) {
+    // No operator's showcase: the pages show the build's own, which is what is designed here.
+    const body: RestShowcase = { items: [] };
+    return { status: 200, body };
   }
   const operation = (["mounts", "browse", "find", "skills", "files"] as const).find((name) =>
     url.pathname.startsWith(`${REST_ROUTES[name]}/`),

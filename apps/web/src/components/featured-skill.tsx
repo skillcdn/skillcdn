@@ -1,7 +1,6 @@
+import type { RestShowcaseEntry, ShowcaseTexts } from "@skillcdn/core";
 import { useEffect, useRef, useState } from "react";
-import { useI18n } from "../i18n/index.js";
 import { Link } from "../navigation.js";
-import { FEATURED_VIDEO } from "../site.js";
 import { ClipAnimation, isRefusal } from "./clip-animation.js";
 import styles from "./featured-skill.module.css";
 import { useInView } from "./use-in-view.js";
@@ -27,12 +26,14 @@ export function ArrowIcon() {
 /**
  * The concept clip. It is fetched once it is on screen and plays, muted and looped, while it is
  * there. Where the browser will not start it by itself, or cannot play it, the same clip as an
- * animated image takes its place. Under reduced motion it does not start, and the poster stands.
+ * animated image takes its place, as it does for an entry without a clip. Under reduced motion
+ * it does not start, and the poster stands.
  */
-function ConceptClip(props: { readonly description: string }) {
+function ConceptClip(props: { readonly entry: RestShowcaseEntry; readonly description: string }) {
   const { ref, inView } = useInView<HTMLDivElement>(0.3);
   const video = useRef<HTMLVideoElement>(null);
   const [failed, setFailed] = useState(false);
+  const { media, width, height } = props.entry;
 
   useEffect(() => {
     const node = video.current;
@@ -52,15 +53,15 @@ function ConceptClip(props: { readonly description: string }) {
 
   return (
     <div ref={ref} className={styles.art}>
-      {failed ? (
-        <ClipAnimation alt={props.description} />
+      {failed || media.clip === null ? (
+        <ClipAnimation entry={props.entry} alt={props.description} />
       ) : (
         <video
           ref={video}
-          src={FEATURED_VIDEO.clip}
-          poster={FEATURED_VIDEO.poster}
-          width={FEATURED_VIDEO.width}
-          height={FEATURED_VIDEO.height}
+          src={media.clip.url}
+          poster={media.poster.url}
+          width={width}
+          height={height}
           muted
           loop
           playsInline
@@ -75,28 +76,36 @@ function ConceptClip(props: { readonly description: string }) {
   );
 }
 
-/** Editorial media is bundled with the site; repository content never supplies media URLs. */
-export function FeaturedSkill() {
-  const { t } = useI18n();
-  const copy = t.landing.featured.video;
+/**
+ * One showcase entry as a card: the clip, the words in the visitor's language, and the way to
+ * the skill. Media comes from the build or from the operator's uploads (ADR-0028); repository
+ * content never supplies a media URL.
+ */
+export function FeaturedSkill(props: {
+  readonly entry: RestShowcaseEntry;
+  readonly texts: ShowcaseTexts;
+}) {
+  const { entry, texts } = props;
   return (
     <article className={styles.card}>
-      <ConceptClip description={copy.clip} />
+      <ConceptClip entry={entry} description={texts.clip ?? texts.title} />
       <div className={styles.content}>
-        <p className={styles.eyebrow}>{copy.credit}</p>
-        <h3>{copy.title}</h3>
-        <p className={styles.body}>{copy.body}</p>
-        <ul className={styles.tags}>
-          {copy.tags.map((tag) => (
-            <li key={tag}>{tag}</li>
-          ))}
-        </ul>
-        <Link href={FEATURED_VIDEO.href} className={styles.action}>
-          {copy.action}
+        {texts.credit !== null && <p className={styles.eyebrow}>{texts.credit}</p>}
+        <h3>{texts.title}</h3>
+        <p className={styles.body}>{texts.body}</p>
+        {texts.tags.length > 0 && (
+          <ul className={styles.tags}>
+            {texts.tags.map((tag) => (
+              <li key={tag}>{tag}</li>
+            ))}
+          </ul>
+        )}
+        <Link href={entry.address} className={styles.action}>
+          {texts.action}
           <ArrowIcon />
         </Link>
-        <p className={styles.requirement}>{copy.requirement}</p>
-        <p className={styles.requirement}>{copy.generated}</p>
+        {texts.requirement !== null && <p className={styles.requirement}>{texts.requirement}</p>}
+        {texts.note !== null && <p className={styles.requirement}>{texts.note}</p>}
       </div>
     </article>
   );

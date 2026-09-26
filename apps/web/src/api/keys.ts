@@ -11,4 +11,6 @@ export const resourceKeys = {
     `${formatAddress(address)} find ${JSON.stringify([path, query])}`,
   skill: (address: Address, path: string): string => `${formatAddress(address)} skill ${path}`,
   file: (address: Address, path: string): string => `${formatAddress(address)} file ${path}`,
+  /** The landing showcase: one for the whole site. */
+  showcase: (): string => "showcase",
 } as const;

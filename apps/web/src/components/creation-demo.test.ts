@@ -1,13 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { messagesFor } from "../i18n/index.js";
 import { LANGUAGES } from "../i18n/languages.js";
-import { FEATURED_VIDEO } from "../site.js";
+import { defaultShowcase, showcaseTexts } from "../showcase.js";
 import { demoSchedule } from "./creation-demo.js";
+
+const entry = defaultShowcase();
+const clipMs = entry.durationMs ?? 0;
+const demoOf = (language: (typeof LANGUAGES)[number]) => {
+  const demo = showcaseTexts(entry, language).demo;
+  if (demo === null) {
+    throw new Error(`the build's own showcase has no example conversation in ${language}`);
+  }
+  return demo;
+};
 
 describe("the timing of the example conversation", () => {
   it("lets every line finish before the next thing happens, in every language", () => {
     for (const language of LANGUAGES) {
-      const s = demoSchedule(messagesFor(language).landing.demo, FEATURED_VIDEO.durationMs);
+      const s = demoSchedule(demoOf(language), clipMs);
       const moments = [
         s.prompt.from,
         s.prompt.until,
@@ -37,8 +46,9 @@ describe("the timing of the example conversation", () => {
 
   it("plays the result once through, after a conversation that stays brisk", () => {
     for (const language of LANGUAGES) {
-      const s = demoSchedule(messagesFor(language).landing.demo, FEATURED_VIDEO.durationMs);
-      expect(s.cycle - s.finished).toBe(FEATURED_VIDEO.durationMs);
+      const s = demoSchedule(demoOf(language), clipMs);
+      expect(s.cycle - s.finished).toBe(clipMs);
+      expect(clipMs).toBeGreaterThan(0);
       // Visitors watched a slower version wait for it; the words stay short enough to read along.
       expect(s.finished, language).toBeLessThan(17_000);
     }

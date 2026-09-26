@@ -42,6 +42,21 @@ export {
   saveRepository,
 } from "./queries/repos.js";
 export {
+  getOperatorMedia,
+  listOperatorMedia,
+  listShowcaseEntries,
+  type NewOperatorMedia,
+  type OperatorMediaRecord,
+  type PutShowcaseResult,
+  putOperatorMedia,
+  putShowcaseEntry,
+  removeOperatorMedia,
+  removeShowcaseEntry,
+  type ShowcaseEntryInput,
+  type ShowcaseEntryRecord,
+  type StoredOperatorMedia,
+} from "./queries/showcase.js";
+export {
   claimSnapshot,
   ensureSnapshot,
   failSnapshot,

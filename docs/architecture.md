@@ -36,7 +36,7 @@ Four properties shape everything else:
 | `packages/db` | PostgreSQL schema, migrations, query layer. | `core` |
 | `packages/github` | GitHub implementation of the git-host port: App auth, user tokens, contents, webhook verification. | `core` |
 | `apps/server` | Composition root: configuration, HTTP and MCP surface, jobs, adapter wiring. | `core`, `db`, `github` |
-| `apps/web` | Optional web UI: landing page and explorer, in several languages. Talks to `api` over REST only; builds to static files, prerendered per language ([ADR-0009](adr/0009-web-ui-prerendered-per-language.md)). | `core` (types, schemas, address parsing) |
+| `apps/web` | Optional web UI: landing page and explorer, in several languages. Talks to `api` over REST only; builds to static files, prerendered per language ([ADR-0009](adr/0009-web-ui-prerendered-per-language.md)), plus a render module the server calls for the page of an address ([ADR-0011](adr/0011-address-pages-rendered-on-the-server.md)) and for the front page with the operator's showcase ([ADR-0028](adr/0028-the-front-page-and-the-explorer-are-operator-content.md)). | `core` (types, schemas, address parsing) |
 
 Where new things go:
 
@@ -133,6 +133,7 @@ Infrastructure-level caching, DNS, TLS and edge configuration are outside this r
 - **Outbound requests.** Host adapters connect only to operator-configured base URLs, never to a URL taken from user input.
 - **Provenance.** Repos whose owner has verified them, or that the operator lists as ones it vouches for until owners can ([ADR-0019](adr/0019-the-operator-vouches-for-repositories-until-owners-can.md)), are *verified* on their default branch; responses from every other mount carry a provenance notice that warns about what the content says beyond the user's task. The operator's lists live in the database behind a token-protected admin API, and a repository on its blocked list answers like one that does not exist ([ADR-0026](adr/0026-serving-follows-the-license-and-the-operators-lists.md)).
 - **Content policy.** The license a skill carries decides whether its content is served or only described with a link to the source ([ADR-0026](adr/0026-serving-follows-the-license-and-the-operators-lists.md)). The classification is pure logic in `core` over the same untrusted input as everything else; a text the reader does not know is restrictive. The index stores the resolved fact per skill and per repository, and the reader applies it with the mount's verification.
+- **Operator content.** What the front page leads with and what the explorer features are the operator's, written through the admin API and kept in the database with the uploads they use; a fresh deployment shows the reference repository on both until the operator lists something ([ADR-0028](adr/0028-the-front-page-and-the-explorer-are-operator-content.md)). Media on the pages comes from the build or from those uploads, which are served by the hash of their bytes, and never from repository content.
 - **Supply chain.** Lockfile with integrity hashes, a minimum release age for new dependency versions, an allow-list for install scripts, actions pinned by commit, secret scanning, and provenance plus SBOM attestations on published images.
 
 ## Extension points

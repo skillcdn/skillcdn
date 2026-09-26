@@ -1,13 +1,13 @@
+import type { RestShowcaseEntry, ShowcaseDemo } from "@skillcdn/core";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../i18n/index.js";
-import type { Messages } from "../i18n/messages/en.js";
-import { FEATURED_VIDEO } from "../site.js";
 import { BrandSymbol } from "./brand.js";
 import { ClipAnimation, isRefusal } from "./clip-animation.js";
 import styles from "./creation-demo.module.css";
 import { useInView } from "./use-in-view.js";
 
-type DemoCopy = Messages["landing"]["demo"];
+/** The lines whose length paces the conversation. */
+export type DemoLines = Pick<ShowcaseDemo, "prompt" | "question" | "answer" | "plan" | "consent">;
 
 const TICK_MS = 80;
 
@@ -48,7 +48,7 @@ export interface DemoSchedule {
  * starts once the one before it is typed and read, whatever a translation makes of it. The cycle
  * ends when the result has played once through.
  */
-export function demoSchedule(copy: DemoCopy, clipMs: number): DemoSchedule {
+export function demoSchedule(copy: DemoLines, clipMs: number): DemoSchedule {
   let at = 0;
   const line = (text: string, pace: number): DemoLine => {
     const from = at;
@@ -110,11 +110,12 @@ function Thinking() {
 /**
  * The result, playing: the concept clip itself, from its first frame once the result is done,
  * and paused while the conversation is off screen. Where the browser will not start it by
- * itself, the same clip as an animated image takes its place.
+ * itself, and for an entry without a clip, the same clip as an animated image takes its place.
  */
-function ResultClip(props: { readonly playing: boolean }) {
+function ResultClip(props: { readonly entry: RestShowcaseEntry; readonly playing: boolean }) {
   const video = useRef<HTMLVideoElement>(null);
   const [failed, setFailed] = useState(false);
+  const { media, width, height } = props.entry;
   useEffect(() => {
     const node = video.current;
     if (node === null) return;
@@ -129,16 +130,16 @@ function ResultClip(props: { readonly playing: boolean }) {
       if (isRefusal(error)) setFailed(true);
     });
   }, [props.playing]);
-  if (failed) {
-    return <ClipAnimation alt="" />;
+  if (failed || media.clip === null) {
+    return <ClipAnimation entry={props.entry} alt="" />;
   }
   return (
     <video
       ref={video}
-      src={FEATURED_VIDEO.clip}
-      poster={FEATURED_VIDEO.poster}
-      width={FEATURED_VIDEO.width}
-      height={FEATURED_VIDEO.height}
+      src={media.clip.url}
+      poster={media.poster.url}
+      width={width}
+      height={height}
       muted
       loop
       playsInline
@@ -151,15 +152,21 @@ function ResultClip(props: { readonly playing: boolean }) {
 }
 
 /**
- * Runs only on screen, respects a live motion preference, and holds while the pointer or the
- * focus is on it. Without motion, and before any script runs, it shows the last scene with the
- * poster of the result, so that nothing plays or loads that nobody asked for. The animation is
- * hidden from assistive technology; the conversation is read from the list after it.
+ * The example conversation of a showcase entry, with its words and its media (ADR-0028). Runs
+ * only on screen, respects a live motion preference, and holds while the pointer or the focus is
+ * on it. Without motion, and before any script runs, it shows the last scene with the poster of
+ * the result, so that nothing plays or loads that nobody asked for. The animation is hidden from
+ * assistive technology; the conversation is read from the list after it.
  */
-export function CreationDemo() {
+export function CreationDemo(props: {
+  readonly entry: RestShowcaseEntry;
+  readonly demo: ShowcaseDemo;
+}) {
   const { t } = useI18n();
-  const copy = t.landing.demo;
-  const schedule = useMemo(() => demoSchedule(copy, FEATURED_VIDEO.durationMs), [copy]);
+  const labels = t.landing.demo;
+  const { entry, demo: copy } = props;
+  const clipMs = entry.durationMs ?? 0;
+  const schedule = useMemo(() => demoSchedule(copy, clipMs), [copy, clipMs]);
   const { ref: root, inView } = useInView<HTMLDivElement>(0.2);
   const [elapsed, setElapsed] = useState<number | null>(null);
   const [hovered, setHovered] = useState(false);
@@ -202,6 +209,14 @@ export function CreationDemo() {
   const finished = time >= schedule.finished;
   const caret = (shown: string, whole: string) =>
     shown.length < whole.length ? styles.caret : undefined;
+  const attachments = [
+    ...(entry.media.reference === null
+      ? []
+      : [{ url: entry.media.reference.url, label: copy.reference }]),
+    ...(entry.media.picture === null
+      ? []
+      : [{ url: entry.media.picture.url, label: copy.picture }]),
+  ];
 
   return (
     <div
@@ -227,7 +242,7 @@ export function CreationDemo() {
           <BrandSymbol className={styles.symbol} />
           <span>
             {copy.title}
-            <small>{copy.label}</small>
+            <small>{labels.label}</small>
           </span>
           <span className={styles.chromeStatus} />
         </div>
@@ -235,17 +250,17 @@ export function CreationDemo() {
           {phase === 0 && (
             <div className={styles.scene}>
               <div className={styles.user}>
-                <small>{copy.user}</small>
-                <div className={styles.attachments}>
-                  <span>
-                    <img src={FEATURED_VIDEO.reference} alt="" />
-                    {copy.reference}
-                  </span>
-                  <span>
-                    <img src={FEATURED_VIDEO.picture} alt="" />
-                    {copy.picture}
-                  </span>
-                </div>
+                <small>{labels.user}</small>
+                {attachments.length > 0 && (
+                  <div className={styles.attachments}>
+                    {attachments.map((attachment) => (
+                      <span key={attachment.url}>
+                        <img src={attachment.url} alt="" />
+                        {attachment.label}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 <p>
                   {prompt}
                   <span className={caret(prompt, copy.prompt)} />
@@ -255,7 +270,7 @@ export function CreationDemo() {
                 <div className={styles.assistant}>
                   <BrandSymbol />
                   <div>
-                    <small>{copy.assistant}</small>
+                    <small>{labels.assistant}</small>
                     {question.length > 0 ? <p>{question}</p> : <Thinking />}
                   </div>
                 </div>
@@ -265,7 +280,7 @@ export function CreationDemo() {
           {phase === 1 && (
             <div className={styles.scene}>
               <div className={styles.user}>
-                <small>{copy.user}</small>
+                <small>{labels.user}</small>
                 <p>
                   {answer}
                   <span className={caret(answer, copy.answer)} />
@@ -275,7 +290,7 @@ export function CreationDemo() {
                 <div className={styles.assistant}>
                   <BrandSymbol />
                   <div>
-                    <small>{copy.assistant}</small>
+                    <small>{labels.assistant}</small>
                     {plan.length > 0 ? <p>{plan}</p> : <Thinking />}
                   </div>
                 </div>
@@ -289,7 +304,7 @@ export function CreationDemo() {
                 {copy.approval}
               </div>
               <div className={styles.user}>
-                <small>{copy.user}</small>
+                <small>{labels.user}</small>
                 <p>
                   {consent}
                   <span className={caret(consent, copy.consent)} />
@@ -299,9 +314,9 @@ export function CreationDemo() {
                 <div className={styles.result} data-finished={finished}>
                   <div className={styles.resultMedia}>
                     {elapsed === null ? (
-                      <img src={FEATURED_VIDEO.poster} alt="" />
+                      <img src={entry.media.poster.url} alt="" />
                     ) : (
-                      <ResultClip playing={finished && inView} />
+                      <ResultClip entry={entry} playing={finished && inView} />
                     )}
                     <span>{finished ? copy.resultLabel : copy.working}</span>
                     {!finished && <span className={styles.progress} />}
@@ -324,12 +339,16 @@ export function CreationDemo() {
           ))}
         </div>
       </div>
-      <ol className="visually-hidden" aria-label={copy.label}>
-        <li>{`${copy.user}: ${copy.prompt} (${copy.reference}, ${copy.picture})`}</li>
-        <li>{`${copy.assistant}: ${copy.question}`}</li>
-        <li>{`${copy.user}: ${copy.answer}`}</li>
-        <li>{`${copy.assistant}: ${copy.plan}`}</li>
-        <li>{`${copy.user}: ${copy.consent}`}</li>
+      <ol className="visually-hidden" aria-label={labels.label}>
+        <li>
+          {attachments.length > 0
+            ? `${labels.user}: ${copy.prompt} (${attachments.map((attachment) => attachment.label).join(", ")})`
+            : `${labels.user}: ${copy.prompt}`}
+        </li>
+        <li>{`${labels.assistant}: ${copy.question}`}</li>
+        <li>{`${labels.user}: ${copy.answer}`}</li>
+        <li>{`${labels.assistant}: ${copy.plan}`}</li>
+        <li>{`${labels.user}: ${copy.consent}`}</li>
         <li>{`${copy.resultLabel}: ${copy.resultDetail}`}</li>
       </ol>
     </div>

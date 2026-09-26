@@ -174,7 +174,57 @@ describe("a server with a web build", () => {
     expect((await inputOf(bad)).data).toEqual({});
   });
 
+  it("renders the front page and llms.txt with the operator's showcase, and serves the build's own without one", async () => {
+    const h = createHarness(testDatabase, { web });
+    expect(await (await h.request("/", { headers: BROWSER })).text()).toContain("Front page");
+    expect(await (await h.request("/llms.txt")).text()).toContain("# Site");
+
+    const poster = await h.showcase.addMedia(new TextEncoder().encode("poster"), "image/webp");
+    await h.showcase.put("spring", {
+      address: "/gh/acme/skills",
+      width: 640,
+      height: 480,
+      media: { poster: poster.sha },
+      texts: { en: { title: "A spring ad", body: "One picture in.", action: "Make one" } },
+    });
+    const page = await h.request("/?lang=ko", { headers: BROWSER });
+    expect(page.status).toBe(200);
+    expect(page.headers.get("content-type")).toBe("text/html; charset=utf-8");
+    expect(page.headers.get("vary")).toBeNull();
+    expect(await inputOf(page)).toMatchObject({
+      language: "ko",
+      origin: "https://skills.example",
+      pathname: "/",
+      search: "?lang=ko",
+      data: {
+        showcase: {
+          ready: {
+            items: [{ id: "spring", media: { poster: { url: poster.url, type: "image/webp" } } }],
+          },
+        },
+      },
+    });
+    // Without a language in the URL the page is in the one the request asks for (ADR-0021).
+    const asked = await h.request("/", { headers: { ...BROWSER, "accept-language": "ko" } });
+    expect(asked.headers.get("vary")).toBe("accept-language");
+    expect(await inputOf(asked)).toMatchObject({ language: "ko", search: "" });
+    const llms = await h.request("/llms.txt");
+    expect(llms.headers.get("content-type")).toContain("text/plain");
+    expect(await llms.text()).toContain('"id":"spring"');
+
+    // Without an entry the prerendered page, with the build's own showcase, is back.
+    await h.showcase.remove("spring");
+    expect(await (await h.request("/", { headers: BROWSER })).text()).toContain("Front page");
+    expect(await (await h.request("/llms.txt")).text()).toContain("# Site\n");
+    expect(await h.showcase.removeMedia(poster.sha)).toBe("removed");
+  });
+
   it("lists the featured and the vouched-for repositories in the sitemap, and nothing else", async () => {
+    // Until the operator features something, the reference repository is featured (ADR-0028).
+    const fresh = createHarness(testDatabase, { web });
+    expect(await (await fresh.request("/sitemap.xml")).text()).toContain(
+      "<loc>https://skills.example/gh/skillcdn/skills</loc>",
+    );
     const h = createHarness(testDatabase, { web });
     await h.lists.add("featured", "/gh/acme/multi-skill/skills");
     await h.lists.add("verified", "/gh/Acme/single-skill");
@@ -190,6 +240,7 @@ describe("a server with a web build", () => {
     expect(xml).toContain("<loc>https://skills.example/gh/acme/single-skill@main</loc>");
     expect(xml).not.toContain("private-repo");
     expect(xml).not.toContain("<loc>https://skills.example/gh/acme/multi-skill</loc>");
+    expect(xml).not.toContain("skillcdn/skills");
     expect((await h.request("/robots.txt")).status).toBe(200);
   });
 

@@ -6,6 +6,7 @@ import {
   type RestFile,
   type RestFind,
   type RestMount,
+  type RestShowcase,
   type RestSkill,
   restBrowseSchema,
   restErrorSchema,
@@ -14,6 +15,7 @@ import {
   restFindSchema,
   restMountSchema,
   restPath,
+  restShowcaseSchema,
   restSkillSchema,
 } from "@skillcdn/core";
 
@@ -127,4 +129,7 @@ export const api = {
 
   featured: (signal: AbortSignal): Promise<RestFeatured> =>
     getJson(REST_ROUTES.featured, {}, restFeaturedSchema, signal),
+
+  showcase: (signal: AbortSignal): Promise<RestShowcase> =>
+    getJson(REST_ROUTES.showcase, {}, restShowcaseSchema, signal),
 };

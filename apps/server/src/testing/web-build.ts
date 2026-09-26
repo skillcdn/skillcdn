@@ -42,6 +42,7 @@ export const TEMPLATE_FILE = "template.html";
 /**
  * A render module as the UI would build it, reduced to what a test can read back: the page
  * repeats the input it was rendered with, and says it is indexable when the index was there.
+ * The front page and llms.txt repeat the showcase they were rendered with.
  */
 const RENDER_MODULE_SOURCE = `
 export function renderAddressPage(template, input) {
@@ -52,6 +53,17 @@ export function renderAddressPage(template, input) {
     .replace("<!--app-html-->", '<pre id="input">' + json + "</pre>")
     .replace("<!--app-head-->", "<title>Rendered " + input.pathname + "</title>");
   return { html, indexable: ready && input.data.mount.ready.index.status === "ready" };
+}
+export function renderLandingPage(template, input) {
+  const json = JSON.stringify(input).replaceAll("<", "\\\\u003c");
+  const html = template
+    .replace('<html lang="en">', '<html lang="' + input.language + '">')
+    .replace("<!--app-html-->", '<pre id="input">' + json + "</pre>")
+    .replace("<!--app-head-->", "<title>Rendered front page</title>");
+  return { html, indexable: true };
+}
+export function renderLlmsTxt(language, showcase) {
+  return "# Site in " + language + "\\n\\n" + JSON.stringify(showcase) + "\\n";
 }
 `;
 

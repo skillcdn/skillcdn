@@ -1,3 +1,7 @@
+import { useEffect } from "react";
+import { api } from "../api/client.js";
+import { resourceKeys } from "../api/keys.js";
+import { useResource } from "../api/use-resource.js";
 import { AddressForm } from "../components/address-form.js";
 import { BrandSymbol } from "../components/brand.js";
 import { CreationDemo } from "../components/creation-demo.js";
@@ -6,12 +10,26 @@ import { Container } from "../components/ui.js";
 import { useI18n } from "../i18n/index.js";
 import { Link } from "../navigation.js";
 import { PATHS } from "../router.js";
-import { FEATURED_VIDEO, LINKS } from "../site.js";
+import { applyHead, buildHead } from "../seo/head.js";
+import { showcaseDemo, showcaseEntries, showcaseTexts } from "../showcase.js";
+import { LINKS } from "../site.js";
 import styles from "./landing.module.css";
 
 export function LandingPage(props: { readonly origin: string }) {
   const { t, language } = useI18n();
   const copy = t.landing;
+  // The operator's showcase (ADR-0028), which the server hands to a rendered page; while it is
+  // not there, and when there is none, the build's own entry stands.
+  const showcase = useResource(resourceKeys.showcase(), (signal) => api.showcase(signal));
+  const loaded = showcase.state === "ready" ? showcase.value : undefined;
+  const entries = showcaseEntries(loaded);
+  const demo = showcaseDemo(entries, language);
+
+  // The head describes the showcase the page shows: the same head the server writes.
+  useEffect(() => {
+    applyHead(buildHead({ name: "landing" }, language, props.origin, { showcase: loaded }));
+  }, [language, props.origin, loaded]);
+
   return (
     <div className={styles.page}>
       <section className={styles.hero}>
@@ -66,7 +84,11 @@ export function LandingPage(props: { readonly origin: string }) {
               <ArrowIcon />
             </Link>
           </div>
-          <FeaturedSkill />
+          <div className={styles.cards}>
+            {entries.map((entry) => (
+              <FeaturedSkill key={entry.id} entry={entry} texts={showcaseTexts(entry, language)} />
+            ))}
+          </div>
         </Container>
       </section>
       <section id="how" className={styles.how}>
@@ -86,12 +108,12 @@ export function LandingPage(props: { readonly origin: string }) {
                 </li>
               ))}
             </ol>
-            <Link className={styles.textLink} href={FEATURED_VIDEO.href}>
-              {copy.how.action}
+            <Link className={styles.textLink} href={demo.entry.address}>
+              {demo.demo.action}
               <ArrowIcon />
             </Link>
           </div>
-          <CreationDemo key={language} />
+          <CreationDemo key={`${language}:${demo.entry.id}`} entry={demo.entry} demo={demo.demo} />
         </Container>
       </section>
       <section className={styles.start}>

@@ -48,6 +48,7 @@ Goal: a deployment that serves other people's repositories can say what it does 
 4. Distribution notices, built: the license, notice and trademark files travel in the image; the web build writes the licenses of its bundled packages to `/licenses/npm.txt`, linked from every page; `pnpm check` refuses a production dependency under a license outside the allowlist.
 5. Web hygiene: built, client icons shipped as their sources ship them, the current client names, a visible note that the showcase clip is an AI-generated concept, and no production default that points at the hosted service. Still open: a regenerated showcase clip that keeps the content credentials of its originals through the re-encode.
 6. Privacy defaults, built: distinct-client hashing keyed from a configured secret and the day rather than a stored key ([ADR-0027](adr/0027-client-hashes-are-keyed-from-a-configured-secret-and-the-day.md)), and the access log documented as a switchable log with its own retention.
+7. Operator content on the pages, decided in [ADR-0028](adr/0028-the-front-page-and-the-explorer-are-operator-content.md) and built: the front page leads with a showcase the operator writes through the admin API, with words per language and uploaded media stored in the database and served by hash; the explorer keeps its own featured list; a fresh deployment shows the reference repository on both until the operator lists something; the server renders the front page and `llms.txt` with the showcase.
 
 ## After milestone 4
 

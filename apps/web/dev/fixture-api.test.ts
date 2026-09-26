@@ -7,6 +7,7 @@ import {
   restFileSchema,
   restFindSchema,
   restMountSchema,
+  restShowcaseSchema,
   restSkillSchema,
 } from "@skillcdn/core";
 import { describe, expect, it } from "vitest";
@@ -48,6 +49,7 @@ describe("the fixture API", () => {
       }
     }
     expect(restFeaturedSchema.safeParse(ask("/api/v1/featured").body).success).toBe(true);
+    expect(restShowcaseSchema.safeParse(ask("/api/v1/showcase").body).success).toBe(true);
   });
 
   it("answers failures with the error shape and the status of the spec", () => {

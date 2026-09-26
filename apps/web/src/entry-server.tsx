@@ -1,4 +1,4 @@
-import type { RestMount, RestSkill } from "@skillcdn/core";
+import type { RestMount, RestShowcase, RestSkill } from "@skillcdn/core";
 import { StrictMode } from "react";
 import { renderToString } from "react-dom/server";
 import { type InitialData, type InitialResource, renderInitialData } from "./api/initial-data.js";
@@ -17,12 +17,14 @@ import {
 import { MountPage } from "./pages/mount.js";
 import { matchRoute, PATHS } from "./router.js";
 import { buildHead, type PageData, renderHead } from "./seo/head.js";
-import { FEATURED_VIDEO, LINKS, ORIGIN_PLACEHOLDER } from "./site.js";
+import { showcaseEntries, showcaseTexts } from "./showcase.js";
+import { LINKS, ORIGIN_PLACEHOLDER } from "./site.js";
 
 // Rendering to HTML, without a browser. scripts/prerender.mjs imports the bundle made from this
 // file at build time and writes one file per static page and language; the server imports the
 // same bundle from the build and calls renderAddressPage for the view of an address, with the
-// answers the page needs (ADR-0009, ADR-0011).
+// answers the page needs (ADR-0009, ADR-0011), and renderLandingPage for the front page with the
+// operator's showcase (ADR-0028).
 
 export { DEFAULT_LANGUAGE, LANGUAGE_PARAM, LANGUAGES, ORIGIN_PLACEHOLDER };
 
@@ -189,14 +191,63 @@ export function renderAddressPage(template: string, input: AddressPageInput): Ad
   return { html, indexable: head.indexable };
 }
 
+/** What the server knows when it renders the front page. */
+export interface LandingPageInput {
+  readonly language: string;
+  readonly origin: string;
+  readonly pathname: string;
+  readonly search: string;
+  /** The operator's showcase, as the REST API would answer. */
+  readonly data: {
+    readonly showcase?: InitialResource | undefined;
+  };
+}
+
+/**
+ * The front page with the operator's showcase (ADR-0028), rendered so that a crawler reads what
+ * a person sees, and the browser takes over where the server left off. Without a showcase the
+ * prerendered page, which shows the build's own, is the same page.
+ */
+export function renderLandingPage(template: string, input: LandingPageInput): AddressPageOutput {
+  const language = isLanguage(input.language) ? input.language : DEFAULT_LANGUAGE;
+  const initialData: Record<string, InitialResource> = {};
+  const pageData: { showcase?: RestShowcase } = {};
+  if (input.data.showcase !== undefined) {
+    initialData[resourceKeys.showcase()] = input.data.showcase;
+    if (input.data.showcase.ready !== undefined) {
+      pageData.showcase = input.data.showcase.ready as RestShowcase;
+    }
+  }
+  const route = { name: "landing" } as const;
+  const head = buildHead(route, language, input.origin, pageData satisfies PageData);
+  const body = renderToString(
+    <StrictMode>
+      <App
+        initialLocation={{ pathname: PATHS.landing, search: input.search }}
+        origin={input.origin}
+        initialData={initialData}
+        preferredLanguage={language}
+      />
+    </StrictMode>,
+  );
+  const html = renderDocument(template, {
+    htmlLang: LANGUAGE_INFO[language].htmlLang,
+    head: renderHead(head),
+    body,
+    routeName: route.name,
+    initialData,
+  });
+  return { html, indexable: head.indexable };
+}
+
 /**
  * A plain-text description of the site for language models, after the llms.txt convention: what
- * it is in one sentence, what there is to make, how it goes, and where the pages are.
+ * it is in one sentence, what there is to make (the operator's showcase, else the build's own),
+ * how it goes, and where the pages are.
  */
-export function renderLlmsTxt(language: Language): string {
+export function renderLlmsTxt(language: Language, showcase?: RestShowcase): string {
   const t = messagesFor(language);
   const origin = ORIGIN_PLACEHOLDER;
-  const featured = t.landing.featured.video;
   const lines = [
     `# ${t.meta.siteName}`,
     "",
@@ -208,7 +259,11 @@ export function renderLlmsTxt(language: Language): string {
     "",
     `## ${t.landing.featured.title}`,
     "",
-    `- [${featured.title}](${origin}${FEATURED_VIDEO.href}): ${featured.body} ${featured.requirement}.`,
+    ...showcaseEntries(showcase).map((entry) => {
+      const words = showcaseTexts(entry, language);
+      const requirement = words.requirement === null ? "" : ` ${words.requirement}.`;
+      return `- [${words.title}](${origin}${entry.address}): ${words.body}${requirement}`;
+    }),
     "",
     `## ${t.landing.how.title}`,
     "",

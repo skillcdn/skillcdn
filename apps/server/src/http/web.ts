@@ -244,6 +244,18 @@ interface RenderModule {
       readonly data: AddressData;
     },
   ): { readonly html: string; readonly indexable: boolean };
+  /** The front page with the operator's showcase (ADR-0028). An older build has no such thing. */
+  renderLandingPage?(
+    template: string,
+    input: {
+      readonly language: string;
+      readonly origin: string;
+      readonly pathname: string;
+      readonly search: string;
+      readonly data: { readonly showcase: PageAnswer };
+    },
+  ): { readonly html: string; readonly indexable: boolean };
+  renderLlmsTxt?(language: string, showcase: unknown): string;
 }
 
 export interface WebBundle {
@@ -254,6 +266,13 @@ export interface WebBundle {
    * render, else the frame in which the browser renders it.
    */
   address(request: WebRequest, data: AddressData, status?: number): Response;
+  /**
+   * The front page rendered with the operator's showcase, or `undefined` when the build cannot
+   * render it: the prerendered page, with the build's own showcase, answers then.
+   */
+  landing(request: WebRequest, showcase: PageAnswer): Response | undefined;
+  /** llms.txt written with the operator's showcase, or `undefined` when the build cannot. */
+  llmsTxt(request: WebRequest, showcase: unknown): Response | undefined;
   /** The sitemap: the indexable pages of the build, and these addresses, in every language. */
   sitemap(request: WebRequest, addresses: readonly string[]): Response;
   /** The page for a URL that is nothing, with status 404. */
@@ -345,6 +364,61 @@ function byteRange(header: string, size: number): ByteRange | null | undefined {
   const start = Number(from);
   const end = to === "" ? size - 1 : Math.min(Number(to), size - 1);
   return start >= size || start > end ? null : { start, end };
+}
+
+const isNotModified = (request: WebRequest, etag: string): boolean =>
+  (request.headers.get("if-none-match") ?? "")
+    .split(",")
+    .some((candidate) => candidate.trim() === etag);
+
+/**
+ * Bytes held in memory, answered like a file: conditional on the ETag, in byte ranges (a phone
+ * plays a video by asking for pieces of it), and without a body for HEAD.
+ */
+export function bytesResponse(
+  request: WebRequest,
+  body: {
+    readonly bytes: Uint8Array;
+    readonly contentType: string;
+    readonly etag: string;
+    readonly cacheControl: string;
+  },
+): Response {
+  const size = body.bytes.byteLength;
+  const headers: Record<string, string> = {
+    "content-type": body.contentType,
+    "cache-control": body.cacheControl,
+    etag: body.etag,
+    "accept-ranges": "bytes",
+    "x-content-type-options": "nosniff",
+  };
+  if (isNotModified(request, body.etag)) {
+    return new Response(null, { status: 304, headers });
+  }
+  const asked = request.headers.get("range");
+  const ifRange = request.headers.get("if-range");
+  const range =
+    asked === null || (ifRange !== null && ifRange.trim() !== body.etag)
+      ? undefined
+      : byteRange(asked, size);
+  if (range === null) {
+    return new Response(null, {
+      status: 416,
+      headers: { ...headers, "content-range": `bytes */${size}` },
+    });
+  }
+  const start = range?.start ?? 0;
+  const end = range?.end ?? size - 1;
+  const status = range === undefined ? 200 : 206;
+  headers["content-length"] = String(size === 0 ? 0 : end - start + 1);
+  if (range !== undefined) {
+    headers["content-range"] = `bytes ${start}-${end}/${size}`;
+  }
+  if (request.method === "HEAD" || size === 0) {
+    return new Response(null, { status, headers });
+  }
+  // A copy: the response owns what it sends, whatever buffer the bytes came out of.
+  return new Response(new Uint8Array(body.bytes.subarray(start, end + 1)), { status, headers });
 }
 
 const escapeXml = (text: string): string =>
@@ -521,10 +595,7 @@ export async function loadWebBundle(
     const on = [...(also === undefined ? [] : [also]), ...(forced ? [] : ["accept-language"])];
     return on.length === 0 ? {} : { vary: on.join(", ") };
   };
-  const notModified = (request: WebRequest, etag: string): boolean =>
-    (request.headers.get("if-none-match") ?? "")
-      .split(",")
-      .some((candidate) => candidate.trim() === etag);
+  const notModified = isNotModified;
   const withOrigin = (text: string, origin: string): string =>
     text
       .replaceAll(originPlaceholder, origin)
@@ -731,6 +802,49 @@ export async function loadWebBundle(
         status,
         varyOn(forced, ADDRESS_HEADERS.vary),
       );
+    },
+    landing(request, showcase) {
+      const render = renderer?.module.renderLandingPage;
+      if (renderer === undefined || render === undefined) {
+        return undefined;
+      }
+      const origin = originOf(request);
+      const { language, forced } = languageOf(request);
+      const rendered = render.call(renderer.module, renderer.template, {
+        language,
+        origin,
+        pathname: request.url.pathname,
+        search: request.url.search,
+        data: { showcase },
+      });
+      if (typeof rendered !== "object" || rendered === null || typeof rendered.html !== "string") {
+        throw new WebBundleError("the render module did not return a front page");
+      }
+      return html(
+        request,
+        withOrigin(rendered.html, origin),
+        language,
+        200,
+        varyOn(forced, undefined),
+      );
+    },
+    llmsTxt(request, showcase) {
+      const render = renderer?.module.renderLlmsTxt;
+      if (renderer === undefined || render === undefined) {
+        return undefined;
+      }
+      const origin = originOf(request);
+      const { language, forced } = languageOf(request);
+      const rendered = render.call(renderer.module, language, showcase);
+      if (typeof rendered !== "string") {
+        throw new WebBundleError("the render module did not return llms.txt");
+      }
+      return text(request, withOrigin(rendered, origin), {
+        "content-type": "text/plain; charset=utf-8",
+        "content-language": language,
+        "cache-control": "public, max-age=0, must-revalidate",
+        ...varyOn(forced, undefined),
+      });
     },
     sitemap,
     notFound: (request) => page(request, manifest.notFound, HTML, 404),

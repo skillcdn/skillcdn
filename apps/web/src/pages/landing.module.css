@@ -401,3 +401,9 @@
     margin-bottom: var(--space-7);
   }
 }
+
+/* One card per showcase entry, stacked: the first is what the page leads with. */
+.cards {
+  display: grid;
+  gap: var(--space-5);
+}

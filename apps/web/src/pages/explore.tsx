@@ -2,14 +2,18 @@ import { formatAddress, parseAddress } from "@skillcdn/core";
 import { api } from "../api/client.js";
 import { useResource } from "../api/use-resource.js";
 import { AddressForm } from "../components/address-form.js";
-import { FeaturedSkill } from "../components/featured-skill.js";
 import { Badge, Container, Skeleton } from "../components/ui.js";
 import { useI18n } from "../i18n/index.js";
 import { repositoryName } from "../i18n/repository-text.js";
 import { Link } from "../navigation.js";
-import { FEATURED_VIDEO, LINKS } from "../site.js";
+import { LINKS } from "../site.js";
 import styles from "./explore.module.css";
 
+/**
+ * The operator's featured list (ADR-0026, ADR-0028): what the explorer leads with. It is its own
+ * list, apart from the showcase of the front page; a fresh deployment features the reference
+ * repository until the operator features something.
+ */
 function Featured() {
   const { t, language } = useI18n();
   const featured = useResource("featured", (signal) => api.featured(signal));
@@ -26,7 +30,7 @@ function Featured() {
       </section>
     );
   }
-  const seen = new Set<string>([FEATURED_VIDEO.address]);
+  const seen = new Set<string>();
   const items = featured.value.items.filter((item) => {
     const parsed = parseAddress(item.address);
     if (!parsed.ok) return false;
@@ -84,9 +88,6 @@ export function ExplorePage(props: { readonly origin: string }) {
     <Container className={styles.page}>
       <h1 className={styles.title}>{t.explore.title}</h1>
       <p className={styles.lead}>{t.explore.lead}</p>
-      <div className={styles.selection}>
-        <FeaturedSkill />
-      </div>
       <Featured />
       <section className={styles.form}>
         <h2 className={styles.heading}>{t.landing.authors.title}</h2>

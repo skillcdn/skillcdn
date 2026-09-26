@@ -50,9 +50,11 @@ src/
   roles/         api.ts (composition root, HTTP server, shutdown), migrate.ts, and check.ts, which runs
                  the indexer over a working tree without a database or a git host
   http/          Hono app: /healthz, /readyz, the route that turns a URL into a mount, the REST API,
-                 what every request gets (id, client address, access log), and web.ts, which serves
-                 a build of the web UI from its manifest (pages per language, files, sitemap, robots),
-                 and the page of an address through the build's render module
+                 the admin API, the uploads of the showcase at /media/<sha>, what every request gets
+                 (id, client address, access log), and web.ts, which serves a build of the web UI from
+                 its manifest (pages per language, files, sitemap, robots), and the page of an address
+                 and the front page with the operator's showcase through the build's render module
+  operator/      the operator's lists and the landing showcase with its uploads (ADR-0026, ADR-0028)
   mcp/           the per-request MCP server and the tool handlers (contracts come from @skillcdn/core)
   mounts/        address -> repository and commit, through the database first and the git host second;
                  MountReader answers questions about a mount as data, for MCP and REST alike
@@ -86,5 +88,6 @@ Create directories when they get their first file. Do not add empty scaffolding.
 - `src/rest.int.test.ts` does the same for the REST API and parses every response with the schemas in `@skillcdn/core`, which are what the web UI parses with.
 - `src/roles/check.test.ts` runs the `check` role over the fixtures and over a made-up working tree.
 - `src/indexer/build-index.test.ts` verifies publication through skill declarations, document directories and bounded local Markdown links, including hidden paths and manifest boundaries retained when reads or indexing limits fail. Linked reference files are readable without becoming standalone search results. The working-tree check includes hidden skill roots while skipping `.git`, `node_modules` and symbolic links.
-- `src/web.int.test.ts` and `src/http/web.test.ts` cover serving a web build: language variants, the public origin, caching, the content security policy, the sitemap with the featured and the vouched-for repositories, and an address answering a browser with a rendered page and everyone else with MCP. They use a small fake build with a fake render module (`src/testing/web-build.ts`), not `apps/web`.
+- `src/web.int.test.ts` and `src/http/web.test.ts` cover serving a web build: language variants, the public origin, caching, the content security policy, the sitemap with the featured and the vouched-for repositories, the front page and `llms.txt` rendered with the operator's showcase, and an address answering a browser with a rendered page and everyone else with MCP. They use a small fake build with a fake render module (`src/testing/web-build.ts`), not `apps/web`.
+- `src/admin.int.test.ts` covers the admin API: the operator's lists, the showcase entries and the uploads they are made of (stored by hash, served immutably in byte ranges), and the takedown.
 - `src/testing/harness.ts` wires the app for all of them. Every test file has a database of its own; tests inside a file share it.

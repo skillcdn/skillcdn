@@ -1,23 +1,31 @@
 import { createHash, timingSafeEqual } from "node:crypto";
+import { MAX_MEDIA_BYTES } from "@skillcdn/core";
 import { OPERATOR_LIST_KINDS, type OperatorListKind, purgeRepository } from "@skillcdn/db";
-import type { Hono } from "hono";
+import type { Context, Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import type { Logger } from "../logger.js";
 import { OperatorListError, OperatorLists } from "../operator/lists.js";
+import { type Showcase, ShowcaseError } from "../operator/showcase.js";
 import type { AppEnv } from "./request-context.js";
 import { errorBody } from "./rest.js";
 
 /**
- * The admin API (ADR-0026): the operator's lists and the takedown, behind one bearer token. It
- * exists only when a token is configured; otherwise the paths are nothing, like any other.
+ * The admin API (ADR-0026, ADR-0028): the operator's lists, the landing showcase with its uploads,
+ * and the takedown, behind one bearer token. It exists only when a token is configured;
+ * otherwise the paths are nothing, like any other.
  */
 export interface AdminDependencies {
   readonly token: string;
   readonly lists: OperatorLists;
+  readonly showcase: Showcase;
   readonly purge: (address: string) => Promise<{ snapshots: number; blobs: number } | undefined>;
   readonly logger: Logger;
 }
 
 export const ADMIN_PREFIX = "/admin/v1";
+
+/** An entry is a document of words in a few languages; this is far more than any needs. */
+const MAX_ENTRY_BYTES = 256 * 1024;
 
 /** Equal without leaking how far the comparison got; the hashes make the lengths equal. */
 function sameToken(presented: string, expected: string): boolean {
@@ -30,7 +38,7 @@ function kindOf(value: string): OperatorListKind | undefined {
 }
 
 export function registerAdmin(app: Hono<AppEnv>, dependencies: AdminDependencies): void {
-  const { token, lists, logger } = dependencies;
+  const { token, lists, showcase, logger } = dependencies;
 
   app.use(`${ADMIN_PREFIX}/*`, async (c, next) => {
     const header = c.req.header("authorization") ?? "";
@@ -46,6 +54,19 @@ export function registerAdmin(app: Hono<AppEnv>, dependencies: AdminDependencies
   /** The address after `prefix` in the request path, as the operator wrote it. */
   const addressAfter = (url: string, prefix: string): string =>
     decodeURIComponent(new URL(url).pathname.slice(prefix.length));
+
+  /** What the operator did wrong, as a status and a body; anything else is ours to look at. */
+  const refused = (c: Context<AppEnv>, error: unknown): Response => {
+    if (error instanceof ShowcaseError) {
+      const extra = error.problems.length === 0 ? {} : { problems: error.problems };
+      const status = error.code === "media.unsupported_type" ? 415 : 400;
+      return c.json(errorBody(error.code, error.message, extra), status);
+    }
+    if (error instanceof OperatorListError) {
+      return c.json(errorBody(error.code, error.message), 400);
+    }
+    throw error;
+  };
 
   app.get(`${ADMIN_PREFIX}/repositories`, async (c) => {
     const wanted = c.req.query("kind");
@@ -92,13 +113,93 @@ export function registerAdmin(app: Hono<AppEnv>, dependencies: AdminDependencies
           ? c.json({ kind, address: written, removed: true })
           : c.json(errorBody("admin.not_listed", "No such entry."), 404);
       } catch (error) {
-        if (error instanceof OperatorListError) {
-          return c.json(errorBody(error.code, error.message), 400);
-        }
-        throw error;
+        return refused(c, error);
       }
     });
   }
+
+  // The landing showcase: entries by name, made of uploads by hash.
+  app.get(`${ADMIN_PREFIX}/showcase`, async (c) => c.json(await showcase.list()));
+
+  app.put(
+    `${ADMIN_PREFIX}/showcase/:id`,
+    bodyLimit({
+      maxSize: MAX_ENTRY_BYTES,
+      onError: (c) => c.json(errorBody("request.too_large", "The request body is too large."), 413),
+    }),
+    async (c) => {
+      let body: unknown;
+      try {
+        body = await c.req.json();
+      } catch {
+        return c.json(errorBody("showcase.invalid", "The body is not JSON."), 400);
+      }
+      try {
+        const entry = await showcase.put(c.req.param("id"), body);
+        logger.info({ entry: entry.id, requestId: c.get("requestId") }, "showcase entry written");
+        return c.json(entry);
+      } catch (error) {
+        return refused(c, error);
+      }
+    },
+  );
+
+  app.delete(`${ADMIN_PREFIX}/showcase/:id`, async (c) => {
+    const id = c.req.param("id");
+    const removed = await showcase.remove(id);
+    logger.info({ entry: id, removed, requestId: c.get("requestId") }, "showcase entry removed");
+    return removed
+      ? c.json({ id, removed: true })
+      : c.json(errorBody("admin.not_found", "No such entry."), 404);
+  });
+
+  app.get(`${ADMIN_PREFIX}/media`, async (c) =>
+    c.json({
+      items: (await showcase.listMedia()).map((upload) => ({
+        ...upload,
+        createdAt: upload.createdAt.toISOString(),
+      })),
+    }),
+  );
+
+  app.post(
+    `${ADMIN_PREFIX}/media`,
+    bodyLimit({
+      maxSize: MAX_MEDIA_BYTES,
+      onError: (c) =>
+        c.json(
+          errorBody("media.too_large", `An upload has at most ${MAX_MEDIA_BYTES} bytes.`),
+          413,
+        ),
+    }),
+    async (c) => {
+      const bytes = new Uint8Array(await c.req.arrayBuffer());
+      try {
+        const uploaded = await showcase.addMedia(bytes, c.req.header("content-type") ?? "");
+        logger.info(
+          { sha: uploaded.sha, size: uploaded.size, requestId: c.get("requestId") },
+          "media uploaded",
+        );
+        return c.json(uploaded);
+      } catch (error) {
+        return refused(c, error);
+      }
+    },
+  );
+
+  app.delete(`${ADMIN_PREFIX}/media/:sha`, async (c) => {
+    const sha = c.req.param("sha");
+    const outcome = await showcase.removeMedia(sha);
+    logger.info({ sha, outcome, requestId: c.get("requestId") }, "media removal");
+    switch (outcome) {
+      case "removed":
+        return c.json({ sha, removed: true });
+      case "in_use":
+        return c.json(errorBody("media.in_use", "A showcase entry still shows the upload."), 409);
+      default:
+        return c.json(errorBody("admin.not_found", "No such upload."), 404);
+    }
+  });
 
   app.post(`${ADMIN_PREFIX}/purge/*`, async (c) => {
     const written = addressAfter(c.req.url, `${ADMIN_PREFIX}/purge`);
@@ -110,10 +211,7 @@ export function registerAdmin(app: Hono<AppEnv>, dependencies: AdminDependencies
         ? c.json(errorBody("admin.unknown_repository", "The repository was never indexed."), 404)
         : c.json(result);
     } catch (error) {
-      if (error instanceof OperatorListError) {
-        return c.json(errorBody(error.code, error.message), 400);
-      }
-      throw error;
+      return refused(c, error);
     }
   });
 }

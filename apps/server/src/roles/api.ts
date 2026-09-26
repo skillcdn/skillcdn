@@ -25,6 +25,7 @@ import { MountReader } from "../mounts/mount-reader.js";
 import { MountService } from "../mounts/mount-service.js";
 import { createOperatorEntitlements } from "../operator/entitlements.js";
 import { OperatorLists } from "../operator/lists.js";
+import { Showcase } from "../operator/showcase.js";
 import { noUsageStats, UsageRecorder, type UsageStats } from "../stats/usage-recorder.js";
 import { SERVER_NAME, SERVER_VERSION } from "../version.js";
 
@@ -64,6 +65,7 @@ export function createApi(
   readonly app: Hono<AppEnv>;
   readonly snapshots: SnapshotService;
   readonly lists: OperatorLists;
+  readonly showcase: Showcase;
 } {
   const { database, gitHost, clock, usage, logger } = ports;
   const blobStore = createBlobStore(database);
@@ -71,6 +73,7 @@ export function createApi(
 
   // The operator's deny list decides first; whatever the port was given decides the rest.
   const lists = new OperatorLists({ database, clock });
+  const showcase = new Showcase({ database, clock, logger });
   const entitlements = createOperatorEntitlements(lists, ports.entitlements);
   const mounts = new MountService({
     database,
@@ -103,6 +106,7 @@ export function createApi(
     snapshots,
     reader,
     lists,
+    showcase,
     admin: config.admin?.token === undefined ? undefined : { token: config.admin.token },
     web: ports.web,
     logger,
@@ -127,7 +131,7 @@ export function createApi(
       publicUrl: config.web?.publicUrl,
     },
   });
-  return { app, snapshots, lists };
+  return { app, snapshots, lists, showcase };
 }
 
 /**

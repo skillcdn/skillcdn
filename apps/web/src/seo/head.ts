@@ -1,4 +1,4 @@
-import type { RestMount, RestSkill } from "@skillcdn/core";
+import type { RestMount, RestShowcase, RestSkill } from "@skillcdn/core";
 import { messagesFor } from "../i18n/index.js";
 import {
   DEFAULT_LANGUAGE,
@@ -14,7 +14,8 @@ import {
   skillTitle,
 } from "../i18n/repository-text.js";
 import { mountHref, PATHS, type Route } from "../router.js";
-import { FEATURED_VIDEO, LINKS } from "../site.js";
+import { showcaseEntries, showcaseTexts } from "../showcase.js";
+import { LINKS } from "../site.js";
 
 // What a crawler reads before it reads the page: title, description, which URL is canonical,
 // where the other languages are, the social preview, and structured data. Built as data so it can
@@ -34,10 +35,11 @@ export interface PageHead {
   readonly jsonLd: readonly Record<string, unknown>[];
 }
 
-/** What a page of an address knows about it, once loaded. */
+/** What a page knows about its data, once loaded: an address's, or the front page's showcase. */
 export interface PageData {
   readonly mount?: RestMount | undefined;
   readonly skill?: RestSkill | undefined;
+  readonly showcase?: RestShowcase | undefined;
 }
 
 export const OG_IMAGE_SIZE = { width: 1200, height: 630 } as const;
@@ -173,6 +175,8 @@ export function buildHead(
               : t.meta.notFound;
 
   const jsonLd: Record<string, unknown>[] = [];
+  // The front page shows the operator's showcase, else the build's own (ADR-0028).
+  const showcase = route.name === "landing" ? showcaseEntries(data?.showcase) : [];
   if (route.name === "landing" && canonical !== undefined) {
     // The site as one entity, named the same everywhere, with its logo and its source.
     const publisher = {
@@ -204,29 +208,38 @@ export function buildHead(
         inLanguage,
         author: publisher,
       },
-      {
+    );
+    // The first clip of the showcase, described where it is served from.
+    const lead = showcase.find((entry) => entry.media.clip !== null);
+    if (lead?.media.clip) {
+      const words = showcaseTexts(lead, language);
+      jsonLd.push({
         "@context": "https://schema.org",
         "@type": "VideoObject",
-        name: `${t.meta.siteName}: ${t.landing.featured.video.title}`,
-        description: t.landing.featured.video.clip,
-        thumbnailUrl: [`${origin}${FEATURED_VIDEO.poster}`],
-        contentUrl: `${origin}${FEATURED_VIDEO.clip}`,
-        uploadDate: FEATURED_VIDEO.published,
-        duration: `PT${Math.round(FEATURED_VIDEO.durationMs / 1000)}S`,
+        name: `${t.meta.siteName}: ${words.title}`,
+        description: words.clip ?? words.title,
+        thumbnailUrl: [`${origin}${lead.media.poster.url}`],
+        contentUrl: `${origin}${lead.media.clip.url}`,
+        ...(lead.published === null ? {} : { uploadDate: lead.published }),
+        ...(lead.durationMs === null
+          ? {}
+          : { duration: `PT${Math.round(lead.durationMs / 1000)}S` }),
         inLanguage,
-      },
-      {
-        "@context": "https://schema.org",
-        "@type": "FAQPage",
-        inLanguage,
-        mainEntity: t.landing.faq.items.map((item) => ({
-          "@type": "Question",
-          name: item.question,
-          acceptedAnswer: { "@type": "Answer", text: item.answer },
-        })),
-      },
-    );
+      });
+    }
+    jsonLd.push({
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      inLanguage,
+      mainEntity: t.landing.faq.items.map((item) => ({
+        "@type": "Question",
+        name: item.question,
+        acceptedAnswer: { "@type": "Answer", text: item.answer },
+      })),
+    });
   }
+  // A showcase entry may bring its own picture for link previews; the build's card otherwise.
+  const social = showcase[0]?.media.social ?? null;
   if (route.name === "mount" && canonical !== undefined && data?.mount !== undefined) {
     const { repository } = data.mount;
     const manifest = data.mount.index.status === "ready" ? data.mount.index.manifest : null;
@@ -269,7 +282,10 @@ export function buildHead(
             })),
             { hreflang: "x-default", href: `${origin}${withLanguage(path, DEFAULT_LANGUAGE)}` },
           ],
-    image: { url: `${origin}/og/og-${language}.png`, alt: t.meta.ogImageAlt },
+    image: {
+      url: social === null ? `${origin}/og/og-${language}.png` : `${origin}${social.url}`,
+      alt: t.meta.ogImageAlt,
+    },
     jsonLd,
   };
 }

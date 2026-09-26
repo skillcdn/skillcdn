@@ -25,9 +25,6 @@
   border-radius: var(--radius-lg);
 }
 
-.selection {
-  margin-top: var(--space-7);
-}
 .formLead {
   color: var(--color-text-muted);
   font-size: var(--text-sm);

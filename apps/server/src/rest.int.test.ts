@@ -1,10 +1,13 @@
 import {
+  formatAddress,
+  REFERENCE_REPOSITORY_ADDRESS,
   restBrowseSchema,
   restErrorSchema,
   restFeaturedSchema,
   restFileSchema,
   restFindSchema,
   restMountSchema,
+  restShowcaseSchema,
   restSkillSchema,
 } from "@skillcdn/core";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
@@ -600,14 +603,74 @@ describe("GET /api/v1/featured", () => {
     });
   });
 
-  it("is empty when the operator features nothing", async () => {
+  it("features the reference repository when the operator features nothing", async () => {
     const h = harness();
     await h.lists.remove("featured", "/gh/acme/with-manifest");
     for (const entry of await h.lists.all("featured")) {
       await h.lists.remove("featured", entry.address);
     }
+    expect((await h.lists.featured()).map(formatAddress)).toEqual([REFERENCE_REPOSITORY_ADDRESS]);
+    // The fixture host has no such repository, so the list is empty here, as any address the
+    // host cannot resolve is left out.
     const response = await h.request("/api/v1/featured");
     expect(await response.json()).toEqual({ items: [] });
+  });
+});
+
+describe("GET /api/v1/showcase", () => {
+  it("is empty until the operator writes an entry, and then shows it with its uploads", async () => {
+    const h = harness();
+    const empty = await h.request("/api/v1/showcase");
+    expect(empty.headers.get("cache-control")).toBe("no-store");
+    expect(await empty.json()).toEqual({ items: [] });
+
+    const poster = await h.showcase.addMedia(new TextEncoder().encode("poster"), "image/webp");
+    await h.showcase.put("spring", {
+      address: "/gh/acme/skills",
+      width: 640,
+      height: 480,
+      media: { poster: poster.sha },
+      texts: {
+        en: { title: "A spring ad", body: "One picture in, an ad out.", action: "Make one" },
+      },
+    });
+    const body = restShowcaseSchema.parse(await (await h.request("/api/v1/showcase")).json());
+    expect(body).toEqual({
+      items: [
+        {
+          id: "spring",
+          address: "/gh/acme/skills",
+          position: 0,
+          width: 640,
+          height: 480,
+          durationMs: null,
+          published: null,
+          media: {
+            clip: null,
+            animation: null,
+            poster: { url: poster.url, type: "image/webp" },
+            reference: null,
+            picture: null,
+            social: null,
+          },
+          texts: {
+            en: {
+              title: "A spring ad",
+              body: "One picture in, an ad out.",
+              tags: [],
+              action: "Make one",
+              requirement: null,
+              clip: null,
+              credit: null,
+              note: null,
+              demo: null,
+            },
+          },
+        },
+      ],
+    });
+    expect(await (await h.request(poster.url)).text()).toBe("poster");
+    await h.showcase.remove("spring");
   });
 });
 

@@ -24,6 +24,7 @@ import {
   type RestMount,
   type RestRepository,
   type RestRepoTranslation,
+  type RestShowcase,
   type RestSkill,
   type RestSkillTranslation,
   type SkillTranslation,
@@ -46,6 +47,8 @@ export interface RestDependencies {
   readonly mountOf: (address: Address) => Promise<Mount | undefined>;
   /** The addresses the operator features, as the lists say right now. */
   readonly featured: () => Promise<readonly Address[]>;
+  /** The landing showcase as the pages read it, as the operator wrote it right now (ADR-0028). */
+  readonly showcase: () => Promise<RestShowcase>;
   /** Milliseconds from a clock that never goes backwards. */
   readonly now: () => number;
 }
@@ -387,7 +390,7 @@ export const CORS_MAX_AGE_SECONDS = 86_400;
 
 /** Registers the REST API of docs/specs/rest.md on the app. */
 export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies): void {
-  const { reader, logger, mountAt, mountOf, featured, now } = dependencies;
+  const { reader, logger, mountAt, mountOf, featured, showcase, now } = dependencies;
 
   /** Parses the query string, or answers 400 without repeating what was sent. */
   const queryOf = <Schema extends z.ZodType>(
@@ -631,4 +634,7 @@ export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies):
     }
     return c.json(await featuredCache.body);
   });
+
+  // Empty when the operator wrote nothing: the pages then show the build's own showcase.
+  app.get(REST_ROUTES.showcase, async (c) => c.json(await showcase()));
 }

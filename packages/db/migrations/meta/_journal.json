@@ -78,6 +78,13 @@
       "when": 1790360257915,
       "tag": "0010_drop-usage-client-keys",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790380738020,
+      "tag": "0011_showcase",
+      "breakpoints": true
     }
   ]
 }

@@ -1,8 +1,8 @@
-import type { RestMount, RestSkill } from "@skillcdn/core";
+import type { RestMount, RestShowcase, RestSkill } from "@skillcdn/core";
 import { describe, expect, it } from "vitest";
 import { LANGUAGES } from "../i18n/languages.js";
 import { matchRoute } from "../router.js";
-import { FEATURED_VIDEO } from "../site.js";
+import { DEFAULT_SHOWCASE_MEDIA } from "../site.js";
 import { buildHead, renderHead } from "./head.js";
 
 const ORIGIN = "https://skills.example";
@@ -110,12 +110,78 @@ describe("buildHead", () => {
         logo: `${ORIGIN}/brand/logo.svg`,
       });
       expect(head.jsonLd[2]).toMatchObject({
-        contentUrl: `${ORIGIN}${FEATURED_VIDEO.clip}`,
-        thumbnailUrl: [`${ORIGIN}${FEATURED_VIDEO.poster}`],
-        uploadDate: FEATURED_VIDEO.published,
+        contentUrl: `${ORIGIN}${DEFAULT_SHOWCASE_MEDIA.clip}`,
+        thumbnailUrl: [`${ORIGIN}${DEFAULT_SHOWCASE_MEDIA.poster}`],
+        uploadDate: DEFAULT_SHOWCASE_MEDIA.published,
       });
     }
     expect(buildHead(matchRoute("/explore", ""), "en", ORIGIN).jsonLd).toEqual([]);
+  });
+
+  it("describes the operator's showcase instead, and previews it with the entry's own picture", () => {
+    const entry: RestShowcase["items"][number] = {
+      id: "poster-only",
+      address: "/gh/acme/skills@main/skills",
+      position: 0,
+      width: 640,
+      height: 480,
+      durationMs: null,
+      published: null,
+      media: {
+        clip: null,
+        animation: null,
+        poster: { url: "/media/poster", type: "image/webp" },
+        reference: null,
+        picture: null,
+        social: { url: "/media/social", type: "image/png" },
+      },
+      texts: {
+        en: {
+          title: "A poster",
+          body: "Only a picture.",
+          tags: [],
+          action: "Open",
+          requirement: null,
+          clip: null,
+          credit: null,
+          note: null,
+          demo: null,
+        },
+      },
+    };
+    // Without a clip there is no video to describe; the preview picture is the entry's.
+    const still = buildHead(matchRoute("/", ""), "ko", ORIGIN, { showcase: { items: [entry] } });
+    expect(still.jsonLd.map((data) => data["@type"])).toEqual([
+      "WebSite",
+      "SoftwareApplication",
+      "FAQPage",
+    ]);
+    expect(still.image.url).toBe(`${ORIGIN}/media/social`);
+    const withClip = buildHead(matchRoute("/", ""), "en", ORIGIN, {
+      showcase: {
+        items: [
+          {
+            ...entry,
+            durationMs: 12_400,
+            published: "2026-10-01",
+            media: { ...entry.media, clip: { url: "/media/clip", type: "video/mp4" } },
+          },
+        ],
+      },
+    });
+    expect(withClip.jsonLd[2]).toMatchObject({
+      "@type": "VideoObject",
+      name: "SkillCDN: A poster",
+      description: "A poster",
+      contentUrl: `${ORIGIN}/media/clip`,
+      thumbnailUrl: [`${ORIGIN}/media/poster`],
+      uploadDate: "2026-10-01",
+      duration: "PT12S",
+    });
+    // An empty showcase is the build's own.
+    expect(
+      buildHead(matchRoute("/", ""), "en", ORIGIN, { showcase: { items: [] } }).image.url,
+    ).toBe(`${ORIGIN}/og/og-en.png`);
   });
 
   it("keeps pages of an address out of search indexes until their data is there", () => {

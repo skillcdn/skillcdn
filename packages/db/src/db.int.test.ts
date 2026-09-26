@@ -1,4 +1,4 @@
-import { type HostRepository, NO_LICENSE } from "@skillcdn/core";
+import { type HostRepository, NO_LICENSE, type ShowcaseTexts } from "@skillcdn/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { drizzleOf } from "./client.js";
 import {
@@ -15,18 +15,25 @@ import {
   findSkills,
   getEntry,
   getManifest,
+  getOperatorMedia,
   getSchemaStatus,
   getSnapshot,
   getSnapshotDiagnostics,
   listDirectory,
   listEntries,
+  listOperatorMedia,
   listOperatorRepositories,
+  listShowcaseEntries,
   listSkillFiles,
   migrateDatabase,
   type NewIndexEntry,
   purgeRepository,
+  putOperatorMedia,
+  putShowcaseEntry,
   releaseSnapshot,
+  removeOperatorMedia,
   removeOperatorRepository,
+  removeShowcaseEntry,
   renewSnapshotLease,
   type SnapshotScope,
   saveCachedRef,
@@ -754,6 +761,104 @@ describe("the operator's lists", () => {
     expect(await removeOperatorRepository(database, "featured", "/gh/acme/skills")).toBe(true);
     expect(await removeOperatorRepository(database, "featured", "/gh/acme/skills")).toBe(false);
     expect((await listOperatorRepositories(database, "featured")).length).toBe(0);
+  });
+});
+
+describe("the landing showcase", () => {
+  const words: ShowcaseTexts = {
+    title: "A spring ad",
+    body: "One picture in, an ad out.",
+    tags: ["Ready to post"],
+    action: "Make one",
+    requirement: null,
+    clip: null,
+    credit: null,
+    note: null,
+    demo: null,
+  };
+  const poster = "p".repeat(64);
+  const clip = "c".repeat(64);
+  const base = {
+    slug: "spring",
+    position: 2,
+    address: "/gh/acme/skills",
+    width: 640,
+    height: 480,
+    durationMs: null,
+    published: null,
+    texts: { en: words },
+  };
+
+  it("keeps entries by name with the upload in each slot, and refuses uploads that are not there", async () => {
+    expect(
+      await putOperatorMedia(database, {
+        sha: poster,
+        contentType: "image/webp",
+        bytes: new Uint8Array([1, 2, 3]),
+      }),
+    ).toEqual({ contentType: "image/webp", size: 3 });
+    // The same hash is the same upload: what was stored first stays, and is what is answered.
+    expect(
+      await putOperatorMedia(database, {
+        sha: poster,
+        contentType: "image/png",
+        bytes: new Uint8Array([9]),
+      }),
+    ).toEqual({ contentType: "image/webp", size: 3 });
+    expect(await putShowcaseEntry(database, { ...base, media: { poster, clip } })).toEqual({
+      outcome: "media_missing",
+      missing: [clip],
+    });
+    expect(await listShowcaseEntries(database)).toEqual([]);
+    expect(await putShowcaseEntry(database, { ...base, media: { poster } })).toEqual({
+      outcome: "created",
+    });
+    await putOperatorMedia(database, {
+      sha: clip,
+      contentType: "video/mp4",
+      bytes: new Uint8Array([4, 5]),
+    });
+    expect(
+      await putShowcaseEntry(database, {
+        ...base,
+        position: 1,
+        durationMs: 8000,
+        published: "2026-10-01",
+        media: { poster, clip },
+      }),
+    ).toEqual({ outcome: "updated" });
+    const entries = await listShowcaseEntries(database);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      slug: "spring",
+      position: 1,
+      address: "/gh/acme/skills",
+      durationMs: 8000,
+      published: "2026-10-01",
+      texts: { en: words },
+      media: {
+        poster: { sha: poster, contentType: "image/webp" },
+        clip: { sha: clip, contentType: "video/mp4" },
+      },
+    });
+    const stored = await getOperatorMedia(database, poster);
+    expect(stored).toMatchObject({ contentType: "image/webp", size: 3 });
+    expect(Array.from(stored?.bytes ?? [])).toEqual([1, 2, 3]);
+  });
+
+  it("lists uploads with the entries that use them, and deletes only what nothing uses", async () => {
+    const listed = await listOperatorMedia(database);
+    expect(listed.map((upload) => [upload.sha, upload.usedBy]).sort()).toEqual([
+      [clip, ["spring"]],
+      [poster, ["spring"]],
+    ]);
+    expect(await removeOperatorMedia(database, poster)).toBe("in_use");
+    expect(await removeOperatorMedia(database, "f".repeat(64))).toBe("missing");
+    expect(await removeShowcaseEntry(database, "spring")).toBe(true);
+    expect(await removeShowcaseEntry(database, "spring")).toBe(false);
+    expect(await removeOperatorMedia(database, poster)).toBe("removed");
+    expect(await getOperatorMedia(database, poster)).toBeUndefined();
+    expect((await listOperatorMedia(database)).map((upload) => upload.sha)).toEqual([clip]);
   });
 });
 
