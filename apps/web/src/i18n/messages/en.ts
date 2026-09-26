@@ -104,19 +104,29 @@ export const en = {
   explore: {
     title: "What will you create next?",
     lead: "A little inspiration. A useful skill. Your next idea starts here.",
-    featured: "More to explore",
+    featured: "Featured repositories",
+    featuredLead: "Picked for this site. Open one to see its skills and connect your AI.",
     featuredSkills: (count: number) => (count === 1 ? "1 skill" : `${count} skills`),
+    /** After the first few skill names of a repository: how many more it has. */
+    moreSkills: (count: number) => `+${count} more`,
     featuredIndexing: "Indexing…",
     featuredFailed: "Could not be indexed",
+    pages: "Pages of featured repositories",
+    page: (current: number, total: number) => `Page ${current} of ${total}`,
+    previous: "Previous",
+    next: "Next",
   },
 
   mount: {
     repository: "Repository",
-    defaultBranch: "default branch",
-    pinned: "pinned",
+    defaultBranch: "Default branch",
+    ref: "Ref",
+    pinned: "Pinned commit",
     commit: "Commit",
     path: "Path",
     license: "License",
+    verified: "Verified",
+    verifiedHint: "Vouched for by the repository's owner or by the operator of this site.",
     unverified: "Unverified",
     unverifiedHint:
       "This content comes straight from the repository and has not been verified by its owner with SkillCDN. Review it before you trust it.",
@@ -155,15 +165,30 @@ export const en = {
       title: "Explore this repository",
       root: "Repository root",
       breadcrumb: "Repository folders",
-      introduction: "Read introduction",
+      introduction: "Read the introduction",
+      folders: "Folders",
+      skills: "Skills",
+      documents: "Documents",
       empty: "No skills or files in this folder.",
       counts: (skills: number, documents: number) =>
         `${skills === 1 ? "1 skill" : `${skills} skills`} · ${documents === 1 ? "1 document" : `${documents} documents`}`,
+      /** What a folder holds, counting only what is there; nothing yet when it holds nothing. */
+      holds: (skills: number, documents: number) => {
+        const parts = [
+          ...(skills === 0 ? [] : [skills === 1 ? "1 skill" : `${skills} skills`]),
+          ...(documents === 0 ? [] : [documents === 1 ? "1 document" : `${documents} documents`]),
+        ];
+        return parts.length === 0 ? "No skills yet" : parts.join(" · ");
+      },
+      nested: (count: number) => `${count} skills inside`,
+      describedOnly: "Described only",
+      describedOnlyHint:
+        "Its license lets SkillCDN say that this skill exists, not pass its content on.",
     },
     search: {
       label: "Search this folder and its subfolders",
       placeholder: "Search in this folder…",
-      hint: "Search in the original language, usually English. Display translations are not searched.",
+      hint: "Searches the original text of skills and documents; display translations are not searched.",
       submit: "Search",
       clear: "Clear",
       resultsFor: (query: string) => `Results for “${query}”`,
@@ -181,7 +206,7 @@ export const en = {
     license: "License",
     licenseNone: "None declared",
     licenseUnrecognized: "Unrecognized license",
-    licenseSource: (source: string) => `from ${source}`,
+    licenseFile: "Read the license file on GitHub",
     describedOnly:
       "This skill is described here, not served. Its license lets SkillCDN say that the skill exists, not pass its content on.",
     readAtSource: "Read it at the source",
@@ -213,7 +238,6 @@ export const en = {
       `Characters ${from.toLocaleString("en")} to ${to.toLocaleString("en")} of ${total.toLocaleString("en")}`,
     more: "Load more",
     referenceUnavailable: "This reference cannot be read from this connection.",
-    imageOmitted: "image not loaded",
     directory: "Directory",
     bytes: (count: number) => `${count.toLocaleString("en")} bytes`,
     directoryTruncated: "Only the first entries are listed.",
@@ -300,11 +324,9 @@ export const en = {
 
   footer: {
     tagline: "Skills for the AI you already use.",
+    /** In llms.txt: where the source and its license are. */
     source: "Source on GitHub",
     license: "License",
-    trademarks: "Trademarks",
-    security: "Security",
-    notices: "Third-party notices",
     terms: "Terms",
     privacy: "Privacy",
     report: "Report content",

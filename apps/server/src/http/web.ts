@@ -105,7 +105,6 @@ export const LEGAL_TAGS = {
 /** Where the analytics script comes from and talks to, as its documentation lists them. */
 const ANALYTICS_SOURCES = {
   script: ["https://*.googletagmanager.com"],
-  images: ["https://*.google-analytics.com", "https://*.googletagmanager.com"],
   connections: [
     "https://*.google-analytics.com",
     "https://*.analytics.google.com",
@@ -118,8 +117,9 @@ const escapeAttribute = (text: string): string =>
 
 /**
  * Pages render repository content, which is untrusted. Nothing inline runs, nothing loads from
- * elsewhere, and nobody frames the page. With analytics configured, the one inline script that
- * starts it is allowed by its hash, and its sources by name.
+ * elsewhere, and nobody frames the page. The one exception is pictures: repository Markdown shows
+ * its images, from any https origin (ADR-0030). With analytics configured, the one inline script
+ * that starts it is allowed by its hash, and its sources by name.
  */
 function pageHeaders(tags: PageTags, inlineScripts: readonly string[]): Record<string, string> {
   const analytics = tags.googleAnalyticsId !== undefined;
@@ -133,7 +133,7 @@ function pageHeaders(tags: PageTags, inlineScripts: readonly string[]): Record<s
       "default-src 'self'",
       `script-src ${sources("'self'", [...ANALYTICS_SOURCES.script, ...hashes])}`,
       "style-src 'self'",
-      `img-src ${sources("'self' data:", ANALYTICS_SOURCES.images)}`,
+      "img-src 'self' data: https:",
       "font-src 'self'",
       `connect-src ${sources("'self'", ANALYTICS_SOURCES.connections)}`,
       "object-src 'none'",

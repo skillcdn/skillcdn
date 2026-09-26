@@ -19,10 +19,6 @@ export const LINKS = {
   docs: `${REPOSITORY_URL}/tree/main/docs`,
   convention: `${REPOSITORY_URL}/blob/main/docs/specs/skill-repo.md`,
   license: `${REPOSITORY_URL}/blob/main/LICENSE.md`,
-  trademarks: `${REPOSITORY_URL}/blob/main/TRADEMARKS.md`,
-  security: `${REPOSITORY_URL}/blob/main/SECURITY.md`,
-  /** Written by the build: the licenses of the npm packages bundled into these pages. */
-  notices: "/licenses/npm.txt",
 } as const;
 
 /**
@@ -30,24 +26,22 @@ export const LINKS = {
  * operator writes a showcase of its own through the admin API. It is bundled with the site: an
  * original AI-generated concept clip of the kind of result the reference repository's skill is
  * for (not a recording of a run of it), the same clip as an animated image for where the video
- * will not play, its first frame as the poster that stands in for both, and what the clip was
- * made from, which the example conversation attaches: a frame of the ad it took its look from,
- * and the picture of its star. The words are in the language packs (`showcase.ts` puts the two
- * together).
+ * will not play, its first frame as the poster that stands in for both, and the picture of its
+ * star, which the example conversation attaches as the character the person brings. The words
+ * are in the language packs (`showcase.ts` puts the two together).
  */
 export const DEFAULT_SHOWCASE_MEDIA = {
-  clip: "/showcase/explorer-ad.mp4",
-  animation: "/showcase/explorer-ad.avif",
-  poster: "/showcase/explorer-ad.webp",
-  reference: "/showcase/reference-ad.webp",
-  picture: "/showcase/explorer.webp",
+  clip: "/showcase/puppy-interview.mp4",
+  animation: "/showcase/puppy-interview.avif",
+  poster: "/showcase/puppy-interview.webp",
+  picture: "/showcase/puppy.webp",
   /** Pixel size of the clip and its poster. */
   width: 752,
   height: 560,
   /** One pass of the loop. The example conversation plays it once through before it restarts. */
-  durationMs: 9_500,
+  durationMs: 4_500,
   /** For the structured data that describes the clip. */
-  published: "2026-09-24",
+  published: "2026-09-26",
 } as const;
 
 /**

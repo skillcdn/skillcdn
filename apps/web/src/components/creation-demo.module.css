@@ -4,6 +4,7 @@
 .root[data-held="true"] * {
   animation-play-state: paused;
 }
+/* One window, the conversation alone: no title bar above it and no stage list under it. */
 .window {
   overflow: hidden;
   border: var(--border);
@@ -11,34 +12,6 @@
   border-radius: var(--radius-xl);
   background: var(--color-bg-subtle);
   box-shadow: var(--shadow-stage);
-}
-.chrome {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-4) var(--space-5);
-  border-bottom: var(--border);
-  font-size: var(--text-sm);
-  background: var(--color-bg-raised);
-}
-.symbol {
-  color: var(--color-accent);
-  width: var(--control-size);
-  height: var(--control-size);
-  padding: var(--space-1);
-}
-.chrome small {
-  display: block;
-  margin-top: var(--space-1);
-  color: var(--color-text-faint);
-  font-size: var(--text-xs);
-}
-.chromeStatus {
-  width: var(--space-2);
-  height: var(--space-2);
-  border-radius: var(--radius-full);
-  background: var(--color-accent);
-  margin-left: auto;
 }
 .conversation {
   height: var(--conversation-height);
@@ -82,6 +55,7 @@
 .assistant p {
   line-height: var(--leading-code);
 }
+/* What the person attaches: the character, large enough to be recognized as one. */
 .attachments {
   display: flex;
   flex-wrap: wrap;
@@ -91,16 +65,16 @@
 .attachments > span {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-1) var(--space-2);
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-3) var(--space-1) var(--space-1);
   background: var(--color-bg-subtle);
   border: var(--border);
   border-radius: var(--radius-md);
   font-size: var(--text-xs);
 }
 .attachments img {
-  height: var(--space-6);
-  width: var(--space-6);
+  height: var(--space-7);
+  width: var(--space-7);
   object-fit: cover;
   border-radius: var(--radius-sm);
 }
@@ -114,27 +88,30 @@
 .approved > span {
   color: var(--color-accent);
 }
+/* The result: the clip itself, and while it is being made, a word and a bar over the blurred
+   poster. Once it plays there is nothing over it. */
 .result {
-  border: var(--border);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  margin-top: calc(-1 * var(--space-2));
-}
-.resultMedia {
   position: relative;
   height: var(--conversation-result-height);
   overflow: hidden;
+  border: var(--border);
+  border-radius: var(--radius-lg);
   background: var(--color-bg);
+  margin-top: calc(-1 * var(--space-2));
 }
 /* The result is wider than the clip is tall, so it shows a band of it: a little above the
    middle, where the star of every scene is. */
-.resultMedia :is(img, video) {
+.result :is(img, video) {
   width: 100%;
   height: 100%;
   object-fit: cover;
   object-position: 50% 45%;
 }
-.resultMedia > span:first-of-type {
+.result[data-finished="false"] :is(img, video) {
+  filter: blur(var(--space-1));
+  opacity: 0.5;
+}
+.working {
   position: absolute;
   top: var(--space-3);
   left: var(--space-3);
@@ -144,20 +121,6 @@
   border-radius: var(--radius-sm);
   font-size: var(--text-xs);
 }
-.result[data-finished="false"] :is(img, video) {
-  filter: blur(var(--space-1));
-  opacity: 0.5;
-}
-.resultText {
-  padding: var(--space-3) var(--space-4);
-  display: grid;
-  gap: var(--space-1);
-  background: var(--color-bg-raised);
-}
-.resultText span {
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-}
 .progress {
   position: absolute;
   bottom: 0;
@@ -165,33 +128,6 @@
   height: var(--space-1);
   background: var(--color-accent);
   width: 65%;
-}
-.stages {
-  display: flex;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: var(--space-5);
-  padding: var(--space-4);
-  border-top: var(--border);
-  color: var(--color-text-faint);
-  font-size: var(--text-xs);
-}
-.stages span {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-.stages i {
-  width: var(--space-1);
-  height: var(--space-1);
-  border-radius: var(--radius-full);
-  background: var(--color-border-strong);
-}
-.stages [data-active="true"] {
-  color: var(--color-accent);
-}
-.stages :where([data-active="true"]) i {
-  background: currentColor;
 }
 .caret {
   display: inline-block;
@@ -263,19 +199,13 @@
     padding: var(--space-4);
     height: var(--conversation-mobile-height);
   }
-  .chrome {
-    padding: var(--space-3) var(--space-4);
-  }
-  .stages {
-    gap: var(--space-3);
-  }
   .scene {
     gap: var(--space-4);
   }
   .user {
     max-width: 95%;
   }
-  .resultMedia {
+  .result {
     height: var(--conversation-mobile-result-height);
   }
 }

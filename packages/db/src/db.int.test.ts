@@ -777,7 +777,6 @@ describe("the landing showcase", () => {
     requirement: null,
     clip: null,
     credit: null,
-    note: null,
     demo: null,
   };
   const poster = "p".repeat(64);

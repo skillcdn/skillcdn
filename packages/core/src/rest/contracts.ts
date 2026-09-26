@@ -315,6 +315,8 @@ export const restFeaturedSchema = z.object({
           translations: restRepoTranslationsSchema,
         }),
       ),
+      /** Whether the operator, or later the owner, vouches for the repository. */
+      verified: z.boolean(),
       status: z.enum(["ready", "indexing", "failed"]),
       skillCount: z.nullable(count),
       skills: z.array(z.string()),

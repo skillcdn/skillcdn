@@ -144,7 +144,6 @@ describe("buildHead", () => {
           requirement: null,
           clip: null,
           credit: null,
-          note: null,
           demo: null,
         },
       },

@@ -126,7 +126,7 @@ function mountBody(
     pinned: isPinnedAddress(address),
     commit: ref?.kind === "commit" ? ref.hash : repository.commit,
     path: address.path,
-    verified: false,
+    verified: repository.verified === true,
     index:
       state === "indexing"
         ? { status: "indexing" }
@@ -525,6 +525,7 @@ function featuredBody(now: number): RestFeatured {
                   translations: repository.manifest.translations ?? {},
                 }
               : null,
+          verified: repository.verified === true,
           status,
           skillCount: status === "ready" ? repository.skills.length : null,
           skills:

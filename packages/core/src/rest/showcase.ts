@@ -57,27 +57,24 @@ const text = (max: number) => z.string().check(z.minLength(1), z.maxLength(max))
 
 /**
  * The example conversation of the front page, in one language: the words of the person and of
- * the assistant, and the three stages the conversation goes through. The pace of the animation
- * follows the length of these lines, so a translation cannot make two of them overlap.
+ * the assistant, in the order they are said. The pace of the animation follows the length of
+ * these lines, so a translation cannot make two of them overlap.
  */
 export const showcaseDemoSchema = z.object({
-  title: text(80),
   prompt: text(300),
-  /** Captions of what the person attaches: the reference and the picture. */
+  /** Captions of what the person attaches, shown for the media the entry has in those slots. */
   reference: text(60),
   picture: text(60),
   question: text(400),
   answer: text(400),
   plan: text(600),
+  /** The line that says the plan and the estimate were reviewed, before the person consents. */
   approval: text(120),
   consent: text(200),
+  /** Said over the result while it is being made. */
   working: text(80),
-  result: text(120),
-  resultDetail: text(120),
-  resultLabel: text(60),
-  stages: z.array(text(40)).check(z.length(3)),
-  /** The link under the steps that lead to the conversation. */
-  action: text(60),
+  /** What the result is, in one line, for whoever cannot see it. */
+  result: text(200),
 });
 export type ShowcaseDemo = z.infer<typeof showcaseDemoSchema>;
 
@@ -94,8 +91,6 @@ export const showcaseTextsSchema = z.object({
   clip: z.nullable(text(600)),
   /** Who made the showcase, said above the title. */
   credit: z.nullable(text(80)),
-  /** Said next to the clip, never over it: what it is and what it is not. */
-  note: z.nullable(text(200)),
   demo: z.nullable(showcaseDemoSchema),
 });
 export type ShowcaseTexts = z.infer<typeof showcaseTextsSchema>;
@@ -143,7 +138,6 @@ export const showcaseTextsInputSchema = z.object({
   requirement: optionalText(120),
   clip: optionalText(600),
   credit: optionalText(80),
-  note: optionalText(200),
   demo: z.optional(z.nullable(showcaseDemoSchema)),
 });
 export type ShowcaseTextsInput = z.infer<typeof showcaseTextsInputSchema>;
@@ -203,7 +197,6 @@ export function completeShowcaseTexts(input: ShowcaseTextsInput): ShowcaseTexts 
     requirement: input.requirement ?? null,
     clip: input.clip ?? null,
     credit: input.credit ?? null,
-    note: input.note ?? null,
     demo: input.demo ?? null,
   };
 }

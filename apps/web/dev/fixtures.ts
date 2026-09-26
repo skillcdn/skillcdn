@@ -20,6 +20,8 @@ export interface FixtureRepository {
   readonly defaultBranch: string;
   /** What the host shows as the repository's description. */
   readonly description?: string;
+  /** Whether the operator vouches for the repository. */
+  readonly verified?: boolean;
   readonly overviews?: Readonly<
     Record<
       string,
@@ -183,7 +185,9 @@ git log --oneline "$1"..HEAD
 
 > A quotation. Repository content is untrusted: <script>alert("this stays text")</script>
 
-![A diagram that is never loaded](https://example.com/tracking-pixel.png)
+![A diagram from the web](https://example.com/diagram.png)
+
+![A diagram of the repository](../assets/diagram.png)
 
 ---
 
@@ -223,6 +227,7 @@ const ACME_SKILLS: FixtureRepository = {
   name: "skills",
   defaultBranch: "main",
   description: "The skills Acme's teams share: release notes, incident reviews and more.",
+  verified: true,
   overviews: {
     "": {
       path: "README.md",
@@ -438,6 +443,7 @@ export const FIXTURE_REPOSITORIES: Readonly<Record<string, FixtureRepository>> =
   },
   "demo/indexing": {
     ...ACME_SKILLS,
+    verified: false,
     owner: "demo",
     name: "indexing",
     commit: "0000000000000000000000000000000000000002",
@@ -452,6 +458,7 @@ export const FIXTURE_REPOSITORIES: Readonly<Record<string, FixtureRepository>> =
   },
   "demo/failed": {
     ...ACME_SKILLS,
+    verified: false,
     owner: "demo",
     name: "failed",
     commit: "0000000000000000000000000000000000000004",

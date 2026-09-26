@@ -1,4 +1,4 @@
-import type { Address, RestFile } from "@skillcdn/core";
+import type { Address, RestFile, RestMount } from "@skillcdn/core";
 import { useState } from "react";
 import { ApiError, api } from "../api/client.js";
 import { resourceKeys } from "../api/keys.js";
@@ -11,6 +11,7 @@ import { Button, Skeleton } from "../components/ui.js";
 import { useI18n } from "../i18n/index.js";
 import { Link } from "../navigation.js";
 import { mountHref } from "../router.js";
+import { hostRawUrl } from "./host-links.js";
 import styles from "./mount.module.css";
 import { contentHref, MountPath, parentDirectory } from "./mount-path.js";
 
@@ -64,9 +65,13 @@ function DirectoryView(props: { readonly address: Address; readonly listing: Dir
 }
 
 /** One text file as `read_repo_file` returns it, a page at a time. */
-export function MountFile(props: { readonly address: Address; readonly path: string }) {
+export function MountFile(props: {
+  readonly address: Address;
+  readonly mount: RestMount;
+  readonly path: string;
+}) {
   const { t } = useI18n();
-  const { address, path } = props;
+  const { address, mount, path } = props;
   const key = resourceKeys.file(address, path);
   const first = useResource(key, (signal) => api.file(address, path, 0, signal));
   const [later, setLater] = useState<LaterPages>({
@@ -179,6 +184,7 @@ export function MountFile(props: { readonly address: Address; readonly path: str
             baseDirectory={directory}
             references={pages.flatMap((page) => page.references ?? [])}
             fileHref={(target) => contentHref(address, target)}
+            imageSrc={(target) => hostRawUrl(mount, target)}
           />
         </div>
       ) : (

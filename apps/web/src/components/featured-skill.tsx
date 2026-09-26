@@ -77,9 +77,11 @@ function ConceptClip(props: { readonly entry: RestShowcaseEntry; readonly descri
 }
 
 /**
- * One showcase entry as a card: the clip, the words in the visitor's language, and the way to
- * the skill. Media comes from the build or from the operator's uploads (ADR-0028); repository
- * content never supplies a media URL.
+ * One showcase entry as a card: the clip on top, the words in the visitor's language under it,
+ * and the way to the skill. The title is the link, and it stretches over the whole card, so that
+ * the card is the click target and the title is what assistive technology reads as the link.
+ * Media comes from the build or from the operator's uploads (ADR-0028); repository content never
+ * supplies a media URL.
  */
 export function FeaturedSkill(props: {
   readonly entry: RestShowcaseEntry;
@@ -91,7 +93,11 @@ export function FeaturedSkill(props: {
       <ConceptClip entry={entry} description={texts.clip ?? texts.title} />
       <div className={styles.content}>
         {texts.credit !== null && <p className={styles.eyebrow}>{texts.credit}</p>}
-        <h3>{texts.title}</h3>
+        <h3 className={styles.title}>
+          <Link href={entry.address} className={styles.titleLink}>
+            {texts.title}
+          </Link>
+        </h3>
         <p className={styles.body}>{texts.body}</p>
         {texts.tags.length > 0 && (
           <ul className={styles.tags}>
@@ -100,12 +106,11 @@ export function FeaturedSkill(props: {
             ))}
           </ul>
         )}
-        <Link href={entry.address} className={styles.action}>
+        <p className={styles.action} aria-hidden="true">
           {texts.action}
           <ArrowIcon />
-        </Link>
+        </p>
         {texts.requirement !== null && <p className={styles.requirement}>{texts.requirement}</p>}
-        {texts.note !== null && <p className={styles.requirement}>{texts.note}</p>}
       </div>
     </article>
   );

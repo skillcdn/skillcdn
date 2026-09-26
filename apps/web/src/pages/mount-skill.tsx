@@ -1,5 +1,5 @@
-import type { Address, RestSkill } from "@skillcdn/core";
-import { useEffect } from "react";
+import type { Address, RestMount, RestSkill } from "@skillcdn/core";
+import { type ReactNode, useEffect } from "react";
 import { ApiError, api } from "../api/client.js";
 import { resourceKeys } from "../api/keys.js";
 import { useMorePages } from "../api/use-more-pages.js";
@@ -11,7 +11,8 @@ import { useI18n } from "../i18n/index.js";
 import { skillDescription, skillTitle } from "../i18n/repository-text.js";
 import { Link } from "../navigation.js";
 import { mountHref } from "../router.js";
-import { licenseLabel } from "./license-text.js";
+import { hostRawUrl } from "./host-links.js";
+import { LicenseValue } from "./license.js";
 import styles from "./mount.module.css";
 import { contentHref, MountPath, parentDirectory } from "./mount-path.js";
 
@@ -20,12 +21,13 @@ type ReadySkill = Extract<RestSkill, { status: "ready" }>;
 /** One skill and its inherited rules, continued until every context page has been loaded. */
 export function MountSkill(props: {
   readonly address: Address;
+  readonly mount: RestMount;
   readonly path: string;
   /** Told what was loaded, or that nothing is, so that the page can say so in its head. */
   readonly onLoaded?: (skill: RestSkill | undefined) => void;
 }) {
   const { t, language } = useI18n();
-  const { address, path, onLoaded } = props;
+  const { address, mount, path, onLoaded } = props;
   const answer = useResource(
     resourceKeys.skill(address, path),
     (signal) => api.skill(address, path, signal),
@@ -43,6 +45,7 @@ export function MountSkill(props: {
     onLoaded?.(loaded);
   }, [onLoaded, loaded]);
   const back = <MountPath address={address} path={parentDirectory(path)} />;
+  const imageSrc = (target: string) => hostRawUrl(mount, target);
 
   if (answer.state === "loading" || (answer.state === "ready" && answer.value.status !== "ready")) {
     return (
@@ -62,13 +65,13 @@ export function MountSkill(props: {
             {answer.error.directories.map((directory) => (
               <li key={directory}>
                 <Link
-                  className={styles.item}
+                  className={styles.card}
                   href={mountHref(address, {
                     kind: "skill",
                     path: directory === "" ? "SKILL.md" : `${directory}/SKILL.md`,
                   })}
                 >
-                  <span className={styles.itemPath}>{directory}</span>
+                  <span className={styles.cardPath}>{directory}</span>
                 </Link>
               </li>
             ))}
@@ -101,11 +104,17 @@ export function MountSkill(props: {
   const title = skillTitle(skill, language);
   const description = skillDescription(skill, language);
   const translated = title !== skill.name || description !== skill.description;
-  const facts: (readonly [string, string])[] = [
+  // The license names its file at the host when the index found it in one.
+  const facts: (readonly [string, ReactNode])[] = [
     ...(title === skill.name ? [] : [[t.skill.name, skill.name] as const]),
     [t.mount.path, skill.path ?? path],
     ...(skill.serving !== undefined
-      ? [[t.skill.license, licenseLabel(t.skill, skill.serving.license)] as const]
+      ? [
+          [
+            t.skill.license,
+            <LicenseValue key="license" license={skill.serving.license} mount={mount} />,
+          ] as const,
+        ]
       : skill.license === null
         ? []
         : [[t.skill.license, skill.license] as const]),
@@ -121,7 +130,8 @@ export function MountSkill(props: {
       {back}
       <header>
         <p className={styles.kicker}>{t.mount.kinds.skill}</p>
-        <h2 className={styles.viewTitle}>{title}</h2>
+        {/* A translated title is prose; the name alone is code. */}
+        <h2 className={title === skill.name ? styles.viewName : styles.viewTitle}>{title}</h2>
         <p className={styles.viewLead}>{description}</p>
         {translated && <p className={styles.note}>{t.skill.translationNote}</p>}
       </header>
@@ -165,6 +175,7 @@ export function MountSkill(props: {
                 source={ruleBody}
                 baseDirectory={parentDirectory(rulePath)}
                 fileHref={(target) => contentHref(address, target)}
+                imageSrc={imageSrc}
               />
             </div>
           </section>
@@ -177,6 +188,7 @@ export function MountSkill(props: {
             baseDirectory={skill.directory}
             references={pages.flatMap((page) => page.skill.references ?? [])}
             fileHref={(target) => contentHref(address, target)}
+            imageSrc={imageSrc}
           />
         </div>
       )}
@@ -191,6 +203,7 @@ export function MountSkill(props: {
               source={content}
               baseDirectory={parentDirectory(filePath)}
               fileHref={(target) => contentHref(address, target)}
+              imageSrc={imageSrc}
             />
           </div>
         </section>

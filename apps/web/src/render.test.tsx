@@ -134,9 +134,7 @@ const SHOWCASE: RestShowcase = {
           requirement: "Uses a video tool",
           clip: "A bottle on a garden table in spring light.",
           credit: "Made by Acme",
-          note: "An AI-generated concept clip.",
           demo: {
-            title: "A spring ad",
             prompt: "Make a spring ad from this picture.",
             reference: "Reference picture",
             picture: "Product picture",
@@ -146,11 +144,7 @@ const SHOWCASE: RestShowcase = {
             approval: "Plan reviewed",
             consent: "Go ahead.",
             working: "Making it…",
-            result: "Your spring ad.",
-            resultDetail: "Short ad",
-            resultLabel: "Example result",
-            stages: ["Your picture", "A few words", "The ad"],
-            action: "Try the spring skill",
+            result: "Your spring ad, three scenes in a garden.",
           },
         },
         ko: {
@@ -161,7 +155,6 @@ const SHOWCASE: RestShowcase = {
           requirement: null,
           clip: null,
           credit: null,
-          note: null,
           demo: null,
         },
       },
@@ -177,6 +170,7 @@ describe("prerendered pages", () => {
       address,
       repository: MOUNT.repository,
       manifest: null,
+      verified: false,
       status: "ready",
       skillCount: 1,
       skills: ["review"],
@@ -200,8 +194,9 @@ describe("prerendered pages", () => {
     );
     expect(body.match(/href="\/gh\/acme\/useful"/g)).toHaveLength(1);
     // One card for the reference repository, whichever way it was written (the address form
-    // links to it as well, as the example to try).
-    expect(body.match(/>\/gh\/skillcdn\/skills</g)).toHaveLength(1);
+    // links to it as well, as the example to try), and four cards in all.
+    expect(body.match(/<h3[^>]*><a[^>]*href="\/gh\/skillcdn\/skills"/g)).toHaveLength(1);
+    expect(body.match(/<h3/g)).toHaveLength(4);
     expect(body).not.toContain('skills/hostile"');
     expect(body).not.toContain("single-skill/references");
     expect(body).not.toContain('href="/gh/SkillCDN/skills"');
@@ -227,7 +222,6 @@ describe("prerendered pages", () => {
       expect(body).toMatch(/<video[^>]+muted=""/);
       expect(body).not.toMatch(/<video[^>]+autoplay/i);
       expect(body).toContain(t.landing.featured.video.clip);
-      expect(body).toContain(t.landing.featured.video.generated);
       expect(body).not.toMatch(/style="|<(?:img|video)[^>]+src="https?:/);
       // The animated image is for a browser that refuses the video, so it is not in the page
       // until one does, and nothing is laid over the clip.
@@ -268,7 +262,7 @@ describe("prerendered pages", () => {
     expect(html).toContain(`"contentUrl":"https://skills.example${MEDIA_URL("a")}"`);
     expect(html).toContain(`content="https://skills.example${MEDIA_URL("d")}"`);
 
-    // In English the entry brings its own conversation, and the link under the steps follows it.
+    // In English the entry brings its own conversation, played with the entry's own media.
     const english = renderLandingPage(TEMPLATE, {
       language: "en",
       origin: "https://skills.example",
@@ -277,7 +271,9 @@ describe("prerendered pages", () => {
       data: { showcase: { ready: SHOWCASE } },
     }).html;
     expect(english).toContain("Make a spring ad from this picture.");
-    expect(english).toContain(">Try the spring skill<");
+    // What the person attaches is what the entry has: a reference here, and no picture.
+    expect(english).toContain("(Reference picture)");
+    expect(english).not.toContain("(Product picture)");
     expect(english).not.toContain(messagesFor("en").landing.demo.prompt);
     expect(english).not.toContain(DEFAULT_SHOWCASE_MEDIA.poster);
 
@@ -297,11 +293,13 @@ describe("prerendered pages", () => {
     for (const language of LANGUAGES) {
       const t = messagesFor(language);
       const { body, head } = renderPage("/", language);
-      // Without a script the last scene stands: the consent and the result.
+      // Without a script the last scene stands: the consent and the result, with nothing over
+      // the result and no title bar or stage list around the conversation.
       expect(body).toContain('data-demo-phase="2"');
       expect(body).toContain(t.landing.demo.approval);
       expect(body).toContain(t.landing.demo.consent);
-      expect(body).toContain(t.landing.demo.resultLabel);
+      expect(body).toContain(`poster="${DEFAULT_SHOWCASE_MEDIA.poster}"`);
+      expect(body).not.toContain(t.landing.demo.working);
       // Nothing to click through, but every line is there to be read.
       expect(body).toContain(`<ol class="visually-hidden" aria-label="${t.landing.demo.label}">`);
       for (const message of [
@@ -309,8 +307,12 @@ describe("prerendered pages", () => {
         t.landing.demo.question,
         t.landing.demo.answer,
         t.landing.demo.plan,
+        t.landing.demo.result,
       ])
         expect(body).toContain(message);
+      // The person brings the character: the picture is attached, and there is no reference.
+      expect(body).toContain(`(${t.landing.demo.picture})`);
+      expect(body).not.toContain(t.landing.demo.reference);
       expect(t.landing.faq.items).toHaveLength(3);
       for (const item of t.landing.faq.items) expect(head).toContain(item.question);
     }
@@ -478,11 +480,12 @@ describe("the page of an address", () => {
     });
     expect(indexable).toBe(false);
     expect(html).toContain('href="/gh/acme/skills?skill=team-a%2Freview%2FSKILL.md"');
-    expect(html).toContain("https://skills.example/gh/acme/skills");
+    // The crumbs lead back to the connected address, which the folder does not change.
+    expect(html).toContain('href="/gh/acme/skills"');
     expect(html).not.toContain("https://skills.example/gh/acme/skills/team-a");
-    expect(html.indexOf(">Team review<")).toBeLessThan(
-      html.indexOf(messagesFor("en").connect.title),
-    );
+    // The connection guide belongs to the page of the address, not to a folder of it.
+    expect(html).toContain(">Team review<");
+    expect(html).not.toContain(messagesFor("en").connect.title);
   });
 
   it("renders one skill with its instructions, and says so when the index is not there yet", () => {

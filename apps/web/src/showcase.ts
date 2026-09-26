@@ -24,7 +24,7 @@ export function defaultShowcase(): RestShowcaseEntry {
   }
   const texts: Record<string, ShowcaseTexts> = {};
   for (const language of LANGUAGES) {
-    const { featured, demo, how } = messagesFor(language).landing;
+    const { featured, demo } = messagesFor(language).landing;
     texts[language] = {
       title: featured.video.title,
       body: featured.video.body,
@@ -33,9 +33,7 @@ export function defaultShowcase(): RestShowcaseEntry {
       requirement: featured.video.requirement,
       clip: featured.video.clip,
       credit: featured.video.credit,
-      note: featured.video.generated,
       demo: {
-        title: demo.title,
         prompt: demo.prompt,
         reference: demo.reference,
         picture: demo.picture,
@@ -46,10 +44,6 @@ export function defaultShowcase(): RestShowcaseEntry {
         consent: demo.consent,
         working: demo.working,
         result: demo.result,
-        resultDetail: demo.resultDetail,
-        resultLabel: demo.resultLabel,
-        stages: [...demo.stages],
-        action: how.action,
       },
     };
   }
@@ -66,7 +60,8 @@ export function defaultShowcase(): RestShowcaseEntry {
       clip: { url: media.clip, type: "video/mp4" },
       animation: { url: media.animation, type: "image/avif" },
       poster: { url: media.poster, type: "image/webp" },
-      reference: { url: media.reference, type: "image/webp" },
+      // The conversation starts from the character alone: there is no reference to attach.
+      reference: null,
       picture: { url: media.picture, type: "image/webp" },
       social: null,
     },
@@ -88,7 +83,6 @@ const NO_WORDS: ShowcaseTexts = {
   requirement: null,
   clip: null,
   credit: null,
-  note: null,
   demo: null,
 };
 

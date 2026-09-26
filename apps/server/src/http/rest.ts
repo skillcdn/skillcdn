@@ -614,6 +614,7 @@ export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies):
                       translations: repoTranslations(answer.overview.manifest.translations),
                     }
                   : null,
+              verified: mount.verified,
               status: answer.status,
               skillCount: answer.status === "ready" ? answer.overview.skillCount : null,
               skills:

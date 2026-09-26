@@ -59,6 +59,29 @@ export function Callout(props: {
   );
 }
 
+/** A check in a filled circle, in the accent: what vouched-for content is marked with. */
+export function VerifiedMark(props: { readonly label: string; readonly hint?: string }) {
+  return (
+    <span
+      className={styles.verified}
+      role="img"
+      aria-label={props.label}
+      title={props.hint ?? props.label}
+    >
+      <svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true">
+        <circle cx="12" cy="12" r="11" fill="currentColor" />
+        <path
+          d="m7.5 12.5 3 3 6-6.5"
+          fill="none"
+          strokeWidth="2.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </span>
+  );
+}
+
 export function Spinner(props: { readonly label: string }) {
   return (
     <span className={styles.spinner} role="status">

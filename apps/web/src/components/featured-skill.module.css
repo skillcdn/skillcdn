@@ -1,15 +1,30 @@
+/* A card: the clip on top, the words under it. The card is one click target (the title link is
+   stretched over it), so the whole surface answers to the pointer and to focus. */
 .card {
+  position: relative;
   display: grid;
-  grid-template-columns: 1.1fr 1fr;
+  grid-template-rows: auto 1fr;
   overflow: hidden;
   border: var(--border);
   border-radius: var(--radius-xl);
-  background: linear-gradient(140deg, var(--color-bg-raised), var(--color-bg-subtle));
+  background: linear-gradient(160deg, var(--color-bg-raised), var(--color-bg-subtle));
+  transition:
+    border-color var(--transition),
+    box-shadow var(--transition);
+}
+.card:hover,
+.card:focus-within {
+  border-color: var(--color-accent);
+  box-shadow: var(--glow);
+}
+.card:focus-within {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
 }
 .art {
   position: relative;
   min-width: 0;
-  min-height: var(--showcase-height);
+  aspect-ratio: 4 / 3;
   overflow: hidden;
 }
 /* The video, or the animated image that takes its place where the video will not play. */
@@ -23,31 +38,47 @@
   background: var(--color-bg);
 }
 .content {
-  padding: var(--space-7);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  justify-content: center;
+  padding: var(--space-5);
 }
 .eyebrow {
   color: var(--color-accent);
   font-size: var(--text-xs);
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-3);
 }
-.content h3 {
-  font-size: var(--text-display-sm);
+.title {
+  font-size: var(--text-xl);
   line-height: var(--leading-tight);
 }
+.titleLink {
+  color: inherit;
+  text-decoration: none;
+}
+.titleLink:hover {
+  color: inherit;
+}
+/* The stretched link: the whole card is the click target. Its focus ring is drawn by the card. */
+.titleLink::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+.titleLink:focus-visible {
+  outline: none;
+}
 .body {
-  margin-top: var(--space-4);
+  margin-top: var(--space-3);
   color: var(--color-text-muted);
-  max-width: var(--width-prose);
+  font-size: var(--text-sm);
 }
 .tags {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  margin-top: var(--space-5);
+  margin-top: var(--space-4);
 }
 .tags li {
   font-size: var(--text-xs);
@@ -56,32 +87,46 @@
   padding: var(--space-1) var(--space-3);
   color: var(--color-text-muted);
 }
+/* The call to action reads as the way in; the click lands on the stretched link above it. */
 .action {
   display: inline-flex;
-  gap: var(--space-3);
+  gap: var(--space-2);
   align-items: center;
+  margin-top: auto;
+  padding-top: var(--space-5);
   color: var(--color-text);
-  text-decoration: none;
-  margin-top: var(--space-6);
+  font-size: var(--text-sm);
   font-weight: var(--weight-bold);
+  transition: color var(--transition);
 }
-.action:hover {
+.card:hover .action {
   color: var(--color-accent-hover);
 }
 .requirement {
-  margin-top: var(--space-3);
+  margin-top: var(--space-2);
   font-size: var(--text-xs);
   color: var(--color-text-faint);
 }
-@media (max-width: 40rem) {
-  .card {
-    grid-template-columns: 1fr;
+/* A showcase of one entry is what a fresh deployment shows: then the one card is the hero, the
+   clip beside the words rather than above them. */
+@media (min-width: 40.01rem) {
+  .card:only-child {
+    grid-template-columns: 1.1fr 1fr;
+    grid-template-rows: none;
   }
-  .art {
-    min-height: 0;
-    aspect-ratio: 4 / 3;
+  .card:only-child .art {
+    aspect-ratio: auto;
+    min-height: var(--showcase-height);
   }
-  .content {
-    padding: var(--space-5);
+  .card:only-child .content {
+    justify-content: center;
+    padding: var(--space-7);
+  }
+  .card:only-child .title {
+    font-size: var(--text-display-sm);
+  }
+  .card:only-child .body {
+    font-size: var(--text-md);
+    max-width: var(--width-prose);
   }
 }

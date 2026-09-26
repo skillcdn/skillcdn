@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { Markdown, resolveRelativePath } from "./markdown.js";
+import { imageUrl, Markdown, resolveRelativePath } from "./markdown.js";
 
 describe("resolveRelativePath", () => {
   it("resolves links between files of a mount", () => {
@@ -28,6 +28,32 @@ describe("resolveRelativePath", () => {
       expect(resolveRelativePath("docs", href), href).toBeUndefined();
     }
     expect(resolveRelativePath("", "..")).toBeUndefined();
+  });
+});
+
+describe("imageUrl", () => {
+  const host = (path: string) => `https://raw.example/${path}`;
+
+  it("keeps an https picture, and sends a path of the repository to the host", () => {
+    expect(imageUrl("https://example.com/a.png", "docs", host)).toBe("https://example.com/a.png");
+    expect(imageUrl("../assets/a.png", "docs", host)).toBe("https://raw.example/assets/a.png");
+    expect(imageUrl("/assets/a.png", "docs", host)).toBe("https://raw.example/assets/a.png");
+  });
+
+  it("loads nothing else", () => {
+    for (const source of [
+      "http://example.com/a.png",
+      "//example.com/a.png",
+      "data:image/png;base64,AAAA",
+      "javascript:alert(1)",
+      "../../outside.png",
+      "",
+      undefined,
+    ]) {
+      expect(imageUrl(source, "docs", host), String(source)).toBeUndefined();
+    }
+    // A page with no repository behind it has nowhere to load a path from.
+    expect(imageUrl("assets/a.png", "", undefined)).toBeUndefined();
   });
 });
 
@@ -92,11 +118,45 @@ describe("Markdown", () => {
     expect(html).not.toContain("href=");
   });
 
-  it("never loads an image", () => {
-    const html = render("![a diagram](https://example.com/pixel.png) ![](local.png)");
-    expect(html).not.toContain("<img");
-    expect(html).not.toContain("pixel.png");
+  it("shows pictures from the web and from the host, lazily and without a referrer", () => {
+    const html = renderToStaticMarkup(
+      <Markdown
+        source={[
+          "![a diagram](https://example.com/pixel.png)",
+          "![local](../assets/local.png)",
+          "![plain](http://example.com/plain.png)",
+          "![inline](data:image/png;base64,AAAA)",
+          "![out](../../outside.png)",
+        ].join("\n\n")}
+        baseDirectory="docs"
+        fileHref={(path) => `/gh/acme/skills?file=${path}`}
+        imageSrc={(path) => `https://raw.example/acme/skills/abc/${path}`}
+      />,
+    );
+    const images = html.match(/<img [^>]+>/g) ?? [];
+    expect(images).toHaveLength(2);
+    expect(images[0]).toContain('src="https://example.com/pixel.png"');
+    expect(images[0]).toContain('alt="a diagram"');
+    expect(images[1]).toContain('src="https://raw.example/acme/skills/abc/assets/local.png"');
+    for (const image of images) {
+      expect(image).toContain('loading="lazy"');
+      expect(image).toContain('referrerPolicy="no-referrer"');
+    }
+    // Anything else stands as its text: another scheme, a path that leaves the repository.
+    expect(html).not.toContain("plain.png");
+    expect(html).not.toContain("data:image");
+    expect(html).not.toContain("outside.png");
+    for (const text of ["plain", "inline", "out"]) {
+      expect(html).toMatch(new RegExp(`<span class="[^"]*">${text}</span>`));
+    }
+  });
+
+  it("shows a picture of the repository as its text where there is no host to load it from", () => {
+    // A page of the deployment's own has no repository behind it.
+    const html = render("![a diagram](assets/local.png) ![web](https://example.com/pixel.png)");
+    expect(html).not.toContain("local.png");
     expect(html).toContain("a diagram");
+    expect(html).toContain('<img src="https://example.com/pixel.png"');
   });
 
   it("renders tables and task lists", () => {

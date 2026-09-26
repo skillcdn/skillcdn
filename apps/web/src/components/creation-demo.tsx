@@ -152,11 +152,13 @@ function ResultClip(props: { readonly entry: RestShowcaseEntry; readonly playing
 }
 
 /**
- * The example conversation of a showcase entry, with its words and its media (ADR-0028). Runs
- * only on screen, respects a live motion preference, and holds while the pointer or the focus is
- * on it. Without motion, and before any script runs, it shows the last scene with the poster of
- * the result, so that nothing plays or loads that nobody asked for. The animation is hidden from
- * assistive technology; the conversation is read from the list after it.
+ * The example conversation of a showcase entry, with its words and its media (ADR-0028): the
+ * person brings a character and a few words, the assistant suggests the story and asks what it
+ * needs, and the result plays. Runs only on screen, respects a live motion preference, and holds
+ * while the pointer or the focus is on it. Without motion, and before any script runs, it shows
+ * the last scene with the poster of the result, so that nothing plays or loads that nobody asked
+ * for. The animation is hidden from assistive technology; the conversation is read from the
+ * list after it.
  */
 export function CreationDemo(props: {
   readonly entry: RestShowcaseEntry;
@@ -209,13 +211,15 @@ export function CreationDemo(props: {
   const finished = time >= schedule.finished;
   const caret = (shown: string, whole: string) =>
     shown.length < whole.length ? styles.caret : undefined;
+  // What the person attaches: the entry's pictures, captioned by its words. The character comes
+  // first, since it is what the conversation starts from.
   const attachments = [
-    ...(entry.media.reference === null
-      ? []
-      : [{ url: entry.media.reference.url, label: copy.reference }]),
     ...(entry.media.picture === null
       ? []
       : [{ url: entry.media.picture.url, label: copy.picture }]),
+    ...(entry.media.reference === null
+      ? []
+      : [{ url: entry.media.reference.url, label: copy.reference }]),
   ];
 
   return (
@@ -238,14 +242,6 @@ export function CreationDemo(props: {
         data-demo-phase={phase}
         data-demo-time={elapsed}
       >
-        <div className={styles.chrome}>
-          <BrandSymbol className={styles.symbol} />
-          <span>
-            {copy.title}
-            <small>{labels.label}</small>
-          </span>
-          <span className={styles.chromeStatus} />
-        </div>
         <div className={styles.conversation}>
           {phase === 0 && (
             <div className={styles.scene}>
@@ -312,31 +308,22 @@ export function CreationDemo(props: {
               </div>
               {time >= schedule.result && (
                 <div className={styles.result} data-finished={finished}>
-                  <div className={styles.resultMedia}>
-                    {elapsed === null ? (
-                      <img src={entry.media.poster.url} alt="" />
-                    ) : (
-                      <ResultClip entry={entry} playing={finished && inView} />
-                    )}
-                    <span>{finished ? copy.resultLabel : copy.working}</span>
-                    {!finished && <span className={styles.progress} />}
-                  </div>
-                  <div className={styles.resultText}>
-                    <strong>{copy.result}</strong>
-                    <span>{copy.resultDetail}</span>
-                  </div>
+                  {elapsed === null ? (
+                    <img src={entry.media.poster.url} alt="" />
+                  ) : (
+                    <ResultClip entry={entry} playing={finished && inView} />
+                  )}
+                  {/* While the result is being made, and nothing over it once it plays. */}
+                  {!finished && (
+                    <>
+                      <span className={styles.working}>{copy.working}</span>
+                      <span className={styles.progress} />
+                    </>
+                  )}
                 </div>
               )}
             </div>
           )}
-        </div>
-        <div className={styles.stages}>
-          {copy.stages.map((stage, index) => (
-            <span key={stage} data-active={index === phase}>
-              <i />
-              {stage}
-            </span>
-          ))}
         </div>
       </div>
       <ol className="visually-hidden" aria-label={labels.label}>
@@ -348,8 +335,9 @@ export function CreationDemo(props: {
         <li>{`${labels.assistant}: ${copy.question}`}</li>
         <li>{`${labels.user}: ${copy.answer}`}</li>
         <li>{`${labels.assistant}: ${copy.plan}`}</li>
+        <li>{copy.approval}</li>
         <li>{`${labels.user}: ${copy.consent}`}</li>
-        <li>{`${copy.resultLabel}: ${copy.resultDetail}`}</li>
+        <li>{copy.result}</li>
       </ol>
     </div>
   );

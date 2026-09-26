@@ -93,18 +93,6 @@
   background: var(--color-accent-solid-hover);
   box-shadow: var(--glow-strong);
 }
-.secondary,
-.textLink {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-3);
-  color: var(--color-text);
-  text-decoration: none;
-  font-size: var(--text-sm);
-}
-.secondary {
-  padding: var(--space-3) 0;
-}
 .compatibility {
   display: grid;
   gap: var(--space-3);
@@ -162,6 +150,13 @@
   text-decoration: none;
   white-space: nowrap;
 }
+/* One card per showcase entry, side by side: as many as fit at the width the page has, and a
+   lone entry takes the whole width as the hero it then is (featured-skill.module.css). */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  gap: var(--space-5);
+}
 .how {
   padding-block: var(--space-8) var(--space-9);
   position: relative;
@@ -192,7 +187,7 @@
 .steps {
   display: grid;
   gap: var(--space-5);
-  margin-block: var(--space-7);
+  margin-top: var(--space-7);
 }
 .steps li {
   display: flex;
@@ -369,6 +364,27 @@
   .featured {
     padding-block: var(--space-5) var(--space-7);
   }
+  /* On a phone the cards are a row to swipe through, one card at a time with the next one
+     showing at the edge, instead of a column of three tall cards. The row bleeds to the edges of
+     the screen and snaps card by card. */
+  .cards {
+    grid-auto-flow: column;
+    grid-auto-columns: 86%;
+    grid-template-columns: none;
+    gap: var(--space-3);
+    margin-inline: calc(-1 * var(--space-4));
+    padding: var(--space-1) var(--space-4) var(--space-3);
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: var(--space-4);
+    scrollbar-width: none;
+  }
+  .cards > * {
+    scroll-snap-align: start;
+  }
+  .cards:has(> :only-child) {
+    grid-auto-columns: 100%;
+  }
   .how {
     padding-block: var(--space-7);
   }
@@ -378,7 +394,7 @@
     grid-template-columns: 1fr;
   }
   .steps {
-    margin-block: var(--space-5);
+    margin-top: var(--space-5);
     gap: var(--space-4);
   }
   .start {
@@ -400,10 +416,4 @@
     gap: var(--space-5);
     margin-bottom: var(--space-7);
   }
-}
-
-/* One card per showcase entry, stacked: the first is what the page leads with. */
-.cards {
-  display: grid;
-  gap: var(--space-5);
 }

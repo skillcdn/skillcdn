@@ -1,20 +1,31 @@
 import type { Address, RestMount, RestSkill } from "@skillcdn/core";
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { api } from "../api/client.js";
 import { resourceKeys } from "../api/keys.js";
 import { useResource } from "../api/use-resource.js";
 import { ConnectGuide } from "../components/connect-guide.js";
 import { ErrorCallout } from "../components/error-callout.js";
-import { Badge, Callout, Container, Skeleton, Spinner } from "../components/ui.js";
+import { Badge, Callout, Container, Skeleton, Spinner, VerifiedMark } from "../components/ui.js";
 import { useI18n } from "../i18n/index.js";
 import { repositoryDescription, repositoryName, translationFor } from "../i18n/repository-text.js";
 import type { MountView } from "../router.js";
 import { applyHead, buildHead } from "../seo/head.js";
-import { licenseLabel } from "./license-text.js";
+import { hostTreeUrl } from "./host-links.js";
+import { LicenseValue } from "./license.js";
 import styles from "./mount.module.css";
 import { MountFile } from "./mount-file.js";
 import { MountOverview } from "./mount-overview.js";
 import { MountSkill } from "./mount-skill.js";
+
+/** A small label, then the value in the code face. */
+function Fact(props: { readonly label: string; readonly children: ReactNode }) {
+  return (
+    <li className={styles.fact}>
+      <span className={styles.factLabel}>{props.label}</span>
+      <code>{props.children}</code>
+    </li>
+  );
+}
 
 function MountHeader(props: { readonly address: Address; readonly mount: RestMount | undefined }) {
   const { t, language } = useI18n();
@@ -34,41 +45,20 @@ function MountHeader(props: { readonly address: Address; readonly mount: RestMou
     manifest !== null && translationFor(manifest.translations, language)?.description == null
       ? (manifest.language ?? undefined)
       : undefined;
-  const hostUrl =
-    mount === undefined
-      ? undefined
-      : `https://github.com/${mount.repository.owner}/${mount.repository.name}/tree/${mount.commit}${
-          mount.path === "" ? "" : `/${mount.path}`
-        }`;
 
   return (
     <header className={styles.header}>
       <p className={styles.kicker}>{t.mount.repository}</p>
-      {/* The badges belong to the name: they say what this address resolves to, and whether
-          anyone has vouched for what it resolves to. */}
-      <div className={styles.titleRow}>
-        <h1 className={styles.title}>{name}</h1>
-        {mount !== undefined && (
-          <ul className={styles.badges}>
-            <li>
-              {mount.pinned ? (
-                <Badge tone="success">{t.mount.pinned}</Badge>
-              ) : (
-                <Badge tone="accent">
-                  {mount.ref ?? `${mount.repository.defaultBranch} · ${t.mount.defaultBranch}`}
-                </Badge>
-              )}
-            </li>
-            {!mount.verified && (
-              <li>
-                <Badge tone="warning" title={t.mount.unverifiedHint}>
-                  {t.mount.unverified}
-                </Badge>
-              </li>
-            )}
-          </ul>
+      {/* The mark belongs to the name: it says someone vouches for what this address resolves to. */}
+      <h1 className={styles.title}>
+        {name}
+        {mount?.verified === true && (
+          <>
+            {" "}
+            <VerifiedMark label={t.mount.verified} hint={t.mount.verifiedHint} />
+          </>
         )}
-      </div>
+      </h1>
       {description != null && (
         <p className={styles.description} lang={descriptionLanguage}>
           {description}
@@ -76,36 +66,42 @@ function MountHeader(props: { readonly address: Address; readonly mount: RestMou
       )}
       {mount !== undefined && (
         <div className={styles.facts}>
-          {/* A small label, then the value in the code face. */}
+          {/* What the address resolved to, under the name: the branch or ref it follows, the
+              commit, and the license, linked to its file where there is one. */}
           <ul className={styles.factList}>
-            {name !== repository && (
-              <li className={styles.fact}>
-                <span className={styles.factLabel}>{t.mount.repository}</span>
-                <code>{repository}</code>
+            {!mount.verified && (
+              <li>
+                <Badge tone="warning" title={t.mount.unverifiedHint}>
+                  {t.mount.unverified}
+                </Badge>
               </li>
             )}
-            <li className={styles.fact}>
-              <span className={styles.factLabel}>{t.mount.commit}</span>
-              <code>{mount.commit.slice(0, 7)}</code>
-            </li>
-            {mount.path !== "" && (
-              <li className={styles.fact}>
-                <span className={styles.factLabel}>{t.mount.path}</span>
-                <code>{mount.path}</code>
-              </li>
+            {name !== repository && <Fact label={t.mount.repository}>{repository}</Fact>}
+            {mount.pinned ? (
+              <Fact label={t.mount.pinned}>{mount.commit.slice(0, 7)}</Fact>
+            ) : (
+              <>
+                <Fact label={mount.ref === null ? t.mount.defaultBranch : t.mount.ref}>
+                  {mount.ref ?? mount.repository.defaultBranch}
+                </Fact>
+                <Fact label={t.mount.commit}>{mount.commit.slice(0, 7)}</Fact>
+              </>
             )}
+            {mount.path !== "" && <Fact label={t.mount.path}>{mount.path}</Fact>}
             {mount.index.status === "ready" && mount.index.license !== undefined && (
-              <li className={styles.fact}>
-                <span className={styles.factLabel}>{t.mount.license}</span>
-                <code>{licenseLabel(t.skill, mount.index.license)}</code>
-              </li>
+              <Fact label={t.mount.license}>
+                <LicenseValue license={mount.index.license} mount={mount} />
+              </Fact>
             )}
           </ul>
-          {hostUrl !== undefined && (
-            <a className={styles.hostLink} href={hostUrl} target="_blank" rel="noopener noreferrer">
-              {t.mount.viewOnHost}
-            </a>
-          )}
+          <a
+            className={styles.hostLink}
+            href={hostTreeUrl(mount)}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {t.mount.viewOnHost}
+          </a>
         </div>
       )}
     </header>
@@ -141,10 +137,16 @@ function MountBody(props: {
     );
   }
   if (view.kind === "file") {
-    return <MountFile address={address} path={view.path} />;
+    return <MountFile address={address} mount={mount} path={view.path} />;
   }
   return view.kind === "skill" ? (
-    <MountSkill key={view.path} address={address} path={view.path} onLoaded={props.onSkill} />
+    <MountSkill
+      key={view.path}
+      address={address}
+      mount={mount}
+      path={view.path}
+      onLoaded={props.onSkill}
+    />
   ) : (
     <MountOverview
       key={`${view.path ?? address.path} ${view.query ?? ""}`}
@@ -184,49 +186,38 @@ export function MountPage(props: MountPageProps) {
     );
   }, [address, view, language, origin, loaded, skill]);
 
-  // Name and description, then how to connect an agent, then what it gets. A skill or a file
-  // is what the visitor came for, so on those views the guide follows the content instead.
-  const guide =
-    mount.state === "error" ? null : (
-      <ConnectGuide origin={origin} address={address} mount={loaded} />
-    );
-  const content = (
-    <div className={styles.content}>
-      {mount.state === "loading" && <Skeleton lines={6} label={t.common.loading} />}
-      {mount.state === "error" && <ErrorCallout error={mount.error} onRetry={mount.reload} />}
-      {mount.state === "ready" && (
-        <>
-          {mount.value.index.status === "ready" && mount.value.index.truncated && (
-            <Callout tone="warning">{t.mount.truncated}</Callout>
-          )}
-          <MountBody
-            address={address}
-            view={view}
-            mount={mount.value}
-            stalled={mount.stalled}
-            onSkill={setSkill}
-          />
-        </>
-      )}
-    </div>
-  );
+  // Name and description, then how to connect an agent, then what it serves. The guide is for
+  // the address as a whole, so it is on the page of the address: a folder, a skill, a file or a
+  // search is what the visitor came for, and the way back to the guide is one crumb away.
+  const atRoot =
+    view.kind === "overview" &&
+    view.query === undefined &&
+    (view.path === undefined || view.path === address.path);
 
   return (
     <Container className={styles.page}>
       <MountHeader address={address} mount={loaded} />
-      {view.kind === "overview" &&
-      view.query === undefined &&
-      (view.path === undefined || view.path === address.path) ? (
-        <>
-          {guide}
-          {content}
-        </>
-      ) : (
-        <>
-          {content}
-          {guide}
-        </>
+      {atRoot && mount.state !== "error" && (
+        <ConnectGuide origin={origin} address={address} mount={loaded} />
       )}
+      <div className={styles.content}>
+        {mount.state === "loading" && <Skeleton lines={6} label={t.common.loading} />}
+        {mount.state === "error" && <ErrorCallout error={mount.error} onRetry={mount.reload} />}
+        {mount.state === "ready" && (
+          <>
+            {mount.value.index.status === "ready" && mount.value.index.truncated && (
+              <Callout tone="warning">{t.mount.truncated}</Callout>
+            )}
+            <MountBody
+              address={address}
+              view={view}
+              mount={mount.value}
+              stalled={mount.stalled}
+              onSkill={setSkill}
+            />
+          </>
+        )}
+      </div>
     </Container>
   );
 }

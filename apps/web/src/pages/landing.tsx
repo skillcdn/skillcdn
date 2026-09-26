@@ -48,10 +48,6 @@ export function LandingPage(props: { readonly origin: string }) {
               {copy.primary}
               <ArrowIcon />
             </Link>
-            <a className={styles.secondary} href="#how">
-              {copy.secondary}
-              <span aria-hidden="true">↘</span>
-            </a>
           </div>
           <div className={styles.compatibility}>
             <span>{copy.compatibility}</span>
@@ -108,10 +104,6 @@ export function LandingPage(props: { readonly origin: string }) {
                 </li>
               ))}
             </ol>
-            <Link className={styles.textLink} href={demo.entry.address}>
-              {demo.demo.action}
-              <ArrowIcon />
-            </Link>
           </div>
           <CreationDemo key={`${language}:${demo.entry.id}`} entry={demo.entry} demo={demo.demo} />
         </Container>

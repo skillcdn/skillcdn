@@ -112,6 +112,23 @@
   color: var(--color-danger);
 }
 
+/* Verified mark: sits next to a name, at the size of its text. */
+
+.verified {
+  display: inline-flex;
+  vertical-align: middle;
+  color: var(--color-accent);
+  font-size: 0.85em;
+}
+
+.verified svg {
+  display: block;
+}
+
+.verified path {
+  stroke: var(--color-accent-contrast);
+}
+
 /* Callout */
 
 .callout {

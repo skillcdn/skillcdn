@@ -38,45 +38,97 @@
 
 .featured {
   margin-top: var(--space-8);
+  scroll-margin-top: var(--space-8);
 }
 
 .heading {
-  margin-bottom: var(--space-4);
-  font-size: var(--text-lg);
+  margin-bottom: var(--space-2);
+  font-size: var(--text-xl);
 }
 
+.featuredLead {
+  margin-bottom: var(--space-5);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* Cards of unequal height fill columns from the top, so the page has no gaps to mind: as many
+   columns as fit, up to three. */
 .grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
-  gap: var(--space-4);
+  columns: 3 17rem;
+  column-gap: var(--space-4);
 }
 
 .card {
-  display: grid;
+  position: relative;
+  display: flex;
+  flex-direction: column;
   gap: var(--space-2);
-  height: 100%;
-  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+  padding: var(--space-4) var(--space-5);
   border: var(--border);
   border-radius: var(--radius-lg);
-  color: var(--color-text);
-  text-decoration: none;
-  transition: border-color var(--transition);
+  background: var(--color-bg-subtle);
+  break-inside: avoid;
+  transition:
+    border-color var(--transition),
+    background var(--transition),
+    box-shadow var(--transition);
 }
 
-.card:hover {
+.card:hover,
+.card:focus-within {
   border-color: var(--color-accent);
-  color: var(--color-text);
+  background: var(--color-bg-inset);
+  box-shadow: var(--glow);
+}
+
+.card:focus-within {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .cardTitle {
-  font-weight: var(--weight-bold);
+  font-size: var(--text-md);
   overflow-wrap: anywhere;
 }
 
+/* The whole card is the way in: the title's link stretches over it. */
+.cardLink {
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.cardLink:hover {
+  color: var(--color-text);
+}
+
+.cardLink::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.cardLink:focus-visible {
+  outline: none;
+}
+
 .cardAddress {
-  color: var(--color-text-muted);
+  color: var(--color-text-faint);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+.cardBody {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
   overflow-wrap: anywhere;
 }
 
@@ -84,8 +136,35 @@
   display: none;
 }
 
-.cardSkills {
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.chips li {
+  padding: 0.1rem var(--space-2);
+  border: var(--border);
+  border-radius: var(--radius-full);
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+.chips .chipMore {
+  border-color: transparent;
+  color: var(--color-text-faint);
+  font-family: var(--font-sans);
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
   color: var(--color-text-muted);
   font-size: var(--text-sm);
-  overflow-wrap: anywhere;
 }

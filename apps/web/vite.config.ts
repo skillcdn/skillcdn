@@ -54,6 +54,8 @@ export default defineConfig(({ mode, isSsrBuild }) => {
         : {
             proxy: {
               "/api": { target: apiUrl, changeOrigin: true },
+              // The operator's uploads, which the showcase names by hash.
+              "/media": { target: apiUrl, changeOrigin: true },
               // An address answers browsers with the UI and everything else with MCP, so the
               // development server does the same: pages stay here, MCP goes to the server.
               "/gh": {

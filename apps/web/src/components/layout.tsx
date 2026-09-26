@@ -16,6 +16,15 @@ export function Layout(props: { readonly children: ReactNode }) {
   useEffect(() => {
     setLegal(readLegalLinks());
   }, []);
+  const links = [
+    ...(legal.termsUrl === undefined ? [] : [{ href: legal.termsUrl, label: t.footer.terms }]),
+    ...(legal.privacyUrl === undefined
+      ? []
+      : [{ href: legal.privacyUrl, label: t.footer.privacy }]),
+    ...(legal.contactEmail === undefined
+      ? []
+      : [{ href: `mailto:${legal.contactEmail}`, label: t.footer.report }]),
+  ];
   return (
     <div className={styles.page}>
       <a className={styles.skip} href="#content">
@@ -42,48 +51,23 @@ export function Layout(props: { readonly children: ReactNode }) {
       </main>
       <footer className={styles.footer}>
         <div className={styles.footerInner}>
-          {/* The name and the links share one line, at the two ends of the page; what the site
-              promises sits under them, quietly. */}
+          {/* The name and the deployment's own pages share one line, at the two ends of the
+              page: its terms, its privacy policy and whom to write to, each only where the
+              deployment has it. What the site promises sits under them, quietly. */}
           <div className={styles.footerTop}>
             <p className={styles.footerBrand}>
               <BrandSymbol className={styles.symbol} />
               <span>{t.meta.siteName}</span>
             </p>
-            <ul className={styles.footerLinks}>
-              <li>
-                <a href={LINKS.docs}>{t.nav.docs}</a>
-              </li>
-              <li>
-                <a href={LINKS.repository}>{t.footer.source}</a>
-              </li>
-              <li>
-                <a href={LINKS.license}>{t.footer.license}</a>
-              </li>
-              <li>
-                <a href={LINKS.trademarks}>{t.footer.trademarks}</a>
-              </li>
-              <li>
-                <a href={LINKS.security}>{t.footer.security}</a>
-              </li>
-              <li>
-                <a href={LINKS.notices}>{t.footer.notices}</a>
-              </li>
-              {legal.termsUrl !== undefined && (
-                <li>
-                  <a href={legal.termsUrl}>{t.footer.terms}</a>
-                </li>
-              )}
-              {legal.privacyUrl !== undefined && (
-                <li>
-                  <a href={legal.privacyUrl}>{t.footer.privacy}</a>
-                </li>
-              )}
-              {legal.contactEmail !== undefined && (
-                <li>
-                  <a href={`mailto:${legal.contactEmail}`}>{t.footer.report}</a>
-                </li>
-              )}
-            </ul>
+            {links.length > 0 && (
+              <ul className={styles.footerLinks}>
+                {links.map((link) => (
+                  <li key={link.href}>
+                    <a href={link.href}>{link.label}</a>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
           <p className={styles.footerNote}>{t.footer.tagline}</p>
         </div>

@@ -44,8 +44,9 @@ describe("language packs", () => {
         expect(text.trim().length, `${language}: an empty message`).toBeGreaterThan(0);
       }
     }
-    // Product names and verified menu labels of apps without a localized menu stay native.
+    // Product names, credits and verified menu labels of apps without a localized menu stay native.
     const names = new Set([
+      "SkillCDN · skillcdn/skills",
       "Claude Code",
       "VS Code",
       "Devin Desktop",

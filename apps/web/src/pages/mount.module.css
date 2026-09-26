@@ -13,18 +13,8 @@
   text-transform: uppercase;
 }
 
-/* The name goes in the middle track and the badges hang off the right one. The two side tracks
-   are equal, so the name stays on the centre line of the page whatever is beside it. */
-.titleRow {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
-  gap: var(--space-3);
-  margin-top: var(--space-1);
-}
-
 .title {
-  grid-column: 2;
+  margin-top: var(--space-1);
   font-size: var(--text-2xl);
   overflow-wrap: anywhere;
   text-align: center;
@@ -38,8 +28,8 @@
   overflow-wrap: anywhere;
 }
 
-/* What the address resolved to, and the way out to the git host. The gap between the two groups
-   is wider than the gap inside one, so the eye reads them apart. */
+/* What the address resolved to, under the name, and the way out to the git host. The gap
+   between the two groups is wider than the gap inside one, so the eye reads them apart. */
 .facts {
   display: flex;
   flex-wrap: wrap;
@@ -50,19 +40,11 @@
   font-size: var(--text-sm);
 }
 
-.badges {
-  grid-column: 3;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-self: start;
-  gap: var(--space-2);
-}
-
 .factList {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
+  justify-content: center;
   gap: var(--space-2) var(--space-4);
   color: var(--color-text-muted);
 }
@@ -138,10 +120,123 @@
 }
 
 .resultsTitle {
-  margin-bottom: var(--space-4);
   font-size: var(--text-md);
   font-weight: var(--weight-medium);
   color: var(--color-text-muted);
+}
+
+/* The folder's own introduction: its README's first words, and the way to the whole of it. */
+.intro {
+  display: grid;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.intro a {
+  text-decoration: none;
+}
+
+.intro a:hover {
+  text-decoration: underline;
+}
+
+/* One folder in three groups: folders, skills, documents. */
+.group {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.groupTitle {
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Folders are small and alike, so they stand side by side. */
+.folders {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+  gap: var(--space-3);
+}
+
+.folder {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border: var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-subtle);
+  transition:
+    border-color var(--transition),
+    background var(--transition),
+    box-shadow var(--transition);
+}
+
+.folder:hover {
+  border-color: var(--color-accent);
+  background: var(--color-bg-inset);
+  box-shadow: var(--glow);
+}
+
+.folderLink {
+  display: flex;
+  align-items: start;
+  gap: var(--space-3);
+  flex: 1;
+  padding: var(--space-4);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.folderLink:hover {
+  color: var(--color-text);
+}
+
+.folderLink > svg {
+  flex: none;
+  color: var(--color-accent);
+  margin-top: 0.1em;
+}
+
+.folderText {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.folderName {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-weight: var(--weight-bold);
+  overflow-wrap: anywhere;
+}
+
+.folderName code {
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-normal);
+}
+
+.folderMeta {
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+}
+
+/* The way to the folder's introduction: a second link in the same card, after the first. */
+.folderReadme {
+  align-self: start;
+  margin: 0 var(--space-4) var(--space-4) calc(var(--space-4) + 20px + var(--space-3));
+  font-size: var(--text-xs);
+  text-decoration: none;
+}
+
+.folderReadme:hover {
+  text-decoration: underline;
 }
 
 /* Lists of skills and documents */
@@ -151,9 +246,9 @@
   gap: var(--space-3);
 }
 
-/* A card, the same one the landing page uses for its tiles. The glow is kept for the hover: a
-   repository can list hundreds of these, and all of them lit at once is a wall of light. */
-.item {
+/* A card. The glow is kept for the hover: a repository can list hundreds of these, and all of
+   them lit at once is a wall of light. */
+.card {
   display: grid;
   gap: var(--space-1);
   padding: var(--space-4);
@@ -168,32 +263,34 @@
     box-shadow var(--transition);
 }
 
-.item:hover {
+.card:hover {
   border-color: var(--color-accent);
   background: var(--color-bg-inset);
   box-shadow: var(--glow);
   color: var(--color-text);
 }
 
-.itemHead {
+.cardHead {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2) var(--space-3);
 }
 
-.itemName {
+.cardTitle {
+  font-weight: var(--weight-bold);
+  overflow-wrap: anywhere;
+}
+
+/* The name a translated title stands in for. */
+.cardName {
+  color: var(--color-text-faint);
   font-family: var(--font-mono);
-  font-weight: var(--weight-bold);
+  font-size: var(--text-xs);
   overflow-wrap: anywhere;
 }
 
-.itemTitle {
-  font-weight: var(--weight-bold);
-  overflow-wrap: anywhere;
-}
-
-.itemBody {
+.cardBody {
   display: -webkit-box;
   overflow: hidden;
   color: var(--color-text-muted);
@@ -204,7 +301,16 @@
   line-clamp: 3;
 }
 
-.itemPath {
+.cardFoot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+}
+
+.cardPath {
   color: var(--color-text-faint);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
@@ -243,21 +349,15 @@
 
 /* Skill and file views */
 
-.back {
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-  text-decoration: none;
-}
-
-.back:hover {
-  color: var(--color-text);
-}
-
-.viewTitle {
+.viewTitle,
+.viewName {
   margin-top: var(--space-1);
-  font-family: var(--font-mono);
   font-size: var(--text-xl);
   overflow-wrap: anywhere;
+}
+
+.viewName {
+  font-family: var(--font-mono);
 }
 
 .viewLead {
@@ -345,20 +445,6 @@
 }
 
 @media (max-width: 40rem) {
-  /* No room for a name flanked by badges: they go under it, still on the centre line. */
-  .titleRow {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .title,
-  .badges {
-    grid-column: 1;
-  }
-
-  .badges {
-    justify-self: center;
-  }
-
   .metaRow {
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
@@ -374,21 +460,12 @@
 }
 
 /* Folder navigation stays inside the connected repository. */
-.browseHeader,
-.itemFoot {
+.browseHeader {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
   align-items: baseline;
   gap: var(--space-2) var(--space-4);
-}
-
-.itemActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-4);
-  padding: var(--space-2) var(--space-4);
-  font-size: var(--text-sm);
 }
 
 .browseHeader .subheading {

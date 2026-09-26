@@ -100,7 +100,7 @@ An entry is a JSON document:
 - `position`: its place in the list, lowest first; `0` when left out.
 - `width` and `height`: the pixel size of the clip and its poster.
 - `media`: uploads by hash. `poster` is required; `clip` (a video), `animation` (the clip as an animated image, for browsers that will not play video), `reference` and `picture` (what the example conversation attaches) and `social` (a 1200 x 630 picture for link previews) are optional. A `clip` needs `durationMs`, one pass of it, and `published`, its date as `YYYY-MM-DD`.
-- `texts`: the words by language tag (`en`, `ko`), at least one language. Each has `title`, `body` and `action` (the button), and optionally `tags` (up to four), `requirement` (what the skill needs besides the AI app), `clip` (what the clip shows, for whoever cannot see it), `credit`, `note` (said next to the clip, such as that it is an AI-generated concept), and `demo`, the example conversation: `title`, `prompt`, `reference`, `picture`, `question`, `answer`, `plan`, `approval`, `consent`, `working`, `result`, `resultDetail`, `resultLabel`, three `stages`, and `action` (the link under the steps). A visitor is shown their language, else the default language of the pages; an entry without a `demo` in the visitor's language shows the build's own conversation.
+- `texts`: the words by language tag (`en`, `ko`), at least one language. Each has `title`, `body` and `action` (the button), and optionally `tags` (up to four), `requirement` (what the skill needs besides the AI app), `clip` (what the clip shows, for whoever cannot see it), `credit`, and `demo`, the example conversation: `prompt` (what the person asks, with the `picture` and `reference` attached, captioned by those two words, when the entry has that media), the assistant's `question`, the person's `answer`, the assistant's `plan`, the `approval` line that says the plan and the estimate were reviewed, the person's `consent`, `working` (said over the result while it is made) and `result` (what the result is, in one line, for whoever cannot see it). A visitor is shown their language, else the default language of the pages; an entry without a `demo` in the visitor's language shows the build's own conversation.
 
 ```json
 {
@@ -115,8 +115,7 @@ An entry is a JSON document:
       "title": "The ad you love, with your star in it.",
       "body": "Show it an ad you admire and a picture of your product.",
       "tags": ["A video and a picture in", "Ready to post"],
-      "action": "Make something like this",
-      "note": "An AI-generated concept clip, not a recording of a run."
+      "action": "Make something like this"
     }
   }
 }
