@@ -16,16 +16,20 @@ import { LANGUAGE_PENDING_ATTRIBUTE, type Language, resolveLanguage } from "./i1
 import { type AppLocation, LocationProvider, useLocation } from "./navigation.js";
 import { ExplorePage } from "./pages/explore.js";
 import { LandingPage } from "./pages/landing.js";
+import type { LegalPageProps } from "./pages/legal.js";
 import type { MountPageProps } from "./pages/mount.js";
 import { BadAddressPage, NotFoundPage } from "./pages/simple.js";
 import { matchRoute, type Route } from "./router.js";
 import { applyHead, buildHead } from "./seo/head.js";
 
-// The explorer view brings the Markdown renderer with it. The front pages do not need it, so in
-// the browser it loads when someone opens an address. The server, which renders that view with
-// its data, passes the component in instead (entry-server.tsx).
+// The explorer view and the deployment's own pages bring the Markdown renderer with them. The
+// front pages do not need it, so in the browser it loads when someone opens one of those. The
+// server, which renders them with their data, passes the components in instead (entry-server.tsx).
 const LazyMountPage = lazy(() =>
   import("./pages/mount.js").then((module) => ({ default: module.MountPage })),
+);
+const LazyLegalPage = lazy(() =>
+  import("./pages/legal.js").then((module) => ({ default: module.LegalPage })),
 );
 
 // Only a development build knows this page; in production the import is never reached, so the
@@ -50,6 +54,8 @@ export interface AppProps {
   readonly initialData?: InitialData;
   /** The explorer view, when it must render at once rather than load. */
   readonly mountPage?: ComponentType<MountPageProps>;
+  /** A page of the deployment's own, when it must render at once rather than load. */
+  readonly legalPage?: ComponentType<LegalPageProps>;
   /**
    * The language a URL without one is shown in: the visitor's choice (which a URL that forces a
    * language makes) or their browser's, read by the browser entry. The server passes the one the
@@ -58,7 +64,12 @@ export interface AppProps {
   readonly preferredLanguage?: Language;
 }
 
-function pageOf(route: Route, origin: string, MountPage: ComponentType<MountPageProps>): ReactNode {
+function pageOf(
+  route: Route,
+  origin: string,
+  MountPage: ComponentType<MountPageProps>,
+  LegalPage: ComponentType<LegalPageProps>,
+): ReactNode {
   switch (route.name) {
     case "landing":
       return <LandingPage origin={origin} />;
@@ -66,6 +77,8 @@ function pageOf(route: Route, origin: string, MountPage: ComponentType<MountPage
       return <ExplorePage origin={origin} />;
     case "mount":
       return <MountPage origin={origin} address={route.address} view={route.view} />;
+    case "legal":
+      return <LegalPage origin={origin} kind={route.kind} />;
     case "bad-address":
       return <BadAddressPage origin={origin} error={route.error} />;
     case "states":
@@ -81,6 +94,7 @@ function Routed(props: {
   readonly origin: string;
   readonly shell: boolean;
   readonly mountPage: ComponentType<MountPageProps>;
+  readonly legalPage: ComponentType<LegalPageProps>;
   readonly preferredLanguage: Language | undefined;
 }) {
   const location = useLocation();
@@ -88,11 +102,11 @@ function Routed(props: {
   const i18n = useMemo(() => ({ language, t: messagesFor(language) }), [language]);
   const route = matchRoute(location.pathname, location.search, import.meta.env.DEV);
 
-  // The view of an address and the front page write their own heads once they know what they
-  // show (pages/mount.tsx, pages/landing.tsx).
+  // The view of an address, the front page and the deployment's own pages write their own heads
+  // once they know what they show (pages/mount.tsx, pages/landing.tsx, pages/legal.tsx).
   // biome-ignore lint/correctness/useExhaustiveDependencies: the route is a function of the location
   useEffect(() => {
-    if (route.name !== "mount" && route.name !== "landing") {
+    if (route.name !== "mount" && route.name !== "landing" && route.name !== "legal") {
       applyHead(buildHead(route, language, props.origin));
     }
   }, [location.pathname, location.search, language, props.origin]);
@@ -128,7 +142,9 @@ function Routed(props: {
         {props.shell ? (
           placeholder
         ) : (
-          <Suspense fallback={placeholder}>{pageOf(route, props.origin, props.mountPage)}</Suspense>
+          <Suspense fallback={placeholder}>
+            {pageOf(route, props.origin, props.mountPage, props.legalPage)}
+          </Suspense>
         )}
       </Layout>
     </I18nContext.Provider>
@@ -146,6 +162,7 @@ export function App(props: AppProps) {
             origin={props.origin}
             shell={props.shell === true}
             mountPage={props.mountPage ?? LazyMountPage}
+            legalPage={props.legalPage ?? LazyLegalPage}
             preferredLanguage={preferred}
           />
         </LocationProvider>

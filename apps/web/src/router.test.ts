@@ -8,6 +8,10 @@ describe("matchRoute", () => {
     expect(matchRoute("/", "?lang=ko")).toEqual({ name: "landing" });
     expect(matchRoute("/explore", "")).toEqual({ name: "explore" });
     expect(matchRoute("/explore/", "")).toEqual({ name: "not-found" });
+    // The deployment's own pages (ADR-0029).
+    expect(matchRoute("/terms", "")).toEqual({ name: "legal", kind: "terms" });
+    expect(matchRoute("/privacy", "?lang=ko")).toEqual({ name: "legal", kind: "privacy" });
+    expect(matchRoute("/terms/", "")).toEqual({ name: "not-found" });
     expect(matchRoute("/nothing", "")).toEqual({ name: "not-found" });
   });
 

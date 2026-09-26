@@ -30,6 +30,7 @@ The API shows a person what an agent gets from an address. It is anonymous, read
 | 413 | `file.too_large` | The file exceeds the readable size limit. |
 | 415 | `file.not_text` | The file is not UTF-8 text. |
 | 403 | `file.not_served` | The license of the file's skill or repository allows a description, not a copy ([licenses](skill-repo.md#licenses)); `sourceUrl` links to the file at its host. |
+| 404 | `legal.not_found` | The page of the deployment's own has not been written. |
 
 ## Index state and paging
 
@@ -107,6 +108,10 @@ The addresses the operator selects for the explorer (the featured list of the [a
 The entries the front page leads with (the showcase of the [admin API](../../deploy/README.md#the-admin-api), [ADR-0028](../adr/0028-the-front-page-and-the-explorer-are-operator-content.md)), in order. An entry carries its `id`, the `address` it leads to, its `position`, the `width` and `height` of its media, the `durationMs` and `published` date of its clip (`null` without one), `media` with a `url` and a `type` in each slot (`poster` always; `clip`, `animation`, `reference`, `picture` and `social`, or `null`), and `texts` by language tag: `title`, `body`, `tags`, `action`, and `requirement`, `clip`, `credit`, `note` and the example conversation `demo`, or `null`. Empty until the operator writes an entry; the pages then show the build's own showcase.
 
 Media URLs are paths under `/media/`, named by the SHA-256 of the file: they never change, are served with `cache-control: public, max-age=31536000, immutable` and answer byte ranges. Anything else under `/media/` is `404`.
+
+### `GET /api/v1/legal/<kind>`
+
+A page of the deployment's own ([ADR-0029](../adr/0029-terms-and-privacy-pages-can-be-written-into-the-deployment.md)): `terms` or `privacy`, as the operator wrote it through the [admin API](../../deploy/README.md#the-admin-api). The document carries its `kind`, the `revised` date (`YYYY-MM-DD`, or `null`) and `texts` by language tag, each a `title` and a `body` in Markdown. `404` with `legal.not_found` for a page that has not been written, and for any other kind. The pages themselves are served at `/terms` and `/privacy`, rendered with the document.
 
 ## Open questions
 

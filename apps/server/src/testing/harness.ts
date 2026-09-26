@@ -7,6 +7,7 @@ import { parseCidr } from "../http/client-address.js";
 import type { AppEnv } from "../http/request-context.js";
 import type { WebBundle } from "../http/web.js";
 import type { SnapshotService } from "../indexer/snapshot-service.js";
+import type { LegalDocuments } from "../operator/legal.js";
 import type { OperatorLists } from "../operator/lists.js";
 import type { Showcase } from "../operator/showcase.js";
 import { createApi } from "../roles/api.js";
@@ -27,6 +28,8 @@ export interface Harness {
   readonly lists: OperatorLists;
   /** The landing showcase, for a test to write entries and uploads without the admin API. */
   readonly showcase: Showcase;
+  /** The deployment's own pages, for a test to write them without the admin API. */
+  readonly legal: LegalDocuments;
   readonly usage: UsageEvent[];
   /** An MCP client connected to an address, from `peer` (the socket address) when given. */
   connect(address: string, options?: { readonly peer?: string }): Promise<Client>;
@@ -53,7 +56,7 @@ export function createHarness(testDatabase: TestDatabase, options: HarnessOption
   const host = options.host ?? createFixtureHost();
   const usage: UsageEvent[] = [];
   const logs: Record<string, unknown>[] = [];
-  const { app, snapshots, lists, showcase } = createApi(
+  const { app, snapshots, lists, showcase, legal } = createApi(
     {
       mounts: { repoTtlMs: 60_000, refTtlMs: 60_000 },
       http: {
@@ -101,6 +104,7 @@ export function createHarness(testDatabase: TestDatabase, options: HarnessOption
     snapshots,
     lists,
     showcase,
+    legal,
     usage,
     request,
     async connect(address, options = {}) {

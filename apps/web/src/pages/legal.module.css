@@ -1,0 +1,15 @@
+/* A page of the deployment's own: one column of prose, as wide as reads well. */
+.page {
+  padding-block: var(--space-7) var(--space-8);
+}
+.article {
+  max-width: 72ch;
+}
+.title {
+  margin-bottom: var(--space-3);
+}
+.revised {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-6);
+}

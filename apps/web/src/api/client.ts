@@ -1,10 +1,13 @@
 import {
   type Address,
+  type LegalDocumentKind,
+  legalPath,
   REST_ROUTES,
   type RestBrowse,
   type RestFeatured,
   type RestFile,
   type RestFind,
+  type RestLegalDocument,
   type RestMount,
   type RestShowcase,
   type RestSkill,
@@ -13,6 +16,7 @@ import {
   restFeaturedSchema,
   restFileSchema,
   restFindSchema,
+  restLegalDocumentSchema,
   restMountSchema,
   restPath,
   restShowcaseSchema,
@@ -132,4 +136,7 @@ export const api = {
 
   showcase: (signal: AbortSignal): Promise<RestShowcase> =>
     getJson(REST_ROUTES.showcase, {}, restShowcaseSchema, signal),
+
+  legal: (kind: LegalDocumentKind, signal: AbortSignal): Promise<RestLegalDocument> =>
+    getJson(legalPath(kind), {}, restLegalDocumentSchema, signal),
 };

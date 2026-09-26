@@ -1,4 +1,4 @@
-import type { RestMount, RestShowcase, RestSkill } from "@skillcdn/core";
+import type { RestLegalDocument, RestMount, RestShowcase, RestSkill } from "@skillcdn/core";
 import { StrictMode } from "react";
 import { renderToString } from "react-dom/server";
 import { type InitialData, type InitialResource, renderInitialData } from "./api/initial-data.js";
@@ -14,6 +14,7 @@ import {
   type Language,
   withLanguage,
 } from "./i18n/languages.js";
+import { LegalPage } from "./pages/legal.js";
 import { MountPage } from "./pages/mount.js";
 import { matchRoute, PATHS } from "./router.js";
 import { buildHead, type PageData, renderHead } from "./seo/head.js";
@@ -226,6 +227,56 @@ export function renderLandingPage(template: string, input: LandingPageInput): Ad
         initialLocation={{ pathname: PATHS.landing, search: input.search }}
         origin={input.origin}
         initialData={initialData}
+        preferredLanguage={language}
+      />
+    </StrictMode>,
+  );
+  const html = renderDocument(template, {
+    htmlLang: LANGUAGE_INFO[language].htmlLang,
+    head: renderHead(head),
+    body,
+    routeName: route.name,
+    initialData,
+  });
+  return { html, indexable: head.indexable };
+}
+
+/** What the server knows when it renders a page of the deployment's own. */
+export interface LegalPageInput {
+  readonly language: string;
+  readonly origin: string;
+  /** `/terms` or `/privacy`. */
+  readonly pathname: string;
+  readonly search: string;
+  /** The document, or why there is none, as the REST API would answer. */
+  readonly data: {
+    readonly legal?: InitialResource | undefined;
+  };
+}
+
+/**
+ * A page of the deployment's own (ADR-0029), rendered with its document so that a crawler reads
+ * what a person sees; without one it is the page that says so, and is not indexed.
+ */
+export function renderLegalPage(template: string, input: LegalPageInput): AddressPageOutput {
+  const language = isLanguage(input.language) ? input.language : DEFAULT_LANGUAGE;
+  const route = matchRoute(input.pathname, input.search);
+  const initialData: Record<string, InitialResource> = {};
+  const pageData: { legal?: RestLegalDocument } = {};
+  if (route.name === "legal" && input.data.legal !== undefined) {
+    initialData[resourceKeys.legal(route.kind)] = input.data.legal;
+    if (input.data.legal.ready !== undefined) {
+      pageData.legal = input.data.legal.ready as RestLegalDocument;
+    }
+  }
+  const head = buildHead(route, language, input.origin, pageData satisfies PageData);
+  const body = renderToString(
+    <StrictMode>
+      <App
+        initialLocation={{ pathname: input.pathname, search: input.search }}
+        origin={input.origin}
+        initialData={initialData}
+        legalPage={LegalPage}
         preferredLanguage={language}
       />
     </StrictMode>,

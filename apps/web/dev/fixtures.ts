@@ -1,6 +1,8 @@
 import type {
+  LegalDocumentKind,
   RestDiagnostic,
   RestDocumentSummary,
+  RestLegalDocument,
   RestRepoTranslation,
   RestSkill,
   RestSkillSummary,
@@ -482,6 +484,46 @@ export const FIXTURE_REPOSITORIES: Readonly<Record<string, FixtureRepository>> =
 };
 
 export const FIXTURE_FEATURED = ["acme/skills", "acme/handbook", "demo/indexing", "demo/failed"];
+
+/**
+ * The deployment's own pages (ADR-0029): terms written through the admin API in two languages;
+ * the privacy policy left unwritten, so that its page shows what an unwritten page is.
+ */
+export const FIXTURE_LEGAL: Readonly<Partial<Record<LegalDocumentKind, RestLegalDocument>>> = {
+  terms: {
+    kind: "terms",
+    revised: "2026-10-01",
+    texts: {
+      en: {
+        title: "Terms of service",
+        body: [
+          "These terms govern the use of this deployment. They are an example written into the fixtures; a real deployment writes its own through the admin API.",
+          "",
+          "## What the service does",
+          "",
+          "It reads, indexes and serves what a repository publishes, keeps copies only to serve them, and takes them down on request.",
+          "",
+          "## Your responsibilities",
+          "",
+          "- Connect only repositories you may use.",
+          "- Do not use the service to distribute content you have no right to.",
+          "",
+          "Questions go to the contact in the footer, and the [privacy policy](/privacy) says what is kept.",
+        ].join("\n"),
+      },
+      ko: {
+        title: "이용약관",
+        body: [
+          "이 약관은 이 배포의 이용에 적용됩니다. 픽스처에 적힌 예시이며, 실제 배포는 관리 API로 자체 약관을 씁니다.",
+          "",
+          "## 서비스가 하는 일",
+          "",
+          "저장소가 공개한 것을 읽고 색인하고 제공하며, 제공을 위해서만 사본을 두고, 요청이 있으면 내립니다.",
+        ].join("\n"),
+      },
+    },
+  },
+};
 
 export function summaryOf(detail: SkillDetail): RestSkillSummary {
   return {

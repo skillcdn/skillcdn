@@ -293,6 +293,11 @@ export const en = {
     decline: "No thanks",
   },
 
+  legal: {
+    /** Under the title of a page of the deployment's own: when its text was last revised. */
+    revised: (date: string) => `Last revised ${date}`,
+  },
+
   footer: {
     tagline: "Skills for the AI you already use.",
     source: "Source on GitHub",

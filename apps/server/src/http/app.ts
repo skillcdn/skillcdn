@@ -1,6 +1,9 @@
 import { createMcpHandler } from "@modelcontextprotocol/server";
 import {
   formatAddress,
+  LEGAL_DOCUMENT_KINDS,
+  LEGAL_PAGE_PATHS,
+  type LegalDocumentKind,
   MAX_QUERY_LENGTH,
   MAX_REPO_PATH_LENGTH,
   MEDIA_ROUTE,
@@ -19,6 +22,7 @@ import { createMountServer, type ToolDependencies } from "../mcp/tools.js";
 import { ReaderInputError } from "../mounts/continuation.js";
 import type { MountReader } from "../mounts/mount-reader.js";
 import { type Mount, MountError, type MountService } from "../mounts/mount-service.js";
+import type { LegalDocuments } from "../operator/legal.js";
 import type { OperatorLists } from "../operator/lists.js";
 import type { Showcase } from "../operator/showcase.js";
 import { purgeByAddress, registerAdmin } from "./admin.js";
@@ -51,6 +55,8 @@ export interface AppDependencies {
   readonly lists: OperatorLists;
   /** The landing showcase and its uploads (ADR-0028). */
   readonly showcase: Showcase;
+  /** The deployment's own pages: its terms and its privacy policy (ADR-0029). */
+  readonly legal: LegalDocuments;
   /** The admin API, when a token is configured; without one it does not exist. */
   readonly admin: { readonly token: string } | undefined;
   /** A build of the web UI to serve. Left out, the server is MCP and REST only. */
@@ -97,10 +103,26 @@ function errorBody(code: string, message: string) {
 
 export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
   const { database, mounts, snapshots, reader, tools, logger, isShuttingDown, web } = dependencies;
+  /** Where the pages of this deployment are, as far as a request can tell. */
+  const originOf = (url: string): string => tools.publicUrl ?? new URL(url).origin;
   const webRequestOf = (c: Context<AppEnv>): WebRequest => ({
     method: c.req.method,
     url: new URL(c.req.url),
     headers: c.req.raw.headers,
+  });
+  /** The deployment's own pages that have been written (ADR-0029); none when unreadable. */
+  const writtenPages = async (): Promise<readonly LegalDocumentKind[]> => {
+    try {
+      return await dependencies.legal.written();
+    } catch (error) {
+      logger.warn({ err: error }, "the deployment's own pages could not be read");
+      return [];
+    }
+  };
+  /** A request that may be answered with a page, which links to the deployment's own pages. */
+  const pageRequestOf = async (c: Context<AppEnv>): Promise<WebRequest> => ({
+    ...webRequestOf(c),
+    legal: await writtenPages(),
   });
   const app = new Hono<AppEnv>();
   app.use(requestContext({ logger, ...dependencies.requests }));
@@ -108,8 +130,6 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
   // The MCP handler builds a server per request. The mount it serves is resolved by the route
   // below before the handler runs, and handed over through this map.
   const resolvedFor = new WeakMap<Request, { mount: Mount; requestId: string; origin: string }>();
-  /** Where the pages of this deployment are, as far as a request can tell. */
-  const originOf = (url: string): string => tools.publicUrl ?? new URL(url).origin;
   const mcp = createMcpHandler(
     async (context) => {
       const request = context.requestInfo;
@@ -208,6 +228,7 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
     },
     featured: () => dependencies.lists.featured(),
     showcase: () => dependencies.showcase.list(),
+    legal: (kind) => dependencies.legal.get(kind),
     now: dependencies.requests.now,
   });
   if (dependencies.admin !== undefined) {
@@ -215,6 +236,7 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
       token: dependencies.admin.token,
       lists: dependencies.lists,
       showcase: dependencies.showcase,
+      legal: dependencies.legal,
       purge: purgeByAddress(database),
       logger,
     });
@@ -242,7 +264,7 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
    * person sees. Serving the page resolves the address and starts indexing it, like the API.
    */
   const addressPage = async (c: Context<AppEnv>, bundle: WebBundle): Promise<Response> => {
-    const request = webRequestOf(c);
+    const request = await pageRequestOf(c);
     const parsed = parseAddress(request.url.pathname);
     if (!parsed.ok) {
       // The page explains what is wrong with the address; the status says it is nothing.
@@ -420,8 +442,33 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
         const addresses = listedAddresses();
         listed = { until: now + SITEMAP_CACHE_MS, addresses };
       }
-      return bundle.sitemap(webRequestOf(c), await listed.addresses);
+      const request = await pageRequestOf(c);
+      const pages = (request.legal ?? []).map((kind) => LEGAL_PAGE_PATHS[kind]);
+      return bundle.sitemap(request, await listed.addresses, pages);
     });
+
+    // The deployment's own pages (ADR-0029): rendered with the document, or with the absence of
+    // one, which is a page too, with the status that says so.
+    for (const kind of LEGAL_DOCUMENT_KINDS) {
+      app.on(["GET", "HEAD"], LEGAL_PAGE_PATHS[kind], async (c) => {
+        const request = await pageRequestOf(c);
+        const document = await dependencies.legal.get(kind);
+        return document === undefined
+          ? bundle.legal(
+              request,
+              kind,
+              {
+                error: {
+                  status: 404,
+                  code: "legal.not_found",
+                  message: "This page has not been written.",
+                },
+              },
+              404,
+            )
+          : bundle.legal(request, kind, { ready: document });
+      });
+    }
 
     /**
      * The operator's showcase, when there is one (ADR-0028). Without one, and when it cannot be
@@ -443,7 +490,7 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
         showcase: { readonly ready: RestShowcase },
       ) => Response | undefined,
     ): Promise<Response> => {
-      const request = webRequestOf(c);
+      const request = await pageRequestOf(c);
       const showcase = await showcaseAnswer();
       const rendered = showcase === undefined ? undefined : render(request, showcase);
       return rendered ?? bundle.respond(request) ?? c.notFound();
@@ -455,12 +502,16 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
       withShowcase(c, (request, showcase) => bundle.llmsTxt(request, showcase.ready)),
     );
 
-    app.on(["GET", "HEAD"], "*", (c) => bundle.respond(webRequestOf(c)) ?? c.notFound());
+    app.on(
+      ["GET", "HEAD"],
+      "*",
+      async (c) => bundle.respond(await pageRequestOf(c)) ?? c.notFound(),
+    );
   }
 
-  app.notFound((c) =>
+  app.notFound(async (c) =>
     web !== undefined && wantsHtml(webRequestOf(c))
-      ? web.notFound(webRequestOf(c))
+      ? web.notFound(await pageRequestOf(c))
       : c.json(errorBody("not_found", "There is nothing at this path."), 404),
   );
   app.onError((error, c) => {

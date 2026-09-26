@@ -1,6 +1,13 @@
-import { type Address, type AddressError, formatAddress, parseAddress } from "@skillcdn/core";
+import {
+  type Address,
+  type AddressError,
+  formatAddress,
+  LEGAL_PAGE_PATHS,
+  type LegalDocumentKind,
+  parseAddress,
+} from "@skillcdn/core";
 
-// Three kinds of page and no nesting, so the router is a function from a URL to a route.
+// A few kinds of page and no nesting, so the router is a function from a URL to a route.
 // Paths are the same in every language; the language travels in the query (i18n/languages.ts).
 
 export type MountView =
@@ -12,6 +19,8 @@ export type Route =
   | { readonly name: "landing" }
   | { readonly name: "explore" }
   | { readonly name: "mount"; readonly address: Address; readonly view: MountView }
+  /** A page of the deployment's own: its terms or its privacy policy (ADR-0029). */
+  | { readonly name: "legal"; readonly kind: LegalDocumentKind }
   | { readonly name: "bad-address"; readonly error: AddressError }
   /** Every state of every page, for whoever works on the design. Only in development. */
   | { readonly name: "states" }
@@ -22,6 +31,8 @@ export type Route =
 export const PATHS = {
   landing: "/",
   explore: "/explore",
+  terms: LEGAL_PAGE_PATHS.terms,
+  privacy: LEGAL_PAGE_PATHS.privacy,
   states: "/dev/states",
   ogCard: "/dev/og",
 } as const;
@@ -34,6 +45,12 @@ export function matchRoute(pathname: string, search: string, development = false
   }
   if (pathname === PATHS.explore) {
     return { name: "explore" };
+  }
+  if (pathname === PATHS.terms) {
+    return { name: "legal", kind: "terms" };
+  }
+  if (pathname === PATHS.privacy) {
+    return { name: "legal", kind: "privacy" };
   }
   if (pathname.startsWith(MOUNT_PREFIX)) {
     const parsed = parseAddress(pathname);

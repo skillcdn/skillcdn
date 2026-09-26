@@ -219,6 +219,58 @@ describe("a server with a web build", () => {
     expect(await h.showcase.removeMedia(poster.sha)).toBe("removed");
   });
 
+  it("serves the deployment's own pages once written, links every page to them, and lists them", async () => {
+    // Configured URLs stand until a page is written into the deployment (ADR-0029).
+    const configured = await loadWebBundle(build.root, {
+      publicUrl: "https://skills.example",
+      tags: { termsUrl: "https://elsewhere.example/terms" },
+    });
+    const h = createHarness(testDatabase, { web: configured });
+    const before = await (await h.request("/", { headers: BROWSER })).text();
+    expect(before).toContain(
+      '<link rel="terms-of-service" href="https://elsewhere.example/terms">',
+    );
+    expect(before).not.toContain("privacy-policy");
+    const missing = await h.request("/privacy", { headers: BROWSER });
+    expect(missing.status).toBe(404);
+    expect(missing.headers.get("content-type")).toBe("text/html; charset=utf-8");
+    expect((await inputOf(missing)).data).toMatchObject({
+      legal: { error: { status: 404, code: "legal.not_found" } },
+    });
+    expect(await (await h.request("/sitemap.xml")).text()).not.toContain("/privacy");
+
+    await h.legal.put("privacy", {
+      revised: "2026-10-01",
+      texts: { en: { title: "Privacy", body: "We keep little." } },
+    });
+    await h.legal.put("terms", { texts: { en: { title: "Terms", body: "Be kind." } } });
+    const page = await h.request("/privacy?lang=ko", { headers: BROWSER });
+    expect(page.status).toBe(200);
+    expect(await inputOf(page)).toMatchObject({
+      language: "ko",
+      origin: "https://skills.example",
+      pathname: "/privacy",
+      search: "?lang=ko",
+      data: { legal: { ready: { kind: "privacy", revised: "2026-10-01" } } },
+    });
+    // Every page now links to the written pages, before the configured URL.
+    const after = await (await h.request("/", { headers: BROWSER })).text();
+    expect(after).toContain('<link rel="terms-of-service" href="https://skills.example/terms">');
+    expect(after).toContain('<link rel="privacy-policy" href="https://skills.example/privacy">');
+    expect(after).not.toContain("elsewhere.example");
+    const address = await (await h.request("/gh/acme/no-such-repo", { headers: BROWSER })).text();
+    expect(address).toContain('<link rel="privacy-policy" href="https://skills.example/privacy">');
+    const xml = await (await h.request("/sitemap.xml")).text();
+    expect(xml).toContain("<loc>https://skills.example/terms</loc>");
+    expect(xml).toContain("<loc>https://skills.example/privacy?lang=ko</loc>");
+
+    await h.legal.remove("terms");
+    await h.legal.remove("privacy");
+    expect(await (await h.request("/", { headers: BROWSER })).text()).toContain(
+      "https://elsewhere.example/terms",
+    );
+  });
+
   it("lists the featured and the vouched-for repositories in the sitemap, and nothing else", async () => {
     // Until the operator features something, the reference repository is featured (ADR-0028).
     const fresh = createHarness(testDatabase, { web });

@@ -14,6 +14,7 @@ import {
   findRepoByAlias,
   findSkills,
   getEntry,
+  getLegalDocument,
   getManifest,
   getOperatorMedia,
   getSchemaStatus,
@@ -21,6 +22,7 @@ import {
   getSnapshotDiagnostics,
   listDirectory,
   listEntries,
+  listLegalDocuments,
   listOperatorMedia,
   listOperatorRepositories,
   listShowcaseEntries,
@@ -28,9 +30,11 @@ import {
   migrateDatabase,
   type NewIndexEntry,
   purgeRepository,
+  putLegalDocument,
   putOperatorMedia,
   putShowcaseEntry,
   releaseSnapshot,
+  removeLegalDocument,
   removeOperatorMedia,
   removeOperatorRepository,
   removeShowcaseEntry,
@@ -859,6 +863,33 @@ describe("the landing showcase", () => {
     expect(await removeOperatorMedia(database, poster)).toBe("removed");
     expect(await getOperatorMedia(database, poster)).toBeUndefined();
     expect((await listOperatorMedia(database)).map((upload) => upload.sha)).toEqual([clip]);
+  });
+});
+
+describe("the deployment's own pages", () => {
+  it("keep one document per kind, replaced as a whole", async () => {
+    const texts = { en: { title: "Terms", body: "Be kind." } };
+    expect(await putLegalDocument(database, { kind: "terms", revised: null, texts })).toBe(
+      "created",
+    );
+    expect(
+      await putLegalDocument(database, {
+        kind: "terms",
+        revised: "2026-10-01",
+        texts: { ...texts, ko: { title: "이용약관", body: "친절하세요." } },
+      }),
+    ).toBe("updated");
+    expect(await getLegalDocument(database, "privacy")).toBeUndefined();
+    expect(await getLegalDocument(database, "terms")).toMatchObject({
+      kind: "terms",
+      revised: "2026-10-01",
+      texts: { en: texts.en, ko: { title: "이용약관" } },
+    });
+    expect((await listLegalDocuments(database)).map((document) => document.kind)).toEqual([
+      "terms",
+    ]);
+    expect(await removeLegalDocument(database, "terms")).toBe(true);
+    expect(await removeLegalDocument(database, "terms")).toBe(false);
   });
 });
 

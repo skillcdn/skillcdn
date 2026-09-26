@@ -2,6 +2,7 @@ import {
   REFERENCE_REPOSITORY_ADDRESS,
   type RestBrowse,
   type RestFeatured,
+  type RestLegalDocument,
   type RestMount,
   type RestShowcase,
   type RestSkill,
@@ -15,6 +16,7 @@ import {
   renderAddressPage,
   renderDocument,
   renderLandingPage,
+  renderLegalPage,
   renderLlmsTxt,
   renderNotFound,
   renderPage,
@@ -732,6 +734,84 @@ describe("the page of an address", () => {
     expect(address.html).toContain('"description":"Prices in $& and $` or $\' for $$1 $');
     expect(address.html).toContain("Prices in $&amp; and $` or $&#x27; for $$1 $&lt;name&gt;");
     expect(address.html.match(/<body>/g)).toHaveLength(1);
+  });
+});
+
+describe("a page of the deployment's own", () => {
+  const ENGLISH = {
+    title: "Terms of service",
+    body: "Be **kind**, and read the [privacy policy](/privacy).\n\n## Scope\n\nEverything here.",
+  };
+  const TERMS: RestLegalDocument = {
+    kind: "terms",
+    revised: "2026-10-01",
+    texts: { en: ENGLISH, ko: { title: "이용약관", body: "친절하세요." } },
+  };
+  const origin = "https://skills.example";
+
+  it("renders the document as Markdown in the visitor's language, with a head that says so", () => {
+    const { html, indexable } = renderLegalPage(TEMPLATE, {
+      language: "en",
+      origin,
+      pathname: "/terms",
+      search: "",
+      data: { legal: { ready: TERMS } },
+    });
+    expect(indexable).toBe(true);
+    expect(html).toContain('data-prerendered="legal" data-lang="en"');
+    expect(html).toContain(">Terms of service</h1>");
+    expect(html).toContain("<strong>kind</strong>");
+    expect(html).toContain('href="/privacy"');
+    expect(html).toContain(">Scope</h2>");
+    expect(html).toContain(messagesFor("en").legal.revised("2026-10-01"));
+    expect(html).toContain('<title data-head="">Terms of service | SkillCDN</title>');
+    expect(html).toContain('<link rel="canonical" href="https://skills.example/terms"');
+    expect(html).toContain(
+      '<meta name="description" content="Be kind, and read the privacy policy."',
+    );
+    expect(html).toContain('<script type="application/json" id="skillcdn-data">');
+    // The visitor's language when it was written in it, else the default language.
+    const korean = renderLegalPage(TEMPLATE, {
+      language: "ko",
+      origin,
+      pathname: "/terms",
+      search: "?lang=ko",
+      data: { legal: { ready: TERMS } },
+    }).html;
+    expect(korean).toContain(">이용약관</h1>");
+    expect(korean).toContain("친절하세요.");
+    expect(korean).not.toContain("<strong>kind</strong>");
+    const fallback = renderLegalPage(TEMPLATE, {
+      language: "ko",
+      origin,
+      pathname: "/terms",
+      search: "?lang=ko",
+      data: { legal: { ready: { ...TERMS, texts: { en: ENGLISH } } } },
+    }).html;
+    expect(fallback).toContain(">Terms of service</h1>");
+    expect(fallback).toContain('<html lang="ko">');
+  });
+
+  it("is not there when it has not been written", () => {
+    const { html, indexable } = renderLegalPage(TEMPLATE, {
+      language: "en",
+      origin,
+      pathname: "/privacy",
+      search: "",
+      data: {
+        legal: {
+          error: {
+            status: 404,
+            code: "legal.not_found",
+            message: "This page has not been written.",
+          },
+        },
+      },
+    });
+    expect(indexable).toBe(false);
+    expect(html).toContain(messagesFor("en").notFound.title);
+    expect(html).toContain('content="noindex,follow"');
+    expect(html).toContain('<title data-head="">Privacy | SkillCDN</title>');
   });
 });
 

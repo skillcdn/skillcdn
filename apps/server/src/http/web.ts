@@ -4,6 +4,7 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { Readable } from "node:stream";
 import { pathToFileURL } from "node:url";
+import { LEGAL_PAGE_PATHS, type LegalDocumentKind } from "@skillcdn/core";
 import * as z from "zod";
 
 // Serves a build of the web UI (ADR-0009). The server knows nothing about the UI: the build
@@ -155,12 +156,6 @@ function headTags(tags: PageTags): { readonly html: string; readonly inlineScrip
       `<meta name="google-site-verification" content="${escapeAttribute(tags.googleSiteVerification)}">`,
     );
   }
-  if (tags.termsUrl !== undefined) {
-    elements.push(`<link rel="${LEGAL_TAGS.terms}" href="${escapeAttribute(tags.termsUrl)}">`);
-  }
-  if (tags.privacyUrl !== undefined) {
-    elements.push(`<link rel="${LEGAL_TAGS.privacy}" href="${escapeAttribute(tags.privacyUrl)}">`);
-  }
   if (tags.contactEmail !== undefined) {
     elements.push(
       `<meta name="${LEGAL_TAGS.contact}" content="${escapeAttribute(tags.contactEmail)}">`,
@@ -189,6 +184,33 @@ function headTags(tags: PageTags): { readonly html: string; readonly inlineScrip
 
 const HEAD_OPEN = /<head(\s[^>]*)?>/i;
 
+/**
+ * The terms and the privacy policy as standard link types, decided per request: a page written
+ * into the deployment (ADR-0029) comes before a configured URL (ADR-0026), and what has neither
+ * links to nothing.
+ */
+function legalTags(termsUrl: string | undefined, privacyUrl: string | undefined): string {
+  const elements: string[] = [];
+  if (termsUrl !== undefined) {
+    elements.push(`<link rel="${LEGAL_TAGS.terms}" href="${escapeAttribute(termsUrl)}">`);
+  }
+  if (privacyUrl !== undefined) {
+    elements.push(`<link rel="${LEGAL_TAGS.privacy}" href="${escapeAttribute(privacyUrl)}">`);
+  }
+  return elements.join("\n");
+}
+
+const HEAD_CLOSE = /<\/head>/i;
+
+/** `elements` at the end of the head; a document without one is returned as it is. */
+function beforeHeadClose(html: string, elements: string): string {
+  const closed = HEAD_CLOSE.exec(html);
+  if (closed === null || elements === "") {
+    return html;
+  }
+  return `${html.slice(0, closed.index)}${elements}\n${html.slice(closed.index)}`;
+}
+
 export class WebBundleError extends Error {
   constructor(message: string, options?: { readonly cause?: unknown }) {
     super(message, options);
@@ -208,6 +230,11 @@ export interface WebRequest {
   readonly method: string;
   readonly url: URL;
   readonly headers: Headers;
+  /**
+   * The deployment's own pages that have been written (ADR-0029): what a page links to as the
+   * terms and the privacy policy, on this origin, before the configured URLs. Left out, those stand.
+   */
+  readonly legal?: readonly LegalDocumentKind[];
 }
 
 /** An answer the page would otherwise ask the REST API for, given to it up front. */
@@ -256,6 +283,17 @@ interface RenderModule {
     },
   ): { readonly html: string; readonly indexable: boolean };
   renderLlmsTxt?(language: string, showcase: unknown): string;
+  /** A page of the deployment's own with its document, or with why there is none (ADR-0029). */
+  renderLegalPage?(
+    template: string,
+    input: {
+      readonly language: string;
+      readonly origin: string;
+      readonly pathname: string;
+      readonly search: string;
+      readonly data: { readonly legal: PageAnswer };
+    },
+  ): { readonly html: string; readonly indexable: boolean };
 }
 
 export interface WebBundle {
@@ -273,8 +311,16 @@ export interface WebBundle {
   landing(request: WebRequest, showcase: PageAnswer): Response | undefined;
   /** llms.txt written with the operator's showcase, or `undefined` when the build cannot. */
   llmsTxt(request: WebRequest, showcase: unknown): Response | undefined;
-  /** The sitemap: the indexable pages of the build, and these addresses, in every language. */
-  sitemap(request: WebRequest, addresses: readonly string[]): Response;
+  /**
+   * A page of the deployment's own (ADR-0029), rendered with its document, or with the absence
+   * of one, when the build can render; else the frame in which the browser renders it.
+   */
+  legal(request: WebRequest, kind: string, data: PageAnswer, status?: number): Response;
+  /**
+   * The sitemap: the indexable pages of the build, these addresses, and these pages of the
+   * deployment's own, in every language.
+   */
+  sitemap(request: WebRequest, addresses: readonly string[], pages?: readonly string[]): Response;
   /** The page for a URL that is nothing, with status 404. */
   notFound(request: WebRequest): Response;
 }
@@ -621,10 +667,22 @@ export async function loadWebBundle(
     language: string,
     status: number,
     extra: Record<string, string> = {},
-  ): Response =>
-    text(
+  ): Response => {
+    // The links to the terms and the privacy policy follow what exists right now: a page written
+    // into the deployment, on this origin, else the configured URL.
+    const written = (kind: LegalDocumentKind): string | undefined =>
+      request.legal?.includes(kind) === true
+        ? `${originOf(request)}${LEGAL_PAGE_PATHS[kind]}`
+        : undefined;
+    return text(
       request,
-      body,
+      beforeHeadClose(
+        body,
+        legalTags(
+          written("terms") ?? options.tags?.termsUrl,
+          written("privacy") ?? options.tags?.privacyUrl,
+        ),
+      ),
       {
         "content-type": HTML,
         "content-language": language,
@@ -635,6 +693,7 @@ export async function loadWebBundle(
       },
       status,
     );
+  };
 
   const page = (
     request: WebRequest,
@@ -688,7 +747,11 @@ export async function loadWebBundle(
     );
   };
 
-  const sitemap = (request: WebRequest, addresses: readonly string[]): Response => {
+  const sitemap = (
+    request: WebRequest,
+    addresses: readonly string[],
+    pages: readonly string[] = [],
+  ): Response => {
     const origin = originOf(request);
     const entries = [
       ...manifest.routes
@@ -700,6 +763,7 @@ export async function loadWebBundle(
             languages.filter((code) => route.files[code] !== undefined),
           ),
         ),
+      ...pages.flatMap((path) => sitemapEntry(origin, path, languages)),
       ...addresses.flatMap((address) => sitemapEntry(origin, address, languages)),
     ];
     return text(
@@ -825,6 +889,31 @@ export async function loadWebBundle(
         withOrigin(rendered.html, origin),
         language,
         200,
+        varyOn(forced, undefined),
+      );
+    },
+    legal(request, kind, data, status = 200) {
+      const render = renderer?.module.renderLegalPage;
+      if (renderer === undefined || render === undefined) {
+        return page(request, manifest.shell, HTML, status);
+      }
+      const origin = originOf(request);
+      const { language, forced } = languageOf(request);
+      const rendered = render.call(renderer.module, renderer.template, {
+        language,
+        origin,
+        pathname: request.url.pathname,
+        search: request.url.search,
+        data: { legal: data },
+      });
+      if (typeof rendered !== "object" || rendered === null || typeof rendered.html !== "string") {
+        throw new WebBundleError(`the render module did not return the ${kind} page`);
+      }
+      return html(
+        request,
+        withOrigin(rendered.html, origin),
+        language,
+        status,
         varyOn(forced, undefined),
       );
     },

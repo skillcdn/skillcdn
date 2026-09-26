@@ -44,7 +44,7 @@ The server is configured only through environment variables. [`.env.example`](..
 | `ADMIN_TOKEN` | `api` | no | **yes** | Bearer token of the [admin API](#the-admin-api). At least 32 characters. Unset: the admin API does not exist. |
 | `GOOGLE_SITE_VERIFICATION` | `api` | no | no | The content of the `google-site-verification` meta tag a search console asks for; written into the head of every page. |
 | `GOOGLE_ANALYTICS_ID` | `api` | no | no | A Google Analytics measurement id (`G-...`). Set, every page asks the visitor once, in a banner, and loads the analytics script only after they agree; consent mode starts with everything denied, and a browser that signals Global Privacy Control or Do Not Track is never asked and never loads it. The content security policy allows the script's sources and nothing else new. |
-| `TERMS_URL`, `PRIVACY_URL` | `api` | no | no | Where the deployment's terms of service and privacy policy are. Each is written into the head of every page as a standard link type and shown in the footer, only when set. See [Operating a public deployment](#operating-a-public-deployment). |
+| `TERMS_URL`, `PRIVACY_URL` | `api` | no | no | Where the deployment's terms of service and privacy policy are, when they are hosted elsewhere. A page written into the deployment through the [admin API](#the-admin-api) is served at `/terms` or `/privacy` and comes first ([ADR-0029](../docs/adr/0029-terms-and-privacy-pages-can-be-written-into-the-deployment.md)). Whichever exists is written into the head of every page as a standard link type and shown in the footer. See [Operating a public deployment](#operating-a-public-deployment). |
 | `CONTACT_EMAIL` | `api` | no | no | Whom to write to about content: takedown requests and reports. Shown in the footer as a link, only when set. |
 | `USAGE_STATS`, `USAGE_STATS_FLUSH_SECONDS` | `api` | no | no | Daily counts per public repository (connections, tool calls, skill loads, distinct clients), without anything that identifies a client: addresses are hashed under the key of the day, and the rows of a day are folded into a count and deleted when it is over. Defaults `true` and `15`. |
 | `USAGE_HASH_SECRET` | `api` | no | **yes** | What client hashes are keyed from ([ADR-0027](../docs/adr/0027-client-hashes-are-keyed-from-a-configured-secret-and-the-day.md)); at least 32 characters. Unset, each process makes its own at start, and replicas or restarts within a day count a client more than once. Set it for more than one replica, or for exact counts. |
@@ -73,6 +73,9 @@ The operator's lists and the takedown ([ADR-0026](../docs/adr/0026-serving-follo
 | `GET /admin/v1/media` | The uploads: hash, type, size, URL, and which entries use each. |
 | `POST /admin/v1/media` | Stores the request body as an upload of the `content-type` sent: `video/mp4`, `video/webm`, `image/avif`, `image/webp`, `image/png`, `image/jpeg` or `image/gif`, at most 16 MiB. Answers with its `sha`, the SHA-256 of the bytes, and the `url` it is served at for everyone, `/media/<sha>`, immutably. The same bytes are the same upload. |
 | `DELETE /admin/v1/media/<sha>` | Removes an upload; `409` while an entry uses it. |
+| `GET /admin/v1/legal` | The deployment's own pages that have been written ([ADR-0029](../docs/adr/0029-terms-and-privacy-pages-can-be-written-into-the-deployment.md)): its terms of service and its privacy policy. |
+| `PUT /admin/v1/legal/<kind>` | Writes the page of `<kind>` (`terms` or `privacy`) from a JSON body, replacing what was there: `texts` by language tag, each with a `title` and a `body` in Markdown, and an optional `revised` date (`YYYY-MM-DD`). The page is then served at `/terms` or `/privacy` on the deployment's own origin, and every page links to it. |
+| `DELETE /admin/v1/legal/<kind>` | Removes the page. The configured URL, when there is one, is linked again. |
 
 What the lists do: a `verified` repository carries no provenance notice on its default branch; a `featured` address is shown by the explorer, and while there is none the reference repository of this project is; a `blocked` repository answers exactly like one that does not exist. The sitemap lists the featured addresses and the verified repositories, minus anything blocked. A process sees a change made through another process within thirty seconds.
 
@@ -119,12 +122,28 @@ An entry is a JSON document:
 }
 ```
 
+The deployment's own pages take the same shape in miniature. Writing them here keeps their URLs on your own origin, `/terms` and `/privacy`, which is what the head, the footer and the consent banner then link to; `TERMS_URL` and `PRIVACY_URL` are for pages hosted elsewhere. A visitor reads their language, else the default language of the pages.
+
+```sh
+curl -X PUT -H "Authorization: Bearer $ADMIN_TOKEN" -H "content-type: application/json" --data @terms.json https://skills.example.com/admin/v1/legal/terms
+```
+
+```json
+{
+  "revised": "2026-10-01",
+  "texts": {
+    "en": { "title": "Terms of service", "body": "## Scope\n\nThese terms govern ..." },
+    "ko": { "title": "이용약관", "body": "## 적용 범위\n\n이 약관은 ..." }
+  }
+}
+```
+
 ## Operating a public deployment
 
 Everything above suits a private installation as it comes. A deployment that serves other people's repositories to the public has more to say and to answer for. Before opening one up:
 
 - Set `PUBLIC_URL` to the origin visitors use, so that canonical links and the sitemap are yours.
-- Publish terms of service and a privacy policy, and set `TERMS_URL` and `PRIVACY_URL`; set `CONTACT_EMAIL` to an address that reads takedown requests and content reports. The pages show all three in the footer and carry them in the head.
+- Publish terms of service and a privacy policy: write them into the deployment through the [admin API](#the-admin-api), which serves them at `/terms` and `/privacy` in every language you write them in, or host them elsewhere and set `TERMS_URL` and `PRIVACY_URL`. Set `CONTACT_EMAIL` to an address that reads takedown requests and content reports. The pages show all three in the footer and carry them in the head.
 - Know what the service does with content, and say it where your visitors can read it: it reads, indexes and serves what a repository publishes, keeps copies only to serve them, and serves or describes a skill by the license it carries ([format](../docs/specs/skill-repo.md#licenses)). A takedown is one entry on the blocked list and one purge through the [admin API](#the-admin-api); keep `ADMIN_TOKEN` where only the operator can reach it.
 - Decide what you vouch for. A `verified` repository is served in full on its default branch whatever its license says, and carries no provenance notice: put only repositories there whose owners agreed.
 - Analytics load only after the visitor agrees in the banner the pages show, and never for a browser that signals a privacy preference. Say in your privacy policy what `GOOGLE_ANALYTICS_ID` sends where, or leave it unset.

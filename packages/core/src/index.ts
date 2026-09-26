@@ -169,6 +169,20 @@ export {
   restSkillTranslationsSchema,
 } from "./rest/contracts.js";
 export {
+  isLegalDocumentKind,
+  LEGAL_DOCUMENT_KINDS,
+  LEGAL_PAGE_PATHS,
+  type LegalDocumentInput,
+  type LegalDocumentKind,
+  type LegalTexts,
+  legalDocumentInputSchema,
+  legalPath,
+  legalTextsSchema,
+  MAX_LEGAL_BODY_LENGTH,
+  type RestLegalDocument,
+  restLegalDocumentSchema,
+} from "./rest/legal.js";
+export {
   completeShowcaseTexts,
   IMAGE_CONTENT_TYPES,
   MAX_MEDIA_BYTES,

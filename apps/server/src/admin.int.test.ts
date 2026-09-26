@@ -1,4 +1,4 @@
-import { restShowcaseSchema } from "@skillcdn/core";
+import { restLegalDocumentSchema, restShowcaseSchema } from "@skillcdn/core";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createFixtureHost, fixtureCommits } from "./testing/fixture-host.js";
@@ -317,5 +317,56 @@ describe("the landing showcase in the admin API (ADR-0028)", () => {
     expect((await remove("/admin/v1/showcase/spring")).status).toBe(404);
     expect((await remove(`/admin/v1/media/${poster.sha}`)).status).toBe(200);
     expect(await (await h.request("/api/v1/showcase")).json()).toEqual({ items: [] });
+  });
+});
+
+describe("the deployment's own pages in the admin API (ADR-0029)", () => {
+  it("writes the terms and the privacy policy as Markdown per language, and serves them to everyone", async () => {
+    const h = createHarness(testDatabase, { adminToken: TOKEN });
+    const asJson = { ...authorized, "content-type": "application/json" };
+    const put = (kind: string, body: unknown) =>
+      h.request(`/admin/v1/legal/${kind}`, {
+        method: "PUT",
+        headers: asJson,
+        body: JSON.stringify(body),
+      });
+    expect((await h.request("/api/v1/legal/terms")).status).toBe(404);
+    expect((await h.request("/api/v1/legal/imprint")).status).toBe(404);
+    expect((await put("imprint", { texts: { en: { title: "Imprint", body: "x" } } })).status).toBe(
+      404,
+    );
+    const empty = await put("terms", { texts: {} });
+    expect(empty.status).toBe(400);
+    expect(await empty.json()).toMatchObject({ error: { code: "legal.invalid" } });
+    expect(
+      (await put("terms", { revised: "yesterday", texts: { en: { title: "Terms", body: "x" } } }))
+        .status,
+    ).toBe(400);
+
+    const texts = {
+      en: { title: "Terms of service", body: "Be **kind**." },
+      ko: { title: "이용약관", body: "친절하세요." },
+    };
+    const written = await put("terms", { revised: "2026-10-01", texts });
+    expect(written.status).toBe(200);
+    expect(await written.json()).toEqual({ kind: "terms", revised: "2026-10-01", texts });
+    const shown = await h.request("/api/v1/legal/terms");
+    expect(shown.status).toBe(200);
+    expect(shown.headers.get("cache-control")).toBe("no-store");
+    expect(restLegalDocumentSchema.parse(await shown.json()).texts.ko?.title).toBe("이용약관");
+    expect(await (await h.request("/admin/v1/legal", { headers: authorized })).json()).toEqual({
+      items: [{ kind: "terms", revised: "2026-10-01", texts }],
+    });
+    // Replaced as a whole: a language left out is gone.
+    await put("terms", { texts: { en: texts.en } });
+    expect(
+      restLegalDocumentSchema.parse(await (await h.request("/api/v1/legal/terms")).json()),
+    ).toEqual({ kind: "terms", revised: null, texts: { en: texts.en } });
+
+    const remove = () =>
+      h.request("/admin/v1/legal/terms", { method: "DELETE", headers: authorized });
+    expect((await remove()).status).toBe(200);
+    expect((await remove()).status).toBe(404);
+    expect((await h.request("/api/v1/legal/terms")).status).toBe(404);
   });
 });

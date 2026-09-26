@@ -52,9 +52,11 @@ src/
   http/          Hono app: /healthz, /readyz, the route that turns a URL into a mount, the REST API,
                  the admin API, the uploads of the showcase at /media/<sha>, what every request gets
                  (id, client address, access log), and web.ts, which serves a build of the web UI from
-                 its manifest (pages per language, files, sitemap, robots), and the page of an address
-                 and the front page with the operator's showcase through the build's render module
-  operator/      the operator's lists and the landing showcase with its uploads (ADR-0026, ADR-0028)
+                 its manifest (pages per language, files, sitemap, robots), and through the build's
+                 render module the page of an address, the front page with the operator's showcase,
+                 and the deployment's own pages at /terms and /privacy
+  operator/      the operator's lists, the landing showcase with its uploads, and the deployment's
+                 own pages (ADR-0026, ADR-0028, ADR-0029)
   mcp/           the per-request MCP server and the tool handlers (contracts come from @skillcdn/core)
   mounts/        address -> repository and commit, through the database first and the git host second;
                  MountReader answers questions about a mount as data, for MCP and REST alike

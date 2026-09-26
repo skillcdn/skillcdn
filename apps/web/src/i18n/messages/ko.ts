@@ -282,6 +282,10 @@ export const ko: Messages = {
     decline: "괜찮아요",
   },
 
+  legal: {
+    revised: (date: string) => `최종 개정일 ${date}`,
+  },
+
   footer: {
     tagline: "쓰던 AI에 더하는 스킬.",
     source: "GitHub의 소스",

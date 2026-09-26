@@ -1,4 +1,4 @@
-import type { RestMount, RestShowcase, RestSkill } from "@skillcdn/core";
+import type { RestLegalDocument, RestMount, RestShowcase, RestSkill } from "@skillcdn/core";
 import { describe, expect, it } from "vitest";
 import { LANGUAGES } from "../i18n/languages.js";
 import { matchRoute } from "../router.js";
@@ -317,6 +317,33 @@ describe("renderHead", () => {
     const hidden = renderHead(buildHead(matchRoute("/gh/acme/skills", ""), "en", ORIGIN));
     expect(hidden).toContain('<meta name="robots" content="noindex,follow"');
     expect(hidden).not.toContain("canonical");
+  });
+
+  it("names a page of the deployment's own after its document, and hides one not written", () => {
+    const document: RestLegalDocument = {
+      kind: "privacy",
+      revised: null,
+      texts: { en: { title: "Privacy policy", body: "We keep **little**.\n\nDetails follow." } },
+    };
+    const written = buildHead(matchRoute("/privacy", ""), "ko", ORIGIN, { legal: document });
+    expect(written).toMatchObject({
+      indexable: true,
+      canonical: "https://skills.example/privacy?lang=ko",
+      title: "Privacy policy | SkillCDN",
+      description: "We keep little.",
+    });
+    expect(written.alternates.map((alternate) => alternate.hreflang)).toEqual([
+      "en",
+      "ko",
+      "x-default",
+    ]);
+    const unwritten = buildHead(matchRoute("/terms", ""), "en", ORIGIN);
+    expect(unwritten).toMatchObject({
+      indexable: false,
+      canonical: undefined,
+      title: "Terms | SkillCDN",
+      description: "",
+    });
   });
 
   it("escapes what comes from a URL", () => {

@@ -20,6 +20,14 @@ export {
   servedEntries,
 } from "./queries/entries.js";
 export {
+  getLegalDocument,
+  type LegalDocumentInput,
+  type LegalDocumentRecord,
+  listLegalDocuments,
+  putLegalDocument,
+  removeLegalDocument,
+} from "./queries/legal.js";
+export {
   addOperatorRepository,
   listOperatorRepositories,
   OPERATOR_LIST_KINDS,

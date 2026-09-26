@@ -24,6 +24,7 @@ import type { Logger } from "../logger.js";
 import { MountReader } from "../mounts/mount-reader.js";
 import { MountService } from "../mounts/mount-service.js";
 import { createOperatorEntitlements } from "../operator/entitlements.js";
+import { LegalDocuments } from "../operator/legal.js";
 import { OperatorLists } from "../operator/lists.js";
 import { Showcase } from "../operator/showcase.js";
 import { noUsageStats, UsageRecorder, type UsageStats } from "../stats/usage-recorder.js";
@@ -66,6 +67,7 @@ export function createApi(
   readonly snapshots: SnapshotService;
   readonly lists: OperatorLists;
   readonly showcase: Showcase;
+  readonly legal: LegalDocuments;
 } {
   const { database, gitHost, clock, usage, logger } = ports;
   const blobStore = createBlobStore(database);
@@ -74,6 +76,7 @@ export function createApi(
   // The operator's deny list decides first; whatever the port was given decides the rest.
   const lists = new OperatorLists({ database, clock });
   const showcase = new Showcase({ database, clock, logger });
+  const legal = new LegalDocuments({ database, clock });
   const entitlements = createOperatorEntitlements(lists, ports.entitlements);
   const mounts = new MountService({
     database,
@@ -107,6 +110,7 @@ export function createApi(
     reader,
     lists,
     showcase,
+    legal,
     admin: config.admin?.token === undefined ? undefined : { token: config.admin.token },
     web: ports.web,
     logger,
@@ -131,7 +135,7 @@ export function createApi(
       publicUrl: config.web?.publicUrl,
     },
   });
-  return { app, snapshots, lists, showcase };
+  return { app, snapshots, lists, showcase, legal };
 }
 
 /**

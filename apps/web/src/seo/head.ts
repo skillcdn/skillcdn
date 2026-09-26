@@ -1,4 +1,4 @@
-import type { RestMount, RestShowcase, RestSkill } from "@skillcdn/core";
+import type { RestLegalDocument, RestMount, RestShowcase, RestSkill } from "@skillcdn/core";
 import { messagesFor } from "../i18n/index.js";
 import {
   DEFAULT_LANGUAGE,
@@ -13,6 +13,7 @@ import {
   skillDescription,
   skillTitle,
 } from "../i18n/repository-text.js";
+import { firstParagraph, legalTexts } from "../legal.js";
 import { mountHref, PATHS, type Route } from "../router.js";
 import { showcaseEntries, showcaseTexts } from "../showcase.js";
 import { LINKS } from "../site.js";
@@ -35,11 +36,15 @@ export interface PageHead {
   readonly jsonLd: readonly Record<string, unknown>[];
 }
 
-/** What a page knows about its data, once loaded: an address's, or the front page's showcase. */
+/**
+ * What a page knows about its data, once loaded: an address's, the front page's showcase, or the
+ * document of a page of the deployment's own.
+ */
 export interface PageData {
   readonly mount?: RestMount | undefined;
   readonly skill?: RestSkill | undefined;
   readonly showcase?: RestShowcase | undefined;
+  readonly legal?: RestLegalDocument | undefined;
 }
 
 export const OG_IMAGE_SIZE = { width: 1200, height: 630 } as const;
@@ -67,6 +72,9 @@ function indexablePathOf(route: Route, data: PageData | undefined): string | und
       return PATHS.landing;
     case "explore":
       return PATHS.explore;
+    case "legal":
+      // Written into the deployment, the page is one to find; not written, there is none.
+      return data?.legal === undefined ? undefined : PATHS[route.kind];
     case "mount": {
       const { address, view } = route;
       if (address.ref !== undefined || data?.mount?.index.status !== "ready") {
@@ -148,6 +156,19 @@ function mountText(
   };
 }
 
+function legalText(
+  route: Extract<Route, { name: "legal" }>,
+  language: Language,
+  data: PageData | undefined,
+): { readonly title: string; readonly description: string } {
+  const t = messagesFor(language);
+  const words = data?.legal === undefined ? undefined : legalTexts(data.legal, language);
+  return {
+    title: `${words?.title ?? t.footer[route.kind]} | ${t.meta.siteName}`,
+    description: words === undefined ? "" : clip(firstParagraph(words.body)),
+  };
+}
+
 export function buildHead(
   route: Route,
   language: Language,
@@ -168,11 +189,13 @@ export function buildHead(
         ? t.meta.explore
         : route.name === "mount"
           ? mountText(route, language, data)
-          : route.name === "states" || route.name === "og-card"
-            ? { title: t.meta.siteName, description: "" }
-            : route.name === "bad-address"
-              ? { title: `${t.address.invalid} | ${t.meta.siteName}`, description: "" }
-              : t.meta.notFound;
+          : route.name === "legal"
+            ? legalText(route, language, data)
+            : route.name === "states" || route.name === "og-card"
+              ? { title: t.meta.siteName, description: "" }
+              : route.name === "bad-address"
+                ? { title: `${t.address.invalid} | ${t.meta.siteName}`, description: "" }
+                : t.meta.notFound;
 
   const jsonLd: Record<string, unknown>[] = [];
   // The front page shows the operator's showcase, else the build's own (ADR-0028).

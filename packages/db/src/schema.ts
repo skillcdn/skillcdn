@@ -1,4 +1,4 @@
-import type { LicenseFact, ShowcaseTexts } from "@skillcdn/core";
+import type { LegalTexts, LicenseFact, ShowcaseTexts } from "@skillcdn/core";
 import { sql } from "drizzle-orm";
 import {
   bigint,
@@ -459,5 +459,28 @@ export const showcaseMedia = pgTable(
       "showcase_media_slot_check",
       sql`${table.slot} in ('clip', 'animation', 'poster', 'reference', 'picture', 'social')`,
     ),
+  ],
+);
+
+/**
+ * A page of the deployment's own (ADR-0029): its terms of service or its privacy policy, written
+ * through the admin API as Markdown in each language the operator has, and served at `/terms`
+ * and `/privacy`. Operator data, not tenant data.
+ */
+export const legalDocuments = pgTable(
+  "legal_documents",
+  {
+    id: id(),
+    kind: text({ enum: ["terms", "privacy"] }).notNull(),
+    /** When the text was last revised, as the operator states it. */
+    revised: date({ mode: "string" }),
+    /** By language tag: the title, and the body as Markdown. */
+    texts: jsonb().$type<Record<string, LegalTexts>>().notNull(),
+    createdAt: createdAt(),
+    updatedAt: instant().notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("legal_documents_kind_key").on(table.kind),
+    check("legal_documents_kind_check", sql`${table.kind} in ('terms', 'privacy')`),
   ],
 );

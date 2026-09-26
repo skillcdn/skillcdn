@@ -6,6 +6,7 @@ import {
   restFeaturedSchema,
   restFileSchema,
   restFindSchema,
+  restLegalDocumentSchema,
   restMountSchema,
   restShowcaseSchema,
   restSkillSchema,
@@ -50,6 +51,10 @@ describe("the fixture API", () => {
     }
     expect(restFeaturedSchema.safeParse(ask("/api/v1/featured").body).success).toBe(true);
     expect(restShowcaseSchema.safeParse(ask("/api/v1/showcase").body).success).toBe(true);
+    // One page of the deployment's own is written, the other is not.
+    expect(restLegalDocumentSchema.safeParse(ask("/api/v1/legal/terms").body).success).toBe(true);
+    expect(ask("/api/v1/legal/privacy").status).toBe(404);
+    expect(ask("/api/v1/legal/other").status).toBe(404);
   });
 
   it("answers failures with the error shape and the status of the spec", () => {

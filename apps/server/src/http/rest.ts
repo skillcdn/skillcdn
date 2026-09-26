@@ -7,7 +7,9 @@ import {
   type FindResult,
   formatAddress,
   GitHostError,
+  isLegalDocumentKind,
   isPinnedAddress,
+  type LegalDocumentKind,
   type LicenseFact,
   MAX_QUERY_LENGTH,
   MAX_REPO_PATH_LENGTH,
@@ -20,6 +22,7 @@ import {
   type RestFeatured,
   type RestFile,
   type RestFind,
+  type RestLegalDocument,
   type RestLicense,
   type RestMount,
   type RestRepository,
@@ -49,6 +52,8 @@ export interface RestDependencies {
   readonly featured: () => Promise<readonly Address[]>;
   /** The landing showcase as the pages read it, as the operator wrote it right now (ADR-0028). */
   readonly showcase: () => Promise<RestShowcase>;
+  /** A page of the deployment's own, when the operator wrote it (ADR-0029). */
+  readonly legal: (kind: LegalDocumentKind) => Promise<RestLegalDocument | undefined>;
   /** Milliseconds from a clock that never goes backwards. */
   readonly now: () => number;
 }
@@ -390,7 +395,7 @@ export const CORS_MAX_AGE_SECONDS = 86_400;
 
 /** Registers the REST API of docs/specs/rest.md on the app. */
 export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies): void {
-  const { reader, logger, mountAt, mountOf, featured, showcase, now } = dependencies;
+  const { reader, logger, mountAt, mountOf, featured, showcase, legal, now } = dependencies;
 
   /** Parses the query string, or answers 400 without repeating what was sent. */
   const queryOf = <Schema extends z.ZodType>(
@@ -637,4 +642,14 @@ export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies):
 
   // Empty when the operator wrote nothing: the pages then show the build's own showcase.
   app.get(REST_ROUTES.showcase, async (c) => c.json(await showcase()));
+
+  // The deployment's own pages, for the pages to render (ADR-0029). A kind that is not one, and
+  // a page that has not been written, are the same absence.
+  app.get(`${REST_ROUTES.legal}/:kind`, async (c) => {
+    const kind = c.req.param("kind");
+    const document = isLegalDocumentKind(kind) ? await legal(kind) : undefined;
+    return document === undefined
+      ? c.json(errorBody("legal.not_found", "This page has not been written."), 404)
+      : c.json(document);
+  });
 }

@@ -1,6 +1,7 @@
 import {
   type Address,
   formatAddress,
+  isLegalDocumentKind,
   isPinnedAddress,
   parseAddress,
   REST_FEATURED_SKILL_NAMES,
@@ -19,6 +20,7 @@ import {
 import {
   FIXTURE_FAILURES,
   FIXTURE_FEATURED,
+  FIXTURE_LEGAL,
   FIXTURE_REPOSITORIES,
   type FixtureRepository,
   summaryOf,
@@ -547,6 +549,13 @@ export function handleFixtureRequest(
     // No operator's showcase: the pages show the build's own, which is what is designed here.
     const body: RestShowcase = { items: [] };
     return { status: 200, body };
+  }
+  if (url.pathname.startsWith(`${REST_ROUTES.legal}/`)) {
+    const kind = url.pathname.slice(REST_ROUTES.legal.length + 1);
+    const document = isLegalDocumentKind(kind) ? FIXTURE_LEGAL[kind] : undefined;
+    return document === undefined
+      ? problem(404, "legal.not_found", "This page has not been written.")
+      : { status: 200, body: document };
   }
   const operation = (["mounts", "browse", "find", "skills", "files"] as const).find((name) =>
     url.pathname.startsWith(`${REST_ROUTES[name]}/`),

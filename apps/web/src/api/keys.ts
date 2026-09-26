@@ -1,4 +1,4 @@
-import { type Address, formatAddress } from "@skillcdn/core";
+import { type Address, formatAddress, type LegalDocumentKind } from "@skillcdn/core";
 
 // One key per thing the UI loads. A page asks for a resource by key; a page rendered on the
 // server hands the browser the answers by the same keys (initial-data.ts).
@@ -13,4 +13,6 @@ export const resourceKeys = {
   file: (address: Address, path: string): string => `${formatAddress(address)} file ${path}`,
   /** The landing showcase: one for the whole site. */
   showcase: (): string => "showcase",
+  /** A page of the deployment's own: its terms or its privacy policy. */
+  legal: (kind: LegalDocumentKind): string => `legal ${kind}`,
 } as const;

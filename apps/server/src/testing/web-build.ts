@@ -65,6 +65,14 @@ export function renderLandingPage(template, input) {
 export function renderLlmsTxt(language, showcase) {
   return "# Site in " + language + "\\n\\n" + JSON.stringify(showcase) + "\\n";
 }
+export function renderLegalPage(template, input) {
+  const json = JSON.stringify(input).replaceAll("<", "\\\\u003c");
+  const html = template
+    .replace('<html lang="en">', '<html lang="' + input.language + '">')
+    .replace("<!--app-html-->", '<pre id="input">' + json + "</pre>")
+    .replace("<!--app-head-->", "<title>Rendered " + input.pathname + "</title>");
+  return { html, indexable: input.data.legal.ready !== undefined };
+}
 `;
 
 const TEMPLATE_SOURCE =

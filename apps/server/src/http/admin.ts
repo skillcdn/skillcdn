@@ -4,20 +4,22 @@ import { OPERATOR_LIST_KINDS, type OperatorListKind, purgeRepository } from "@sk
 import type { Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type { Logger } from "../logger.js";
+import { LegalDocumentError, LegalDocuments } from "../operator/legal.js";
 import { OperatorListError, OperatorLists } from "../operator/lists.js";
 import { type Showcase, ShowcaseError } from "../operator/showcase.js";
 import type { AppEnv } from "./request-context.js";
 import { errorBody } from "./rest.js";
 
 /**
- * The admin API (ADR-0026, ADR-0028): the operator's lists, the landing showcase with its uploads,
- * and the takedown, behind one bearer token. It exists only when a token is configured;
- * otherwise the paths are nothing, like any other.
+ * The admin API (ADR-0026, ADR-0028, ADR-0029): the operator's lists, the landing showcase with
+ * its uploads, the deployment's own pages, and the takedown, behind one bearer token. It exists
+ * only when a token is configured; otherwise the paths are nothing, like any other.
  */
 export interface AdminDependencies {
   readonly token: string;
   readonly lists: OperatorLists;
   readonly showcase: Showcase;
+  readonly legal: LegalDocuments;
   readonly purge: (address: string) => Promise<{ snapshots: number; blobs: number } | undefined>;
   readonly logger: Logger;
 }
@@ -26,6 +28,8 @@ export const ADMIN_PREFIX = "/admin/v1";
 
 /** An entry is a document of words in a few languages; this is far more than any needs. */
 const MAX_ENTRY_BYTES = 256 * 1024;
+/** A policy in a few languages; far more than any needs. */
+const MAX_DOCUMENT_BYTES = 1024 * 1024;
 
 /** Equal without leaking how far the comparison got; the hashes make the lengths equal. */
 function sameToken(presented: string, expected: string): boolean {
@@ -38,7 +42,7 @@ function kindOf(value: string): OperatorListKind | undefined {
 }
 
 export function registerAdmin(app: Hono<AppEnv>, dependencies: AdminDependencies): void {
-  const { token, lists, showcase, logger } = dependencies;
+  const { token, lists, showcase, legal, logger } = dependencies;
 
   app.use(`${ADMIN_PREFIX}/*`, async (c, next) => {
     const header = c.req.header("authorization") ?? "";
@@ -60,6 +64,11 @@ export function registerAdmin(app: Hono<AppEnv>, dependencies: AdminDependencies
     if (error instanceof ShowcaseError) {
       const extra = error.problems.length === 0 ? {} : { problems: error.problems };
       const status = error.code === "media.unsupported_type" ? 415 : 400;
+      return c.json(errorBody(error.code, error.message, extra), status);
+    }
+    if (error instanceof LegalDocumentError) {
+      const extra = error.problems.length === 0 ? {} : { problems: error.problems };
+      const status = error.code === "legal.invalid_kind" ? 404 : 400;
       return c.json(errorBody(error.code, error.message, extra), status);
     }
     if (error instanceof OperatorListError) {
@@ -198,6 +207,46 @@ export function registerAdmin(app: Hono<AppEnv>, dependencies: AdminDependencies
         return c.json(errorBody("media.in_use", "A showcase entry still shows the upload."), 409);
       default:
         return c.json(errorBody("admin.not_found", "No such upload."), 404);
+    }
+  });
+
+  // The deployment's own pages: its terms of service and its privacy policy (ADR-0029).
+  app.get(`${ADMIN_PREFIX}/legal`, async (c) => c.json({ items: await legal.all() }));
+
+  app.put(
+    `${ADMIN_PREFIX}/legal/:kind`,
+    bodyLimit({
+      maxSize: MAX_DOCUMENT_BYTES,
+      onError: (c) => c.json(errorBody("request.too_large", "The request body is too large."), 413),
+    }),
+    async (c) => {
+      let body: unknown;
+      try {
+        body = await c.req.json();
+      } catch {
+        return c.json(errorBody("legal.invalid", "The body is not JSON."), 400);
+      }
+      try {
+        const kind = LegalDocuments.kindOf(c.req.param("kind"));
+        const document = await legal.put(kind, body);
+        logger.info({ kind, requestId: c.get("requestId") }, "legal document written");
+        return c.json(document);
+      } catch (error) {
+        return refused(c, error);
+      }
+    },
+  );
+
+  app.delete(`${ADMIN_PREFIX}/legal/:kind`, async (c) => {
+    try {
+      const kind = LegalDocuments.kindOf(c.req.param("kind"));
+      const removed = await legal.remove(kind);
+      logger.info({ kind, removed, requestId: c.get("requestId") }, "legal document removed");
+      return removed
+        ? c.json({ kind, removed: true })
+        : c.json(errorBody("admin.not_found", "No such document."), 404);
+    } catch (error) {
+      return refused(c, error);
     }
   });
 
