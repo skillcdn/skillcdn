@@ -53,6 +53,8 @@ export interface HarnessOptions {
   readonly web?: WebBundle;
   /** Left out, nothing is counted. */
   readonly stats?: UsageStats;
+  /** What fetching a picture for a social preview answers; left out, nothing is found. */
+  readonly fetch?: (input: string, init: RequestInit) => Promise<Response>;
 }
 
 export function createHarness(testDatabase: TestDatabase, options: HarnessOptions = {}): Harness {
@@ -96,6 +98,8 @@ export function createHarness(testDatabase: TestDatabase, options: HarnessOption
       isShuttingDown: () => false,
       web: options.web,
       stats: options.stats,
+      // Tests never leave the process: a picture is found only when a test hands one in.
+      fetch: options.fetch ?? (async () => new Response(null, { status: 404 })),
     },
   );
   const request = async (path: string, init?: RequestInit) =>

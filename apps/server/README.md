@@ -54,9 +54,12 @@ src/
                  (id, client address, access log), and web.ts, which serves a build of the web UI from
                  its manifest (pages per language, files, sitemap, robots), and through the build's
                  render module the page of an address, the front page with the operator's showcase,
-                 and the deployment's own pages at /terms and /privacy
-  operator/      the operator's lists, the landing showcase with its uploads, and the deployment's
-                 own pages (ADR-0026, ADR-0028, ADR-0029)
+                 the deployment's own pages at /terms and /privacy, and the words of the social
+                 preview of an address, drawn at /social/<address>
+  operator/      the operator's lists, the landing showcase with its uploads, the pictures of
+                 addresses, and the deployment's own pages (ADR-0026, ADR-0028, ADR-0029, ADR-0031)
+  social/        the social preview of an address (ADR-0032): the card drawn with a canvas from the
+                 words the web build writes, the owner's picture fetched for it, and both kept
   mcp/           the per-request MCP server and the tool handlers (contracts come from @skillcdn/core)
   mounts/        address -> repository and commit, through the database first and the git host second;
                  MountReader answers questions about a mount as data, for MCP and REST alike

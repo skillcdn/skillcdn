@@ -1,8 +1,16 @@
-import type { RestLegalDocument, RestMount, RestShowcase, RestSkill } from "@skillcdn/core";
+import {
+  formatAddress,
+  type RestLegalDocument,
+  type RestMount,
+  type RestShowcase,
+  type RestSkill,
+  SOCIAL_ROUTE,
+} from "@skillcdn/core";
 import { messagesFor } from "../i18n/index.js";
 import {
   DEFAULT_LANGUAGE,
   LANGUAGE_INFO,
+  LANGUAGE_PARAM,
   LANGUAGES,
   type Language,
   withLanguage,
@@ -263,6 +271,15 @@ export function buildHead(
   }
   // A showcase entry may bring its own picture for link previews; the build's card otherwise.
   const social = showcase[0]?.media.social ?? null;
+  // The page of an address unfurls with a card the server draws for it, in this language, with
+  // the skill's words when the page shows one (ADR-0032); the language is in the URL so that a
+  // crawler gets the card of the page it read, whatever language it asks for itself.
+  const drawn =
+    route.name === "mount" && data?.mount !== undefined
+      ? `${origin}${SOCIAL_ROUTE}${formatAddress(route.address)}?${LANGUAGE_PARAM}=${language}${
+          route.view.kind === "skill" ? `&skill=${encodeURIComponent(route.view.path)}` : ""
+        }`
+      : undefined;
   if (route.name === "mount" && canonical !== undefined && data?.mount !== undefined) {
     const { repository } = data.mount;
     const manifest = data.mount.index.status === "ready" ? data.mount.index.manifest : null;
@@ -305,10 +322,13 @@ export function buildHead(
             })),
             { hreflang: "x-default", href: `${origin}${withLanguage(path, DEFAULT_LANGUAGE)}` },
           ],
-    image: {
-      url: social === null ? `${origin}/og/og-${language}.png` : `${origin}${social.url}`,
-      alt: t.meta.ogImageAlt,
-    },
+    image:
+      drawn === undefined
+        ? {
+            url: social === null ? `${origin}/og/og-${language}.png` : `${origin}${social.url}`,
+            alt: t.meta.ogImageAlt,
+          }
+        : { url: drawn, alt: text.title },
     jsonLd,
   };
 }

@@ -113,6 +113,22 @@ write(
   )}\n`,
 );
 
+// The faces the server draws social previews with (ADR-0032): the same typeface as the pages,
+// unmodified, from the package the pages take it from, under the notice that ships with it.
+const fontSource = join(
+  root,
+  "node_modules",
+  "pretendard",
+  "dist",
+  "public",
+  "static",
+  "alternative",
+);
+mkdirSync(join(dist, "fonts"), { recursive: true });
+for (const face of ["Pretendard-Regular.ttf", "Pretendard-Bold.ttf"]) {
+  cpSync(join(fontSource, face), join(dist, "fonts", face));
+}
+
 process.stdout.write(
   `prerendered ${routes.length} routes in ${LANGUAGES.length} languages (${LANGUAGES.join(", ")})\n`,
 );

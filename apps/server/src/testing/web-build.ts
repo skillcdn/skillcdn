@@ -73,6 +73,20 @@ export function renderLegalPage(template, input) {
     .replace("<!--app-head-->", "<title>Rendered " + input.pathname + "</title>");
   return { html, indexable: input.data.legal.ready !== undefined };
 }
+export function socialCard(language, origin, data) {
+  const mount = data.mount;
+  const skill = data.skill !== undefined && data.skill.status === "ready" ? data.skill.skill : undefined;
+  return {
+    kicker: skill === undefined ? "Repository" : "Skill",
+    title: skill === undefined ? mount.repository.owner + "/" + mount.repository.name : skill.name,
+    subtitle: origin.replace(/^https?:\\/\\//, "") + mount.address + " (" + language + ")",
+    description: (skill === undefined ? mount.repository.description : skill.description) ?? "",
+    badges: mount.index.status === "ready" ? [mount.index.skillCount + " skills"] : [],
+    verified: mount.verified,
+    avatar: mount.repository.avatar,
+    siteName: "SkillCDN",
+  };
+}
 `;
 
 const TEMPLATE_SOURCE =

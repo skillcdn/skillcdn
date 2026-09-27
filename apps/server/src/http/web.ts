@@ -4,7 +4,7 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { Readable } from "node:stream";
 import { pathToFileURL } from "node:url";
-import { LEGAL_PAGE_PATHS, type LegalDocumentKind } from "@skillcdn/core";
+import { LEGAL_PAGE_PATHS, type LegalDocumentKind, type SocialCard } from "@skillcdn/core";
 import * as z from "zod";
 
 // Serves a build of the web UI (ADR-0009). The server knows nothing about the UI: the build
@@ -80,7 +80,24 @@ const CONTENT_TYPES: Readonly<Record<string, string>> = {
   ".xml": "application/xml; charset=utf-8",
   ".webmanifest": "application/manifest+json",
   ".woff2": "font/woff2",
+  ".ttf": "font/ttf",
+  ".otf": "font/otf",
 };
+
+/** Where a build keeps the faces the server draws social previews with (ADR-0032). */
+const FONTS_DIRECTORY = "fonts/";
+
+/** What the render module answers for the social preview of an address, checked before it is drawn. */
+const socialCardSchema = z.object({
+  kicker: z.string(),
+  title: z.string(),
+  subtitle: z.string(),
+  description: z.string(),
+  badges: z.array(z.string()),
+  verified: z.boolean(),
+  avatar: z.string(),
+  siteName: z.string(),
+});
 
 /**
  * Tags an operator adds to every page: a search console's proof of ownership, analytics, and
@@ -283,6 +300,12 @@ interface RenderModule {
     },
   ): { readonly html: string; readonly indexable: boolean };
   renderLlmsTxt?(language: string, showcase: unknown): string;
+  /** The words of the social preview of an address (ADR-0032). An older build has no such thing. */
+  socialCard?(
+    language: string,
+    origin: string,
+    data: { readonly mount: unknown; readonly skill?: unknown },
+  ): unknown;
   /** A page of the deployment's own with its document, or with why there is none (ADR-0029). */
   renderLegalPage?(
     template: string,
@@ -323,6 +346,16 @@ export interface WebBundle {
   sitemap(request: WebRequest, addresses: readonly string[], pages?: readonly string[]): Response;
   /** The page for a URL that is nothing, with status 404. */
   notFound(request: WebRequest): Response;
+  /**
+   * The words of the social preview of an address (ADR-0032), in the language the request asks
+   * for, as the build writes them for the page; `undefined` when the build cannot say.
+   */
+  social(
+    request: WebRequest,
+    data: { readonly mount: unknown; readonly skill?: unknown },
+  ): { readonly card: SocialCard; readonly language: string; readonly forced: boolean } | undefined;
+  /** The font files the build ships for drawing (ADR-0032); none in an older build. */
+  readonly fonts: readonly string[];
 }
 
 /** True when the request is a browser asking for a page, as opposed to a client of an API. */
@@ -618,6 +651,9 @@ export async function loadWebBundle(
   }
 
   const routes = new Map(manifest.routes.map((route) => [route.path, route]));
+  const fonts = [...statics.entries()]
+    .filter(([path]) => path.startsWith(`/${FONTS_DIRECTORY}`) && /\.(?:ttf|otf)$/i.test(path))
+    .map(([, found]) => found.file);
   const originOf = (request: WebRequest): string => options.publicUrl ?? request.url.origin;
   /**
    * The language of a page: the one the parameter names, when the build has it; else the one the
@@ -826,6 +862,21 @@ export async function loadWebBundle(
   const ADDRESS_HEADERS = { vary: "accept" };
 
   return {
+    fonts,
+    social(request, data) {
+      const render = renderer?.module.socialCard;
+      if (renderer === undefined || render === undefined) {
+        return undefined;
+      }
+      const { language, forced } = languageOf(request);
+      const parsed = socialCardSchema.safeParse(
+        render.call(renderer.module, language, originOf(request), data),
+      );
+      if (!parsed.success) {
+        throw new WebBundleError("the render module did not return a social card");
+      }
+      return { card: parsed.data, language, forced };
+    },
     respond(request) {
       if (request.method !== "GET" && request.method !== "HEAD") {
         return undefined;

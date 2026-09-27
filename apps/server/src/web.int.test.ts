@@ -271,6 +271,41 @@ describe("a server with a web build", () => {
     );
   });
 
+  it("draws the social preview of an address in the language the URL asks for, and one skill's", async () => {
+    const host = createFixtureHost("web-social");
+    const h = createHarness(testDatabase, { web, host });
+    const address = `/gh/acme/multi-skill@${fixtureCommits("web-social").main}`;
+    await h.request(`/api/v1/mounts${address}`);
+    await h.snapshots.idle();
+
+    const card = await h.request(`/social${address}?lang=ko`);
+    expect(card.status).toBe(200);
+    expect(card.headers.get("content-type")).toBe("image/png");
+    expect(card.headers.get("cache-control")).toBe("public, max-age=3600");
+    expect(card.headers.get("vary")).toBeNull();
+    const bytes = new Uint8Array(await card.arrayBuffer());
+    expect([...bytes.subarray(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    expect([view.getUint32(16), view.getUint32(20)]).toEqual([1200, 630]);
+
+    // The same card is kept and answered as unchanged; without a language in the URL the card
+    // follows the request, and says so.
+    const again = await h.request(`/social${address}?lang=ko`, {
+      headers: { "if-none-match": card.headers.get("etag") ?? "" },
+    });
+    expect(again.status).toBe(304);
+    expect((await h.request(`/social${address}`)).headers.get("vary")).toBe("accept-language");
+    expect((await h.request(`/social${address}`, { method: "HEAD" })).status).toBe(200);
+
+    // One skill's card; a skill that is not there, and an address that is nothing, are nothing.
+    const skill = await h.request(`/social${address}?skill=skills/release-notes/SKILL.md`);
+    expect(skill.status).toBe(200);
+    expect(skill.headers.get("etag")).not.toBe(card.headers.get("etag"));
+    expect((await h.request(`/social${address}?skill=skills/none/SKILL.md`)).status).toBe(404);
+    expect((await h.request("/social/gh/acme/no-such-repo")).status).toBe(404);
+    expect((await h.request("/social/not%20an%20address")).status).toBe(404);
+  });
+
   it("lists the featured and the vouched-for repositories in the sitemap, and nothing else", async () => {
     // Until the operator features something, the reference repository is featured (ADR-0028).
     const fresh = createHarness(testDatabase, { web });
@@ -334,6 +369,8 @@ describe("a server with a web build that cannot render", () => {
     expect(page.status).toBe(200);
     expect(await page.text()).toContain("Shell in Korean");
     expect((await h.request("/gh/acme/no-such-repo", { headers: BROWSER })).status).toBe(404);
+    // Without a render module there are no words for a card, so there is no card.
+    expect((await h.request("/social/gh/acme/multi-skill")).status).toBe(404);
     await h.snapshots.idle();
     plain.remove();
   });

@@ -4,7 +4,7 @@ What ships inside the image or the web build under a license of its own, beyond 
 
 ## Pretendard
 
-The typeface that draws Hangul in the web UI (`apps/web`), shipped as unmodified subset font files in the web build.
+The typeface that draws Hangul in the web UI (`apps/web`), shipped as unmodified subset font files in the web build; two of its unmodified static faces (`Pretendard-Regular.ttf`, `Pretendard-Bold.ttf`) ship in the web build's `fonts/` as well, for the server to set the social previews of addresses in ([ADR-0032](docs/adr/0032-social-previews-are-drawn-by-the-server-for-each-address.md)).
 
 - Copyright (c) 2021, Kil Hyung-jin (https://github.com/orioncactus/pretendard), with Reserved Font Name "Pretendard". Its license file also carries the notices of the fonts it is derived from: Adobe (Reserved Font Name "Source"), The Inter Project Authors ("Inter") and The M+ FONTS Project Authors ("M PLUS 1").
 - License: SIL Open Font License, Version 1.1 (`OFL-1.1`). The full text with every copyright notice ships with the fonts as `licenses/pretendard.txt` in the web build ([`apps/web/public/licenses/pretendard.txt`](apps/web/public/licenses/pretendard.txt)), and the font files carry it in their metadata as well.

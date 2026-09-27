@@ -28,6 +28,7 @@ import { OperatorImages } from "../operator/images.js";
 import { LegalDocuments } from "../operator/legal.js";
 import { OperatorLists } from "../operator/lists.js";
 import { Showcase } from "../operator/showcase.js";
+import { SocialCards } from "../social/cards.js";
 import { noUsageStats, UsageRecorder, type UsageStats } from "../stats/usage-recorder.js";
 import { SERVER_NAME, SERVER_VERSION } from "../version.js";
 
@@ -46,6 +47,11 @@ export interface ApiPorts {
   readonly web?: WebBundle | undefined;
   /** Left out, nothing is counted. */
   readonly stats?: UsageStats | undefined;
+  /**
+   * How the pictures of social previews are fetched from the git host (ADR-0032); the
+   * platform's own fetch when left out. Tests hand in one that never leaves the process.
+   */
+  readonly fetch?: ((input: string, init: RequestInit) => Promise<Response>) | undefined;
 }
 
 export type ApiConfig = Pick<Config, "mounts" | "indexing"> & {
@@ -106,6 +112,16 @@ export function createApi(
   });
 
   const reader = new MountReader({ database, blobStore, gitHost, snapshots, limits });
+  // Social previews are pages' business: without a web build there is nothing to draw them for.
+  const social =
+    ports.web === undefined
+      ? undefined
+      : new SocialCards({
+          fetch: ports.fetch ?? ((input, init) => fetch(input, init)),
+          clock,
+          logger,
+          fonts: ports.web.fonts,
+        });
 
   const app = createApp({
     database,
@@ -118,6 +134,7 @@ export function createApi(
     legal,
     admin: config.admin?.token === undefined ? undefined : { token: config.admin.token },
     web: ports.web,
+    social,
     logger,
     isShuttingDown: ports.isShuttingDown,
     requests: {

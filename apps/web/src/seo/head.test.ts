@@ -301,6 +301,27 @@ describe("buildHead", () => {
   });
 });
 
+describe("the picture of the page of an address", () => {
+  it("is the card the server draws for it, in the page's language, and the skill's for a skill", () => {
+    const repository = buildHead(matchRoute("/gh/acme/skills", "?lang=ko"), "ko", ORIGIN, {
+      mount: MOUNT,
+    });
+    expect(repository.image.url).toBe(`${ORIGIN}/social/gh/acme/skills?lang=ko`);
+    expect(repository.image.alt).toBe(repository.title);
+    const skill = buildHead(
+      matchRoute("/gh/acme/skills", "?skill=review%2FSKILL.md"),
+      "en",
+      ORIGIN,
+      { mount: MOUNT },
+    );
+    expect(skill.image.url).toBe(`${ORIGIN}/social/gh/acme/skills?lang=en&skill=review%2FSKILL.md`);
+    // Without the address's data there is no card to name: the site's own picture stands.
+    expect(buildHead(matchRoute("/gh/acme/skills", ""), "en", ORIGIN).image.url).toBe(
+      `${ORIGIN}/og/og-en.png`,
+    );
+  });
+});
+
 describe("renderHead", () => {
   it("writes what crawlers and link previews read", () => {
     const html = renderHead(buildHead(matchRoute("/", "?lang=ko"), "ko", ORIGIN));

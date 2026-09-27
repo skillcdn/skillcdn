@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { createMcpHandler } from "@modelcontextprotocol/server";
 import {
   formatAddress,
@@ -10,6 +11,8 @@ import {
   parseAddress,
   REST_MOUNT_LIST_LIMIT,
   type RestShowcase,
+  type RestSkill,
+  SOCIAL_ROUTE,
 } from "@skillcdn/core";
 import { type Database, getSchemaStatus } from "@skillcdn/db";
 import { type Context, Hono } from "hono";
@@ -26,6 +29,7 @@ import type { OperatorImages } from "../operator/images.js";
 import type { LegalDocuments } from "../operator/legal.js";
 import type { OperatorLists } from "../operator/lists.js";
 import type { Showcase } from "../operator/showcase.js";
+import type { SocialCards } from "../social/cards.js";
 import { purgeByAddress, registerAdmin } from "./admin.js";
 import type { ClientAddressResolver } from "./client-address.js";
 import { type AppEnv, requestContext } from "./request-context.js";
@@ -64,6 +68,8 @@ export interface AppDependencies {
   readonly admin: { readonly token: string } | undefined;
   /** A build of the web UI to serve. Left out, the server is MCP and REST only. */
   readonly web: WebBundle | undefined;
+  /** Draws the social previews of addresses (ADR-0032); nothing to draw without the web UI. */
+  readonly social: SocialCards | undefined;
   readonly logger: Logger;
   readonly requests: {
     readonly addresses: ClientAddressResolver;
@@ -261,6 +267,82 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
       cacheControl: "public, max-age=31536000, immutable",
     });
   });
+
+  // The social preview of an address (ADR-0032): the picture a link to its page unfurls with,
+  // drawn from the words the build writes for the page, with a skill's when one is asked for.
+  // Asking for it resolves the address and starts indexing it, as the page does; what the index
+  // cannot say yet is left off the card, which is drawn again once it can.
+  const socialQuery = z.object({
+    skill: z.string().min(1).max(MAX_REPO_PATH_LENGTH).optional(),
+  });
+  const social = dependencies.social;
+  if (web !== undefined && social !== undefined) {
+    app.on(["GET", "HEAD"], `${SOCIAL_ROUTE}/*`, async (c) => {
+      const request = webRequestOf(c);
+      const parsed = parseAddress(request.url.pathname.slice(SOCIAL_ROUTE.length));
+      const query = socialQuery.safeParse(c.req.query());
+      if (!parsed.ok || !query.success) {
+        return c.notFound();
+      }
+      let mount: Mount;
+      try {
+        mount = await mounts.resolve(parsed.value);
+        startIndexing(mount);
+      } catch (error) {
+        if (error instanceof MountError) {
+          return c.notFound();
+        }
+        throw error;
+      }
+      try {
+        const body = mountBody(mount, await reader.overview(mount, REST_MOUNT_LIST_LIMIT));
+        let skill: RestSkill | undefined;
+        if (query.data.skill !== undefined) {
+          const outcome = skillOutcome(
+            await reader.skill(mount, query.data.skill, 0, undefined, true),
+          );
+          if (!("body" in outcome)) {
+            return c.notFound();
+          }
+          skill = outcome.body;
+        }
+        const drawn = web.social(
+          request,
+          skill === undefined ? { mount: body } : { mount: body, skill },
+        );
+        if (drawn === undefined) {
+          return c.notFound();
+        }
+        // Everything the card is made from names it: a change to any of it is another card.
+        const key = [
+          drawn.language,
+          body.address,
+          mount.commit,
+          query.data.skill ?? "",
+          body.index.status,
+        ].join("\n");
+        const response = bytesResponse(request, {
+          bytes: await social.picture(key, drawn.card),
+          contentType: "image/png",
+          etag: `"${createHash("sha1").update(key).digest("hex")}"`,
+          cacheControl: "public, max-age=3600",
+        });
+        if (!drawn.forced) {
+          response.headers.set("vary", "accept-language");
+        }
+        return response;
+      } catch (error) {
+        if (error instanceof ReaderInputError) {
+          return c.notFound();
+        }
+        const known = hostFailure(error);
+        if (known === undefined) {
+          throw error;
+        }
+        return c.json(errorBody(known.code, known.message), known.status as 503);
+      }
+    });
+  }
 
   /**
    * The page of an address for a browser, rendered with what the address serves: the same

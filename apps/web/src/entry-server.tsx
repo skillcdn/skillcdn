@@ -20,6 +20,7 @@ import { matchRoute, PATHS } from "./router.js";
 import { buildHead, type PageData, renderHead } from "./seo/head.js";
 import { showcaseEntries, showcaseTexts } from "./showcase.js";
 import { LINKS, ORIGIN_PLACEHOLDER } from "./site.js";
+import { socialCard } from "./social.js";
 
 // Rendering to HTML, without a browser. scripts/prerender.mjs imports the bundle made from this
 // file at build time and writes one file per static page and language; the server imports the
@@ -27,7 +28,8 @@ import { LINKS, ORIGIN_PLACEHOLDER } from "./site.js";
 // answers the page needs (ADR-0009, ADR-0011), and renderLandingPage for the front page with the
 // operator's showcase (ADR-0028).
 
-export { DEFAULT_LANGUAGE, LANGUAGE_PARAM, LANGUAGES, ORIGIN_PLACEHOLDER };
+/** The words of the social preview of an address, for the server to draw (ADR-0032). */
+export { DEFAULT_LANGUAGE, LANGUAGE_PARAM, LANGUAGES, ORIGIN_PLACEHOLDER, socialCard };
 
 /** Pages that do not depend on data and are therefore prerendered completely. */
 export const STATIC_PAGES = [
