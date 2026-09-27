@@ -1,4 +1,5 @@
 import { parseFrontMatter, splitFrontMatter } from "./front-matter.js";
+import { isImageUrl } from "./image-source.js";
 import {
   commentedValueWarnings,
   MAX_OPTIONAL_FIELD_LENGTH,
@@ -29,10 +30,21 @@ export interface RepoTranslation {
   readonly description: string | undefined;
 }
 
+/**
+ * The picture a manifest declares for its folder (ADR-0031): a file of the repository, relative
+ * to the manifest, or an `https` URL. Any picture, of any size and shape; the pages show it from
+ * where it is and never store it.
+ */
+export type RepoImage =
+  | { readonly kind: "path"; readonly path: RepoPath }
+  | { readonly kind: "url"; readonly url: string };
+
 export interface RepoManifest {
   /** Absent: the repository is named as its git host names it. */
   readonly name: string | undefined;
   readonly description: string;
+  /** The picture that stands for the folder, when the manifest declares one. */
+  readonly image: RepoImage | undefined;
   /**
    * Directories whose files are served, relative to the manifest's own directory; the root path
    * stands for that directory itself. The default directories when the field is absent, none
@@ -138,6 +150,7 @@ export function parseRepoManifest(text: string): Result<ParsedRepoManifest, Repo
     manifest: {
       name,
       description,
+      image: readImage(fields.get("image"), ignored),
       documents: readDocuments(fields.get("documents"), warnings),
       exclude: exclude.value,
       license: optionalText(fields, "license", MAX_OPTIONAL_FIELD_LENGTH, ignored),
@@ -148,6 +161,34 @@ export function parseRepoManifest(text: string): Result<ParsedRepoManifest, Repo
     },
     warnings,
   });
+}
+
+/**
+ * The `image` field: a path relative to the manifest, written as `documents` entries are, or an
+ * `https` URL. Whether the file exists is checked against the tree when the repository is
+ * indexed; here only the form is. Anything else is reported and ignored.
+ */
+function readImage(value: unknown, ignored: (message: string) => void): RepoImage | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  const text = typeof value === "string" ? value.trim() : "";
+  if (isImageUrl(text)) {
+    return { kind: "url", url: text };
+  }
+  // `./banner.png` is how people write a relative path; the prefix says nothing the path does not.
+  const relative = text.replace(/^\.\//, "");
+  const parsed =
+    relative.length === 0 || /^[A-Za-z][A-Za-z0-9+.-]*:/.test(relative)
+      ? undefined
+      : parseRepoPath(relative);
+  if (parsed === undefined || !parsed.ok) {
+    ignored(
+      '"image" is ignored: expected the path of a file of the repository, relative to the manifest, or an https URL',
+    );
+    return undefined;
+  }
+  return { kind: "path", path: parsed.value };
 }
 
 /** Exclusions are policy: silently dropping a typo could publish content the author withheld. */

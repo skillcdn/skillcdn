@@ -70,9 +70,12 @@ The operator's lists and the takedown ([ADR-0026](../docs/adr/0026-serving-follo
 | `GET /admin/v1/showcase` | The entries the front page leads with ([ADR-0028](../docs/adr/0028-the-front-page-and-the-explorer-are-operator-content.md)), as `GET /api/v1/showcase` shows them to everyone. |
 | `PUT /admin/v1/showcase/<id>` | Writes the entry named `<id>` (a lowercase slug) from a JSON body, replacing what was there; the body is described below. Answers with the entry as the pages read it, or `400` with `problems` that say what is wrong. |
 | `DELETE /admin/v1/showcase/<id>` | Removes the entry. Its uploads stay. |
-| `GET /admin/v1/media` | The uploads: hash, type, size, URL, and which entries use each. |
+| `GET /admin/v1/images` | The pictures of addresses ([ADR-0031](../docs/adr/0031-a-picture-for-a-repository-comes-from-its-manifest-or-the-operator.md)): the address, the upload's hash or `null`, and the URL the pages load the picture from. |
+| `PUT /admin/v1/images/gh/<owner>/<repo>[@ref][/path]` | Gives the address a picture, replacing what was there, from a JSON body with exactly one of `media` (the hash of an upload that is a picture) and `url` (an `https` URL). The explorer's card and the page of that address, and of every address of that repository when the picture is the repository's, show it in place of what the repository's manifest declares. A URL keeps the picture's traffic off the deployment; an upload is served from it. |
+| `DELETE /admin/v1/images/gh/<owner>/<repo>[@ref][/path]` | Removes the picture; `404` when there was none. The repository's own picture, when it declares one, shows again. |
+| `GET /admin/v1/media` | The uploads: hash, type, size, URL, and which entries and addresses use each. |
 | `POST /admin/v1/media` | Stores the request body as an upload of the `content-type` sent: `video/mp4`, `video/webm`, `image/avif`, `image/webp`, `image/png`, `image/jpeg` or `image/gif`, at most 16 MiB. Answers with its `sha`, the SHA-256 of the bytes, and the `url` it is served at for everyone, `/media/<sha>`, immutably. The same bytes are the same upload. |
-| `DELETE /admin/v1/media/<sha>` | Removes an upload; `409` while an entry uses it. |
+| `DELETE /admin/v1/media/<sha>` | Removes an upload; `409` while an entry or the picture of an address uses it. |
 | `GET /admin/v1/legal` | The deployment's own pages that have been written ([ADR-0029](../docs/adr/0029-terms-and-privacy-pages-can-be-written-into-the-deployment.md)): its terms of service and its privacy policy. |
 | `PUT /admin/v1/legal/<kind>` | Writes the page of `<kind>` (`terms` or `privacy`) from a JSON body, replacing what was there: `texts` by language tag, each with a `title` and a `body` in Markdown, and an optional `revised` date (`YYYY-MM-DD`). The page is then served at `/terms` or `/privacy` on the deployment's own origin, and every page links to it. |
 | `DELETE /admin/v1/legal/<kind>` | Removes the page. The configured URL, when there is one, is linked again. |
@@ -119,6 +122,13 @@ An entry is a JSON document:
     }
   }
 }
+```
+
+A repository declares its own picture in its manifest ([format](../docs/specs/skill-repo.md#the-repository-manifest-skillcdnmd)). To show another one on a repository's card and page, give its address a picture: an `https` URL, or an upload from `POST /admin/v1/media`.
+
+```sh
+curl -X PUT -H "Authorization: Bearer $ADMIN_TOKEN" -H "content-type: application/json" --data '{"url":"https://example.com/pictures/skills.png"}' https://skills.example.com/admin/v1/images/gh/owner/repo
+curl -X PUT -H "Authorization: Bearer $ADMIN_TOKEN" -H "content-type: application/json" --data '{"media":"<sha of banner.webp>"}' https://skills.example.com/admin/v1/images/gh/owner/repo@main/skills/ad
 ```
 
 The deployment's own pages take the same shape in miniature. Writing them here keeps their URLs on your own origin, `/terms` and `/privacy`, which is what the head, the footer and the consent banner then link to; `TERMS_URL` and `PRIVACY_URL` are for pages hosted elsewhere. A visitor reads their language, else the default language of the pages.

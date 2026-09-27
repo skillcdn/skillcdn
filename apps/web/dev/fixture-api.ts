@@ -37,6 +37,8 @@ export interface FixtureAnswer {
 
 /** How long `demo/slow` stays "indexing" after it was first asked for. */
 const SLOW_INDEXING_MS = 5000;
+/** The picture of the fixture owner, as the host would serve one (ADR-0031). */
+const FIXTURE_AVATAR = "https://avatars.githubusercontent.com/u/583231?s=160&v=4";
 const PAGE_LIMIT = 40_000;
 
 const firstAsked = new Map<string, number>();
@@ -121,12 +123,15 @@ function mountBody(
       name: repository.name,
       defaultBranch: repository.defaultBranch,
       description: repository.description ?? null,
+      avatar: repository.avatar ?? FIXTURE_AVATAR,
     },
     ref: ref === undefined ? null : ref.kind === "commit" ? ref.hash : ref.name,
     pinned: isPinnedAddress(address),
     commit: ref?.kind === "commit" ? ref.hash : repository.commit,
     path: address.path,
     verified: repository.verified === true,
+    // The manifest's picture is known once the index is; the operator's would show before.
+    image: state === "ready" ? (repository.image ?? null) : null,
     index:
       state === "indexing"
         ? { status: "indexing" }
@@ -516,6 +521,7 @@ function featuredBody(now: number): RestFeatured {
             name: repository.name,
             defaultBranch: repository.defaultBranch,
             description: repository.description ?? null,
+            avatar: repository.avatar ?? FIXTURE_AVATAR,
           },
           manifest:
             status === "ready" && repository.manifest !== undefined
@@ -526,6 +532,7 @@ function featuredBody(now: number): RestFeatured {
                 }
               : null,
           verified: repository.verified === true,
+          image: status === "ready" ? (repository.image ?? null) : null,
           status,
           skillCount: status === "ready" ? repository.skills.length : null,
           skills:

@@ -210,6 +210,11 @@ export interface SkillFrontMatter {
   readonly exclude?: readonly string[];
   /** Repository manifest only: the tag of the language the repository is written in. */
   readonly language?: string;
+  /**
+   * Repository manifest only: the picture it declares (ADR-0031), as a repository-root path of a
+   * file the tree has, or as an `https` URL.
+   */
+  readonly image?: string;
   /** Local Markdown destinations, normalized to repository-root paths. */
   readonly references?: readonly { readonly href: string; readonly path: string }[];
   /** Readable through a link, without becoming an independent catalog/search document. */
@@ -458,6 +463,32 @@ export const showcaseMedia = pgTable(
     check(
       "showcase_media_slot_check",
       sql`${table.slot} in ('clip', 'animation', 'poster', 'reference', 'picture', 'social')`,
+    ),
+  ],
+);
+
+/**
+ * The picture the operator gives an address (ADR-0031), shown in place of the one its repository
+ * declares: one of its uploads by hash, or an `https` URL that the reader's browser loads.
+ * Exactly one of the two is set. Operator data, not tenant data.
+ */
+export const operatorImages = pgTable(
+  "operator_images",
+  {
+    id: id(),
+    /** Canonical, as the address grammar prints it; a ref and a path are allowed. */
+    address: text().notNull(),
+    mediaSha: text().references(() => operatorMedia.sha, { onDelete: "restrict" }),
+    url: text(),
+    createdAt: createdAt(),
+    updatedAt: instant().notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("operator_images_address_key").on(table.address),
+    index("operator_images_media_idx").on(table.mediaSha),
+    check(
+      "operator_images_source_check",
+      sql`(${table.mediaSha} is null) <> (${table.url} is null)`,
     ),
   ],
 );

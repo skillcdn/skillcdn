@@ -22,6 +22,10 @@ export interface FixtureRepository {
   readonly description?: string;
   /** Whether the operator vouches for the repository. */
   readonly verified?: boolean;
+  /** The owner's picture as the host serves it; the fixture owner's when left out. */
+  readonly avatar?: string;
+  /** The picture that stands for the repository, as the page loads it, when it has one. */
+  readonly image?: string;
   readonly overviews?: Readonly<
     Record<
       string,
@@ -228,6 +232,8 @@ const ACME_SKILLS: FixtureRepository = {
   defaultBranch: "main",
   description: "The skills Acme's teams share: release notes, incident reviews and more.",
   verified: true,
+  // The bundled poster stands in for a picture the manifest would declare.
+  image: "/showcase/puppy-interview.webp",
   overviews: {
     "": {
       path: "README.md",

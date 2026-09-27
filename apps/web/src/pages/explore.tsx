@@ -3,7 +3,15 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client.js";
 import { useResource } from "../api/use-resource.js";
 import { AddressForm } from "../components/address-form.js";
-import { Badge, Button, Container, Skeleton, VerifiedMark } from "../components/ui.js";
+import {
+  Avatar,
+  Badge,
+  Button,
+  Container,
+  Picture,
+  Skeleton,
+  VerifiedMark,
+} from "../components/ui.js";
 import { useI18n } from "../i18n/index.js";
 import { repositoryDescription, repositoryName } from "../i18n/repository-text.js";
 import { Link } from "../navigation.js";
@@ -14,8 +22,9 @@ import styles from "./explore.module.css";
 const PAGE_SIZE = 12;
 
 /**
- * One featured repository: the name it gives itself, else its address; what it is, from its
- * manifest or from what the host says about it; and the first of its skills by name.
+ * One featured repository: its picture when it has one, its owner's, the name it gives itself,
+ * else its address; what it is, from its manifest or from what the host says about it; and the
+ * first of its skills by name.
  */
 function FeaturedCard(props: { readonly item: RestFeatured["items"][number] }) {
   const { t, language } = useI18n();
@@ -31,35 +40,46 @@ function FeaturedCard(props: { readonly item: RestFeatured["items"][number] }) {
   const more = (item.skillCount ?? 0) - item.skills.length;
   return (
     <li className={styles.card}>
-      <div className={styles.cardHead}>
-        <h3 className={styles.cardTitle}>
-          <Link className={styles.cardLink} href={item.address}>
-            {name}
-          </Link>
-        </h3>
-        {item.verified && <VerifiedMark label={t.mount.verified} hint={t.mount.verifiedHint} />}
-      </div>
-      {address.toLowerCase() !== name.toLowerCase() && (
-        <p className={styles.cardAddress}>{address}</p>
-      )}
-      {description !== null && description !== "" && (
-        <p className={styles.cardBody}>{description}</p>
-      )}
-      <p className={styles.cardMeta}>
-        {item.status === "ready" && item.skillCount !== null && (
-          <Badge tone="accent">{t.explore.featuredSkills(item.skillCount)}</Badge>
+      {item.image !== null && <Picture className={styles.cardArt} src={item.image} />}
+      <div className={styles.cardBody}>
+        <div className={styles.cardHead}>
+          <Avatar src={item.repository.avatar} />
+          <div className={styles.cardTitles}>
+            <h3 className={styles.cardTitle}>
+              <Link className={styles.cardLink} href={item.address}>
+                {name}
+              </Link>
+              {item.verified && (
+                <>
+                  {" "}
+                  <VerifiedMark label={t.mount.verified} hint={t.mount.verifiedHint} />
+                </>
+              )}
+            </h3>
+            {address.toLowerCase() !== name.toLowerCase() && (
+              <p className={styles.cardAddress}>{address}</p>
+            )}
+          </div>
+        </div>
+        {description !== null && description !== "" && (
+          <p className={styles.cardText}>{description}</p>
         )}
-        {item.status === "indexing" && <Badge>{t.explore.featuredIndexing}</Badge>}
-        {item.status === "failed" && <Badge tone="warning">{t.explore.featuredFailed}</Badge>}
-      </p>
-      {item.skills.length > 0 && (
-        <ul className={styles.chips}>
-          {item.skills.map((skill) => (
-            <li key={skill}>{skill}</li>
-          ))}
-          {more > 0 && <li className={styles.chipMore}>{t.explore.moreSkills(more)}</li>}
-        </ul>
-      )}
+        <p className={styles.cardMeta}>
+          {item.status === "ready" && item.skillCount !== null && (
+            <Badge tone="accent">{t.explore.featuredSkills(item.skillCount)}</Badge>
+          )}
+          {item.status === "indexing" && <Badge>{t.explore.featuredIndexing}</Badge>}
+          {item.status === "failed" && <Badge tone="warning">{t.explore.featuredFailed}</Badge>}
+        </p>
+        {item.skills.length > 0 && (
+          <ul className={styles.chips}>
+            {item.skills.map((skill) => (
+              <li key={skill}>{skill}</li>
+            ))}
+            {more > 0 && <li className={styles.chipMore}>{t.explore.moreSkills(more)}</li>}
+          </ul>
+        )}
+      </div>
     </li>
   );
 }

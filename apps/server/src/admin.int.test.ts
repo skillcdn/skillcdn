@@ -370,3 +370,97 @@ describe("the deployment's own pages in the admin API (ADR-0029)", () => {
     expect((await h.request("/api/v1/legal/terms")).status).toBe(404);
   });
 });
+
+describe("the pictures of addresses in the admin API (ADR-0031)", () => {
+  const asJson = { ...authorized, "content-type": "application/json" };
+
+  it("keeps one picture per address, an upload or a URL, and frees an upload only when nothing shows it", async () => {
+    const h = createHarness(testDatabase, { adminToken: TOKEN });
+    const put = (address: string, body: unknown) =>
+      h.request(`/admin/v1/images${address}`, {
+        method: "PUT",
+        headers: asJson,
+        body: JSON.stringify(body),
+      });
+    const upload = async (contentType: string, body: Uint8Array) =>
+      (await (
+        await h.request("/admin/v1/media", {
+          method: "POST",
+          headers: { ...authorized, "content-type": contentType },
+          body,
+        })
+      ).json()) as Uploaded;
+    const remove = (path: string) => h.request(path, { method: "DELETE", headers: authorized });
+
+    // One source, and only one: an upload by hash or an https URL.
+    for (const body of [
+      {},
+      { url: "http://example.com/a.png" },
+      { url: "https://example.com/a b.png" },
+      { media: "not-a-hash" },
+      { url: "https://example.com/a.png", media: "a".repeat(64) },
+      { url: "https://example.com/a.png", extra: true },
+    ]) {
+      const refused = await put("/gh/acme/single-skill", body);
+      expect(refused.status).toBe(400);
+      expect(await refused.json()).toMatchObject({ error: { code: "image.invalid" } });
+    }
+    expect((await put("/not an address", { url: "https://example.com/a.png" })).status).toBe(400);
+    expect(
+      await (await put("/gh/acme/single-skill", { media: "b".repeat(64) })).json(),
+    ).toMatchObject({ error: { code: "image.media_missing" } });
+    const clip = await upload("video/mp4", new Uint8Array([1, 2, 3]));
+    expect(await (await put("/gh/acme/single-skill", { media: clip.sha })).json()).toMatchObject({
+      error: { code: "image.media_wrong_kind" },
+    });
+
+    const picture = await upload("image/png", new TextEncoder().encode("a picture of an address"));
+    const written = await put("/gh/Acme/Single-Skill", { media: picture.sha });
+    expect(written.status).toBe(200);
+    expect(await written.json()).toMatchObject({
+      address: "/gh/acme/single-skill",
+      media: picture.sha,
+      url: picture.url,
+    });
+    expect(
+      await (
+        await put("/gh/acme/multi-skill@main/skills", { url: "https://example.com/skills.png" })
+      ).json(),
+    ).toMatchObject({
+      address: "/gh/acme/multi-skill@main/skills",
+      media: null,
+      url: "https://example.com/skills.png",
+    });
+    const listed = (await (
+      await h.request("/admin/v1/images", { headers: authorized })
+    ).json()) as {
+      items: { address: string; url: string }[];
+    };
+    expect(listed.items.map((item) => [item.address, item.url])).toEqual([
+      ["/gh/acme/single-skill", picture.url],
+      ["/gh/acme/multi-skill@main/skills", "https://example.com/skills.png"],
+    ]);
+
+    // The upload is in use until the picture is replaced or removed.
+    expect((await remove(`/admin/v1/media/${picture.sha}`)).status).toBe(409);
+    const uploads = (await (
+      await h.request("/admin/v1/media", { headers: authorized })
+    ).json()) as {
+      items: { sha: string; usedBy: string[] }[];
+    };
+    expect(uploads.items.find((item) => item.sha === picture.sha)?.usedBy).toEqual([
+      "/gh/acme/single-skill",
+    ]);
+    expect(
+      await (await put("/gh/acme/single-skill", { url: "https://example.com/single.png" })).json(),
+    ).toMatchObject({ media: null, url: "https://example.com/single.png" });
+    expect((await remove(`/admin/v1/media/${picture.sha}`)).status).toBe(200);
+    expect(await (await remove("/admin/v1/images/gh/acme/single-skill")).json()).toEqual({
+      address: "/gh/acme/single-skill",
+      removed: true,
+    });
+    expect((await remove("/admin/v1/images/gh/acme/single-skill")).status).toBe(404);
+    expect((await remove("/admin/v1/images/gh/acme/multi-skill@main/skills")).status).toBe(200);
+    expect((await remove(`/admin/v1/media/${clip.sha}`)).status).toBe(200);
+  });
+});

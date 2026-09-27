@@ -185,6 +185,11 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
     entry,
     kind: classifyRepoFile(entry.path),
   }));
+  // Every file of the commit, whether or not it is indexed: a manifest may point at one as its
+  // picture (ADR-0031), and a picture is a file the tree has, or nothing.
+  const treeFiles = new Set(
+    tree.entries.filter((entry) => entry.type === "file").map((entry) => entry.path),
+  );
 
   // What the index holds, admitted in the order of the rounds and within the limits.
   const admitted = new Map<RepoPath, Candidate>();
@@ -425,6 +430,20 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
           withholdExcludedManifest(entry.path);
           continue;
         }
+        // The picture is kept as the page loads it: a URL as written, a path from the repository
+        // root, and only when the tree has the file; a picture that is not there is reported.
+        const messages = warnings.map((warning) => warning.message);
+        let image: string | undefined;
+        if (manifest.image?.kind === "url") {
+          image = manifest.image.url;
+        } else if (manifest.image?.kind === "path") {
+          const pictured = joinRepoPath(directory, manifest.image.path);
+          if (treeFiles.has(pictured)) {
+            image = pictured;
+          } else {
+            messages.push(`"image" is ignored: ${pictured} is not a file of the repository`);
+          }
+        }
         manifests.set(entry.path, {
           ...base,
           kind: "manifest",
@@ -434,7 +453,8 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
           frontMatter: {
             ...(manifest.license === undefined ? {} : { license: manifest.license }),
             metadata: { ...manifest.metadata },
-            warnings: warnings.map((warning) => warning.message),
+            warnings: messages,
+            ...(image === undefined ? {} : { image }),
             documents: [...manifest.documents],
             exclude: [...manifest.exclude],
             references: referencesOf(entry.path, text),

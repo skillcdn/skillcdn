@@ -4,6 +4,7 @@ import { OPERATOR_LIST_KINDS, type OperatorListKind, purgeRepository } from "@sk
 import type { Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type { Logger } from "../logger.js";
+import { OperatorImageError, type OperatorImages } from "../operator/images.js";
 import { LegalDocumentError, LegalDocuments } from "../operator/legal.js";
 import { OperatorListError, OperatorLists } from "../operator/lists.js";
 import { type Showcase, ShowcaseError } from "../operator/showcase.js";
@@ -11,14 +12,16 @@ import type { AppEnv } from "./request-context.js";
 import { errorBody } from "./rest.js";
 
 /**
- * The admin API (ADR-0026, ADR-0028, ADR-0029): the operator's lists, the landing showcase with
- * its uploads, the deployment's own pages, and the takedown, behind one bearer token. It exists
- * only when a token is configured; otherwise the paths are nothing, like any other.
+ * The admin API (ADR-0026, ADR-0028, ADR-0029, ADR-0031): the operator's lists, the landing
+ * showcase with its uploads, the pictures of addresses, the deployment's own pages, and the
+ * takedown, behind one bearer token. It exists only when a token is configured; otherwise the
+ * paths are nothing, like any other.
  */
 export interface AdminDependencies {
   readonly token: string;
   readonly lists: OperatorLists;
   readonly showcase: Showcase;
+  readonly images: OperatorImages;
   readonly legal: LegalDocuments;
   readonly purge: (address: string) => Promise<{ snapshots: number; blobs: number } | undefined>;
   readonly logger: Logger;
@@ -42,7 +45,7 @@ function kindOf(value: string): OperatorListKind | undefined {
 }
 
 export function registerAdmin(app: Hono<AppEnv>, dependencies: AdminDependencies): void {
-  const { token, lists, showcase, legal, logger } = dependencies;
+  const { token, lists, showcase, images, legal, logger } = dependencies;
 
   app.use(`${ADMIN_PREFIX}/*`, async (c, next) => {
     const header = c.req.header("authorization") ?? "";
@@ -70,6 +73,10 @@ export function registerAdmin(app: Hono<AppEnv>, dependencies: AdminDependencies
       const extra = error.problems.length === 0 ? {} : { problems: error.problems };
       const status = error.code === "legal.invalid_kind" ? 404 : 400;
       return c.json(errorBody(error.code, error.message, extra), status);
+    }
+    if (error instanceof OperatorImageError) {
+      const extra = error.problems.length === 0 ? {} : { problems: error.problems };
+      return c.json(errorBody(error.code, error.message, extra), 400);
     }
     if (error instanceof OperatorListError) {
       return c.json(errorBody(error.code, error.message), 400);
@@ -207,6 +214,49 @@ export function registerAdmin(app: Hono<AppEnv>, dependencies: AdminDependencies
         return c.json(errorBody("media.in_use", "A showcase entry still shows the upload."), 409);
       default:
         return c.json(errorBody("admin.not_found", "No such upload."), 404);
+    }
+  });
+
+  // The pictures of addresses (ADR-0031): shown in place of what a repository declares.
+  app.get(`${ADMIN_PREFIX}/images`, async (c) => c.json({ items: await images.all() }));
+
+  app.put(
+    `${ADMIN_PREFIX}/images/*`,
+    bodyLimit({
+      maxSize: MAX_ENTRY_BYTES,
+      onError: (c) => c.json(errorBody("request.too_large", "The request body is too large."), 413),
+    }),
+    async (c) => {
+      const written = addressAfter(c.req.url, `${ADMIN_PREFIX}/images`);
+      let body: unknown;
+      try {
+        body = await c.req.json();
+      } catch {
+        return c.json(errorBody("image.invalid", "The body is not JSON."), 400);
+      }
+      try {
+        const image = await images.put(written, body);
+        logger.info(
+          { address: image.address, requestId: c.get("requestId") },
+          "operator image written",
+        );
+        return c.json(image);
+      } catch (error) {
+        return refused(c, error);
+      }
+    },
+  );
+
+  app.delete(`${ADMIN_PREFIX}/images/*`, async (c) => {
+    const written = addressAfter(c.req.url, `${ADMIN_PREFIX}/images`);
+    try {
+      const { address, removed } = await images.remove(written);
+      logger.info({ address, removed, requestId: c.get("requestId") }, "operator image removed");
+      return removed
+        ? c.json({ address, removed: true })
+        : c.json(errorBody("admin.not_found", "No such picture."), 404);
+    } catch (error) {
+      return refused(c, error);
     }
   });
 

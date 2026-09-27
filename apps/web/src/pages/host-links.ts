@@ -1,4 +1,4 @@
-import { parseRepoPath, type RestMount, sourceFileUrl } from "@skillcdn/core";
+import { parseRepoPath, type RestMount, rawFileUrl, sourceFileUrl } from "@skillcdn/core";
 
 // Where the things a page shows live at their git host, at the commit the page shows. The pages
 // send a reader there for what they do not serve themselves: the tree, a license file, and the
@@ -25,6 +25,10 @@ export function hostFileUrl(mount: RestMount, path: string): string | undefined 
 
 /** The bytes of a file of the commit as the host serves them: where a picture in Markdown is loaded from. */
 export function hostRawUrl(mount: RestMount, path: string): string {
+  const parsed = parseRepoPath(path);
+  if (parsed.ok) {
+    return rawFileUrl(mount.repository, mount.commit, parsed.value);
+  }
   const { owner, name } = mount.repository;
   return `https://raw.githubusercontent.com/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/${mount.commit}/${encodePath(path)}`;
 }

@@ -22,6 +22,7 @@ import { createMountServer, type ToolDependencies } from "../mcp/tools.js";
 import { ReaderInputError } from "../mounts/continuation.js";
 import type { MountReader } from "../mounts/mount-reader.js";
 import { type Mount, MountError, type MountService } from "../mounts/mount-service.js";
+import type { OperatorImages } from "../operator/images.js";
 import type { LegalDocuments } from "../operator/legal.js";
 import type { OperatorLists } from "../operator/lists.js";
 import type { Showcase } from "../operator/showcase.js";
@@ -55,6 +56,8 @@ export interface AppDependencies {
   readonly lists: OperatorLists;
   /** The landing showcase and its uploads (ADR-0028). */
   readonly showcase: Showcase;
+  /** The pictures the operator gives addresses (ADR-0031). */
+  readonly images: OperatorImages;
   /** The deployment's own pages: its terms and its privacy policy (ADR-0029). */
   readonly legal: LegalDocuments;
   /** The admin API, when a token is configured; without one it does not exist. */
@@ -236,6 +239,7 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
       token: dependencies.admin.token,
       lists: dependencies.lists,
       showcase: dependencies.showcase,
+      images: dependencies.images,
       legal: dependencies.legal,
       purge: purgeByAddress(database),
       logger,

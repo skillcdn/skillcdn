@@ -1,7 +1,7 @@
 import type { ShowcaseMediaSlot, ShowcaseTexts } from "@skillcdn/core";
-import { asc, eq, inArray, sql } from "drizzle-orm";
+import { asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { type Database, drizzleOf } from "../client.js";
-import { operatorMedia, showcaseEntries, showcaseMedia } from "../schema.js";
+import { operatorImages, operatorMedia, showcaseEntries, showcaseMedia } from "../schema.js";
 
 // The landing showcase and the media it is made of (ADR-0028). Operator data, not tenant data.
 
@@ -235,11 +235,14 @@ export interface OperatorMediaRecord {
   readonly contentType: string;
   readonly size: number;
   readonly createdAt: Date;
-  /** The names of the entries that use the upload, in any slot. */
+  /**
+   * What uses the upload: the names of the showcase entries that show it in any slot, and the
+   * addresses whose picture it is (ADR-0031).
+   */
   readonly usedBy: readonly string[];
 }
 
-/** Every upload without its bytes, oldest first, and which entries use each. */
+/** Every upload without its bytes, oldest first, and what uses each. */
 export async function listOperatorMedia(database: Database): Promise<OperatorMediaRecord[]> {
   const db = drizzleOf(database);
   const rows = await db
@@ -252,16 +255,24 @@ export async function listOperatorMedia(database: Database): Promise<OperatorMed
     .from(operatorMedia)
     .orderBy(asc(operatorMedia.createdAt), asc(operatorMedia.sha));
   const uses = await db
-    .select({ sha: showcaseMedia.sha, slug: showcaseEntries.slug })
+    .select({ sha: showcaseMedia.sha, name: showcaseEntries.slug })
     .from(showcaseMedia)
     .innerJoin(showcaseEntries, eq(showcaseMedia.entryId, showcaseEntries.id));
+  const pictures = await db
+    .select({ sha: operatorImages.mediaSha, name: operatorImages.address })
+    .from(operatorImages)
+    .where(isNotNull(operatorImages.mediaSha));
   return rows.map((row) => ({
     ...row,
-    usedBy: [...new Set(uses.filter((use) => use.sha === row.sha).map((use) => use.slug))].sort(),
+    usedBy: [
+      ...new Set(
+        [...uses, ...pictures].filter((use) => use.sha === row.sha).map((use) => use.name),
+      ),
+    ].sort(),
   }));
 }
 
-/** `in_use` leaves the upload where it is: an entry still shows it. */
+/** `in_use` leaves the upload where it is: an entry still shows it, or an address is pictured by it. */
 export async function removeOperatorMedia(
   database: Database,
   sha: string,
@@ -273,7 +284,12 @@ export async function removeOperatorMedia(
       .from(showcaseMedia)
       .where(eq(showcaseMedia.sha, sha))
       .limit(1);
-    if (use !== undefined) {
+    const [picture] = await tx
+      .select({ id: operatorImages.id })
+      .from(operatorImages)
+      .where(eq(operatorImages.mediaSha, sha))
+      .limit(1);
+    if (use !== undefined || picture !== undefined) {
       return "in_use";
     }
     const rows = await tx

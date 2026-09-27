@@ -340,6 +340,7 @@ describe("repository-root publication and progressive loading", () => {
       refTtlMs: 60_000,
       staleGraceMs: 60_000,
       isVerified: async () => false,
+      imageOf: async () => undefined,
     });
     const mount = await mounts.resolve(parsed.value);
     const stored = createBlobStore(database.database);

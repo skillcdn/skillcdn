@@ -194,6 +194,7 @@ describe("usage statistics", () => {
       commit: "c".repeat(40),
       limits: {},
       verified: false,
+      image: undefined,
       trustedUntil: undefined,
     };
     lost.count(mount, "connection");

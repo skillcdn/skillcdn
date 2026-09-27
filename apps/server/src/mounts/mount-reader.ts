@@ -149,6 +149,11 @@ export interface MountManifest {
   readonly description: string;
   /** The tag of the language the repository says it is written in. */
   readonly language: string | undefined;
+  /**
+   * The picture the nearest manifest that has one declares (ADR-0031): a repository-root path
+   * of a file the tree has, or an `https` URL.
+   */
+  readonly image: string | undefined;
   readonly translations: Readonly<Record<string, RepoTranslation>>;
   /** The Markdown after the front-matter, trimmed: the rules. Empty when there are none. */
   readonly rules: string;
@@ -539,6 +544,8 @@ export class MountReader {
         description: row.description,
         language: ancestors.find((entry) => entry.frontMatter?.language !== undefined)?.frontMatter
           ?.language,
+        image: ancestors.find((entry) => entry.frontMatter?.image !== undefined)?.frontMatter
+          ?.image,
         translations: repoTranslationsOf(row.frontMatter?.translations),
         rules: split?.kind === "found" ? split.body.trim() : "",
       };

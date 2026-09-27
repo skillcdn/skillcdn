@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { type ButtonHTMLAttributes, type ReactNode, useState } from "react";
 import styles from "./ui.module.css";
 
 // Small building blocks. Each one is a class in ui.module.css and nothing more.
@@ -56,6 +56,61 @@ export function Callout(props: {
       </div>
       {props.action}
     </div>
+  );
+}
+
+/**
+ * A picture loaded from elsewhere (ADR-0030, ADR-0031): lazily unless it is above the fold,
+ * without a referrer, decorative next to the words that name what it shows, and gone as a
+ * whole, frame included, when it cannot be loaded.
+ */
+export function Picture(props: {
+  readonly src: string;
+  readonly className?: string;
+  readonly eager?: boolean;
+}) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return null;
+  }
+  return (
+    <div className={props.className}>
+      <img
+        src={props.src}
+        alt=""
+        loading={props.eager === true ? undefined : "lazy"}
+        decoding="async"
+        referrerPolicy="no-referrer"
+        onError={() => setFailed(true)}
+      />
+    </div>
+  );
+}
+
+/**
+ * The owner's picture as the git host serves it (ADR-0031): a rounded square, so that a logo
+ * keeps its corners and a face its frame, next to the name it belongs to.
+ */
+export function Avatar(props: {
+  readonly src: string;
+  readonly size?: "sm" | "md" | "lg";
+  readonly className?: string;
+  readonly eager?: boolean;
+}) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return null;
+  }
+  return (
+    <img
+      className={cx(styles.avatar, styles[`avatar-${props.size ?? "md"}`], props.className)}
+      src={props.src}
+      alt=""
+      loading={props.eager === true ? undefined : "lazy"}
+      decoding="async"
+      referrerPolicy="no-referrer"
+      onError={() => setFailed(true)}
+    />
   );
 }
 

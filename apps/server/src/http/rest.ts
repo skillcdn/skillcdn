@@ -1,5 +1,6 @@
 import {
   type Address,
+  accountAvatarUrl,
   BROWSE_MAX_LIMIT,
   type BrowseResult,
   describeLicense,
@@ -13,6 +14,7 @@ import {
   type LicenseFact,
   MAX_QUERY_LENGTH,
   MAX_REPO_PATH_LENGTH,
+  parseRepoPath,
   READ_FILE_MAX_LIMIT,
   REST_FEATURED_SKILL_NAMES,
   REST_MOUNT_LIST_LIMIT,
@@ -30,6 +32,7 @@ import {
   type RestShowcase,
   type RestSkill,
   type RestSkillTranslation,
+  rawFileUrl,
   type SkillTranslation,
 } from "@skillcdn/core";
 import type { Context, Hono } from "hono";
@@ -89,6 +92,9 @@ export function errorBody(code: string, message: string, extra: Record<string, u
   return { error: { code, message, ...extra } };
 }
 
+/** The size of the owner's picture the pages ask the host for: 80 CSS pixels on a 2x screen. */
+const AVATAR_SIZE = 160;
+
 function repositoryOf(mount: Mount): RestRepository {
   const { repository } = mount.repo;
   return {
@@ -97,7 +103,38 @@ function repositoryOf(mount: Mount): RestRepository {
     name: repository.name,
     defaultBranch: repository.defaultBranch,
     description: repository.description ?? null,
+    avatar: accountAvatarUrl(mount.address.host, repository.owner.hostAccountId, AVATAR_SIZE),
   };
+}
+
+/**
+ * Where the picture that stands for the address is loaded from (ADR-0031): the operator's, else
+ * the one the manifest declares, which is a file of the repository at the commit the mount shows
+ * or a URL as written; `null` when there is neither.
+ */
+function imageOf(
+  mount: Mount,
+  manifest: { readonly image: string | undefined } | undefined,
+): string | null {
+  if (mount.image !== undefined) {
+    return mount.image;
+  }
+  const declared = manifest?.image;
+  if (declared === undefined) {
+    return null;
+  }
+  if (/^https:\/\//i.test(declared)) {
+    return declared;
+  }
+  const path = parseRepoPath(declared);
+  const { repository } = mount.repo;
+  return path.ok
+    ? rawFileUrl(
+        { host: mount.address.host, owner: repository.owner.login, name: repository.name },
+        mount.commit,
+        path.value,
+      )
+    : null;
 }
 
 const notReadyBody = (outcome: NotReady) =>
@@ -223,6 +260,7 @@ export function mountBody(
     commit: mount.commit,
     path: mount.address.path,
     verified: mount.verified,
+    image: imageOf(mount, answer.status === "ready" ? answer.overview.manifest : undefined),
     index:
       answer.status !== "ready"
         ? notReadyBody(answer)
@@ -615,6 +653,10 @@ export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies):
                     }
                   : null,
               verified: mount.verified,
+              image: imageOf(
+                mount,
+                answer.status === "ready" ? answer.overview.manifest : undefined,
+              ),
               status: answer.status,
               skillCount: answer.status === "ready" ? answer.overview.skillCount : null,
               skills:

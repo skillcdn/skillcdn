@@ -23,6 +23,7 @@ import {
   listDirectory,
   listEntries,
   listLegalDocuments,
+  listOperatorImages,
   listOperatorMedia,
   listOperatorRepositories,
   listShowcaseEntries,
@@ -31,10 +32,12 @@ import {
   type NewIndexEntry,
   purgeRepository,
   putLegalDocument,
+  putOperatorImage,
   putOperatorMedia,
   putShowcaseEntry,
   releaseSnapshot,
   removeLegalDocument,
+  removeOperatorImage,
   removeOperatorMedia,
   removeOperatorRepository,
   removeShowcaseEntry,
@@ -862,6 +865,61 @@ describe("the landing showcase", () => {
     expect(await removeOperatorMedia(database, poster)).toBe("removed");
     expect(await getOperatorMedia(database, poster)).toBeUndefined();
     expect((await listOperatorMedia(database)).map((upload) => upload.sha)).toEqual([clip]);
+  });
+});
+
+describe("the pictures of addresses", () => {
+  it("keep one picture per address, an upload or a URL, and hold an upload while it is shown", async () => {
+    const picture = "d".repeat(64);
+    expect(
+      await putOperatorImage(database, { address: "/gh/acme/skills", mediaSha: picture }),
+    ).toEqual({ outcome: "media_missing" });
+    await putOperatorMedia(database, {
+      sha: picture,
+      contentType: "image/png",
+      bytes: new Uint8Array([7]),
+    });
+    expect(
+      await putOperatorImage(database, { address: "/gh/acme/skills", mediaSha: picture }),
+    ).toEqual({ outcome: "created" });
+    expect(
+      await putOperatorImage(database, {
+        address: "/gh/acme/other@main/skills",
+        url: "https://example.com/other.png",
+      }),
+    ).toEqual({ outcome: "created" });
+    expect(
+      (await listOperatorImages(database)).map((image) => [
+        image.address,
+        image.media?.sha,
+        image.media?.contentType,
+        image.url,
+      ]),
+    ).toEqual([
+      ["/gh/acme/skills", picture, "image/png", undefined],
+      ["/gh/acme/other@main/skills", undefined, undefined, "https://example.com/other.png"],
+    ]);
+    expect(
+      (await listOperatorMedia(database)).find((upload) => upload.sha === picture)?.usedBy,
+    ).toEqual(["/gh/acme/skills"]);
+    expect(await removeOperatorMedia(database, picture)).toBe("in_use");
+    // Replacing the picture frees the upload.
+    expect(
+      await putOperatorImage(database, {
+        address: "/gh/acme/skills",
+        url: "https://example.com/skills.png",
+      }),
+    ).toEqual({ outcome: "updated" });
+    expect((await listOperatorImages(database)).map((image) => image.url)).toEqual([
+      "https://example.com/skills.png",
+      "https://example.com/other.png",
+    ]);
+    expect(await removeOperatorMedia(database, picture)).toBe("removed");
+    expect(await removeOperatorImage(database, "/gh/acme/skills")).toBe(true);
+    expect(await removeOperatorImage(database, "/gh/acme/skills")).toBe(false);
+    expect((await listOperatorImages(database)).map((image) => image.address)).toEqual([
+      "/gh/acme/other@main/skills",
+    ]);
   });
 });
 

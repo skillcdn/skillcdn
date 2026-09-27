@@ -29,6 +29,7 @@ describe("the check role", () => {
     expect(report).toContain("  license: MIT (SKILLCDN.md)\n");
     expect(report).toContain("  name: Acme playbooks");
     expect(report).toContain("  language: en");
+    expect(report).toContain("  image: (none)");
     expect(report).toContain("  translations: ko");
     expect(report).toContain("  documents: docs");
     expect(report).toContain(

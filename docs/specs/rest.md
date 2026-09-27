@@ -47,9 +47,10 @@ Repository identity and a bounded overview of the mount:
 | Field | Meaning |
 |---|---|
 | `address` | Canonical address. |
-| `repository` | Host, owner, name, default branch and host description. |
+| `repository` | Host, owner, name, default branch, host description, and `avatar`, the owner's picture as the host serves it ([ADR-0031](../adr/0031-a-picture-for-a-repository-comes-from-its-manifest-or-the-operator.md)). |
 | `ref`, `pinned`, `commit`, `path` | Requested ref (`null` for default), whether it is a full commit hash, resolved commit, and mounted repository-root directory. |
 | `verified` | Whether the operator or, later, the owner vouches for the repository ([tools](tools.md)). |
+| `image` | The picture that stands for the address, as the URL a browser loads it from: the operator's ([admin API](../../deploy/README.md#the-admin-api)), else the one the nearest manifest declares ([format](skill-repo.md#the-repository-manifest-skillcdnmd)), a file of the repository at `commit` at the host or a URL as written; `null` when there is none. |
 | `index` | State, or a ready overview with manifest metadata, the `license` that governs the mounted directory outside its skills (`kind`, `name`, `source`), skill/document counts, bounded listings and diagnostics. |
 
 The overview's manifest carries its own canonical `path`, `name`, `description`, `language` and `translations`, or is absent when no applicable manifest exists. An ancestor manifest's path remains its actual repository path even if ordinary file reading cannot reach it from this mount. Names, descriptions and translations belong to their declaring manifest; language inherits from the nearest ancestor that declares it.
@@ -101,7 +102,7 @@ MCP additionally bounds its complete serialized tool result and can return short
 
 ### `GET /api/v1/featured`
 
-The addresses the operator selects for the explorer (the featured list of the [admin API](../../deploy/README.md#the-admin-api)), with their repository metadata, manifest introduction when available, whether the repository is `verified`, index status, skill count and a few skill names. While the operator features nothing, the reference repository is featured ([ADR-0028](../adr/0028-the-front-page-and-the-explorer-are-operator-content.md)). Unresolvable addresses are omitted, and so is a repository whose index found no license ([ADR-0026](../adr/0026-serving-follows-the-license-and-the-operators-lists.md)). There is no public enumeration of every indexed repository: asking for an address alone does not opt its author into a catalog.
+The addresses the operator selects for the explorer (the featured list of the [admin API](../../deploy/README.md#the-admin-api)), with their repository metadata (the owner's `avatar` included), manifest introduction when available, whether the repository is `verified`, the `image` that stands for the address as on the mount (or `null`), index status, skill count and a few skill names. While the operator features nothing, the reference repository is featured ([ADR-0028](../adr/0028-the-front-page-and-the-explorer-are-operator-content.md)). Unresolvable addresses are omitted, and so is a repository whose index found no license ([ADR-0026](../adr/0026-serving-follows-the-license-and-the-operators-lists.md)). There is no public enumeration of every indexed repository: asking for an address alone does not opt its author into a catalog.
 
 ### `GET /api/v1/showcase`
 

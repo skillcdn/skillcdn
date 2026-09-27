@@ -79,12 +79,14 @@ describe("GET /api/v1/mounts/<address>", () => {
         name: "multi-skill",
         defaultBranch: "main",
         description: "Two skills and the documents next to them.",
+        avatar: "https://avatars.githubusercontent.com/u/42?s=160&v=4",
       },
       ref: fixtureCommits("rest-overview").main,
       pinned: true,
       commit: fixtureCommits("rest-overview").main,
       path: "",
       verified: false,
+      image: null,
     });
     if (mount.index.status !== "ready") {
       throw new Error("expected a ready index");
@@ -103,6 +105,47 @@ describe("GET /api/v1/mounts/<address>", () => {
     );
     expect(mount.index.documentCount).toBe(mount.index.documents.length);
     expect(mount.index.truncated).toBe(false);
+  });
+
+  it("shows the picture the manifest declares, and the operator's in its place", async () => {
+    const host = createFixtureHost("rest-picture");
+    const text = (value: string) => new TextEncoder().encode(value);
+    host.addFile(
+      "SKILLCDN.md",
+      text("---\ndescription: Pictured.\nimage: assets/banner.svg\n---\n"),
+    );
+    host.addFile("assets/banner.svg", text("<svg xmlns='http://www.w3.org/2000/svg'/>"));
+    const h = harness({ host });
+    const commit = fixtureCommits("rest-picture").main;
+    await indexed(h, "/gh/acme/single-skill");
+    const read = async (address = "/gh/acme/single-skill") =>
+      restMountSchema.parse(await (await h.request(`/api/v1/mounts${address}`)).json());
+    const declared = await read();
+    // The owner's picture comes from the host by the account's id; the repository's is the file
+    // the manifest names, at the commit the page shows.
+    expect(declared.repository.avatar).toBe("https://avatars.githubusercontent.com/u/42?s=160&v=4");
+    expect(declared.image).toBe(
+      `https://raw.githubusercontent.com/Acme/single-skill/${commit}/assets/banner.svg`,
+    );
+    // A mount below the manifest inherits its picture, as it inherits the language.
+    expect((await read("/gh/acme/single-skill@main/references")).image).toBe(declared.image);
+
+    // The operator's picture stands in front of the repository's, for the address it names
+    // and for every address of that repository.
+    await h.images.put("/gh/acme/single-skill", { url: "https://example.com/banner.png" });
+    expect((await read()).image).toBe("https://example.com/banner.png");
+    expect((await read("/gh/acme/single-skill@main/references")).image).toBe(
+      "https://example.com/banner.png",
+    );
+    await h.images.put("/gh/acme/single-skill@main/references", {
+      url: "https://example.com/references.png",
+    });
+    expect((await read("/gh/acme/single-skill@main/references")).image).toBe(
+      "https://example.com/references.png",
+    );
+    await h.images.remove("/gh/acme/single-skill");
+    await h.images.remove("/gh/acme/single-skill@main/references");
+    expect((await read()).image).toBe(declared.image);
   });
 
   it("relays the manifest of a repository, and its rules with every skill", async () => {
@@ -573,9 +616,11 @@ describe("GET /api/v1/featured", () => {
             name: "multi-skill",
             defaultBranch: "main",
             description: "Two skills and the documents next to them.",
+            avatar: "https://avatars.githubusercontent.com/u/42?s=160&v=4",
           },
           manifest: null,
           verified: false,
+          image: null,
           status: "ready",
           skillCount: 2,
           skills: ["incident-review", "release-notes"],

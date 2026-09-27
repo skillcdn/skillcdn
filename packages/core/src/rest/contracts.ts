@@ -106,6 +106,8 @@ export const restRepositorySchema = z.object({
   defaultBranch: z.string(),
   /** What the host shows as the repository's description, or `null`. */
   description: z.nullable(z.string()),
+  /** The owner's picture as the host serves it: an https URL, loaded by the browser (ADR-0031). */
+  avatar: z.string(),
 });
 
 /** What people see in one language instead of a skill's name and description. */
@@ -160,6 +162,11 @@ export const restMountSchema = z.object({
   commit: z.string(),
   path: z.string(),
   verified: z.boolean(),
+  /**
+   * The picture that stands for the address (ADR-0031): the operator's, else the one the
+   * manifest declares, as a URL the browser loads it from; `null` when there is none.
+   */
+  image: z.nullable(z.string()),
   index: z.discriminatedUnion("status", [
     z.object({
       status: z.literal("ready"),
@@ -317,6 +324,8 @@ export const restFeaturedSchema = z.object({
       ),
       /** Whether the operator, or later the owner, vouches for the repository. */
       verified: z.boolean(),
+      /** The picture that stands for the address, as on the mount, or `null`. */
+      image: z.nullable(z.string()),
       status: z.enum(["ready", "indexing", "failed"]),
       skillCount: z.nullable(count),
       skills: z.array(z.string()),

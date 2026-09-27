@@ -24,6 +24,7 @@ import type { Logger } from "../logger.js";
 import { MountReader } from "../mounts/mount-reader.js";
 import { MountService } from "../mounts/mount-service.js";
 import { createOperatorEntitlements } from "../operator/entitlements.js";
+import { OperatorImages } from "../operator/images.js";
 import { LegalDocuments } from "../operator/legal.js";
 import { OperatorLists } from "../operator/lists.js";
 import { Showcase } from "../operator/showcase.js";
@@ -67,6 +68,7 @@ export function createApi(
   readonly snapshots: SnapshotService;
   readonly lists: OperatorLists;
   readonly showcase: Showcase;
+  readonly images: OperatorImages;
   readonly legal: LegalDocuments;
 } {
   const { database, gitHost, clock, usage, logger } = ports;
@@ -76,6 +78,7 @@ export function createApi(
   // The operator's deny list decides first; whatever the port was given decides the rest.
   const lists = new OperatorLists({ database, clock });
   const showcase = new Showcase({ database, clock, logger });
+  const images = new OperatorImages({ database, clock });
   const legal = new LegalDocuments({ database, clock });
   const entitlements = createOperatorEntitlements(lists, ports.entitlements);
   const mounts = new MountService({
@@ -87,6 +90,7 @@ export function createApi(
     refTtlMs: config.mounts.refTtlMs,
     staleGraceMs: Math.max(config.mounts.repoTtlMs, config.mounts.refTtlMs) * STALE_GRACE_FACTOR,
     isVerified: (key) => lists.isVerified(key),
+    imageOf: (address) => images.imageFor(address),
   });
   const snapshots = new SnapshotService({
     database,
@@ -110,6 +114,7 @@ export function createApi(
     reader,
     lists,
     showcase,
+    images,
     legal,
     admin: config.admin?.token === undefined ? undefined : { token: config.admin.token },
     web: ports.web,
@@ -135,7 +140,7 @@ export function createApi(
       publicUrl: config.web?.publicUrl,
     },
   });
-  return { app, snapshots, lists, showcase, legal };
+  return { app, snapshots, lists, showcase, images, legal };
 }
 
 /**

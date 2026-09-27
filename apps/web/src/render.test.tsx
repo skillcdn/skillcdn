@@ -38,12 +38,14 @@ const MOUNT: RestMount = {
     name: "skills",
     defaultBranch: "main",
     description: "Skills for the whole team.",
+    avatar: "https://avatars.example/acme.png",
   },
   ref: null,
   pinned: false,
   commit: "a".repeat(40),
   path: "",
   verified: false,
+  image: null,
   index: {
     status: "ready",
     truncated: false,
@@ -171,6 +173,7 @@ describe("prerendered pages", () => {
       repository: MOUNT.repository,
       manifest: null,
       verified: false,
+      image: address === "/gh/acme/useful" ? "https://pictures.example/useful.png" : null,
       status: "ready",
       skillCount: 1,
       skills: ["review"],
@@ -198,6 +201,11 @@ describe("prerendered pages", () => {
     expect(body.match(/<h3[^>]*><a[^>]*href="\/gh\/skillcdn\/skills"/g)).toHaveLength(1);
     expect(body.match(/<h3/g)).toHaveLength(4);
     expect(body).not.toContain('skills/hostile"');
+    // Every card carries the owner's picture; the one with a picture of its own shows it, loaded
+    // lazily and without a referrer (ADR-0031).
+    expect(body.match(/src="https:\/\/avatars\.example\/acme\.png"/g)).toHaveLength(4);
+    expect(body.match(/src="https:\/\/pictures\.example\/useful\.png"/g)).toHaveLength(1);
+    expect(body).toContain('referrerPolicy="no-referrer"');
     expect(body).not.toContain("single-skill/references");
     expect(body).not.toContain('href="/gh/SkillCDN/skills"');
     expect(body).toContain('href="/gh/skillcdn/skillcdn/skills/hostile-tools"');
@@ -447,6 +455,23 @@ describe("the page of an address", () => {
     // The guide says what to say first; it no longer previews the server instructions.
     expect(html).toContain(t.connect.firstMessage.label);
     expect(html).not.toContain("This server serves");
+    // The owner's picture stands above the name; a repository without a picture has no frame
+    // for one, and one with a picture shows it over the header (ADR-0031).
+    expect(html).toContain('src="https://avatars.example/acme.png"');
+    expect(html).not.toContain("pictures.example");
+    const pictured = renderAddressPage(TEMPLATE, {
+      language: "en",
+      origin: "https://skills.example",
+      pathname: "/gh/acme/skills",
+      search: "",
+      data: {
+        mount: { ready: { ...MOUNT, image: "https://pictures.example/banner.png" } },
+        browse: { ready: BROWSE },
+      },
+    }).html;
+    expect(pictured.indexOf('src="https://pictures.example/banner.png"')).toBeLessThan(
+      pictured.indexOf('src="https://avatars.example/acme.png"'),
+    );
   });
 
   it("renders a scoped folder from browse data and keeps the connection address", () => {

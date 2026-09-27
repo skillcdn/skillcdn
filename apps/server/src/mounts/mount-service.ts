@@ -35,6 +35,11 @@ export interface Mount {
    */
   readonly verified: boolean;
   /**
+   * The picture the operator gave the address, or its repository, when it did (ADR-0031): where
+   * the pages load it from, in place of what the repository declares.
+   */
+  readonly image: string | undefined;
+  /**
    * Until when the ref's resolution is trusted; `undefined` for a pinned commit, which never
    * changes. What a client may cache what it reads is bounded by it.
    */
@@ -81,6 +86,8 @@ export interface MountServiceOptions {
   readonly staleGraceMs: number;
   /** Whether the operator vouches for a repository, by the key {@link repositoryKey} gives it. */
   readonly isVerified: (key: string) => Promise<boolean>;
+  /** Where the operator's picture for an address is loaded from, when it gave one (ADR-0031). */
+  readonly imageOf: (address: Address) => Promise<string | undefined>;
 }
 
 const MAX_REMEMBERED_MISSING = 10_000;
@@ -188,6 +195,7 @@ export class MountService {
       // Whoever vouched for the repository vouched for its default branch (ADR-0026).
       verified:
         address.ref === undefined && (await this.#options.isVerified(repositoryKey(address))),
+      image: await this.#options.imageOf(address),
       trustedUntil: resolved.trustedUntil,
     };
   }

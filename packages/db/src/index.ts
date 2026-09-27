@@ -20,6 +20,14 @@ export {
   servedEntries,
 } from "./queries/entries.js";
 export {
+  listOperatorImages,
+  type OperatorImageInput,
+  type OperatorImageRecord,
+  type PutOperatorImageResult,
+  putOperatorImage,
+  removeOperatorImage,
+} from "./queries/images.js";
+export {
   getLegalDocument,
   type LegalDocumentInput,
   type LegalDocumentRecord,

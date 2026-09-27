@@ -267,6 +267,7 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
         `  name: ${manifest.name ?? "(the repository's name on the git host)"}\n` +
         `  description: ${manifest.description ?? ""}\n` +
         `  language: ${manifest.frontMatter?.language ?? "(not declared)"}\n` +
+        `  image: ${manifest.frontMatter?.image ?? "(none)"}\n` +
         (manifest.frontMatter?.manifestError === undefined
           ? ""
           : `  unavailable: ${manifest.frontMatter.manifestError}\n`) +

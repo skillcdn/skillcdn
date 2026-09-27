@@ -63,17 +63,37 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
   margin-bottom: var(--space-4);
-  padding: var(--space-4) var(--space-5);
   border: var(--border);
   border-radius: var(--radius-lg);
   background: var(--color-bg-subtle);
+  overflow: hidden;
   break-inside: avoid;
   transition:
     border-color var(--transition),
     background var(--transition),
     box-shadow var(--transition);
+}
+
+/* The repository's own picture, whatever its shape, fills the top of the card at two to one;
+   its middle is what shows. */
+.cardArt {
+  aspect-ratio: 2 / 1;
+  border-bottom: var(--border);
+  background: var(--color-bg-inset);
+}
+
+.cardArt img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
 }
 
 .card:hover,
@@ -88,10 +108,15 @@
   outline-offset: 2px;
 }
 
+/* The owner's picture, then the name and the address beside it. */
 .cardHead {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
+}
+
+.cardTitles {
+  min-width: 0;
 }
 
 .cardTitle {
@@ -126,7 +151,7 @@
   overflow-wrap: anywhere;
 }
 
-.cardBody {
+.cardText {
   color: var(--color-text-muted);
   font-size: var(--text-sm);
   overflow-wrap: anywhere;

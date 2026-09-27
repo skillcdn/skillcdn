@@ -5,7 +5,16 @@ import { resourceKeys } from "../api/keys.js";
 import { useResource } from "../api/use-resource.js";
 import { ConnectGuide } from "../components/connect-guide.js";
 import { ErrorCallout } from "../components/error-callout.js";
-import { Badge, Callout, Container, Skeleton, Spinner, VerifiedMark } from "../components/ui.js";
+import {
+  Avatar,
+  Badge,
+  Callout,
+  Container,
+  Picture,
+  Skeleton,
+  Spinner,
+  VerifiedMark,
+} from "../components/ui.js";
 import { useI18n } from "../i18n/index.js";
 import { repositoryDescription, repositoryName, translationFor } from "../i18n/repository-text.js";
 import type { MountView } from "../router.js";
@@ -48,6 +57,12 @@ function MountHeader(props: { readonly address: Address; readonly mount: RestMou
 
   return (
     <header className={styles.header}>
+      {/* The repository's picture over the header when it has one, and its owner's on the lower
+          edge of it; without one, the owner's stands alone above the name (ADR-0031). */}
+      {mount?.image != null && <Picture className={styles.banner} src={mount.image} eager />}
+      {mount !== undefined && (
+        <Avatar className={styles.avatar} src={mount.repository.avatar} size="lg" eager />
+      )}
       <p className={styles.kicker}>{t.mount.repository}</p>
       {/* The mark belongs to the name: it says someone vouches for what this address resolves to. */}
       <h1 className={styles.title}>

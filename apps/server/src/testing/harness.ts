@@ -7,6 +7,7 @@ import { parseCidr } from "../http/client-address.js";
 import type { AppEnv } from "../http/request-context.js";
 import type { WebBundle } from "../http/web.js";
 import type { SnapshotService } from "../indexer/snapshot-service.js";
+import type { OperatorImages } from "../operator/images.js";
 import type { LegalDocuments } from "../operator/legal.js";
 import type { OperatorLists } from "../operator/lists.js";
 import type { Showcase } from "../operator/showcase.js";
@@ -28,6 +29,8 @@ export interface Harness {
   readonly lists: OperatorLists;
   /** The landing showcase, for a test to write entries and uploads without the admin API. */
   readonly showcase: Showcase;
+  /** The pictures of addresses, for a test to write them without the admin API. */
+  readonly images: OperatorImages;
   /** The deployment's own pages, for a test to write them without the admin API. */
   readonly legal: LegalDocuments;
   readonly usage: UsageEvent[];
@@ -56,7 +59,7 @@ export function createHarness(testDatabase: TestDatabase, options: HarnessOption
   const host = options.host ?? createFixtureHost();
   const usage: UsageEvent[] = [];
   const logs: Record<string, unknown>[] = [];
-  const { app, snapshots, lists, showcase, legal } = createApi(
+  const { app, snapshots, lists, showcase, images, legal } = createApi(
     {
       mounts: { repoTtlMs: 60_000, refTtlMs: 60_000 },
       http: {
@@ -104,6 +107,7 @@ export function createHarness(testDatabase: TestDatabase, options: HarnessOption
     snapshots,
     lists,
     showcase,
+    images,
     legal,
     usage,
     request,

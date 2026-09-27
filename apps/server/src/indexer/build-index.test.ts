@@ -129,6 +129,29 @@ describe("repository publication and link indexing", () => {
     expect(result.byPath.get("skills/example/values.json")?.searchBody).toBeUndefined();
   });
 
+  it("keeps the picture a manifest declares as the page loads it, and reports one the tree lacks", async () => {
+    const result = await index({
+      "SKILLCDN.md": manifest("", "documents: []\nimage: ./assets/banner.svg\n"),
+      "assets/banner.svg": "<svg xmlns='http://www.w3.org/2000/svg'/>",
+      "team/SKILLCDN.md": manifest("", "documents: []\nimage: https://example.com/team.png\n"),
+      "team/docs/SKILLCDN.md": manifest("", "documents: []\nimage: missing.png\n"),
+      "team/docs/guide.md": "# Guide",
+    });
+    // A path is kept from the repository root, a URL as written.
+    expect(result.byPath.get("SKILLCDN.md")?.frontMatter).toMatchObject({
+      image: "assets/banner.svg",
+      warnings: [],
+    });
+    expect(result.byPath.get("team/SKILLCDN.md")?.frontMatter).toMatchObject({
+      image: "https://example.com/team.png",
+    });
+    const nested = result.byPath.get("team/docs/SKILLCDN.md")?.frontMatter;
+    expect(nested?.image).toBeUndefined();
+    expect(nested?.warnings).toEqual([
+      '"image" is ignored: team/docs/missing.png is not a file of the repository',
+    ]);
+  });
+
   it("discovers flat, nested, root and hidden skill declarations through one rule", async () => {
     const result = await index({
       "SKILL.md": skill(),

@@ -92,6 +92,13 @@
       "when": 1790389220113,
       "tag": "0012_legal-documents",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1790481285019,
+      "tag": "0013_operator-images",
+      "breakpoints": true
     }
   ]
 }

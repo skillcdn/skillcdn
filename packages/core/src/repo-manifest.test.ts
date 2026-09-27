@@ -56,6 +56,7 @@ describe("parseRepoManifest", () => {
   it("needs only a description", () => {
     const { manifest } = parsed("---\ndescription: Playbooks.\n---\n");
     expect(manifest.name).toBeUndefined();
+    expect(manifest.image).toBeUndefined();
     expect(manifest.documents).toEqual(["docs"]);
     expect(manifest.exclude).toEqual([]);
     expect(manifest.language).toBeUndefined();
@@ -108,6 +109,38 @@ describe("parseRepoManifest", () => {
       '"language" is ignored: expected a language tag such as "en" or "pt-BR"',
       '2 "translations" entries are ignored: expected at most 32 language tags such as "ko", each mapping to translated fields',
     ]);
+  });
+
+  it("reads the picture as a path relative to the manifest or as an https URL", () => {
+    const image = (value: string) => parsed(`---\ndescription: D.\nimage: ${value}\n---\n`);
+    expect(image("assets/banner.png").manifest.image).toEqual({
+      kind: "path",
+      path: "assets/banner.png",
+    });
+    expect(image("./banner.webp").manifest.image).toEqual({
+      kind: "path",
+      path: "banner.webp",
+    });
+    expect(image("https://example.com/banner.png?v=2").manifest.image).toEqual({
+      kind: "url",
+      url: "https://example.com/banner.png?v=2",
+    });
+    expect(image("assets/banner.png").warnings).toEqual([]);
+  });
+
+  it.each([
+    "http://example.com/banner.png",
+    "../banner.png",
+    "/banner.png",
+    "data:image/png;base64,AAAA",
+    "'https://example.com/a b.png'",
+    "''",
+    "[a, b]",
+  ])("ignores a picture written as %s and says so", (value) => {
+    const { manifest, warnings } = parsed(`---\ndescription: D.\nimage: ${value}\n---\n`);
+    expect(manifest.image).toBeUndefined();
+    expect(warnings.map((warning) => warning.code)).toEqual(["ignored_field"]);
+    expect(warnings[0]?.message).toContain('"image" is ignored');
   });
 
   it("warns when the description is cut at a hash", () => {

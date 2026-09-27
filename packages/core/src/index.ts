@@ -26,6 +26,8 @@ export {
   splitFrontMatter,
 } from "./front-matter.js";
 export { isFullCommitHash, isValidRefName, MAX_REF_LENGTH } from "./git-ref.js";
+export { accountAvatarUrl, rawFileUrl } from "./host-urls.js";
+export { isImageUrl, MAX_IMAGE_URL_LENGTH } from "./image-source.js";
 export {
   classifyLicenseField,
   classifyLicenseFile,
@@ -103,6 +105,7 @@ export {
   MAX_REPO_NAME_LENGTH,
   type ParsedRepoManifest,
   parseRepoManifest,
+  type RepoImage,
   type RepoManifest,
   type RepoManifestError,
   type RepoManifestErrorCode,
