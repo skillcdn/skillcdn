@@ -15,18 +15,6 @@
   background: radial-gradient(ellipse at 50% 0%, var(--color-atmosphere), transparent 60%);
   pointer-events: none;
 }
-.hero::after {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  inset: 0;
-  background-image:
-    linear-gradient(var(--color-grid) var(--hairline), transparent var(--hairline)),
-    linear-gradient(90deg, var(--color-grid) var(--hairline), transparent var(--hairline));
-  background-size: var(--grid-size) var(--grid-size);
-  mask-image: radial-gradient(ellipse at 50% 0%, var(--color-bg), transparent 70%);
-  pointer-events: none;
-}
 .eyebrow {
   display: inline-flex;
   align-items: center;

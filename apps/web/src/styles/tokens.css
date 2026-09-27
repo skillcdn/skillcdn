@@ -186,11 +186,14 @@
   /* Editorial landing surfaces, preserving the shared blue accent. */
   --color-atmosphere: #27457670;
   --color-atmosphere-soft: #24426b30;
-  --color-grid: #739bd00b;
   --color-media-shade: #050d1bb3;
   --color-media-border: #ffffff2b;
-  --hairline: 1px;
-  --grid-size: 4rem;
+  /* The ground of every page: a field of faint blue points on a grid, fading out below the
+     first screen. Faint enough to read as texture, never as a pattern to look at. */
+  --color-point: #739bd01c;
+  --point-size: 1px;
+  --point-grid: 1.5rem;
+  --point-field-height: 64rem;
   --text-display: clamp(2.4rem, 1.4rem + 3.5vw, 4.25rem);
   --text-display-mobile: clamp(1.9rem, 1rem + 4.3vw, 2.65rem);
   --text-display-sm: clamp(1.7rem, 1.3rem + 1.1vw, 2.35rem);

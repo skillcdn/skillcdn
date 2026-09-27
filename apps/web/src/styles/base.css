@@ -117,12 +117,9 @@ table {
   color: var(--color-accent-contrast);
 }
 
-/* Motion is decoration here. Modules opt in to it, so that nobody has to opt out. */
-@media (prefers-reduced-motion: no-preference) {
-  html {
-    scroll-behavior: smooth;
-  }
-}
+/* Motion is decoration here. Modules opt in to it, so that nobody has to opt out. Scrolling is
+   never animated: a page change, a return through history and a jump to an anchor all land at
+   once, so that nothing moves that the reader did not move. */
 
 .visually-hidden {
   position: absolute;

@@ -22,13 +22,17 @@ function currentLocation(): AppLocation {
   return { pathname: window.location.pathname, search: window.location.search };
 }
 
-/** Moves to another page of the app without loading a document. */
+/**
+ * Moves to another page of the app without loading a document. A new page starts at its top,
+ * at once: an animated scroll would show the old page leaving. A return through history keeps
+ * the browser's own restoration, which is instant as well.
+ */
 export function navigate(href: string, options: { readonly replace?: boolean } = {}): void {
   if (options.replace === true) {
     window.history.replaceState(null, "", href);
   } else {
     window.history.pushState(null, "", href);
-    window.scrollTo(0, 0);
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
   }
   window.dispatchEvent(new Event(NAVIGATED));
 }

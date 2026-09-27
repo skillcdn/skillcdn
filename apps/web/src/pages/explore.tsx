@@ -96,7 +96,7 @@ function Featured() {
   const top = useRef<HTMLElement>(null);
   // A new page starts where the list starts, not wherever the buttons were.
   useEffect(() => {
-    if (page > 1) top.current?.scrollIntoView({ block: "start" });
+    if (page > 1) top.current?.scrollIntoView({ block: "start", behavior: "instant" });
   }, [page]);
 
   // The front page works without this list, so a failure to load it is not worth an error.

@@ -1,7 +1,29 @@
 .page {
+  position: relative;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   min-height: 100dvh;
+}
+
+/* The ground of the page: faint points on a grid under everything, strongest at the top and
+   gone below the first screen, so that the surfaces above read as lying on something. One
+   tiled gradient behind a mask, and it scrolls with the page: nothing is repainted on scroll. */
+.page::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0 0 auto;
+  height: var(--point-field-height);
+  background-image: radial-gradient(
+    circle,
+    var(--color-point) var(--point-size),
+    transparent calc(var(--point-size) + 0.6px)
+  );
+  background-size: var(--point-grid) var(--point-grid);
+  background-position: center top;
+  mask-image: radial-gradient(ellipse 80% 100% at 50% 0%, var(--color-bg) 25%, transparent 100%);
+  pointer-events: none;
 }
 
 .skip {
