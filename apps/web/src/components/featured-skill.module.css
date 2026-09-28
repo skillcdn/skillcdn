@@ -5,9 +5,13 @@
   display: grid;
   grid-template-rows: auto 1fr;
   overflow: hidden;
-  border: var(--border);
+  /* Glass. The border is left transparent and drawn by the last background layer instead, which
+     is how an edge gets to be brighter at the top than underneath; the two layers over it are
+     the sheen on the face and the tint the ground is seen through. */
+  border: 1px solid transparent;
   border-radius: var(--radius-xl);
-  background: linear-gradient(160deg, var(--color-bg-raised), var(--color-bg-subtle));
+  background: var(--glass-surface);
+  box-shadow: var(--glass-sheen);
   transition:
     border-color var(--transition),
     box-shadow var(--transition);
@@ -15,7 +19,8 @@
 .card:hover,
 .card:focus-within {
   border-color: var(--color-accent);
-  box-shadow: var(--glow);
+  background: var(--glass-surface-hover);
+  box-shadow: var(--glass-sheen), var(--glow);
 }
 .card:focus-within {
   outline: var(--focus-ring);
@@ -84,7 +89,10 @@
   font-size: var(--text-xs);
   border: var(--border);
   border-radius: var(--radius-full);
-  padding: var(--space-1) var(--space-3);
+  /* The same lift the badges take: one line centred in a box lands a shade low without it. */
+  padding-inline: var(--space-3);
+  padding-block: calc(var(--space-1) - var(--label-optical))
+    calc(var(--space-1) + var(--label-optical));
   color: var(--color-text-muted);
 }
 /* The call to action reads as the way in; the click lands on the stretched link above it. */
@@ -98,6 +106,12 @@
   font-size: var(--text-sm);
   font-weight: var(--weight-bold);
   transition: color var(--transition);
+}
+
+/* The arrow rides on the letters, not on the line box they sit in: a mark centred on the line
+   lands above the ink, because the face leaves more room above a line than below. Measured. */
+.action svg {
+  translate: 0 var(--mark-optical);
 }
 .card:hover .action {
   color: var(--color-accent-hover);

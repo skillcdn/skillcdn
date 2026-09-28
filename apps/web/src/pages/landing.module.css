@@ -7,14 +7,9 @@
   text-align: center;
   isolation: isolate;
 }
-.hero::before {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  inset: calc(-1 * var(--space-9)) -20% -25%;
-  background: radial-gradient(ellipse at 50% 0%, var(--color-atmosphere), transparent 60%);
-  pointer-events: none;
-}
+/* The hero has no light of its own. It had a halo behind the title, and a halo behind centred
+   words is what makes a page look like a slide: the light now comes up past the hero from the
+   page's ground (`layout.module.css`), which lights the hero and the section under it as one. */
 .eyebrow {
   display: inline-flex;
   align-items: center;
@@ -23,12 +18,14 @@
   font-size: var(--text-sm);
   margin-bottom: var(--space-5);
 }
+/* The one warm mark in the interface: the first thing on the page, and the only place the point
+   colour touches text rather than light. */
 .eyebrow > span {
   width: var(--space-2);
   height: var(--space-2);
   border-radius: var(--radius-full);
-  background: var(--color-accent);
-  box-shadow: var(--glow);
+  background: var(--color-point);
+  box-shadow: var(--glow-point);
 }
 .title {
   font-size: var(--text-display);
@@ -63,7 +60,10 @@
   justify-content: center;
   gap: var(--space-3);
   min-height: var(--control-large);
-  padding: var(--space-3) var(--space-5);
+  /* The same lift the badges take: one line centred in a box lands a shade low without it. */
+  padding-inline: var(--space-5);
+  padding-block: calc(var(--space-3) - var(--label-optical))
+    calc(var(--space-3) + var(--label-optical));
   border: var(--border);
   border-color: var(--color-accent-solid);
   border-radius: var(--radius-md);
@@ -75,6 +75,11 @@
   transition:
     background var(--transition),
     box-shadow var(--transition);
+}
+/* The box already lifts the label off its line; the arrow has to come back down by the same
+   amount to ride on the letters rather than on the line they sit in. */
+.primary svg {
+  translate: 0 var(--label-optical);
 }
 .primary:hover {
   color: var(--color-accent-contrast);
@@ -105,6 +110,11 @@
 .compatibility > div > .moreApps {
   font-size: var(--text-xs);
   color: var(--color-text-faint);
+}
+/* Marks beside a label ride on the letters, not on the line box they share with them. */
+.compatibility > :where(div) > span > img,
+.sectionHeading > a svg {
+  translate: 0 var(--label-optical);
 }
 .compatibility img[src$="openai.svg"],
 .compatibility img[src$="cursor.svg"] {
@@ -148,15 +158,112 @@
 .how {
   padding-block: var(--space-8) var(--space-9);
   position: relative;
+  isolation: isolate;
 }
-.how::before {
+
+/* A light to a section, so the page has something to pass on the way down rather than one glow at
+   the top and nothing after it. These scroll with the page: they belong to the sections, not to
+   the room behind them, and that difference in speed is what keeps them at another depth from the
+   light on the first screen. They alternate sides so that they read as lights one has come across
+   rather than as a column of them. */
+.featured,
+.faqSection {
+  position: relative;
+  isolation: isolate;
+}
+
+/* Behind the boxes: a negative index inside the section's own stacking context, which paints over
+ * the section's surface and under everything in it. A light in front of a card is a veil on it --
+ * the card goes milky, its text loses contrast, and the blue of it stops being the blue of the
+ * ones beside it. Behind, it lights the card through the glass instead, which is what glass is
+ * for, and `top` per section is then only about where the light should be and not about which
+ * paragraph it must miss. */
+.featured::before,
+.how::before,
+.faqSection::before {
   content: "";
   position: absolute;
   z-index: -1;
-  inset: 0 -30% 0 20%;
-  background: radial-gradient(ellipse, var(--color-atmosphere-soft), transparent 65%);
+  width: var(--section-glow-width);
+  height: var(--section-glow-height);
+  translate: 0 -50%;
+  /* `closest-side` and a fill that ends at nothing: a radial gradient reaches its far corners by
+     default and would still be opaque where the rounding cuts it, which leaves an arc no amount
+     of blurring removes. */
+  background: var(--glow-section);
+  border-radius: 50%;
+  filter: blur(var(--section-glow-blur));
+  opacity: var(--section-glow-strength);
   pointer-events: none;
 }
+
+.featured::before {
+  top: 24%;
+  left: 2%;
+}
+
+.how::before {
+  top: 18%;
+  right: 0;
+}
+
+.faqSection::before {
+  top: 4%;
+  left: 26%;
+}
+
+/* The smaller lights: decoration, scattered rather than placed, one to a corner of a section that
+   the section light does not already fill. `.start` carries its own surface colour, so it has to
+   make a stacking context of its own for a light to sit over that surface and under its words;
+   the others have nothing behind them and do not. */
+.start,
+.repository {
+  position: relative;
+  isolation: isolate;
+}
+
+.featured::after,
+.how::after,
+.faqSection::after,
+.start::before,
+.repository::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: var(--accent-glow-width);
+  height: var(--accent-glow-height);
+  background: var(--glow-spark);
+  border-radius: 50%;
+  filter: blur(var(--accent-glow-blur));
+  opacity: var(--accent-glow-strength);
+  pointer-events: none;
+}
+
+.featured::after {
+  top: 8%;
+  right: 6%;
+}
+
+.how::after {
+  bottom: 4%;
+  left: 8%;
+}
+
+.faqSection::after {
+  top: 12%;
+  right: 4%;
+}
+
+.start::before {
+  top: 14%;
+  left: 12%;
+}
+
+.repository::before {
+  bottom: -10%;
+  right: 10%;
+}
+
 .howGrid {
   display: grid;
   grid-template-columns: 0.85fr 1fr;
@@ -187,7 +294,9 @@
   color: var(--color-accent);
   font-size: var(--text-xs);
   font-family: var(--font-mono);
-  padding-top: var(--space-1);
+  /* Enough to bring the number onto the heading beside it and no more: a whole step of the grid
+     put it three pixels under the words it numbers. Measured against the two inks. */
+  padding-top: 1px;
 }
 .steps h3 {
   font-size: var(--text-md);
@@ -227,15 +336,27 @@
   align-items: center;
   gap: var(--space-2);
 }
-.startSteps span {
+/* A number in a ring, and it takes three lines to sit in the middle of one.
+
+   The line the number is set on is taller than the ring, because the line height is the page's and
+   the ring is only as tall as it is wide. A box that cannot hold its line puts the line at the top
+   of it rather than the middle, which is most of the two pixels the number was low; `line-height:
+   1` makes it fit. The rest is the usual lift, because centring centres the line box and not the
+   ink in it — doubled here, since a fixed height splits a padding between the two sides.
+
+   The ring is then dropped onto the label beside it, the way every other mark is. */
+.startSteps li > span {
   display: grid;
   place-items: center;
   width: var(--space-5);
   height: var(--space-5);
+  padding-bottom: calc(2 * var(--label-optical));
   border: var(--border);
   border-color: var(--color-border-strong);
   border-radius: var(--radius-full);
   font-size: var(--text-xs);
+  line-height: 1;
+  translate: 0 var(--label-optical);
 }
 .faqSection {
   padding-block: var(--space-9) var(--space-8);
@@ -267,47 +388,29 @@
 .faqItem summary::-webkit-details-marker {
   display: none;
 }
-.faqItem summary span {
+/* The caret points at the answer: down while it is folded, up once it is out. It never squashes
+   when a long question wraps, and it drops onto the question's ink the way every mark does. */
+.faqCaret {
+  flex: none;
+  width: var(--faq-caret);
+  height: var(--faq-caret);
   color: var(--color-text-muted);
-  font-size: var(--text-xl);
-  font-weight: var(--weight-normal);
+  translate: 0 var(--label-optical);
+  transition: rotate var(--transition);
 }
-.faqItem[open] summary span {
-  transform: rotate(45deg);
+.faqItem[open] .faqCaret {
+  rotate: 180deg;
 }
 .faqItem p {
   color: var(--color-text-muted);
   padding-bottom: var(--space-5);
   font-size: var(--text-sm);
 }
+/* The invitation brings its own box; the page says where it sits and hangs its light off it. */
 .repository {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: center;
-  gap: var(--space-7);
   margin-bottom: var(--space-8);
-  padding: var(--space-6);
-  border: var(--border);
-  border-radius: var(--radius-lg);
-}
-.repository h2 {
-  font-size: var(--text-md);
-}
-.repository p {
-  color: var(--color-text-muted);
-  margin-top: var(--space-2);
-  font-size: var(--text-sm);
-}
-.repository a {
-  display: inline-block;
-  margin-top: var(--space-3);
-  font-size: var(--text-xs);
-  text-decoration: none;
 }
 @media (max-width: 60rem) {
-  .repository {
-    grid-template-columns: 1fr;
-  }
   .howGrid {
     gap: var(--space-6);
   }
@@ -377,8 +480,7 @@
     padding-block: var(--space-7);
   }
   .howGrid,
-  .faqGrid,
-  .repository {
+  .faqGrid {
     grid-template-columns: 1fr;
   }
   .steps {
@@ -392,7 +494,7 @@
     gap: var(--space-3);
     font-size: var(--text-xs);
   }
-  .startSteps span {
+  .startSteps li > span {
     width: var(--space-4);
     height: var(--space-4);
   }
@@ -400,8 +502,6 @@
     padding-block: var(--space-7);
   }
   .repository {
-    padding: var(--space-5);
-    gap: var(--space-5);
     margin-bottom: var(--space-7);
   }
 }

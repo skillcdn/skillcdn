@@ -2,7 +2,7 @@ import { formatAddress, parseAddress, type RestFeatured } from "@skillcdn/core";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client.js";
 import { useResource } from "../api/use-resource.js";
-import { AddressForm } from "../components/address-form.js";
+import { AuthorsInvite } from "../components/authors-invite.js";
 import {
   Avatar,
   Badge,
@@ -15,7 +15,6 @@ import {
 import { useI18n } from "../i18n/index.js";
 import { repositoryDescription, repositoryName } from "../i18n/repository-text.js";
 import { Link } from "../navigation.js";
-import { LINKS } from "../site.js";
 import styles from "./explore.module.css";
 
 /** Cards per page. The list is the operator's and arrives whole; the page keeps it readable. */
@@ -66,7 +65,7 @@ function FeaturedCard(props: { readonly item: RestFeatured["items"][number] }) {
         )}
         <p className={styles.cardMeta}>
           {item.status === "ready" && item.skillCount !== null && (
-            <Badge tone="accent">{t.explore.featuredSkills(item.skillCount)}</Badge>
+            <Badge tone="point">{t.explore.featuredSkills(item.skillCount)}</Badge>
           )}
           {item.status === "indexing" && <Badge>{t.explore.featuredIndexing}</Badge>}
           {item.status === "failed" && <Badge tone="warning">{t.explore.featuredFailed}</Badge>}
@@ -166,14 +165,7 @@ export function ExplorePage(props: { readonly origin: string }) {
       <h1 className={styles.title}>{t.explore.title}</h1>
       <p className={styles.lead}>{t.explore.lead}</p>
       <Featured />
-      <section className={styles.form}>
-        <h2 className={styles.heading}>{t.landing.authors.title}</h2>
-        <p className={styles.formLead}>{t.landing.authors.body}</p>
-        <AddressForm origin={props.origin} label={t.landing.authors.check} footnote />
-        <a className={styles.authorLink} href={LINKS.convention}>
-          {t.landing.authors.convention}
-        </a>
-      </section>
+      <AuthorsInvite origin={props.origin} className={styles.invite} footnote />
     </Container>
   );
 }

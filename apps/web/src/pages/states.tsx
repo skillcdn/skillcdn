@@ -99,7 +99,7 @@ export function StatesPage(_props: { readonly origin: string }) {
       <h2 className={styles.heading}>Badges</h2>
       <div className={styles.row}>
         <Badge>neutral</Badge>
-        <Badge tone="accent">accent</Badge>
+        <Badge tone="point">point</Badge>
         <Badge tone="success">success</Badge>
         <Badge tone="warning">warning</Badge>
         <Badge tone="danger">danger</Badge>

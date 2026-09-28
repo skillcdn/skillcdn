@@ -246,7 +246,7 @@ export function MountSkill(props: {
                 {skill.included.includes(file) && (
                   <>
                     {" "}
-                    <Badge tone="accent">{t.skill.included}</Badge>
+                    <Badge tone="point">{t.skill.included}</Badge>
                   </>
                 )}
               </li>

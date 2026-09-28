@@ -93,7 +93,11 @@
   color: var(--client-text);
 }
 .sidebar > span {
-  padding: var(--space-2);
+  /* The illustrated rows take the same lift as our own boxed labels: this is a drawing of another
+     app, but it is our type setting it, and a row that reads crooked reads crooked. */
+  padding-inline: var(--space-2);
+  padding-block: calc(var(--space-2) - var(--label-optical))
+    calc(var(--space-2) + var(--label-optical));
   border-radius: var(--radius-md);
 }
 .sidebar .sidebarSelected {

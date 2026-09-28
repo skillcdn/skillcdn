@@ -146,18 +146,28 @@
   box-shadow: 0 0 0 3px var(--color-danger-subtle);
 }
 
-/* The hint, or what went wrong, and the examples run on as one line of small text: they flow
-   into each other and wrap mid-line instead of each taking a row of its own. */
+/* The hint, or what went wrong, and the examples: one line of small text where there is room for
+   one, and where there is not the examples drop whole to the next. Inline they read as one run,
+   which is right under a wide field and a mess under a narrow one -- the sentence breaks in the
+   middle and the examples start halfway along the line under it, a gap where no gap belongs. */
 .footnote {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-5);
   margin-top: var(--space-2);
   padding-inline: var(--space-2);
   font-size: var(--text-xs);
-  line-height: 1.9;
+  line-height: 1.6;
 }
 
+/* The sentence takes the room it needs and no more, so short prose leaves the examples beside
+   it; what it cannot fit on one line it wraps on its own row, over even lines rather than a full
+   one and a word. */
 .hint,
 .error {
-  display: inline;
+  flex: 0 1 auto;
+  text-wrap: balance;
 }
 
 .hint {
@@ -169,8 +179,10 @@
 }
 
 .examples {
-  display: inline;
-  margin-left: var(--space-5);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
 }
 
 .examplesLabel {
@@ -178,12 +190,9 @@
 }
 
 .exampleList {
-  display: inline;
-}
-
-.exampleList li {
-  display: inline;
-  margin-left: var(--space-3);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
 }
 
 .example {

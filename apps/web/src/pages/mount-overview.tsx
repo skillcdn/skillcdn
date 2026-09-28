@@ -128,7 +128,7 @@ function SkillCard(props: {
             </Badge>
           )}
           {props.nested !== undefined && props.nested > 0 && (
-            <Badge tone="accent">{t.mount.browse.nested(props.nested)}</Badge>
+            <Badge tone="point">{t.mount.browse.nested(props.nested)}</Badge>
           )}
           {props.warnings !== undefined && props.warnings > 0 && (
             <Badge tone="warning">{t.mount.warnings(props.warnings)}</Badge>
@@ -171,7 +171,7 @@ function DocumentCard(props: {
       >
         <span className={styles.cardHead}>
           <span className={styles.cardTitle}>{props.title ?? lastSegment(props.path)}</span>
-          {props.partOf != null && <Badge tone="accent">{t.mount.partOfSkill(props.partOf)}</Badge>}
+          {props.partOf != null && <Badge tone="point">{t.mount.partOfSkill(props.partOf)}</Badge>}
         </span>
         {props.summary !== null && (
           <span className={styles.cardBody} lang={props.language ?? undefined}>

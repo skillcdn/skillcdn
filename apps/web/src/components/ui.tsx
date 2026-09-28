@@ -24,7 +24,7 @@ export function Button(
 }
 
 export function Badge(props: {
-  readonly tone?: "neutral" | "accent" | "success" | "warning" | "danger";
+  readonly tone?: "neutral" | "point" | "success" | "warning" | "danger";
   readonly title?: string;
   readonly children: ReactNode;
 }) {

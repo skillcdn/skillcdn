@@ -43,8 +43,7 @@ export function LanguageSwitcher() {
       >
         <summary aria-label={`${t.language.label}: ${LANGUAGE_INFO[language].label}`}>
           <svg
-            width="18"
-            height="18"
+            className={styles.globe}
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -57,8 +56,7 @@ export function LanguageSwitcher() {
           </svg>
           {LANGUAGE_INFO[language].label}
           <svg
-            width="12"
-            height="12"
+            className={styles.caret}
             viewBox="0 0 16 16"
             fill="none"
             stroke="currentColor"

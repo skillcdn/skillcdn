@@ -74,12 +74,16 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  padding: 0.1rem var(--space-2);
+  /* On the grid, and a shade off centre: the block padding gives the top back to the bottom so
+     the label sits on the middle of the badge rather than a little under it. */
+  padding-inline: var(--space-2);
+  padding-block: calc(var(--space-1) - var(--label-optical))
+    calc(var(--space-1) + var(--label-optical));
   border: 1px solid var(--color-border);
   border-radius: var(--radius-full);
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
-  line-height: 1.5;
+  line-height: 1.25;
   white-space: nowrap;
 }
 
@@ -88,10 +92,13 @@
   color: var(--color-text-muted);
 }
 
-.tone-accent {
-  background: var(--color-accent-subtle);
+/* What a badge says that is not a status: a count, or that a thing is part of another. It takes
+   the point colour, which is the one warm thing on the page and so reads before anything around
+   it -- and which is not the accent, so a badge is never mistaken for something to click. */
+.tone-point {
+  background: var(--color-point-subtle);
   border-color: transparent;
-  color: var(--color-accent);
+  color: var(--color-point);
 }
 
 .tone-success {

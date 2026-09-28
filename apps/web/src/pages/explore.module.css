@@ -16,29 +16,51 @@
   font-size: var(--text-lg);
 }
 
-.form {
-  max-width: var(--width-prose);
+/* The invitation brings its own box; the page only says where it sits. */
+.invite {
   margin-top: var(--space-8);
-  margin-inline: auto;
-  padding: var(--space-5);
-  border: var(--border);
-  border-radius: var(--radius-lg);
 }
 
-.formLead {
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-  margin-bottom: var(--space-5);
-}
-.authorLink {
-  display: inline-block;
-  margin-top: var(--space-4);
-  font-size: var(--text-sm);
-}
-
+/* One light in the middle of the grid, as the landing page has one to a section: something for
+   the page to pass on the way down. Same recipe and the same two traps — the fill ends at nothing
+   and `closest-side` keeps it ending where the box does, and nothing is masked. */
 .featured {
+  position: relative;
+  isolation: isolate;
   margin-top: var(--space-8);
   scroll-margin-top: var(--space-8);
+}
+
+.featured::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: 12%;
+  right: 0;
+  width: var(--section-glow-width);
+  height: var(--section-glow-height);
+  translate: 0 -50%;
+  background: var(--glow-section);
+  border-radius: 50%;
+  filter: blur(var(--section-glow-blur));
+  opacity: var(--section-glow-strength);
+  pointer-events: none;
+}
+
+/* A smaller one further down the grid: decoration, on the other side from the section light. */
+.featured::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: 64%;
+  left: 4%;
+  width: var(--accent-glow-width);
+  height: var(--accent-glow-height);
+  background: var(--glow-spark);
+  border-radius: 50%;
+  filter: blur(var(--accent-glow-blur));
+  opacity: var(--accent-glow-strength);
+  pointer-events: none;
 }
 
 .heading {
@@ -64,9 +86,11 @@
   display: flex;
   flex-direction: column;
   margin-bottom: var(--space-4);
-  border: var(--border);
+  /* Glass: the edge is the last background layer, so it can be brighter at the top than under. */
+  border: 1px solid transparent;
   border-radius: var(--radius-lg);
-  background: var(--color-bg-subtle);
+  background: var(--glass-surface);
+  box-shadow: var(--glass-sheen);
   overflow: hidden;
   break-inside: avoid;
   transition:
@@ -99,8 +123,8 @@
 .card:hover,
 .card:focus-within {
   border-color: var(--color-accent);
-  background: var(--color-bg-inset);
-  box-shadow: var(--glow);
+  background: var(--glass-surface-hover);
+  box-shadow: var(--glass-sheen), var(--glow);
 }
 
 .card:focus-within {
@@ -169,12 +193,16 @@
 }
 
 .chips li {
-  padding: 0.1rem var(--space-2);
+  /* On the grid, and lifted as a badge is; the code face needs its own value for that. */
+  padding-inline: var(--space-2);
+  padding-block: calc(var(--space-1) - var(--label-optical-code))
+    calc(var(--space-1) + var(--label-optical-code));
   border: var(--border);
   border-radius: var(--radius-full);
   color: var(--color-text-muted);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
+  line-height: 1.25;
   overflow-wrap: anywhere;
 }
 
@@ -182,6 +210,9 @@
   border-color: transparent;
   color: var(--color-text-faint);
   font-family: var(--font-sans);
+  /* Set in the interface face, so it takes that face lift rather than the code one. */
+  padding-block: calc(var(--space-1) - var(--label-optical))
+    calc(var(--space-1) + var(--label-optical));
 }
 
 .pagination {

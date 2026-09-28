@@ -18,8 +18,10 @@ const STACK = `"${FAMILY}", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", s
 // The pages' tokens, as the card cannot read a stylesheet.
 const COLORS = {
   background: "#0b1019",
-  atmosphere: "#274576",
-  point: "#739bd0",
+  sky: "#0d1730",
+  sourceCore: "#93b4f2",
+  sourceMid: "#7f7ae8b8",
+  sourceHalo: "#3a5fd488",
   border: "#263042",
   inset: "#151d2b",
   text: "#e8ebf0",
@@ -27,6 +29,8 @@ const COLORS = {
   faint: "#8b97a9",
   accent: "#6ea1ff",
   accentSubtle: "#111a2b",
+  point: "#ffa85c",
+  pointSubtle: "#2a1a0e",
   contrast: "#ffffff",
 } as const;
 
@@ -121,36 +125,62 @@ function roundedClip(ctx: SKRSContext2D, x: number, y: number, size: number, rad
   ctx.clip();
 }
 
-/** The ground of the pages: the dark surface, a soft blue glow at the top and a field of points fading down. */
+// The ground of the pages (apps/web `components/layout.module.css`), read against the card's own
+// size: the numbers are copied because the card cannot read a stylesheet, as the colours are.
+// Change one, change the other.
+
+/** The card is a crop from well above where the field starts to go, so it is flat almost to the foot. */
+const SKY_FLAT = 0.92;
+/**
+ * The one source, in fractions of the card: an ellipse filled hot and pale at the middle, turning
+ * violet and then deep blue on the way out, and then blurred, because a blur falls off the way
+ * light does while a gradient ramps evenly. `core` is how far the hot middle holds before it
+ * turns and `mid` where it has become the violet; the same three stops the pages use.
+ */
+const SOURCE = {
+  x: 0.5,
+  y: 0.8,
+  rx: 0.42,
+  ry: 0.267,
+  core: 0.26,
+  mid: 0.56,
+  blur: 67,
+  strength: 0.34,
+} as const;
+
+/** The ground of the pages: a flat dark field with one source of light standing low in it. */
 function drawGround(ctx: SKRSContext2D): void {
   ctx.fillStyle = COLORS.background;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
-  const glow = ctx.createRadialGradient(
-    WIDTH * 0.3,
-    -HEIGHT * 0.2,
-    0,
-    WIDTH * 0.3,
-    -HEIGHT * 0.2,
-    WIDTH * 0.75,
-  );
-  glow.addColorStop(0, `${COLORS.atmosphere}70`);
-  glow.addColorStop(1, `${COLORS.atmosphere}00`);
-  ctx.fillStyle = glow;
+  const sky = ctx.createLinearGradient(0, 0, 0, HEIGHT);
+  sky.addColorStop(0, COLORS.sky);
+  sky.addColorStop(SKY_FLAT, COLORS.sky);
+  sky.addColorStop(1, `${COLORS.sky}d9`);
+  ctx.fillStyle = sky;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
-  const step = 24;
-  for (let y = step / 2; y < HEIGHT; y += step) {
-    // Points fade with the distance from the top, as they do on the pages.
-    const alpha = Math.max(0, 0.16 * (1 - y / HEIGHT));
-    if (alpha <= 0.01) break;
-    ctx.fillStyle = `${COLORS.point}${Math.round(alpha * 255)
-      .toString(16)
-      .padStart(2, "0")}`;
-    for (let x = step / 2; x < WIDTH; x += step) {
-      ctx.beginPath();
-      ctx.arc(x, y, 1.2, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
+  // The source is blurred on a layer of its own: a filter set on the card's own context would
+  // blur everything drawn after it as well.
+  const layer = createCanvas(WIDTH, HEIGHT);
+  const paint = layer.getContext("2d");
+  const radius = SOURCE.rx * WIDTH;
+  paint.filter = `blur(${SOURCE.blur}px)`;
+  paint.save();
+  // A canvas gradient is round, so the canvas is squashed instead: the circle becomes the ellipse.
+  paint.translate(SOURCE.x * WIDTH, SOURCE.y * HEIGHT);
+  paint.scale(1, (SOURCE.ry * HEIGHT) / radius);
+  const light = paint.createRadialGradient(0, 0, 0, 0, 0, radius);
+  light.addColorStop(0, COLORS.sourceCore);
+  light.addColorStop(SOURCE.core, COLORS.sourceCore);
+  light.addColorStop(SOURCE.mid, COLORS.sourceMid);
+  light.addColorStop(1, COLORS.sourceHalo);
+  paint.fillStyle = light;
+  paint.beginPath();
+  paint.arc(0, 0, radius, 0, Math.PI * 2);
+  paint.fill();
+  paint.restore();
+  ctx.globalAlpha = SOURCE.strength;
+  ctx.drawImage(layer, 0, 0);
+  ctx.globalAlpha = 1;
 }
 
 function drawAvatar(ctx: SKRSContext2D, picture: SkiaImage | undefined): void {
@@ -227,7 +257,9 @@ function drawPills(ctx: SKRSContext2D, card: SocialCard, y: number): void {
     const verified = card.verified && index === card.badges.length - 1;
     const iconWidth = verified ? size + 10 : 0;
     const width = ctx.measureText(badge).width + 40 + iconWidth;
-    ctx.fillStyle = COLORS.accentSubtle;
+    // The count is the page's point colour; what says the repository is verified stays the accent,
+    // because that is a state and the point colour never carries one.
+    ctx.fillStyle = verified ? COLORS.accentSubtle : COLORS.pointSubtle;
     ctx.strokeStyle = COLORS.border;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -237,7 +269,7 @@ function drawPills(ctx: SKRSContext2D, card: SocialCard, y: number): void {
     if (verified) {
       drawCheck(ctx, x + 18, y + (height - size) / 2, size);
     }
-    ctx.fillStyle = COLORS.accent;
+    ctx.fillStyle = verified ? COLORS.accent : COLORS.point;
     ctx.fillText(badge, x + 20 + iconWidth, y + height / 2 + 1);
     x += width + 12;
   });

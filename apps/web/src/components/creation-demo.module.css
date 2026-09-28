@@ -7,11 +7,11 @@
 /* One window, the conversation alone: no title bar above it and no stage list under it. */
 .window {
   overflow: hidden;
-  border: var(--border);
-  border-color: var(--color-border-strong);
+  /* Glass, as the cards are: a window the page is behind, not a panel laid on it. */
+  border: 1px solid transparent;
   border-radius: var(--radius-xl);
-  background: var(--color-bg-subtle);
-  box-shadow: var(--shadow-stage);
+  background: var(--glass-surface);
+  box-shadow: var(--glass-sheen), var(--shadow-stage);
 }
 .conversation {
   height: var(--conversation-height);

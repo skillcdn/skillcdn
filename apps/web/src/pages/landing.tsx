@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { api } from "../api/client.js";
 import { resourceKeys } from "../api/keys.js";
 import { useResource } from "../api/use-resource.js";
-import { AddressForm } from "../components/address-form.js";
+import { AuthorsInvite } from "../components/authors-invite.js";
 import { BrandSymbol } from "../components/brand.js";
 import { CreationDemo } from "../components/creation-demo.js";
 import { ArrowIcon, FeaturedSkill } from "../components/featured-skill.js";
@@ -12,8 +12,25 @@ import { Link } from "../navigation.js";
 import { PATHS } from "../router.js";
 import { applyHead, buildHead } from "../seo/head.js";
 import { showcaseDemo, showcaseEntries, showcaseTexts } from "../showcase.js";
-import { LINKS } from "../site.js";
 import styles from "./landing.module.css";
+
+/** The caret at the end of a question: down while the answer is folded, up once it is open. */
+function FaqCaret() {
+  return (
+    <svg
+      className={styles.faqCaret}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
 
 export function LandingPage(props: { readonly origin: string }) {
   const { t, language } = useI18n();
@@ -136,7 +153,7 @@ export function LandingPage(props: { readonly origin: string }) {
               <details key={item.question} className={styles.faqItem}>
                 <summary>
                   {item.question}
-                  <span aria-hidden="true">+</span>
+                  <FaqCaret />
                 </summary>
                 <p>{item.answer}</p>
               </details>
@@ -145,17 +162,7 @@ export function LandingPage(props: { readonly origin: string }) {
         </Container>
       </section>
       <Container>
-        <section className={styles.repository}>
-          <div>
-            <h2>{copy.authors.title}</h2>
-            <p>{copy.authors.body}</p>
-            <a href={LINKS.convention}>
-              {copy.authors.convention}
-              <span aria-hidden="true"> ↗</span>
-            </a>
-          </div>
-          <AddressForm origin={props.origin} label={copy.authors.check} />
-        </section>
+        <AuthorsInvite origin={props.origin} className={styles.repository} />
       </Container>
     </div>
   );

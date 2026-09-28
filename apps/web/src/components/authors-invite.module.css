@@ -1,0 +1,43 @@
+/* The copy on one side and the field on the other, so the invitation reads as one line of
+   thought rather than a stack. Below the width where two columns would each be too narrow to
+   read, they become one. */
+.section {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: center;
+  gap: var(--space-7);
+  padding: var(--space-6);
+  border: var(--border);
+  border-radius: var(--radius-lg);
+}
+
+/* Scoped to the copy: the form beside it has links of its own, and they are not this one. */
+.copy h2 {
+  font-size: var(--text-md);
+}
+
+.copy p {
+  margin-top: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.copy a {
+  display: inline-block;
+  margin-top: var(--space-3);
+  font-size: var(--text-xs);
+  text-decoration: none;
+}
+
+@media (max-width: 60rem) {
+  .section {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 40rem) {
+  .section {
+    gap: var(--space-5);
+    padding: var(--space-5);
+  }
+}

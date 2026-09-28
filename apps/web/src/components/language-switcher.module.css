@@ -2,12 +2,15 @@
   position: relative;
   font-size: var(--text-xs);
 }
+/* The globe, the language and the caret are one control, so the gap that holds them is tighter
+   than the padding around them. */
 .picker summary {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--language-gap);
   min-height: var(--control-size);
-  padding: var(--space-2);
+  padding-block: var(--space-2);
+  padding-inline: var(--language-pad-x) calc(var(--language-pad-x) - var(--language-pad-trim));
   border-radius: var(--radius-md);
   cursor: pointer;
   list-style: none;
@@ -17,16 +20,40 @@
 .picker summary::-webkit-details-marker {
   display: none;
 }
+/* Neither mark ever squashes: what gives at a narrow width is the label, not the icons.
+
+   They also sit a shade lower than the middle of the line. Centring puts the label's *box* on the
+   centre, and the ink inside that box is not centred in it: the font leaves more room above the
+   letters than below, so the marks land above what you actually see and the row reads crooked.
+   Dropping them by that difference puts them on the same line as the letters. Measured against
+   the rendered font, it is the same for Hangul and for Latin capitals, so one value does both;
+   the marks move rather than the label, because moving vector art off the pixel grid costs
+   nothing and moving text off it costs sharpness. */
+.globe,
+.caret {
+  flex: none;
+  transform: translateY(var(--language-mark-drop));
+}
+.globe {
+  width: var(--language-icon);
+  height: var(--language-icon);
+}
+.caret {
+  width: var(--language-caret);
+  height: var(--language-caret);
+}
 .picker summary:hover,
 .picker[open] summary {
   background: var(--color-bg-raised);
   color: var(--color-text);
 }
+/* As wide as the longest language, with a floor so that two short ones do not look cramped. */
 .list {
   position: absolute;
   right: 0;
   top: calc(100% + var(--space-2));
-  width: var(--language-menu-width);
+  width: max-content;
+  min-width: var(--language-menu-width);
   padding: var(--space-1);
   border: var(--border);
   border-radius: var(--radius-lg);
@@ -37,7 +64,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-3);
+  gap: var(--space-5);
+  /* The same lift the badges use: one line centred in a box lands low without it. */
+  padding-inline: var(--space-3);
+  padding-block: calc(var(--space-2) - var(--label-optical))
+    calc(var(--space-2) + var(--label-optical));
   border-radius: var(--radius-md);
   color: var(--color-text-muted);
   text-decoration: none;
@@ -51,7 +82,6 @@
 }
 @media (max-width: 40rem) {
   .picker summary {
-    gap: var(--space-1);
-    padding-inline: var(--space-1);
+    padding-inline: var(--space-2) calc(var(--space-2) - var(--language-pad-trim));
   }
 }

@@ -4,25 +4,104 @@
   display: flex;
   flex-direction: column;
   min-height: 100dvh;
+  /* The lights a section hangs off its own side reach past the page, and clipping sideways keeps
+     them from widening it. Sideways only: the page still scrolls and the header still sticks to
+     the window, because `clip` only clips and makes no scroll container of its own. */
+  overflow-x: clip;
+  /* The field, and the far light lying low in it: flat colour and one vague gradient, fixed to
+     the window so that the room stays put while the page moves through it. The far light is a
+     plain gradient and not a blurred shape on purpose — at that distance there is no shape left
+     to see, and the vagueness is what reads as distance. */
+  background-color: var(--color-sky);
+  background-image: radial-gradient(
+    ellipse 120% 64% at 50% 92%,
+    var(--color-far),
+    var(--color-far-turn) 48%,
+    transparent 72%
+  );
+  background-attachment: fixed;
 }
 
-/* The ground of the page: faint points on a grid under everything, strongest at the top and
-   gone below the first screen, so that the surfaces above read as lying on something. One
-   tiled gradient behind a mask, and it scrolls with the page: nothing is repainted on scroll. */
+/* The ground of the page is three fixed layers, and the order of them is the whole design: the
+   field and the far light behind, the near light over them, and the air over both. The light is
+   where the page is, and a room does not move when you look further down a page. Fixed layers are
+   composited, so the blur is rasterised once and scrolling moves only what is above them; a fixed
+   box also adds nothing to the scrollable area, so the blur may spill past the sides without the
+   page ever scrolling sideways.
+
+   Depth comes from three things and none of them is a bigger glow. The two lights differ in every
+   way distance changes a light: the far one is wide, dim and vague, the near one small, bright and
+   defined. The air over both takes the corners down, which is what distance does to contrast and
+   what keeps the middle reading as further in than the edges. And it takes the foot of the window
+   down too, so the light ends somewhere instead of running off the bottom of the screen. */
+
+/* The near light, and this is the part a gradient cannot do. It is an ellipse that is then
+   blurred: a blur falls off the way light does, while a radial gradient ramps evenly and reads as
+   paint. Its colour goes hot and pale at the centre and saturated at the rim, because that is what
+   the middle of a light looks like; one colour all through reads as a tinted shape.
+   `--source-strength` dims the whole of it at once, which is the only knob worth reaching for. */
 .page::before {
   content: "";
-  position: absolute;
+  position: fixed;
   z-index: -1;
-  inset: 0 0 auto;
-  height: var(--point-field-height);
-  background-image: radial-gradient(
-    circle,
-    var(--color-point) var(--point-size),
-    transparent calc(var(--point-size) + 0.6px)
+  top: var(--source-top);
+  left: var(--source-inset);
+  right: var(--source-inset);
+  height: var(--source-height);
+  /* The fill has to end at nothing exactly where the box ends, or the rounding cuts it while it
+     is still opaque and leaves a step that survives any amount of blurring as a visible arc. A
+     radial gradient reaches its far corners by default, which for this box is well outside the
+     ellipse; `closest-side` puts its edge on the box own edge instead. */
+  background: radial-gradient(
+    ellipse closest-side,
+    var(--color-source-core) 20%,
+    var(--color-source-mid) 44%,
+    var(--color-source-halo) 70%,
+    transparent 100%
   );
-  background-size: var(--point-grid) var(--point-grid);
-  background-position: center top;
-  mask-image: radial-gradient(ellipse 80% 100% at 50% 0%, var(--color-bg) 25%, transparent 100%);
+  filter: blur(var(--source-blur));
+  opacity: var(--source-strength);
+  pointer-events: none;
+}
+
+/* Parallax, and only one layer of it. What makes a difference in depth is a difference in speed,
+   so the question is which layers have one. The far light is far enough to be at infinity and the
+   air is at the eye: neither of those moves when you walk, and neither moves here. The near light
+   is the only thing between, so it is the only thing that drifts, and the page sliding past it at
+   full speed is what you read as distance.
+
+   It drifts for the first screen or so and then holds, because by then it is out of the window and
+   the rest of the page is the flat field; carrying on would only be work. Scroll-driven, so there
+   is no listener and nothing runs on the main thread: a browser without it keeps the light still,
+   which is what this was before, and reduced motion asks for exactly that as well. */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: scroll()) {
+    .page::before {
+      animation: source-drift linear both;
+      animation-timeline: scroll(root block);
+      animation-range: 0 var(--source-drift-over);
+    }
+  }
+}
+
+@keyframes source-drift {
+  to {
+    transform: translateY(calc(-1 * var(--source-drift)));
+  }
+}
+
+/* The air, over both lights rather than under them: it has to be able to take the light down as
+   well as the field, or the corners darken and the glare in them does not. This is why the fade
+   at the foot is a veil here and not a mask on the light — a mask is clipped and tiled to its own
+   box, so it cuts the blur off at the box edge and leaves exactly the arc it was added to avoid. */
+.page::after {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  background-image:
+    linear-gradient(to bottom, transparent var(--source-fade), var(--color-vignette)),
+    radial-gradient(ellipse 130% 110% at 50% 34%, transparent 36%, var(--color-vignette) 100%);
   pointer-events: none;
 }
 
@@ -31,7 +110,9 @@
   top: var(--space-2);
   left: var(--space-2);
   z-index: 20;
-  padding: var(--space-2) var(--space-3);
+  padding-inline: var(--space-3);
+  padding-block: calc(var(--space-2) - var(--label-optical))
+    calc(var(--space-2) + var(--label-optical));
   border-radius: var(--radius-md);
   background: var(--color-accent-solid);
   color: var(--color-accent-contrast);
