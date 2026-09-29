@@ -19,7 +19,8 @@ const STACK = `"${FAMILY}", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", s
 const COLORS = {
   background: "#0b1019",
   sky: "#0d1730",
-  sourceCore: "#93b4f2",
+  sourceCore: "#dbe7ff",
+  sourceBody: "#93b4f2",
   sourceMid: "#7f7ae8b8",
   sourceHalo: "#3a5fd488",
   border: "#263042",
@@ -132,19 +133,22 @@ function roundedClip(ctx: SKRSContext2D, x: number, y: number, size: number, rad
 /** The card is a crop from well above where the field starts to go, so it is flat almost to the foot. */
 const SKY_FLAT = 0.92;
 /**
- * The one source, in fractions of the card: an ellipse filled hot and pale at the middle, turning
- * violet and then deep blue on the way out, and then blurred, because a blur falls off the way
- * light does while a gradient ramps evenly. `core` is how far the hot middle holds before it
- * turns and `mid` where it has become the violet; the same three stops the pages use.
+ * The one source, in fractions of the card: an ellipse nearly white at the middle, turning to its
+ * own blue, then violet, then deep blue on the way out, and then blurred, because a blur falls off
+ * the way light does while a gradient ramps evenly. `core` is how far the white holds, `body` where
+ * the light has become its own colour, `mid` where it has turned violet; the same four stops the
+ * pages use. The blur is a fraction of the light and not most of it: blurred much harder, the
+ * middle stops being a middle and the whole thing reads as a region that happens to be lighter.
  */
 const SOURCE = {
   x: 0.5,
   y: 0.8,
   rx: 0.42,
   ry: 0.267,
-  core: 0.26,
-  mid: 0.56,
-  blur: 67,
+  core: 0.02,
+  body: 0.16,
+  mid: 0.5,
+  blur: 45,
   strength: 0.34,
 } as const;
 
@@ -171,6 +175,7 @@ function drawGround(ctx: SKRSContext2D): void {
   const light = paint.createRadialGradient(0, 0, 0, 0, 0, radius);
   light.addColorStop(0, COLORS.sourceCore);
   light.addColorStop(SOURCE.core, COLORS.sourceCore);
+  light.addColorStop(SOURCE.body, COLORS.sourceBody);
   light.addColorStop(SOURCE.mid, COLORS.sourceMid);
   light.addColorStop(1, COLORS.sourceHalo);
   paint.fillStyle = light;

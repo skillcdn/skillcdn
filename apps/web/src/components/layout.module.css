@@ -8,18 +8,26 @@
      them from widening it. Sideways only: the page still scrolls and the header still sticks to
      the window, because `clip` only clips and makes no scroll container of its own. */
   overflow-x: clip;
-  /* The field, and the far light lying low in it: flat colour and one vague gradient, fixed to
-     the window so that the room stays put while the page moves through it. The far light is a
-     plain gradient and not a blurred shape on purpose — at that distance there is no shape left
-     to see, and the vagueness is what reads as distance. */
+  /* The flat field. Everything with any shape to it is in a layer of its own above this, because
+     each of those moves at its own speed and this one is simply the dark they are read against. */
   background-color: var(--color-sky);
+}
+
+/* The far light lying low in the field: a plain gradient and not a blurred shape on purpose — at
+   that distance there is no shape left to see, and the vagueness is what reads as distance. Under
+   the near light, which is why it takes the lower index; the air over both is a `::after` and so
+   comes after it in tree order at the same index. */
+.room {
+  position: fixed;
+  z-index: -2;
+  inset: 0;
   background-image: radial-gradient(
     ellipse 120% 64% at 50% 92%,
     var(--color-far),
     var(--color-far-turn) 48%,
     transparent 72%
   );
-  background-attachment: fixed;
+  pointer-events: none;
 }
 
 /* The ground of the page is three fixed layers, and the order of them is the whole design: the
@@ -54,8 +62,9 @@
      ellipse; `closest-side` puts its edge on the box own edge instead. */
   background: radial-gradient(
     ellipse closest-side,
-    var(--color-source-core) 20%,
-    var(--color-source-mid) 44%,
+    var(--color-source-core) 0%,
+    var(--color-source-body) 14%,
+    var(--color-source-mid) 42%,
     var(--color-source-halo) 70%,
     transparent 100%
   );
@@ -64,31 +73,12 @@
   pointer-events: none;
 }
 
-/* Parallax, and only one layer of it. What makes a difference in depth is a difference in speed,
-   so the question is which layers have one. The far light is far enough to be at infinity and the
-   air is at the eye: neither of those moves when you walk, and neither moves here. The near light
-   is the only thing between, so it is the only thing that drifts, and the page sliding past it at
-   full speed is what you read as distance.
+/* Nothing here moves. The room is fixed to the window and the page travels through it: that is
+   the whole of the depth, and it is why the glass in front of it reads -- a card crossing a light
+   that is holding still changes as it goes, and a card carrying its own light does not.
 
-   It drifts for the first screen or so and then holds, because by then it is out of the window and
-   the rest of the page is the flat field; carrying on would only be work. Scroll-driven, so there
-   is no listener and nothing runs on the main thread: a browser without it keeps the light still,
-   which is what this was before, and reduced motion asks for exactly that as well. */
-@media (prefers-reduced-motion: no-preference) {
-  @supports (animation-timeline: scroll()) {
-    .page::before {
-      animation: source-drift linear both;
-      animation-timeline: scroll(root block);
-      animation-range: 0 var(--source-drift-over);
-    }
-  }
-}
-
-@keyframes source-drift {
-  to {
-    transform: translateY(calc(-1 * var(--source-drift)));
-  }
-}
+   It used to drift, a little and then more, at its own rate against the scroll. Both of those are
+   gone: a background that moves at all is a background that scrolls, only slower. */
 
 /* The air, over both lights rather than under them: it has to be able to take the light down as
    well as the field, or the corners darken and the glare in them does not. This is why the fade

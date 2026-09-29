@@ -172,6 +172,27 @@
   isolation: isolate;
 }
 
+/* And they go out on the way down. The top of the page is the showing and the foot of it is the
+   asking -- the questions, then the field to type an address into -- and the light follows: full
+   where there is something to look at, nearly gone where there is something to read and answer.
+   It is one number a section at a time rather than a gradient over the whole page, because the
+   lights are per section and a section is the unit anyone actually perceives moving past. */
+.how {
+  --glow-fade: 0.78;
+}
+
+.start {
+  --glow-fade: 0.55;
+}
+
+.faqSection {
+  --glow-fade: 0.38;
+}
+
+.repository {
+  --glow-fade: 0.28;
+}
+
 /* Behind the boxes: a negative index inside the section's own stacking context, which paints over
  * the section's surface and under everything in it. A light in front of a card is a veil on it --
  * the card goes milky, its text loses contrast, and the blue of it stops being the blue of the
@@ -193,7 +214,9 @@
   background: var(--glow-section);
   border-radius: 50%;
   filter: blur(var(--section-glow-blur));
-  opacity: var(--section-glow-strength);
+  /* Named once here so the rule and the keyframes that replace it can read the same number. */
+  --glow-strength: var(--section-glow-strength);
+  opacity: calc(var(--glow-strength) * var(--glow-fade, 1));
   pointer-events: none;
 }
 
@@ -235,7 +258,8 @@
   background: var(--glow-spark);
   border-radius: 50%;
   filter: blur(var(--accent-glow-blur));
-  opacity: var(--accent-glow-strength);
+  --glow-strength: var(--accent-glow-strength);
+  opacity: calc(var(--glow-strength) * var(--glow-fade, 1));
   pointer-events: none;
 }
 
@@ -503,5 +527,74 @@
   }
   .repository {
     margin-bottom: var(--space-7);
+  }
+}
+
+/* The lights hold still and the page moves past them. Pinned to the window rather than to the
+   section, so scrolling changes which card is lit and not where the light is -- which is the whole
+   reason for having glass in front of them.
+
+   They still belong to a section: each fades up as its own section crosses the window and back
+   down as it leaves, so at most one or two are alight at a time instead of all eight stacked on
+   one screen, which is what pinning them would otherwise mean. `view()` is the section's passage;
+   `fixed` is the light's place. The side each keeps is its own, so passing one after another is a
+   light on the left, then one on the right, and not one light that never went away.
+
+   Without scroll timelines, and under reduced motion, they stay absolute and scroll with their
+   section: fixed without the fade would be eight lights at once, which is worse than moving. */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .featured,
+    .how,
+    .faqSection,
+    .start,
+    .repository {
+      view-timeline-name: --section-pass;
+    }
+
+    .featured::before,
+    .how::before,
+    .faqSection::before,
+    .featured::after,
+    .how::after,
+    .faqSection::after,
+    .start::before,
+    .repository::before {
+      position: fixed;
+      bottom: auto;
+      animation: glow-pass linear both;
+      /* The section's passage and not the light's: `view()` would take the subject to be the
+         element being animated, which is this pinned box and never crosses anything. */
+      animation-timeline: --section-pass;
+    }
+
+    .featured::before,
+    .how::before,
+    .faqSection::before {
+      top: 30%;
+    }
+
+    .featured::after,
+    .how::after,
+    .faqSection::after,
+    .start::before,
+    .repository::before {
+      top: 58%;
+    }
+  }
+}
+
+/* The fade has to carry the strength as well, because an animated opacity replaces the one on the
+   rule rather than scaling it. Full for the middle of the pass and nothing at either end. */
+@keyframes glow-pass {
+  0% {
+    opacity: 0;
+  }
+  32%,
+  68% {
+    opacity: calc(var(--glow-strength) * var(--glow-fade, 1));
+  }
+  100% {
+    opacity: 0;
   }
 }

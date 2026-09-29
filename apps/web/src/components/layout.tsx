@@ -27,6 +27,10 @@ export function Layout(props: { readonly children: ReactNode }) {
   ];
   return (
     <div className={styles.page}>
+      {/* The field and the far light. It is an element and not another background layer on the
+          page because it has to move at its own speed, and only a transform moves without asking
+          the main thread for a repaint on every frame. */}
+      <div className={styles.room} aria-hidden="true" />
       <a className={styles.skip} href="#content">
         {t.nav.skipToContent}
       </a>

@@ -6,11 +6,17 @@
 }
 /* One window, the conversation alone: no title bar above it and no stage list under it. */
 .window {
+  position: relative;
   overflow: hidden;
   /* Glass, as the cards are: a window the page is behind, not a panel laid on it. */
+  /* The border stays transparent until the pointer arrives, so that nothing flat is painted over
+     the lens ring and the outermost line anyone sees is the refracted one. It is still a border
+     at rest, at full width and no colour: taking the width away instead would move the contents
+     of the card by a pixel the moment it came back. */
   border: 1px solid transparent;
   border-radius: var(--radius-xl);
   background: var(--glass-surface);
+  backdrop-filter: var(--glass-backdrop);
   box-shadow: var(--glass-sheen), var(--shadow-stage);
 }
 .conversation {
@@ -208,4 +214,20 @@
   .result {
     height: var(--conversation-mobile-result-height);
   }
+}
+
+/* The refracted rim (tokens.css). Under the content and over the pane's own face, so the words
+   stay off it; `border-radius: inherit` keeps it on the corners. */
+.window::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  padding: var(--glass-lens-width);
+  border-radius: inherit;
+  backdrop-filter: var(--glass-lens);
+  background: var(--color-glass-edge);
+  mask: var(--glass-lens-mask);
+  mask-composite: exclude;
+  pointer-events: none;
 }

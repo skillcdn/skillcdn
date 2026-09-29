@@ -5,13 +5,17 @@
   display: grid;
   grid-template-rows: auto 1fr;
   overflow: hidden;
-  /* Glass. The border is left transparent and drawn by the last background layer instead, which
-     is how an edge gets to be brighter at the top than underneath; the two layers over it are
-     the sheen on the face and the tint the ground is seen through. */
+  /* Glass (tokens.css). The border is left transparent and drawn by the last background layer
+     instead, so the hairline runs inside the radius rather than round the outside of it. */
+  /* The border stays transparent until the pointer arrives, so that nothing flat is painted over
+     the lens ring and the outermost line anyone sees is the refracted one. It is still a border
+     at rest, at full width and no colour: taking the width away instead would move the contents
+     of the card by a pixel the moment it came back. */
   border: 1px solid transparent;
   border-radius: var(--radius-xl);
   background: var(--glass-surface);
-  box-shadow: var(--glass-sheen);
+  backdrop-filter: var(--glass-backdrop);
+  box-shadow: var(--glass-sheen), var(--glass-lift);
   transition:
     border-color var(--transition),
     box-shadow var(--transition);
@@ -20,7 +24,7 @@
 .card:focus-within {
   border-color: var(--color-accent);
   background: var(--glass-surface-hover);
-  box-shadow: var(--glass-sheen), var(--glow);
+  box-shadow: var(--glass-sheen), var(--glass-lift), var(--glow);
 }
 .card:focus-within {
   outline: var(--focus-ring);
@@ -143,4 +147,20 @@
     font-size: var(--text-md);
     max-width: var(--width-prose);
   }
+}
+
+/* The refracted rim (tokens.css). Under the content and over the pane's own face, so the words
+   stay off it; `border-radius: inherit` keeps it on the corners. */
+.card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  padding: var(--glass-lens-width);
+  border-radius: inherit;
+  backdrop-filter: var(--glass-lens);
+  background: var(--color-glass-edge);
+  mask: var(--glass-lens-mask);
+  mask-composite: exclude;
+  pointer-events: none;
 }

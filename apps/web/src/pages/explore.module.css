@@ -43,7 +43,8 @@
   background: var(--glow-section);
   border-radius: 50%;
   filter: blur(var(--section-glow-blur));
-  opacity: var(--section-glow-strength);
+  --glow-strength: var(--section-glow-strength);
+  opacity: var(--glow-strength);
   pointer-events: none;
 }
 
@@ -59,7 +60,8 @@
   background: var(--glow-spark);
   border-radius: 50%;
   filter: blur(var(--accent-glow-blur));
-  opacity: var(--accent-glow-strength);
+  --glow-strength: var(--accent-glow-strength);
+  opacity: var(--glow-strength);
   pointer-events: none;
 }
 
@@ -86,11 +88,17 @@
   display: flex;
   flex-direction: column;
   margin-bottom: var(--space-4);
-  /* Glass: the edge is the last background layer, so it can be brighter at the top than under. */
+  /* Glass (tokens.css): the hairline is the last background layer, so the border itself is left
+     transparent for it to paint on. */
+  /* The border stays transparent until the pointer arrives, so that nothing flat is painted over
+     the lens ring and the outermost line anyone sees is the refracted one. It is still a border
+     at rest, at full width and no colour: taking the width away instead would move the contents
+     of the card by a pixel the moment it came back. */
   border: 1px solid transparent;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   background: var(--glass-surface);
-  box-shadow: var(--glass-sheen);
+  backdrop-filter: var(--glass-backdrop);
+  box-shadow: var(--glass-sheen), var(--glass-lift);
   overflow: hidden;
   break-inside: avoid;
   transition:
@@ -124,7 +132,7 @@
 .card:focus-within {
   border-color: var(--color-accent);
   background: var(--glass-surface-hover);
-  box-shadow: var(--glass-sheen), var(--glow);
+  box-shadow: var(--glass-sheen), var(--glass-lift), var(--glow);
 }
 
 .card:focus-within {
@@ -223,4 +231,58 @@
   margin-top: var(--space-4);
   color: var(--color-text-muted);
   font-size: var(--text-sm);
+}
+
+/* The refracted rim (tokens.css). Under the content and over the pane's own face, so the words
+   stay off it; `border-radius: inherit` keeps it on the corners. */
+.card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  padding: var(--glass-lens-width);
+  border-radius: inherit;
+  backdrop-filter: var(--glass-lens);
+  background: var(--color-glass-edge);
+  mask: var(--glass-lens-mask);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Pinned to the window and faded by the grid's own passage, as the landing page's lights are
+   (landing.module.css): the light holds still and the cards move over it. */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .featured {
+      view-timeline-name: --section-pass;
+    }
+
+    .featured::before,
+    .featured::after {
+      position: fixed;
+      animation: glow-pass linear both;
+      animation-timeline: --section-pass;
+    }
+
+    .featured::before {
+      top: 30%;
+    }
+
+    .featured::after {
+      top: 58%;
+    }
+  }
+}
+
+@keyframes glow-pass {
+  0% {
+    opacity: 0;
+  }
+  32%,
+  68% {
+    opacity: var(--glow-strength);
+  }
+  100% {
+    opacity: 0;
+  }
 }

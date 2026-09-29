@@ -244,128 +244,167 @@
   /* What the field falls to at the edges. Air over distance takes contrast away, and the corners
      going dark is what puts the middle further in than them. */
   --color-vignette: #04071199;
-  --color-source-core: #93b4f2;
+  --color-source-core: #dbe7ff;
+  --color-source-body: #93b4f2;
   --color-source-mid: #7f7ae8b8;
   --color-source-halo: #3a5fd488;
   --source-strength: 0.34;
   --source-top: 30rem;
   --source-height: 30rem;
   --source-inset: 8%;
-  --source-blur: 6rem;
-  /* How far the near light drifts behind the page, and over how much scrolling. The two together
-     are its speed: a third of the page's is enough to read as depth without the light seeming to
-     slide. */
-  --source-drift: 36vh;
-  --source-drift-over: 120vh;
+  --source-blur: 4rem;
 
-  /* The lights along the page, one to a section, in front of the room rather than in it: these
-     belong to the content and scroll with it. Same recipe as the near light and the same two
+  /* The lights along the page, one to a section, in front of the room rather than in it -- and
+     pinned to the window like it, so what scrolling changes is which card is lit and never where
+     the light is. Same recipe as the near light and the same two
      traps — the fill ends at nothing and `closest-side` keeps it ending where the box does, and
      nothing is ever masked. They are dimmer and smaller than the one behind the first screen,
      because a page with several equals in it has no first screen.
 
      They lean the other way from the light behind the page: cyan at the core where that one is
-     violet, so that passing one after the other is a change of colour and not a repeat. */
-  --color-section-core: #82c2ea;
+     violet, so that passing one after the other is a change of colour and not a repeat.
+
+     They are bright, and the glass is why. A pane is only as convincing as the difference between
+     what is behind one part of it and another, so a page of even light gives back panes that all
+     look the same and might as well be painted. These are strong enough that a card standing on
+     one and a card standing beside it are plainly not the same colour, and wide and soft enough
+     that the strength does not come back as blotches: what went up is the level, not the edge.
+
+     And each has a middle. `--color-section-core` is nearly white and holds for no distance at
+     all, `--color-section-body` is the colour the light actually is, and the two after it are the
+     fall. A light you can find the centre of is a light; one that is the same all over is a wash,
+     and a wash is what this was when the core was the body colour and a wide blur flattened what
+     little peak it had. The blur came down with it -- measured at the middle, the ground under a
+     core went from a luminance of 0.06 to 0.20, three times brighter, which is the difference
+     between seeing a light and seeing that a region is lighter. */
+  --color-section-core: #e4f1ff;
+  --color-section-body: #a9d4f5;
   --color-section-mid: #5f82dfae;
   --color-section-halo: #35569c66;
   --glow-section: radial-gradient(
     ellipse closest-side,
-    var(--color-section-core) 22%,
-    var(--color-section-mid) 48%,
-    var(--color-section-halo) 72%,
+    var(--color-section-core) 0%,
+    var(--color-section-body) 14%,
+    var(--color-section-mid) 38%,
+    var(--color-section-halo) 66%,
     transparent 100%
   );
   --section-glow-width: 58%;
-  --section-glow-height: 26rem;
-  --section-glow-blur: 9rem;
-  --section-glow-strength: 0.44;
-  /* The smaller ones scattered between them, which are decoration and nothing else. Half the size
-     and short of the strength, so that the section lights stay the ones a page is lit by and these
-     are only what the eye catches on the way past.
+  --section-glow-height: 30rem;
+  /* Enough to take the ring out of the gradient and no more. It was 9rem, which is most of the
+     light's own height, and a blur that size has nothing left in the middle to be a middle. */
+  --section-glow-blur: 4rem;
+  --section-glow-strength: 0.85;
+  /* The smaller ones scattered between them. Short of the section lights in size and strength both,
+     so those stay the ones a page is lit by and these are what the eye catches on the way past --
+     and bright enough, since they light glass too.
 
      The third colour in the room, and it stays in the same family as the other two: violet, where
      the section lights are cyan and the one behind the page turns through blue. Three lights that
      differ in hue and agree in temperature read as one room lit from several places. A warm one
      would read as a fire in it, which is a second subject and not a decoration -- warm belongs to
      the point colour, and the point colour belongs on the interface. */
-  --color-spark-core: #b9aaff;
+  --color-spark-core: #e2dbff;
+  --color-spark-body: #c3b6ff;
   --color-spark-mid: #7d63e4ae;
   --color-spark-halo: #3f2f9a5c;
   --glow-spark: radial-gradient(
     ellipse closest-side,
-    var(--color-spark-core) 20%,
-    var(--color-spark-mid) 46%,
-    var(--color-spark-halo) 72%,
+    var(--color-spark-core) 0%,
+    var(--color-spark-body) 14%,
+    var(--color-spark-mid) 38%,
+    var(--color-spark-halo) 66%,
     transparent 100%
   );
   --accent-glow-width: 34%;
-  --accent-glow-height: 20rem;
-  --accent-glow-strength: 0.3;
+  --accent-glow-height: 22rem;
+  --accent-glow-strength: 0.62;
   /* Wide and soft rather than small and dense. Every light but the one behind the page is a wash
      and not a shape: a tight bright blob on a dark field reads as a stain on it, and several of
      them read as blotches. Size and blur went up together for that, because softness is read
      against size -- a heavy blur on a small shape only leaves a dimmer blob of the same size. */
-  --accent-glow-blur: 6rem;
+  --accent-glow-blur: 3rem;
   /* Where the near light starts going out towards the foot of the window, so that it ends
      somewhere instead of running off the bottom of the screen. */
   --source-fade: 58%;
 
-  /* Glass. Four things make a surface read as glass, and a tint is none of them.
+  /* Glass, built the way the phones do it, because the phones are what everyone's eye is trained
+     on and anything else reads as an imitation of it.
 
-     It is mostly transparent: a third of a colour, not most of one, so the light of the ground
-     runs on through the card and the top of a card is a different blue from its bottom. That is
-     the only structure there is behind a card here, and glass needs something to be seen through.
+     It is a material and not a decoration, so it has no drawing in it: no raking sheen across the
+     face, no edge that is bright on one side and gone on the other. Those are a painting of glass.
+     A material is four plain things -- a wide blur, the colour behind it pushed, an even veil, and
+     a hairline round it -- and the reason it convinces is that every pane is the same and the
+     only thing that differs between them is what each one has behind it.
 
-     Its face catches light: one raking sheen across the top corner, which is a gradient over the
-     whole surface and not a line.
+     The blur is wide because a narrow one looks like a mistake rather than a material; the
+     saturation is what actually carries it here, since the field behind is smooth and a blur of
+     smooth is smooth. Past the panes are the lights, so a card over one comes back with the
+     colour deepened and a card over the bare field does not, and that difference from card to
+     card is the whole of the effect. */
+  --glass-backdrop: blur(28px) saturate(2);
+  /* The veil, and most of the pane is not it: a little over two fifths, so that what a card shows
+     is mostly the room. It is the page's own dark and not a blue of its own -- given a blue, a
+     card reads as lit where the ground is lit and as a pale slab where it is not, because there
+     the blue is the glass inventing a colour nothing is casting. Even from edge to edge, as the
+     phones are: a tint that shades across the face is a picture of a lit pane, and the eye reads
+     the difference. */
+  --color-glass: #111a2e66;
+  --color-glass-hover: #18243f73;
+  /* What the edge carries of its own, over what it refracts. A hairline of flat colour is a
+     border; this is a wash on top of a line that is still showing the room through it. */
+  --color-glass-edge: #ffffff1c;
+  /* A plain colour is allowed in the `background` shorthand in its last layer alone: in the middle
+     of the list it makes the whole declaration invalid and the browser drops it in silence. Hence
+     the one-colour gradients. */
+  --glass-tint: linear-gradient(var(--color-glass), var(--color-glass));
+  --glass-tint-hover: linear-gradient(var(--color-glass-hover), var(--color-glass-hover));
+  /* What the edge of a sheet does to light, which is most of what tells you a sheet is there.
 
-     Its edge is lit unevenly, bright where it faces the light and almost gone underneath. A
-     hairline of one colour is a border; an edge that changes along its length is a thickness.
+     Three lines and all of them thin: the lit top edge, the hairline that closes the other three
+     sides, and a few pixels of light under the top where the edge gathered it. That is the whole
+     of the thickness. A sheet a millimetre thick does not have a bright frame round it, and a
+     wide inner glow is what a frame is -- tried at 20 and 28 pixels, and the panes came back
+     looking matted rather than glazed.
 
-     There is no backdrop-filter in this. Blurring the smooth field behind a card gives back the
-     same field, and saturating it was measured to change nothing at all: both were paid for per
-     card and neither showed. The header blurs, because the page really does scroll under it. */
-  /* The tint is the page's own surface, not a blue of its own. Given a blue, a card reads as
-     lit where the ground is lit and as a pale slab where it is not, because there the blue is
-     the glass inventing a colour nothing is casting. Neutral, every bit of blue in a card comes
-     from what is behind it, which is the whole idea. */
-  --color-glass: #0d121c8c;
-  --color-glass-hover: #121926a6;
-  --color-glass-edge: #a9c6ff4a;
-  --color-glass-edge-dim: #a9c6ff20;
-  /* The tint is a gradient, and not only because a plain colour is allowed in the `background`
-     shorthand in the last layer alone, where a colour in the middle of the list makes the whole
-     declaration invalid and the browser drops it in silence. It is a gradient because a pane of
-     glass is not evenly tinted: it is nearly clear where nothing is behind it and gathers colour
-     along the edge the light comes from, which here is the bottom. An even tint over the whole
-     face is what makes a card read as a painted slab rather than as something standing in a
-     room. `--color-glass-foot` is that gathered edge. */
-  --color-glass-foot: #1a2a4a7a;
-  --glass-tint: linear-gradient(var(--color-glass) 58%, var(--color-glass-foot));
-  --glass-tint-hover: linear-gradient(var(--color-glass-hover) 52%, var(--color-glass-foot));
-  /* The glint on the face is a fixed size, not a share of the surface: light does not spread out
-     because the pane got bigger. Left to scale, it is a corner highlight on a card and a wash
-     across the whole of a large panel, which is what makes the big one shout. */
-  --glass-face: linear-gradient(155deg, #ffffff0e, #ffffff04 34%, #ffffff00 62%);
-  --glass-face-size: 20rem 20rem;
-  --glass-rim: linear-gradient(155deg, var(--color-glass-edge), var(--color-glass-edge-dim) 70%);
-  --glass-sheen: inset 0 1px 0 #ffffff1a;
-  /* The whole pane in one value. Every glass surface is these three layers, in this order, on
-     these two paint boxes, and a copy of the recipe per surface is a copy that drifts -- a colour
-     in the middle of the list, or a `padding-box` forgotten, makes the browser drop the whole
-     declaration without a word. A surface says `background: var(--glass-surface)` and leaves its
-     border transparent for the rim to paint on.
+     Every spread here is zero, and that is not an oversight. An inset shadow is drawn between the
+     padding box and an inner rect, and a negative spread grows that inner rect until it swallows
+     the padding box entirely, at which point there is no shadow left to blur -- the declaration
+     is valid, costs a layer, and draws nothing. Measured by toggling it: the page did not change. */
+  --glass-sheen: inset 0 1px 0 #ffffff59, inset 0 0 0 1px #ffffff12, inset 0 3px 6px #ffffff17;
+  /* And it stands off the page, softly. A pane with no shadow is a hole cut in the background;
+     one with a heavy shadow is a card pretending to be glass. */
+  --glass-lift: 0 0.75rem 2rem -0.75rem #00000059;
+  /* The rim, where a sheet stops being flat. Light entering near an edge crosses more glass and
+     leaves it bent, brighter and a shade off-colour, which is why the border of a real pane is
+     never the same as its middle. Nothing in CSS bends anything, but a ring with a filter of its
+     own does the same work: less blur than the face, so what is behind it comes back sharper; more
+     brightness, because that is what a bevel gathers; and a few degrees of hue, which is the
+     dispersion. A surface hangs it on a `::before` -- see any of the three that use it.
+
+     This ring is the outermost line of the pane, which is the point of it: there is no flat
+     hairline painted over the top, so what draws the edge of a card is the room behind that edge,
+     bent. It changes along its own length as the light behind it changes, the way an edge does.
+     A border cannot do this -- a background takes no filter, and `overflow: hidden` clips a child
+     to the padding box, so nothing can paint into the border area. The border is therefore left at
+     zero width until the pointer arrives, and the accent it then takes is the only flat line here.
+
+     Two pixels, because refraction at an edge happens in the thickness of the edge and nowhere
+     else. Wider reads as a border and not as glass: at 12px the panes had a bright frame round
+     them, and at 18px the frame's inner boundary cut straight across a row of chips. */
+  --glass-lens: blur(4px) brightness(1.4) saturate(1.5) hue-rotate(-6deg);
+  --glass-lens-width: 2px;
+  /* The ring itself: the whole box, less the box inset by that width. `exclude` is what cuts the
+     middle out, and both layers have to be there for it to have something to exclude from. */
+  --glass-lens-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  /* The face of the pane: the veil, and nothing else. The edge is not painted here any more --
+     it is the lens ring above, which is a filter and not a colour and so cannot be a background.
 
      The hand gets its own whole recipe rather than an element swapping the tint inside this one:
      a custom property has its variables substituted where it is written, so this value carries
      the tint it read here and redefining `--glass-tint` further down changes nothing. */
-  --glass-surface:
-    var(--glass-face) 0 0 / var(--glass-face-size) no-repeat padding-box,
-    var(--glass-tint) padding-box, var(--glass-rim) border-box;
-  --glass-surface-hover:
-    var(--glass-face) 0 0 / var(--glass-face-size) no-repeat padding-box,
-    var(--glass-tint-hover) padding-box, var(--glass-rim) border-box;
+  --glass-surface: var(--glass-tint) padding-box;
+  --glass-surface-hover: var(--glass-tint-hover) padding-box;
   --text-display: clamp(2.4rem, 1.4rem + 3.5vw, 4.25rem);
   --text-display-mobile: clamp(1.9rem, 1rem + 4.3vw, 2.65rem);
   --text-display-sm: clamp(1.7rem, 1.3rem + 1.1vw, 2.35rem);
