@@ -30,7 +30,7 @@ const COLORS = {
   faint: "#8b97a9",
   accent: "#6ea1ff",
   accentSubtle: "#111a2b",
-  point: "#ffa85c",
+  point: "#ffb13a",
   pointSubtle: "#2a1a0e",
   contrast: "#ffffff",
 } as const;

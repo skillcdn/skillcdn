@@ -44,7 +44,7 @@
      either: it never draws a control, a link or a state, because the blue stops meaning anything
      the moment the orange can mean it too. Today it is what a badge is filled with, and the mark
      before the hero's first line. */
-  --color-point: #ffa85c;
+  --color-point: #ffb13a;
   --color-point-subtle: #2a1a0e;
   /* Selected text. The subtle accent is too close to the surfaces to show a selection at all;
      this is the solid blue, let through enough to read the text on it. */
