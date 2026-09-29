@@ -158,7 +158,6 @@
 .how {
   padding-block: var(--space-8) var(--space-9);
   position: relative;
-  isolation: isolate;
 }
 
 /* A light to a section, so the page has something to pass on the way down rather than one glow at
@@ -166,10 +165,16 @@
    the room behind them, and that difference in speed is what keeps them at another depth from the
    light on the first screen. They alternate sides so that they read as lights one has come across
    rather than as a column of them. */
+/* Positioned, so a light can be placed against the section -- and deliberately not isolated,
+   which is the part that matters. `isolation: isolate` would make the section a stacking context
+   and keep its `z-index: -1` light inside it, and a pinned light painted with its own section is
+   painted over every section before it: that is how the first light came to lie on the hero's
+   title rather than behind it. Without it the light falls through to the page's own negative
+   layer, behind all of the page's words and in front of the room. The two sections that do carry
+   a surface of their own keep the isolation, because their light has to sit over that surface. */
 .featured,
 .faqSection {
   position: relative;
-  isolation: isolate;
 }
 
 /* And they go out on the way down. The top of the page is the showing and the foot of it is the
@@ -177,6 +182,14 @@
    where there is something to look at, nearly gone where there is something to read and answer.
    It is one number a section at a time rather than a gradient over the whole page, because the
    lights are per section and a section is the unit anyone actually perceives moving past. */
+/* The first one is the quietest of them, which is the opposite of the way the rest of the page
+   goes, and the hero is the reason. Every other light has a screen to itself; this one shares its
+   screen with the largest block of centred words on the site, and behind words a light is read as
+   the contrast it costs them rather than as light. */
+.featured {
+  --glow-fade: 0.35;
+}
+
 .how {
   --glow-fade: 0.78;
 }
@@ -568,6 +581,14 @@
       animation-timeline: --section-pass;
     }
 
+    /* The first section is the exception, because its light is the light on the first screen and
+       a light that is already there does not arrive. Every other section is a whole window below
+       the fold at this point and starts dark; this one starts lit and only goes out. */
+    .featured::before,
+    .featured::after {
+      animation-name: glow-first;
+    }
+
     .featured::before,
     .how::before,
     .faqSection::before {
@@ -585,15 +606,35 @@
 }
 
 /* The fade has to carry the strength as well, because an animated opacity replaces the one on the
-   rule rather than scaling it. Full for the middle of the pass and nothing at either end. */
+   rule rather than scaling it.
+
+   It stays dark for the first two fifths of the pass, and that is the point of these numbers. The
+   pass opens a whole window before the section arrives, so a light that rose with it would be up
+   over the section before it rather than its own. It comes on once its own section is filling the
+   window, and is gone before the section is. */
 @keyframes glow-pass {
-  0% {
+  0%,
+  42% {
     opacity: 0;
   }
-  32%,
-  68% {
+  55%,
+  78% {
     opacity: calc(var(--glow-strength) * var(--glow-fade, 1));
   }
+  90%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* The same light, joined halfway through: full while the first screen is the screen, out by the
+   time the section it belongs to has gone by. */
+@keyframes glow-first {
+  0%,
+  40% {
+    opacity: calc(var(--glow-strength) * var(--glow-fade, 1));
+  }
+  72%,
   100% {
     opacity: 0;
   }

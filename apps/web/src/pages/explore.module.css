@@ -26,7 +26,6 @@
    and `closest-side` keeps it ending where the box does, and nothing is masked. */
 .featured {
   position: relative;
-  isolation: isolate;
   margin-top: var(--space-8);
   scroll-margin-top: var(--space-8);
 }
@@ -260,7 +259,7 @@
     .featured::before,
     .featured::after {
       position: fixed;
-      animation: glow-pass linear both;
+      animation: glow-first linear both;
       animation-timeline: --section-pass;
     }
 
@@ -274,14 +273,16 @@
   }
 }
 
-@keyframes glow-pass {
-  0% {
-    opacity: 0;
-  }
-  32%,
-  68% {
+/* The one light on this page is the light on its first screen, so it is already lit rather than
+   arriving: it only goes out, and on a grid short enough to fit the window it never gets that far.
+   The fade has to carry the strength as well, because an animated opacity replaces the one on the
+   rule rather than scaling it. */
+@keyframes glow-first {
+  0%,
+  70% {
     opacity: var(--glow-strength);
   }
+  92%,
   100% {
     opacity: 0;
   }
