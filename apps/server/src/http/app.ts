@@ -1,7 +1,10 @@
 import { createHash } from "node:crypto";
 import { createMcpHandler } from "@modelcontextprotocol/server";
 import {
+  accountAvatarUrl,
   formatAddress,
+  ICON_ROUTE,
+  ICON_SIZE,
   LEGAL_DOCUMENT_KINDS,
   LEGAL_PAGE_PATHS,
   type LegalDocumentKind,
@@ -30,6 +33,7 @@ import type { LegalDocuments } from "../operator/legal.js";
 import type { OperatorLists } from "../operator/lists.js";
 import type { Showcase } from "../operator/showcase.js";
 import type { SocialCards } from "../social/cards.js";
+import { type PictureFetcher, rasterImageType } from "../social/pictures.js";
 import { purgeByAddress, registerAdmin } from "./admin.js";
 import type { ClientAddressResolver } from "./client-address.js";
 import { type AppEnv, requestContext } from "./request-context.js";
@@ -70,6 +74,8 @@ export interface AppDependencies {
   readonly web: WebBundle | undefined;
   /** Draws the social previews of addresses (ADR-0032); nothing to draw without the web UI. */
   readonly social: SocialCards | undefined;
+  /** Fetches the owner's picture from the git host, for the icon of an address's MCP server. */
+  readonly pictures: PictureFetcher;
   readonly logger: Logger;
   readonly requests: {
     readonly addresses: ClientAddressResolver;
@@ -343,6 +349,44 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
       }
     });
   }
+
+  // The icon of the MCP server of an address (specs/tools.md): the owner's picture as the git
+  // host serves it, at one size, from this origin, because a client fetches a server's icon from
+  // the server's own origin and from nowhere else. Fetched without credentials and kept for a
+  // while, as the picture of a social preview is, and served only when its bytes are a raster
+  // image: what the host answers is not trusted by its headers.
+  app.on(["GET", "HEAD"], `${ICON_ROUTE}/*`, async (c) => {
+    const request = webRequestOf(c);
+    const parsed = parseAddress(request.url.pathname.slice(ICON_ROUTE.length));
+    if (!parsed.ok) {
+      return c.notFound();
+    }
+    let mount: Mount;
+    try {
+      mount = await mounts.resolve(parsed.value);
+    } catch (error) {
+      if (error instanceof MountError) {
+        return c.notFound();
+      }
+      throw error;
+    }
+    const owner = mount.repo.repository.owner.hostAccountId;
+    const bytes = await dependencies.pictures.get(
+      accountAvatarUrl(mount.address.host, owner, ICON_SIZE),
+    );
+    const type = bytes === undefined ? undefined : rasterImageType(bytes);
+    if (bytes === undefined || type === undefined) {
+      return c.notFound();
+    }
+    // The same account's picture at the same size is the same icon, whatever address asked.
+    const key = `${mount.address.host}:${owner}:${ICON_SIZE}`;
+    return bytesResponse(request, {
+      bytes,
+      contentType: type,
+      etag: `"${createHash("sha1").update(key).digest("hex")}"`,
+      cacheControl: "public, max-age=3600",
+    });
+  });
 
   /**
    * The page of an address for a browser, rendered with what the address serves: the same

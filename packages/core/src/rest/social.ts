@@ -6,6 +6,15 @@
 /** Where the server draws the social preview of an address: `/social/gh/<owner>/<repo>...`. */
 export const SOCIAL_ROUTE = "/social";
 
+/**
+ * Where the server serves the icon of the MCP server of an address, `/icon/gh/<owner>/<repo>...`:
+ * the owner's picture as the git host serves it, `ICON_SIZE` pixels square. It is served from the
+ * deployment's own origin because a client fetches a server's icon from that origin and from
+ * nowhere else; the server info names it in `icons`.
+ */
+export const ICON_ROUTE = "/icon";
+export const ICON_SIZE = 128;
+
 /** The size link previews expect. */
 export const SOCIAL_CARD_SIZE = { width: 1200, height: 630 } as const;
 

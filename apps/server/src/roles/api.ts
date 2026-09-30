@@ -29,6 +29,7 @@ import { LegalDocuments } from "../operator/legal.js";
 import { OperatorLists } from "../operator/lists.js";
 import { Showcase } from "../operator/showcase.js";
 import { SocialCards } from "../social/cards.js";
+import { PictureFetcher } from "../social/pictures.js";
 import { noUsageStats, UsageRecorder, type UsageStats } from "../stats/usage-recorder.js";
 import { SERVER_NAME, SERVER_VERSION } from "../version.js";
 
@@ -112,16 +113,17 @@ export function createApi(
   });
 
   const reader = new MountReader({ database, blobStore, gitHost, snapshots, limits });
+  // The owner's picture, fetched once for the icon of an address's server and for its social
+  // preview alike.
+  const pictures = new PictureFetcher({
+    fetch: ports.fetch ?? ((input, init) => fetch(input, init)),
+    clock,
+  });
   // Social previews are pages' business: without a web build there is nothing to draw them for.
   const social =
     ports.web === undefined
       ? undefined
-      : new SocialCards({
-          fetch: ports.fetch ?? ((input, init) => fetch(input, init)),
-          clock,
-          logger,
-          fonts: ports.web.fonts,
-        });
+      : new SocialCards({ pictures, clock, logger, fonts: ports.web.fonts });
 
   const app = createApp({
     database,
@@ -135,6 +137,7 @@ export function createApi(
     admin: config.admin?.token === undefined ? undefined : { token: config.admin.token },
     web: ports.web,
     social,
+    pictures,
     logger,
     isShuttingDown: ports.isShuttingDown,
     requests: {

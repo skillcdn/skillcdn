@@ -1,8 +1,8 @@
 import type { Clock } from "@skillcdn/core";
 
-// Pictures the server fetches to draw a social preview (ADR-0032): the owner's, from the git
-// host. Fetched without credentials, bounded in size and time, kept for a while, and never
-// served on: they are drawn into a card and nothing else.
+// Pictures the server fetches from the git host: the owner's, drawn into a social preview
+// (ADR-0032) and served as the icon of an address's MCP server (specs/tools.md). Fetched without
+// credentials, bounded in size and time, and kept for a while.
 
 /** The most bytes a picture may have; an avatar is a fraction of it. */
 const MAX_PICTURE_BYTES = 2 * 1024 * 1024;
@@ -79,4 +79,27 @@ export class PictureFetcher {
     }
     this.#kept.set(url, { bytes, until: this.#clock.now().getTime() + KEEP_MS });
   }
+}
+
+const startsWith = (bytes: Uint8Array, magic: readonly number[], at = 0): boolean =>
+  magic.every((byte, index) => bytes[at + index] === byte);
+
+/**
+ * The type of a raster image by its first bytes, or nothing: PNG, JPEG, GIF or WebP, the types
+ * a client renders an icon from. Nothing else is served on, whatever the host said it sent; an
+ * SVG in particular can carry a script.
+ */
+export function rasterImageType(
+  bytes: Uint8Array,
+): "image/png" | "image/jpeg" | "image/gif" | "image/webp" | undefined {
+  if (startsWith(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) return "image/png";
+  if (startsWith(bytes, [0xff, 0xd8, 0xff])) return "image/jpeg";
+  if (startsWith(bytes, [0x47, 0x49, 0x46, 0x38])) return "image/gif";
+  if (
+    startsWith(bytes, [0x52, 0x49, 0x46, 0x46]) &&
+    startsWith(bytes, [0x57, 0x45, 0x42, 0x50], 8)
+  ) {
+    return "image/webp";
+  }
+  return undefined;
 }

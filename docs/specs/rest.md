@@ -118,6 +118,10 @@ A page of the deployment's own ([ADR-0029](../adr/0029-terms-and-privacy-pages-c
 
 The social preview of the page of an address ([ADR-0032](../adr/0032-social-previews-are-drawn-by-the-server-for-each-address.md)): a 1200 by 630 PNG the server draws with the owner's picture, the name, the address, the description and a few facts, in the language `lang` names (else the one the request asks for, with `vary: accept-language`), and for the skill at the canonical `SKILL.md` path `skill` names when given. The page of an address names it as its `og:image`. Asking for it resolves the address and starts indexing it, as asking for the page does; a card drawn before the index is ready says less and is drawn again once it is. `404` for an address that is nothing, a skill that is not there, or a deployment without the web UI. Answered with `cache-control: public, max-age=3600`, an ETag, and byte ranges.
 
+### `GET /icon/<address>`
+
+The icon of the MCP server of an address ([tools](tools.md#connection-and-prompt)): the owner's picture as the git host serves it, 128 pixels square, fetched without credentials and served on from this origin, because a client fetches a server's icon from the server's own origin and from nowhere else. Served only when the bytes are a PNG, JPEG, GIF or WebP by their own first bytes, whatever the host said; `404` otherwise, and for an address that is nothing. Answered with the image's type, `cache-control: public, max-age=3600`, an ETag that names the account and the size, and byte ranges.
+
 ## Open questions
 
 - Pinned addresses could support immutable caching.

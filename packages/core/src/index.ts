@@ -214,7 +214,13 @@ export {
   showcaseTextsSchema,
   VIDEO_CONTENT_TYPES,
 } from "./rest/showcase.js";
-export { SOCIAL_CARD_SIZE, SOCIAL_ROUTE, type SocialCard } from "./rest/social.js";
+export {
+  ICON_ROUTE,
+  ICON_SIZE,
+  SOCIAL_CARD_SIZE,
+  SOCIAL_ROUTE,
+  type SocialCard,
+} from "./rest/social.js";
 export { err, ok, type Result } from "./result.js";
 export {
   assembleSkillDocument,

@@ -225,6 +225,48 @@ describe("a multi-skill repository", () => {
     await client.close();
   });
 
+  it("serves the owner's picture as the icon of an address, from this origin", async () => {
+    const host = createFixtureHost("server-icon");
+    const commit = fixtureCommits("server-icon").main;
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13]);
+    const asked: string[] = [];
+    const h = harness({
+      host,
+      fetch: async (input) => {
+        asked.push(input);
+        return new Response(png, { headers: { "content-type": "image/png" } });
+      },
+    });
+    const icon = await h.request(`/icon/gh/acme/multi-skill@${commit}/skills`);
+    expect(icon.status).toBe(200);
+    expect(icon.headers.get("content-type")).toBe("image/png");
+    expect(icon.headers.get("cache-control")).toBe("public, max-age=3600");
+    expect(icon.headers.get("etag")).toBeTruthy();
+    expect(new Uint8Array(await icon.arrayBuffer())).toEqual(png);
+    // Fetched from the host by the account's immutable id at the icon's size, without a token.
+    expect(asked).toEqual(["https://avatars.githubusercontent.com/u/42?s=128&v=4"]);
+    // The same account's picture again is the kept copy, whatever address asks, and HEAD works.
+    const head = await h.request(`/icon/gh/acme/multi-skill@${commit}`, { method: "HEAD" });
+    expect(head.status).toBe(200);
+    expect(asked).toHaveLength(1);
+    // Nothing for an address that is nothing, and nothing said about why.
+    expect((await h.request("/icon/gh/acme/no-such-repo")).status).toBe(404);
+    expect((await h.request("/icon/gh/acme")).status).toBe(404);
+  });
+
+  it("serves no icon whose bytes are not a raster image, whatever the host called them", async () => {
+    const host = createFixtureHost("server-icon-svg");
+    const commit = fixtureCommits("server-icon-svg").main;
+    const h = harness({
+      host,
+      fetch: async () =>
+        new Response("<svg xmlns='http://www.w3.org/2000/svg'><script/></svg>", {
+          headers: { "content-type": "image/png" },
+        }),
+    });
+    expect((await h.request(`/icon/gh/acme/multi-skill@${commit}`)).status).toBe(404);
+  });
+
   it("tells a client what the repository holds as it connects", async () => {
     const host = createFixtureHost("connect-catalog");
     // Pinned, so that the ref cache of the earlier tests does not answer with their commit.
@@ -254,6 +296,13 @@ describe("a multi-skill repository", () => {
       name: "skillcdn",
       title: "Acme/multi-skill/skills",
       websiteUrl: `http://skillcdn.test/gh/acme/multi-skill@${commit}/skills`,
+      // The owner's picture, from this origin: a client fetches an icon from nowhere else.
+      icons: [
+        {
+          src: `http://skillcdn.test/icon/gh/acme/multi-skill@${commit}/skills`,
+          sizes: ["128x128"],
+        },
+      ],
     });
     // Nothing changes within a connection, so no client is invited to watch for changes.
     expect(client.getServerCapabilities()).toMatchObject({

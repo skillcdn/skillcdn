@@ -53,7 +53,7 @@ export interface HarnessOptions {
   readonly web?: WebBundle;
   /** Left out, nothing is counted. */
   readonly stats?: UsageStats;
-  /** What fetching a picture for a social preview answers; left out, nothing is found. */
+  /** What fetching a picture (a social preview's, an icon) answers; left out, nothing is found. */
   readonly fetch?: (input: string, init: RequestInit) => Promise<Response>;
 }
 

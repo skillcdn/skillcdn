@@ -9,6 +9,8 @@ import {
   GitHostError,
   getSkillInputSchema,
   getSkillTool,
+  ICON_ROUTE,
+  ICON_SIZE,
   INDEXING_NOTICE,
   MCP_BROWSE_DEFAULT_LIMIT,
   MCP_SEARCH_DEFAULT_LIMIT,
@@ -99,6 +101,14 @@ export async function createMountServer(
         360,
       ),
       websiteUrl: `${request.origin}${formatAddress(mount.address)}`,
+      // The owner's picture, served from this origin at `ICON_ROUTE` (specs/tools.md): a client
+      // fetches a server's icon from the server's own origin and from nowhere else.
+      icons: [
+        {
+          src: `${request.origin}${ICON_ROUTE}${formatAddress(mount.address)}`,
+          sizes: [`${ICON_SIZE}x${ICON_SIZE}`],
+        },
+      ],
     },
     {
       // The surface of a mount never changes within a connection, so no client needs to

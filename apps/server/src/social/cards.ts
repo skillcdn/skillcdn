@@ -1,11 +1,12 @@
 import type { Clock, SocialCard } from "@skillcdn/core";
 import type { Logger } from "../logger.js";
 import { drawSocialCard, registerCardFonts } from "./card.js";
-import { PictureFetcher } from "./pictures.js";
+import type { PictureFetcher } from "./pictures.js";
 
 // The social previews of addresses (ADR-0032): drawn on demand from the card the web build
 // writes for a page, with the owner's picture fetched from the git host, and kept for a while
-// under the key the page gives them, so that a burst of unfurls draws each once.
+// under the key the page gives them, so that a burst of unfurls draws each once. The fetcher
+// is shared with the icon route, so that one fetch of a picture serves both.
 
 /** How long a drawn card is kept, and how many. A card is a hundred kilobytes or so. */
 const KEEP_MS = 60 * 60 * 1000;
@@ -23,13 +24,13 @@ export class SocialCards {
   readonly #drawing = new Map<string, Promise<Uint8Array>>();
 
   constructor(options: {
-    readonly fetch: (input: string, init: RequestInit) => Promise<Response>;
+    readonly pictures: PictureFetcher;
     readonly clock: Clock;
     readonly logger: Logger;
     /** The font files of the web build; without them the system's fonts stand in. */
     readonly fonts: readonly string[];
   }) {
-    this.#pictures = new PictureFetcher({ fetch: options.fetch, clock: options.clock });
+    this.#pictures = options.pictures;
     this.#clock = options.clock;
     const { registered } = registerCardFonts(options.fonts);
     if (options.fonts.length > 0 && registered === 0) {
