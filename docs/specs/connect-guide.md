@@ -15,7 +15,7 @@ The repository page helps a visitor connect its skills to an AI app without need
 - Cursor and VS Code have prominent Add buttons opening their native install confirmation. ChatGPT and Claude offer app-open links to the page where their first step starts; they do not imply an undocumented installation API. Terminal clients show a copyable command. A generic client has no assumed universal JSON schema.
 - A step says only what the app asks of the visitor. Claude brings an added connector into a chat on its own, so its last step is a message and nothing is switched on per conversation; ChatGPT still needs the plugin mentioned with @ in a Work chat.
 - Finish with a copyable first message naming the repository. No scene claims that a real connection has succeeded. Availability notes and official help explain missing menus without promising account access.
-- All assets ship with the application, including icon licenses. No remote images, inline styles, third-party embeds or animation dependencies are needed. Website colors remain dark with one blue accent; client illustrations and marks use their native colors.
+- All assets ship with the application, including icon licenses. No remote images, inline styles, third-party embeds or animation dependencies are needed. Website colors remain dark with one blue accent and the point colour on badges alone; client illustrations and marks use their native colors.
 
 ## Setup references
 

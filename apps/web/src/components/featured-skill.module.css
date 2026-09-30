@@ -5,9 +5,7 @@
   display: grid;
   grid-template-rows: auto 1fr;
   overflow: hidden;
-  /* Glass (tokens.css). The border is left transparent and drawn by the last background layer
-     instead, so the hairline runs inside the radius rather than round the outside of it. */
-  /* The border stays transparent until the pointer arrives, so that nothing flat is painted over
+  /* Glass (tokens.css). The border stays transparent until the pointer arrives, so that nothing flat is painted over
      the lens ring and the outermost line anyone sees is the refracted one. It is still a border
      at rest, at full width and no colour: taking the width away instead would move the contents
      of the card by a pixel the moment it came back. */

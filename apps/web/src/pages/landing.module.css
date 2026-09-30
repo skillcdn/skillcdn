@@ -161,10 +161,9 @@
 }
 
 /* A light to a section, so the page has something to pass on the way down rather than one glow at
-   the top and nothing after it. These scroll with the page: they belong to the sections, not to
-   the room behind them, and that difference in speed is what keeps them at another depth from the
-   light on the first screen. They alternate sides so that they read as lights one has come across
-   rather than as a column of them. */
+   the top and nothing after it. Each belongs to its section, which fades it in and out as it
+   passes (the block at the foot of this file), and they alternate sides so that they read as
+   lights one has come across rather than as a column of them. */
 /* Positioned, so a light can be placed against the section -- and deliberately not isolated,
    which is the part that matters. `isolation: isolate` would make the section a stacking context
    and keep its `z-index: -1` light inside it, and a pinned light painted with its own section is
