@@ -51,6 +51,7 @@ describe("connection onboarding", () => {
                 client={client}
                 step={step}
                 name="my-skills"
+                description="Skills for tests"
                 url="https://skills.example/gh/acme/skills"
               />
             </I18nContext>,
@@ -83,6 +84,7 @@ describe("connection onboarding", () => {
         client="claude"
         step={1}
         name="team-skills"
+        description="Skills for tests"
         url="https://skills.example/gh/acme/skills@release/docs"
       />,
     );
@@ -97,7 +99,13 @@ describe("connection onboarding", () => {
     "keeps %s shell and in-app commands in separate copy targets",
     (client) => {
       const scene = renderToStaticMarkup(
-        <ConnectPreview client={client} step={1} name="my-skills" url="https://skills.example" />,
+        <ConnectPreview
+          client={client}
+          step={1}
+          name="my-skills"
+          description="Skills for tests"
+          url="https://skills.example"
+        />,
       );
       const launch = client === "claudeCode" ? "claude" : client;
       const check = client === "gemini" ? "/mcp list" : "/mcp";
@@ -140,6 +148,7 @@ describe("connection onboarding", () => {
         client="cursor"
         step={0}
         name="my-skills"
+        description="Skills for tests"
         url="https://skills.example/gh/acme/skills"
       />,
     );
@@ -148,6 +157,7 @@ describe("connection onboarding", () => {
         client="cursor"
         step={1}
         name="my-skills"
+        description="Skills for tests"
         url="https://skills.example/gh/acme/skills"
       />,
     );

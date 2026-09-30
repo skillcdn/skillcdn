@@ -187,18 +187,41 @@
 .window:is([data-phase="approach"], [data-phase="hover"]) .menu {
   opacity: 0;
 }
-/* A menu of several entries, the one to take drawn as the control it is. */
-.menuList {
-  display: grid;
+/* A choice from a list whose default is the wrong one. The list is open while the first pointer
+   arrives and clicks the entry to take; from the click on, the list is gone and the field shows
+   what was chosen. Still, it shows the choice made: the still picture is the finished one. */
+.select {
+  position: relative;
+}
+.dropdown {
+  position: absolute;
+  z-index: 3;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  display: none;
   gap: var(--space-1);
+  min-width: max-content;
   padding: var(--space-1);
   border: var(--preview-border);
   border-radius: var(--radius-md);
-  background: var(--app-sidebar);
+  background: var(--app-bg);
+  box-shadow: var(--client-shadow);
   color: var(--client-muted);
 }
-.menuList > span:not(.highlight) {
+.dropdown > span:not(.highlight) {
   padding: var(--space-1) var(--space-2);
+}
+.beforeChoice {
+  display: none;
+}
+.window:is([data-phase="approach"], [data-phase="hover"], [data-phase="click"]) .dropdown {
+  display: grid;
+}
+.window:is([data-phase="approach"], [data-phase="hover"], [data-phase="click"]) .beforeChoice {
+  display: inline;
+}
+.window:is([data-phase="approach"], [data-phase="hover"], [data-phase="click"]) .afterChoice {
+  display: none;
 }
 /* A box already ticked: the step says to tick it, and the drawing shows it ticked. */
 .checked {

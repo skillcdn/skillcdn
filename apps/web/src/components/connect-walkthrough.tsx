@@ -8,10 +8,12 @@ export function ConnectWalkthrough({
   client,
   name,
   url,
+  description,
 }: {
   readonly client: ConnectClient;
   readonly name: string;
   readonly url: string;
+  readonly description: string;
 }) {
   const { t } = useI18n();
   const c = t.connect.clients[client];
@@ -47,7 +49,13 @@ export function ConnectWalkthrough({
               data-active={index === step}
               aria-label={`${c.label} — ${c.titles[index]}`}
             >
-              <ConnectPreview client={client} step={index} name={name} url={url} />
+              <ConnectPreview
+                client={client}
+                step={index}
+                name={name}
+                url={url}
+                description={description}
+              />
             </figure>
           </li>
         );

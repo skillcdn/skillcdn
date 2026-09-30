@@ -43,6 +43,20 @@ function Toggle() {
   );
 }
 
+function Chevron() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="m4 6 4 4 4-4"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function Field({
   label,
   value,
@@ -68,11 +82,14 @@ export function ConnectPreview({
   step,
   name,
   url,
+  description,
 }: {
   readonly client: ConnectClient;
   readonly step: number;
   readonly name: string;
   readonly url: string;
+  /** What to describe the server as where an app asks: the repository's own words, shortened. */
+  readonly description: string;
 }) {
   const { t } = useI18n();
   const p = t.connect.preview;
@@ -157,6 +174,7 @@ export function ConnectPreview({
         <span>×</span>
       </div>
       <Field label={p.name} value={name} />
+      {client === "chatgpt" && <Field label={p.description} value={description} />}
       {client === "chatgpt" && (
         <div className={styles.formRow}>
           <span>{p.connection}</span>
@@ -167,24 +185,34 @@ export function ConnectPreview({
         </div>
       )}
       <Field label={client === "chatgpt" ? p.serverUrl : p.url} value={url} highlight />
-      {client !== "claude" && (
-        // ChatGPT's authentication comes up as OAuth, and the step says to change it: the drawing
-        // shows it changed.
+      {client === "chatgpt" ? (
+        // The authentication list comes up on OAuth and the step says to choose none: the first
+        // pointer takes it from the open list, and the field then shows the choice.
         <div className={styles.formRow}>
           <span>{p.authentication}</span>
-          <span className={styles.selectValue}>
-            {client === "chatgpt" ? p.noAuth : p.none}
-            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path
-                d="m4 6 4 4 4-4"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+          <span className={styles.select}>
+            <span className={styles.selectValue}>
+              <span className={styles.beforeChoice}>{p.oauth}</span>
+              <span className={styles.afterChoice}>{p.noAuth}</span>
+              <Chevron />
+            </span>
+            <span className={styles.dropdown}>
+              <span>{p.oauth}</span>
+              <Highlight>{p.noAuth}</Highlight>
+              <span>{p.oauthOrNone}</span>
+            </span>
           </span>
         </div>
+      ) : (
+        client === "other" && (
+          <div className={styles.formRow}>
+            <span>{p.authentication}</span>
+            <span className={styles.selectValue}>
+              {p.none}
+              <Chevron />
+            </span>
+          </div>
+        )
       )}
       {client === "chatgpt" && (
         <div className={styles.formRow}>
@@ -349,15 +377,8 @@ export function ConnectPreview({
             </Highlight>
           </div>
           <div className={styles.menu}>
-            {claude ? (
-              <Highlight action>{p.addConnector}</Highlight>
-            ) : (
-              <span className={styles.menuList}>
-                <span>{p.createPlugin}</span>
-                <span>{p.uploadPlugin}</span>
-                <Highlight action>{p.createMcpApp}</Highlight>
-              </span>
-            )}
+            {/* The entry to take and no other: the rest of the menu changes between releases. */}
+            <Highlight action>{claude ? p.addConnector : p.createMcpApp}</Highlight>
           </div>
           <div className={styles.skeleton} />
           <div className={styles.skeletonShort} />

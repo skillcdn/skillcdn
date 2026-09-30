@@ -1,4 +1,4 @@
-import { type Address, formatAddress, type RestMount } from "@skillcdn/core";
+import { type Address, compactSummary, formatAddress, type RestMount } from "@skillcdn/core";
 import { useI18n } from "../i18n/index.js";
 import { ClientIcon } from "./client-icon.js";
 import { CodeBlock, CopyButton } from "./code-block.js";
@@ -30,6 +30,9 @@ export function serverNameOf(address: Address, manifestName?: string | null): st
   return name.length === 0 ? "skills" : name;
 }
 
+/** How much of a description an app's form is given: a sentence or two, as such a field holds. */
+const DESCRIPTION_LENGTH = 160;
+
 /** A link that opens the client with the server filled in. */
 export function cursorInstallLink(name: string, url: string): string {
   const config = btoa(JSON.stringify({ url }));
@@ -44,10 +47,12 @@ function ClientGuide({
   client,
   name,
   url,
+  description,
 }: {
   readonly client: ConnectClient;
   readonly name: string;
   readonly url: string;
+  readonly description: string;
 }) {
   const { t, language } = useI18n();
   const c = t.connect.clients[client];
@@ -101,7 +106,13 @@ function ClientGuide({
           </a>
         )}
       </div>
-      <ConnectWalkthrough key={`${client}-${language}`} client={client} name={name} url={url} />
+      <ConnectWalkthrough
+        key={`${client}-${language}`}
+        client={client}
+        name={name}
+        url={url}
+        description={description}
+      />
       {terminal ? (
         <CodeBlock code={configuration} label={t.connect.preview.terminal} copy />
       ) : (
@@ -151,6 +162,16 @@ export function ConnectGuide({
   const url = `${origin}${formatAddress(address)}`;
   const manifest = mount?.index.status === "ready" ? mount.index.manifest : undefined;
   const name = serverNameOf(address, manifest?.name);
+  // What an app that asks for a description is told: the repository's own words, shortened to
+  // what such a field holds, so that an agent choosing among servers knows what this one is for.
+  const repository =
+    mount === undefined
+      ? `${address.owner}/${address.repo}`
+      : `${mount.repository.owner}/${mount.repository.name}`;
+  const description = compactSummary(
+    manifest?.description ?? mount?.repository.description ?? t.connect.describes(repository),
+    DESCRIPTION_LENGTH,
+  );
   // The message names the server as the steps told the visitor to name it, so that an agent with
   // other servers and skills connected is asked about this one and not about everything it has.
   const message = t.connect.firstMessage.text(name);
@@ -158,7 +179,9 @@ export function ConnectGuide({
     id: client,
     label: t.connect.clients[client].label,
     icon: <ClientIcon client={client} />,
-    content: <ClientGuide key={client} client={client} name={name} url={url} />,
+    content: (
+      <ClientGuide key={client} client={client} name={name} url={url} description={description} />
+    ),
   }));
 
   return (
