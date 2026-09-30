@@ -2,6 +2,7 @@ import { parseAddress } from "@skillcdn/core";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { I18nContext, messagesFor } from "../i18n/index.js";
+import { previewPhase } from "./connect-animation.js";
 import { CLIENT_DETAILS, CONNECT_CLIENTS, clientConfiguration } from "./connect-clients.js";
 import {
   ConnectGuide,
@@ -66,6 +67,15 @@ describe("connection onboarding", () => {
       }
     },
   );
+
+  it("takes a two-click scene from the first click straight to the second pointer", () => {
+    expect(previewPhase(1500, "clicks")).toBe("click");
+    expect(previewPhase(1600, "clicks")).toBe("action");
+    expect(previewPhase(1600, "click")).toBe("type");
+    expect(previewPhase(2300, "clicks")).toBe("submit");
+    expect(previewPhase(3000, "clicks")).toBe("done");
+    expect(previewPhase(6400, "clicks")).toBe("still");
+  });
 
   it("offers the complete name and address as copy targets inside the form", () => {
     const scene = renderToStaticMarkup(

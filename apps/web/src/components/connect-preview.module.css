@@ -176,9 +176,16 @@
   background: var(--client-text);
   color: var(--app-bg);
 }
+/* The Add button's menu: it is not there until the first click opens it, and then it stays for
+   the second pointer to choose from. Still (out of view, or under reduced motion) it shows open,
+   because the still picture is the finished one. */
 .menu {
   display: flex;
   justify-content: flex-end;
+  transition: opacity var(--demo-transition);
+}
+.window:is([data-phase="approach"], [data-phase="hover"]) .menu {
+  opacity: 0;
 }
 /* A two-way choice drawn as the apps draw it: two labels in one pill, the chosen one raised. */
 .segment {

@@ -2,13 +2,23 @@ import { createContext, type RefObject, useContext, useEffect, useRef, useState 
 import styles from "./connect-preview.module.css";
 
 const LOOP_MS = 6400;
-const CLICK_LOOP_MS = 3000;
 const FRAME_MS = 80;
+
+/**
+ * What a scene does, which sets how long its loop is: one click on a control; two clicks, the
+ * first opening a menu and the second choosing its entry; or typing and sending, the whole
+ * timeline.
+ */
+export type PreviewLoop = "click" | "clicks" | "type";
+const LOOP_LENGTH: Record<PreviewLoop, number> = { click: 3000, clicks: 4000, type: LOOP_MS };
+/** Where the typing phase would start, and how long it lasts: a two-click scene skips over it. */
+const TYPE_START_MS = 1520;
+const TYPE_MS = 2400;
 
 export const PreviewTime = createContext(LOOP_MS);
 
 /** A single clock keeps typing, the pointer and clicks together; nothing advances the step. */
-export function usePreviewLoop(typing: boolean): {
+export function usePreviewLoop(loop: PreviewLoop): {
   readonly root: RefObject<HTMLDivElement | null>;
   readonly time: number;
 } {
@@ -28,7 +38,7 @@ export function usePreviewLoop(typing: boolean): {
       }
       const started = performance.now();
       setTime(0);
-      const duration = typing ? LOOP_MS : CLICK_LOOP_MS;
+      const duration = LOOP_LENGTH[loop];
       timer = setInterval(() => setTime((performance.now() - started) % duration), FRAME_MS);
     };
     const observer = new IntersectionObserver(
@@ -47,18 +57,26 @@ export function usePreviewLoop(typing: boolean): {
       motion.removeEventListener("change", update);
       document.removeEventListener("visibilitychange", update);
     };
-  }, [typing]);
+  }, [loop]);
   return { root, time };
 }
 
-export function previewPhase(time: number): string {
+/**
+ * The phase a scene is in. One timeline serves every scene: the first pointer arrives, hovers
+ * and clicks; typing runs; the second pointer arrives and clicks; and the result holds. A
+ * two-click scene has nothing to type, so its clock jumps from the first click straight to the
+ * second pointer, which is what lets one menu open on the first click and its entry take the
+ * second.
+ */
+export function previewPhase(time: number, loop: PreviewLoop = "type"): string {
   if (time >= LOOP_MS) return "still";
-  if (time < 720) return "approach";
-  if (time < 1120) return "hover";
-  if (time < 1520) return "click";
-  if (time < 3920) return "type";
-  if (time < 4560) return "action";
-  if (time < 4960) return "submit";
+  const at = loop === "clicks" && time >= TYPE_START_MS ? time + TYPE_MS : time;
+  if (at < 720) return "approach";
+  if (at < 1120) return "hover";
+  if (at < TYPE_START_MS) return "click";
+  if (at < TYPE_START_MS + TYPE_MS) return "type";
+  if (at < 4560) return "action";
+  if (at < 4960) return "submit";
   return "done";
 }
 

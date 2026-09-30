@@ -85,7 +85,7 @@ export const connectEn = {
         "Enter a name, set the type to Streamable HTTP, paste your connection address as the URL and save.",
         "Start a Work chat and send the first message below. ChatGPT finds the server on its own.",
       ),
-      note: "These steps follow the ChatGPT app. On the web, turn on Developer mode under Settings → Security and login, then add the server as a plugin from the Plugins page; the official guide walks through it.",
+      note: "Use the ChatGPT app: these steps follow it. On the web, a server is added as a plugin behind Developer mode, which not every plan or workspace has; the official guide says who has it and how.",
     },
     claude: {
       label: "Claude",

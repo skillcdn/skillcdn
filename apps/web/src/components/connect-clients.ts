@@ -22,7 +22,9 @@ export const CLIENT_DETAILS: Record<
   chatgpt: {
     icon: "openai",
     docs: "https://developers.openai.com/plugins/deploy/connect-chatgpt",
-    web: "https://chatgpt.com/plugins",
+    // The steps follow the app, which has no link into its settings. The web's plugins page sits
+    // behind Developer mode, which not every plan or workspace has, so nothing sends a reader there.
+    web: undefined,
   },
   claude: {
     icon: "claude",

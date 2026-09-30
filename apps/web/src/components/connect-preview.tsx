@@ -1,7 +1,13 @@
 import type { ReactNode } from "react";
 import { useI18n } from "../i18n/index.js";
 import { ClientIcon } from "./client-icon.js";
-import { DemoPointer, PreviewTime, previewPhase, usePreviewLoop } from "./connect-animation.js";
+import {
+  DemoPointer,
+  type PreviewLoop,
+  PreviewTime,
+  previewPhase,
+  usePreviewLoop,
+} from "./connect-animation.js";
 import { type ConnectClient, clientConfiguration, isTerminalClient } from "./connect-clients.js";
 import styles from "./connect-preview.module.css";
 import { PreviewCopy } from "./connect-preview-copy.js";
@@ -10,13 +16,19 @@ function Highlight({
   children,
   action = false,
   pointer = true,
+  className,
 }: {
   readonly children: ReactNode;
   readonly action?: boolean;
   readonly pointer?: boolean;
+  /** The control's own look, when it is more than an outline: a filled button, say. */
+  readonly className?: string;
 }) {
   return (
-    <span className={styles.highlight} data-action={action}>
+    <span
+      className={className === undefined ? styles.highlight : `${styles.highlight} ${className}`}
+      data-action={action}
+    >
       {children}
       {pointer && <DemoPointer action={action} />}
     </span>
@@ -67,8 +79,15 @@ export function ConnectPreview({
   const label = t.connect.clients[client].label;
   const terminal = isTerminalClient(client);
   const editor = client === "cursor" || client === "vscode";
-  const typing = terminal || step === 2 || (step === 1 && !editor);
-  const { root, time } = usePreviewLoop(typing);
+  // What the scene does sets its loop: the first step of Claude and ChatGPT opens a menu and
+  // chooses from it, two clicks; the forms, chats and terminals type and send.
+  const loop: PreviewLoop =
+    terminal || step === 2 || (step === 1 && !editor)
+      ? "type"
+      : step === 0 && (client === "claude" || client === "chatgpt")
+        ? "clicks"
+        : "click";
+  const { root, time } = usePreviewLoop(loop);
   const file = client === "vscode" ? ".vscode/mcp.json" : ".cursor/mcp.json";
   const code = clientConfiguration(client, name, url);
 
@@ -308,10 +327,13 @@ export function ConnectPreview({
                 <span className={styles.tabSelected}>{p.mcp}</span>
               </>
             )}
-            <span className={styles.addButton}>{claude ? `+ ${p.add}` : `${p.add} ▾`}</span>
+            {/* The first click opens the menu; the second, by the action pointer, takes its entry. */}
+            <Highlight className={styles.addButton}>
+              {claude ? `+ ${p.add}` : `${p.add} ▾`}
+            </Highlight>
           </div>
           <div className={styles.menu}>
-            <Highlight>{claude ? p.addConnector : p.addMcpServer}</Highlight>
+            <Highlight action>{claude ? p.addConnector : p.addMcpServer}</Highlight>
           </div>
           <div className={styles.skeleton} />
           <div className={styles.skeletonShort} />
@@ -347,7 +369,7 @@ export function ConnectPreview({
         ref={root}
         className={`${styles.window} ${!terminal && !editor && step === 1 ? styles.formWindow : ""}`}
         data-client={client}
-        data-phase={previewPhase(time)}
+        data-phase={previewPhase(time, loop)}
       >
         <div className={styles.chrome} aria-hidden="true">
           <span className={styles.traffic}>
