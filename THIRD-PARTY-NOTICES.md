@@ -12,7 +12,7 @@ The typeface that draws Hangul in the web UI (`apps/web`), shipped as unmodified
 
 ## Lobe Icons
 
-The OpenAI, Claude, Cursor, Windsurf, Codex and Gemini marks in `apps/web/public/clients/` identify the clients supported by the connection guide.
+The OpenAI, Claude, Cursor, Codex and Gemini marks in `apps/web/public/clients/` identify the clients supported by the connection guide.
 
 - Source: [Lobe Icons](https://github.com/lobehub/lobe-icons/tree/2e76c48721e91b9aaa40803a0fa2eb8aca7399c4/packages/static-svg/icons), snapshot `2e76c48721e91b9aaa40803a0fa2eb8aca7399c4`. Claude and Gemini use the color variants (`claude-color.svg`, `gemini-color.svg`). The files are byte for byte as the source ships them; the pages show them as images, so nothing in them meets the content security policy.
 - Copyright (c) 2023 LobeHub. License: MIT; the complete notice ships as [`licenses/lobe-icons.txt`](apps/web/public/licenses/lobe-icons.txt).

@@ -46,6 +46,13 @@
 .messageHeading h3 {
   font-size: var(--text-lg);
 }
+/* Short prose in narrow columns: no last line of one word where the browser can avoid it. */
+.hint,
+.stepText,
+.support p,
+.copyLabel p {
+  text-wrap: pretty;
+}
 .hint {
   color: var(--color-text-muted);
   font-size: var(--text-sm);

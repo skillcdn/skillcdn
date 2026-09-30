@@ -66,17 +66,15 @@ export function ConnectPreview({
   const p = t.connect.preview;
   const label = t.connect.clients[client].label;
   const terminal = isTerminalClient(client);
-  const editor = client === "cursor" || client === "vscode" || client === "windsurf";
-  const typing = terminal || step === 2 || (step === 1 && (!editor || client === "windsurf"));
+  const editor = client === "cursor" || client === "vscode";
+  const typing = terminal || step === 2 || (step === 1 && !editor);
   const { root, time } = usePreviewLoop(typing);
-  const file =
-    client === "vscode"
-      ? ".vscode/mcp.json"
-      : client === "windsurf"
-        ? "mcp_config.json"
-        : ".cursor/mcp.json";
+  const file = client === "vscode" ? ".vscode/mcp.json" : ".cursor/mcp.json";
   const code = clientConfiguration(client, name, url);
 
+  // Claude brings a connector into a chat on its own once it is added, so its chat shows no menu
+  // to switch the server on and no mention to make; the message is the whole of the step.
+  const picks = client !== "claude";
   const chat = (
     <div className={styles.chat}>
       <div className={styles.chatTitle}>
@@ -84,26 +82,26 @@ export function ConnectPreview({
         <strong>
           {client === "chatgpt"
             ? p.work
-            : client === "windsurf"
-              ? p.cascade
-              : editor
-                ? client === "vscode"
-                  ? p.vscodeAgent
-                  : p.agent
-                : p.newChat}
+            : editor
+              ? client === "vscode"
+                ? p.chatView
+                : p.agent
+              : p.newChat}
         </strong>
       </div>
-      <div className={styles.chatMenu}>
-        <span>
-          {client === "chatgpt" ? p.plugins : client === "claude" ? p.connectors : p.tools}
-        </span>
-        <Highlight pointer={false}>
-          <span>{name}</span>
-          <Toggle />
-        </Highlight>
-      </div>
+      {picks && (
+        <div className={styles.chatMenu}>
+          <span>{client === "chatgpt" ? p.plugins : p.tools}</span>
+          <Highlight pointer={false}>
+            <span>{name}</span>
+            <Toggle />
+          </Highlight>
+        </div>
+      )}
       <div className={styles.composer}>
-        <span className={styles.chip}>{client === "chatgpt" ? `@${name}` : `+ ${name}`}</span>
+        {picks && (
+          <span className={styles.chip}>{client === "chatgpt" ? `@${name}` : `+ ${name}`}</span>
+        )}
         <div className={styles.composerText}>
           <PreviewCopy text={p.ask} appearance="text" />
         </div>
@@ -160,7 +158,9 @@ export function ConnectPreview({
         </div>
       )}
       <div className={styles.formActions}>
-        <Highlight action>{client === "chatgpt" ? p.createPlugin : p.add}</Highlight>
+        <Highlight action>
+          {client === "chatgpt" ? p.createPlugin : client === "claude" ? p.continue : p.add}
+        </Highlight>
       </div>
     </div>
   );
@@ -208,11 +208,7 @@ export function ConnectPreview({
         </div>
         <div className={styles.editorBody}>
           <div className={styles.editorTab} aria-hidden="true">
-            {step === 1 && client !== "cursor"
-              ? file
-              : client === "windsurf"
-                ? p.cascade
-                : p.settings}
+            {step === 1 && client !== "cursor" ? file : p.settings}
             <span>×</span>
           </div>
           {step === 2 ? (
@@ -244,32 +240,16 @@ export function ConnectPreview({
           ) : step === 1 ? (
             <>
               <div className={styles.codeActions} aria-hidden="true">
-                <Highlight action={client !== "vscode"}>
-                  {client === "vscode" ? p.trust : p.save}
-                </Highlight>
+                <Highlight>{p.trust}</Highlight>
               </div>
-              <PreviewCopy text={code} appearance="code" animated={client !== "vscode"} />
+              <PreviewCopy text={code} appearance="code" />
             </>
-          ) : client === "vscode" ? (
+          ) : (
             <div className={styles.editorSettings}>
               <h4>{p.installServer}</h4>
               <Field label={p.name} value={name} />
               <Field label={p.url} value={url} />
               <Highlight>{p.installServer}</Highlight>
-            </div>
-          ) : (
-            <div className={styles.editorSettings}>
-              <h4>{p.cascade}</h4>
-              <div className={styles.settingRow}>
-                <span>{p.actions}</span>
-                <span>···</span>
-              </div>
-              <Highlight>{p.openConfig}</Highlight>
-              <div className={styles.serverCard}>
-                <span className={styles.dot} />
-                <code>{name}</code>
-                <span className={styles.toggle} />
-              </div>
             </div>
           )}
         </div>
@@ -279,12 +259,39 @@ export function ConnectPreview({
     scene = chat;
   } else if (step === 1) {
     scene = <div className={styles.modalBackdrop}>{form}</div>;
-  } else {
-    const section = client === "chatgpt" ? p.security : client === "claude" ? p.connectors : p.mcp;
+  } else if (client === "claude") {
+    // The Customize page from the sidebar, on its Connectors tab, with the Add menu open on the
+    // entry the step names. The same page opens from the account menu's settings, which the
+    // step's note says; one drawing is enough.
     scene = (
       <div className={styles.settings}>
         <div className={styles.sidebar}>
-          <strong>{client === "claude" ? p.customize : p.settings}</strong>
+          <span>{p.newChat}</span>
+          <span>{p.projects}</span>
+          <span className={styles.sidebarSelected}>{p.customize}</span>
+        </div>
+        <div className={styles.settingsContent}>
+          <h4>{p.customize}</h4>
+          <div className={styles.tabRow}>
+            <span>{p.skills}</span>
+            <span className={styles.tabSelected}>{p.connectors}</span>
+            <span>{p.plugins}</span>
+            <span className={styles.addButton}>+ {p.add}</span>
+          </div>
+          <div className={styles.menu}>
+            <Highlight>{p.addConnector}</Highlight>
+          </div>
+          <div className={styles.skeleton} />
+          <div className={styles.skeletonShort} />
+        </div>
+      </div>
+    );
+  } else {
+    const section = client === "chatgpt" ? p.security : p.mcp;
+    scene = (
+      <div className={styles.settings}>
+        <div className={styles.sidebar}>
+          <strong>{p.settings}</strong>
           <span>{p.general}</span>
           <span>{p.account}</span>
           <span className={styles.sidebarSelected}>{section}</span>
@@ -308,7 +315,7 @@ export function ConnectPreview({
                 <span>{section}</span>
                 <span>+</span>
               </div>
-              <Highlight>{client === "claude" ? p.addConnector : p.add}</Highlight>
+              <Highlight>{p.add}</Highlight>
               <div className={styles.skeleton} />
               <div className={styles.skeletonShort} />
             </>

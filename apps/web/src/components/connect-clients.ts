@@ -3,7 +3,6 @@ export const CONNECT_CLIENTS = [
   "claude",
   "cursor",
   "vscode",
-  "windsurf",
   "claudeCode",
   "codex",
   "gemini",
@@ -28,7 +27,8 @@ export const CLIENT_DETAILS: Record<
   claude: {
     icon: "claude",
     docs: "https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp",
-    web: "https://claude.ai",
+    // The Connectors tab of Customize, where the guide's first step starts; the help centre links it.
+    web: "https://claude.ai/customize/connectors",
   },
   cursor: { icon: "cursor", docs: "https://cursor.com/help/customization/mcp", web: undefined },
   vscode: {
@@ -36,7 +36,6 @@ export const CLIENT_DETAILS: Record<
     docs: "https://code.visualstudio.com/docs/agent-customization/mcp-servers",
     web: undefined,
   },
-  windsurf: { icon: "windsurf", docs: "https://docs.devin.ai/desktop/cascade/mcp", web: undefined },
   claudeCode: { icon: "claude", docs: "https://code.claude.com/docs/en/mcp", web: undefined },
   codex: {
     icon: "codex",
@@ -66,8 +65,6 @@ export function clientConfiguration(client: ConnectClient, name: string, url: st
       return `gemini mcp add --transport http ${name} ${url}`;
     case "vscode":
       return JSON.stringify({ servers: { [name]: { type: "http", url } } }, null, 2);
-    case "windsurf":
-      return JSON.stringify({ mcpServers: { [name]: { serverUrl: url } } }, null, 2);
     default:
       return JSON.stringify({ mcpServers: { [name]: { url } } }, null, 2);
   }

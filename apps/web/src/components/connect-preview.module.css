@@ -21,17 +21,13 @@
   --app-accent: var(--client-claude-accent);
 }
 .window[data-client="cursor"],
-.window[data-client="vscode"],
-.window[data-client="windsurf"] {
+.window[data-client="vscode"] {
   --app-bg: var(--client-editor-bg);
   --app-sidebar: var(--client-editor-sidebar);
   --app-field: var(--client-editor-field);
 }
 .window[data-client="cursor"] {
   --app-bg: var(--client-cursor-bg);
-}
-.window[data-client="windsurf"] {
-  --app-bg: var(--client-windsurf-bg);
 }
 .window[data-client="claudeCode"],
 .window[data-client="codex"],
@@ -157,6 +153,32 @@
   border-radius: var(--radius-full);
   background: var(--color-accent-contrast);
   transition: transform var(--demo-transition);
+}
+/* Claude's Customize page: the tabs across the top of it with the Add button at their end, and
+   that button's menu open underneath, on the right where the button is. */
+.tabRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--client-muted);
+}
+.tabRow > span {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
+}
+.tabRow .tabSelected {
+  background: var(--app-field);
+  color: var(--client-text);
+}
+.tabRow .addButton {
+  margin-left: auto;
+  background: var(--client-text);
+  color: var(--app-bg);
+}
+.menu {
+  display: flex;
+  justify-content: flex-end;
 }
 .skeleton,
 .skeletonShort {

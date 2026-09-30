@@ -116,8 +116,8 @@ function ClientGuide({
       {terminal ? (
         <CodeBlock code={configuration} label={t.connect.preview.terminal} copy />
       ) : (
-        (client === "cursor" || client === "vscode" || client === "windsurf") && (
-          <details className={styles.manual} open={client === "windsurf"}>
+        (client === "cursor" || client === "vscode") && (
+          <details className={styles.manual}>
             <summary>{t.connect.manual}</summary>
             {install !== undefined && addressCard}
             <CodeBlock code={configuration} copy />

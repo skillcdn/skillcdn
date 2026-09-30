@@ -113,9 +113,6 @@ describe("connection onboarding", () => {
     expect(JSON.parse(clientConfiguration("vscode", name, url))).toEqual({
       servers: { [name]: { type: "http", url } },
     });
-    expect(JSON.parse(clientConfiguration("windsurf", name, url))).toEqual({
-      mcpServers: { [name]: { serverUrl: url } },
-    });
     expect(clientConfiguration("codex", name, url)).toBe(`codex mcp add ${name} --url ${url}`);
     expect(clientConfiguration("claudeCode", name, url)).toBe(
       `claude mcp add --transport http ${name} ${url}`,

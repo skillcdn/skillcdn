@@ -49,10 +49,8 @@ describe("language packs", () => {
       "SkillCDN · skillcdn/skills",
       "Claude Code",
       "VS Code",
-      "Devin Desktop",
       "Codex CLI",
       "Gemini CLI",
-      "Open MCP config file",
       "browse_repo · search_repo · load_skill · read_repo_file",
     ]);
     const english = new Set(
