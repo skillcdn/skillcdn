@@ -240,7 +240,7 @@ describe("a multi-skill repository", () => {
     const icon = await h.request(`/icon/gh/acme/multi-skill@${commit}/skills`);
     expect(icon.status).toBe(200);
     expect(icon.headers.get("content-type")).toBe("image/png");
-    expect(icon.headers.get("cache-control")).toBe("public, max-age=3600");
+    expect(icon.headers.get("cache-control")).toBe("public, max-age=86400");
     expect(icon.headers.get("etag")).toBeTruthy();
     expect(new Uint8Array(await icon.arrayBuffer())).toEqual(png);
     // Fetched from the host by the account's immutable id at the icon's size, without a token.

@@ -7,8 +7,8 @@ import type { Clock } from "@skillcdn/core";
 /** The most bytes a picture may have; an avatar is a fraction of it. */
 const MAX_PICTURE_BYTES = 2 * 1024 * 1024;
 const TIMEOUT_MS = 5_000;
-/** How long a fetched picture is kept, and how many. */
-const KEEP_MS = 60 * 60 * 1000;
+/** How long a fetched picture is kept, and how many: an account's picture rarely changes. */
+const KEEP_MS = 24 * 60 * 60 * 1000;
 const MAX_KEPT = 512;
 
 type Fetch = (input: string, init: RequestInit) => Promise<Response>;

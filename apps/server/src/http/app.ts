@@ -378,13 +378,14 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
     if (bytes === undefined || type === undefined) {
       return c.notFound();
     }
-    // The same account's picture at the same size is the same icon, whatever address asked.
+    // The same account's picture at the same size is the same icon, whatever address asked, and
+    // a day is soon enough to notice that an account changed its picture.
     const key = `${mount.address.host}:${owner}:${ICON_SIZE}`;
     return bytesResponse(request, {
       bytes,
       contentType: type,
       etag: `"${createHash("sha1").update(key).digest("hex")}"`,
-      cacheControl: "public, max-age=3600",
+      cacheControl: "public, max-age=86400",
     });
   });
 

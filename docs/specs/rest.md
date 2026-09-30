@@ -120,7 +120,7 @@ The social preview of the page of an address ([ADR-0032](../adr/0032-social-prev
 
 ### `GET /icon/<address>`
 
-The icon of the MCP server of an address ([tools](tools.md#connection-and-prompt)): the owner's picture as the git host serves it, 128 pixels square, fetched without credentials and served on from this origin, because a client fetches a server's icon from the server's own origin and from nowhere else. Served only when the bytes are a PNG, JPEG, GIF or WebP by their own first bytes, whatever the host said; `404` otherwise, and for an address that is nothing. Answered with the image's type, `cache-control: public, max-age=3600`, an ETag that names the account and the size, and byte ranges.
+The icon of the MCP server of an address ([tools](tools.md#connection-and-prompt)): the owner's picture as the git host serves it, 128 pixels square, fetched without credentials and served on from this origin, because a client fetches a server's icon from the server's own origin and from nowhere else. Served only when the bytes are a PNG, JPEG, GIF or WebP by their own first bytes, whatever the host said; `404` otherwise, and for an address that is nothing. Answered with the image's type, `cache-control: public, max-age=86400` (an account's picture rarely changes), an ETag that names the account and the size, and byte ranges.
 
 ## Open questions
 
