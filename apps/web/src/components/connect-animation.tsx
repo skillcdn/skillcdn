@@ -6,8 +6,8 @@ const FRAME_MS = 80;
 
 /**
  * What a scene does, which sets how long its loop is: one click on a control; two clicks, the
- * first opening a menu and the second choosing its entry; or typing and sending, the whole
- * timeline.
+ * first opening a menu and the second choosing its entry; typing and sending, the whole
+ * timeline; or filling a form, which has a timeline of its own.
  */
 export type PreviewLoop = "click" | "clicks" | "type" | "fill";
 const LOOP_LENGTH: Record<PreviewLoop, number> = {
@@ -21,28 +21,46 @@ const TYPE_START_MS = 1520;
 const TYPE_MS = 2400;
 
 /**
- * The clock a scene reads, from the one that ticks. One timeline serves every scene: the first
- * pointer arrives, hovers and clicks; typing runs; the second pointer arrives and clicks; and
- * the result holds. Two kinds of scene take it in another order. A two-click scene has nothing
- * to type, so its clock jumps from the first click straight to the second pointer, which is what
- * lets a menu open on the first click and its entry take the second. A form that is filled
- * types first and then takes a choice with the first pointer before the second submits it, so
- * that what the person does in the app happens in the order they do it.
+ * A form that is filled, in the order a person fills it, with one pointer that travels: the
+ * address is typed; the pointer reaches the list and opens it; seeks the entry and picks it;
+ * aims at the button and submits; and the result holds. Each pair is the pointer arriving and
+ * then pressing, so nothing is pressed by a pointer that is not yet there.
+ */
+const FILL_PHASES = [
+  ["type", 2200],
+  ["reach", 2900],
+  ["open", 3200],
+  ["seek", 3900],
+  ["pick", 4200],
+  ["aim", 4900],
+  ["submit", 5300],
+] as const;
+/** The control the travelling pointer is on in each phase; none while typing. */
+const FILL_TARGET: Readonly<Record<string, string>> = {
+  reach: "select",
+  open: "select",
+  seek: "option",
+  pick: "option",
+  aim: "submit",
+  submit: "submit",
+  done: "submit",
+};
+
+/**
+ * The clock the shared timeline is read on. A two-click scene has nothing to type, so its clock
+ * jumps from the first click straight to the second pointer, which is what lets a menu open on
+ * the first click and its entry take the second.
  */
 export function previewClock(time: number, loop: PreviewLoop = "type"): number {
-  if (time >= LOOP_MS) return time;
-  if (loop === "clicks" && time >= TYPE_START_MS) return time + TYPE_MS;
-  if (loop === "fill") {
-    if (time < TYPE_MS) return time + TYPE_START_MS;
-    if (time < TYPE_START_MS + TYPE_MS) return time - TYPE_MS;
-  }
-  return time;
+  return loop === "clicks" && time >= TYPE_START_MS && time < LOOP_MS ? time + TYPE_MS : time;
 }
 
-/** What typing reads in a filled form: done, once the clock has moved on to the choice. */
+/** What typing reads: in a filled form it starts at once and is done when the pointer sets out. */
 export function typingClock(time: number, loop: PreviewLoop): number {
-  const clock = previewClock(time, loop);
-  return loop === "fill" && clock < TYPE_START_MS ? TYPE_START_MS + TYPE_MS : clock;
+  if (loop !== "fill" || time >= LOOP_MS) {
+    return previewClock(time, loop);
+  }
+  return time < FILL_PHASES[0][1] ? time + TYPE_START_MS : TYPE_START_MS + TYPE_MS;
 }
 
 export const PreviewTime = createContext(LOOP_MS);
@@ -91,9 +109,16 @@ export function usePreviewLoop(loop: PreviewLoop): {
   return { root, time };
 }
 
-/** The phase a scene is in, on the clock `previewClock` gives its kind. */
+/**
+ * The phase a scene is in. One timeline serves most scenes: the first pointer arrives, hovers
+ * and clicks; typing runs; the second pointer arrives and clicks; and the result holds. A
+ * filled form has its own (`FILL_PHASES`).
+ */
 export function previewPhase(time: number, loop: PreviewLoop = "type"): string {
   if (time >= LOOP_MS) return "still";
+  if (loop === "fill") {
+    return FILL_PHASES.find(([, until]) => time < until)?.[0] ?? "done";
+  }
   const at = previewClock(time, loop);
   if (at < 720) return "approach";
   if (at < 1120) return "hover";
@@ -119,11 +144,52 @@ export function TypedText({ text }: { readonly text: string }) {
   );
 }
 
+const POINTER_PATH =
+  "M4 2.8a.7.7 0 0 0-1.2.5v18.4a.7.7 0 0 0 1.2.5l4.3-4.1 3.7 7.2a.9.9 0 0 0 1.2.4l2.5-1.3a.9.9 0 0 0 .4-1.2l-3.7-7.1 5.9-1.1a.7.7 0 0 0 .3-1.2L4 2.8Z";
+
 export function DemoPointer({ action = false }: { readonly action?: boolean }) {
   return (
     <span className={action ? styles.actionPointer : styles.pointer}>
       <svg viewBox="0 0 24 28" fill="none" aria-hidden="true" focusable="false">
-        <path d="M4 2.8a.7.7 0 0 0-1.2.5v18.4a.7.7 0 0 0 1.2.5l4.3-4.1 3.7 7.2a.9.9 0 0 0 1.2.4l2.5-1.3a.9.9 0 0 0 .4-1.2l-3.7-7.1 5.9-1.1a.7.7 0 0 0 .3-1.2L4 2.8Z" />
+        <path d={POINTER_PATH} />
+      </svg>
+    </span>
+  );
+}
+
+/**
+ * The one pointer of a filled form. It belongs to the scene and not to a control, and goes from
+ * control to control (`data-point`) as the phases say, so that it is seen to travel between a
+ * list, its entry and the button instead of one pointer fading out here and another in there.
+ * Where it stands is measured, because the controls are laid out by the text in them; it is set
+ * on the element from an effect, so the server's markup carries no style.
+ */
+export function ScenePointer({
+  scene,
+  phase,
+}: {
+  readonly scene: RefObject<HTMLElement | null>;
+  readonly phase: string;
+}) {
+  const pointer = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const within = scene.current;
+    const element = pointer.current;
+    const name = FILL_TARGET[phase];
+    if (within === null || element === null || name === undefined) return;
+    const target = within.querySelector<HTMLElement>(`[data-point="${name}"]`);
+    if (target === null) return;
+    const from = within.getBoundingClientRect();
+    const to = target.getBoundingClientRect();
+    if (to.width === 0) return;
+    const x = to.left - from.left + to.width / 2;
+    const y = to.top - from.top + to.height / 2;
+    element.style.transform = `translate(${x}px, ${y}px)`;
+  }, [scene, phase]);
+  return (
+    <span ref={pointer} className={styles.scenePointer}>
+      <svg viewBox="0 0 24 28" fill="none" aria-hidden="true" focusable="false">
+        <path d={POINTER_PATH} />
       </svg>
     </span>
   );

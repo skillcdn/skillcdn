@@ -79,17 +79,17 @@ describe("connection onboarding", () => {
     expect(previewPhase(6400, "clicks")).toBe("still");
   });
 
-  it("types a filled form first, then takes its choice, then submits it", () => {
+  it("fills a form in the order a person does, each press after the pointer has arrived", () => {
     expect(previewPhase(0, "fill")).toBe("type");
     expect(typingClock(0, "fill")).toBe(1520);
-    expect(previewPhase(2399, "fill")).toBe("type");
-    expect(previewPhase(2400, "fill")).toBe("approach");
-    expect(previewPhase(3600, "fill")).toBe("click");
-    // The typed text stays whole while the choice is made.
-    expect(typingClock(3600, "fill")).toBe(3920);
-    expect(previewPhase(4000, "fill")).toBe("action");
-    expect(previewPhase(4700, "fill")).toBe("submit");
-    expect(previewPhase(5000, "fill")).toBe("done");
+    expect(previewPhase(2199, "fill")).toBe("type");
+    // The list is reached, then opened; its entry sought, then picked; the button aimed at, then pressed.
+    expect(
+      [2200, 2900, 3200, 3900, 4200, 4900, 5300].map((time) => previewPhase(time, "fill")),
+    ).toEqual(["reach", "open", "seek", "pick", "aim", "submit", "done"]);
+    // The typed text stays whole from the moment the pointer sets out.
+    expect(typingClock(2200, "fill")).toBe(3920);
+    expect(typingClock(5000, "fill")).toBe(3920);
     expect(previewPhase(6400, "fill")).toBe("still");
   });
 

@@ -3,6 +3,8 @@
   --app-sidebar: var(--client-chatgpt-sidebar);
   --app-field: var(--client-chatgpt-field);
   --app-accent: var(--color-accent);
+  /* A scene's travelling pointer is placed against the window. */
+  position: relative;
   height: var(--preview-height);
   overflow: hidden;
   border: var(--preview-border);
@@ -187,10 +189,11 @@
 .window:is([data-phase="approach"], [data-phase="hover"]) .menu {
   opacity: 0;
 }
-/* A choice from a list whose default is the wrong one. The form is typed first; then the list is
-   open while the first pointer arrives and clicks the entry to take; from the click on, the list
-   is gone and the field shows what was chosen. Still, it shows the choice made: the still picture
-   is the finished one. */
+/* A choice from a list whose default is the wrong one, in a form that is filled in the order a
+   person fills it (the phases are in connect-animation.tsx). The default stands while the form is
+   typed; the pointer reaches the field and opens the list; seeks the entry and picks it, which
+   closes the list and leaves the choice in the field; then goes on to the button. Still, the
+   field shows the choice made: the still picture is the finished one. */
 .select {
   position: relative;
 }
@@ -215,15 +218,26 @@
 .beforeChoice {
   display: none;
 }
-.window:is([data-phase="approach"], [data-phase="hover"], [data-phase="click"]) .dropdown {
+.window:is([data-phase="open"], [data-phase="seek"], [data-phase="pick"]) .dropdown {
   display: grid;
 }
-/* The default stands while the form is typed and until the entry is clicked. */
-.window:is([data-phase="type"], [data-phase="approach"], [data-phase="hover"], [data-phase="click"])
-.beforeChoice {
+.window:is(
+    [data-phase="type"],
+    [data-phase="reach"],
+    [data-phase="open"],
+    [data-phase="seek"],
+    [data-phase="pick"]
+  )
+  .beforeChoice {
   display: inline;
 }
-.window:is([data-phase="type"], [data-phase="approach"], [data-phase="hover"], [data-phase="click"])
+.window:is(
+    [data-phase="type"],
+    [data-phase="reach"],
+    [data-phase="open"],
+    [data-phase="seek"],
+    [data-phase="pick"]
+  )
   .afterChoice {
   display: none;
 }
@@ -765,10 +779,62 @@
   stroke-width: 1.3;
   stroke-linejoin: round;
 }
+/* The one pointer of a filled form: it belongs to the scene, and its place is set from the
+   control it is on (ScenePointer), so it is seen to travel from one to the next. */
+.scenePointer {
+  position: absolute;
+  z-index: 4;
+  left: 0;
+  top: 0;
+  width: var(--preview-pointer-width);
+  height: var(--preview-pointer-height);
+  margin-left: calc(-1 * var(--preview-pointer-hotspot));
+  margin-top: calc(-1 * var(--preview-pointer-hotspot));
+  pointer-events: none;
+  opacity: 0;
+  transition:
+    transform var(--demo-pointer-transition),
+    opacity var(--demo-transition);
+}
+.scenePointer svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(var(--preview-pointer-shadow));
+  transform-origin: var(--preview-pointer-hotspot) var(--preview-pointer-hotspot);
+  transition: transform var(--demo-transition);
+}
+.scenePointer path {
+  fill: var(--color-accent-contrast);
+  stroke: var(--client-terminal-bg);
+  stroke-width: 1.3;
+  stroke-linejoin: round;
+}
+.window:is(
+    [data-phase="reach"],
+    [data-phase="open"],
+    [data-phase="seek"],
+    [data-phase="pick"],
+    [data-phase="aim"],
+    [data-phase="submit"],
+    [data-phase="done"]
+  )
+  .scenePointer {
+  opacity: 1;
+}
+.window:is([data-phase="open"], [data-phase="pick"], [data-phase="submit"]) .scenePointer svg {
+  transform: scale(0.88);
+}
 .highlight {
   transition:
     border-color var(--demo-transition),
     background var(--demo-transition);
+}
+/* What is pressed answers the press: the field as the list opens, the entry as it is taken. */
+.window[data-phase="open"] .selectValue[data-point],
+.window[data-phase="pick"] .dropdown .highlight {
+  border-color: var(--app-accent);
+  background: color-mix(in srgb, var(--app-accent) 18%, var(--app-field));
 }
 .chatMenu,
 .composerText {
@@ -839,6 +905,7 @@
   }
   .window .pointer,
   .window .actionPointer,
+  .window .scenePointer,
   .window[data-phase="type"] .textCaret {
     display: none;
   }

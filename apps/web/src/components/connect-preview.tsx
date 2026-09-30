@@ -6,6 +6,7 @@ import {
   type PreviewLoop,
   PreviewTime,
   previewPhase,
+  ScenePointer,
   typingClock,
   usePreviewLoop,
 } from "./connect-animation.js";
@@ -18,17 +19,21 @@ function Highlight({
   action = false,
   pointer = true,
   className,
+  point,
 }: {
   readonly children: ReactNode;
   readonly action?: boolean;
   readonly pointer?: boolean;
   /** The control's own look, when it is more than an outline: a filled button, say. */
   readonly className?: string;
+  /** The name a scene's travelling pointer finds this control by. */
+  readonly point?: string;
 }) {
   return (
     <span
       className={className === undefined ? styles.highlight : `${styles.highlight} ${className}`}
       data-action={action}
+      data-point={point}
     >
       {children}
       {pointer && <DemoPointer action={action} />}
@@ -190,19 +195,21 @@ export function ConnectPreview({
       )}
       <Field label={client === "chatgpt" ? p.serverUrl : p.url} value={url} highlight />
       {client === "chatgpt" ? (
-        // The authentication list comes up on OAuth and the step says to choose none: the first
-        // pointer takes it from the open list, and the field then shows the choice.
+        // The authentication list comes up on OAuth and the step says to choose none: the
+        // scene's pointer opens the list, takes the entry, and the field then shows the choice.
         <div className={styles.formRow}>
           <span>{p.authentication}</span>
           <span className={styles.select}>
-            <span className={styles.selectValue}>
+            <span className={styles.selectValue} data-point="select">
               <span className={styles.beforeChoice}>{p.oauth}</span>
               <span className={styles.afterChoice}>{p.noAuth}</span>
               <Chevron />
             </span>
             <span className={styles.dropdown}>
               <span>{p.oauth}</span>
-              <Highlight>{p.noAuth}</Highlight>
+              <Highlight pointer={false} point="option">
+                {p.noAuth}
+              </Highlight>
               <span>{p.oauthOrNone}</span>
             </span>
           </span>
@@ -235,7 +242,7 @@ export function ConnectPreview({
         </div>
       )}
       <div className={styles.formActions}>
-        <Highlight action>
+        <Highlight action pointer={client !== "chatgpt"} point="submit">
           {client === "chatgpt" ? p.create : client === "claude" ? p.continue : p.add}
         </Highlight>
       </div>
@@ -420,6 +427,7 @@ export function ConnectPreview({
         data-client={client}
         data-phase={previewPhase(time, loop)}
       >
+        {loop === "fill" && <ScenePointer scene={root} phase={previewPhase(time, loop)} />}
         <div className={styles.chrome} aria-hidden="true">
           <span className={styles.traffic}>
             <i />

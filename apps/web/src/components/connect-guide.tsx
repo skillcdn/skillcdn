@@ -111,7 +111,13 @@ function ClientGuide({
           <p>{t.connect.installHint}</p>
         </div>
       </div>
-      <a className={cx(ui.button, ui.primary, styles.openLink)} href={install}>
+      {/* A page opens beside this one; a link into an app on the computer has no tab to open. */}
+      <a
+        className={cx(ui.button, ui.primary, styles.openLink)}
+        href={install}
+        target={install.startsWith("https://") ? "_blank" : undefined}
+        rel={install.startsWith("https://") ? "noopener noreferrer" : undefined}
+      >
         {t.connect.add(c.label)}
         <span aria-hidden="true">↗</span>
       </a>
