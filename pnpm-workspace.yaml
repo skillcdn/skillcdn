@@ -6,7 +6,7 @@ packages:
 catalog:
   "@types/node": ^24.13.6
   typescript: ^7.0.2
-  vitest: ^5.0.1
+  vitest: ^5.0.2
   zod: ^4.6.5
 
 # Supply-chain guard: never resolve a version published less than 3 days ago (minutes).
