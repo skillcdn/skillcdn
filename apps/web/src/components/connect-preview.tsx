@@ -152,27 +152,28 @@ export function ConnectPreview({
     <div className={styles.dialog}>
       <div className={styles.dialogTitle}>
         <strong>
-          {client === "chatgpt" ? p.connectMcp : client === "claude" ? p.addConnector : p.remote}
+          {client === "chatgpt" ? p.newPlugin : client === "claude" ? p.addConnector : p.remote}
         </strong>
         <span>×</span>
       </div>
       <Field label={p.name} value={name} />
       {client === "chatgpt" && (
-        // The type comes up as STDIO, and the step says to change it: the drawing shows it changed.
         <div className={styles.formRow}>
-          <span>{p.type}</span>
+          <span>{p.connection}</span>
           <span className={styles.segment}>
-            <span>{p.stdio}</span>
-            <span className={styles.segmentSelected}>{p.streamableHttp}</span>
+            <span className={styles.segmentSelected}>{p.serverUrl}</span>
+            <span>{p.tunnel}</span>
           </span>
         </div>
       )}
-      <Field label={p.url} value={url} highlight />
-      {client === "other" && (
+      <Field label={client === "chatgpt" ? p.serverUrl : p.url} value={url} highlight />
+      {client !== "claude" && (
+        // ChatGPT's authentication comes up as OAuth, and the step says to change it: the drawing
+        // shows it changed.
         <div className={styles.formRow}>
           <span>{p.authentication}</span>
           <span className={styles.selectValue}>
-            {p.none}
+            {client === "chatgpt" ? p.noAuth : p.none}
             <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path
                 d="m4 6 4 4 4-4"
@@ -185,9 +186,25 @@ export function ConnectPreview({
           </span>
         </div>
       )}
+      {client === "chatgpt" && (
+        <div className={styles.formRow}>
+          <span className={styles.checked}>
+            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path
+                d="m3.5 8.5 3 3 6-7"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            {p.acknowledge}
+          </span>
+        </div>
+      )}
       <div className={styles.formActions}>
         <Highlight action>
-          {client === "chatgpt" ? p.save : client === "claude" ? p.continue : p.add}
+          {client === "chatgpt" ? p.create : client === "claude" ? p.continue : p.add}
         </Highlight>
       </div>
     </div>
@@ -305,9 +322,9 @@ export function ConnectPreview({
             </>
           ) : (
             <>
-              <strong>{p.settings}</strong>
-              <span>{p.general}</span>
+              <strong>{p.chatgptCustomize}</strong>
               <span className={styles.sidebarSelected}>{p.plugins}</span>
+              <span>{p.skills}</span>
             </>
           )}
         </div>
@@ -322,9 +339,8 @@ export function ConnectPreview({
               </>
             ) : (
               <>
-                <span>{p.plugins}</span>
-                <span>{p.apps}</span>
-                <span className={styles.tabSelected}>{p.mcp}</span>
+                <span className={styles.tabSelected}>{p.publicPlugins}</span>
+                <span>{p.personalPlugins}</span>
               </>
             )}
             {/* The first click opens the menu; the second, by the action pointer, takes its entry. */}
@@ -333,7 +349,15 @@ export function ConnectPreview({
             </Highlight>
           </div>
           <div className={styles.menu}>
-            <Highlight action>{claude ? p.addConnector : p.addMcpServer}</Highlight>
+            {claude ? (
+              <Highlight action>{p.addConnector}</Highlight>
+            ) : (
+              <span className={styles.menuList}>
+                <span>{p.createPlugin}</span>
+                <span>{p.uploadPlugin}</span>
+                <Highlight action>{p.createMcpApp}</Highlight>
+              </span>
+            )}
           </div>
           <div className={styles.skeleton} />
           <div className={styles.skeletonShort} />

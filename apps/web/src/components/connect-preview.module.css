@@ -187,6 +187,35 @@
 .window:is([data-phase="approach"], [data-phase="hover"]) .menu {
   opacity: 0;
 }
+/* A menu of several entries, the one to take drawn as the control it is. */
+.menuList {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: var(--preview-border);
+  border-radius: var(--radius-md);
+  background: var(--app-sidebar);
+  color: var(--client-muted);
+}
+.menuList > span:not(.highlight) {
+  padding: var(--space-1) var(--space-2);
+}
+/* A box already ticked: the step says to tick it, and the drawing shows it ticked. */
+.checked {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--client-text);
+}
+.checked svg {
+  flex: none;
+  width: var(--space-4);
+  height: var(--space-4);
+  padding: calc(var(--space-1) / 2);
+  border: var(--preview-border);
+  border-radius: var(--radius-sm);
+  color: var(--app-accent);
+}
 /* A two-way choice drawn as the apps draw it: two labels in one pill, the chosen one raised. */
 .segment {
   display: inline-flex;
