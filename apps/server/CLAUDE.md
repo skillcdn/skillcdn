@@ -17,6 +17,7 @@ Read the root [`CLAUDE.md`](../../CLAUDE.md) first. This workspace is the compos
 
 - Integration tests in one file share a database, and the system is built to reuse what it knows: a repository is its host id, a commit is indexed once, a body is stored once per hash, a default branch is cached. A test that needs fresh state gives `createFixtureHost` a variant and addresses that variant's commit explicitly, and adds files of its own when it needs something to be fetched.
 - `snapshots.close()` aborts indexing and refuses new work; tests that only want to wait use `snapshots.idle()`.
+- The crawler that draws a link's preview card sends `Accept: */*` or no `Accept` at all, never `text/html`. An address answers the page to any GET or HEAD that does not name what MCP speaks (`wantsHtml`); a rule that waited for `text/html` gave every unfurler the protocol's 405 and no card.
 - A test of reads during indexing must hold only the indexer's tree request until the read assertions finish. Releasing a shared tree gate first lets the indexer race ahead and changes which read path is exercised.
 - A commit is indexed once, and what its index holds is decided then. A change that would make an index come out differently (what is served, what is searched, how a document is summarized) needs `INDEX_VERSION` in `src/indexer/build-index.ts` bumped in the same commit; commits indexed under the older version are then rebuilt when next asked for. Without the bump, a deployment keeps serving what the old rules produced.
 

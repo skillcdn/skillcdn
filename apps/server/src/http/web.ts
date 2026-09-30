@@ -358,12 +358,19 @@ export interface WebBundle {
   readonly fonts: readonly string[];
 }
 
-/** True when the request is a browser asking for a page, as opposed to a client of an API. */
+/**
+ * True when the request asks for a page rather than for the protocol. A GET or HEAD gets the page
+ * unless it names what MCP speaks, JSON or an event stream: a browser asks for HTML, and the
+ * crawler that draws a link's preview asks for anything at all or for nothing, and it needs the
+ * page and its metadata as much as the browser does. An MCP client always names its media types,
+ * so it is never mistaken for either.
+ */
 export function wantsHtml(request: Pick<WebRequest, "method" | "headers">): boolean {
-  return (
-    (request.method === "GET" || request.method === "HEAD") &&
-    (request.headers.get("accept") ?? "").toLowerCase().includes("text/html")
-  );
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return false;
+  }
+  const accept = (request.headers.get("accept") ?? "").toLowerCase();
+  return !accept.includes("text/event-stream") && !accept.includes("application/json");
 }
 
 const sha1 = (text: string): string => createHash("sha1").update(text).digest("hex").slice(0, 16);

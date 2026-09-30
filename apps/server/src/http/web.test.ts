@@ -414,7 +414,7 @@ describe("loadWebBundle", () => {
 });
 
 describe("wantsHtml", () => {
-  it("tells a browser asking for a page from a client of an API", () => {
+  it("tells a browser asking for a page from a client of the protocol", () => {
     const browser = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
     expect(wantsHtml(request("/", { headers: { accept: browser } }))).toBe(true);
     expect(wantsHtml(request("/", { method: "HEAD", headers: { accept: browser } }))).toBe(true);
@@ -422,8 +422,15 @@ describe("wantsHtml", () => {
     expect(
       wantsHtml(request("/", { headers: { accept: "application/json, text/event-stream" } })),
     ).toBe(false);
-    expect(wantsHtml(request("/", { headers: { accept: "*/*" } }))).toBe(false);
-    expect(wantsHtml(request("/"))).toBe(false);
+    expect(wantsHtml(request("/", { headers: { accept: "text/event-stream" } }))).toBe(false);
+    expect(wantsHtml(request("/", { headers: { accept: "application/json" } }))).toBe(false);
+  });
+
+  it("gives the page to a link unfurler, which asks for anything or for nothing", () => {
+    expect(wantsHtml(request("/", { headers: { accept: "*/*" } }))).toBe(true);
+    expect(wantsHtml(request("/"))).toBe(true);
+    expect(wantsHtml(request("/", { method: "HEAD" }))).toBe(true);
+    expect(wantsHtml(request("/", { method: "POST" }))).toBe(false);
   });
 });
 

@@ -66,7 +66,7 @@ Over the MCP skills extension, a file of a skill is named by the address without
 
 ## In a browser
 
-The same URL answers people. When the deployment serves the web UI, a `GET` whose `Accept` header asks for `text/html` gets the explorer view of the address, rendered with what the address serves; every other request on the path is MCP ([ADR-0009](../adr/0009-web-ui-prerendered-per-language.md), [ADR-0011](../adr/0011-address-pages-rendered-on-the-server.md)). Query parameters are not part of an address: `lang` selects the language of the UI, `skill`, `file` and `q` select a view, and none of them means anything to MCP. Search engines may index the view of an address without a ref and the view of one of its skills; a page at a ref, a file and a search say `noindex`.
+The same URL answers people. When the deployment serves the web UI, a `GET` or `HEAD` gets the explorer view of the address, rendered with what the address serves, unless its `Accept` header names what MCP speaks (`application/json` or `text/event-stream`); a browser asks for HTML and a link unfurler for anything or nothing, and both get the page. Every other request on the path is MCP ([ADR-0009](../adr/0009-web-ui-prerendered-per-language.md), [ADR-0011](../adr/0011-address-pages-rendered-on-the-server.md)). Query parameters are not part of an address: `lang` selects the language of the UI, `skill`, `file` and `q` select a view, and none of them means anything to MCP. Search engines may index the view of an address without a ref and the view of one of its skills; a page at a ref, a file and a search say `noindex`.
 
 ## Open questions
 

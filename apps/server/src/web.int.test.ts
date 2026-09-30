@@ -109,9 +109,20 @@ describe("a server with a web build", () => {
     expect(ping.status).toBe(200);
     expect(ping.headers.get("content-type")).not.toContain("text/html");
 
-    // A GET that does not ask for HTML is MCP's to answer, as it was without a web build.
+    // A GET that asks for the stream is MCP's to answer, as it was without a web build.
     const stream = await h.request(address, { headers: { accept: "text/event-stream" } });
     expect(stream.headers.get("content-type") ?? "").not.toContain("text/html");
+
+    // The crawler that draws a link's preview asks for anything or for nothing, and gets the
+    // page with its metadata, not the protocol's refusal of a GET.
+    for (const headers of [{ accept: "*/*" }, {}]) {
+      const unfurled = await h.request(address, { headers });
+      expect(unfurled.status).toBe(200);
+      expect(unfurled.headers.get("content-type")).toBe("text/html; charset=utf-8");
+    }
+    const head = await h.request(address, { method: "HEAD" });
+    expect(head.status).toBe(200);
+    expect(head.headers.get("content-type")).toBe("text/html; charset=utf-8");
   });
 
   it("renders invalid folder scopes and oversized page queries as 400 pages", async () => {
@@ -337,11 +348,17 @@ describe("a server with a web build", () => {
     expect(page.status).toBe(404);
     expect(await page.text()).toContain("Not found in Korean");
 
-    const json = await h.request("/no/such/page");
+    // A client that names the protocol's media types is answered in them; one that asks for
+    // anything or nothing is a browser or an unfurler as far as the server can tell, and gets the
+    // page.
+    const json = await h.request("/no/such/page", { headers: { accept: "application/json" } });
     expect(json.status).toBe(404);
     expect(await json.json()).toEqual({
       error: { code: "not_found", message: "There is nothing at this path." },
     });
+    const bare = await h.request("/no/such/page");
+    expect(bare.status).toBe(404);
+    expect(bare.headers.get("content-type")).toBe("text/html; charset=utf-8");
     expect((await h.request("/routes.json")).status).toBe(404);
     expect((await h.request("/index.html")).status).toBe(404);
     expect((await h.request("/render/entry-server.js")).status).toBe(404);
