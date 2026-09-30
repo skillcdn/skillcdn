@@ -382,14 +382,16 @@ export function ConnectPreview({
                 <span>{p.personalPlugins}</span>
               </>
             )}
-            {/* The first click opens the menu; the second, by the action pointer, takes its entry. */}
-            <Highlight className={styles.addButton}>
+            {/* The scene's pointer presses the button, which opens the menu, then its entry. */}
+            <Highlight className={styles.addButton} pointer={false} point="menu">
               {claude ? `+ ${p.add}` : `${p.add} ▾`}
             </Highlight>
           </div>
           <div className={styles.menu}>
             {/* The entry to take and no other: the rest of the menu changes between releases. */}
-            <Highlight action>{claude ? p.addConnector : p.createMcpApp}</Highlight>
+            <Highlight action pointer={false} point="entry">
+              {claude ? p.addConnector : p.createMcpApp}
+            </Highlight>
           </div>
           <div className={styles.skeleton} />
           <div className={styles.skeletonShort} />
@@ -427,7 +429,7 @@ export function ConnectPreview({
         data-client={client}
         data-phase={previewPhase(time, loop)}
       >
-        {loop === "fill" && <ScenePointer scene={root} phase={previewPhase(time, loop)} />}
+        <ScenePointer scene={root} loop={loop} phase={previewPhase(time, loop)} />
         <div className={styles.chrome} aria-hidden="true">
           <span className={styles.traffic}>
             <i />

@@ -35,16 +35,41 @@ const FILL_PHASES = [
   ["aim", 4900],
   ["submit", 5300],
 ] as const;
-/** The control the travelling pointer is on in each phase; none while typing. */
-const FILL_TARGET: Readonly<Record<string, string>> = {
-  reach: "select",
-  open: "select",
-  seek: "option",
-  pick: "option",
-  aim: "submit",
-  submit: "submit",
-  done: "submit",
+/**
+ * Where a scene's travelling pointer is in each phase, by the name of the control
+ * (`data-point`), and the phases in which it presses. In a phase that names no control the
+ * pointer is out of sight: while a form is typed, and once a menu's entry has been taken.
+ */
+interface PointerPath {
+  readonly on: Readonly<Record<string, string>>;
+  readonly pressed: readonly string[];
+}
+const POINTER_PATHS: Partial<Record<PreviewLoop, PointerPath>> = {
+  fill: {
+    on: {
+      reach: "select",
+      open: "select",
+      seek: "option",
+      pick: "option",
+      aim: "submit",
+      submit: "submit",
+      done: "submit",
+    },
+    pressed: ["open", "pick", "submit"],
+  },
+  clicks: {
+    on: {
+      approach: "menu",
+      hover: "menu",
+      click: "menu",
+      action: "entry",
+      submit: "entry",
+    },
+    pressed: ["click", "submit"],
+  },
 };
+/** How far off its first control the pointer comes into sight, in pixels: a short way in. */
+const ENTER_FROM = { x: 28, y: 22 } as const;
 
 /**
  * The clock the shared timeline is read on. A two-click scene has nothing to type, so its clock
@@ -158,25 +183,34 @@ export function DemoPointer({ action = false }: { readonly action?: boolean }) {
 }
 
 /**
- * The one pointer of a filled form. It belongs to the scene and not to a control, and goes from
- * control to control (`data-point`) as the phases say, so that it is seen to travel between a
- * list, its entry and the button instead of one pointer fading out here and another in there.
- * Where it stands is measured, because the controls are laid out by the text in them; it is set
- * on the element from an effect, so the server's markup carries no style.
+ * The one pointer of a scene with more than one press. It belongs to the scene and not to a
+ * control, and goes from control to control (`data-point`) as the phases say, so that it is
+ * seen to travel between a button, its menu's entry and whatever comes next instead of one
+ * pointer fading out here and another in there. Where it stands is measured, because the
+ * controls are laid out by the text in them; it is set on the element from an effect, so the
+ * server's markup carries no style. Coming into sight, it is first put a short way off its
+ * control without moving there, so that it arrives from nearby and not from wherever it was.
  */
 export function ScenePointer({
   scene,
+  loop,
   phase,
 }: {
   readonly scene: RefObject<HTMLElement | null>;
+  readonly loop: PreviewLoop;
   readonly phase: string;
 }) {
   const pointer = useRef<HTMLSpanElement>(null);
+  const shown = useRef(false);
+  const path = POINTER_PATHS[loop];
+  const name = path?.on[phase];
   useEffect(() => {
     const within = scene.current;
     const element = pointer.current;
-    const name = FILL_TARGET[phase];
-    if (within === null || element === null || name === undefined) return;
+    if (within === null || element === null || name === undefined) {
+      shown.current = false;
+      return;
+    }
     const target = within.querySelector<HTMLElement>(`[data-point="${name}"]`);
     if (target === null) return;
     const from = within.getBoundingClientRect();
@@ -184,10 +218,26 @@ export function ScenePointer({
     if (to.width === 0) return;
     const x = to.left - from.left + to.width / 2;
     const y = to.top - from.top + to.height / 2;
+    if (!shown.current) {
+      element.style.transition = "none";
+      element.style.transform = `translate(${x + ENTER_FROM.x}px, ${y + ENTER_FROM.y}px)`;
+      // Reading the layout commits the starting place, so that the move below is a move.
+      void element.offsetWidth;
+      element.style.transition = "";
+      shown.current = true;
+    }
     element.style.transform = `translate(${x}px, ${y}px)`;
-  }, [scene, phase]);
+  }, [scene, name]);
+  if (path === undefined) {
+    return null;
+  }
   return (
-    <span ref={pointer} className={styles.scenePointer}>
+    <span
+      ref={pointer}
+      className={styles.scenePointer}
+      data-visible={name !== undefined}
+      data-pressed={path.pressed.includes(phase)}
+    >
       <svg viewBox="0 0 24 28" fill="none" aria-hidden="true" focusable="false">
         <path d={POINTER_PATH} />
       </svg>

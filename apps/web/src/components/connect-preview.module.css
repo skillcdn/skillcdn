@@ -779,8 +779,9 @@
   stroke-width: 1.3;
   stroke-linejoin: round;
 }
-/* The one pointer of a filled form: it belongs to the scene, and its place is set from the
-   control it is on (ScenePointer), so it is seen to travel from one to the next. */
+/* The one pointer of a scene with more than one press: it belongs to the scene, and its place
+   is set from the control it is on (ScenePointer), so it is seen to travel from one to the
+   next. When it is in sight and when it presses are the component's to say. */
 .scenePointer {
   position: absolute;
   z-index: 4;
@@ -810,19 +811,10 @@
   stroke-width: 1.3;
   stroke-linejoin: round;
 }
-.window:is(
-    [data-phase="reach"],
-    [data-phase="open"],
-    [data-phase="seek"],
-    [data-phase="pick"],
-    [data-phase="aim"],
-    [data-phase="submit"],
-    [data-phase="done"]
-  )
-  .scenePointer {
+.scenePointer[data-visible="true"] {
   opacity: 1;
 }
-.window:is([data-phase="open"], [data-phase="pick"], [data-phase="submit"]) .scenePointer svg {
+.scenePointer[data-pressed="true"] svg {
   transform: scale(0.88);
 }
 .highlight {
