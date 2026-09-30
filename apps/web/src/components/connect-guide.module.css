@@ -69,11 +69,27 @@
   border-radius: var(--radius-lg);
   background: var(--color-bg-inset);
 }
+/* The link that does the step: what it does on the left, the button on the right, and one
+   under the other when the row is too narrow for both. */
+.installCard {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-5);
+  padding: var(--space-4);
+  border: var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-inset);
+}
 .copyLabel {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   font-size: var(--text-sm);
+}
+.installCard .copyLabel {
+  flex: 1 1 18rem;
 }
 .copyLabel p {
   color: var(--color-text-muted);

@@ -43,6 +43,19 @@ export function vscodeInstallLink(name: string, url: string): string {
   return `vscode:mcp/install?${encodeURIComponent(JSON.stringify({ name, type: "http", url }))}`;
 }
 
+/**
+ * Claude's add-connector dialog with the name and the address filled in, which Claude marks as
+ * having come from a link and asks the person to confirm (the format its connector docs give).
+ */
+export function claudeInstallLink(name: string, url: string): string {
+  const query = new URLSearchParams({
+    modal: "add-custom-connector",
+    connectorName: name,
+    connectorUrl: url,
+  });
+  return `https://claude.ai/customize/connectors?${query}`;
+}
+
 function ClientGuide({
   client,
   name,
@@ -63,7 +76,9 @@ function ClientGuide({
       ? cursorInstallLink(name, url)
       : client === "vscode"
         ? vscodeInstallLink(name, url)
-        : undefined;
+        : client === "claude"
+          ? claudeInstallLink(name, url)
+          : undefined;
   const configuration = clientConfiguration(client, name, url);
   const addressCard = (
     <div className={styles.copyAddress}>
@@ -82,26 +97,42 @@ function ClientGuide({
       </div>
     </div>
   );
+  // A client that takes a link with the server filled in leads with that link, where the
+  // address would otherwise be: the one step that does most of the work comes first, and the
+  // address waits under manual setup for whoever needs it.
+  const installCard = install !== undefined && (
+    <div className={styles.installCard}>
+      <div className={styles.copyLabel}>
+        <span className={styles.linkSymbol} aria-hidden="true">
+          ↗
+        </span>
+        <div>
+          <strong>{t.connect.installTitle(c.label)}</strong>
+          <p>{t.connect.installHint}</p>
+        </div>
+      </div>
+      <a className={cx(ui.button, ui.primary, styles.openLink)} href={install}>
+        {t.connect.add(c.label)}
+        <span aria-hidden="true">↗</span>
+      </a>
+    </div>
+  );
   return (
     <div className={styles.clientGuide}>
-      {install === undefined && addressCard}
+      {install === undefined ? addressCard : installCard}
       <div className={styles.guideHeading}>
         <div>
           <h3>{t.connect.follow(c.label)}</h3>
           <p className={styles.hint}>{t.connect.guideHint}</p>
         </div>
-        {(install !== undefined || details.web !== undefined) && (
+        {install === undefined && details.web !== undefined && (
           <a
-            className={cx(
-              ui.button,
-              install === undefined ? ui.secondary : ui.primary,
-              styles.openLink,
-            )}
-            href={install ?? details.web}
-            target={install === undefined ? "_blank" : undefined}
-            rel={install === undefined ? "noopener noreferrer" : undefined}
+            className={cx(ui.button, ui.secondary, styles.openLink)}
+            href={details.web}
+            target="_blank"
+            rel="noopener noreferrer"
           >
-            {install !== undefined ? t.connect.add(c.label) : t.connect.open(c.label)}
+            {t.connect.open(c.label)}
             <span aria-hidden="true">↗</span>
           </a>
         )}
@@ -116,11 +147,11 @@ function ClientGuide({
       {terminal ? (
         <CodeBlock code={configuration} label={t.connect.preview.terminal} copy />
       ) : (
-        (client === "cursor" || client === "vscode") && (
+        install !== undefined && (
           <details className={styles.manual}>
             <summary>{t.connect.manual}</summary>
-            {install !== undefined && addressCard}
-            <CodeBlock code={configuration} copy />
+            {addressCard}
+            {client !== "claude" && <CodeBlock code={configuration} copy />}
             {client === "vscode" && (
               <CodeBlock
                 code={`code --add-mcp '${JSON.stringify({ name, type: "http", url })}'`}

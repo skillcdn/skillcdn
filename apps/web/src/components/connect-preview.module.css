@@ -187,9 +187,10 @@
 .window:is([data-phase="approach"], [data-phase="hover"]) .menu {
   opacity: 0;
 }
-/* A choice from a list whose default is the wrong one. The list is open while the first pointer
-   arrives and clicks the entry to take; from the click on, the list is gone and the field shows
-   what was chosen. Still, it shows the choice made: the still picture is the finished one. */
+/* A choice from a list whose default is the wrong one. The form is typed first; then the list is
+   open while the first pointer arrives and clicks the entry to take; from the click on, the list
+   is gone and the field shows what was chosen. Still, it shows the choice made: the still picture
+   is the finished one. */
 .select {
   position: relative;
 }
@@ -217,10 +218,13 @@
 .window:is([data-phase="approach"], [data-phase="hover"], [data-phase="click"]) .dropdown {
   display: grid;
 }
-.window:is([data-phase="approach"], [data-phase="hover"], [data-phase="click"]) .beforeChoice {
+/* The default stands while the form is typed and until the entry is clicked. */
+.window:is([data-phase="type"], [data-phase="approach"], [data-phase="hover"], [data-phase="click"])
+.beforeChoice {
   display: inline;
 }
-.window:is([data-phase="approach"], [data-phase="hover"], [data-phase="click"]) .afterChoice {
+.window:is([data-phase="type"], [data-phase="approach"], [data-phase="hover"], [data-phase="click"])
+  .afterChoice {
   display: none;
 }
 /* A box already ticked: the step says to tick it, and the drawing shows it ticked. */

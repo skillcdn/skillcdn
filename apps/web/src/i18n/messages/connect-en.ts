@@ -17,6 +17,8 @@ export const connectEn = {
   follow: (client: string) => `Connect ${client}`,
   guideHint: "Open the app and follow the steps in order.",
   add: (client: string) => `Add to ${client}`,
+  installTitle: (client: string) => `Add it to ${client} in one step`,
+  installHint: "The app opens with the name and address filled in. Check them and confirm.",
   open: (client: string) => `Open ${client}`,
   manual: "Manual setup",
   nameHint: (name: string) => `If the app asks for a name, use “${name}” or any name you like.`,
@@ -98,10 +100,10 @@ export const connectEn = {
     },
     claude: {
       label: "Claude",
-      titles: three("Open Connectors", "Add a custom connector", "Use it in a chat"),
+      titles: three("Add the connector", "Confirm it", "Use it in a chat"),
       steps: three(
-        "In the sidebar, open Customize and choose the Connectors tab. Select Add, then Add custom connector.",
-        "Enter a name, paste your connection address as the MCP server URL and select Continue.",
+        "Select Add to Claude. Claude opens Customize → Connectors with the name and address filled in. Without the button, choose Add there, then Add custom connector, and paste them yourself.",
+        "Check the name and the MCP server URL, then select Continue.",
         "Start a new chat and send the first message below. Claude uses the connector on its own when a request calls for it.",
       ),
       note: "The same page opens from the account menu under Settings → Connectors. In a Team or Enterprise workspace, an owner may need to add the connector first.",

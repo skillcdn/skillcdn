@@ -2,10 +2,11 @@ import { parseAddress } from "@skillcdn/core";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { I18nContext, messagesFor } from "../i18n/index.js";
-import { previewPhase } from "./connect-animation.js";
+import { previewPhase, typingClock } from "./connect-animation.js";
 import { CLIENT_DETAILS, CONNECT_CLIENTS, clientConfiguration } from "./connect-clients.js";
 import {
   ConnectGuide,
+  claudeInstallLink,
   cursorInstallLink,
   serverNameOf,
   vscodeInstallLink,
@@ -78,6 +79,20 @@ describe("connection onboarding", () => {
     expect(previewPhase(6400, "clicks")).toBe("still");
   });
 
+  it("types a filled form first, then takes its choice, then submits it", () => {
+    expect(previewPhase(0, "fill")).toBe("type");
+    expect(typingClock(0, "fill")).toBe(1520);
+    expect(previewPhase(2399, "fill")).toBe("type");
+    expect(previewPhase(2400, "fill")).toBe("approach");
+    expect(previewPhase(3600, "fill")).toBe("click");
+    // The typed text stays whole while the choice is made.
+    expect(typingClock(3600, "fill")).toBe(3920);
+    expect(previewPhase(4000, "fill")).toBe("action");
+    expect(previewPhase(4700, "fill")).toBe("submit");
+    expect(previewPhase(5000, "fill")).toBe("done");
+    expect(previewPhase(6400, "fill")).toBe("still");
+  });
+
   it("offers the complete name and address as copy targets inside the form", () => {
     const scene = renderToStaticMarkup(
       <ConnectPreview
@@ -125,6 +140,11 @@ describe("connection onboarding", () => {
     expect(
       JSON.parse(decodeURIComponent(vscodeInstallLink(name, url).split("?")[1] ?? "")),
     ).toEqual({ name, type: "http", url });
+    const claude = new URL(claudeInstallLink(name, url));
+    expect(`${claude.origin}${claude.pathname}`).toBe("https://claude.ai/customize/connectors");
+    expect(claude.searchParams.get("modal")).toBe("add-custom-connector");
+    expect(claude.searchParams.get("connectorName")).toBe(name);
+    expect(claude.searchParams.get("connectorUrl")).toBe(url);
     expect(JSON.parse(clientConfiguration("cursor", name, url))).toEqual({
       mcpServers: { [name]: { url } },
     });

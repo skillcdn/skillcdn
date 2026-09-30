@@ -6,6 +6,7 @@ import {
   type PreviewLoop,
   PreviewTime,
   previewPhase,
+  typingClock,
   usePreviewLoop,
 } from "./connect-animation.js";
 import { type ConnectClient, clientConfiguration, isTerminalClient } from "./connect-clients.js";
@@ -97,13 +98,16 @@ export function ConnectPreview({
   const terminal = isTerminalClient(client);
   const editor = client === "cursor" || client === "vscode";
   // What the scene does sets its loop: the first step of Claude and ChatGPT opens a menu and
-  // chooses from it, two clicks; the forms, chats and terminals type and send.
+  // chooses from it, two clicks; ChatGPT's form is typed, then a choice is made in it, then it
+  // is submitted; the other forms, the chats and the terminals type and send.
   const loop: PreviewLoop =
-    terminal || step === 2 || (step === 1 && !editor)
-      ? "type"
-      : step === 0 && (client === "claude" || client === "chatgpt")
-        ? "clicks"
-        : "click";
+    step === 1 && client === "chatgpt"
+      ? "fill"
+      : terminal || step === 2 || (step === 1 && !editor)
+        ? "type"
+        : step === 0 && (client === "claude" || client === "chatgpt")
+          ? "clicks"
+          : "click";
   const { root, time } = usePreviewLoop(loop);
   const file = client === "vscode" ? ".vscode/mcp.json" : ".cursor/mcp.json";
   const code = clientConfiguration(client, name, url);
@@ -409,7 +413,7 @@ export function ConnectPreview({
   }
 
   return (
-    <PreviewTime value={time}>
+    <PreviewTime value={typingClock(time, loop)}>
       <div
         ref={root}
         className={`${styles.window} ${!terminal && !editor && step === 1 ? styles.formWindow : ""}`}

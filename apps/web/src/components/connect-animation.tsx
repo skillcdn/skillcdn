@@ -9,11 +9,41 @@ const FRAME_MS = 80;
  * first opening a menu and the second choosing its entry; or typing and sending, the whole
  * timeline.
  */
-export type PreviewLoop = "click" | "clicks" | "type";
-const LOOP_LENGTH: Record<PreviewLoop, number> = { click: 3000, clicks: 4000, type: LOOP_MS };
-/** Where the typing phase would start, and how long it lasts: a two-click scene skips over it. */
+export type PreviewLoop = "click" | "clicks" | "type" | "fill";
+const LOOP_LENGTH: Record<PreviewLoop, number> = {
+  click: 3000,
+  clicks: 4000,
+  type: LOOP_MS,
+  fill: LOOP_MS,
+};
+/** Where the typing phase starts and how long it lasts; the first click ends where it starts. */
 const TYPE_START_MS = 1520;
 const TYPE_MS = 2400;
+
+/**
+ * The clock a scene reads, from the one that ticks. One timeline serves every scene: the first
+ * pointer arrives, hovers and clicks; typing runs; the second pointer arrives and clicks; and
+ * the result holds. Two kinds of scene take it in another order. A two-click scene has nothing
+ * to type, so its clock jumps from the first click straight to the second pointer, which is what
+ * lets a menu open on the first click and its entry take the second. A form that is filled
+ * types first and then takes a choice with the first pointer before the second submits it, so
+ * that what the person does in the app happens in the order they do it.
+ */
+export function previewClock(time: number, loop: PreviewLoop = "type"): number {
+  if (time >= LOOP_MS) return time;
+  if (loop === "clicks" && time >= TYPE_START_MS) return time + TYPE_MS;
+  if (loop === "fill") {
+    if (time < TYPE_MS) return time + TYPE_START_MS;
+    if (time < TYPE_START_MS + TYPE_MS) return time - TYPE_MS;
+  }
+  return time;
+}
+
+/** What typing reads in a filled form: done, once the clock has moved on to the choice. */
+export function typingClock(time: number, loop: PreviewLoop): number {
+  const clock = previewClock(time, loop);
+  return loop === "fill" && clock < TYPE_START_MS ? TYPE_START_MS + TYPE_MS : clock;
+}
 
 export const PreviewTime = createContext(LOOP_MS);
 
@@ -61,16 +91,10 @@ export function usePreviewLoop(loop: PreviewLoop): {
   return { root, time };
 }
 
-/**
- * The phase a scene is in. One timeline serves every scene: the first pointer arrives, hovers
- * and clicks; typing runs; the second pointer arrives and clicks; and the result holds. A
- * two-click scene has nothing to type, so its clock jumps from the first click straight to the
- * second pointer, which is what lets one menu open on the first click and its entry take the
- * second.
- */
+/** The phase a scene is in, on the clock `previewClock` gives its kind. */
 export function previewPhase(time: number, loop: PreviewLoop = "type"): string {
   if (time >= LOOP_MS) return "still";
-  const at = loop === "clicks" && time >= TYPE_START_MS ? time + TYPE_MS : time;
+  const at = previewClock(time, loop);
   if (at < 720) return "approach";
   if (at < 1120) return "hover";
   if (at < TYPE_START_MS) return "click";

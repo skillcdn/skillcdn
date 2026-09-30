@@ -14,6 +14,8 @@ export const connectKo: typeof connectEn = {
   follow: (client: string) => `${client}에 연결하기`,
   guideHint: "앱을 열고 아래 순서대로 따라 하세요.",
   add: (client: string) => `${client}에 추가하기`,
+  installTitle: (client: string) => `${client}에 한 번에 추가하기`,
+  installHint: "앱이 열리면 이름과 주소가 채워져 있어요. 확인하고 진행하면 돼요.",
   open: (client: string) => `${client} 열기`,
   manual: "직접 설정하기",
   nameHint: (name: string) => `이름을 물으면 “${name}”을 쓰거나, 알아보기 쉬운 이름을 정하세요.`,
@@ -95,10 +97,10 @@ export const connectKo: typeof connectEn = {
     },
     claude: {
       label: "Claude",
-      titles: ["커넥터를 여세요", "커스텀 커넥터를 추가하세요", "대화에서 써 보세요"],
+      titles: ["커넥터를 추가하세요", "확인하고 진행하세요", "대화에서 써 보세요"],
       steps: [
-        "왼쪽 메뉴에서 사용자 지정을 열고 커넥터 탭을 고르세요. 추가를 누른 다음 커스텀 커넥터 추가를 선택하세요.",
-        "이름을 적고, MCP 서버 URL에 연결 주소를 붙여 넣은 뒤 계속을 누르세요.",
+        "‘Claude에 추가하기’를 누르세요. Claude의 사용자 지정 → 커넥터가 열리고 이름과 주소가 채워져 있어요. 버튼 없이 할 때는 거기서 추가 → 커스텀 커넥터 추가를 누르고 직접 붙여 넣으세요.",
+        "이름과 MCP 서버 URL을 확인하고 계속을 누르세요.",
         "새 대화를 열고 아래 첫 질문을 보내세요. 필요한 순간에 Claude가 커넥터를 알아서 사용해요.",
       ],
       note: "왼쪽 아래 계정 메뉴의 설정 → 커넥터로 들어가도 같은 화면이 열려요. 회사·팀 계정은 소유자가 먼저 커넥터를 추가해야 할 수 있어요.",
