@@ -22,9 +22,9 @@ export const connectKo: typeof connectEn = {
   official: "공식 연결 안내",
   firstMessage: {
     label: "연결했다면, 첫 질문을 보내 보세요",
-    text: (name: string) =>
-      `${name}에 어떤 스킬이 있는지 살펴봐 줘. 어떤 일을 도와줄 수 있는지 알려 주고, 무엇부터 해 볼지 같이 골라 줘.`,
-    hint: "대화창에 붙여 넣어 보내세요. 그다음은 하고 싶은 일을 말하면 돼요.",
+    text: (server: string) =>
+      `${server} 서버에 어떤 스킬이 있는지 살펴봐 줘. 어떤 일을 도와줄 수 있는지 알려 주고, 무엇부터 해 볼지 같이 골라 줘.`,
+    hint: "대화창에 붙여 넣어 보내세요. 서버에 다른 이름을 붙였다면 그 이름으로 바꿔 말하세요.",
     copy: "질문 복사하기",
   },
   preview: {
@@ -34,15 +34,17 @@ export const connectKo: typeof connectEn = {
     general: "일반",
     account: "계정",
     name: "이름",
-    description: "설명",
-    descriptionValue: "내 AI를 위한 스킬과 문서",
     url: "MCP 서버 URL",
     authentication: "인증",
     none: "없음",
-    developer: "개발자 모드",
-    security: "보안 및 로그인",
     plugins: "플러그인",
-    createPlugin: "플러그인 만들기",
+    apps: "앱",
+    addMcpServer: "MCP 서버 추가",
+    connectMcp: "맞춤형 MCP에 연결",
+    type: "유형",
+    stdio: "STDIO",
+    streamableHttp: "스트리밍 가능한 HTTP",
+    save: "저장",
     install: "설치",
     installServer: "서버 설치",
     work: "Work",
@@ -58,7 +60,7 @@ export const connectKo: typeof connectEn = {
     toolNames: "browse_repo · search_repo · load_skill · read_repo_file",
     enabled: "사용 중",
     newChat: "새 대화",
-    ask: "어떤 스킬로 나를 도와줄 수 있어?",
+    ask: (server: string) => `${server} 서버에 어떤 스킬이 있어?`,
     terminal: "터미널",
     commandHint: "터미널에 명령을 붙여 넣고 Enter 키를 누르세요.",
     checkHint: "앱을 열고 서버가 연결되어 있는지 확인하세요.",
@@ -75,13 +77,13 @@ export const connectKo: typeof connectEn = {
   clients: {
     chatgpt: {
       label: "ChatGPT",
-      titles: ["개발자 모드를 켜세요", "연결을 추가하세요", "대화에서 써 보세요"],
+      titles: ["MCP 탭을 여세요", "서버를 추가하세요", "대화에서 써 보세요"],
       steps: [
-        "설정 → 보안 및 로그인에서 개발자 모드를 켜세요.",
-        "플러그인에서 +를 누르세요. 이름과 설명을 적고, MCP 서버 URL에 연결 주소를 붙여 넣은 뒤 인증은 없음으로 두고 플러그인을 만드세요.",
-        "만든 개인 플러그인을 설치하세요. Work 대화에서 @를 입력해 플러그인을 고른 다음, 아래 첫 질문을 보내세요.",
+        "ChatGPT 앱에서 설정 → 플러그인을 열고 MCP 탭을 고르세요. 추가를 누른 다음 MCP 서버 추가를 선택하세요.",
+        "이름을 적고, 유형을 스트리밍 가능한 HTTP로 바꾼 뒤 URL에 연결 주소를 붙여 넣고 저장하세요.",
+        "Work 대화를 열고 아래 첫 질문을 보내세요. 따로 지정하지 않아도 ChatGPT가 서버를 알아서 찾아 써요.",
       ],
-      note: "계정이나 회사·팀 설정에서 개발자 모드와 플러그인을 쓸 수 있어야 해요.",
+      note: "ChatGPT 앱 기준 안내예요. 웹에서는 설정 → 보안 및 로그인에서 개발자 모드를 켠 뒤, 플러그인 페이지에서 서버를 플러그인으로 추가해요. 자세한 순서는 공식 안내에 있어요.",
     },
     claude: {
       label: "Claude",

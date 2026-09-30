@@ -27,8 +27,9 @@ export const CLIENT_DETAILS: Record<
   claude: {
     icon: "claude",
     docs: "https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp",
-    // The Connectors tab of Customize, where the guide's first step starts; the help centre links it.
-    web: "https://claude.ai/customize/connectors",
+    // The Connectors tab of Customize with the add-connector dialog already open: the guide's
+    // first step, done. Checked in the app on September 30, 2026.
+    web: "https://claude.ai/customize/connectors?modal=add-custom-connector",
   },
   cursor: { icon: "cursor", docs: "https://cursor.com/help/customization/mcp", web: undefined },
   vscode: {

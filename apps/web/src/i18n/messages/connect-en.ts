@@ -24,9 +24,9 @@ export const connectEn = {
   official: "Official setup guide",
   firstMessage: {
     label: "Connected? Send a first message",
-    text: (name: string) =>
-      `Look at the skills in ${name}. Tell me what you can help me with, and help me choose where to start.`,
-    hint: "Paste this into a chat. From there, just say what you need.",
+    text: (server: string) =>
+      `Look at the skills in the ${server} server. Tell me what you can help me with, and help me choose where to start.`,
+    hint: "Paste this into a chat. If you gave the server another name, say that one.",
     copy: "Copy this message",
   },
   preview: {
@@ -36,15 +36,17 @@ export const connectEn = {
     general: "General",
     account: "Account",
     name: "Name",
-    description: "Description",
-    descriptionValue: "Skills and documents for my AI",
     url: "MCP server URL",
     authentication: "Authentication",
     none: "None",
-    developer: "Developer mode",
-    security: "Security and login",
     plugins: "Plugins",
-    createPlugin: "Create plugin",
+    apps: "Apps",
+    addMcpServer: "Add MCP server",
+    connectMcp: "Connect to custom MCP",
+    type: "Type",
+    stdio: "STDIO",
+    streamableHttp: "Streamable HTTP",
+    save: "Save",
     install: "Install",
     installServer: "Install Server",
     work: "Work",
@@ -60,7 +62,7 @@ export const connectEn = {
     toolNames: "browse_repo · search_repo · load_skill · read_repo_file",
     enabled: "Enabled",
     newChat: "New chat",
-    ask: "What skills can you help me with?",
+    ask: (server: string) => `What skills are in ${server}?`,
     terminal: "Terminal",
     commandHint: "Paste the command into your terminal, then press Enter.",
     checkHint: "Open the client and check that the server is available.",
@@ -77,13 +79,13 @@ export const connectEn = {
   clients: {
     chatgpt: {
       label: "ChatGPT",
-      titles: three("Turn on developer mode", "Add the connection", "Use it in a chat"),
+      titles: three("Open the MCP tab", "Add the server", "Use it in a chat"),
       steps: three(
-        "In Settings → Security and login, turn on Developer mode.",
-        "Open Plugins and select +. Enter a name and description, paste your connection address as the MCP server URL, choose no authentication and create the plugin.",
-        "Install your personal plugin. Start a Work chat, type @, choose the plugin and send the first message below.",
+        "In the ChatGPT app, open Settings → Plugins and choose the MCP tab. Select Add, then Add MCP server.",
+        "Enter a name, set the type to Streamable HTTP, paste your connection address as the URL and save.",
+        "Start a Work chat and send the first message below. ChatGPT finds the server on its own.",
       ),
-      note: "Developer mode and plugins must be available in your account or workspace.",
+      note: "These steps follow the ChatGPT app. On the web, turn on Developer mode under Settings → Security and login, then add the server as a plugin from the Plugins page; the official guide walks through it.",
     },
     claude: {
       label: "Claude",

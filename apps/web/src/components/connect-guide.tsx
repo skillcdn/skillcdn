@@ -30,17 +30,6 @@ export function serverNameOf(address: Address, manifestName?: string | null): st
   return name.length === 0 ? "skills" : name;
 }
 
-/** What to call the server when talking to the agent: the manifest's name, else the repository. */
-export function displayNameOf(address: Address, mount: RestMount | undefined): string {
-  const manifest = mount?.index.status === "ready" ? mount.index.manifest : undefined;
-  if (manifest?.name != null) {
-    return manifest.name;
-  }
-  return mount === undefined
-    ? `${address.owner}/${address.repo}`
-    : `${mount.repository.owner}/${mount.repository.name}`;
-}
-
 /** A link that opens the client with the server filled in. */
 export function cursorInstallLink(name: string, url: string): string {
   const config = btoa(JSON.stringify({ url }));
@@ -162,7 +151,9 @@ export function ConnectGuide({
   const url = `${origin}${formatAddress(address)}`;
   const manifest = mount?.index.status === "ready" ? mount.index.manifest : undefined;
   const name = serverNameOf(address, manifest?.name);
-  const message = t.connect.firstMessage.text(displayNameOf(address, mount));
+  // The message names the server as the steps told the visitor to name it, so that an agent with
+  // other servers and skills connected is asked about this one and not about everything it has.
+  const message = t.connect.firstMessage.text(name);
   const tabs = CONNECT_CLIENTS.map((client) => ({
     id: client,
     label: t.connect.clients[client].label,

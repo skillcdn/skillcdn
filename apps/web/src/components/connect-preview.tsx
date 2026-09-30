@@ -72,9 +72,11 @@ export function ConnectPreview({
   const file = client === "vscode" ? ".vscode/mcp.json" : ".cursor/mcp.json";
   const code = clientConfiguration(client, name, url);
 
-  // Claude brings a connector into a chat on its own once it is added, so its chat shows no menu
-  // to switch the server on and no mention to make; the message is the whole of the step.
-  const picks = client !== "claude";
+  // Claude and ChatGPT bring an added server into a chat on their own, so their chats show no
+  // menu to switch it on and no mention to make; the message is the whole of the step. The
+  // editors and an unknown client keep a tools list, because theirs have one to check.
+  const picks = editor || client === "other";
+  const ask = p.ask(name);
   const chat = (
     <div className={styles.chat}>
       <div className={styles.chatTitle}>
@@ -91,7 +93,7 @@ export function ConnectPreview({
       </div>
       {picks && (
         <div className={styles.chatMenu}>
-          <span>{client === "chatgpt" ? p.plugins : p.tools}</span>
+          <span>{p.tools}</span>
           <Highlight pointer={false}>
             <span>{name}</span>
             <Toggle />
@@ -99,11 +101,9 @@ export function ConnectPreview({
         </div>
       )}
       <div className={styles.composer}>
-        {picks && (
-          <span className={styles.chip}>{client === "chatgpt" ? `@${name}` : `+ ${name}`}</span>
-        )}
+        {picks && <span className={styles.chip}>{`+ ${name}`}</span>}
         <div className={styles.composerText}>
-          <PreviewCopy text={p.ask} appearance="text" />
+          <PreviewCopy text={ask} appearance="text" />
         </div>
         <div className={styles.composerBar}>
           <span className={styles.attach}>+</span>
@@ -124,7 +124,7 @@ export function ConnectPreview({
         </div>
       </div>
       <div className={styles.sentMessage} aria-hidden="true">
-        {p.ask}
+        {ask}
       </div>
     </div>
   );
@@ -133,14 +133,23 @@ export function ConnectPreview({
     <div className={styles.dialog}>
       <div className={styles.dialogTitle}>
         <strong>
-          {client === "chatgpt" ? p.createPlugin : client === "claude" ? p.addConnector : p.remote}
+          {client === "chatgpt" ? p.connectMcp : client === "claude" ? p.addConnector : p.remote}
         </strong>
         <span>×</span>
       </div>
       <Field label={p.name} value={name} />
-      {client === "chatgpt" && <Field label={p.description} value={p.descriptionValue} />}
+      {client === "chatgpt" && (
+        // The type comes up as STDIO, and the step says to change it: the drawing shows it changed.
+        <div className={styles.formRow}>
+          <span>{p.type}</span>
+          <span className={styles.segment}>
+            <span>{p.stdio}</span>
+            <span className={styles.segmentSelected}>{p.streamableHttp}</span>
+          </span>
+        </div>
+      )}
       <Field label={p.url} value={url} highlight />
-      {client !== "claude" && (
+      {client === "other" && (
         <div className={styles.formRow}>
           <span>{p.authentication}</span>
           <span className={styles.selectValue}>
@@ -159,7 +168,7 @@ export function ConnectPreview({
       )}
       <div className={styles.formActions}>
         <Highlight action>
-          {client === "chatgpt" ? p.createPlugin : client === "claude" ? p.continue : p.add}
+          {client === "chatgpt" ? p.save : client === "claude" ? p.continue : p.add}
         </Highlight>
       </div>
     </div>
@@ -175,7 +184,7 @@ export function ConnectPreview({
           <strong>{label}</strong>
         </div>
         <p className={styles.terminalHint} aria-hidden="true">
-          {step === 0 ? p.commandHint : step === 1 ? p.checkHint : p.ask}
+          {step === 0 ? p.commandHint : step === 1 ? p.checkHint : ask}
         </p>
         <div className={styles.terminalCommands} key={step}>
           {step === 1 ? (
@@ -184,7 +193,7 @@ export function ConnectPreview({
               <PreviewCopy text={client === "gemini" ? "/mcp list" : "/mcp"} />
             </>
           ) : (
-            <PreviewCopy text={step === 0 ? code : p.ask} />
+            <PreviewCopy text={step === 0 ? code : ask} />
           )}
         </div>
         {step > 0 && (
@@ -259,27 +268,50 @@ export function ConnectPreview({
     scene = chat;
   } else if (step === 1) {
     scene = <div className={styles.modalBackdrop}>{form}</div>;
-  } else if (client === "claude") {
-    // The Customize page from the sidebar, on its Connectors tab, with the Add menu open on the
-    // entry the step names. The same page opens from the account menu's settings, which the
-    // step's note says; one drawing is enough.
+  } else if (client === "claude" || client === "chatgpt") {
+    // The two apps lay this page out alike: a page with tabs across the top, an Add button at the
+    // end of them and its menu open on the entry the step names. Claude's is the Customize page
+    // from the sidebar on its Connectors tab (the same page opens from the account menu's
+    // settings, which the note says); ChatGPT's is the Plugins page of its settings on the MCP
+    // tab. One drawing each is enough.
+    const claude = client === "claude";
     scene = (
       <div className={styles.settings}>
         <div className={styles.sidebar}>
-          <span>{p.newChat}</span>
-          <span>{p.projects}</span>
-          <span className={styles.sidebarSelected}>{p.customize}</span>
+          {claude ? (
+            <>
+              <span>{p.newChat}</span>
+              <span>{p.projects}</span>
+              <span className={styles.sidebarSelected}>{p.customize}</span>
+            </>
+          ) : (
+            <>
+              <strong>{p.settings}</strong>
+              <span>{p.general}</span>
+              <span className={styles.sidebarSelected}>{p.plugins}</span>
+            </>
+          )}
         </div>
         <div className={styles.settingsContent}>
-          <h4>{p.customize}</h4>
+          <h4>{claude ? p.customize : p.plugins}</h4>
           <div className={styles.tabRow}>
-            <span>{p.skills}</span>
-            <span className={styles.tabSelected}>{p.connectors}</span>
-            <span>{p.plugins}</span>
-            <span className={styles.addButton}>+ {p.add}</span>
+            {claude ? (
+              <>
+                <span>{p.skills}</span>
+                <span className={styles.tabSelected}>{p.connectors}</span>
+                <span>{p.plugins}</span>
+              </>
+            ) : (
+              <>
+                <span>{p.plugins}</span>
+                <span>{p.apps}</span>
+                <span className={styles.tabSelected}>{p.mcp}</span>
+              </>
+            )}
+            <span className={styles.addButton}>{claude ? `+ ${p.add}` : `${p.add} ▾`}</span>
           </div>
           <div className={styles.menu}>
-            <Highlight>{p.addConnector}</Highlight>
+            <Highlight>{claude ? p.addConnector : p.addMcpServer}</Highlight>
           </div>
           <div className={styles.skeleton} />
           <div className={styles.skeletonShort} />
@@ -287,39 +319,23 @@ export function ConnectPreview({
       </div>
     );
   } else {
-    const section = client === "chatgpt" ? p.security : p.mcp;
     scene = (
       <div className={styles.settings}>
         <div className={styles.sidebar}>
           <strong>{p.settings}</strong>
           <span>{p.general}</span>
           <span>{p.account}</span>
-          <span className={styles.sidebarSelected}>{section}</span>
+          <span className={styles.sidebarSelected}>{p.mcp}</span>
         </div>
         <div className={styles.settingsContent}>
-          <h4>{section}</h4>
-          {client === "chatgpt" ? (
-            <>
-              <Highlight pointer={false}>
-                <span>{p.developer}</span>
-                <Toggle />
-              </Highlight>
-              <div className={styles.settingRow}>
-                <span>{p.plugins}</span>
-                <span>+</span>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className={styles.settingRow}>
-                <span>{section}</span>
-                <span>+</span>
-              </div>
-              <Highlight>{p.add}</Highlight>
-              <div className={styles.skeleton} />
-              <div className={styles.skeletonShort} />
-            </>
-          )}
+          <h4>{p.mcp}</h4>
+          <div className={styles.settingRow}>
+            <span>{p.mcp}</span>
+            <span>+</span>
+          </div>
+          <Highlight>{p.add}</Highlight>
+          <div className={styles.skeleton} />
+          <div className={styles.skeletonShort} />
         </div>
       </div>
     );

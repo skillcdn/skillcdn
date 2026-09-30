@@ -180,6 +180,23 @@
   display: flex;
   justify-content: flex-end;
 }
+/* A two-way choice drawn as the apps draw it: two labels in one pill, the chosen one raised. */
+.segment {
+  display: inline-flex;
+  gap: var(--space-1);
+  padding: calc(var(--space-1) / 2);
+  border: var(--preview-border);
+  border-radius: var(--radius-md);
+  color: var(--client-muted);
+}
+.segment > span {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+}
+.segment .segmentSelected {
+  background: var(--app-field);
+  color: var(--client-text);
+}
 .skeleton,
 .skeletonShort {
   height: var(--space-2);
