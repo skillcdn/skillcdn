@@ -17,6 +17,15 @@
   --color-bg-raised: #192232;
   --color-border: #263042;
   --color-border-strong: #3b4960;
+  /* The hairline of a box that carries no fill of its own. The two above are fixed colours, which
+     is what a line on a surface should be -- but a box over the lights has no surface, and a fixed
+     dark line disappears the moment the light behind it is brighter than the line. That is the
+     whole failure: the edge goes exactly where the page is brightest. This one is white let
+     through, so it lightens whatever is behind it and holds the same edge everywhere the box sits.
+     Measured where these lines actually run, at the dimmest and the brightest ground under them:
+     3.05:1 at worst, against 1.00:1 for the fixed line, which on the questions was the very colour
+     it was drawn on. The alpha is set by the brightest of those, not the average. */
+  --color-border-lit: #ffffff66;
 
   /* Text */
   --color-text: #e8ebf0;
@@ -102,6 +111,7 @@
   --radius-lg: 12px;
   --radius-full: 999px;
   --border: 1px solid var(--color-border);
+  --border-lit: 1px solid var(--color-border-lit);
 
   /* Every face here leaves more room above a line of text than below it, so one line centred in a
      box lands low: the box is centred on the font metrics and the letters are not centred in

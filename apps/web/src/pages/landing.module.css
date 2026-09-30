@@ -406,11 +406,14 @@
 .faqGrid > h2 {
   font-size: var(--text-2xl);
 }
+/* The lit hairline, as the invitation below uses: these rules sit over the section's light with
+   nothing behind them, and a fixed line there measured 1.00:1 -- the same colour as the ground it
+   was drawn on. */
 .faqItem {
-  border-bottom: var(--border);
+  border-bottom: var(--border-lit);
 }
 .faqItem:first-child {
-  border-top: var(--border);
+  border-top: var(--border-lit);
 }
 .faqItem summary {
   display: flex;
