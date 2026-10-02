@@ -43,8 +43,11 @@ function MountHeader(props: {
   readonly origin: string;
   readonly address: Address;
   readonly mount: RestMount | undefined;
-  /** What the page shows, for the address strip; none while the address cannot be served. */
-  readonly use: "root" | "skill" | "folder" | undefined;
+  /**
+   * What the page shows, for the address under the name; none on the page of the address,
+   * which has the guide itself, and while the address cannot be served.
+   */
+  readonly use: "skill" | "folder" | undefined;
 }) {
   const { t, language } = useI18n();
   const { address, mount } = props;
@@ -87,8 +90,8 @@ function MountHeader(props: {
           {description}
         </p>
       )}
-      {/* The address to connect with comes before the facts about the commit: the one is what
-          the visitor came for, the other is there for whoever asks. */}
+      {/* Away from the guide, the address to connect with comes before the facts about the
+          commit: the one is what the visitor came for, the other is there for whoever asks. */}
       {props.use !== undefined && (
         <ConnectStrip origin={props.origin} address={address} kind={props.use} />
       )}
@@ -214,24 +217,20 @@ export function MountPage(props: MountPageProps) {
     );
   }, [address, view, language, origin, loaded, skill]);
 
-  // Name and description and the address to connect with, then how to connect an agent, then
-  // what it serves. The guide is for the address as a whole, so it is on the page of the
-  // address: a folder, a skill, a file or a search is what the visitor came for, and keeps the
-  // address under the name, which leads back to the guide.
+  // Name and description, then how to connect an agent, then what it serves. The guide is for
+  // the address as a whole, so it is on the page of the address: a folder, a skill, a file or
+  // a search is what the visitor came for, and carries the address under the name instead,
+  // which leads back to the guide.
   const atRoot =
     view.kind === "overview" &&
     view.query === undefined &&
     (view.path === undefined || view.path === address.path);
-  const use = atRoot ? "root" : view.kind === "skill" ? "skill" : "folder";
+  const use =
+    atRoot || mount.state === "error" ? undefined : view.kind === "skill" ? "skill" : "folder";
 
   return (
     <Container className={styles.page}>
-      <MountHeader
-        origin={origin}
-        address={address}
-        mount={loaded}
-        use={mount.state === "error" ? undefined : use}
-      />
+      <MountHeader origin={origin} address={address} mount={loaded} use={use} />
       {atRoot && mount.state !== "error" && (
         <ConnectGuide origin={origin} address={address} mount={loaded} />
       )}

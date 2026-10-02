@@ -29,24 +29,21 @@ function LinkIcon() {
 }
 
 /**
- * The address to connect with, under the name on every page of it: the address itself in a
- * field with its copy button, and one line under it saying what connecting it gives and where
- * the steps are. On the page of the address the guide is further down the same page; on a
- * folder, a skill or a file of it, it is on that page. A plain anchor either way, so that the
- * browser lands on the guide itself and not at the top of the page it is on.
+ * The address to connect with, under the name on a folder, a skill or a file of it: the address
+ * itself in a field with its copy button, and one line under it saying what connecting it
+ * gives and where the steps are. The steps are the guide on the page of the address, which has
+ * no need of this: a plain anchor there, so that the browser lands on the guide itself and not
+ * at the top of the page it is on.
  */
 export function ConnectStrip(props: {
   readonly origin: string;
   readonly address: Address;
   /** What the page shows: the line names the skills, or the one skill, the address is for. */
-  readonly kind: "root" | "skill" | "folder";
+  readonly kind: "skill" | "folder";
 }) {
   const { t } = useI18n();
   const url = `${props.origin}${formatAddress(props.address)}`;
-  const guide =
-    props.kind === "root"
-      ? `#${GUIDE_ANCHOR}`
-      : appHref(`${mountHref(props.address)}#${GUIDE_ANCHOR}`);
+  const guide = appHref(`${mountHref(props.address)}#${GUIDE_ANCHOR}`);
   return (
     <div className={styles.strip}>
       <div className={styles.field}>
