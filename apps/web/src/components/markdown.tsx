@@ -83,6 +83,15 @@ export function Markdown(props: {
         // Everything passes through here unchanged; the components below decide what a URL may do.
         urlTransform={(url) => url}
         components={{
+          // A document's headings sit under the page's own title and the title of the view, so
+          // each is two levels down from where it was written and keeps the size of that level:
+          // the outline of the page stays one outline, and the document still looks like itself.
+          h1: ({ children }) => <h3 className={styles.h1}>{children}</h3>,
+          h2: ({ children }) => <h4 className={styles.h2}>{children}</h4>,
+          h3: ({ children }) => <h5 className={styles.h3}>{children}</h5>,
+          h4: ({ children }) => <h6 className={styles.h4}>{children}</h6>,
+          h5: ({ children }) => <h6 className={styles.h5}>{children}</h6>,
+          h6: ({ children }) => <h6 className={styles.h6}>{children}</h6>,
           a({ href, children }) {
             if (href === undefined || href === "") {
               return <span>{children}</span>;

@@ -790,7 +790,8 @@ describe("a page of the deployment's own", () => {
     expect(html).toContain(">Terms of service</h1>");
     expect(html).toContain("<strong>kind</strong>");
     expect(html).toContain('href="/privacy"');
-    expect(html).toContain(">Scope</h2>");
+    // A heading of the document sits two levels under the page's own title.
+    expect(html).toContain(">Scope</h4>");
     expect(html).toContain(messagesFor("en").legal.revised("2026-10-01"));
     expect(html).toContain('<title data-head="">Terms of service | SkillCDN</title>');
     expect(html).toContain('<link rel="canonical" href="https://skills.example/terms"');
