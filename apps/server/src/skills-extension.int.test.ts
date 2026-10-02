@@ -268,6 +268,73 @@ describe("the MCP skills extension", () => {
     }
   });
 
+  it("lists a skill without a file over the read limit, and names the file with its source", async () => {
+    const big = `{"fonts":"${"x".repeat(5000)}"}`;
+    const { h, address } = repository("ext-oversized", {
+      "skills/write/SKILL.md": skill("Write the document."),
+      "skills/write/style.md": "Short sentences.",
+      "skills/write/data/fonts.json": big,
+    });
+    await ready(h, address);
+    const client = await h.connect(address);
+    try {
+      const prefix = "skill://gh/acme/multi-skill";
+      const commit = fixtureCommits("ext-oversized").main;
+      // The URL spells the repository as its host does, however the address was typed.
+      const sourceUrl = `https://raw.githubusercontent.com/Acme/multi-skill/${commit}/skills/write/data/fonts.json`;
+      const listed = listSchema.parse(
+        await client.request({ method: "skills/list", params: {} }, listSchema),
+      );
+      const write = listed.skills.find((item) => item.uri.endsWith("/write/SKILL.md"));
+      if (write === undefined) throw new Error("the skill must be listed without the file");
+      // The listing holds what the host can hold; the document says what was left out and where.
+      expect(write.resources.map((file) => file.uri)).toEqual([
+        `${prefix}/skills/write/SKILL.md`,
+        `${prefix}/skills/write/style.md`,
+      ]);
+      const read = await client.readResource({ uri: write.uri });
+      const document = (read.contents[0] as { text?: string }).text ?? "";
+      expect(document).toContain(
+        `> Not included, over this server's file size limit: \`skills/write/data/fonts.json\` (${big.length} bytes); fetch it from ${sourceUrl}\n`,
+      );
+      expect(sha256(new TextEncoder().encode(document))).toBe(write.resources[0]?.digest);
+      await expect(
+        client.readResource({ uri: `${prefix}/skills/write/data/fonts.json` }),
+      ).rejects.toMatchObject({ code: -32602 });
+      const folder = directorySchema.parse(
+        await client.request(
+          { method: "resources/directory/read", params: { uri: `${prefix}/skills/write` } },
+          directorySchema,
+        ),
+      );
+      expect(folder.resources.map((item) => item.name)).toEqual(["SKILL.md", "style.md"]);
+
+      // The tools say the same: the file is named with its source, and a read sends there.
+      const loaded = await client.callTool({
+        name: "load_skill",
+        arguments: { path: "skills/write/SKILL.md" },
+      });
+      const text = (loaded.content as { text?: string }[])
+        .map((block) => block.text ?? "")
+        .join("");
+      expect(text).toContain(
+        `Files over this server's size limit, not readable here; fetch them from the source:\n- skills/write/data/fonts.json (${big.length} bytes): ${sourceUrl}`,
+      );
+      expect(text).toContain("is over the read limit");
+      expect(loaded.structuredContent).toMatchObject({
+        oversized: [{ path: "skills/write/data/fonts.json", size: big.length, sourceUrl }],
+      });
+      const refused = await client.callTool({
+        name: "read_repo_file",
+        arguments: { path: "skills/write/data/fonts.json" },
+      });
+      expect(refused.isError).toBe(true);
+      expect(JSON.stringify(refused.content)).toContain(sourceUrl);
+    } finally {
+      await client.close();
+    }
+  });
+
   it("answers an empty, short-lived listing while the commit is being indexed", async () => {
     const host = createFixtureHost("ext-indexing");
     const release = host.holdTrees();

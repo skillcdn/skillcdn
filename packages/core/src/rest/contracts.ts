@@ -256,6 +256,13 @@ export const restSkillSchema = z.discriminatedUnion("status", [
       body: z.string(),
       files: z.array(z.string()),
       filesTruncated: z.boolean(),
+      /**
+       * Files of the skill over the read limit (ADR-0033): not readable through the files
+       * endpoint, with `sourceUrl` where their bytes are at the host.
+       */
+      oversized: z.optional(
+        z.array(z.object({ path: z.string(), size: count, sourceUrl: z.string() })),
+      ),
       /** The files the skill declares as needed on every run; `get_skill` returns their text. */
       included: z.array(z.string()),
       warnings: z.array(z.string()),
@@ -339,6 +346,11 @@ export const restErrorSchema = z.object({
     message: z.string(),
     /** With `skill.ambiguous`: the directories to choose from. */
     directories: z.optional(z.array(z.string())),
+    /**
+     * With `file.too_large`, `file.not_text` and `file.not_served`: where the file is at its
+     * host. For the first two it is the raw bytes, which this endpoint cannot carry.
+     */
+    sourceUrl: z.optional(z.string()),
   }),
 });
 

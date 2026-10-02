@@ -15,7 +15,7 @@ export const INDEX_LIMIT_DEFAULTS: IndexLimits = {
   maxIndexedFiles: 2000,
   maxIndexedFileBytes: 262_144,
   maxIndexedTotalBytes: 33_554_432,
-  maxReadableFileBytes: 1_048_576,
+  maxReadableFileBytes: 2_097_152,
   maxArchiveBytes: 268_435_456,
 };
 

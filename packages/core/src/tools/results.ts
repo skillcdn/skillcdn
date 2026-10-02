@@ -1,5 +1,6 @@
 import type { LicenseFact } from "../license.js";
 import type { RepoPath } from "../repo-path.js";
+import type { OmittedFile } from "../skill-document.js";
 import type { SkillTranslation } from "../skill-manifest.js";
 
 export interface FileReference {
@@ -159,6 +160,11 @@ export interface SkillResult {
   /** Supporting files of the skill, ready to pass to `read_repo_file`. */
   readonly files: readonly RepoPath[];
   readonly filesTruncated: boolean;
+  /**
+   * Files of the skill over the read limit (ADR-0033): not readable here, with where their bytes
+   * are at the host.
+   */
+  readonly oversized?: readonly OmittedFile[];
   /** The files the skill declares as needed on every run, with their text. */
   readonly included: readonly IncludedFile[];
   readonly warnings: readonly string[];

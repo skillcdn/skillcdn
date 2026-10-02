@@ -105,10 +105,29 @@ describe("repository instructions", () => {
     expect(text).toContain("Company skills: Shared expertise.");
     expect(text).toContain("engineering/");
     expect(text).toContain("128 skills");
-    expect(text).toContain("Use for releases and incidents.");
+    expect(text).toContain("Use for releases and incidents. 128 skills, 2 documents");
     expect(text).toContain("load_skill");
     expect(text).toContain("until complete");
     expect(text).toContain("repository root");
+  });
+
+  it("introduces only the folders with something discoverable, and says what that is", () => {
+    const text = renderInstructions({
+      status: "ready",
+      catalog: {
+        ...base,
+        groups: [
+          { ...folder(".claude"), name: null, description: null, skillCount: 0, documentCount: 0 },
+          { ...folder("docs"), name: null, description: null, skillCount: 0, documentCount: 20 },
+          { ...folder("plugin"), name: null, description: null, skillCount: 1, documentCount: 0 },
+        ],
+        skillCount: 1,
+        documentCount: 20,
+      },
+    });
+    expect(text).not.toContain(".claude/");
+    expect(text).toContain("docs/: 20 documents\n");
+    expect(text).toContain("plugin/: 1 skill\n");
   });
   it("introduces a skill at the mounted directory itself, with or without folders beside it", () => {
     const root = { name: "release", directory: path(""), description: "Cut a release." };

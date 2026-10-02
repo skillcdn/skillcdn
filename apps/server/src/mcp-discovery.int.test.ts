@@ -130,6 +130,47 @@ describe("MCP discovery with bounded optional context", () => {
     }
   });
 
+  it("keeps the files of hidden copies out of search along with the copies", async () => {
+    const { h, address } = repository("mcp-hidden-copy-files", {
+      "plugin/skills/write/SKILL.md": skill("Write it."),
+      "plugin/skills/write/reference/notes.md": "# Notes\n\nSharedquartz guidance.\n",
+      ".claude/skills/write/SKILL.md": skill("Write it, for one harness."),
+      ".claude/skills/write/reference/notes.md":
+        "# Notes\n\nSharedquartz guidance. Hiddenonlyquartz too.\n",
+    });
+    await ready(h, address);
+    const client = await h.connect(address);
+    try {
+      const shared = data<FindResult>(await call(client, "search_repo", { query: "sharedquartz" }));
+      expect(shared.items.map((item) => (item.kind === "skill" ? item.path : item.path))).toEqual([
+        "plugin/skills/write/SKILL.md",
+      ]);
+      expect(
+        data<FindResult>(await call(client, "search_repo", { query: "hiddenonlyquartz" })).items,
+      ).toEqual([]);
+      // The copy stays loadable by its exact path, and says what it is.
+      const hidden = data<SkillResult>(
+        await call(client, "load_skill", { path: ".claude/skills/write/SKILL.md" }),
+      );
+      expect(hidden.warnings).toContainEqual(expect.stringContaining("hidden directory"));
+      // Counts and the overview cover what can be discovered: the copy's folder is not introduced,
+      // and browsing shows it with nothing to discover.
+      expect(client.getInstructions()).toContain("plugin/: 1 skill\n");
+      expect(client.getInstructions()).not.toContain(".claude/");
+      const root = data<BrowseResult>(await call(client, "browse_repo", {}));
+      expect(root.entries.find((entry) => entry.path === ".claude")).toMatchObject({
+        kind: "directory",
+        skillCount: 0,
+      });
+      expect(root.entries.find((entry) => entry.path === "plugin")).toMatchObject({
+        kind: "directory",
+        skillCount: 1,
+      });
+    } finally {
+      await client.close();
+    }
+  });
+
   it("enforces local fixture exclusions on discovery, links, includes and nested mounts", async () => {
     const excluded = "internal/.fixtures";
     const skillPath = `${excluded}/sample/SKILL.md`;

@@ -79,15 +79,24 @@ export function renderInstructions(state: CatalogState): string {
   const summary = `${head} ${plural(catalog.skillCount, "skill")}, ${plural(catalog.documentCount, "document")}.${language}${diagnostics}`;
   const skillRow = (skill: CatalogSkill): string =>
     `${skill.directory ? `${skill.directory}/` : ""}SKILL.md: ${compactSummary(skill.description, 90)}`;
-  const groupRow = (entry: BrowseEntry): string =>
-    `${entry.path}${entry.kind === "directory" ? "/" : ""}: ${entry.name === null ? "" : `${compactSummary(entry.name, 80)}. `}${entry.description === null ? "" : `${compactSummary(entry.description, 100)} `}${entry.skillCount} skills`;
+  // A folder is introduced by what can be discovered in it. One with nothing discoverable (hidden
+  // copies of a skill, test fixtures, code) stays browsable, but does not take up the budget.
+  const groupRow = (entry: BrowseEntry): string => {
+    const counts = [
+      entry.skillCount === 0 ? undefined : plural(entry.skillCount, "skill"),
+      entry.documentCount === 0 ? undefined : plural(entry.documentCount, "document"),
+    ].filter((count) => count !== undefined);
+    return `${entry.path}${entry.kind === "directory" ? "/" : ""}: ${entry.name === null ? "" : `${compactSummary(entry.name, 80)}. `}${entry.description === null ? "" : `${compactSummary(entry.description, 100)} `}${counts.join(", ")}`;
+  };
   const rows =
     catalog.groups === undefined
       ? catalog.skills.map(skillRow)
       : [
           // A skill at the mounted directory itself belongs to no folder: it is introduced by name.
           ...catalog.skills.filter((skill) => skill.directory.length === 0).map(skillRow),
-          ...catalog.groups.map(groupRow),
+          ...catalog.groups
+            .filter((entry) => entry.skillCount > 0 || entry.documentCount > 0)
+            .map(groupRow),
         ];
   const ending = `browse_repo returns the full folder contents with continuation.\n${HOW_TO}\n${extensionLine(mount)}`;
   let result = `${compactSummary(summary, INSTRUCTIONS_MAX_LENGTH - ending.length - 1)}\n`;

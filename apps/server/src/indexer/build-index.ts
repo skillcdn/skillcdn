@@ -7,8 +7,10 @@ import {
   DomainError,
   decodeText,
   describeListingProblem,
+  describeOmittedFile,
   type GitHost,
   GitHostError,
+  type GitHostKey,
   type IndexLimits,
   inspectMarkdownReferences,
   isExcludedPath,
@@ -19,6 +21,7 @@ import {
   joinRepoPath,
   type LicenseFact,
   MAX_LICENSE_TEXT_LENGTH,
+  type OmittedFile,
   owningSkillDirectory,
   parentDirectory,
   parseRepoManifest,
@@ -28,6 +31,7 @@ import {
   type RepoFileKind,
   type RepoPath,
   ROOT_PATH,
+  rawFileUrl,
   relativeRepoPath,
   resolveLicense,
   type ServedScope,
@@ -54,7 +58,7 @@ import { gitBlobHash, sha256Hex } from "./git-hash.js";
  * is rebuilt when it is next asked for (`ensureSnapshot` in @skillcdn/db); without the bump, a
  * deployment keeps serving what the old rules produced until the repository moves on.
  */
-export const INDEX_VERSION = 7;
+export const INDEX_VERSION = 8;
 
 const MAX_DIAGNOSTICS = 50;
 const FETCH_CONCURRENCY = 8;
@@ -68,6 +72,15 @@ export interface BuildIndexOptions {
   readonly gitHost: Pick<GitHost, "getTree" | "readBlob" | "readArchive">;
   readonly blobStore: BlobStore;
   readonly coordinates: RepoCoordinates;
+  /**
+   * The repository as its host spells it, for the URLs the index records (ADR-0033); left out,
+   * the coordinates stand in, which an address spells as the caller typed it.
+   */
+  readonly repository?: {
+    readonly host: GitHostKey;
+    readonly owner: string;
+    readonly name: string;
+  };
   readonly commit: string;
   readonly limits: IndexLimits;
   readonly signal: AbortSignal;
@@ -191,16 +204,15 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
     tree.entries.filter((entry) => entry.type === "file").map((entry) => entry.path),
   );
 
-  // What the index holds, admitted in the order of the rounds and within the limits.
+  // What the index holds, admitted in the order of the rounds and within the limits. A file over
+  // the per-file limit is not fetched, but it is not lost either: the tree knows it, so it is
+  // listed, and read when the read limit allows; the index is partial when entries are left out.
   const admitted = new Map<RepoPath, Candidate>();
   let indexedBytes = 0;
   const admit = (candidate: Candidate, maxFileBytes = limits.maxIndexedFileBytes): boolean => {
     if (admitted.has(candidate.entry.path)) return true;
     const { size } = candidate.entry;
-    if (size > maxFileBytes) {
-      truncated = true;
-      return false;
-    }
+    if (size > maxFileBytes) return false;
     if (
       admitted.size >= limits.maxIndexedFiles ||
       indexedBytes + size > limits.maxIndexedTotalBytes
@@ -405,6 +417,8 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
           continue;
         }
         if (text === undefined) {
+          // A declaration the limits keep out is content the index lacks, unlike a data file.
+          if (!admitted.has(entry.path)) truncated = true;
           broken(
             admitted.has(entry.path) ? "unavailable" : "index_limit",
             admitted.has(entry.path)
@@ -468,6 +482,7 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
         continue;
       }
       if (text === undefined) {
+        if (!admitted.has(entry.path)) truncated = true;
         report(
           entry.path,
           admitted.has(entry.path) ? "unavailable" : "index_limit",
@@ -688,53 +703,76 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
 
   // Round three: every served file of a skill the skills extension may list, whatever its kind,
   // so that each has a digest, then the document each such skill is served as (ADR-0025). A
-  // skill a host cannot hold as a whole stays with the tools, and its entry says why.
+  // file over the read limit is left out of the skill and named in that document with where its
+  // bytes are (ADR-0033). A skill a host cannot hold as a whole stays with the tools, and its
+  // entry says why.
   interface Listing {
     readonly directory: RepoPath;
     readonly skill: NewIndexEntry;
     /** Every served file inside the directory, the files of nested skills included. */
     readonly files: readonly Candidate[];
+    /** The files within the read limit: what the skill is served with. */
+    readonly held: readonly Candidate[];
+    /** The files over the read limit, in path order. */
+    readonly omitted: readonly OmittedFile[];
     problem: SkillListingProblem | undefined;
     detail: string | undefined;
     document: { readonly digest: string; readonly size: number } | undefined;
   }
+  const repository = options.repository ?? {
+    host: coordinates.host,
+    owner: coordinates.owner,
+    name: coordinates.repo,
+  };
   const listings: Listing[] = [];
   for (const [directory, skill] of skills) {
     const owned = candidates.filter(
       ({ entry }) => isWithinRepoPath(directory, entry.path) && served(entry.path),
     );
-    const problem = skillListingProblem({
-      directory,
-      name: skill.name ?? "",
-      files: owned.map(({ entry }) => ({
+    const held = owned.filter(({ entry }) => entry.size <= limits.maxReadableFileBytes);
+    const omitted = owned
+      .filter(({ entry }) => entry.size > limits.maxReadableFileBytes)
+      .sort(byPath)
+      .map(({ entry }) => ({
+        path: entry.path,
         size: entry.size,
-        available: entry.size <= limits.maxReadableFileBytes,
-      })),
-    });
+        sourceUrl: rawFileUrl(repository, commit, entry.path),
+      }));
     listings.push({
       directory,
       skill,
       files: owned,
-      problem,
-      detail:
-        problem === "file_unavailable"
-          ? owned.find(({ entry }) => entry.size > limits.maxReadableFileBytes)?.entry.path
-          : undefined,
+      held,
+      omitted,
+      problem: skillListingProblem({
+        directory,
+        name: skill.name ?? "",
+        files: held.map(({ entry }) => ({ size: entry.size })),
+      }),
+      detail: undefined,
       document: undefined,
     });
   }
+  // A body is stored once per hash, so a file that several copies of a skill share spends the
+  // byte budget once: counting it per copy marked a repository partial for content it holds.
+  const wanted = new Set<string>();
   await fetchBodies(
     listings
       .filter((listing) => listing.problem === undefined)
-      .flatMap((listing) => listing.files)
+      .flatMap((listing) => listing.held)
       .filter((candidate) => !texts.has(candidate.entry.hash))
+      .filter((candidate) => {
+        if (wanted.has(candidate.entry.hash)) return false;
+        wanted.add(candidate.entry.hash);
+        return true;
+      })
       .filter((candidate) => admit(candidate, limits.maxReadableFileBytes)),
     limits.maxReadableFileBytes,
   );
 
   const byIdentity = new Map<string, Listing[]>();
   for (const listing of listings) {
-    const unavailable = listing.files.find(({ entry }) => !digests.has(entry.hash));
+    const unavailable = listing.held.find(({ entry }) => !digests.has(entry.hash));
     if (listing.problem === undefined && unavailable !== undefined) {
       listing.problem = "file_unavailable";
       listing.detail = unavailable.entry.path;
@@ -812,30 +850,38 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
         return body === undefined ? [] : [{ path: manifest.path as RepoPath, text: body }];
       }),
       included: included.map((file) => ({ path: file.path, text: file.text ?? "" })),
+      omitted: listing.omitted,
     });
     if (input === undefined) continue;
     const bytes = new TextEncoder().encode(assembleSkillDocument(input));
     listing.document = { digest: sha256Hex(bytes), size: bytes.byteLength };
   }
   const listedSkills = new Map<string, NewIndexEntry>();
-  for (const { directory, skill, problem, detail, document } of listings) {
+  /** The directories of the skills that leave search, and take their files with them. */
+  const silenced = new Set<RepoPath>();
+  for (const { directory, skill, problem, detail, document, omitted } of listings) {
     const frontMatter = skill.frontMatter ?? { metadata: {}, warnings: [] };
     const license = licenseOf(directory, skill);
+    // A copy that is listed once, and a hidden skill next to visible ones, leave search too.
+    const searchable = skill.searchable && problem !== "duplicate" && problem !== "hidden";
+    if (!searchable) silenced.add(directory);
     listedSkills.set(skill.path, {
       ...skill,
       ...(document === undefined ? {} : { digest: document.digest, servedSize: document.size }),
       listed: problem === undefined && document !== undefined,
       licenseKind: license.kind,
-      // A copy that is listed once, and a hidden skill next to visible ones, leave search too.
-      searchable: skill.searchable && problem !== "duplicate" && problem !== "hidden",
+      searchable,
       frontMatter: {
-        ...(problem === undefined
-          ? frontMatter
-          : {
-              ...frontMatter,
-              warnings: [...frontMatter.warnings, describeListingProblem(problem, detail)],
-              unlisted: problem,
-            }),
+        ...frontMatter,
+        warnings: [
+          ...frontMatter.warnings,
+          ...omitted.map((file) =>
+            describeOmittedFile({ ...file, limit: limits.maxReadableFileBytes }),
+          ),
+          ...(problem === undefined ? [] : [describeListingProblem(problem, detail)]),
+        ],
+        ...(problem === undefined ? {} : { unlisted: problem }),
+        ...(omitted.length === 0 ? {} : { omitted }),
         licenseFact: license,
       },
     });
@@ -849,13 +895,18 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
         : (manifests.get(entry.path) ?? documents.get(entry.path));
     const skillDir = owningSkillDirectory(entry.path, skillDirectories);
     const visible = served(entry.path);
-    const body = digests.get(entry.hash);
+    // A body fetched for search is not served when the file is over the read limit: the skill
+    // names the file instead (ADR-0033), and a digest would list it.
+    const body = entry.size > limits.maxReadableFileBytes ? undefined : digests.get(entry.hash);
     const digested = body === undefined ? {} : { digest: body.digest, servedSize: body.size };
     if (indexed !== undefined) {
       const known = indexed.digest === undefined ? { ...indexed, ...digested } : indexed;
+      // The files of a skill that left search leave it too: a hidden copy of a visible skill
+      // would otherwise come back through its reference files (ADR-0024).
+      const audible = skillDir === undefined || !silenced.has(skillDir);
       return unreadSkills.has(entry.path)
-        ? { ...known, skillDir, visible: true, searchable: visible }
-        : { ...known, skillDir, visible };
+        ? { ...known, skillDir, visible: true, searchable: visible && audible }
+        : { ...known, skillDir, visible, searchable: known.searchable && audible };
     }
     return {
       path: entry.path,

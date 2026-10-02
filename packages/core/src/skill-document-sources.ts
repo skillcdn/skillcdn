@@ -1,6 +1,6 @@
 import { parseFrontMatter, splitFrontMatter } from "./front-matter.js";
 import type { RepoPath } from "./repo-path.js";
-import type { SkillDocumentInput } from "./skill-document.js";
+import type { OmittedFile, SkillDocumentInput } from "./skill-document.js";
 
 /**
  * What the indexer and the reader both start from when they assemble a skill: the source texts.
@@ -15,6 +15,8 @@ export interface SkillDocumentSources {
   readonly manifests: readonly { readonly path: RepoPath; readonly text: string }[];
   /** The files the skill includes, in declaration order, with their texts. */
   readonly included: readonly { readonly path: RepoPath; readonly text: string }[];
+  /** The files of the skill the read limit keeps out of it, as the index recorded them. */
+  readonly omitted?: readonly OmittedFile[];
 }
 
 /** `undefined` when the skill's front matter cannot be read: such a skill is not assembled. */
@@ -39,5 +41,8 @@ export function skillDocumentInput(sources: SkillDocumentSources): SkillDocument
     rules,
     body: split.body.trim(),
     included: sources.included.map((file) => ({ path: file.path, content: file.text })),
+    ...(sources.omitted === undefined || sources.omitted.length === 0
+      ? {}
+      : { omitted: sources.omitted }),
   };
 }

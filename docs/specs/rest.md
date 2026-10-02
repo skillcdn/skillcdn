@@ -84,6 +84,7 @@ The ready response's `skill` contains:
 - `ruleChain`: applicable manifest bodies in repository-root-to-nearest order, with canonical source paths and fragment information.
 - `body`: the skill-body content on this page.
 - Supporting-file paths, included-file information and canonical `references` for optional reads.
+- `oversized`, when present: the files of the skill over the read limit, each with its `path`, `size` and the `sourceUrl` of its bytes at the host; the files endpoint refuses them ([format](skill-repo.md#what-the-skills-extension-serves)).
 - `complete` and `nextCursor`, indicating whether the context requires another call.
 
 Context text is bounded to 16 KiB of UTF-8 per page: root-to-nearest rules first, then the skill body, then declared include files. Metadata and response structure add to that size. A page may contain only part of one rule or file and identifies the fragment. Continue until complete before treating the skill as loaded. Missing required content leaves `complete: false` with a diagnostic; `nextCursor` is absent when pagination cannot repair the failure. Ancestor rules above the mount are delivered through these pages; their paths do not become general file-read permissions. Translations are for the page's visitor, not alternate skill identifiers or search aliases.
@@ -96,7 +97,7 @@ The `read_repo_file` tool. `path` is a canonical file path inside the mount. `of
 { "kind": "file", "path": "marketing/docs/guide.md", "content": "...", "offset": 0, "nextOffset": null, "totalLength": 1234 }
 ```
 
-A file page never splits a character. Use the browse endpoint for directories. Raw files do not add inherited rules or stand in for loading a skill.
+A file page never splits a character. Use the browse endpoint for directories. Raw files do not add inherited rules or stand in for loading a skill. A file over the read limit answers `413` with `file.too_large`, and one that is not UTF-8 text `415` with `file.not_text`; both errors carry the `sourceUrl` of the file's bytes at the host, the only place to get what this endpoint cannot carry.
 
 MCP additionally bounds its complete serialized tool result and can return shorter pages than these REST limits. The byte budget and continuation behavior are defined in [tools](tools.md#results-and-continuations).
 

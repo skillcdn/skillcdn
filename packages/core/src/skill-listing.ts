@@ -2,9 +2,10 @@ import { baseName, isHiddenPath } from "./repo-layout.js";
 import type { RepoPath } from "./repo-path.js";
 
 /**
- * Which skills the MCP skills extension lists (ADR-0025): a host holds a skill as a whole, so
- * the skill has to be one a host can hold. The others stay available through the tools, and
- * the reason they are not listed is reported.
+ * Which skills the MCP skills extension lists (ADR-0025, ADR-0033): a host holds a skill as a
+ * whole, so the skill has to be one a host can hold. A file over the read limit is left out of
+ * the skill and named in its document with where to fetch it; the skill is listed without it.
+ * The skills that cannot be listed stay available through the tools, and the reason is reported.
  */
 
 /** The extension's own bounds for one skill. */
@@ -16,7 +17,7 @@ export type SkillListingProblem =
   | "name_directory_mismatch"
   | "too_many_files"
   | "too_large"
-  /** A file of the skill is over the read limit or was not stored, so it cannot be served whole. */
+  /** A file of the skill within the read limit was not stored, so it cannot be served whole. */
   | "file_unavailable"
   /** Identical to a skill listed at another path. */
   | "duplicate"
@@ -27,18 +28,19 @@ export type SkillListingProblem =
 
 export interface SkillListingFile {
   readonly size: number;
-  /** True when the bytes are stored and within the read limit. */
-  readonly available: boolean;
 }
 
 export interface SkillListingInput {
   readonly directory: RepoPath;
   readonly name: string;
-  /** Every served file of the skill, its own manifest included. */
+  /** Every served file of the skill within the read limit, its own manifest included. */
   readonly files: readonly SkillListingFile[];
 }
 
-/** Why a skill cannot be listed on its own, before duplicates and hidden copies are considered. */
+/**
+ * Why a skill cannot be listed on its own, before its files are fetched and before duplicates
+ * and hidden copies are considered.
+ */
 export function skillListingProblem(input: SkillListingInput): SkillListingProblem | undefined {
   if (input.directory.length > 0 && baseName(input.directory) !== input.name) {
     return "name_directory_mismatch";
@@ -47,8 +49,19 @@ export function skillListingProblem(input: SkillListingInput): SkillListingProbl
   if (input.files.reduce((total, file) => total + file.size, 0) > SKILL_LISTING_MAX_BYTES) {
     return "too_large";
   }
-  if (input.files.some((file) => !file.available)) return "file_unavailable";
   return undefined;
+}
+
+/**
+ * The warning a skill carries for each file the read limit keeps out of it: the author learns
+ * that the skill is served without the file, and that the served document says where it is.
+ */
+export function describeOmittedFile(file: {
+  readonly path: string;
+  readonly size: number;
+  readonly limit: number;
+}): string {
+  return `${file.path} is over the read limit (${file.size} bytes; the limit is ${file.limit}) and is left out of the skill; the served SKILL.md names it with where to fetch it.`;
 }
 
 /** A skill under a hidden directory is one a person did not mean to publish as such. */

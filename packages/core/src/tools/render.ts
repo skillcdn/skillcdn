@@ -257,6 +257,13 @@ export function renderSkillResult(result: SkillResult): string {
     );
     files = `Supporting files, readable with read_repo_file:\n${listed.join("\n")}${more}`;
   }
+  // A file the read limit keeps out is still part of the skill: the host has the bytes.
+  const oversized =
+    result.oversized === undefined || result.oversized.length === 0
+      ? undefined
+      : `Files over this server's size limit, not readable here; fetch them from the source:\n${result.oversized
+          .map((file) => `- ${file.path} (${file.size} bytes): ${file.sourceUrl}`)
+          .join("\n")}`;
   const warnings =
     result.warnings.length === 0
       ? undefined
@@ -283,6 +290,7 @@ export function renderSkillResult(result: SkillResult): string {
       ? `Skill context is incomplete.${result.nextCursor === undefined ? " Resolve the warnings before using this skill." : ` Continue load_skill with path ${JSON.stringify(result.path)} and cursor ${JSON.stringify(result.nextCursor)} before using it.`}`
       : undefined,
     files,
+    oversized,
     warnings,
     result.detailsTruncated
       ? `Optional details abbreviated; read_repo_file ${result.path ?? `${result.directory.length === 0 ? "" : `${result.directory}/`}SKILL.md`} has the source.`

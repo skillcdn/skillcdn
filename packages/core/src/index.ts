@@ -226,6 +226,8 @@ export {
   assembleSkillDocument,
   frontMatterObject,
   type IncludedFileSection,
+  type OmittedFile,
+  omittedLines,
   provenanceLine,
   renderSkillSections,
   SKILLCDN_KEY,
@@ -237,6 +239,7 @@ export {
 export { type SkillDocumentSources, skillDocumentInput } from "./skill-document-sources.js";
 export {
   describeListingProblem,
+  describeOmittedFile,
   isHiddenSkill,
   SKILL_LISTING_MAX_BYTES,
   SKILL_LISTING_MAX_FILES,

@@ -646,9 +646,9 @@ describe("what the skills extension lists", () => {
       {
         "skills/ad-copy/SKILL.md": skill("Named example, in a directory that is not."),
         "skills/example/SKILL.md": skill("Fine."),
-        "skills/example/big.bin": "x".repeat(5000),
+        "skills/example/notes.md": "Notes the host cannot fetch.",
       },
-      { limits: { maxReadableFileBytes: 4096 } },
+      { unreadable: ["skills/example/notes.md"] },
     );
     expect(result.byPath.get("skills/ad-copy/SKILL.md")).toMatchObject({
       listed: false,
@@ -664,9 +664,102 @@ describe("what the skills extension lists", () => {
       frontMatter: { unlisted: "file_unavailable" },
     });
     expect(result.byPath.get("skills/example/SKILL.md")?.frontMatter?.warnings).toContainEqual(
-      expect.stringContaining("skills/example/big.bin"),
+      expect.stringContaining("skills/example/notes.md"),
     );
-    expect(result.byPath.get("skills/example/big.bin")?.digest).toBeUndefined();
+    expect(result.byPath.get("skills/example/notes.md")?.digest).toBeUndefined();
+  });
+
+  it("lists a skill without a file over the read limit, and names the file with its source", async () => {
+    const result = await index(
+      {
+        "skills/example/SKILL.md": skill("Fine."),
+        "skills/example/notes.md": "Notes.",
+        "skills/example/data/fonts.json": `{"fonts":"${"x".repeat(5000)}"}`,
+      },
+      { limits: { maxReadableFileBytes: 4096 } },
+    );
+    const sourceUrl = `https://raw.githubusercontent.com/example/skills/${"a".repeat(40)}/skills/example/data/fonts.json`;
+    const omitted = [{ path: "skills/example/data/fonts.json", size: 5012, sourceUrl }];
+    const listed = result.byPath.get("skills/example/SKILL.md");
+    expect(listed).toMatchObject({ listed: true, searchable: true, frontMatter: { omitted } });
+    expect(listed?.frontMatter?.unlisted).toBeUndefined();
+    expect(listed?.frontMatter?.warnings).toEqual([
+      expect.stringContaining(
+        "skills/example/data/fonts.json is over the read limit (5012 bytes; the limit is 4096)",
+      ),
+    ]);
+    // The document names the file, and its digest covers that line, so the file is not fetched
+    // and the skill is still served as a whole the host can verify.
+    const input = skillDocumentInput({
+      commit: "a".repeat(40),
+      skill: { path: path("skills/example/SKILL.md"), text: skill("Fine.") },
+      manifests: [],
+      included: [],
+      omitted,
+    });
+    if (input === undefined) throw new Error("the skill must assemble");
+    const document = assembleSkillDocument(input);
+    expect(document).toContain(`(5012 bytes); fetch it from ${sourceUrl}`);
+    expect(listed?.digest).toBe(digestOf(document));
+    // Fetched for search under the larger indexing limit, the file is still not served: no digest
+    // lists it, whatever the limits are in relation to each other.
+    expect(result.byPath.get("skills/example/data/fonts.json")).toMatchObject({ visible: true });
+    expect(result.byPath.get("skills/example/data/fonts.json")?.digest).toBeUndefined();
+    expect(result.byPath.get("skills/example/notes.md")?.digest).toBe(digestOf("Notes."));
+    // A data file over the per-file limit is listed, not lost: the index is not partial for it.
+    expect(result.truncated).toBe(false);
+  });
+
+  it("counts a file that several copies share once toward the byte budget", async () => {
+    const big = "x".repeat(3000);
+    const files = {
+      "plugin/skills/example/SKILL.md": skill("Same."),
+      "plugin/skills/example/data.bin": big,
+      ".claude/skills/example/SKILL.md": skill("Same."),
+      ".claude/skills/example/data.bin": big,
+      ".cursor/skills/example/SKILL.md": skill("Same."),
+      ".cursor/skills/example/data.bin": big,
+    };
+    // Three manifests and one body of 3,000 bytes fit; three bodies would not.
+    const result = await index(files, { limits: { maxIndexedTotalBytes: 3500 } });
+    expect(result.truncated).toBe(false);
+    expect(result.byPath.get("plugin/skills/example/SKILL.md")).toMatchObject({ listed: true });
+    for (const copy of [".claude", ".cursor"]) {
+      expect(result.byPath.get(`${copy}/skills/example/SKILL.md`)).toMatchObject({
+        frontMatter: { unlisted: "duplicate" },
+      });
+      expect(result.byPath.get(`${copy}/skills/example/data.bin`)?.digest).toBeDefined();
+    }
+  });
+
+  it("takes the files of a hidden or duplicate copy out of search with the copy", async () => {
+    const result = await index({
+      "plugin/skills/example/SKILL.md": skill("Visible."),
+      "plugin/skills/example/reference/notes.md": "Shared notes.",
+      ".claude/skills/example/SKILL.md": skill("Hidden, and not identical."),
+      ".claude/skills/example/reference/notes.md": "Shared notes.",
+      ".cursor/skills/example/SKILL.md": skill("Visible."),
+      ".cursor/skills/example/reference/notes.md": "Shared notes.",
+    });
+    expect(result.byPath.get("plugin/skills/example/SKILL.md")).toMatchObject({
+      listed: true,
+      searchable: true,
+    });
+    expect(result.byPath.get("plugin/skills/example/reference/notes.md")).toMatchObject({
+      visible: true,
+      searchable: true,
+    });
+    for (const copy of [".claude", ".cursor"]) {
+      expect(result.byPath.get(`${copy}/skills/example/SKILL.md`)).toMatchObject({
+        listed: false,
+        searchable: false,
+        frontMatter: { unlisted: copy === ".claude" ? "hidden" : "duplicate" },
+      });
+      expect(result.byPath.get(`${copy}/skills/example/reference/notes.md`)).toMatchObject({
+        visible: true,
+        searchable: false,
+      });
+    }
   });
 
   it("lists identical copies once, and hidden skills only when nothing visible is there", async () => {

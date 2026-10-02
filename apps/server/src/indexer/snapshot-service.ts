@@ -187,6 +187,11 @@ export class SnapshotService {
         gitHost,
         blobStore,
         coordinates: mount.coordinates,
+        repository: {
+          host: mount.coordinates.host,
+          owner: mount.repo.repository.owner.login,
+          name: mount.repo.repository.name,
+        },
         commit: mount.commit,
         limits: { ...this.#options.limits, ...mount.limits },
         signal,

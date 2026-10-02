@@ -575,17 +575,25 @@ describe("GET /api/v1/files/<address>", () => {
       ],
     });
 
-    for (const [query, status, code] of [
-      ["path=docs/missing.md", 404, "file.not_found"],
-      ["path=docs/huge.md", 413, "file.too_large"],
-      ["path=assets/logo.png", 415, "file.not_text"],
-      ["path=../single-skill/SKILL.md", 400, "request.invalid"],
-      ["offset=3", 400, "request.invalid"],
-      ["path=SKILL.md&limit=0", 400, "request.invalid"],
+    for (const [query, status, code, sourcePath] of [
+      ["path=docs/missing.md", 404, "file.not_found", undefined],
+      ["path=docs/huge.md", 413, "file.too_large", "docs/huge.md"],
+      ["path=assets/logo.png", 415, "file.not_text", "assets/logo.png"],
+      ["path=../single-skill/SKILL.md", 400, "request.invalid", undefined],
+      ["offset=3", 400, "request.invalid", undefined],
+      ["path=SKILL.md&limit=0", 400, "request.invalid", undefined],
     ] as const) {
       const response = await h.request(fileUrl(query));
       expect(response.status, query).toBe(status);
-      expect((await errorOf(response)).code, query).toBe(code);
+      const error = await errorOf(response);
+      expect(error.code, query).toBe(code);
+      // What this endpoint cannot carry is at the host: the error says where (ADR-0033).
+      const sourceUrl =
+        sourcePath === undefined
+          ? undefined
+          : `https://raw.githubusercontent.com/Acme/single-skill/${fixtureCommits("rest-files").main}/${sourcePath}`;
+      expect(error.sourceUrl, query).toBe(sourceUrl);
+      if (sourceUrl !== undefined) expect(error.message, query).toContain(sourceUrl);
     }
     await h.snapshots.idle();
   });

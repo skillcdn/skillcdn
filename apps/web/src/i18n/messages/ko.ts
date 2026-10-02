@@ -202,6 +202,8 @@ export const ko: Messages = {
     metadata: "메타데이터",
     files: "이 스킬의 파일",
     filesTruncated: "앞쪽 파일만 표시됩니다.",
+    oversized:
+      "이 서버의 파일 크기 한도를 넘어 스킬과 함께 제공되지 않는 파일입니다. 제공되는 SKILL.md에 각 파일이 원본의 바이트로 가는 이 링크와 함께 적혀 있습니다.",
     browseFiles: "지원 파일 전체 둘러보기",
     browseChildren: "파일과 하위 스킬 둘러보기",
     incomplete:

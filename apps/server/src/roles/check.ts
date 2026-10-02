@@ -6,6 +6,7 @@ import {
   BROWSE_DEFAULT_LIMIT,
   browseCatalogFiles,
   type CatalogFile,
+  classifyRepoFile,
   decodeText,
   describeLicense,
   FIND_LIST_SKILLS_MAX,
@@ -64,7 +65,7 @@ function pathOf(text: string): RepoPath {
  * The files of a directory as tree entries: `.git`, `node_modules` and ordinary symbolic links
  * are left out. A symlink policy remains an unreadable boundary, without following its target.
  * Hidden skills and explicitly referenced files follow the indexer's rules. A
- * file too large to be indexed gets a stand-in hash: nothing ever asks for its body.
+ * file too large to be indexed or read gets a stand-in hash: nothing ever asks for its body.
  */
 async function readWorkingTree(
   root: string,
@@ -112,7 +113,9 @@ async function readWorkingTree(
         continue;
       }
       const size = (await stat(absolute)).size;
-      if (size > limits.maxIndexedFileBytes) {
+      // The indexer asks for bodies up to the larger of the two limits: searched content up to
+      // one, the files a skill is served with up to the other.
+      if (size > Math.max(limits.maxIndexedFileBytes, limits.maxReadableFileBytes)) {
         const hash = createHash("sha1").update(`unread ${path}`).digest("hex");
         files.push({ entry: { path: parsed.value, type: "file", size, hash }, bytes: undefined });
         continue;
@@ -285,8 +288,12 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
   );
 
   const listed = skills.filter((skill) => skill.listed === true);
+  // A hidden copy of a visible skill, or a copy that repeats one, is loadable by its exact path
+  // and nothing else (ADR-0024): the author sees how many of the skills found are such copies.
+  const discoverable = skills.filter((skill) => skill.searchable);
+  const copies = skills.length - discoverable.length;
   write(
-    `Skills: ${skills.length}${skills.length === 0 ? "" : ` (${listed.length} listed through the MCP skills extension)`}\n`,
+    `Skills: ${skills.length}${skills.length === 0 ? "" : ` (${listed.length} listed through the MCP skills extension${copies === 0 ? "" : `; ${copies} hidden or duplicate copies, loadable by exact path only`})`}\n`,
   );
   for (const skill of skills) {
     const directory = skill.skillDir ?? "";
@@ -294,11 +301,15 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
       (entry) => entry.visible && entry.skillDir === directory && entry.kind !== "skill",
     );
     const included = skill.frontMatter?.include ?? [];
+    const omitted = skill.frontMatter?.omitted ?? [];
     const license = skill.frontMatter?.licenseFact;
     write(
       `- ${skill.name ?? "?"} (${directory === "" ? "." : directory})\n` +
         `  ${skill.description ?? ""}\n` +
         `  files: ${owned.length}${included.length === 0 ? "" : ` (${included.length} returned with the skill)`}\n` +
+        (omitted.length === 0
+          ? ""
+          : `  over the read limit, named in the served document with their source: ${omitted.map((file) => `${file.path} (${file.size} bytes)`).join(", ")}\n`) +
         `  extension: ${skill.listed === true ? `listed, ${skill.servedSize ?? 0} bytes as served` : `not listed (${skill.frontMatter?.unlisted ?? "unknown"})`}\n` +
         (license === undefined
           ? ""
@@ -314,6 +325,30 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
     write(`- ${document.path}${document.title === undefined ? "" : ` - ${document.title}`}\n`);
   }
   write("\n");
+
+  // Markdown and JSON over the per-file indexing limit are listed and read, never searched or
+  // summarized; the author learns which, since nothing else says so.
+  const unsearched = index.entries
+    .filter(
+      (entry) =>
+        entry.visible &&
+        entry.kind === "other" &&
+        entry.size > limits.maxIndexedFileBytes &&
+        ["markdown", "json"].includes(classifyRepoFile(pathOf(entry.path))),
+    )
+    .sort(byPath);
+  if (unsearched.length > 0) {
+    const named = unsearched
+      .slice(0, NAMED_NOT_SERVED)
+      .map((entry) => `${entry.path} (${entry.size} bytes)`);
+    const rest =
+      unsearched.length > NAMED_NOT_SERVED
+        ? `, and ${unsearched.length - NAMED_NOT_SERVED} more`
+        : "";
+    write(
+      `Too large to search or summarize (over ${limits.maxIndexedFileBytes} bytes), still listed and readable: ${unsearched.length} files (${named.join(", ")}${rest})\n\n`,
+    );
+  }
 
   if (notServed.length > 0) {
     const named = notServed.slice(0, NAMED_NOT_SERVED).map((entry) => entry.path);
@@ -367,7 +402,7 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
       directory: pathOf(skill.skillDir ?? ""),
       description: skill.description ?? "",
     })),
-    skillCount: skills.length,
+    skillCount: discoverable.length,
     documentCount: documents.length,
     diagnostics,
   };

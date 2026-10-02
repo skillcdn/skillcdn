@@ -457,6 +457,36 @@ describe("rendering", () => {
     );
   });
 
+  it("names the files over the read limit with where to fetch them, after the readable ones", () => {
+    const text = renderSkillResult(
+      skillResult({
+        name: "impeccable",
+        directory: path("plugin/skills/impeccable"),
+        body: "Design it.",
+        files: [path("plugin/skills/impeccable/reference/audit.md")],
+        oversized: [
+          {
+            path: "plugin/skills/impeccable/scripts/data/font-index.json",
+            size: 3_000_000,
+            sourceUrl:
+              "https://raw.githubusercontent.com/acme/skills/0123456789abcdef0123456789abcdef01234567/plugin/skills/impeccable/scripts/data/font-index.json",
+          },
+        ],
+      }),
+    );
+    expect(text).toContain(
+      [
+        "Supporting files, readable with read_repo_file:",
+        "- plugin/skills/impeccable/reference/audit.md",
+        "",
+        "Files over this server's size limit, not readable here; fetch them from the source:",
+        "- plugin/skills/impeccable/scripts/data/font-index.json (3000000 bytes): https://raw.githubusercontent.com/acme/skills/0123456789abcdef0123456789abcdef01234567/plugin/skills/impeccable/scripts/data/font-index.json",
+        "",
+        "--- instructions ---",
+      ].join("\n"),
+    );
+  });
+
   it("returns the files a skill needs on every run after the instructions", () => {
     const text = renderSkillResult(
       skillResult({

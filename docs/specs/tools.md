@@ -26,7 +26,7 @@ Paths always start at the repository root, including on a sub-path connection. N
 
 ## Browse and search
 
-`browse_repo` shows immediate folders and eligible files with their canonical paths. Folder entries carry counts and identify a skill or a `SKILLCDN.md` when present. Manifest metadata adds a name and description to the real folder; it does not create an alias or hide path segments. Plain folders work without a manifest. Pages name their commit and provide `nextCursor` when more entries remain.
+`browse_repo` shows immediate folders and eligible files with their canonical paths. Folder entries carry counts of what can be discovered below them, so a hidden or duplicate copy of a skill is not counted although its folder can be browsed, and identify a skill or a `SKILLCDN.md` when present. Manifest metadata adds a name and description to the real folder; it does not create an alias or hide path segments. Plain folders work without a manifest. Pages name their commit and provide `nextCursor` when more entries remain.
 
 An optional `overview` identifies the current folder's README with its `path`, title and short description; an entry's optional `overviewPath` identifies its own introduction. Read it with `read_repo_file` only when that context helps choose the next step. Explicit manifest descriptions take precedence, followed by the local README summary and the git-host description at the repository root. Overview-only files are neither independent search results nor extra documents in counts. Their eligible local Markdown links remain readable references. See [README introductions](skill-repo.md#readme-introductions).
 
@@ -64,7 +64,7 @@ Supporting-file summaries may be bounded. `browse_repo` pages through the direct
 
 ## Raw files
 
-`read_repo_file` returns UTF-8 text from an eligible file within the mount, with the path, character offset, total length and next offset. A page never splits a character. It does not prepend shared rules or turn a raw `SKILL.md` read into a skill load: it returns the source as written, `skillcdn` key included. Binary, oversized, unavailable and unknown files produce safe tool errors with a hint. So does a file whose license keeps it at the source, a described skill's directory or a restrictive repository license outside the skills: the error names the license and links to the file at its host ([licenses](skill-repo.md#licenses)).
+`read_repo_file` returns UTF-8 text from an eligible file within the mount, with the path, character offset, total length and next offset. A page never splits a character. It does not prepend shared rules or turn a raw `SKILL.md` read into a skill load: it returns the source as written, `skillcdn` key included. Binary, oversized, unavailable and unknown files produce safe tool errors with a hint. For a file over the read limit, and for one that is not UTF-8 text, the error says so and gives the URL of the file's bytes at the host, the only place to get what this tool cannot carry ([ADR-0033](../adr/0033-a-file-over-the-read-limit-is-named-with-its-source.md)). So does a file whose license keeps it at the source, a described skill's directory or a restrictive repository license outside the skills: the error names the license and links to the file at its host ([licenses](skill-repo.md#licenses)).
 
 The requested character limit is an upper bound. The MCP response byte budget can shorten the page, including for JSON escaping and multibyte text; continue at `nextOffset` to retrieve the remaining text. READMEs are optional reads and never automatically join a skill's context. Excluded files return the same unavailable-content result as other ineligible paths.
 
@@ -82,7 +82,7 @@ A problem the model can correct is an error tool result, not a protocol error. U
 
 ## Connection and prompt
 
-Connection instructions introduce the repository and mounted scope, give counts and a bounded overview of folders, explain `browse_repo`, `search_repo`, `load_skill` and `read_repo_file`, and name the prefix under which the skills extension serves the same skills. A brief manifest introduction, README summary or git-host description supplies orientation; an available README is named by path rather than included in full. Instructions stay within 2,000 characters and point to browsing for the rest. They report indexing or manifest diagnostics instead of implying an incomplete catalog is complete. A missing optional manifest is not itself a warning.
+Connection instructions introduce the repository and mounted scope, give counts and a bounded overview of the folders that hold something discoverable, explain `browse_repo`, `search_repo`, `load_skill` and `read_repo_file`, and name the prefix under which the skills extension serves the same skills. A brief manifest introduction, README summary or git-host description supplies orientation; an available README is named by path rather than included in full. Instructions stay within 2,000 characters and point to browsing for the rest. They report indexing or manifest diagnostics instead of implying an incomplete catalog is complete. A missing optional manifest is not itself a warning.
 
 The server info carries the manifest's name and description when available, otherwise the address with a README or host description, and links to the address page. It names one icon, the owner's picture at 128 pixels square, at `/icon/<address>` on the deployment's own origin ([REST](rest.md#get-iconaddress)): a client fetches a server's icon from that origin and from nowhere else, so the git host's copy is served on rather than named. The description of `browse_repo` also explains discovery for clients that do not show server instructions.
 
@@ -96,7 +96,7 @@ A mount declares the extension `io.modelcontextprotocol/skills` with `directoryR
 
 | Method | Answer |
 |---|---|
-| `skills/list` | The listed skills inside the mount in path order, 20 per page with `nextCursor`. Each entry carries the skill's `uri`, its served `frontmatter` as data, and `resources`: every served file inside the skill directory, the files of nested skills included, with `uri`, `digest` (`sha256:` and 64 hex digits over the bytes a read returns) and `size`. |
+| `skills/list` | The listed skills inside the mount in path order, 20 per page with `nextCursor`. Each entry carries the skill's `uri`, its served `frontmatter` as data, and `resources`: every served file inside the skill directory, the files of nested skills included, with `uri`, `digest` (`sha256:` and 64 hex digits over the bytes a read returns) and `size`. A file over the read limit is not among them: the skill's `SKILL.md` names it with its size and where to fetch it ([format](skill-repo.md#what-the-skills-extension-serves)). |
 | `skills/get` | The same entry for one listed skill by URI. |
 | `resources/read` | The bytes a URI names, as text (`text/markdown`, `application/json`, ...) or as base64 (`blob`) when they are not text. The `SKILL.md` of a skill is the assembled document. |
 | `resources/directory/read` | The direct children of a directory URI: `name`, `uri` and `mimeType`, with `inode/directory` for a directory. |

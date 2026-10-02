@@ -42,6 +42,7 @@ import {
   type RepoPath,
   type RepoTranslation,
   ROOT_PATH,
+  rawFileUrl,
   SKILL_PAGE_BYTES,
   type SkillResult,
   type SkillRules,
@@ -118,13 +119,16 @@ export type FileLookup =
       readonly path: RepoPath;
       readonly suggestions?: readonly string[];
     }
+  /** Over the read limit: the bytes are at the host, at `sourceUrl` (ADR-0033). */
   | {
       readonly kind: "too_large";
       readonly path: RepoPath;
       readonly size: number;
       readonly limit: number;
+      readonly sourceUrl: string;
     }
-  | { readonly kind: "not_text"; readonly path: RepoPath }
+  /** Not text, so not what this route carries: the bytes are at the host, at `sourceUrl`. */
+  | { readonly kind: "not_text"; readonly path: RepoPath; readonly sourceUrl: string }
   /** The license allows a description of the file's skill or repository, not a copy (ADR-0026). */
   | {
       readonly kind: "not_served";
@@ -444,6 +448,16 @@ export class MountReader {
   #sourceUrl(mount: Mount, path: RepoPath): string {
     const { repository } = mount.repo;
     return sourceFileUrl(
+      { host: mount.coordinates.host, owner: repository.owner.login, name: repository.name },
+      mount.commit,
+      path,
+    );
+  }
+
+  /** Where the bytes of a file are at the host, for a reader that has to fetch them itself. */
+  #rawUrl(mount: Mount, path: RepoPath): string {
+    const { repository } = mount.repo;
+    return rawFileUrl(
       { host: mount.coordinates.host, owner: repository.owner.login, name: repository.name },
       mount.commit,
       path,
@@ -834,7 +848,11 @@ export class MountReader {
     if (owned !== undefined && !servesInFull(owned, mount.verified)) {
       return { status: "ready", entries: undefined };
     }
-    const children = await listDirectory(database, scope, path, MAX_DIRECTORY_ENTRIES);
+    // What a directory holds here is what the extension serves: a file over the read limit is
+    // named in the skill's document instead (ADR-0033).
+    const children = await listDirectory(database, scope, path, MAX_DIRECTORY_ENTRIES, {
+      servedOnly: true,
+    });
     if (children.length === 0) return { status: "ready", entries: undefined };
     return {
       status: "ready",
@@ -893,6 +911,8 @@ export class MountReader {
       skill: { path: skill.path as RepoPath, text },
       manifests: rules.map((rule) => ({ path: rule.path, text: rule.text ?? "" })),
       included: included.map((file) => ({ path: file.path, text: file.text ?? "" })),
+      // As the index recorded them, so that the document is the one the index digested.
+      omitted: skill.frontMatter?.omitted,
     });
     return input === undefined ? undefined : assembleSkillDocument(input);
   }
@@ -1247,6 +1267,9 @@ export class MountReader {
           .map((file) => belowMount(mount, file))
           .filter((file) => file !== undefined),
         filesTruncated: files.length > MAX_LISTED_SKILL_FILES,
+        ...(skill.frontMatter?.omitted === undefined
+          ? {}
+          : { oversized: skill.frontMatter.omitted }),
         included: pagedIncluded,
         warnings,
         rules: pagedRules[0],
@@ -1390,6 +1413,7 @@ export class MountReader {
         path: below,
         size: file.size,
         limit: limits.maxReadableFileBytes,
+        sourceUrl: this.#rawUrl(mount, path),
       };
     }
 
@@ -1403,7 +1427,7 @@ export class MountReader {
       await blobStore.write(file.hash, bytes);
       text = decodeText(bytes);
       if (text === undefined) {
-        return { kind: "not_text", path: below };
+        return { kind: "not_text", path: below, sourceUrl: this.#rawUrl(mount, path) };
       }
     }
     const refsOutcome =

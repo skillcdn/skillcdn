@@ -378,6 +378,7 @@ export function skillOutcome(
             body: skill.body,
             files: [...skill.files],
             filesTruncated: skill.filesTruncated,
+            ...(skill.oversized === undefined ? {} : { oversized: [...skill.oversized] }),
             included: skill.included.map((file) => file.path),
             warnings: [...skill.warnings],
             translations: skillTranslations(skill.translations),
@@ -572,12 +573,20 @@ export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies):
           return c.json(
             errorBody(
               "file.too_large",
-              `The file is too large to read (${lookup.size} bytes; the limit is ${lookup.limit}).`,
+              `The file is too large to read here (${lookup.size} bytes; the limit is ${lookup.limit}). Fetch it from the source: ${lookup.sourceUrl}`,
+              { sourceUrl: lookup.sourceUrl },
             ),
             413,
           );
         case "not_text":
-          return c.json(errorBody("file.not_text", "The file is not UTF-8 text."), 415);
+          return c.json(
+            errorBody(
+              "file.not_text",
+              `The file is not UTF-8 text, which is all this endpoint carries. Fetch it from the source: ${lookup.sourceUrl}`,
+              { sourceUrl: lookup.sourceUrl },
+            ),
+            415,
+          );
         case "not_served":
           return c.json(
             errorBody(

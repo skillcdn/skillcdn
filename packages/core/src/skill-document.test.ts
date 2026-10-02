@@ -163,6 +163,23 @@ describe("the assembled document", () => {
     );
   });
 
+  it("names the files left out for their size, with where to fetch them, after the provenance", () => {
+    const omitted = [
+      {
+        path: "skills/release-notes/data/fonts.json",
+        size: 3_000_000,
+        sourceUrl:
+          "https://raw.githubusercontent.com/acme/skills/0123456789abcdef0123456789abcdef01234567/skills/release-notes/data/fonts.json",
+      },
+    ];
+    const document = assembleSkillDocument({ ...input, omitted });
+    expect(document).toContain(
+      `${provenanceLine(input.commit, input.sources)}\n> Not included, over this server's file size limit: \`skills/release-notes/data/fonts.json\` (3000000 bytes); fetch it from ${omitted[0]?.sourceUrl}\n\n--- applicable rules: SKILLCDN.md ---`,
+    );
+    // Without the list, or with an empty one, the document is the same as before.
+    expect(assembleSkillDocument({ ...input, omitted: [] })).toBe(assembleSkillDocument(input));
+  });
+
   it("marks sections a page cut, and files that are not at hand, only for a tool", () => {
     const sections = {
       rules: [{ path: "SKILLCDN.md", body: "Ask", truncated: true }],

@@ -215,6 +215,8 @@ export const en = {
     metadata: "Metadata",
     files: "Files of this skill",
     filesTruncated: "Only the first files are listed.",
+    oversized:
+      "Over this server's file size limit, so not served with the skill. Each is named in the skill's served SKILL.md with this link to its bytes at the source.",
     browseFiles: "Browse all supporting files",
     browseChildren: "Browse files and nested skills",
     incomplete:

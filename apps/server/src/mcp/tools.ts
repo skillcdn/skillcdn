@@ -232,10 +232,12 @@ export async function createMountServer(
           );
         case "too_large":
           return problem(
-            `${lookup.path} is too large to read (${lookup.size} bytes; limit ${lookup.limit}).`,
+            `${lookup.path} is too large to read here (${lookup.size} bytes; the limit is ${lookup.limit}). Fetch it from the source: ${lookup.sourceUrl}`,
           );
         case "not_text":
-          return problem(`${lookup.path} is not a UTF-8 text file.`);
+          return problem(
+            `${lookup.path} is not a UTF-8 text file, which is all this tool carries. Fetch it from the source: ${lookup.sourceUrl}`,
+          );
         case "not_served":
           return problem(
             `${lookup.path} is described, not served: its license (${describeLicense(lookup.license)}) allows SkillCDN to say that it exists, not to pass its content on. Read it at its source: ${lookup.sourceUrl}`,

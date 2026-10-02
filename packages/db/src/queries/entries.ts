@@ -322,13 +322,15 @@ export interface DirectoryListing {
 
 /**
  * The immediate entries of one directory of a snapshot: every file the tree had, searchable or
- * not, and the subdirectories, which come first. `directory` is empty for the root.
+ * not, and the subdirectories, which come first. `directory` is empty for the root. With
+ * `servedOnly`, only the files whose bytes are stored count, as the skills extension serves them.
  */
 export async function listDirectory(
   database: Database,
   scope: SnapshotScope,
   directory: string,
   limit: number,
+  options: { readonly servedOnly?: boolean } = {},
 ): Promise<DirectoryListing[]> {
   const prefix = directory.length === 0 ? "" : `${directory}/`;
   const rest =
@@ -348,6 +350,7 @@ export async function listDirectory(
       and(
         inSnapshot(scope),
         VISIBLE,
+        options.servedOnly === true ? sql`${indexEntries.digest} is not null` : undefined,
         prefix.length === 0 ? undefined : sql`starts_with(${indexEntries.path}, ${prefix})`,
       ),
     )

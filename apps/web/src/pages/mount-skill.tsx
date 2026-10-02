@@ -254,6 +254,21 @@ export function MountSkill(props: {
           </ul>
         )}
         {skill.filesTruncated && <p className={styles.note}>{t.skill.filesTruncated}</p>}
+        {skill.oversized !== undefined && skill.oversized.length > 0 && (
+          <>
+            <p className={styles.note}>{t.skill.oversized}</p>
+            <ul className={styles.files}>
+              {skill.oversized.map((file) => (
+                <li key={file.path}>
+                  <a href={file.sourceUrl} target="_blank" rel="noopener noreferrer">
+                    <code>{file.path}</code>
+                  </a>{" "}
+                  <span className={styles.note}>{file.size.toLocaleString(language)} B</span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
         <p className={styles.note}>
           <Link
             href={mountHref(address, { kind: "overview", path: skill.directory, query: undefined })}

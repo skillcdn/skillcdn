@@ -76,7 +76,9 @@ export function browseCatalogFiles(files: readonly CatalogFile[], path: RepoPath
     }
     if (file.path === childPath) child.direct = file;
     if (file.kind === "skill") {
-      child.skillCount += 1;
+      // Counts cover what can be discovered: a hidden copy of a visible skill, or a copy that
+      // repeats one, is found by browsing its folder but is not counted (ADR-0024).
+      if (file.searchable) child.skillCount += 1;
       if (file.path === childPath || file.path === `${childPath}/${SKILL_MANIFEST_FILE}`) {
         child.skill = file;
       }

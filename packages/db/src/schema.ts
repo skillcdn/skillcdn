@@ -226,6 +226,16 @@ export interface SkillFrontMatter {
   /** Skill only: why the MCP skills extension does not list it (ADR-0025), when it does not. */
   readonly unlisted?: string;
   /**
+   * Skill only: the files of the skill over the read limit when the commit was indexed
+   * (ADR-0033): left out of what is served, and named in the served document with where their
+   * bytes are at the host. Kept here so that a read assembles the document the index digested.
+   */
+  readonly omitted?: readonly {
+    readonly path: string;
+    readonly size: number;
+    readonly sourceUrl: string;
+  }[];
+  /**
    * The license that governs the file (ADR-0026): for a skill, the one resolved for it; for a
    * license file, what the file itself says.
    */

@@ -30,6 +30,19 @@ export interface SkillSections {
   readonly included: readonly IncludedFileSection[];
 }
 
+/**
+ * A file of the skill that the server does not serve because it is over the read limit
+ * (ADR-0033): the document names it, with its size and where the bytes are at the git host, so
+ * that a host that installed the skill knows what is missing and can fetch it.
+ */
+export interface OmittedFile {
+  /** The repository-root path of the file. */
+  readonly path: string;
+  readonly size: number;
+  /** The raw bytes of the file at the host, in the commit the document is assembled from. */
+  readonly sourceUrl: string;
+}
+
 export interface SkillDocumentInput extends SkillSections {
   /**
    * The parsed front matter of the source, as the failsafe parser returns it: strings,
@@ -39,6 +52,8 @@ export interface SkillDocumentInput extends SkillSections {
   /** The commit the document is assembled from, and the source files in the order they are used. */
   readonly commit: string;
   readonly sources: readonly string[];
+  /** The files of the skill left out for their size, in path order. */
+  readonly omitted?: readonly OmittedFile[];
 }
 
 const RESERVED_PLAIN_KEYS = new Set(["true", "false", "null", "yes", "no", "on", "off", "~"]);
@@ -151,8 +166,20 @@ export function provenanceLine(commit: string, sources: readonly string[]): stri
   return `> Assembled by SkillCDN from ${listOfPaths(sources)} at commit \`${commit}\`.`;
 }
 
+/**
+ * The lines that name the files left out of the skill, one per file, right after the provenance
+ * line: what is missing, how large it is, and where to fetch it from.
+ */
+export function omittedLines(omitted: readonly OmittedFile[]): string[] {
+  return omitted.map(
+    (file) =>
+      `> Not included, over this server's file size limit: \`${file.path}\` (${file.size} bytes); fetch it from ${file.sourceUrl}`,
+  );
+}
+
 /** The complete document, ending in one line break. Deterministic: the same input, the same bytes. */
 export function assembleSkillDocument(input: SkillDocumentInput): string {
   const sections = renderSkillSections(input);
-  return `---\n${serializeFrontMatter(input.frontMatter)}\n---\n${provenanceLine(input.commit, input.sources)}${sections.length === 0 ? "" : `\n\n${sections}`}\n`;
+  const head = [provenanceLine(input.commit, input.sources), ...omittedLines(input.omitted ?? [])];
+  return `---\n${serializeFrontMatter(input.frontMatter)}\n---\n${head.join("\n")}${sections.length === 0 ? "" : `\n\n${sections}`}\n`;
 }

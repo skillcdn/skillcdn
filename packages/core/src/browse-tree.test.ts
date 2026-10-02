@@ -136,6 +136,31 @@ describe("browsing a published repository tree", () => {
     );
   });
 
+  it("counts the skills that can be discovered, and still shows a hidden copy in its folder", () => {
+    const files = [
+      skill("plugin/skills/write/SKILL.md"),
+      file(".claude/skills/write/SKILL.md", {
+        kind: "skill",
+        name: "write",
+        skillDir: path(".claude/skills/write"),
+        searchable: false,
+      }),
+      file(".claude/skills/write/reference.md", {
+        skillDir: path(".claude/skills/write"),
+        searchable: false,
+      }),
+    ];
+    expect(
+      browseCatalogFiles(files, ROOT_PATH).map((entry) => [entry.path, entry.skillCount]),
+    ).toEqual([
+      [".claude", 0],
+      ["plugin", 1],
+    ]);
+    expect(browseCatalogFiles(files, path(".claude/skills"))).toMatchObject([
+      { path: ".claude/skills/write/SKILL.md", kind: "skill", skillCount: 0 },
+    ]);
+  });
+
   it("keeps a root skill and a nested skill separately reachable", () => {
     const files = [
       skill("SKILL.md"),

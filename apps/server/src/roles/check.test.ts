@@ -149,7 +149,7 @@ describe("the check role", () => {
     expect(report).toContain("Optional overview files: 2");
     const connection = report.split("What a client is told on connect")[1];
     expect(connection).toContain("Writing library: Find the right writing skill.");
-    expect(connection).toContain("team/: Editors. Team writing workflows. 1 skills");
+    expect(connection).toContain("team/: Editors. Team writing workflows. 1 skill\n");
     expect(connection).toContain("Optional overview: read_repo_file README.md");
     expect(connection).not.toContain("Detailed setup stays optional");
     expect(connection).not.toContain("team/README.md:");
@@ -192,8 +192,8 @@ describe("the check role", () => {
     expect(report).toContain("Documents outside the skills: 1\n- docs/guide.md");
     expect(report).toContain("Linked reference files: 1");
     const connection = report.split("What a client is told on connect")[1];
-    expect(connection).toContain("team/: Editors. Team workflows. 2 skills");
-    expect(connection).toContain("docs/: 0 skills");
+    expect(connection).toContain("team/: Editors. Team workflows. 2 skills\n");
+    expect(connection).toContain("docs/: 1 document\n");
     expect(connection).not.toContain("shared.md");
     expect(connection).not.toContain("team/review/SKILL.md");
   });
