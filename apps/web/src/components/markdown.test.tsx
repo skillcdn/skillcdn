@@ -63,9 +63,37 @@ describe("Markdown", () => {
       <Markdown
         source={source}
         baseDirectory="docs"
+        under={2}
         fileHref={(path) => `/gh/acme/skills?file=${path}`}
       />,
     );
+
+  it("puts the document's headings under the page's own, at the size they were written at", () => {
+    const outline = (source: string, under: 1 | 2 | 3) =>
+      renderToStaticMarkup(
+        <Markdown source={source} baseDirectory="" under={under} fileHref={(path) => path} />,
+      );
+    // Under the title of a view: the document's own title is the next level down, and the rest
+    // keep their distance from it, down to the deepest level there is.
+    const titled = outline("# Title\n\n## Part\n\n### Detail\n\n###### Deep", 2);
+    expect(titled).toMatch(/<h3 class="[^"]+">Title<\/h3>/);
+    expect(titled).toMatch(/<h4 class="[^"]+">Part<\/h4>/);
+    expect(titled).toMatch(/<h5 class="[^"]+">Detail<\/h5>/);
+    expect(titled).toMatch(/<h6 class="[^"]+">Deep<\/h6>/);
+    expect(titled).not.toContain("<h1");
+    // A document that starts with its sections sits just as close under the page's heading.
+    const sections = outline("## Scope\n\n### Detail", 1);
+    expect(sections).toMatch(/<h2 class="[^"]+">Scope<\/h2>/);
+    expect(sections).toMatch(/<h3 class="[^"]+">Detail<\/h3>/);
+    expect(outline("## Scope", 3)).toMatch(/<h4 class="[^"]+">Scope<\/h4>/);
+    // The size is the written level's: a `##` is dressed the same wherever it lands.
+    const classOf = (html: string, text: string) =>
+      new RegExp(`<h\\d class="([^"]+)">${text}</h\\d>`).exec(html)?.[1];
+    expect(classOf(sections, "Scope")).toBe(classOf(titled, "Part"));
+    expect(classOf(sections, "Scope")).not.toBe(classOf(titled, "Title"));
+    // A heading inside a quote counts too.
+    expect(outline("> # Quoted", 1)).toMatch(/<h2 class="[^"]+">Quoted<\/h2>/);
+  });
 
   it("treats repository content as text, never as markup", () => {
     const html = render(
@@ -108,6 +136,7 @@ describe("Markdown", () => {
       <Markdown
         source="[Shared](/shared/guide.md)"
         baseDirectory="team/skills"
+        under={2}
         fileHref={(path) => `/gh/acme/skills/team?file=${path}`}
         references={[
           { href: "/shared/guide.md", path: "shared/guide.md", status: "outside_mount" },
@@ -129,6 +158,7 @@ describe("Markdown", () => {
           "![out](../../outside.png)",
         ].join("\n\n")}
         baseDirectory="docs"
+        under={2}
         fileHref={(path) => `/gh/acme/skills?file=${path}`}
         imageSrc={(path) => `https://raw.example/acme/skills/abc/${path}`}
       />,

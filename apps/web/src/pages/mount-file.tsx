@@ -182,6 +182,7 @@ export function MountFile(props: {
           <Markdown
             source={frontMatter === undefined ? content : content.slice(frontMatter.length)}
             baseDirectory={directory}
+            under={2}
             references={pages.flatMap((page) => page.references ?? [])}
             fileHref={(target) => contentHref(address, target)}
             imageSrc={(target) => hostRawUrl(mount, target)}

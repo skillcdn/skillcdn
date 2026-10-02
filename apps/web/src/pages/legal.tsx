@@ -59,7 +59,8 @@ export function LegalPage(props: LegalPageProps) {
         {document.value.revised !== null && (
           <p className={styles.revised}>{t.legal.revised(document.value.revised)}</p>
         )}
-        <Markdown source={words.body} baseDirectory="" fileHref={(path) => `/${path}`} />
+        {/* The operator writes the sections; the title above them is the page's own. */}
+        <Markdown source={words.body} baseDirectory="" under={1} fileHref={(path) => `/${path}`} />
       </article>
     </Container>
   );

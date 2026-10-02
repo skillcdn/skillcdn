@@ -10,8 +10,9 @@
   margin-top: var(--space-4);
 }
 
-/* Headings are rendered two levels down from where they were written (markdown.tsx), so the
+/* Headings are rendered under the heading of the page that shows them (markdown.tsx), so the
    level a heading was written at is its class, and that is what sizes it. */
+.prose h2,
 .prose h3,
 .prose h4,
 .prose h5,

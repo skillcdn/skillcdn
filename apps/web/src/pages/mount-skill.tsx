@@ -173,6 +173,7 @@ export function MountSkill(props: {
               <Markdown
                 source={ruleBody}
                 baseDirectory={parentDirectory(rulePath)}
+                under={3}
                 fileHref={(target) => contentHref(address, target)}
                 imageSrc={imageSrc}
               />
@@ -185,6 +186,7 @@ export function MountSkill(props: {
           <Markdown
             source={body}
             baseDirectory={skill.directory}
+            under={2}
             references={pages.flatMap((page) => page.skill.references ?? [])}
             fileHref={(target) => contentHref(address, target)}
             imageSrc={imageSrc}
@@ -201,6 +203,7 @@ export function MountSkill(props: {
             <Markdown
               source={content}
               baseDirectory={parentDirectory(filePath)}
+              under={3}
               fileHref={(target) => contentHref(address, target)}
               imageSrc={imageSrc}
             />

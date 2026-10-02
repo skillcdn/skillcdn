@@ -65,10 +65,65 @@ export function imageUrl(
   return target === undefined || hostUrl === undefined ? undefined : hostUrl(target);
 }
 
+/** A heading as the Markdown parser hands it over: the one node this file changes. */
+interface HeadingNode {
+  readonly type: "heading";
+  depth: number;
+  data?: Record<string, unknown>;
+}
+
+function isHeading(node: object): node is HeadingNode {
+  return (
+    "type" in node && node.type === "heading" && "depth" in node && typeof node.depth === "number"
+  );
+}
+
+function collectHeadings(node: unknown, into: HeadingNode[]): void {
+  if (typeof node !== "object" || node === null) {
+    return;
+  }
+  if (isHeading(node)) {
+    into.push(node);
+    return;
+  }
+  if ("children" in node && Array.isArray(node.children)) {
+    for (const child of node.children) {
+      collectHeadings(child, into);
+    }
+  }
+}
+
+/**
+ * Puts a document's headings under the heading of the page that shows it. The document's highest
+ * heading is rendered one level below that heading, the others keep their distance from it, and
+ * each keeps the size of the level it was written at, which becomes its class. The page is one
+ * outline, whether the document starts with a title of its own or with its sections, and the
+ * document still looks like itself.
+ */
+function headingsUnder(level: 1 | 2 | 3) {
+  return () => (tree: unknown) => {
+    const headings: HeadingNode[] = [];
+    collectHeadings(tree, headings);
+    let top = 6;
+    for (const heading of headings) {
+      top = Math.min(top, heading.depth);
+    }
+    for (const heading of headings) {
+      heading.data = { ...heading.data, hProperties: { className: styles[`h${heading.depth}`] } };
+      heading.depth = Math.min(6, heading.depth - top + level + 1);
+    }
+  };
+}
+
 export function Markdown(props: {
   readonly source: string;
   /** Directory of the rendered file, relative to the repository root; `""` for the root. */
   readonly baseDirectory: string;
+  /**
+   * The level of the heading the document is shown under: 1 on a page that is the document's
+   * own, 2 under the title of a view, 3 under a section of one. The document's headings follow.
+   */
+  readonly under: 1 | 2 | 3;
   /** The URL inside the app that shows a file of the same mount. */
   readonly fileHref: (path: string) => string;
   /** Where a picture that is a file of the repository is loaded from: its copy at the git host. */
@@ -79,19 +134,10 @@ export function Markdown(props: {
   return (
     <div className={styles.prose}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, headingsUnder(props.under)]}
         // Everything passes through here unchanged; the components below decide what a URL may do.
         urlTransform={(url) => url}
         components={{
-          // A document's headings sit under the page's own title and the title of the view, so
-          // each is two levels down from where it was written and keeps the size of that level:
-          // the outline of the page stays one outline, and the document still looks like itself.
-          h1: ({ children }) => <h3 className={styles.h1}>{children}</h3>,
-          h2: ({ children }) => <h4 className={styles.h2}>{children}</h4>,
-          h3: ({ children }) => <h5 className={styles.h3}>{children}</h5>,
-          h4: ({ children }) => <h6 className={styles.h4}>{children}</h6>,
-          h5: ({ children }) => <h6 className={styles.h5}>{children}</h6>,
-          h6: ({ children }) => <h6 className={styles.h6}>{children}</h6>,
           a({ href, children }) {
             if (href === undefined || href === "") {
               return <span>{children}</span>;

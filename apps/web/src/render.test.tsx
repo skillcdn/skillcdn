@@ -528,6 +528,10 @@ describe("the page of an address", () => {
     });
     expect(skill.indexable).toBe(true);
     expect(skill.html).toContain("<strong>regressions</strong>");
+    // One outline: the page's title is the one h1, the skill's title is under it, and the
+    // document's own title is under that, at the size it was written at.
+    expect(skill.html.match(/<h1[ >]/g)).toHaveLength(1);
+    expect(skill.html).toMatch(/<h3 class="[^"]+">Review<\/h3>/);
     expect(skill.html).toContain("review · Acme/skills | SkillCDN");
     expect(skill.html).not.toContain(messagesFor("en").skill.translationNote);
 
@@ -795,8 +799,9 @@ describe("a page of the deployment's own", () => {
     expect(html).toContain(">Terms of service</h1>");
     expect(html).toContain("<strong>kind</strong>");
     expect(html).toContain('href="/privacy"');
-    // A heading of the document sits two levels under the page's own title.
-    expect(html).toContain(">Scope</h4>");
+    // The operator's sections sit right under the page's own title, as deploy/README.md shows
+    // them written.
+    expect(html).toContain(">Scope</h2>");
     expect(html).toContain(messagesFor("en").legal.revised("2026-10-01"));
     expect(html).toContain('<title data-head="">Terms of service | SkillCDN</title>');
     expect(html).toContain('<link rel="canonical" href="https://skills.example/terms"');
