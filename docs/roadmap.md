@@ -14,7 +14,7 @@ What exists, what is being built, what comes next. Update this file in the same 
 Goal: an agent that connects to an address knows what it got and uses it well, whatever the client; a person who opens the page of a repository connects their agent from there. Skills travel through the MCP skills extension, and the tools remain for discovery and for clients without it.
 
 - [x] Connection instructions and server info introduce an address; document summaries use the first paragraph when no description is declared
-- [x] Repository-root content paths, real folder browsing with counts and metadata, scoped search paged after folding, exact `get_skill` with complete inherited rules through continuations, text and structured output, one `use_skill(path)` prompt, and matching REST and web navigation ([ADR-0022](adr/0022-repository-paths-and-progressive-skill-loading.md))
+- [x] Repository-root content paths, real folder browsing with counts and metadata, scoped search paged after folding, exact `get_skill` with complete inherited rules through continuations, text output, one `use_skill(path)` prompt, and matching REST and web navigation ([ADR-0022](adr/0022-repository-paths-and-progressive-skill-loading.md))
 - [x] The MCP endpoint answers browsers on any origin, as the REST API does
 - [x] The page of a repository leads with its name and description, then the steps to connect it to the common clients, and shows what the agent is told when it connects
 - [x] Beginner-friendly connection guide: bundled client icons, English/Korean animated screen illustrations, manual steps and reduced-motion support, copyable setup and a first-message prompt ([guide contract](specs/connect-guide.md))
@@ -32,13 +32,13 @@ Goal: an agent that connects to an address knows what it got and uses it well, w
 - [x] Skills over MCP implemented: raw bytes, sizes and SHA-256 digests in the index; the assembled `SKILL.md`; skill URIs; connection instructions that point at skills; `check` reporting what the standard channel lists; the tools under their final names.
 - [x] The extension verified against a running server with the MCP Inspector's SEP-2640 checks (`--method skills/list --verify`): the reference repository's skill and its files pass with no conformance errors. Hosts that implement the extension are tried by hand with the other clients below.
 - [x] Skills with large data files, found with a real third-party repository ([ADR-0033](adr/0033-a-file-over-the-read-limit-is-named-with-its-source.md)): the read limit defaults to 2 MiB; a file still over it does not keep its skill off the extension but is named in the served `SKILL.md` with its size and source; refused reads of oversized and binary files point at the source; the files of hidden and duplicate copies leave search with them; counts and the connect overview cover what can be discovered; per-file limits no longer mark the index partial, and a file that several copies share spends the byte budget once.
+- [x] One representation per tool result ([ADR-0034](adr/0034-a-tool-result-is-the-text-written-for-the-model.md)): the four tools return the text written for the model and no structured copy, because a client that passes only the data to its model dropped that text, and the second copy halved what a page carried; a `load_skill` page now carries the reader's full 16 KiB, and its first page names the supporting files up to a byte bound; the budget stays at 24 KiB.
 - [ ] Connect real clients by hand, to a local server and to the hosted service, and fix what they show, including the clients that implement the skills extension. Nothing in this repository can test that; it is done after every change to what a client sees.
 
 Design points still open (record the outcome in the spec or an ADR):
 
 - Pinned commits that the host serves through a repository without being part of its history (see the open questions in the address spec).
 - Abuse controls for the anonymous endpoints. The server bounds its own work: request and index size limits, bounded indexing per process, a short in-process memory of names that do not exist. Limiting requests per client is the job of whatever sits in front of the server. Still missing here: a negative cache shared between replicas.
-- The `load_skill` page budget: a result carries its context twice, as text and as structured data, so a page holds about 10 KB of a large skill and lists five of its files; whether to carry it once or raise the budget is open in the [tools spec](specs/tools.md#open-questions). The bound on supporting files listed through REST (50) is not what limits large skills: the extension lists every file, and the known large skills have at most 82.
 
 ## Now: milestone 4, ready for public operation
 

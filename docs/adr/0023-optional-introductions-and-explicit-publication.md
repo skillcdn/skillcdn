@@ -1,6 +1,6 @@
 # ADR-0023: Read introductions on demand and make publication exclusions explicit
 
-- Status: Accepted
+- Status: Accepted; the second representation bounded in point 2 is removed by ADR-0034
 - Date: 2026-09-24
 - Supersedes ADR-0022's availability of skills inside failed manifest scopes. Other decisions remain.
 

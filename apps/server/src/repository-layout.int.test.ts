@@ -9,7 +9,6 @@ import {
   restFindSchema,
   restMountSchema,
   restSkillSchema,
-  type SkillResult,
 } from "@skillcdn/core";
 import { createBlobStore } from "@skillcdn/db";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
@@ -20,6 +19,7 @@ import { MountReader } from "./mounts/mount-reader.js";
 import { MountService } from "./mounts/mount-service.js";
 import { createFixtureHost, fixtureCommits } from "./testing/fixture-host.js";
 import { createHarness, type Harness } from "./testing/harness.js";
+import { continuationOf, listedPaths, skillSectionsOf, textOf } from "./testing/tool-text.js";
 
 let database: TestDatabase;
 beforeAll(async () => {
@@ -72,11 +72,9 @@ async function load(h: Harness, address: string, path: string, cursor?: string) 
 
 async function tool(client: Client, name: string, args: Record<string, unknown>) {
   const result = await client.callTool({ name, arguments: args });
-  return {
-    error: result.isError === true,
-    text: JSON.stringify(result.content),
-    data: result.structuredContent as Record<string, unknown> | undefined,
-  };
+  // One representation, the text (ADR-0034).
+  expect(result.structuredContent).toBeUndefined();
+  return { error: result.isError === true, text: textOf(result) };
 }
 
 describe("repository-root publication and progressive loading", () => {
@@ -97,12 +95,12 @@ describe("repository-root publication and progressive loading", () => {
     for (const query of ["compose", "copper", "storyboard", original]) {
       const found = await tool(client, "search_repo", { query, path: "media" });
       expect(found.error).toBe(false);
-      expect(found.data?.items).toEqual([expect.objectContaining({ kind: "skill", path })]);
+      expect(listedPaths(found.text)).toEqual([path]);
     }
     for (const query of [translated, "presentationonlyquartz"]) {
       const found = await tool(client, "search_repo", { query, path: "media" });
       expect(found.error).toBe(false);
-      expect(found.data?.items).toEqual([]);
+      expect(found.text).toContain("No results for");
       const params = new URLSearchParams({ query, path: "media" });
       const human = restFindSchema.parse(
         await (await h.request(`/api/v1/find${address}?${params}`)).json(),
@@ -228,17 +226,17 @@ describe("repository-root publication and progressive loading", () => {
       });
       expect(result.isError).not.toBe(true);
       expect(Buffer.byteLength(JSON.stringify(result), "utf8")).toBeLessThanOrEqual(40 * 1024);
-      expect(result.structuredContent).not.toHaveProperty("translations");
-      expect(result.structuredContent).not.toHaveProperty("rules");
-      const page = result.structuredContent as unknown as SkillResult;
-      allBody += page.body;
-      for (const rule of page.ruleChain ?? []) allRules += rule.body;
+      expect(result.structuredContent).toBeUndefined();
+      const text = textOf(result);
+      const page = skillSectionsOf(text);
+      allBody += page.body ?? "";
+      for (const rule of page.rules) allRules += rule.body;
       for (const included of page.included) {
         expect(included.path).toBe(includePath);
         allIncluded += included.content ?? "";
       }
-      expect(page.complete).toBe(page.nextCursor === undefined);
-      cursor = page.nextCursor;
+      cursor = continuationOf(text);
+      expect(text.includes("Skill context is incomplete.")).toBe(cursor !== undefined);
       count += 1;
       expect(count).toBeLessThan(10);
     } while (cursor !== undefined);

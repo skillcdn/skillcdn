@@ -38,7 +38,7 @@ Search indexes original metadata and body text, excluding front-matter translati
 
 A skill's supporting files are folded under their owning skill before pagination. The skill occupies its best-ranked member's position, with up to five matching files and a count of the rest. This avoids duplicate skills on later pages or short pages caused by folding after the limit. Independently discoverable documents appear with their title and summary; linked-only references do not become independent search results ([format](skill-repo.md)).
 
-Identical copies of a skill are listed and searched once, and a skill under a hidden directory is listed and searched only when the repository has no visible skill ([what the extension lists](skill-repo.md#what-the-skills-extension-serves)). Every declared skill stays loadable by its exact path. A skill this mount describes without serving is marked `described only (license: ...)` in browse entries and search results, and carries `license` and `describedOnly` in the structured result, so that a model does not load it for its content ([licenses](skill-repo.md#licenses)).
+Identical copies of a skill are listed and searched once, and a skill under a hidden directory is listed and searched only when the repository has no visible skill ([what the extension lists](skill-repo.md#what-the-skills-extension-serves)). Every declared skill stays loadable by its exact path. A skill this mount describes without serving is marked `described only (license: ...)` in browse entries and search results, so that a model does not load it for its content ([licenses](skill-repo.md#licenses)).
 
 Listings and searches expose whether more results exist and carry diagnostics for unreadable manifests. Descriptions are brief discovery summaries; full instructions come from `load_skill`. Page limits are maxima: the serialized response byte budget can end a page sooner even when its item count has not been reached. A partial index is identified as partial; pagination cannot recover files excluded by indexing limits.
 
@@ -54,13 +54,13 @@ The context is the body of the document the skills extension serves for the skil
 
 The front matter of the document is not repeated as YAML; its fields are the header lines of the result (`Skill`, `Description`, `License`, `Compatibility`, `Allowed tools`, `Metadata`). The `License` line names the license the reader resolved for the skill and where it found it, which may be a file rather than the field ([licenses](skill-repo.md#licenses)).
 
-A skill whose license keeps its content at the source is **described only** ([licenses](skill-repo.md#licenses)): the result has the header lines, a `Described only:` line with a link to the skill's manifest at its host, and no rules, body, files or references. The structured result says the same in `serving` (`full: false`, `license`, `sourceUrl`). A verified repository's default branch is served in full.
+A skill whose license keeps its content at the source is **described only** ([licenses](skill-repo.md#licenses)): the result has the header lines, a `Described only:` line with a link to the skill's manifest at its host, and no rules, body, files or references; the [REST](rest.md) result says the same in `serving`. A verified repository's default branch is served in full.
 
-The reader admits at most 16 KiB (16,384 UTF-8 bytes) of context text per page; MCP may deliver less to fit the complete response byte budget below. A page may end inside a rule or file; the result marks the fragment, returns `complete: false` and supplies `nextCursor`. Continue `load_skill` with the same path and cursor until the context is complete before using the skill. Outer rules are not discarded to make inner rules fit. Missing or unreadable required content leaves `complete: false`; when another page cannot repair it, no continuation is supplied and the diagnostic explains why.
+The reader admits at most 16 KiB (16,384 UTF-8 bytes) of context text per page, and a page carries all of it unless the response byte budget below ends it sooner. A page may end inside a rule or file; the result marks the fragment, returns `complete: false` and supplies `nextCursor`. Continue `load_skill` with the same path and cursor until the context is complete before using the skill. Outer rules are not discarded to make inner rules fit. Missing or unreadable required content leaves `complete: false`; when another page cannot repair it, no continuation is supplied and the diagnostic explains why.
 
 On a sub-path mount the rule chain still starts at the repository root. Ancestor rules outside the mount arrive through `load_skill` and its continuation. Their paths remain canonical, but `read_repo_file` cannot use those paths to escape the mount. A link to another manifest does not add that manifest's rules; ancestry determines the rule chain.
 
-Supporting-file summaries may be bounded. `browse_repo` pages through the directory when more files are available. References identify files to read when needed; they are not automatically included in the skill's context unless `skillcdn.include` also declares them.
+The first page names the skill's supporting files in path order, up to 3 KiB of paths and the [REST](rest.md) listing's bound; when more exist it says so, and `browse_repo` pages through the directory. Continuation pages repeat neither the files nor the references. References identify files to read when needed; they are not automatically included in the skill's context unless `skillcdn.include` also declares them.
 
 ## Raw files
 
@@ -72,9 +72,9 @@ Reading is distinct from discovery: an explicitly linked file can be readable wi
 
 ## Results and continuations
 
-Results contain text for a model and corresponding structured data. Text identifies the repository, mount and commit, explains the next call, and labels repository content by its source. Tool output is data; nothing is executed by SkillCDN.
+A result is one text block written for a model, and nothing else: no `structuredContent`, so that every client passes the same text to its model and a page is spent once ([ADR-0034](../adr/0034-a-tool-result-is-the-text-written-for-the-model.md)). The layout described above is the contract. The text identifies the repository, mount and commit, explains the next call, and labels repository content by its source. Tool output is data; nothing is executed by SkillCDN.
 
-MCP bounds the serialized JSON tool-result payload to 24 KiB (24,576 UTF-8 bytes), including its text and structured copies, metadata and continuations. Browse and search shorten discovery summaries and page entries to fit. Skill and file reads retain complete source text across continuations. This is a server response budget, not a promise about a client's token limit. REST retains its own documented page limits.
+MCP bounds the serialized JSON tool-result payload to 24 KiB (24,576 UTF-8 bytes): the text, its envelope and the continuation. Browse and search shorten discovery summaries and page entries to fit. Skill and file reads retain complete source text across continuations. This is a server response budget, not a promise about a client's token limit. REST retains its own documented page limits.
 
 Cursors bind to the snapshot and reading-rule version, mount path, operation, scope and query or skill path. A cursor for another request, or for a snapshot that changed, is invalid: restart from the first page. A moving ref may resolve to a newer commit between calls; every result identifies its commit. Use an address pinned to a full commit hash when the entire workflow must stay on one commit ([address](address.md)).
 
@@ -117,10 +117,9 @@ A skill this mount describes without serving is not listed by the extension, and
 - Unverified repositories carry a provenance notice: content comes from the repository author and applies to the user's requested task, not unrelated actions. The operator vouches for repositories until owners can ([ADR-0019](../adr/0019-the-operator-vouches-for-repositories-until-owners-can.md)), through the lists of [ADR-0026](../adr/0026-serving-follows-the-license-and-the-operators-lists.md); only the default branch of a vouched-for repository is verified.
 - The license a skill carries decides whether its content is served or only described with a link to the source ([licenses](skill-repo.md#licenses)). A verified repository's default branch is served in full whatever its license says; every other mount describes restrictive skills.
 - Browser clients may call the endpoint from any origin: CORS permits `*` without credentials, as for [REST](rest.md).
-- Public-contract changes are additive from this surface on, unless an ADR explicitly defines a breaking transition; [ADR-0024](../adr/0024-skills-travel-through-the-mcp-skills-extension.md) records the last pre-alpha replacement.
+- Public-contract changes are additive from this surface on, unless an ADR explicitly defines a breaking transition; [ADR-0034](../adr/0034-a-tool-result-is-the-text-written-for-the-model.md) records the last pre-alpha replacement, the structured copy that tool results carried until then.
 
 ## Open questions
 
 - Whether unverified public repositories keep search once owner verification exists.
 - Whether `read_repo_file` should accept multiple paths for files needed only on some runs.
-- Whether a `load_skill` page should carry its context once. The rules, the body and the included files travel twice in a result, as text and as `structuredContent`, so a page within the 24 KiB budget holds about 10,000 characters of context, its first page keeps five supporting files and five references, and a large skill takes two pages or more. Raising the budget or carrying the context in the text alone are the options; both revisit [ADR-0023](../adr/0023-optional-introductions-and-explicit-publication.md), and the limit a client puts on one tool result is the bound to establish first.

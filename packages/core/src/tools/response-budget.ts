@@ -1,4 +1,4 @@
-/** Bounds the complete MCP result, including text and structured representations. */
+/** Bounds the complete serialized MCP result: the text written for the model, and its envelope. */
 export const MCP_RESULT_MAX_BYTES = 24 * 1024;
 export const BROWSE_DESCRIPTION_MAX_LENGTH = 240;
 export const SEARCH_DESCRIPTION_MAX_LENGTH = 360;

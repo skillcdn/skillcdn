@@ -15,16 +15,18 @@ import {
   serializedResultBytes,
 } from "@skillcdn/core";
 
+/**
+ * A tool result is one text block written for the model, and nothing else (ADR-0034): a client
+ * that passes only `structuredContent` to its model would drop the text, and a second copy of the
+ * content would spend the page twice.
+ */
 export interface ToolReply {
   [key: string]: unknown;
   content: { type: "text"; text: string }[];
   isError?: boolean;
 }
 
-export const reply = (text: string, data?: object): ToolReply => ({
-  content: [{ type: "text", text }],
-  ...(data === undefined ? {} : { structuredContent: data }),
-});
+export const reply = (text: string): ToolReply => ({ content: [{ type: "text", text }] });
 
 export const problem = (text: string): ToolReply => ({
   // JSON can expand a single control character to six bytes.
@@ -34,6 +36,10 @@ export const problem = (text: string): ToolReply => ({
 
 export const fitsReply = (result: ToolReply): boolean =>
   serializedResultBytes(result) <= MCP_RESULT_MAX_BYTES;
+
+/** What the lists of a skill's supporting files and of its references may take of the first page. */
+const SKILL_FILES_BYTES = 3_072;
+const SKILL_REFERENCES_BYTES = 2_048;
 
 const diagnosticsOf = (diagnostics: readonly IndexDiagnostic[]) => ({
   diagnostics: diagnostics.slice(0, 3).map((diagnostic) => ({
@@ -61,7 +67,7 @@ export function browseReply(result: BrowseResult): ToolReply {
       description: entry.description === null ? null : compactSummary(entry.description, 240),
     })),
   };
-  return reply(renderBrowseResult(data), data);
+  return reply(renderBrowseResult(data));
 }
 
 export function searchReply(result: FindResult): ToolReply {
@@ -79,7 +85,6 @@ export function searchReply(result: FindResult): ToolReply {
               summary: undefined,
             })),
             moreFiles: item.moreFiles + Math.max(0, item.files.length - 2),
-            translations: {},
           }
         : {
             ...item,
@@ -88,14 +93,7 @@ export function searchReply(result: FindResult): ToolReply {
           },
     ),
   };
-  return reply(renderFindResult(data), {
-    ...data,
-    items: data.items.map((item) => {
-      if (item.kind !== "skill") return item;
-      const { translations: _translations, ...canonical } = item;
-      return canonical;
-    }),
-  });
+  return reply(renderFindResult(data));
 }
 
 function uniqueReferences(references: readonly FileReference[]): FileReference[] {
@@ -107,6 +105,7 @@ function uniqueReferences(references: readonly FileReference[]): FileReference[]
   });
 }
 
+/** The longest prefix of `items` that stays within `bytes` once serialized, at most `maximum` long. */
 function briefList<T>(items: readonly T[], maximum: number, bytes: number): T[] {
   const result: T[] = [];
   for (const item of items.slice(0, maximum)) {
@@ -116,11 +115,16 @@ function briefList<T>(items: readonly T[], maximum: number, bytes: number): T[] 
   return result;
 }
 
-/** Optional indexes are small; all required text is retained and paged by the reader. */
+/**
+ * The required text is paged by the reader and kept whole; the optional lists are bounded in
+ * bytes on the first page and left off continuation pages.
+ */
 export function skillReply(result: SkillResult, continuation = false): ToolReply {
   const references = uniqueReferences(result.references ?? []);
-  const shownReferences = continuation ? [] : briefList(references, 5, 2_048);
-  const shownFiles = continuation ? [] : briefList(result.files, 5, 1_024);
+  const shownReferences = continuation ? [] : briefList(references, 5, SKILL_REFERENCES_BYTES);
+  const shownFiles = continuation
+    ? []
+    : briefList(result.files, result.files.length, SKILL_FILES_BYTES);
   const blockingWarnings = result.warnings.filter((warning) =>
     /^(Applicable rules unavailable|Required file unavailable)/.test(warning),
   );
@@ -158,19 +162,17 @@ export function skillReply(result: SkillResult, continuation = false): ToolReply
     referencesTruncated: !continuation && references.length > shownReferences.length,
     included: result.included.filter((file) => file.content !== ""),
     warnings: shownWarnings,
-    translations: {},
   };
-  const { translations: _translations, rules: _legacyRules, ...canonical } = data;
-  return reply(renderSkillResult(data), canonical);
+  return reply(renderSkillResult(data));
 }
 
 export function fileReply(result: FileResult): ToolReply {
   const references = uniqueReferences(result.references ?? []);
-  const shownReferences = briefList(references, 5, 2_048);
+  const shownReferences = briefList(references, 5, SKILL_REFERENCES_BYTES);
   const data: FileResult = {
     ...result,
     references: shownReferences,
     referencesTruncated: references.length > shownReferences.length,
   };
-  return reply(renderFileResult(data), data);
+  return reply(renderFileResult(data));
 }

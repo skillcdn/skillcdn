@@ -2,15 +2,10 @@ import { describe, expect, it } from "vitest";
 import { compactSummary, serializedResultBytes } from "./response-budget.js";
 
 describe("MCP response budgets", () => {
-  it("counts JSON escaping and both output representations", () => {
-    const value = {
-      content: [{ type: "text", text: 'a\n"b' }],
-      structuredContent: { body: 'a\n"b' },
-    };
+  it("counts JSON escaping and the envelope around the text", () => {
+    const value = { content: [{ type: "text", text: 'a\n"b' }], isError: false };
     expect(serializedResultBytes(value)).toBe(JSON.stringify(value).length);
-    expect(serializedResultBytes(value)).toBeGreaterThan(
-      serializedResultBytes(value.structuredContent),
-    );
+    expect(serializedResultBytes(value)).toBeGreaterThan(serializedResultBytes(value.content));
   });
 
   it("counts multilingual and astral characters as UTF-8, including escaped lone surrogates", () => {

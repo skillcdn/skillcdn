@@ -19,6 +19,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { INDEX_VERSION } from "./indexer/build-index.js";
 import { createFixtureHost, fixtureCommits } from "./testing/fixture-host.js";
 import { createHarness, type HarnessOptions } from "./testing/harness.js";
+import { listedPaths } from "./testing/tool-text.js";
 
 let testDatabase: TestDatabase;
 
@@ -35,10 +36,11 @@ const harness = (options: HarnessOptions = {}) => createHarness(testDatabase, op
 async function call(client: Client, name: string, args: Record<string, unknown> = {}) {
   const result = await client.callTool({ name, arguments: args });
   const content = result.content as { type: string; text?: string }[];
+  // One representation, the text (ADR-0034).
+  expect(result.structuredContent).toBeUndefined();
   return {
     text: content.map((block) => block.text ?? "").join("\n"),
     isError: result.isError === true,
-    data: result.structuredContent as Record<string, unknown> | undefined,
   };
 }
 
@@ -353,8 +355,7 @@ describe("a multi-skill repository", () => {
     expect(root.text).toContain("- directory: docs");
     expect(root.text).toContain("- directory: skills");
     expect(root.text).toContain("Optional overview: read_repo_file README.md");
-    expect(root.data?.entries).toHaveLength(2);
-    expect(root.data?.overview).toMatchObject({ path: "README.md" });
+    expect(listedPaths(root.text)).toHaveLength(2);
     expect((await call(client, "read_repo_file", { path: "README.md" })).isError).toBe(false);
 
     const skill = await call(client, "browse_repo", { path: "skills/release-notes" });
@@ -386,7 +387,7 @@ describe("a multi-skill repository", () => {
     expect(search.text).not.toContain(".draft.md");
 
     const root = await call(client, "browse_repo");
-    expect(root.data?.entries).toHaveLength(2);
+    expect(listedPaths(root.text)).toHaveLength(2);
     expect(root.text).not.toContain(".editorconfig");
     expect(root.text).not.toContain(".github");
     const docs = await call(client, "browse_repo", { path: "docs" });
@@ -478,8 +479,6 @@ describe("other repository shapes", () => {
     // readable, so that the author can see what was found; the listing says why it is missing.
     expect(listing.text).not.toContain("document: skills/no-front-matter/SKILL.md");
     expect(listing.text).toContain("Index diagnostics (3 of 7):");
-    expect(listing.data?.diagnosticsTotal).toBe(7);
-    expect(listing.data?.diagnostics).toHaveLength(3);
     expect(listing.text).toContain(
       '- skills/colon-in-description/SKILL.md (invalid_front_matter): front-matter is not valid YAML (BLOCK_AS_IMPLICIT_KEY): the value of "description" contains ": "; quote the value or write it as a block scalar (>)',
     );
@@ -547,7 +546,7 @@ describe("a repository with a manifest", () => {
     );
 
     const root = await call(client, "browse_repo");
-    expect(root.data?.entries).toHaveLength(2);
+    expect(listedPaths(root.text)).toHaveLength(2);
     expect(root.text).toContain("- directory: docs");
     expect(root.text).toContain("- directory: skills");
     expect(root.text).not.toContain("- file: SKILLCDN.md");
@@ -618,7 +617,7 @@ describe("a repository with a manifest", () => {
     expect(client.getInstructions()).toContain("Skills and documents from");
     expect(client.getInstructions()).not.toContain("Broken");
     const listing = await call(client, "browse_repo");
-    expect(listing.data?.entries).toEqual([]);
+    expect(listedPaths(listing.text)).toEqual([]);
     expect(listing.text).toContain("SKILLCDN.md (invalid_description)");
     expect((await call(client, "read_repo_file", { path: "README.md" })).isError).toBe(true);
     // The file itself stays readable, so the author can see what was found.
@@ -629,7 +628,9 @@ describe("a repository with a manifest", () => {
     expect(
       (await call(client, "read_repo_file", { path: "skills/release-notes/SKILL.md" })).isError,
     ).toBe(true);
-    expect((await call(client, "search_repo", { query: "release" })).data?.items).toEqual([]);
+    expect((await call(client, "search_repo", { query: "release" })).text).toContain(
+      "No results for",
+    );
     await client.close();
   });
 
@@ -668,12 +669,10 @@ describe("a repository with a manifest", () => {
       for (const result of [root, guide, skill]) {
         expect(result.isError).toBe(false);
         expect(result.text).toBe(INDEXING_NOTICE);
-        expect(result.data).toEqual({ status: "indexing" });
       }
       for (const path of ["skills/broken/notes.md", "skills/greeting/references/wait.md"]) {
         const result = await call(client, "read_repo_file", { path });
         expect(result.text, path).toBe(INDEXING_NOTICE);
-        expect(result.data, path).toEqual({ status: "indexing" });
       }
 
       resumeIndexing.resolve();
@@ -822,7 +821,6 @@ describe("while a commit is being indexed", () => {
 
     const reading = await call(client, "read_repo_file", { path: "docs/only-here.md" });
     expect(reading.text).toBe(INDEXING_NOTICE);
-    expect(reading.data).toEqual({ status: "indexing" });
     release();
 
     await snapshots.idle();
@@ -1129,9 +1127,6 @@ describe("content policy (ADR-0026)", () => {
     expect(open.isError).toBe(false);
     expect(open.text).toContain("License: MIT (LICENSE)");
     expect(open.text).toContain("--- instructions ---");
-    expect(open.data).toMatchObject({
-      serving: { full: true, license: { kind: "permissive", name: "MIT", source: "LICENSE" } },
-    });
 
     const reserved = await call(client, "load_skill", { path: "skills/reserved/SKILL.md" });
     expect(reserved.isError).toBe(false);
@@ -1140,11 +1135,7 @@ describe("content policy (ADR-0026)", () => {
     expect(reserved.text).toContain("https://github.com/Acme/licensed/blob/");
     expect(reserved.text).not.toContain("--- instructions ---");
     expect(reserved.text).not.toContain("handshake");
-    expect(reserved.data).toMatchObject({
-      body: "",
-      files: [],
-      serving: { full: false, license: { kind: "restrictive", name: "All rights reserved" } },
-    });
+    expect(reserved.text).not.toContain("Supporting files");
 
     const declared = await call(client, "load_skill", { path: "skills/declared/SKILL.md" });
     expect(declared.text).toContain("License: CC-BY-NC-4.0 (skills/declared/SKILL.md)");
@@ -1191,7 +1182,6 @@ describe("content policy (ADR-0026)", () => {
       const reserved = await call(client, "load_skill", { path: "skills/reserved/SKILL.md" });
       expect(reserved.text).toContain("--- instructions ---");
       expect(reserved.text).not.toContain("Described only");
-      expect(reserved.data).toMatchObject({ serving: { full: true } });
       const secret = await call(client, "read_repo_file", {
         path: "skills/reserved/references/secret.md",
       });

@@ -32,6 +32,31 @@ const skill = (patch: Partial<SkillResult> = {}): SkillResult => ({
 });
 
 describe("MCP context projections", () => {
+  it("carries one representation, the text, and no structured copy", () => {
+    const result = skillReply(skill());
+    expect(Object.keys(result)).toEqual(["content"]);
+    expect(result.content).toEqual([
+      { type: "text", text: expect.stringContaining("Skill: write") },
+    ]);
+  });
+
+  it("names every supporting file of a large skill on the first page, within a byte bound", () => {
+    const files = Array.from(
+      { length: 50 },
+      (_, index) => `skills/write/reference/topic-${String(index).padStart(2, "0")}.md` as RepoPath,
+    );
+    const listed = skillReply(skill({ files })).content[0]?.text ?? "";
+    for (const file of files) expect(listed).toContain(`- ${file}\n`);
+    expect(listed).not.toContain("for all supporting files");
+    const long = Array.from(
+      { length: 50 },
+      (_, index) => `skills/write/${"deep/".repeat(20)}file-${index}.md` as RepoPath,
+    );
+    const cut = skillReply(skill({ files: long })).content[0]?.text ?? "";
+    expect(cut).toContain("- skills/write/deep/");
+    expect(cut).toContain('(browse_repo {"path":"skills/write"} for all supporting files)');
+  });
+
   it("bounds errors after JSON escaping as well as their source text", () => {
     const result = problem(String.fromCodePoint(1).repeat(30_000));
     expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThanOrEqual(MCP_RESULT_MAX_BYTES);

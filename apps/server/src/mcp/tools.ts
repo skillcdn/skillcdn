@@ -58,7 +58,7 @@ const INDEXING_TTL_MS = 5_000;
 
 function notReady(outcome: NotReady): ToolReply {
   return outcome.status === "indexing"
-    ? reply(INDEXING_NOTICE, { status: "indexing" })
+    ? reply(INDEXING_NOTICE)
     : problem(`This commit could not be indexed (${outcome.errorCode}). Try again later.`);
 }
 

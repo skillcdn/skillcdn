@@ -321,9 +321,6 @@ describe("the MCP skills extension", () => {
         `Files over this server's size limit, not readable here; fetch them from the source:\n- skills/write/data/fonts.json (${big.length} bytes): ${sourceUrl}`,
       );
       expect(text).toContain("is over the read limit");
-      expect(loaded.structuredContent).toMatchObject({
-        oversized: [{ path: "skills/write/data/fonts.json", size: big.length, sourceUrl }],
-      });
       const refused = await client.callTool({
         name: "read_repo_file",
         arguments: { path: "skills/write/data/fonts.json" },

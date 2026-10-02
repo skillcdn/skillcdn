@@ -1,18 +1,20 @@
 import type { Client } from "@modelcontextprotocol/client";
-import {
-  type BrowseResult,
-  type FileResult,
-  type FindResult,
-  restErrorSchema,
-  restMountSchema,
-  type SkillResult,
-} from "@skillcdn/core";
+import { INDEXING_NOTICE, restErrorSchema, restMountSchema } from "@skillcdn/core";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createFixtureHost, fixtureCommits } from "./testing/fixture-host.js";
 import { createHarness, type Harness } from "./testing/harness.js";
+import {
+  continuationOf,
+  filePageOf,
+  listedPaths,
+  skillSectionsOf,
+  textOf,
+} from "./testing/tool-text.js";
 
 const MAX_REPLY_BYTES = 24_576;
+/** A line of the resolved references a page lists. */
+const REFERENCE_LINE = / -> \S+ \((?:available|outside_mount|missing|blocked)\)$/;
 let database: TestDatabase;
 beforeAll(async () => {
   database = await createTestDatabase(process.env.TEST_DATABASE_URL ?? DEV_DATABASE_URL);
@@ -74,13 +76,15 @@ async function ready(h: Harness, address: string): Promise<void> {
 async function call(client: Client, name: string, args: Record<string, unknown>) {
   const result = await client.callTool({ name, arguments: args });
   expect(Buffer.byteLength(JSON.stringify(result), "utf8")).toBeLessThanOrEqual(MAX_REPLY_BYTES);
+  // One representation, the text (ADR-0034).
+  expect(result.structuredContent).toBeUndefined();
   return result;
 }
 
-function data<T>(result: Awaited<ReturnType<typeof call>>): T {
+/** The text of a result that is not an error. */
+function text(result: Awaited<ReturnType<typeof call>>): string {
   expect(result.isError).not.toBe(true);
-  expect(result.structuredContent).toBeDefined();
-  return result.structuredContent as unknown as T;
+  return textOf(result);
 }
 
 describe("MCP discovery with bounded optional context", () => {
@@ -97,33 +101,32 @@ describe("MCP discovery with bounded optional context", () => {
     await ready(h, address);
     const client = await h.connect(address);
     try {
-      const root = data<BrowseResult>(await call(client, "browse_repo", {}));
-      expect(root.overview).toMatchObject({ path: "README.md", title: "Original overview" });
-      expect(root.entries.find((entry) => entry.path === "department")).toMatchObject({
-        overviewPath: "department/README.md",
-        description: "Choose a writing task.",
-      });
-      for (const path of ["source", ".hidden"]) {
-        expect(root.entries.map((entry) => entry.path)).not.toContain(path);
-      }
-      expect(root.entries.map((entry) => entry.path)).not.toContain("README.md");
-      const folder = data<BrowseResult>(await call(client, "browse_repo", { path: "department" }));
-      expect(folder.overview?.path).toBe("department/README.md");
+      const root = text(await call(client, "browse_repo", {}));
+      expect(root).toContain("Original overview");
+      expect(root).toContain("Optional overview: read_repo_file README.md.");
+      expect(root).toMatch(
+        /^- directory: department.*; overview: department\/README\.md\n {2}Choose a writing task\.$/m,
+      );
+      const paths = listedPaths(root);
+      expect(paths).toContain("department");
+      for (const path of ["source", ".hidden", "README.md"]) expect(paths).not.toContain(path);
+      const folder = text(await call(client, "browse_repo", { path: "department" }));
+      expect(folder).toContain("Optional overview: read_repo_file department/README.md.");
       expect(
-        data<FileResult>(await call(client, "read_repo_file", { path: "README.md" })).content,
+        filePageOf(text(await call(client, "read_repo_file", { path: "README.md" }))).content,
       ).toBe(rootReadme);
       for (const path of ["README.ko.md", "source/README.md", ".hidden/README.md"]) {
         expect((await call(client, "read_repo_file", { path })).isError).toBe(true);
       }
-      const loaded = data<SkillResult>(
-        await call(client, "load_skill", { path: "department/write/SKILL.md" }),
-      );
-      expect(loaded.body).toBe("Write the requested document.");
-      expect(loaded.ruleChain ?? []).toEqual([]);
-      expect(loaded.included).toEqual([]);
-      expect(JSON.stringify(loaded)).not.toContain("Overviewquartz");
+      const loaded = text(await call(client, "load_skill", { path: "department/write/SKILL.md" }));
+      expect(skillSectionsOf(loaded)).toEqual({
+        rules: [],
+        body: "Write the requested document.",
+        included: [],
+      });
+      expect(loaded).not.toContain("Overviewquartz");
       for (const query of ["overviewquartz", "translationonlyquartz"]) {
-        expect(data<FindResult>(await call(client, "search_repo", { query })).items).toEqual([]);
+        expect(text(await call(client, "search_repo", { query }))).toContain("No results for");
       }
     } finally {
       await client.close();
@@ -141,31 +144,24 @@ describe("MCP discovery with bounded optional context", () => {
     await ready(h, address);
     const client = await h.connect(address);
     try {
-      const shared = data<FindResult>(await call(client, "search_repo", { query: "sharedquartz" }));
-      expect(shared.items.map((item) => (item.kind === "skill" ? item.path : item.path))).toEqual([
-        "plugin/skills/write/SKILL.md",
-      ]);
-      expect(
-        data<FindResult>(await call(client, "search_repo", { query: "hiddenonlyquartz" })).items,
-      ).toEqual([]);
+      const shared = text(await call(client, "search_repo", { query: "sharedquartz" }));
+      expect(listedPaths(shared)).toEqual(["plugin/skills/write/SKILL.md"]);
+      expect(text(await call(client, "search_repo", { query: "hiddenonlyquartz" }))).toContain(
+        "No results for",
+      );
       // The copy stays loadable by its exact path, and says what it is.
-      const hidden = data<SkillResult>(
+      const hidden = text(
         await call(client, "load_skill", { path: ".claude/skills/write/SKILL.md" }),
       );
-      expect(hidden.warnings).toContainEqual(expect.stringContaining("hidden directory"));
+      expect(hidden).toContain("Warnings for the skill author:");
+      expect(hidden).toContain("hidden directory");
       // Counts and the overview cover what can be discovered: the copy's folder is not introduced,
       // and browsing shows it with nothing to discover.
       expect(client.getInstructions()).toContain("plugin/: 1 skill\n");
       expect(client.getInstructions()).not.toContain(".claude/");
-      const root = data<BrowseResult>(await call(client, "browse_repo", {}));
-      expect(root.entries.find((entry) => entry.path === ".claude")).toMatchObject({
-        kind: "directory",
-        skillCount: 0,
-      });
-      expect(root.entries.find((entry) => entry.path === "plugin")).toMatchObject({
-        kind: "directory",
-        skillCount: 1,
-      });
+      const root = text(await call(client, "browse_repo", {}));
+      expect(root).toMatch(/^- directory: \.claude(?: \(.*\))?; 0 skills/m);
+      expect(root).toMatch(/^- directory: plugin(?: \(.*\))?; 1 skill/m);
     } finally {
       await client.close();
     }
@@ -195,14 +191,14 @@ describe("MCP discovery with bounded optional context", () => {
     const client = await h.connect(address);
     const nested = await h.connect(`${address}/${excluded}`);
     try {
-      const root = data<BrowseResult>(await call(client, "browse_repo", {}));
-      expect(root.entries.map((entry) => entry.path)).not.toContain("internal");
-      expect(root.diagnostics ?? []).toEqual([]);
-      expect(JSON.stringify(root)).not.toContain("Hiddenquartz");
-      const hidden = data<BrowseResult>(await call(nested, "browse_repo", {}));
-      expect(hidden.entries).toEqual([]);
-      expect(hidden.diagnostics ?? []).toEqual([]);
-      expect(JSON.stringify(hidden)).not.toContain("Hiddenquartz");
+      const root = text(await call(client, "browse_repo", {}));
+      expect(listedPaths(root)).not.toContain("internal");
+      expect(root).not.toContain("Index diagnostics");
+      expect(root).not.toContain("Hiddenquartz");
+      const hidden = text(await call(nested, "browse_repo", {}));
+      expect(listedPaths(hidden)).toEqual([]);
+      expect(hidden).not.toContain("Index diagnostics");
+      expect(hidden).not.toContain("Hiddenquartz");
       const mount = restMountSchema.parse(
         await (await h.request(`/api/v1/mounts${address}/${excluded}`)).json(),
       );
@@ -213,23 +209,21 @@ describe("MCP discovery with bounded optional context", () => {
           expect((await call(target, "read_repo_file", { path })).isError).toBe(true);
         }
       }
-      const loaded = data<SkillResult>(
-        await call(client, "load_skill", { path: "public/write/SKILL.md" }),
-      );
-      expect(loaded.complete).toBe(false);
-      expect(loaded.included).toEqual([
-        expect.objectContaining({ path: "public/write/private.md" }),
+      const loaded = text(await call(client, "load_skill", { path: "public/write/SKILL.md" }));
+      expect(loaded).toContain("Skill context is incomplete.");
+      expect(skillSectionsOf(loaded).included).toEqual([
+        { path: "public/write/private.md", content: undefined, continues: false },
       ]);
-      expect(loaded.included[0]?.content).toBeUndefined();
-      expect(
-        loaded.references?.find((reference) => reference.path === `${excluded}/README.md`)?.status,
-      ).not.toBe("available");
+      const reference = loaded
+        .split("\n")
+        .find((line) => line.includes(`-> ${excluded}/README.md (`));
+      expect(reference ?? "").not.toContain("(available)");
       expect(
         (await call(client, "read_repo_file", { path: "public/write/private.md" })).isError,
       ).toBe(true);
-      expect(
-        data<FindResult>(await call(client, "search_repo", { query: "hiddenquartz" })).items,
-      ).toEqual([]);
+      expect(text(await call(client, "search_repo", { query: "hiddenquartz" }))).toContain(
+        "No results for",
+      );
     } finally {
       await client.close();
       await nested.close();
@@ -253,14 +247,14 @@ describe("MCP discovery with bounded optional context", () => {
           );
         }),
       ]);
-      expect(data<Record<string, unknown>>(early)).toMatchObject({ status: "indexing" });
+      expect(text(early)).toBe(INDEXING_NOTICE);
       const response = await h.request(`/api/v1/files${address}?path=docs/fresh.md`);
       expect(response.status).toBe(503);
       expect(restErrorSchema.parse(await response.json()).error.code).toBe("index.indexing");
       release();
       await ready(h, address);
       expect(
-        data<FileResult>(await call(client, "read_repo_file", { path: "docs/fresh.md" })).content,
+        filePageOf(text(await call(client, "read_repo_file", { path: "docs/fresh.md" }))).content,
       ).toContain("Fresh readable instructions.");
     } finally {
       if (timer !== undefined) clearTimeout(timer);
@@ -301,15 +295,14 @@ describe("MCP discovery with bounded optional context", () => {
             ...(operation === "search_repo" ? { query: "copper" } : {}),
             ...(cursor === undefined ? {} : { cursor }),
           });
-          const page = data<BrowseResult & FindResult>(result);
-          const items = operation === "browse_repo" ? page.entries : page.items;
+          const page = text(result);
+          const items = listedPaths(page);
           expect(items.length).toBeGreaterThan(0);
           for (const item of items) {
-            expect(item.kind).toBe("skill");
-            expect(item.path).toBeDefined();
-            paths.push(item.path as string);
+            expect(item).toMatch(/^large\/skill-\d{2}\/SKILL\.md$/);
+            paths.push(item);
           }
-          cursor = page.nextCursor;
+          cursor = continuationOf(page);
           if (cursor !== undefined) {
             expect(cursors.has(cursor)).toBe(false);
             cursors.add(cursor);
@@ -357,29 +350,31 @@ describe("MCP discovery with bounded optional context", () => {
           path,
           ...(cursor === undefined ? {} : { cursor }),
         });
-        const page = data<SkillResult>(result);
-        for (const rule of page.ruleChain ?? []) {
+        const page = text(result);
+        const sections = skillSectionsOf(page);
+        for (const rule of sections.rules) {
           expect(rule.path).toBe("SKILLCDN.md");
           allRules += rule.body;
         }
-        allBody += page.body;
-        for (const file of page.included) {
+        allBody += sections.body ?? "";
+        for (const file of sections.included) {
           expect(file.path).toBe("team/write/required.md");
           expect(file.content).toBeDefined();
-          allRequired += file.content;
+          allRequired += file.content ?? "";
         }
-        const references = page.references ?? [];
-        expect(new Set(references.map((reference) => reference.path)).size).toBe(references.length);
+        const references = page.split("\n").filter((line) => REFERENCE_LINE.test(line));
+        expect(new Set(references).size).toBe(references.length);
         if (pages === 0) {
-          expect(references).toEqual([expect.objectContaining({ path: "team/write/optional.md" })]);
-          expect(page.metadata.audience).toBe("Optionalpresentationmarker");
+          expect(references).toHaveLength(1);
+          expect(references[0]).toContain("-> team/write/optional.md (");
+          expect(page).toContain("Metadata: audience: Optionalpresentationmarker");
         } else {
-          expect(page.metadata).toEqual({});
-          expect(page.files).toEqual([]);
+          expect(page).not.toContain("Metadata:");
+          expect(page).not.toContain("Supporting files");
           expect(references).toEqual([]);
         }
-        expect(page.complete).toBe(page.nextCursor === undefined);
-        cursor = page.nextCursor;
+        cursor = continuationOf(page);
+        expect(page.includes("Skill context is incomplete.")).toBe(cursor !== undefined);
         if (cursor !== undefined) {
           expect(seen.has(cursor)).toBe(false);
           seen.add(cursor);
@@ -410,14 +405,15 @@ describe("MCP discovery with bounded optional context", () => {
       let offset = 0;
       let pages = 0;
       while (true) {
-        const page = data<FileResult>(
+        const read = text(
           await call(client, "read_repo_file", { path: "docs/long.md", offset, limit: 100_000 }),
         );
+        const page = filePageOf(read);
         expect(page.offset).toBe(offset);
         expect(page.totalLength).toBe(content.length);
         expect(page.content.length).toBeGreaterThan(0);
-        const references = page.references ?? [];
-        expect(new Set(references.map((reference) => reference.path)).size).toBe(references.length);
+        const references = read.split("\n").filter((line) => REFERENCE_LINE.test(line));
+        expect(new Set(references).size).toBe(references.length);
         reconstructed += page.content;
         pages += 1;
         expect(pages).toBeLessThan(80);
