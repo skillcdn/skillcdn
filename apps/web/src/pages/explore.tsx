@@ -64,8 +64,11 @@ function FeaturedCard(props: { readonly item: RestFeatured["items"][number] }) {
           <p className={styles.cardText}>{description}</p>
         )}
         <p className={styles.cardMeta}>
+          {/* The point is for something to look at; a count of nothing is not that. */}
           {item.status === "ready" && item.skillCount !== null && (
-            <Badge tone="point">{t.explore.featuredSkills(item.skillCount)}</Badge>
+            <Badge tone={item.skillCount > 0 ? "point" : "neutral"}>
+              {t.explore.featuredSkills(item.skillCount)}
+            </Badge>
           )}
           {item.status === "indexing" && <Badge>{t.explore.featuredIndexing}</Badge>}
           {item.status === "failed" && <Badge tone="warning">{t.explore.featuredFailed}</Badge>}

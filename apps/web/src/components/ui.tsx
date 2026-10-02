@@ -33,6 +33,24 @@ export function Badge(props: {
       className={cx(styles.badge, styles[`tone-${props.tone ?? "neutral"}`])}
       title={props.title}
     >
+      {/* A warning carries a mark, so that it is told from a count by its shape and not only
+          by its colour. */}
+      {props.tone === "warning" && (
+        <svg
+          viewBox="0 0 24 24"
+          width="1em"
+          height="1em"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M12 3.5 2.5 20h19z" />
+          <path d="M12 10v4.5M12 17.3h.01" />
+        </svg>
+      )}
       {props.children}
     </span>
   );
