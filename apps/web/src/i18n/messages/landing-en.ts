@@ -61,7 +61,7 @@ export const landingEn = {
     eyebrow: "Ready when you are",
     title: "Your AI has more in it.",
     body: "Find a skill you love. Connect it once. Then just start talking.",
-    action: "Explore the possibilities",
+    action: "Explore skills",
     steps: ["Pick a skill", "Connect your AI", "Say what you want to make"],
   },
   authors: {
@@ -81,7 +81,7 @@ export const landingEn = {
       {
         question: "Which AI apps can I use?",
         answer:
-          "ChatGPT, Claude, and other apps that connect over MCP. Every skill page shows the steps for each of them. Which ways of connecting you get depends on your app and account.",
+          "ChatGPT, Claude, and other apps that connect over MCP. The steps for each of them are on every repository page, one click away from any skill. Which ways of connecting you get depends on your app and account.",
       },
       {
         question: "What do I need to get started?",

@@ -11,6 +11,7 @@ export function CopyButton(props: {
   readonly label?: string;
   readonly variant?: "primary" | "secondary" | "ghost";
   readonly size?: "md" | "sm";
+  readonly className?: string;
 }) {
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
@@ -27,6 +28,7 @@ export function CopyButton(props: {
     <Button
       size={props.size ?? "sm"}
       variant={props.variant ?? "ghost"}
+      className={props.className}
       onClick={() => {
         // Without a secure context there is no clipboard; the text stays selectable.
         navigator.clipboard?.writeText(props.text).then(

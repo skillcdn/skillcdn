@@ -43,7 +43,7 @@ export const landingKo = {
     label: "대화 예시",
     assistant: "AI 어시스턴트",
     user: "나",
-    prompt: "이 강아지로 우리 군고구마 가게 인터뷰 숏츠 하나 만들어줘.",
+    prompt: "이 강아지로 우리 군고구마 가게 인터뷰 쇼츠 하나 만들어줘.",
     reference: "레퍼런스 영상",
     picture: "내 캐릭터",
     question:
@@ -58,9 +58,9 @@ export const landingKo = {
   },
   start: {
     eyebrow: "준비는 끝났어요",
-    title: "당신의 AI, 더 잘할 수 있어요.",
+    title: "내 AI, 더 잘할 수 있어요.",
     body: "마음에 드는 스킬을 고르고, 한 번 연결하세요. 그다음엔 대화만 시작하면 돼요.",
-    action: "새로운 가능성 둘러보기",
+    action: "스킬 둘러보기",
     steps: ["스킬 고르기", "쓰던 AI에 연결하기", "만들고 싶은 것 말하기"],
   },
   authors: {
@@ -80,7 +80,7 @@ export const landingKo = {
       {
         question: "어떤 AI 앱에서 쓸 수 있나요?",
         answer:
-          "ChatGPT, Claude 등 MCP로 연결되는 앱이면 돼요. 스킬 페이지마다 앱별 연결 단계가 안내되어 있어요. 연결 방식은 앱과 계정에 따라 달라질 수 있어요.",
+          "ChatGPT, Claude 등 MCP로 연결되는 앱이면 돼요. 앱별 연결 단계는 저장소 페이지마다 있고, 어느 스킬에서든 한 번에 갈 수 있어요. 연결 방식은 앱과 계정에 따라 달라질 수 있어요.",
       },
       {
         question: "시작하려면 무엇이 필요한가요?",

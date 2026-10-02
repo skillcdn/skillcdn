@@ -1,9 +1,11 @@
-import type { Address, RestMount, RestSkill } from "@skillcdn/core";
+import { type Address, formatAddress, type RestMount, type RestSkill } from "@skillcdn/core";
 import { type ReactNode, useEffect, useState } from "react";
 import { api } from "../api/client.js";
 import { resourceKeys } from "../api/keys.js";
 import { useResource } from "../api/use-resource.js";
+import { AddressForm } from "../components/address-form.js";
 import { ConnectGuide } from "../components/connect-guide.js";
+import { ConnectStrip } from "../components/connect-strip.js";
 import { ErrorCallout } from "../components/error-callout.js";
 import {
   Avatar,
@@ -17,7 +19,8 @@ import {
 } from "../components/ui.js";
 import { useI18n } from "../i18n/index.js";
 import { repositoryDescription, repositoryName, translationFor } from "../i18n/repository-text.js";
-import type { MountView } from "../router.js";
+import { Link } from "../navigation.js";
+import { type MountView, PATHS } from "../router.js";
 import { applyHead, buildHead } from "../seo/head.js";
 import { hostTreeUrl } from "./host-links.js";
 import { LicenseValue } from "./license.js";
@@ -36,7 +39,13 @@ function Fact(props: { readonly label: string; readonly children: ReactNode }) {
   );
 }
 
-function MountHeader(props: { readonly address: Address; readonly mount: RestMount | undefined }) {
+function MountHeader(props: {
+  readonly origin: string;
+  readonly address: Address;
+  readonly mount: RestMount | undefined;
+  /** What the page shows, for the address strip; none while the address cannot be served. */
+  readonly use: "root" | "skill" | "folder" | undefined;
+}) {
   const { t, language } = useI18n();
   const { address, mount } = props;
   const repository =
@@ -63,7 +72,6 @@ function MountHeader(props: { readonly address: Address; readonly mount: RestMou
       {mount !== undefined && (
         <Avatar className={styles.avatar} src={mount.repository.avatar} size="lg" eager />
       )}
-      <p className={styles.kicker}>{t.mount.repository}</p>
       {/* The mark belongs to the name: it says someone vouches for what this address resolves to. */}
       <h1 className={styles.title}>
         {name}
@@ -78,6 +86,11 @@ function MountHeader(props: { readonly address: Address; readonly mount: RestMou
         <p className={styles.description} lang={descriptionLanguage}>
           {description}
         </p>
+      )}
+      {/* The address to connect with comes before the facts about the commit: the one is what
+          the visitor came for, the other is there for whoever asks. */}
+      {props.use !== undefined && (
+        <ConnectStrip origin={props.origin} address={address} kind={props.use} />
       )}
       {mount !== undefined && (
         <div className={styles.facts}>
@@ -201,23 +214,47 @@ export function MountPage(props: MountPageProps) {
     );
   }, [address, view, language, origin, loaded, skill]);
 
-  // Name and description, then how to connect an agent, then what it serves. The guide is for
-  // the address as a whole, so it is on the page of the address: a folder, a skill, a file or a
-  // search is what the visitor came for, and the way back to the guide is one crumb away.
+  // Name and description and the address to connect with, then how to connect an agent, then
+  // what it serves. The guide is for the address as a whole, so it is on the page of the
+  // address: a folder, a skill, a file or a search is what the visitor came for, and keeps the
+  // address under the name, which leads back to the guide.
   const atRoot =
     view.kind === "overview" &&
     view.query === undefined &&
     (view.path === undefined || view.path === address.path);
+  const use = atRoot ? "root" : view.kind === "skill" ? "skill" : "folder";
 
   return (
     <Container className={styles.page}>
-      <MountHeader address={address} mount={loaded} />
+      <MountHeader
+        origin={origin}
+        address={address}
+        mount={loaded}
+        use={mount.state === "error" ? undefined : use}
+      />
       {atRoot && mount.state !== "error" && (
         <ConnectGuide origin={origin} address={address} mount={loaded} />
       )}
       <div className={styles.content}>
         {mount.state === "loading" && <Skeleton lines={6} label={t.common.loading} />}
         {mount.state === "error" && <ErrorCallout error={mount.error} onRetry={mount.reload} />}
+        {/* An address that resolves to nothing is, most of the time, a slip of a character: the
+            address stays in a field to fix, and the featured skills are a way out. */}
+        {mount.state === "error" && mount.error.status === 404 && (
+          <div className={styles.lost}>
+            <p className={styles.note}>{t.mount.lost.lead}</p>
+            <AddressForm
+              origin={origin}
+              initialValue={formatAddress(address).replace(/^\/gh\//, "")}
+            />
+            <p className={styles.note}>
+              <Link href={PATHS.explore}>
+                {t.mount.lost.explore}
+                <span aria-hidden="true"> →</span>
+              </Link>
+            </p>
+          </div>
+        )}
         {mount.state === "ready" && (
           <>
             {mount.value.index.status === "ready" && mount.value.index.truncated && (

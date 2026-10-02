@@ -439,10 +439,12 @@ describe("the page of an address", () => {
     expect(html).not.toContain("<script>alert");
     // The browser continues with the origin the server rendered for.
     expect(html).toContain("skills.example/gh/acme/skills");
-    // The description of the repository, then how to connect an agent: the endpoint, the steps
-    // for the common clients, and what the agent is told when it connects.
+    // The description of the repository and the address to connect with, then how to connect
+    // an agent: the steps for the common clients, and what the agent is told when it connects.
     const t = messagesFor("ko");
     expect(html).toContain("Skills for the whole team.");
+    expect(html).toContain(t.mount.use.these);
+    expect(html.indexOf(t.mount.use.these)).toBeLessThan(html.indexOf(t.connect.title));
     expect(html).toContain(t.mount.search.hint);
     expect(html).toContain('aria-describedby="mount-search-hint"');
     expect(html).toContain(t.connect.title);
@@ -508,9 +510,12 @@ describe("the page of an address", () => {
     // The crumbs lead back to the connected address, which the folder does not change.
     expect(html).toContain('href="/gh/acme/skills"');
     expect(html).not.toContain("https://skills.example/gh/acme/skills/team-a");
-    // The connection guide belongs to the page of the address, not to a folder of it.
+    // The connection guide belongs to the page of the address, not to a folder of it; the
+    // address itself, and the way to the guide, stay on every page of it.
     expect(html).toContain(">Team review<");
     expect(html).not.toContain(messagesFor("en").connect.title);
+    expect(html).toContain(messagesFor("en").mount.use.these);
+    expect(html).toContain('href="/gh/acme/skills#connect-title"');
   });
 
   it("renders one skill with its instructions, and says so when the index is not there yet", () => {

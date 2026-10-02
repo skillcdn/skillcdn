@@ -66,7 +66,7 @@ export const ko: Messages = {
     label: "저장소 주소",
     prefixHint: "GitHub",
     placeholder: "owner/repo",
-    submit: "살펴보기",
+    submit: "열기",
     hint: "선택 사항: @브랜치, @태그 또는 @커밋, 그 뒤에 /하위/경로.",
     examples: "예시",
     invalid: "올바른 주소가 아닙니다.",
@@ -94,13 +94,14 @@ export const ko: Messages = {
   explore: {
     title: "다음엔 무엇을 만들어 볼까요?",
     lead: "작은 영감 하나, 유용한 스킬 하나. 다음 아이디어가 여기서 시작돼요.",
-    featured: "추천 저장소",
-    featuredLead: "이 사이트가 고른 저장소예요. 열어서 스킬을 살펴보고, 쓰던 AI에 연결하세요.",
+    featured: "먼저 써 볼 스킬",
+    featuredLead:
+      "이 사이트가 고른 스킬 모음이에요. 열어서 무엇을 만들 수 있는지 보고, 쓰던 AI에 연결하세요.",
     featuredSkills: (count: number) => `스킬 ${count}개`,
     moreSkills: (count: number) => `외 ${count}개`,
     featuredIndexing: "색인 중…",
     featuredFailed: "색인하지 못했습니다",
-    pages: "추천 저장소 페이지",
+    pages: "추천 스킬 페이지",
     page: (current: number, total: number) => `${total}쪽 중 ${current}쪽`,
     previous: "이전",
     next: "다음",
@@ -120,6 +121,15 @@ export const ko: Messages = {
     unverifiedHint:
       "이 콘텐츠는 저장소에서 그대로 가져온 것이며, 저장소 소유자가 SkillCDN에서 확인 절차를 거치지 않았습니다. 신뢰하기 전에 직접 검토하세요.",
     viewOnHost: "GitHub에서 보기",
+    use: {
+      these: "내 AI에 이 주소를 연결하면 이 스킬들을 쓸 수 있어요.",
+      this: "내 AI에 이 주소를 연결하면 이 스킬을 쓸 수 있어요.",
+      guide: "연결 방법 보기",
+    },
+    lost: {
+      lead: "주소를 확인하거나, 추천 스킬에서 시작해 보세요.",
+      explore: "추천 스킬 보기",
+    },
     indexing: {
       title: "이 커밋을 색인하는 중…",
       body: "보통 몇 초면 끝납니다. 페이지는 자동으로 갱신됩니다.",
@@ -139,12 +149,12 @@ export const ko: Messages = {
       `전체 ${total}개 중 처음 ${shown}개만 표시합니다.`,
     noSkills: {
       title: "스킬이 없습니다",
-      body: "이 마운트에는 올바른 SKILL.md가 있는 디렉터리가 없습니다. 문서는 그대로 검색하고 읽을 수 있습니다.",
+      body: "올바른 SKILL.md가 있는 폴더가 없습니다. 문서는 그대로 검색하고 읽을 수 있습니다.",
     },
-    noDocuments: "이 마운트에는 문서가 없습니다.",
+    noDocuments: "문서가 없습니다.",
     empty: {
       title: "제공할 내용이 없습니다",
-      body: "이 마운트에는 스킬도, Markdown이나 JSON 문서도 없습니다.",
+      body: "이 주소에는 스킬도, Markdown이나 JSON 문서도 없습니다.",
     },
     diagnostics: {
       lead: "아래 매니페스트는 제공되지 않았습니다. 수정해서 푸시하면 다음 커밋부터 다시 색인됩니다.",
@@ -152,7 +162,7 @@ export const ko: Messages = {
     warnings: (count: number) => `경고 ${count}개`,
     browse: {
       title: "저장소 둘러보기",
-      root: "저장소 루트",
+      root: "전체",
       breadcrumb: "저장소 폴더",
       introduction: "소개 읽기",
       folders: "폴더",
@@ -267,7 +277,7 @@ export const ko: Messages = {
       },
       "skill.not_found": {
         title: "스킬을 찾을 수 없습니다",
-        body: "이 마운트에는 그런 이름의 스킬이 없습니다.",
+        body: "이 주소에는 그런 이름의 스킬이 없습니다.",
       },
       "skill.ambiguous": {
         title: "같은 이름의 스킬이 여러 개입니다",
@@ -279,7 +289,7 @@ export const ko: Messages = {
       },
       "file.not_found": {
         title: "파일을 찾을 수 없습니다",
-        body: "이 마운트의 해당 경로에는 파일이 없습니다.",
+        body: "이 저장소의 해당 경로에는 파일이 없습니다.",
       },
       "file.too_large": {
         title: "파일이 너무 큽니다",

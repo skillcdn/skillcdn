@@ -1,0 +1,62 @@
+/* The address under the name, centred as the rest of the header is: the address in a field,
+   as a thing to copy, and one quiet line under it. The field holds its own button, so the
+   whole of it reads as one control and not as a label with two actions hung off its end. */
+.strip {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+}
+
+/* A pill, since a pill is what an address field looks like everywhere else. It is as wide as
+   its address and no wider, and a long address wraps inside it rather than widening the page. */
+.field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: 100%;
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-full);
+  background: var(--color-bg-inset);
+}
+
+/* The mark sits on the address's own line box, a shade below centre as any mark beside text. */
+.mark {
+  display: inline-flex;
+  flex: none;
+  color: var(--color-accent);
+  font-size: var(--text-md);
+  translate: 0 var(--language-mark-drop);
+}
+
+.address {
+  min-width: 0;
+  padding-block: var(--space-1);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+/* The button takes the field's own corners, so it ends the pill rather than sitting in it. */
+.copy {
+  flex: none;
+  border-radius: var(--radius-full);
+}
+
+.lead {
+  max-width: var(--width-prose);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  text-align: center;
+  text-wrap: balance;
+}
+
+.guide {
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.guide:hover {
+  text-decoration: underline;
+}

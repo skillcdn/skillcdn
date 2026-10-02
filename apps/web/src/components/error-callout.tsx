@@ -24,9 +24,11 @@ export function ErrorCallout(props: { readonly error: ApiError; readonly onRetry
   const { title, body } = describeError(t, props.error);
   // A server that is not there, or is struggling, may be back in a moment. A missing thing is not.
   const retryable = props.error.status === 0 || props.error.status >= 500;
+  // A thing that is not there is, most often, a slip in the address: said plainly, not in red.
+  const tone = props.error.status === 404 ? "info" : "danger";
   return (
     <Callout
-      tone="danger"
+      tone={tone}
       title={title}
       action={
         retryable && props.onRetry !== undefined ? (

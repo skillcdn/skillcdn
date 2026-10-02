@@ -129,7 +129,6 @@ export function MountSkill(props: {
     <article className={styles.stack}>
       {back}
       <header>
-        <p className={styles.kicker}>{t.mount.kinds.skill}</p>
         {/* A translated title is prose; the name alone is code. */}
         <h2 className={title === skill.name ? styles.viewName : styles.viewTitle}>{title}</h2>
         <p className={styles.viewLead}>{description}</p>

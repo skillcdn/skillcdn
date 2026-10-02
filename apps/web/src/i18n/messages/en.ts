@@ -76,7 +76,7 @@ export const en = {
     label: "Repository address",
     prefixHint: "GitHub",
     placeholder: "owner/repo",
-    submit: "Explore",
+    submit: "Open",
     hint: "Optional: @branch, @tag or @commit, then a /sub/path.",
     examples: "Examples",
     invalid: "That is not a valid address.",
@@ -104,14 +104,15 @@ export const en = {
   explore: {
     title: "What will you create next?",
     lead: "A little inspiration. A useful skill. Your next idea starts here.",
-    featured: "Featured repositories",
-    featuredLead: "Picked for this site. Open one to see its skills and connect your AI.",
+    featured: "Skills to start with",
+    featuredLead:
+      "Collections picked for this site. Open one to see what you can make, then connect your AI.",
     featuredSkills: (count: number) => (count === 1 ? "1 skill" : `${count} skills`),
     /** After the first few skill names of a repository: how many more it has. */
     moreSkills: (count: number) => `+${count} more`,
     featuredIndexing: "Indexing…",
     featuredFailed: "Could not be indexed",
-    pages: "Pages of featured repositories",
+    pages: "Pages of featured skills",
     page: (current: number, total: number) => `Page ${current} of ${total}`,
     previous: "Previous",
     next: "Next",
@@ -131,6 +132,17 @@ export const en = {
     unverifiedHint:
       "This content comes straight from the repository and has not been verified by its owner with SkillCDN. Review it before you trust it.",
     viewOnHost: "View on GitHub",
+    /** Under the address field on every page of an address: what connecting it gives, and the way to the steps. */
+    use: {
+      these: "Connect this address to your AI to use these skills.",
+      this: "Connect this address to your AI to use this skill.",
+      guide: "How to connect",
+    },
+    /** Under a not-found error: the way back. */
+    lost: {
+      lead: "Check the address, or start from the featured skills.",
+      explore: "Browse featured skills",
+    },
     indexing: {
       title: "Indexing this commit…",
       body: "This usually takes a few seconds. The page updates by itself.",
@@ -150,12 +162,12 @@ export const en = {
     listLimited: (shown: number, total: number) => `Showing the first ${shown} of ${total}.`,
     noSkills: {
       title: "No skills here",
-      body: "No directory in this mount has a valid SKILL.md. Documents can still be searched and read.",
+      body: "No folder here has a valid SKILL.md. Documents can still be searched and read.",
     },
-    noDocuments: "No documents in this mount.",
+    noDocuments: "No documents here.",
     empty: {
       title: "Nothing to serve",
-      body: "This mount has no skills and no Markdown or JSON documents.",
+      body: "There are no skills and no Markdown or JSON documents at this address.",
     },
     diagnostics: {
       lead: "These manifests were not served. Fix them and push: the next commit is indexed again.",
@@ -163,7 +175,7 @@ export const en = {
     warnings: (count: number) => (count === 1 ? "1 warning" : `${count} warnings`),
     browse: {
       title: "Explore this repository",
-      root: "Repository root",
+      root: "Everything",
       breadcrumb: "Repository folders",
       introduction: "Read the introduction",
       folders: "Folders",
@@ -280,7 +292,7 @@ export const en = {
       },
       "skill.not_found": {
         title: "Skill not found",
-        body: "There is no skill by that name in this mount.",
+        body: "There is no skill by that name at this address.",
       },
       "skill.ambiguous": {
         title: "Several skills share that name",
@@ -292,7 +304,7 @@ export const en = {
       },
       "file.not_found": {
         title: "File not found",
-        body: "There is no file at that path in this mount.",
+        body: "There is no file at that path in this repository.",
       },
       "file.too_large": {
         title: "File too large",

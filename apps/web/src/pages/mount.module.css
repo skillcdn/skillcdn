@@ -350,6 +350,13 @@
   font-size: var(--text-sm);
 }
 
+/* Under an address that resolves to nothing: the way to fix it, and the way out. */
+.lost {
+  display: grid;
+  gap: var(--space-3);
+  max-width: var(--width-prose);
+}
+
 .diagnostics {
   display: grid;
   gap: var(--space-3);

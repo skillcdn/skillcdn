@@ -2,7 +2,7 @@ import type { AddressError } from "@skillcdn/core";
 import { AddressForm } from "../components/address-form.js";
 import { Callout, Container } from "../components/ui.js";
 import { useI18n } from "../i18n/index.js";
-import { Link } from "../navigation.js";
+import { Link, useLocation } from "../navigation.js";
 import { PATHS } from "../router.js";
 import styles from "./simple.module.css";
 
@@ -23,12 +23,14 @@ export function NotFoundPage() {
 /** A URL under /gh/ that is not an address: say which rule it breaks, and offer the form again. */
 export function BadAddressPage(props: { readonly origin: string; readonly error: AddressError }) {
   const { t } = useI18n();
+  // What was typed stays in the field, as it was typed: most of the time the fix is one character.
+  const typed = useLocation().pathname.replace(/^\/gh\/?/, "");
   return (
     <Container className={styles.page}>
       <h1 className={styles.title}>{t.address.invalid}</h1>
-      <Callout tone="danger">{t.address.errors[props.error.code]}</Callout>
+      <Callout tone="warning">{t.address.errors[props.error.code]}</Callout>
       <div className={styles.form}>
-        <AddressForm origin={props.origin} footnote />
+        <AddressForm key={typed} origin={props.origin} initialValue={typed} footnote />
       </div>
     </Container>
   );
