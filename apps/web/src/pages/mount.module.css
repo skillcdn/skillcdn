@@ -4,8 +4,10 @@
 
 /* Header */
 
-/* The picture that stands for the address, whatever its shape, at three to one over the
-   header, and the owner's picture on its lower edge, ringed in the page background. */
+/* The picture that stands for the address, whatever its shape, as wide as the header: three to
+   one until that height reaches the cap below, and from there on the cap's height with the
+   width still growing, so on a wide page it is flatter than three to one. The owner's picture
+   sits on its lower edge, ringed in the page background. */
 .banner {
   /* The width has to be stated: with only an aspect ratio, the max-height below is transferred
      through the ratio and caps the width at three times it, leaving the rest of the row empty. */
