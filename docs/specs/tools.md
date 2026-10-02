@@ -123,3 +123,4 @@ A skill this mount describes without serving is not listed by the extension, and
 
 - Whether unverified public repositories keep search once owner verification exists.
 - Whether `read_repo_file` should accept multiple paths for files needed only on some runs.
+- Whether a `load_skill` page should carry its context once. The rules, the body and the included files travel twice in a result, as text and as `structuredContent`, so a page within the 24 KiB budget holds about 10,000 characters of context, its first page keeps five supporting files and five references, and a large skill takes two pages or more. Raising the budget or carrying the context in the text alone are the options; both revisit [ADR-0023](../adr/0023-optional-introductions-and-explicit-publication.md), and the limit a client puts on one tool result is the bound to establish first.

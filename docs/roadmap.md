@@ -38,6 +38,7 @@ Design points still open (record the outcome in the spec or an ADR):
 
 - Pinned commits that the host serves through a repository without being part of its history (see the open questions in the address spec).
 - Abuse controls for the anonymous endpoints. The server bounds its own work: request and index size limits, bounded indexing per process, a short in-process memory of names that do not exist. Limiting requests per client is the job of whatever sits in front of the server. Still missing here: a negative cache shared between replicas.
+- The `load_skill` page budget: a result carries its context twice, as text and as structured data, so a page holds about 10 KB of a large skill and lists five of its files; whether to carry it once or raise the budget is open in the [tools spec](specs/tools.md#open-questions). The bound on supporting files listed through REST (50) is not what limits large skills: the extension lists every file, and the known large skills have at most 82.
 
 ## Now: milestone 4, ready for public operation
 
