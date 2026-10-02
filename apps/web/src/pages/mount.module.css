@@ -7,6 +7,9 @@
 /* The picture that stands for the address, whatever its shape, at three to one over the
    header, and the owner's picture on its lower edge, ringed in the page background. */
 .banner {
+  /* The width has to be stated: with only an aspect ratio, the max-height below is transferred
+     through the ratio and caps the width at three times it, leaving the rest of the row empty. */
+  width: 100%;
   aspect-ratio: 3 / 1;
   max-height: 16rem;
   overflow: hidden;
