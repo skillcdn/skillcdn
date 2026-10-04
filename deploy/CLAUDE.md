@@ -15,3 +15,4 @@ Read the root [`CLAUDE.md`](../CLAUDE.md) first. These rules also cover `.github
 ## Gotchas
 
 - `.dockerignore` drops every `*.md` except the root `README.md` and the three notices. A Markdown file the image must carry has to be re-included there, or the `COPY` fails only in the image job of CI: `pnpm check` never builds the image, so build the image locally before pushing a Dockerfile change.
+- The image job of CI asks the running image for pages by path and checks what comes back. A change to what a path answers breaks it without touching this directory, and `pnpm check` never runs it: when one segment short of an address became the page of an account, the job's "not an address" was that path. After changing what a path answers, read the job's steps and replay them against a local build before pushing: a throwaway database in the compose PostgreSQL, `migrate` and `api` on the compose network with a published port, and the same requests.
