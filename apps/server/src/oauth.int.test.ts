@@ -11,7 +11,7 @@ import {
 import { restAuthorizationSchema, restGrantsSchema } from "@skillcdn/core";
 import { countUnusedOAuthClients } from "@skillcdn/db";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createFixtureHost } from "./testing/fixture-host.js";
 import { createFixtureLogin, FIXTURE_INSTALL_URL } from "./testing/fixture-login.js";
 import {
@@ -761,15 +761,23 @@ describe("tokens", () => {
     const cookie = await h.signIn("alice");
     expect((await mcp(h, SECRET, tokens.access_token)).status).toBe(200);
     expect((await h.request("/api/v1/me/grants")).status).toBe(401);
-    const listed = restGrantsSchema.parse(
-      await (await h.request("/api/v1/me/grants", { headers: { cookie } })).json(),
+    // That a grant was used is noted beside the request that used it, which does not wait for
+    // the note: the list says so a moment later, not necessarily at once.
+    const grant = await vi.waitFor(
+      async () => {
+        const listed = restGrantsSchema.parse(
+          await (await h.request("/api/v1/me/grants", { headers: { cookie } })).json(),
+        );
+        const [newest] = listed.items;
+        expect(newest).toMatchObject({
+          client: { name: "Test client", uri: null },
+          address: "/gh/acme/secret-skills",
+        });
+        expect(newest?.lastUsedAt).not.toBeNull();
+        return newest;
+      },
+      { timeout: 5_000, interval: 25 },
     );
-    const [grant] = listed.items;
-    expect(grant).toMatchObject({
-      client: { name: "Test client", uri: null },
-      address: "/gh/acme/secret-skills",
-    });
-    expect(grant?.lastUsedAt).not.toBeNull();
 
     const path = `/api/v1/me/grants/${grant?.id}`;
     const others = await h.signIn("bob");
