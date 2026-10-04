@@ -4,6 +4,7 @@ import {
   type RestFeatured,
   type RestLegalDocument,
   type RestMount,
+  type RestOwner,
   type RestShowcase,
   type RestSkill,
 } from "@skillcdn/core";
@@ -104,6 +105,44 @@ const SKILL: RestSkill = {
     rules: null,
     translations: {},
   },
+};
+
+/** The page of an account: one repository indexed with a skill, and one the host only lists. */
+const OWNER: RestOwner = {
+  owner: {
+    host: "gh",
+    login: "Acme",
+    name: "Acme, Inc.",
+    kind: "organization",
+    avatar: "https://avatars.example/acme.png",
+    bio: "Tools for teams that ship.",
+    url: "https://github.com/Acme",
+    publicRepositories: 2,
+  },
+  indexed: [
+    {
+      address: "/gh/acme/skills",
+      repository: { ...MOUNT.repository, visibility: "public" },
+      manifest: null,
+      verified: false,
+      image: null,
+      status: "ready",
+      skillCount: 1,
+      skills: ["review"],
+    },
+  ],
+  repositories: [
+    {
+      address: "/gh/acme/notes",
+      name: "notes",
+      description: "Notes nobody has opened here yet.",
+      fork: false,
+      archived: false,
+      stars: 3,
+      pushedAt: "2026-09-01T00:00:00.000Z",
+    },
+  ],
+  nextPage: null,
 };
 
 const MEDIA_URL = (letter: string) => `/media/${letter.repeat(64)}`;
@@ -702,7 +741,7 @@ describe("the page of an address", () => {
     const bad = renderAddressPage(TEMPLATE, {
       language: "fr",
       origin: "https://skills.example",
-      pathname: "/gh/acme",
+      pathname: "/gh/acme/skills.git",
       search: "",
       data: {},
     });
@@ -710,6 +749,118 @@ describe("the page of an address", () => {
     expect(bad.html).toContain('<html lang="en">');
     expect(bad.html).toContain('data-prerendered="bad-address"');
     expect(bad.html).toContain(t.address.invalid);
+  });
+
+  it("says that a private repository is one, and what its AI app has to do to read it", () => {
+    for (const language of LANGUAGES) {
+      const t = messagesFor(language);
+      const shown = (visibility: "public" | "private") =>
+        renderAddressPage(TEMPLATE, {
+          language,
+          origin: "https://skills.example",
+          pathname: "/gh/acme/skills",
+          search: "",
+          data: {
+            mount: { ready: { ...MOUNT, repository: { ...MOUNT.repository, visibility } } },
+            browse: { ready: BROWSE },
+          },
+        });
+      const mine = shown("private");
+      // Nobody else may find it, and nothing about it is offered to a search engine.
+      expect(mine.indexable).toBe(false);
+      expect(mine.html).toContain('<meta name="robots" content="noindex,follow"');
+      expect(mine.html).not.toContain("/social/gh/acme/skills");
+      expect(mine.html).toContain(`>${t.mount.private}<`);
+      // The guide says the app signs in, and gives the steps that differ for that.
+      expect(mine.html).toContain(t.connect.private.title);
+      expect(mine.html).toContain(t.connect.private.signIn.chatgpt);
+      expect(mine.html).toContain(t.connect.private.steps.chatgpt);
+      expect(mine.html).not.toContain(t.connect.clients.chatgpt.steps[1]);
+
+      const everyones = shown("public");
+      expect(everyones.indexable).toBe(true);
+      expect(everyones.html).not.toContain(`>${t.mount.private}<`);
+      expect(everyones.html).not.toContain(t.connect.private.title);
+      expect(everyones.html).toContain(t.connect.clients.chatgpt.steps[1]);
+    }
+  });
+
+  it("renders the frame of the pages the browser fills in, for nobody in particular", () => {
+    for (const language of LANGUAGES) {
+      const t = messagesFor(language);
+      for (const [pathname, routeName] of [
+        ["/account", "account"],
+        ["/account/repositories", "account"],
+        ["/oauth/consent", "consent"],
+      ] as const) {
+        const { html, indexable } = renderAddressPage(TEMPLATE, {
+          language,
+          origin: "https://skills.example",
+          pathname,
+          search: pathname === "/oauth/consent" ? "?request=sealed" : "",
+          data: {},
+        });
+        expect(indexable, pathname).toBe(false);
+        expect(html, pathname).toContain(`data-prerendered="${routeName}"`);
+        expect(html, pathname).toContain('<meta name="robots" content="noindex,follow"');
+        // The server does not know who asks: nothing of a person's is in the document, and the
+        // header has no way to sign in until the browser has asked whether there is one.
+        expect(html, pathname).toContain(t.common.loading);
+        expect(html, pathname).not.toContain(t.auth.signIn);
+        expect(html, pathname).toContain('id="skillcdn-data">{}</script>');
+      }
+    }
+  });
+
+  it("renders the page of an account with what the host shows everyone, for a crawler to read", () => {
+    const render = (language: string, data: Parameters<typeof renderAddressPage>[1]["data"]) =>
+      renderAddressPage(TEMPLATE, {
+        language,
+        origin: "https://skills.example",
+        pathname: "/gh/Acme",
+        search: "",
+        data,
+      });
+    for (const language of LANGUAGES) {
+      const t = messagesFor(language);
+      const { html, indexable } = render(language, { owner: { ready: OWNER } });
+      expect(indexable).toBe(true);
+      expect(html).toContain('data-prerendered="owner"');
+      // Named as the host spells it, at one URL per language however the path was typed.
+      expect(html).toContain('<title data-head="">Acme | SkillCDN</title>');
+      expect(html).toContain('<meta name="robots" content="index,follow"');
+      expect(html).toContain(
+        `<link rel="canonical" href="https://skills.example/gh/acme${language === "en" ? "" : `?lang=${language}`}"`,
+      );
+      // The page itself is in the document, not a frame that waits for the browser.
+      expect(html).not.toContain(t.common.loading);
+      expect(html).toContain("Acme, Inc.");
+      expect(html).toContain(t.owner.indexed);
+      expect(html).toContain("Notes nobody has opened here yet.");
+      // What is indexed and holds skills is linked for anyone to follow. The rest of the host's
+      // list is a way in for a person: a crawler that followed it would have everything indexed.
+      const anchor = (href: string) => new RegExp(`<a [^>]*href="${href}"[^>]*>`).exec(html)?.[0];
+      expect(anchor("/gh/acme/skills")).toBeDefined();
+      expect(anchor("/gh/acme/skills")).not.toContain("nofollow");
+      expect(anchor("/gh/acme/notes")).toContain('rel="nofollow"');
+      // The browser continues from the answer the server rendered with.
+      expect(html).toContain('"owner /gh/acme":{"ready":');
+    }
+
+    // Before anything is known the page is its frame, named as its path writes it; an account
+    // that is not there is a page that says so. Neither is one to find.
+    const frame = render("en", {});
+    expect(frame.indexable).toBe(false);
+    expect(frame.html).toContain('<title data-head="">acme | SkillCDN</title>');
+    expect(frame.html).toContain('<meta name="robots" content="noindex,follow"');
+    const missing = render("en", {
+      owner: {
+        error: { status: 404, code: "owner.not_found", message: "The account was not found." },
+      },
+    });
+    expect(missing.indexable).toBe(false);
+    expect(missing.html).toContain(messagesFor("en").owner.notFound.title);
+    expect(missing.html).toContain('<meta name="robots" content="noindex,follow"');
   });
 
   it("renders a URL without a language in the one the server chose for the request", () => {

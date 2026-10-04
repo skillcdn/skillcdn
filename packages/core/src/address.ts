@@ -191,6 +191,39 @@ export function formatAddress(address: Address): string {
   return path.length === 0 ? mounted : `${mounted}/${path}`;
 }
 
+/** An account on a git host, as the path of its page names it. */
+export interface OwnerPath {
+  readonly host: GitHostKey;
+  /** Canonical spelling: lowercase on hosts that match names case-insensitively. */
+  readonly owner: string;
+}
+
+/**
+ * Parses `/gh/<owner>`: the path of the page of an account. It is one segment short of an
+ * address, serves people and never MCP. `undefined` for anything else; an owner is written with
+ * unreserved characters only, so nothing is percent-decoded.
+ */
+export function parseOwnerPath(input: string): OwnerPath | undefined {
+  if (input.length > MAX_ADDRESS_LENGTH) {
+    return undefined;
+  }
+  const [empty, host, owner, ...rest] = input.split("/");
+  if (empty !== "" || host === undefined || owner === undefined || rest.length > 0) {
+    return undefined;
+  }
+  if (!isGitHostKey(host)) {
+    return undefined;
+  }
+  const rules = HOST_NAMING_RULES[host];
+  return rules.owner.test(owner)
+    ? { host, owner: rules.caseInsensitive ? owner.toLowerCase() : owner }
+    : undefined;
+}
+
+export function formatOwnerPath(owner: OwnerPath): string {
+  return `/${owner.host}/${owner.owner}`;
+}
+
 /** Pinned addresses name a full commit hash and may be cached indefinitely; everything else moves. */
 export function isPinnedAddress(address: Address): boolean {
   return address.ref?.kind === "commit";

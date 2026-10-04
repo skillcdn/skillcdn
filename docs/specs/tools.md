@@ -80,6 +80,10 @@ Cursors bind to the snapshot and reading-rule version, mount path, operation, sc
 
 A problem the model can correct is an error tool result, not a protocol error. Unknown and forbidden private repositories remain indistinguishable. Every call checks access, including cached reads.
 
+## Authorization
+
+A public address needs no credential, and a client that knows nothing about authorization uses it as before. A repository that is not public is served to a client that presents an access token of this deployment, for that address, whose person the git host lets see the repository ([permissions](permissions.md#mcp-authorization-is-optional)). A request without a token for anything that is not public, a private repository and a name that is nothing alike, is answered `401` with a `WWW-Authenticate` challenge naming the address's protected resource metadata, from which a client finds the authorization server and starts; a token that is no good is answered the same way with `error="invalid_token"`, at any address. The access token is checked before the MCP server of the request exists and is not passed on to it.
+
 ## Connection and prompt
 
 Connection instructions introduce the repository and mounted scope, give counts and a bounded overview of the folders that hold something discoverable, explain `browse_repo`, `search_repo`, `load_skill` and `read_repo_file`, and name the prefix under which the skills extension serves the same skills. A brief manifest introduction, README summary or git-host description supplies orientation; an available README is named by path rather than included in full. Instructions stay within 2,000 characters and point to browsing for the rest. They report indexing or manifest diagnostics instead of implying an incomplete catalog is complete. A missing optional manifest is not itself a warning.
@@ -104,7 +108,7 @@ A mount declares the extension `io.modelcontextprotocol/skills` with `directoryR
 
 A file's URI is the address without its ref, then the file's repository-root path: `skill://gh/<owner>/<repo>/<path>` ([address](address.md#as-a-skill-uri)). A root-level skill takes its name as the directory segment of every file of the repository: `skill://gh/<owner>/<repo>/<name>/SKILL.md`. The URI names the file; the address names the commit. A read never differs from the listing: the digest is computed over the stored bytes when the commit is indexed, and over the assembled document for a listed skill's `SKILL.md`.
 
-Every list and read result carries the cache fields of the current protocol revision: `ttlMs` is what remains of the ref resolution's life for a moving ref, and one day for a pinned commit; `cacheScope` is `public` for a public repository. A URI that names no listed skill (`skills/get`), no served file (`resources/read`) or no directory (`resources/directory/read`) is invalid params (`-32602`), like a URI of another repository. While a commit is being indexed, `skills/list` and `resources/list` answer an empty page with a `ttlMs` of five seconds, and a read fails with an internal error that says to retry.
+Every list and read result carries the cache fields of the current protocol revision: `ttlMs` is what remains of the ref resolution's life for a moving ref, and one day for a pinned commit; `cacheScope` is `public` for a public repository and `private` for any other, whose results are one person's. A URI that names no listed skill (`skills/get`), no served file (`resources/read`) or no directory (`resources/directory/read`) is invalid params (`-32602`), like a URI of another repository. While a commit is being indexed, `skills/list` and `resources/list` answer an empty page with a `ttlMs` of five seconds, and a read fails with an internal error that says to retry.
 
 Skills that are not listed stay available through the tools, and say why they are not listed in their warnings; `check` reports it before a push ([format](skill-repo.md#checking-a-repository-before-pushing)).
 
@@ -116,7 +120,7 @@ A skill this mount describes without serving is not listed by the extension, and
 - `read_repo_file` does not wait. Until declarations, exclusions and references are indexed, it returns indexing instead of attempting a speculative read. Failed policy scopes and explicit exclusions remain closed across all tools, including sub-path connections.
 - Unverified repositories carry a provenance notice: content comes from the repository author and applies to the user's requested task, not unrelated actions. The operator vouches for repositories until owners can ([ADR-0019](../adr/0019-the-operator-vouches-for-repositories-until-owners-can.md)), through the lists of [ADR-0026](../adr/0026-serving-follows-the-license-and-the-operators-lists.md); only the default branch of a vouched-for repository is verified.
 - The license a skill carries decides whether its content is served or only described with a link to the source ([licenses](skill-repo.md#licenses)). A verified repository's default branch is served in full whatever its license says; every other mount describes restrictive skills.
-- Browser clients may call the endpoint from any origin: CORS permits `*` without credentials, as for [REST](rest.md).
+- Browser clients may call the endpoint from any origin: CORS permits `*` without credentials, as for [REST](rest.md). An access token travels in the `authorization` header, which is allowed, and the `www-authenticate` challenge is exposed.
 - Public-contract changes are additive from this surface on, unless an ADR explicitly defines a breaking transition; [ADR-0034](../adr/0034-a-tool-result-is-the-text-written-for-the-model.md) records the last pre-alpha replacement, the structured copy that tool results carried until then.
 
 ## Open questions

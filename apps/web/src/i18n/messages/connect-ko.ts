@@ -23,6 +23,34 @@ export const connectKo: typeof connectEn = {
   helpBody:
     "앱 버전이나 회사·팀 설정에 따라 메뉴가 다를 수 있어요. 공식 안내를 확인하거나, 관리자에게 외부 연결을 허용해 달라고 요청하세요.",
   official: "공식 연결 안내",
+  private: {
+    title: "비공개 저장소예요",
+    body: "AI 앱이 이 저장소를 읽으려면 먼저 내 이름으로 로그인해야 해요. 브라우저에 SkillCDN 페이지가 열리면 GitHub로 로그인하고 앱을 허용하세요. GitHub에서 이 저장소를 볼 수 있는 사람만 들어올 수 있어요.",
+    signIn: {
+      chatgpt:
+        "만들기를 누르면 ChatGPT가 로그인 페이지를 열어요. GitHub로 로그인하고 ChatGPT를 허용하세요.",
+      claude:
+        "커넥터를 추가하면 Claude가 로그인을 요청해요. GitHub로 로그인하고 Claude를 허용하세요.",
+      cursor:
+        "Cursor가 서버에 로그인하라고 알려 줘요. 브라우저에서 GitHub로 로그인하고 Cursor를 허용하세요.",
+      vscode:
+        "VS Code가 서버 인증을 요청해요. 허용한 다음 GitHub로 로그인하고 VS Code를 허용하세요.",
+      claudeCode:
+        "Claude Code에서 /mcp를 입력하고 서버를 골라 Authenticate를 선택하세요. GitHub로 로그인하고 Claude Code를 허용하세요.",
+      codex:
+        "추가 명령을 실행하면 Codex가 브라우저에 로그인 페이지를 열어요. GitHub로 로그인하고 Codex를 허용하세요. 페이지가 열리지 않았다면 아래 로그인 명령을 실행하세요.",
+      gemini:
+        "Gemini CLI에서 아래 인증 명령을 입력하세요. 브라우저에서 GitHub로 로그인하고 Gemini CLI를 허용하세요.",
+      other:
+        "앱이 인증 방식을 물으면 OAuth를 고르세요. 열리는 페이지에서 GitHub로 로그인하고 앱을 허용하세요.",
+    },
+    steps: {
+      chatgpt:
+        "이름을 적고, 설명에는 예시 화면의 문장을 넣으세요. 연결은 서버 URL로 둔 채 연결 주소를 붙여 넣고, 인증은 OAuth 그대로 둔 뒤 확인란에 체크하고 만들기를 누르세요.",
+      other:
+        "서버를 추가하고 연결 주소를 붙여 넣으세요. 연결 방식은 HTTP(Streamable HTTP)이고, 인증은 OAuth를 고르세요.",
+    },
+  },
   firstMessage: {
     label: "연결했다면, 첫 질문을 보내 보세요",
     text: (server: string) =>

@@ -128,9 +128,10 @@ jobs:
           test "$(docker exec api id -u)" -ne 0
           # The web UI ships in the image: a page per language, and the render module for addresses.
           # An address that is not one is rendered without asking the git host, which CI never does.
+          # One segment short of an address is the page of an account, which does ask it.
           curl -fsS -H 'accept: text/html' 'http://127.0.0.1:11188/' | grep -q '<html lang="en">'
           curl -fsS -H 'accept: text/html' 'http://127.0.0.1:11188/?lang=ko' | grep -q '<html lang="ko">'
-          curl -sS -H 'accept: text/html' 'http://127.0.0.1:11188/gh/skillcdn' | grep -q 'data-prerendered="bad-address"'
+          curl -sS -H 'accept: text/html' 'http://127.0.0.1:11188/gh/skillcdn/skills.git' | grep -q 'data-prerendered="bad-address"'
           curl -fsS 'http://127.0.0.1:11188/sitemap.xml' | grep -q 'hreflang="ko"'
           curl -fsS 'http://127.0.0.1:11188/api/v1/featured' | grep -q '"items"'
           # The notices ship with the pages and with the image.

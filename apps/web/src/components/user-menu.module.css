@@ -1,0 +1,98 @@
+/* The same disclosure the language picker is, so the two controls at the end of the header read
+   as one kind of thing: a quiet label that opens a short list. */
+
+.signIn {
+  flex: none;
+}
+
+.menu {
+  position: relative;
+  font-size: var(--text-xs);
+}
+
+.menu summary {
+  display: flex;
+  align-items: center;
+  gap: var(--language-gap);
+  min-height: var(--control-size);
+  padding-inline: var(--space-2) calc(var(--space-2) - var(--language-pad-trim));
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  list-style: none;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.menu summary:hover,
+.menu[open] summary {
+  background: var(--color-bg-raised);
+  color: var(--color-text);
+}
+
+/* A name can be long; the picture says who it is when there is no room for it. */
+.login {
+  max-width: var(--user-menu-name-width);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.caret {
+  flex: none;
+  width: var(--language-caret);
+  height: var(--language-caret);
+  transform: translateY(var(--language-mark-drop));
+}
+
+.list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--space-2));
+  width: max-content;
+  min-width: var(--user-menu-width);
+  padding: var(--space-1);
+  border: var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-inset);
+  box-shadow: var(--shadow-stage);
+}
+
+.list a,
+.list button {
+  display: block;
+  width: 100%;
+  /* The same lift the badges use: one line centred in a box lands low without it. */
+  padding-inline: var(--space-3);
+  padding-block: calc(var(--space-2) - var(--label-optical))
+    calc(var(--space-2) + var(--label-optical));
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-text-muted);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.list a:hover,
+.list button:hover {
+  background: var(--color-bg-raised);
+  color: var(--color-text);
+}
+
+/* Leaving is apart from the pages one goes to. */
+.separated {
+  margin-top: var(--space-1);
+  padding-top: var(--space-1);
+  border-top: var(--border);
+}
+
+@media (max-width: 40rem) {
+  .login {
+    display: none;
+  }
+}

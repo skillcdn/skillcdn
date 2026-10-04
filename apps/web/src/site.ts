@@ -1,4 +1,4 @@
-import { REFERENCE_REPOSITORY_ADDRESS } from "@skillcdn/core";
+import { AUTH_META_NAME, REFERENCE_REPOSITORY_ADDRESS } from "@skillcdn/core";
 
 // Facts about the site that are not copy: where things link to, and how the public origin
 // travels from the server into the page.
@@ -107,4 +107,19 @@ export function readLegalLinks(): LegalLinks {
 /** `https://host/path` without the scheme, the way an address is usually written down. */
 export function hostOf(origin: string): string {
   return origin.replace(/^https?:\/\//, "");
+}
+
+/**
+ * Whether people can sign in on this deployment, as the server wrote it into the head: a meta
+ * tag naming the git host they sign in through. Prerendered pages carry none, so it is read after
+ * mount. A development server has no server behind its pages to say so, and asks the API instead.
+ */
+export function readSignIn(): boolean {
+  if (typeof document === "undefined") {
+    return false;
+  }
+  const declared = document
+    .querySelector(`meta[name="${AUTH_META_NAME}"]`)
+    ?.getAttribute("content");
+  return (declared !== null && declared !== undefined && declared !== "") || import.meta.env.DEV;
 }

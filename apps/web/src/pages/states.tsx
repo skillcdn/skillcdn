@@ -1,3 +1,4 @@
+import { loginPath } from "@skillcdn/core";
 import { CodeBlock } from "../components/code-block.js";
 import { Tabs } from "../components/tabs.js";
 import {
@@ -10,6 +11,7 @@ import {
   Spinner,
 } from "../components/ui.js";
 import { Link } from "../navigation.js";
+import { PATHS } from "../router.js";
 import styles from "./states.module.css";
 
 // Development only: every state of every page, one click away, and every building block on one
@@ -62,9 +64,36 @@ const PAGES: readonly (readonly [string, string])[] = [
   ["/gh/demo/not-allowed", "A repository this deployment does not serve"],
   ["/gh/demo/broken-server", "An internal server error"],
   ["/gh/acme/skills.git", "Not a valid address"],
+  [
+    "/gh/acme",
+    "The page of an account: indexed skills first, then its other repositories in pages",
+  ],
+  ["/gh/acme/project-2", "A listed repository, opened: indexed, and nothing to serve"],
+  ["/gh/demo", "The page of a person whose repositories are in every state"],
+  ["/gh/octo-dev", "The page of an account with nothing public; yours once you are signed in"],
+  ["/gh/no-such-account", "An account that does not exist"],
+  [
+    "/gh/acme/private-skills",
+    "A private repository: not found until you sign in, then with the sign-in steps in its guide",
+  ],
+  ["/account", "Your account: the way to sign in, or the overview once signed in"],
+  ["/account/repositories", "Your private repositories, by where the GitHub app is installed"],
+  ["/account/apps", "The apps you allowed; removing one lasts until the server restarts"],
+  ["/account?login=denied", "A sign-in that was cancelled (signed out only)"],
+  ["/oauth/consent?request=web", "An app asks to read a private repository"],
+  ["/oauth/consent?request=local", "A command-line app asks, and is sent back to this computer"],
+  ["/oauth/consent?request=app", "An installed app asks, and is sent back by a link of its own"],
+  ["/oauth/consent?request=not-visible", "An app asks for a repository you cannot open"],
+  ["/oauth/consent?request=host-down", "An app asks while the git host cannot be asked"],
+  ["/oauth/consent?request=gone", "A request that has expired"],
+  ["/oauth/consent", "The consent page opened without a request"],
+  ["/oauth/consent?error=invalid_redirect_uri", "A request the authorization endpoint refused"],
+  ["/oauth/consent?error=invalid_target", "A request that broke a rule, said to whoever built it"],
   ["/no/such/page", "Page not found"],
   ["/dev/og", "The picture behind the social-preview images (1200 x 630)"],
 ];
+
+const FIXTURE_SIGN_IN_NOTE = "the header then has the account menu; sign out from it";
 
 export function StatesPage(_props: { readonly origin: string }) {
   return (
@@ -74,6 +103,15 @@ export function StatesPage(_props: { readonly origin: string }) {
         Development only. Every link opens a page in one particular state, served from fixtures. Add{" "}
         <code>?lang=ko</code> to any of them.
       </p>
+
+      <h2 className={styles.heading}>Signing in</h2>
+      {/* Real navigations, as signing in is: the fixture server signs its one person in at once. */}
+      <ul className={styles.links}>
+        <li>
+          <a href={loginPath(PATHS.states)}>Sign in as the fixture person</a>
+          <code>{FIXTURE_SIGN_IN_NOTE}</code>
+        </li>
+      </ul>
 
       <h2 className={styles.heading}>Pages</h2>
       <ul className={styles.links}>

@@ -1,3 +1,4 @@
+import { accountEn } from "./account-en.js";
 import { connectEn } from "./connect-en.js";
 import { landingEn } from "./landing-en.js";
 
@@ -99,6 +100,8 @@ export const en = {
 
   connect: connectEn,
 
+  ...accountEn,
+
   landing: landingEn,
 
   explore: {
@@ -132,6 +135,9 @@ export const en = {
     unverifiedHint:
       "This content comes straight from the repository and has not been verified by its owner with SkillCDN. Review it before you trust it.",
     viewOnHost: "View on GitHub",
+    private: "Private",
+    privateHint:
+      "Only people who can see this repository on GitHub can open this page or connect to it.",
     /** Under the address field on every page of an address: what connecting it gives, and the way to the steps. */
     use: {
       these: "Connect this address to your AI to use these skills.",
@@ -272,7 +278,7 @@ export const en = {
       },
       "mount.repo_not_found": {
         title: "Repository not found",
-        body: "It does not exist, or it is not public. Private repositories are not supported yet.",
+        body: "It does not exist, or it is private.",
       },
       "mount.ref_not_found": {
         title: "Ref not found",

@@ -1,8 +1,14 @@
 import { createHash } from "node:crypto";
 import { createMcpHandler } from "@modelcontextprotocol/server";
 import {
+  ACCOUNT_PAGE_PATH,
+  type Address,
   accountAvatarUrl,
+  type Clock,
+  CONSENT_PAGE_PATH,
   formatAddress,
+  formatOwnerPath,
+  type GitHostLogin,
   ICON_ROUTE,
   ICON_SIZE,
   LEGAL_DOCUMENT_KINDS,
@@ -12,29 +18,37 @@ import {
   MAX_REPO_PATH_LENGTH,
   MEDIA_ROUTE,
   parseAddress,
+  parseOwnerPath,
   REST_MOUNT_LIST_LIMIT,
   type RestShowcase,
   type RestSkill,
   SOCIAL_ROUTE,
 } from "@skillcdn/core";
-import { type Database, getSchemaStatus } from "@skillcdn/db";
+import { type Database, getSchemaStatus, type UserRecord } from "@skillcdn/db";
 import { type Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import * as z from "zod";
+import { CredentialsLostError, type UserCredentials } from "../auth/credentials.js";
+import type { Login } from "../auth/login.js";
+import type { AuthorizationServer } from "../auth/oauth/authorization-server.js";
+import type { OAuthClients } from "../auth/oauth/clients.js";
+import type { Sessions } from "../auth/sessions.js";
 import type { SnapshotService } from "../indexer/snapshot-service.js";
 import type { Logger } from "../logger.js";
 import { createMountServer, type ToolDependencies } from "../mcp/tools.js";
 import { ReaderInputError } from "../mounts/continuation.js";
 import type { MountReader } from "../mounts/mount-reader.js";
-import { type Mount, MountError, type MountService } from "../mounts/mount-service.js";
+import { type Mount, MountError, type MountService, type Viewer } from "../mounts/mount-service.js";
 import type { OperatorImages } from "../operator/images.js";
 import type { LegalDocuments } from "../operator/legal.js";
 import type { OperatorLists } from "../operator/lists.js";
 import type { Showcase } from "../operator/showcase.js";
+import { OwnerNotFoundError, type OwnerService } from "../owners/owner-service.js";
 import type { SocialCards } from "../social/cards.js";
 import { type PictureFetcher, rasterImageType } from "../social/pictures.js";
 import { purgeByAddress, registerAdmin } from "./admin.js";
+import { registerAuth } from "./auth.js";
 import type { ClientAddressResolver } from "./client-address.js";
 import { type AppEnv, requestContext } from "./request-context.js";
 import {
@@ -54,8 +68,25 @@ import {
   wantsHtml,
 } from "./web.js";
 
+/** What signing in is made of, on a deployment where people can (docs/specs/permissions.md). */
+export interface AppAuth {
+  /** The origin people use: where tokens are issued, and where the git host sends people back. */
+  readonly origin: string;
+  readonly sessions: Sessions;
+  readonly login: Login;
+  readonly authorization: AuthorizationServer;
+  readonly clients: OAuthClients;
+  readonly credentials: UserCredentials;
+  readonly hostLogin: GitHostLogin;
+  readonly clock: Clock;
+}
+
 export interface AppDependencies {
   readonly database: Database;
+  /** Signing in and what stands on it. Left out, nobody signs in and every request is nobody's. */
+  readonly auth: AppAuth | undefined;
+  /** The pages of accounts; left out where the git host's directory is not wired. */
+  readonly owners: OwnerService | undefined;
   readonly mounts: MountService;
   readonly snapshots: SnapshotService;
   readonly reader: MountReader;
@@ -90,6 +121,8 @@ export interface AppDependencies {
 
 /** JSON-RPC messages are small. This is the ceiling for anything a client may send. */
 const MAX_REQUEST_BYTES = 1024 * 1024;
+/** The header under which the route names a request to the MCP handler; never a client's to set. */
+const RESOLVED_HEADER = "x-skillcdn-resolved";
 const pageQuery = z.object({
   skill: z.string().min(1).max(MAX_REPO_PATH_LENGTH).optional(),
   file: z.string().min(1).max(MAX_REPO_PATH_LENGTH).optional(),
@@ -118,6 +151,7 @@ function errorBody(code: string, message: string) {
 
 export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
   const { database, mounts, snapshots, reader, tools, logger, isShuttingDown, web } = dependencies;
+  const { auth } = dependencies;
   /** Where the pages of this deployment are, as far as a request can tell. */
   const originOf = (url: string): string => tools.publicUrl ?? new URL(url).origin;
   const webRequestOf = (c: Context<AppEnv>): WebRequest => ({
@@ -143,15 +177,19 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
   app.use(requestContext({ logger, ...dependencies.requests }));
 
   // The MCP handler builds a server per request. The mount it serves is resolved by the route
-  // below before the handler runs, and handed over through this map.
-  const resolvedFor = new WeakMap<Request, { mount: Mount; requestId: string; origin: string }>();
+  // below before the handler runs, for whoever the request is for, and handed over through this
+  // map: the route gives the request a key of its own making in a header, which is how the
+  // handler's copy of the request still names it. Whatever a client sent under that name is
+  // overwritten, so a key is never one a client chose.
+  const resolvedFor = new Map<string, { mount: Mount; requestId: string; origin: string }>();
   const mcp = createMcpHandler(
     async (context) => {
       const request = context.requestInfo;
-      const resolved = request === undefined ? undefined : resolvedFor.get(request);
+      const key = request?.headers.get(RESOLVED_HEADER);
+      const resolved = key === null || key === undefined ? undefined : resolvedFor.get(key);
       let mount = resolved?.mount;
       if (mount === undefined && request !== undefined) {
-        // The handler passed on a different Request object than the one it was given.
+        // Nothing was handed over: resolved as nobody in particular, which is what is public.
         const parsed = parseAddress(new URL(request.url).pathname);
         mount = parsed.ok ? await mounts.resolve(parsed.value) : undefined;
       }
@@ -195,6 +233,49 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
   };
 
   /**
+   * Who a page or a REST request is for: whoever its cookie says is signed in. A request that
+   * carries no session is nobody's and has no viewer; one that does is only asked whose it is
+   * when it matters, which for a repository known to be public is never.
+   */
+  const sessionViewer = (c: Context<AppEnv>): Viewer | undefined => {
+    const cookie = c.req.header("cookie");
+    return auth?.sessions.carriedBy(cookie) === true
+      ? () => auth.sessions.resolve(cookie)
+      : undefined;
+  };
+
+  /**
+   * Resolves an address for the pages and the REST API. A person the git host no longer vouches
+   * for is nobody, and to nobody what is not public does not exist.
+   */
+  const resolveFor = async (address: Address, viewer: Viewer | undefined): Promise<Mount> => {
+    try {
+      return await mounts.resolve(address, viewer);
+    } catch (error) {
+      if (error instanceof CredentialsLostError) {
+        throw new MountError("repo_not_found", "The repository was not found.", { cause: error });
+      }
+      throw error;
+    }
+  };
+
+  /** The answer to an address that did not resolve, as the REST API and MCP give it. */
+  const resolutionFailure = (c: Context<AppEnv>, address: Address, error: unknown): Response => {
+    if (error instanceof MountError) {
+      if (error.retryAfterSeconds !== undefined) {
+        c.header("retry-after", String(error.retryAfterSeconds));
+      }
+      // Missing and forbidden repositories share one code and one message.
+      return c.json(errorBody(error.code, error.detail), STATUS_BY_REASON[error.reason]);
+    }
+    logger.error(
+      { err: error, address: formatAddress(address), requestId: c.get("requestId") },
+      "mount resolution failed",
+    );
+    return c.json(errorBody("internal", "The request could not be served."), 500);
+  };
+
+  /**
    * Resolves the address in the request path after `prefix`, or answers with the error. Asking
    * about an address is enough to start indexing it, so the next question finds it done or underway.
    */
@@ -206,22 +287,82 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
     }
     const address = parsed.value;
     try {
-      const mount = await mounts.resolve(address);
+      const mount = await resolveFor(address, sessionViewer(c));
       startIndexing(mount);
       return mount;
     } catch (error) {
-      if (error instanceof MountError) {
-        if (error.retryAfterSeconds !== undefined) {
-          c.header("retry-after", String(error.retryAfterSeconds));
-        }
-        // Missing and forbidden repositories share one code and one message.
-        return c.json(errorBody(error.code, error.detail), STATUS_BY_REASON[error.reason]);
+      return resolutionFailure(c, address, error);
+    }
+  };
+
+  /**
+   * Resolves the address of an MCP request for whoever its access token stands for. A token is
+   * optional: without one, what is public is served as it always was. What is not public is
+   * answered with a challenge that says where to ask for access (docs/specs/permissions.md), and
+   * so is a name that is nothing at all, because nobody in particular may learn which it is.
+   */
+  const mcpMountAt = async (c: Context<AppEnv>): Promise<Mount | Response> => {
+    const path = new URL(c.req.url).pathname;
+    const parsed = parseAddress(path);
+    if (!parsed.ok) {
+      return c.json(errorBody(`address.${parsed.error.code}`, parsed.error.message), 400);
+    }
+    const address = parsed.value;
+    let user: UserRecord | undefined;
+    try {
+      if (auth === undefined) {
+        const mount = await mounts.resolve(address);
+        startIndexing(mount);
+        return mount;
       }
-      logger.error(
-        { err: error, address: formatAddress(address), requestId: c.get("requestId") },
-        "mount resolution failed",
-      );
-      return c.json(errorBody("internal", "The request could not be served."), 500);
+      const challenge = (
+        code: string,
+        message: string,
+        error?: { readonly code: string; readonly description: string },
+      ): Response => {
+        c.header("www-authenticate", auth.authorization.challenge(path, error));
+        c.header("cache-control", "no-store");
+        return c.json(errorBody(code, message), 401);
+      };
+      // A credential that is no good stands for nobody. What everyone is served needs none and
+      // is served all the same; anything else then says that the credential is no good.
+      const bearer = await auth.authorization.verify(c.req.header("authorization"), address);
+      user = bearer.status === "valid" ? bearer.user : undefined;
+      try {
+        const viewer = user;
+        const mount = await mounts.resolve(
+          address,
+          viewer === undefined ? undefined : async () => viewer,
+        );
+        startIndexing(mount);
+        return mount;
+      } catch (error) {
+        if (error instanceof CredentialsLostError) {
+          const description = "Sign in again: the git host no longer accepts this account.";
+          return challenge("auth.invalid_token", description, {
+            code: "invalid_token",
+            description,
+          });
+        }
+        if (
+          error instanceof MountError &&
+          error.reason === "repo_not_found" &&
+          user === undefined
+        ) {
+          return bearer.status === "invalid"
+            ? challenge("auth.invalid_token", bearer.description, {
+                code: "invalid_token",
+                description: bearer.description,
+              })
+            : challenge(
+                "auth.required",
+                "This address is not public, or does not exist. Sign in to connect to a private repository.",
+              );
+        }
+        throw error;
+      }
+    } catch (error) {
+      return resolutionFailure(c, address, error);
     }
   };
 
@@ -244,8 +385,33 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
     featured: () => dependencies.lists.featured(),
     showcase: () => dependencies.showcase.list(),
     legal: (kind) => dependencies.legal.get(kind),
+    owners: dependencies.owners,
     now: dependencies.requests.now,
   });
+  // After the REST API, whose rules for `/api/` (any origin without credentials, nothing
+  // cached) then hold for what a signed-in person asks as well.
+  if (auth !== undefined) {
+    registerAuth(app, {
+      ...auth,
+      database,
+      logger,
+      canSee: async (address, user) => {
+        try {
+          await resolveFor(address, async () => user);
+          return true;
+        } catch (error) {
+          if (error instanceof MountError) {
+            // A host that could not be asked says neither yes nor no.
+            return error.reason === "rate_limited" || error.reason === "unavailable"
+              ? undefined
+              : false;
+          }
+          throw error;
+        }
+      },
+      asksForPermission: (address) => mounts.asksForPermission(address),
+    });
+  }
   if (dependencies.admin !== undefined) {
     registerAdmin(app, {
       token: dependencies.admin.token,
@@ -396,6 +562,38 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
    */
   const addressPage = async (c: Context<AppEnv>, bundle: WebBundle): Promise<Response> => {
     const request = await pageRequestOf(c);
+    // One segment short of an address is the page of an account (ADR-0037): one document for
+    // everyone, rendered with what the git host shows everyone, so that a crawler reads what a
+    // person sees. Looking at it indexes nothing.
+    const { owners } = dependencies;
+    const owner = owners === undefined ? undefined : parseOwnerPath(request.url.pathname);
+    if (owners !== undefined && owner !== undefined) {
+      try {
+        return bundle.address(request, { owner: { ready: await owners.page(owner, 1) } });
+      } catch (error) {
+        if (error instanceof OwnerNotFoundError) {
+          return bundle.address(
+            request,
+            {
+              owner: {
+                error: {
+                  status: 404,
+                  code: "owner.not_found",
+                  message: "The account was not found.",
+                },
+              },
+            },
+            404,
+          );
+        }
+        const known = hostFailure(error);
+        if (known === undefined) {
+          throw error;
+        }
+        const { status, code, message } = known;
+        return bundle.address(request, { owner: { error: { status, code, message } } }, status);
+      }
+    }
     const parsed = parseAddress(request.url.pathname);
     if (!parsed.ok) {
       // The page explains what is wrong with the address; the status says it is nothing.
@@ -419,7 +617,7 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
     }
     let mount: Mount;
     try {
-      mount = await mounts.resolve(parsed.value);
+      mount = await resolveFor(parsed.value, sessionViewer(c));
       startIndexing(mount);
     } catch (error) {
       if (error instanceof MountError) {
@@ -432,6 +630,8 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
       }
       throw error;
     }
+    // What is not public was resolved for one person, and the page is theirs alone.
+    const forOne = { forOne: mount.repo.repository.visibility !== "public" };
     try {
       const data: {
         mount: AddressData["mount"];
@@ -465,7 +665,7 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
           data.find = { ready: findBody(await reader.find(mount, { query: search, path }, 0)) };
         else data.browse = { ready: browseBody(await reader.browse(mount, { path }, 0)) };
       }
-      return bundle.address(request, data);
+      return bundle.address(request, data, 200, forOne);
     } catch (error) {
       if (error instanceof ReaderInputError) {
         return bundle.address(
@@ -474,6 +674,7 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
             mount: { error: { status: 400, code: error.code, message: error.message } },
           },
           400,
+          forOne,
         );
       }
       const known = hostFailure(error);
@@ -481,12 +682,19 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
         throw error;
       }
       const { status, code, message } = known;
-      return bundle.address(request, { mount: { error: { status, code, message } } }, status);
+      return bundle.address(
+        request,
+        { mount: { error: { status, code, message } } },
+        status,
+        forOne,
+      );
     }
   };
 
-  // Public content, anonymous and read-only: a page on any origin may reach the endpoint, as it
-  // may reach the REST API. No cookies are involved, so credentials are never allowed.
+  // Read-only, and nobody's unless the request says whose with an access token: a page on any
+  // origin may reach the endpoint, as it may reach the REST API. No cookies are involved, so
+  // credentials are never allowed; a token travels in a header the page sets itself, and the
+  // challenge that asks for one is readable to it.
   app.use(
     "/gh/*",
     cors({
@@ -501,7 +709,13 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
         "mcp-protocol-version",
         "mcp-session-id",
       ],
-      exposeHeaders: ["mcp-protocol-version", "mcp-session-id", "retry-after", "x-request-id"],
+      exposeHeaders: [
+        "mcp-protocol-version",
+        "mcp-session-id",
+        "retry-after",
+        "www-authenticate",
+        "x-request-id",
+      ],
       maxAge: CORS_MAX_AGE_SECONDS,
     }),
   );
@@ -517,15 +731,15 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
       if (web !== undefined && wantsHtml(webRequestOf(c))) {
         return addressPage(c, web);
       }
-      const mount = await mountAt(c, "");
+      const mount = await mcpMountAt(c);
       if (mount instanceof Response) {
         return mount;
       }
-      let request = c.req.raw;
+      let body: string | undefined;
       if (c.req.method === "POST") {
         // A JSON-RPC batch would let one request carry thousands of calls, and no protocol
         // revision the server speaks needs one: an array body is refused before the handler.
-        const body = await c.req.text();
+        body = await c.req.text();
         if (/^\s*\[/.test(body)) {
           return c.json(
             {
@@ -536,46 +750,76 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
             400,
           );
         }
-        request = new Request(c.req.raw.url, { method: "POST", headers: c.req.raw.headers, body });
         // Every MCP message is a POST, whichever protocol revision the client speaks; a client
         // that sent one used this repository today.
         tools.stats.client(mount, c.get("clientAddress"));
       }
-      resolvedFor.set(request, {
+      // The handler gets the request under a key of this route's making, and without the access
+      // token: who the request is for was settled above, and nothing further on needs the token.
+      const key = dependencies.requests.newRequestId();
+      const headers = new Headers(c.req.raw.headers);
+      headers.set(RESOLVED_HEADER, key);
+      headers.delete("authorization");
+      const request = new Request(c.req.raw.url, {
+        method: c.req.method,
+        headers,
+        signal: c.req.raw.signal,
+        ...(body === undefined ? {} : { body }),
+      });
+      resolvedFor.set(key, {
         mount,
         requestId: c.get("requestId"),
         origin: originOf(c.req.url),
       });
-      const response = await mcp.fetch(request);
-      // Public content, but a moving ref: caches between us and the client must not pin it.
-      response.headers.set("cache-control", "no-store");
-      return response;
+      try {
+        const response = await mcp.fetch(request);
+        // A moving ref, or one person's: nothing between us and the client keeps it.
+        response.headers.set("cache-control", "no-store");
+        return response;
+      } finally {
+        resolvedFor.delete(key);
+      }
     },
   );
 
   if (web !== undefined) {
     const bundle = web;
-    let listed: { readonly until: number; readonly addresses: Promise<string[]> } | undefined;
+    interface Listed {
+      readonly addresses: readonly string[];
+      /** The pages of the accounts those addresses belong to, each once (ADR-0037). */
+      readonly owners: readonly string[];
+    }
+    let listed: { readonly until: number; readonly entries: Promise<Listed> } | undefined;
 
-    /** The addresses the sitemap lists: the featured ones and the vouched-for repositories. */
-    const listedAddresses = async (): Promise<string[]> => {
+    /**
+     * What the sitemap lists besides the build's own pages: the featured addresses and the
+     * vouched-for repositories, and the pages of the accounts they belong to.
+     */
+    const listedEntries = async (): Promise<Listed> => {
       try {
-        return (await dependencies.lists.listed()).map(formatAddress);
+        const addresses = await dependencies.lists.listed();
+        return {
+          addresses: addresses.map(formatAddress),
+          owners:
+            dependencies.owners === undefined
+              ? []
+              : [...new Set(addresses.map(({ host, owner }) => formatOwnerPath({ host, owner })))],
+        };
       } catch (error) {
         logger.warn({ err: error }, "the operator's lists could not be read for the sitemap");
-        return [];
+        return { addresses: [], owners: [] };
       }
     };
 
     app.get("/sitemap.xml", async (c) => {
       const now = dependencies.requests.now();
       if (listed === undefined || listed.until <= now) {
-        const addresses = listedAddresses();
-        listed = { until: now + SITEMAP_CACHE_MS, addresses };
+        listed = { until: now + SITEMAP_CACHE_MS, entries: listedEntries() };
       }
       const request = await pageRequestOf(c);
-      const pages = (request.legal ?? []).map((kind) => LEGAL_PAGE_PATHS[kind]);
-      return bundle.sitemap(request, await listed.addresses, pages);
+      const { addresses, owners } = await listed.entries;
+      const pages = [...(request.legal ?? []).map((kind) => LEGAL_PAGE_PATHS[kind]), ...owners];
+      return bundle.sitemap(request, addresses, pages);
     });
 
     // The deployment's own pages (ADR-0029): rendered with the document, or with the absence of
@@ -629,6 +873,13 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
     app.on(["GET", "HEAD"], "/", (c) =>
       withShowcase(c, (request, showcase) => bundle.landing(request, showcase)),
     );
+    if (auth !== undefined) {
+      // The pages of whoever is signed in, and the page that asks them about a client: one
+      // document for everyone, which the browser fills in with what the REST API tells it.
+      for (const path of [ACCOUNT_PAGE_PATH, `${ACCOUNT_PAGE_PATH}/*`, CONSENT_PAGE_PATH]) {
+        app.on(["GET", "HEAD"], path, async (c) => bundle.view(await pageRequestOf(c)));
+      }
+    }
     app.on(["GET", "HEAD"], "/llms.txt", (c) =>
       withShowcase(c, (request, showcase) => bundle.llmsTxt(request, showcase.ready)),
     );

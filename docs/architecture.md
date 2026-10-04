@@ -7,9 +7,9 @@
 ```
 agent (any MCP client)
    |   https://<host>/gh/<owner>/<repo>[@ref][/path]
-   |   anonymous for public repos; OAuth or a project token for private repos
+   |   anonymous for public repos; OAuth for private repos (a project token later)
    v
-server, role api        stateless: MCP over HTTP, REST for the web UI, OAuth, webhook receiver
+server, role api        stateless: MCP over HTTP, REST for the web UI, sign-in and OAuth; later the webhook receiver
    |          \
    |           \ enqueue
    v            v
@@ -24,7 +24,7 @@ git host                GitHub first; GitLab and Gitea behind the same port
 Four properties shape everything else:
 
 - **Git is the source of truth.** We read, index and serve. We never host content, and a pinned ref serves exactly what was reviewed.
-- **The git host owns permissions.** We ask it whether a user can see a repo and cache only the yes/no answer. There is no user or team model of our own beyond a repo-scoped project token.
+- **The git host owns permissions.** We ask it whether a user can see a repo and cache only the yes/no answer ([specs/permissions.md](specs/permissions.md)). There is no user or team model of our own beyond a repo-scoped project token, which is planned.
 - **One image, one database.** Hosted and self-hosted run the same build against PostgreSQL and S3-compatible storage. Nothing in the core path needs a particular cloud.
 - **Repositories declare, they never execute.** Skills are Markdown plus declarations. We run no third-party code, on the server or on the user's machine.
 
@@ -34,7 +34,7 @@ Four properties shape everything else:
 |---|---|---|
 | `packages/core` | Address scheme, skill-repo convention, permission rules, tool contracts, and the ports everything else implements. Pure: no I/O, no Node APIs, usable in a browser. | nothing |
 | `packages/db` | PostgreSQL schema, migrations, query layer. | `core` |
-| `packages/github` | GitHub implementation of the git-host port: App auth, user tokens, contents, webhook verification. | `core` |
+| `packages/github` | GitHub implementation of the git-host ports: contents, the app's installation tokens, signing in and what a person can see, the public listing of an account; later webhook verification. | `core` |
 | `apps/server` | Composition root: configuration, HTTP and MCP surface, jobs, adapter wiring. | `core`, `db`, `github` |
 | `apps/web` | Optional web UI: landing page and explorer, in several languages. Talks to `api` over REST only; builds to static files, prerendered per language ([ADR-0009](adr/0009-web-ui-prerendered-per-language.md)), plus a render module the server calls for the page of an address ([ADR-0011](adr/0011-address-pages-rendered-on-the-server.md)) and for the front page with the operator's showcase ([ADR-0028](adr/0028-the-front-page-and-the-explorer-are-operator-content.md)). | `core` (types, schemas, address parsing) |
 
@@ -66,7 +66,9 @@ Process contract: `GET /healthz` reports liveness, `GET /readyz` reports readine
 
 **A browser.** When the deployment serves the web UI, a `GET` that accepts HTML is answered with a page: a prerendered one for the static routes, in the language the `lang` parameter names, else the one the request's `Accept-Language` asks for ([ADR-0009](adr/0009-web-ui-prerendered-per-language.md), [ADR-0021](adr/0021-a-url-without-a-language-is-served-in-the-language-asked-for.md)), and for an address a page rendered on the spot by the build's render module with what the address serves, the same answers the REST API gives ([ADR-0011](adr/0011-address-pages-rendered-on-the-server.md), [specs/rest.md](specs/rest.md)). Serving the page of an address resolves it and starts indexing, like the API. The server reads the build's manifest and knows nothing else about the UI.
 
-**Private repo.** An org admin installs the GitHub App on selected repos (contents and metadata, read-only). A user connects through MCP OAuth; we hand off to the git host's login and keep the resulting user token server-side, issuing our own token to the agent. On every request we ask the git host whether this user can see this repo and cache the boolean for a short time; membership, team and visibility webhooks invalidate it. Indexing always uses the installation token. Headless agents use a **project token**: repo-scoped, read-only, expiring, revocable.
+**Private repo.** An owner installs the GitHub App on selected repos (contents and metadata, read-only). A person signs in through the app, in the browser or from their MCP client: the deployment is its own OAuth authorization server, hands off to the git host's login, keeps the resulting user token server-side and encrypted, and issues its own token to the agent, good at one address ([ADR-0035](adr/0035-people-sign-in-through-the-git-hosts-app.md), [ADR-0036](adr/0036-the-deployment-is-the-authorization-server-of-its-addresses.md)). A request from nobody in particular is resolved as everyone sees the name. A person's request for a repository known to be public is answered as anyone's is. For anything else it looks first at what the host last let that person read, then asks the git host as everyone, and then, as the person, whether they can see the repository; a yes is cached for a short time. Nothing one caller's request leaves behind answers another's, so a private repository in use and a name that is nothing cost a stranger the same. Content is read and indexed with the installation token, never the person's. An MCP request without a token for anything that is not public gets a challenge that says where to ask for access, the same for a private repository and for a name that is nothing. A public address never asks and publishes nothing about signing in, so a client finds no authorization there however it looks for it. [specs/permissions.md](specs/permissions.md) is the contract. Still to come: membership, team and visibility webhooks that end a cached answer early, and for headless agents a **project token**: repo-scoped, read-only, expiring, revocable.
+
+**The page of an account.** One segment short of an address, `/gh/<owner>`, answers a browser with the account's public repositories as the git host lists them, the ones already indexed with skills first. Listing indexes nothing and shows only what the host still shows everyone. The page is rendered on the server and open to search engines, like the page of an address ([ADR-0037](adr/0037-an-account-has-a-page-made-from-what-the-git-host-shows-everyone.md)).
 
 Details and open questions live in [specs/](specs/).
 
@@ -76,7 +78,7 @@ PostgreSQL is the only stateful dependency and plays four roles: content index w
 
 - **Account**: an organization or user on a git host. Everything tenant-scoped hangs off an account.
 - **Repo**, **ref → commit** resolution, and **index entries** per `(repo, commit)`: canonical path, kind, front-matter, discoverability, readability, reference targets, search vector, blob hash, the digest and size of what the file is served as, and whether the skills extension lists a skill. Index entries for a commit are immutable. The reading-rule version invalidates indexes when interpretation changes.
-- **Installation**, **project token** (stored as a hash), **git-host user token** (encrypted at rest), **permission cache** `(user, repo) → boolean` with an expiry.
+- **User** (an account that signed in), its **git-host user token** (encrypted at rest), **sessions**, **OAuth clients, codes, grants and tokens** (every secret stored as a hash), and the **permission cache** `(user, repo) → boolean` with the time it was answered. Later: **installation** events and the **project token** (stored as a hash).
 - **Jobs**, owned by the queue library in its own schema.
 
 Indexing first identifies declaration boundaries, then reads manifests and skills, discovers declared documents, and expands local Markdown references within bounded work. A failed manifest retains its boundary even when its body exceeds limits. Valid skills may declare hidden roots; individual links never expose siblings. Linked-only files are readable without becoming independent search results. Applicable rules are computed by ancestry and delivered completely through `load_skill` pages, including ancestor rules above a sub-path mount. These pages do not grant general reads outside the mount ([ADR-0022](adr/0022-repository-paths-and-progressive-skill-loading.md)). A third round fetches every file of the skills the skills extension may list, so that each has a SHA-256 digest, and computes the digest of the document each listed skill is served as ([ADR-0025](adr/0025-a-skill-on-the-wire-is-assembled-from-its-sources.md)).
@@ -118,7 +120,7 @@ Infrastructure-level caching, DNS, TLS and edge configuration are outside this r
 
 - **Immutable by construction.** Anything addressed by a commit hash never changes: index once per `(repo, commit)`, share it across all users, and send `Cache-Control: public, max-age=31536000, immutable` for cacheable reads of pinned public content.
 - **Moving refs** (branches, tags, the default branch) get a short TTL and revalidate with the commit hash as the `ETag`.
-- **Private responses** are always `Cache-Control: private, no-store`.
+- **Private responses** are always `Cache-Control: private, no-store`, and MCP results of a repository that is not public say `cacheScope: "private"`.
 - **Be cheap toward the git host.** Conditional requests; one tree listing per commit; bodies fetched by content hash, so a new commit only costs what changed; one archive download instead of many per-file calls when a repository is new; webhooks instead of polling; backoff on rate limits. The host's request quota is the scarce resource, not bandwidth.
 - **Bound the work per repo.** Text formats only, with caps on file count and size. Caps are configuration with safe defaults.
 - **Stay small.** Stateless `api` and interruptible `worker` run on small arm64 instances and scale horizontally; one PostgreSQL covers search, queue and cache.
@@ -128,9 +130,10 @@ Infrastructure-level caching, DNS, TLS and edge configuration are outside this r
 
 - **Untrusted input:** repository content, every request, and webhook payloads until their signature is verified (constant-time comparison, replay protection on the delivery id).
 - **No execution.** Repository content is parsed as data with size and depth limits, safe YAML, normalized paths, no traversal and no symlink following. Local Markdown references are resolved against the indexed tree; linked URLs never cause outbound fetches. Markdown is returned as text.
-- **Fail closed.** No permission answer means no access. A repo that does not exist and a repo the caller may not see produce the same response.
-- **Tokens.** Git-host user tokens are encrypted at rest and never leave the server. Project tokens are stored as hashes. Our own access tokens are short-lived. Tokens and authorization headers are never logged.
-- **Outbound requests.** Host adapters connect only to operator-configured base URLs, never to a URL taken from user input.
+- **Fail closed.** No permission answer means no access. A repo that does not exist and a repo the caller may not see produce the same response after the same work: the git host is asked as the person before anything private is read, and no cache that a repository's own people fill is read for anyone else ([specs/permissions.md](specs/permissions.md)).
+- **Tokens.** Git-host user tokens are encrypted at rest, used only to ask what their person can see, and never leave the server. Sessions, authorization codes, access and refresh tokens and client secrets are random strings stored as hashes. Our own access tokens are short-lived and good at one address. Tokens and authorization headers are never logged.
+- **Requests that change something for a person** come from the deployment's own pages: the session cookie does not travel with other sites' requests, and the request's origin is checked as well.
+- **Outbound requests.** Host adapters connect only to operator-configured base URLs, never to a URL taken from user input. The one exception is the metadata document an OAuth client identifies itself with: fetched over TLS from public addresses only, without redirects, small and briefly ([ADR-0036](adr/0036-the-deployment-is-the-authorization-server-of-its-addresses.md)).
 - **Provenance.** Repos whose owner has verified them, or that the operator lists as ones it vouches for until owners can ([ADR-0019](adr/0019-the-operator-vouches-for-repositories-until-owners-can.md)), are *verified* on their default branch; responses from every other mount carry a provenance notice that warns about what the content says beyond the user's task. The operator's lists live in the database behind a token-protected admin API, and a repository on its blocked list answers like one that does not exist ([ADR-0026](adr/0026-serving-follows-the-license-and-the-operators-lists.md)).
 - **Content policy.** The license a skill carries decides whether its content is served or only described with a link to the source ([ADR-0026](adr/0026-serving-follows-the-license-and-the-operators-lists.md)). The classification is pure logic in `core` over the same untrusted input as everything else; a text the reader does not know is restrictive. The index stores the resolved fact per skill and per repository, and the reader applies it with the mount's verification.
 - **Operator content.** What the front page leads with and what the explorer features are the operator's, written through the admin API and kept in the database with the uploads they use; a fresh deployment shows the reference repository on both until the operator lists something ([ADR-0028](adr/0028-the-front-page-and-the-explorer-are-operator-content.md)). Media on the pages comes from the build or from those uploads, which are served by the hash of their bytes, and never from repository content. The terms of service and the privacy policy can be written the same way and are then served at `/terms` and `/privacy`, which every page links to before any configured URL ([ADR-0029](adr/0029-terms-and-privacy-pages-can-be-written-into-the-deployment.md)); their Markdown goes through the renderer repository content goes through.

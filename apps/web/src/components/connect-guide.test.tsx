@@ -3,7 +3,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { I18nContext, messagesFor } from "../i18n/index.js";
 import { previewPhase, typingClock } from "./connect-animation.js";
-import { CLIENT_DETAILS, CONNECT_CLIENTS, clientConfiguration } from "./connect-clients.js";
+import {
+  CLIENT_DETAILS,
+  CONNECT_CLIENTS,
+  clientConfiguration,
+  clientSignInCommand,
+} from "./connect-clients.js";
 import {
   ConnectGuide,
   claudeInstallLink,
@@ -131,6 +136,75 @@ describe("connection onboarding", () => {
     },
   );
 
+  it.each(["en", "ko"] as const)(
+    "tells every app how to sign in to a private repository, in %s",
+    (language) => {
+      const t = messagesFor(language);
+      const scene = (client: (typeof CONNECT_CLIENTS)[number], signIn: boolean) =>
+        renderToStaticMarkup(
+          <I18nContext value={{ language, t }}>
+            <ConnectPreview
+              client={client}
+              step={1}
+              name="team-skills"
+              description="Skills for tests"
+              url="https://skills.example/gh/acme/private"
+              signIn={signIn}
+            />
+          </I18nContext>,
+        );
+      const p = t.connect.preview;
+      // ChatGPT's list comes up on OAuth: for a private repository it is left there, and
+      // nothing is chosen from it; for a public one the step is to choose no authentication.
+      expect(scene("chatgpt", true)).toContain(`>${p.oauth}<`);
+      expect(scene("chatgpt", true)).not.toContain(p.noAuth);
+      expect(scene("chatgpt", true)).not.toContain('data-point="option"');
+      expect(scene("chatgpt", false)).toContain(p.noAuth);
+      expect(scene("other", true)).toContain(`>${p.oauth}<`);
+      expect(scene("other", false)).toContain(`>${p.none}<`);
+
+      // Codex signs in as the server is added, and has a shell command for when it did not;
+      // Gemini CLI signs in from inside it; Claude Code offers it in the list its check
+      // already opens. Each command is a copy target of its own.
+      expect(clientSignInCommand("codex", "team-skills")).toBe("codex mcp login team-skills");
+      expect(clientSignInCommand("gemini", "team-skills")).toBe("/mcp auth team-skills");
+      expect(clientSignInCommand("claudeCode", "team-skills")).toBeUndefined();
+      expect(scene("codex", true)).toBe(scene("codex", false));
+      expect(scene("gemini", true)).toContain(
+        `aria-label="${t.common.copy}: /mcp auth team-skills"`,
+      );
+      expect(scene("gemini", true)).not.toContain("/mcp list");
+      expect(scene("claudeCode", true)).toBe(scene("claudeCode", false));
+      expect(scene("codex", false)).not.toContain("mcp login");
+      // The add command of Codex says which address the sign-in is for, where one is needed.
+      const added = (signIn: boolean) =>
+        renderToStaticMarkup(
+          <I18nContext value={{ language, t }}>
+            <ConnectPreview
+              client="codex"
+              step={0}
+              name="team-skills"
+              description="Skills for tests"
+              url="https://skills.example/gh/acme/private"
+              signIn={signIn}
+            />
+          </I18nContext>,
+        );
+      const address = "https://skills.example/gh/acme/private";
+      expect(added(true)).toContain(
+        `codex mcp add team-skills --url ${address} --oauth-resource ${address}`,
+      );
+      expect(added(false)).not.toContain("--oauth-resource");
+
+      // Every app has a sentence that says how it starts the sign-in, and the two apps whose
+      // second step names an authentication choice have that step written for a private one.
+      for (const client of CONNECT_CLIENTS) {
+        expect(t.connect.private.signIn[client].length, client).toBeGreaterThan(0);
+      }
+      expect(Object.keys(t.connect.private.steps).sort()).toEqual(["chatgpt", "other"]);
+    },
+  );
+
   it("keeps the mounted endpoint intact in install links and configurations", () => {
     const url = "https://skills.example/gh/acme/skills@release/1.2:docs";
     const name = "team-skills";
@@ -152,6 +226,15 @@ describe("connection onboarding", () => {
       servers: { [name]: { type: "http", url } },
     });
     expect(clientConfiguration("codex", name, url)).toBe(`codex mcp add ${name} --url ${url}`);
+    expect(clientConfiguration("codex", name, url, true)).toBe(
+      `codex mcp add ${name} --url ${url} --oauth-resource ${url}`,
+    );
+    // No other client is told anything more for a server that asks to sign in.
+    for (const client of ["claudeCode", "gemini", "cursor", "vscode", "other"] as const) {
+      expect(clientConfiguration(client, name, url, true)).toBe(
+        clientConfiguration(client, name, url),
+      );
+    }
     expect(clientConfiguration("claudeCode", name, url)).toBe(
       `claude mcp add --transport http ${name} ${url}`,
     );

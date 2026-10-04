@@ -55,7 +55,8 @@ Parsing never consults the repository. An address means the same thing whatever 
 - **Content paths are repository-root paths.** On `/gh/acme/library/marketing`, `get_skill` still takes `marketing/skills/ad-copy/SKILL.md`, and file reads retain that same prefix. Names and shortened directory aliases are not content identifiers. Paths outside the mount are rejected. Applicable ancestor rules are delivered only through skill-context pages, without allowing arbitrary file reads above the mount ([tools](tools.md)).
 - **Pagination identifies one indexed view.** Cursors bind to the commit's snapshot and reading-rule version, mount and request. A changed snapshot or request requires restarting the page sequence.
 - **Pinned** addresses (full commit hash) always serve the same content and may be cached indefinitely.
-- **Moving** addresses resolve to a commit at request time. Resolution is cached briefly and invalidated by push webhooks where the App is installed.
+- **Moving** addresses resolve to a commit at request time. Resolution is cached briefly; push webhooks where the App is installed will invalidate it earlier.
+- **An address is also what a person allows an AI app to read.** Over MCP an address is an OAuth protected resource, and an access token is good at exactly one canonical address, ref and path included ([permissions](permissions.md#tokens)).
 - **A short commit hash** is accepted wherever the host resolves it, but it is a moving ref: a prefix that is unique today can become ambiguous later, so it is never cached as immutable.
 - **Repository identity.** After the first resolution a repository is identified by the host's immutable numeric id. The `owner/repo` spelling is a lookup alias that is re-pointed after a rename or a transfer, so an index survives both and a recycled name never inherits another repository's index.
 - The parser is pure and total: every input yields either a parsed address or a typed error. It never throws on hostile input and never touches the network.
@@ -67,6 +68,10 @@ Over the MCP skills extension, a file of a skill is named by the address without
 ## In a browser
 
 The same URL answers people. When the deployment serves the web UI, a `GET` or `HEAD` gets the explorer view of the address, rendered with what the address serves, unless its `Accept` header names what MCP speaks (`application/json` or `text/event-stream`); a browser asks for HTML and a link unfurler for anything or nothing, and both get the page. Every other request on the path is MCP ([ADR-0009](../adr/0009-web-ui-prerendered-per-language.md), [ADR-0011](../adr/0011-address-pages-rendered-on-the-server.md)). Query parameters are not part of an address: `lang` selects the language of the UI, `skill`, `file` and `q` select a view, and none of them means anything to MCP. Search engines may index the view of an address without a ref and the view of one of its skills; a page at a ref, a file and a search say `noindex`.
+
+## One segment short: the page of an account
+
+`/gh/<owner>`, without a repository, is not an address: nothing can be mounted there, and MCP answers `400`. To a browser it is the page of that account ([ADR-0037](../adr/0037-an-account-has-a-page-made-from-what-the-git-host-shows-everyone.md), [REST](rest.md#get-apiv1ownersghowner)). `parseOwnerPath` and `formatOwnerPath` in `packages/core` implement it with the owner rules of this grammar: the host key, then one owner segment that is valid for the host, lowercased where the host matches names case-insensitively, and nothing after it, not even a slash. The page is rendered on the server with what the host lists for everyone. Search engines may index it once the account has something public to show, at its lowercased path, and the sitemap lists the pages of the accounts whose repositories it lists.
 
 ## Open questions
 

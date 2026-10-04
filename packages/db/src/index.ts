@@ -36,6 +36,32 @@ export {
   removeLegalDocument,
 } from "./queries/legal.js";
 export {
+  countUnusedOAuthClients,
+  createOAuthGrant,
+  deleteExpiredOAuth,
+  deleteOAuthGrant,
+  deleteUnusedOAuthClients,
+  findOAuthAccess,
+  findOAuthClient,
+  listOAuthGrants,
+  type OAuthAccess,
+  type OAuthClientAuthMethod,
+  type OAuthClientInput,
+  type OAuthClientRecord,
+  type OAuthClientSource,
+  type OAuthCodeRecord,
+  type OAuthGrantInput,
+  type OAuthGrantRecord,
+  type OAuthRefreshOutcome,
+  type OAuthTokenPair,
+  revokeOAuthToken,
+  rotateOAuthRefresh,
+  saveOAuthClient,
+  saveOAuthCode,
+  takeOAuthCode,
+  touchOAuthGrant,
+} from "./queries/oauth.js";
+export {
   addOperatorRepository,
   listOperatorRepositories,
   OPERATOR_LIST_KINDS,
@@ -45,11 +71,22 @@ export {
   purgeRepository,
   removeOperatorRepository,
 } from "./queries/operator.js";
+export { type IndexedRepository, listIndexedRepositories } from "./queries/owners.js";
+export {
+  deleteStaleRepoPermissions,
+  findReadableRepo,
+  findRepoPermission,
+  type ReadableRepo,
+  type RepoPermission,
+  type RepoPermissionScope,
+  saveRepoPermission,
+} from "./queries/permissions.js";
 export {
   type CachedRef,
   deleteRepoAlias,
   findCachedRef,
   findRepoByAlias,
+  markRepositoryNotPublic,
   type RepoAlias,
   type RepoAliasRecord,
   type RepoRecord,
@@ -101,4 +138,20 @@ export {
   type UsageTotal,
   usageDayOf,
 } from "./queries/usage.js";
+export {
+  createSession,
+  deleteExpiredSessions,
+  deleteSession,
+  deleteUserCredentials,
+  findSession,
+  findUser,
+  forgetUserAccess,
+  getUserCredentials,
+  type SessionRecord,
+  type StoredCredentials,
+  saveLogin,
+  saveUserCredentials,
+  touchSession,
+  type UserRecord,
+} from "./queries/users.js";
 export type { SkillFrontMatter, SnapshotDiagnostic, StoredTranslation } from "./schema.js";

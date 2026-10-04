@@ -4,9 +4,12 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   type GitHost,
+  type GitHostDirectory,
   GitHostError,
+  type HostCredential,
   type HostRepository,
   parseRepoPath,
+  type RepoCoordinates,
   type TreeEntry,
 } from "@skillcdn/core";
 
@@ -71,22 +74,57 @@ function readFixture(name: string): FixtureFile[] {
   return files;
 }
 
-export interface FixtureHost extends GitHost {
+/** The host id a fixture repository has for good: derived from its name. */
+export function fixtureRepoId(repo: string): string {
+  return String(Number.parseInt(sha1(repo).slice(0, 8), 16));
+}
+
+/**
+ * The repositories of `acme` that only the app's installation can read, by the fixture directory
+ * each has the files of: what a private repository with the app installed looks like to us.
+ */
+export const INSTALLED_PRIVATE_REPOSITORIES: Readonly<Record<string, string>> = {
+  "secret-skills": "multi-skill",
+  "other-secrets": "single-skill",
+};
+
+export interface FixtureHost extends GitHost, GitHostDirectory {
   /** Calls per port method, to assert how often the host was asked. */
   readonly calls: Record<
-    "getRepository" | "resolveRef" | "getTree" | "readBlob" | "readArchive",
+    | "getRepository"
+    | "resolveRef"
+    | "getTree"
+    | "readBlob"
+    | "readArchive"
+    | "getProfile"
+    | "listPublicRepositories",
     number
   >;
+  /** Every call that named a repository, with the credential it asked with, in order. */
+  readonly asked: {
+    readonly method: string;
+    readonly repo: string;
+    readonly credential: HostCredential;
+  }[];
   /** Makes `getTree` wait until the returned function is called. */
   holdTrees(): () => void;
   /** Extra files that exist in every repository, for cases the committed fixtures do not cover. */
   addFile(path: string, bytes: Uint8Array): void;
+  /**
+   * Makes a public repository stop being one, as its owner making it private does: the host's
+   * public list no longer names it, and the name is nothing to the deployment's credential.
+   */
+  hide(repo: string): void;
+  /** Makes every later call of a method fail as an unreachable host does. */
+  fail(method: "getRepository" | "resolveRef" | "getTree" | "readBlob" | "getProfile"): void;
 }
 
 /**
  * `acme/<fixture directory>` is a public repository; `acme/private-repo` exists but is
- * private; everything else is missing. Every repository has the refs `main` (the default branch)
- * and `release/1.2`; see {@link fixtureCommits}.
+ * private, and visible even to the deployment's own credential; the repositories of
+ * {@link INSTALLED_PRIVATE_REPOSITORIES} are private and exist only for the app's installation,
+ * as on a real host; everything else is missing. Every repository has the refs `main` (the
+ * default branch) and `release/1.2`; see {@link fixtureCommits}.
  */
 export function createFixtureHost(
   variant = "",
@@ -97,21 +135,100 @@ export function createFixtureHost(
     readonly archiveAlters?: (path: string) => boolean;
   } = {},
 ): FixtureHost {
-  const calls = { getRepository: 0, resolveRef: 0, getTree: 0, readBlob: 0, readArchive: 0 };
+  const calls = {
+    getRepository: 0,
+    resolveRef: 0,
+    getTree: 0,
+    readBlob: 0,
+    readArchive: 0,
+    getProfile: 0,
+    listPublicRepositories: 0,
+  };
+  const asked: FixtureHost["asked"] = [];
   const extra: FixtureFile[] = [];
   let gate: Promise<void> = Promise.resolve();
   const known = new Set(readdirSync(FIXTURES_ROOT).filter((name) => !name.includes(".")));
+  const hidden = new Set<string>();
+  const failing = new Set<string>();
   const commits = fixtureCommits(variant);
+  /** What the host shows everyone: the fixture repositories nobody made private. */
+  const listed = (): string[] => [...known].filter((name) => !hidden.has(name)).sort();
 
-  const filesOf = (repo: string): FixtureFile[] => {
-    if (!known.has(repo)) {
+  /**
+   * Notes the call, and refuses it when the repository is one the credential cannot see: a
+   * private repository does not exist for the deployment's own credential.
+   */
+  const see = (method: string, coordinates: RepoCoordinates): void => {
+    const credential = coordinates.credential ?? "deployment";
+    asked.push({ method, repo: coordinates.repo, credential });
+    if (failing.has(method)) {
+      throw new GitHostError("transient", "the git host could not be reached");
+    }
+    if (
+      (coordinates.repo in INSTALLED_PRIVATE_REPOSITORIES || hidden.has(coordinates.repo)) &&
+      credential !== "installation"
+    ) {
       throw new GitHostError("not_found", "not found on the git host");
     }
-    return [...readFixture(repo), ...extra];
+  };
+
+  const filesOf = (repo: string): FixtureFile[] => {
+    const directory = INSTALLED_PRIVATE_REPOSITORIES[repo] ?? repo;
+    if (!known.has(directory)) {
+      throw new GitHostError("not_found", "not found on the git host");
+    }
+    return [...readFixture(directory), ...extra];
   };
 
   return {
     calls,
+    asked,
+
+    async getProfile(_host, login) {
+      calls.getProfile += 1;
+      if (failing.has("getProfile")) {
+        throw new GitHostError("transient", "the git host could not be reached");
+      }
+      if (login.toLowerCase() !== "acme") {
+        throw new GitHostError("not_found", "not found on the git host");
+      }
+      return {
+        hostAccountId: "42",
+        login: "Acme",
+        kind: "organization",
+        name: "Acme Inc.",
+        bio: "Skills for everything Acme makes.",
+        publicRepositories: listed().length,
+      };
+    },
+
+    async listPublicRepositories(_host, login, page) {
+      calls.listPublicRepositories += 1;
+      if (login.toLowerCase() !== "acme") {
+        throw new GitHostError("not_found", "not found on the git host");
+      }
+      // Two to a page, so that paging is something a test can see.
+      const names = listed();
+      const start = (page - 1) * 2;
+      return {
+        repositories: names.slice(start, start + 2).map((name) => ({
+          hostRepoId: fixtureRepoId(name),
+          name,
+          description: FIXTURE_DESCRIPTIONS[name],
+          fork: false,
+          archived: name === "hostile",
+          stars: name.length,
+          pushedAt: "2026-09-01T00:00:00.000Z",
+        })),
+        hasMore: start + 2 < names.length,
+      };
+    },
+    hide(repo) {
+      hidden.add(repo);
+    },
+    fail(method) {
+      failing.add(method);
+    },
     holdTrees() {
       let release: () => void = () => {};
       gate = new Promise((resolve) => {
@@ -137,23 +254,34 @@ export function createFixtureHost(
 
     async getRepository(coordinates): Promise<HostRepository> {
       calls.getRepository += 1;
-      const isPrivate = coordinates.repo === "private-repo";
-      if (coordinates.owner !== "acme" || (!known.has(coordinates.repo) && !isPrivate)) {
+      see("getRepository", coordinates);
+      const installed = coordinates.repo in INSTALLED_PRIVATE_REPOSITORIES;
+      const isPrivate = coordinates.repo === "private-repo" || installed;
+      // The app is installed on some repositories and on no others: its credential names
+      // nothing elsewhere, not even what is public.
+      const reachable =
+        coordinates.credential === "installation"
+          ? installed
+          : known.has(coordinates.repo) || isPrivate;
+      if (coordinates.owner !== "acme" || !reachable) {
         throw new GitHostError("not_found", "not found on the git host");
       }
       return {
         // A host id belongs to one repository for good, so it is derived from the name.
-        hostRepoId: String(Number.parseInt(sha1(coordinates.repo).slice(0, 8), 16)),
+        hostRepoId: fixtureRepoId(coordinates.repo),
         owner: { hostAccountId: "42", login: "Acme", kind: "organization" },
         name: coordinates.repo,
         defaultBranch: "main",
-        description: FIXTURE_DESCRIPTIONS[coordinates.repo],
+        description: installed
+          ? "Skills only Acme's own people see."
+          : FIXTURE_DESCRIPTIONS[coordinates.repo],
         visibility: isPrivate ? "private" : "public",
       };
     },
 
-    async resolveRef(_coordinates, ref): Promise<string> {
+    async resolveRef(coordinates, ref): Promise<string> {
       calls.resolveRef += 1;
+      see("resolveRef", coordinates);
       if (ref === undefined) {
         return commits.main;
       }
@@ -170,12 +298,14 @@ export function createFixtureHost(
 
     async getTree(coordinates) {
       calls.getTree += 1;
+      see("getTree", coordinates);
       await gate;
       return { entries: filesOf(coordinates.repo).map((file) => file.entry), truncated: false };
     },
 
     async readBlob(coordinates, hash, maxBytes): Promise<Uint8Array> {
       calls.readBlob += 1;
+      see("readBlob", coordinates);
       const file = filesOf(coordinates.repo).find((candidate) => candidate.entry.hash === hash);
       if (file === undefined) {
         throw new GitHostError("not_found", "not found on the git host");
@@ -190,6 +320,7 @@ export function createFixtureHost(
       ? {
           async *readArchive(coordinates, _commit, request) {
             calls.readArchive += 1;
+            see("readArchive", coordinates);
             for (const file of filesOf(coordinates.repo)) {
               if (request.wants(file.entry.path, file.entry.size)) {
                 const altered = options.archiveAlters?.(file.entry.path) === true;

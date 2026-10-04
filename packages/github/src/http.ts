@@ -24,6 +24,20 @@ export interface HttpOptions {
   readonly maxCacheEntries: number;
 }
 
+/**
+ * A credential to send instead of the deployment's own: the one the host issued the app for an
+ * installation, the app's own proof of identity, or a person's. It lives for the one call.
+ */
+export interface RequestCredential {
+  readonly bearer: string;
+  /**
+   * Whose it is, which is what a refusal means: a person's credential the host no longer accepts
+   * is `unauthorized`, so that the caller can tell a dead credential from a repository the
+   * person cannot see. Replies under a person's credential are never kept.
+   */
+  readonly of: "app" | "installation" | "user";
+}
+
 export interface HttpRequest {
   readonly accept: string;
   /** Revalidate a stored ETag instead of refetching. For resources that change. */
@@ -31,6 +45,8 @@ export interface HttpRequest {
   readonly maxBytes?: number;
   /** Statuses that mean "no such thing" for this endpoint, beyond the usual ones. */
   readonly notFoundStatuses?: readonly number[];
+  /** Left out: the deployment's own credential. */
+  readonly credential?: RequestCredential | undefined;
 }
 
 export interface HttpReply {
@@ -54,7 +70,10 @@ function sleep(milliseconds: number): Promise<void> {
 }
 
 /** Reads a body up to `maxBytes`, then stops: `content-length` is a hint, not a promise. */
-async function readBody(response: Response, maxBytes: number): Promise<Uint8Array | undefined> {
+export async function readBody(
+  response: Response,
+  maxBytes: number,
+): Promise<Uint8Array | undefined> {
   if (response.body === null) {
     return new Uint8Array();
   }
@@ -104,13 +123,22 @@ function isRateLimited(status: number, headers: Headers): boolean {
   );
 }
 
-function failure(response: Response, notFoundStatuses: readonly number[]): GitHostError {
+function failure(
+  response: Response,
+  notFoundStatuses: readonly number[],
+  credential?: RequestCredential,
+): GitHostError {
   const { status, headers } = response;
   if (isRateLimited(status, headers)) {
     const seconds = retryAfterSeconds(headers, Date.now() / 1000);
     return new GitHostError("rate_limited", "the git host is rate limiting requests", {
       ...(seconds === undefined ? {} : { retryAfterSeconds: seconds }),
     });
+  }
+  // A person's credential that the host refuses is the one refusal that is told apart: it says
+  // nothing about any repository, and the caller has to ask the person to sign in again.
+  if (status === 401 && credential?.of === "user") {
+    return new GitHostError("unauthorized", "the git host refused the credential");
   }
   // Forbidden and unauthorized collapse into not found: callers must not be able to tell a
   // repository that does not exist from one they may not see.
@@ -167,25 +195,72 @@ export class GitHubHttp {
       readonly accept: string;
       readonly signal: AbortSignal;
       readonly notFoundStatuses?: readonly number[];
+      readonly credential?: RequestCredential | undefined;
     },
   ): Promise<Response> {
-    const response = await this.#follow(path, { accept: request.accept }, request.signal, true);
+    const response = await this.#follow(
+      { method: "GET", path, credential: request.credential },
+      { accept: request.accept },
+      request.signal,
+      true,
+    );
     if (response.status >= 200 && response.status < 300) {
       return response;
     }
     await response.body?.cancel();
-    throw failure(response, request.notFoundStatuses ?? []);
+    throw failure(response, request.notFoundStatuses ?? [], request.credential);
+  }
+
+  /**
+   * POSTs a JSON body to `path` below the base URL and returns the 2xx reply. For the few calls
+   * that ask the host to issue something; they are safe to repeat, so they retry like a GET.
+   */
+  async post(path: string, body: unknown, request: HttpRequest): Promise<HttpReply> {
+    const { attempts, retryBaseDelayMs } = this.#options;
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        const response = await this.#follow(
+          { method: "POST", path, credential: request.credential, body: JSON.stringify(body) },
+          { accept: request.accept, "content-type": "application/json" },
+          AbortSignal.timeout(this.#options.timeoutMs),
+          false,
+        );
+        if (response.status >= 200 && response.status < 300) {
+          const read = await readBody(response, request.maxBytes ?? DEFAULT_MAX_BYTES);
+          if (read === undefined) {
+            throw new GitHostError("invalid", "the git host sent more data than allowed");
+          }
+          return { status: response.status, headers: response.headers, body: read };
+        }
+        await response.body?.cancel();
+        throw failure(response, request.notFoundStatuses ?? [], request.credential);
+      } catch (error) {
+        const retryable = error instanceof GitHostError && error.kind === "transient";
+        if (!retryable || attempt >= attempts) {
+          throw error;
+        }
+        await sleep(Math.random() * retryBaseDelayMs * 2 ** (attempt - 1));
+      }
+    }
   }
 
   async #getOnce(path: string, request: HttpRequest): Promise<HttpReply> {
-    const cacheKey = `${request.accept} ${path}`;
-    const cached = request.conditional === true ? this.#cache.get(cacheKey) : undefined;
+    // What one credential may see says nothing about another, so each kind keeps its own
+    // replies, and a person's are not kept at all.
+    const conditional = request.conditional === true && request.credential?.of !== "user";
+    const cacheKey = `${request.credential?.of ?? "deployment"} ${request.accept} ${path}`;
+    const cached = conditional ? this.#cache.get(cacheKey) : undefined;
     const headers: Record<string, string> = { accept: request.accept };
     if (cached !== undefined) {
       headers["if-none-match"] = cached.etag;
     }
     const signal = AbortSignal.timeout(this.#options.timeoutMs);
-    const response = await this.#follow(path, headers, signal, false);
+    const response = await this.#follow(
+      { method: "GET", path, credential: request.credential },
+      headers,
+      signal,
+      false,
+    );
 
     if (response.status === 304 && cached !== undefined) {
       this.#remember(cacheKey, cached);
@@ -198,14 +273,14 @@ export class GitHubHttp {
       }
       const reply = { status: response.status, headers: response.headers, body };
       const etag = response.headers.get("etag");
-      if (request.conditional === true && etag !== null) {
+      if (conditional && etag !== null) {
         this.#remember(cacheKey, { etag, reply });
       }
       return reply;
     }
 
     await response.body?.cancel();
-    throw failure(response, request.notFoundStatuses ?? []);
+    throw failure(response, request.notFoundStatuses ?? [], request.credential);
   }
 
   /**
@@ -214,13 +289,19 @@ export class GitHubHttp {
    * Credentials are sent to the configured origin and nowhere else.
    */
   async #follow(
-    path: string,
+    call: {
+      readonly method: "GET" | "POST";
+      readonly path: string;
+      readonly credential: RequestCredential | undefined;
+      readonly body?: string;
+    },
     extraHeaders: Readonly<Record<string, string>>,
     signal: AbortSignal,
     download: boolean,
   ): Promise<Response> {
-    const token = await this.#options.token?.();
-    let url = new URL(`${this.#options.baseUrl.replace(/\/+$/, "")}${path}`);
+    const token =
+      call.credential === undefined ? await this.#options.token?.() : call.credential.bearer;
+    let url = new URL(`${this.#options.baseUrl.replace(/\/+$/, "")}${call.path}`);
     for (let redirects = 0; ; redirects += 1) {
       const headers: Record<string, string> = {
         ...extraHeaders,
@@ -235,10 +316,11 @@ export class GitHubHttp {
       let response: Response;
       try {
         response = await this.#options.fetch(url.href, {
-          method: "GET",
+          method: call.method,
           headers,
           redirect: "manual",
           signal,
+          ...(call.body === undefined ? {} : { body: call.body }),
         });
       } catch (error) {
         // The cause stays attached for logs; the message carries nothing request-specific.
@@ -258,7 +340,9 @@ export class GitHubHttp {
           (download &&
             next.protocol === "https:" &&
             this.#options.downloadOrigins.includes(next.origin)));
-      if (next === null || !allowed || redirects >= MAX_REDIRECTS) {
+      // A redirected POST would have to be sent again as it is or turned into a GET; the host
+      // asks for neither, so it is refused like a redirect to elsewhere.
+      if (next === null || !allowed || redirects >= MAX_REDIRECTS || call.method !== "GET") {
         throw new GitHostError("invalid", "the git host sent a redirect that cannot be followed");
       }
       url = next;

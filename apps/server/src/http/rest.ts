@@ -14,6 +14,7 @@ import {
   type LicenseFact,
   MAX_QUERY_LENGTH,
   MAX_REPO_PATH_LENGTH,
+  parseOwnerPath,
   parseRepoPath,
   READ_FILE_MAX_LIMIT,
   REST_FEATURED_SKILL_NAMES,
@@ -42,6 +43,7 @@ import type { Logger } from "../logger.js";
 import { ReaderInputError } from "../mounts/continuation.js";
 import type { MountOverview, MountReader, NotReady, SkillLookup } from "../mounts/mount-reader.js";
 import type { Mount } from "../mounts/mount-service.js";
+import { OwnerNotFoundError, type OwnerService } from "../owners/owner-service.js";
 import type { AppEnv } from "./request-context.js";
 
 export interface RestDependencies {
@@ -57,6 +59,8 @@ export interface RestDependencies {
   readonly showcase: () => Promise<RestShowcase>;
   /** A page of the deployment's own, when the operator wrote it (ADR-0029). */
   readonly legal: (kind: LegalDocumentKind) => Promise<RestLegalDocument | undefined>;
+  /** The pages of accounts (ADR-0037). Left out, there are none. */
+  readonly owners: OwnerService | undefined;
   /** Milliseconds from a clock that never goes backwards. */
   readonly now: () => number;
 }
@@ -82,6 +86,8 @@ const skillQuery = z
     cursor: z.string().max(4096).optional(),
   })
   .refine((value) => value.path !== undefined || value.name !== undefined);
+/** The git host pages an account's listing; it stops long before this. */
+const ownerQuery = z.object({ page: z.coerce.number().int().min(1).max(100).optional() });
 const fileQuery = z.object({
   path: z.string().min(1).max(MAX_REPO_PATH_LENGTH),
   offset: z.coerce.number().int().min(0).optional(),
@@ -104,6 +110,7 @@ function repositoryOf(mount: Mount): RestRepository {
     defaultBranch: repository.defaultBranch,
     description: repository.description ?? null,
     avatar: accountAvatarUrl(mount.address.host, repository.owner.hostAccountId, AVATAR_SIZE),
+    visibility: repository.visibility,
   };
 }
 
@@ -694,6 +701,30 @@ export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies):
 
   // Empty when the operator wrote nothing: the pages then show the build's own showcase.
   app.get(REST_ROUTES.showcase, async (c) => c.json(await showcase()));
+
+  // The page of an account (ADR-0037): who it is and what it has in public, as the git host
+  // says, with what is already indexed first. Asking indexes nothing.
+  const { owners } = dependencies;
+  if (owners !== undefined) {
+    app.get(`${REST_ROUTES.owners}/*`, async (c) => {
+      const query = queryOf(c, ownerQuery);
+      if (query instanceof Response) {
+        return query;
+      }
+      const owner = parseOwnerPath(new URL(c.req.url).pathname.slice(REST_ROUTES.owners.length));
+      if (owner === undefined) {
+        return c.json(errorBody("owner.invalid", "Write an account as gh/<owner>."), 400);
+      }
+      try {
+        return c.json(await owners.page(owner, query.page ?? 1));
+      } catch (error) {
+        if (error instanceof OwnerNotFoundError) {
+          return c.json(errorBody("owner.not_found", "The account was not found."), 404);
+        }
+        return failure(c, error);
+      }
+    });
+  }
 
   // The deployment's own pages, for the pages to render (ADR-0029). A kind that is not one, and
   // a page that has not been written, are the same absence.

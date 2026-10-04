@@ -1,3 +1,4 @@
+import { createPrivateKey } from "node:crypto";
 import { readFileSync } from "node:fs";
 import type { IndexLimits } from "@skillcdn/core";
 import * as z from "zod";
@@ -5,7 +6,23 @@ import { type Cidr, parseCidr } from "../http/client-address.js";
 
 // The only module that reads the environment. Contract: .env.example and deploy/README.md.
 
-const SECRET_NAMES = ["DATABASE_URL", "GITHUB_TOKEN", "ADMIN_TOKEN", "USAGE_HASH_SECRET"] as const;
+const SECRET_NAMES = [
+  "DATABASE_URL",
+  "GITHUB_TOKEN",
+  "ADMIN_TOKEN",
+  "USAGE_HASH_SECRET",
+  "GITHUB_APP_PRIVATE_KEY",
+  "GITHUB_APP_CLIENT_SECRET",
+  "AUTH_SECRET",
+] as const;
+/** What signing in needs, all of it or none of it. */
+const SIGN_IN_NAMES = [
+  "GITHUB_APP_ID",
+  "GITHUB_APP_PRIVATE_KEY",
+  "GITHUB_APP_CLIENT_ID",
+  "GITHUB_APP_CLIENT_SECRET",
+  "AUTH_SECRET",
+] as const;
 /** Shorter than this, a token or a secret is guessable enough to be a mistake. */
 const MIN_SECRET_LENGTH = 32;
 
@@ -96,6 +113,28 @@ const environmentSchema = z.object({
 
   GITHUB_API_URL: z.url({ protocol: /^https?$/ }).default("https://api.github.com"),
   GITHUB_TOKEN: z.string().min(1).optional(),
+  GITHUB_WEB_URL: z
+    .url({ protocol: /^https?$/ })
+    .transform((value) => new URL(value).origin)
+    .optional(),
+  GITHUB_APP_ID: z
+    .string()
+    .regex(/^[A-Za-z0-9._-]{1,64}$/, "must be the app's id or client id")
+    .optional(),
+  GITHUB_APP_PRIVATE_KEY: z.string().min(1).optional(),
+  GITHUB_APP_CLIENT_ID: z
+    .string()
+    .regex(/^[A-Za-z0-9._-]{1,64}$/, "must be the app's client id")
+    .optional(),
+  GITHUB_APP_CLIENT_SECRET: z.string().min(1).optional(),
+  AUTH_SECRET: z
+    .string()
+    .min(MIN_SECRET_LENGTH, `must be at least ${MIN_SECRET_LENGTH} characters`)
+    .optional(),
+  SESSION_TTL_DAYS: integer(30, 1, 365),
+  ACCESS_TOKEN_TTL_SECONDS: integer(3600, 60, 86_400),
+  REFRESH_TOKEN_TTL_DAYS: integer(30, 1, 365),
+  PERMISSION_TTL_SECONDS: integer(60, 0, 3600),
 
   ADMIN_TOKEN: z
     .string()
@@ -159,6 +198,29 @@ export interface WebTags {
   readonly contactEmail: string | undefined;
 }
 
+export interface AuthConfig {
+  /** The app the operator registered at the git host. */
+  readonly github: {
+    /** The app's id or client id: what the host calls the issuer of the app's tokens. */
+    readonly appId: string;
+    /** PEM. */
+    readonly privateKey: string;
+    readonly clientId: string;
+    readonly clientSecret: string;
+    /** Where people use the host in a browser. Unset: derived from the API URL. */
+    readonly webUrl: string | undefined;
+  };
+  /** What stored credentials are encrypted with, and what travels through a browser is sealed with. */
+  readonly secret: string;
+  /** How long a browser stays signed in without being used. */
+  readonly sessionTtlMs: number;
+  readonly accessTokenTtlMs: number;
+  /** How long a client can renew its access without the person, counted from its last renewal. */
+  readonly refreshTokenTtlMs: number;
+  /** How long the git host's answer about what a person can see is believed. */
+  readonly permissionTtlMs: number;
+}
+
 export interface Config {
   readonly environment: "development" | "test" | "production";
   readonly logLevel: string;
@@ -186,6 +248,11 @@ export interface Config {
     readonly apiUrl: string;
     readonly token: string | undefined;
   };
+  /**
+   * Signing in through the git host's app, which is what private repositories are served on
+   * (docs/specs/permissions.md). Unset: nobody signs in, and only public repositories exist.
+   */
+  readonly auth: AuthConfig | undefined;
   readonly web: {
     /** Directory of a web UI build to serve. Left out, there is no UI. */
     readonly root: string | undefined;
@@ -260,6 +327,57 @@ function withSecretFiles(
 }
 
 /**
+ * What signing in is configured with, or `undefined` when it is not. It takes all of the app's
+ * credentials and the secret, and an origin that does not change with the request: the git host
+ * sends people back to it, and clients are issued tokens in its name.
+ */
+function authOf(
+  env: z.infer<typeof environmentSchema>,
+  problems: string[],
+): AuthConfig | undefined {
+  const {
+    GITHUB_APP_ID: appId,
+    GITHUB_APP_PRIVATE_KEY: key,
+    GITHUB_APP_CLIENT_ID: clientId,
+    GITHUB_APP_CLIENT_SECRET: clientSecret,
+    AUTH_SECRET: secret,
+  } = env;
+  const given = { appId, key, clientId, clientSecret, secret };
+  if (Object.values(given).every((value) => value === undefined)) {
+    return undefined;
+  }
+  if (
+    appId === undefined ||
+    key === undefined ||
+    clientId === undefined ||
+    clientSecret === undefined ||
+    secret === undefined
+  ) {
+    const missing = SIGN_IN_NAMES.filter((name) => env[name] === undefined);
+    problems.push(`${missing.join(", ")}: required once any of ${SIGN_IN_NAMES.join(", ")} is set`);
+    return undefined;
+  }
+  if (env.PUBLIC_URL === undefined) {
+    problems.push("PUBLIC_URL: required for signing in, which needs one origin to come back to");
+  }
+  // A key in a variable is often written on one line, with the line breaks spelled out.
+  const privateKey = key.replaceAll("\\n", "\n");
+  try {
+    createPrivateKey(privateKey);
+  } catch {
+    problems.push("GITHUB_APP_PRIVATE_KEY: must be a private key in PEM format");
+  }
+  return {
+    github: { appId, privateKey, clientId, clientSecret, webUrl: env.GITHUB_WEB_URL },
+    secret,
+    sessionTtlMs: env.SESSION_TTL_DAYS * 86_400_000,
+    accessTokenTtlMs: env.ACCESS_TOKEN_TTL_SECONDS * 1000,
+    refreshTokenTtlMs: env.REFRESH_TOKEN_TTL_DAYS * 86_400_000,
+    permissionTtlMs: env.PERMISSION_TTL_SECONDS * 1000,
+  };
+}
+
+/**
  * Parses and validates the environment once, at boot. Problems name the variable and the rule,
  * never the value: a connection string or a token must not end up in a log.
  */
@@ -287,6 +405,10 @@ export function loadConfig(
   }
 
   const env = parsed.data;
+  const auth = authOf(env, problems);
+  if (problems.length > 0) {
+    throw new ConfigError(problems);
+  }
   return {
     environment: env.NODE_ENV,
     logLevel: env.LOG_LEVEL,
@@ -303,6 +425,7 @@ export function loadConfig(
     },
     database: { url: env.DATABASE_URL, poolMax: env.DATABASE_POOL_MAX },
     github: { apiUrl: env.GITHUB_API_URL, token: env.GITHUB_TOKEN },
+    auth,
     web: {
       root: env.WEB_ROOT,
       // Unset, pages are written for whatever origin the request came in on. No default names

@@ -1,6 +1,14 @@
 import { formatAddress } from "@skillcdn/core";
 import { describe, expect, it } from "vitest";
-import { addressFromInput, matchRoute, mountHref } from "./router.js";
+import {
+  ACCOUNT_SECTIONS,
+  accountHref,
+  addressFromInput,
+  matchRoute,
+  mountHref,
+  ownerFromInput,
+  ownerHref,
+} from "./router.js";
 
 describe("matchRoute", () => {
   it("knows the pages that exist once per language", () => {
@@ -38,7 +46,39 @@ describe("matchRoute", () => {
       name: "bad-address",
       error: { code: "invalid_repo" },
     });
-    expect(matchRoute("/gh/acme", "")).toMatchObject({ name: "bad-address" });
+    // One segment that is not the name of an account is an address with a part missing.
+    expect(matchRoute("/gh/-acme", "")).toMatchObject({ name: "bad-address" });
+    expect(matchRoute("/gh/", "")).toMatchObject({ name: "bad-address" });
+  });
+
+  it("reads one segment under the host as the page of an account", () => {
+    expect(matchRoute("/gh/Acme", "?lang=ko")).toEqual({
+      name: "owner",
+      owner: { host: "gh", owner: "acme" },
+    });
+    expect(ownerHref({ host: "gh", owner: "acme" })).toBe("/gh/acme");
+    // A trailing slash, or anything after the name, is an address, good or bad.
+    expect(matchRoute("/gh/acme/", "")).toMatchObject({ name: "bad-address" });
+    expect(matchRoute("/gh/acme/skills", "")).toMatchObject({ name: "mount" });
+  });
+
+  it("knows the sections of the account pages, each at one path", () => {
+    expect(matchRoute("/account", "")).toEqual({ name: "account", section: "overview" });
+    for (const section of ACCOUNT_SECTIONS) {
+      expect(matchRoute(accountHref(section), "")).toEqual({ name: "account", section });
+    }
+    expect(accountHref()).toBe("/account");
+    expect(accountHref("repositories")).toBe("/account/repositories");
+    // The first section has no second path, and there are no others.
+    expect(matchRoute("/account/overview", "")).toEqual({ name: "not-found" });
+    expect(matchRoute("/account/", "")).toEqual({ name: "not-found" });
+    expect(matchRoute("/account/billing", "")).toEqual({ name: "not-found" });
+    expect(matchRoute("/accounts", "")).toEqual({ name: "not-found" });
+  });
+
+  it("has one page that asks about a connecting app", () => {
+    expect(matchRoute("/oauth/consent", "?request=abc")).toEqual({ name: "consent" });
+    expect(matchRoute("/oauth/authorize", "")).toEqual({ name: "not-found" });
   });
 
   it("shows the states page in development only", () => {
@@ -99,5 +139,24 @@ describe("addressFromInput", () => {
     expect(canonical("acme")).toBe("missing_repo");
     expect(canonical("acme/skills/../../etc")).toBe("dot_segment");
     expect(canonical("-acme/skills")).toBe("invalid_owner");
+  });
+});
+
+describe("ownerFromInput", () => {
+  it("reads the name of an account, however it was written, and nothing longer", () => {
+    for (const input of [
+      "acme",
+      " Acme ",
+      "gh/acme",
+      "/gh/acme/",
+      "https://github.com/Acme",
+      "https://github.com/acme/",
+      "https://skillcdn.example/gh/acme",
+    ]) {
+      expect(ownerFromInput(input), input).toEqual({ host: "gh", owner: "acme" });
+    }
+    for (const input of ["", "acme/skills", "https://github.com/acme/skills", "-acme", "a b"]) {
+      expect(ownerFromInput(input), input).toBeUndefined();
+    }
   });
 });

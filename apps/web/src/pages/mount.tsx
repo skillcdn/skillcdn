@@ -1,8 +1,9 @@
 import { type Address, formatAddress, type RestMount, type RestSkill } from "@skillcdn/core";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { api } from "../api/client.js";
 import { resourceKeys } from "../api/keys.js";
 import { useResource } from "../api/use-resource.js";
+import { signInHref, useSession } from "../auth/session.js";
 import { AddressForm } from "../components/address-form.js";
 import { ConnectGuide } from "../components/connect-guide.js";
 import { ConnectStrip } from "../components/connect-strip.js";
@@ -12,15 +13,17 @@ import {
   Badge,
   Callout,
   Container,
+  cx,
   Picture,
   Skeleton,
   Spinner,
   VerifiedMark,
 } from "../components/ui.js";
+import ui from "../components/ui.module.css";
 import { useI18n } from "../i18n/index.js";
 import { repositoryDescription, repositoryName, translationFor } from "../i18n/repository-text.js";
-import { Link } from "../navigation.js";
-import { type MountView, PATHS } from "../router.js";
+import { Link, useLocation } from "../navigation.js";
+import { accountHref, type MountView, PATHS } from "../router.js";
 import { applyHead, buildHead } from "../seo/head.js";
 import { hostTreeUrl } from "./host-links.js";
 import { LicenseValue } from "./license.js";
@@ -100,6 +103,12 @@ function MountHeader(props: {
           {/* What the address resolved to, under the name: the branch or ref it follows, the
               commit, and the license, linked to its file where there is one. */}
           <ul className={styles.factList}>
+            {/* Said first: who else can open this page is what a person checks before sharing it. */}
+            {mount.repository.visibility === "private" && (
+              <li>
+                <Badge title={t.mount.privateHint}>{t.mount.private}</Badge>
+              </li>
+            )}
             {!mount.verified && (
               <li>
                 <Badge tone="warning" title={t.mount.unverifiedHint}>
@@ -137,6 +146,48 @@ function MountHeader(props: {
       )}
     </header>
   );
+}
+
+/**
+ * Under a repository that was not found: it may be one the visitor has to sign in for, or one
+ * the git host's app is not installed on. The server answers the same for those and for a name
+ * that does not exist (docs/specs/permissions.md), so this says what to try, not what is the case.
+ */
+function PrivateHint() {
+  const { t } = useI18n();
+  const { session } = useSession();
+  const location = useLocation();
+  if (session.status === "anonymous") {
+    return (
+      <Callout
+        action={
+          // A real navigation: signing in happens at the git host, and comes back here.
+          <a className={cx(ui.button, ui.secondary, ui.small)} href={signInHref(location)}>
+            {t.auth.signInWith}
+          </a>
+        }
+      >
+        {t.auth.privateSignedOut}
+      </Callout>
+    );
+  }
+  if (session.status === "user") {
+    return (
+      <Callout
+        action={
+          <Link
+            className={cx(ui.button, ui.secondary, ui.small)}
+            href={accountHref("repositories")}
+          >
+            {t.auth.privateManage}
+          </Link>
+        }
+      >
+        {t.auth.privateSignedIn}
+      </Callout>
+    );
+  }
+  return null;
 }
 
 function MountBody(props: {
@@ -207,6 +258,20 @@ export function MountPage(props: MountPageProps) {
   const [skill, setSkill] = useState<RestSkill | undefined>(undefined);
   const loaded = mount.state === "ready" ? mount.value : undefined;
 
+  // What a private repository shows was answered for the person who was signed in. Once they
+  // sign out the address is asked again, as anyone, and the page shows what anyone is shown.
+  const { session } = useSession();
+  const signedIn = session.status === "user";
+  const wasSignedIn = useRef(signedIn);
+  const forOne = loaded?.repository.visibility === "private";
+  // biome-ignore lint/correctness/useExhaustiveDependencies: who is signed in is the trigger
+  useEffect(() => {
+    if (wasSignedIn.current && !signedIn && forOne) {
+      mount.reload();
+    }
+    wasSignedIn.current = signedIn;
+  }, [signedIn]);
+
   // The head says what this view shows, once it knows: the same head the server writes.
   useEffect(() => {
     applyHead(
@@ -237,6 +302,7 @@ export function MountPage(props: MountPageProps) {
       <div className={styles.content}>
         {mount.state === "loading" && <Skeleton lines={6} label={t.common.loading} />}
         {mount.state === "error" && <ErrorCallout error={mount.error} onRetry={mount.reload} />}
+        {mount.state === "error" && mount.error.code === "mount.repo_not_found" && <PrivateHint />}
         {/* An address that resolves to nothing is, most of the time, a slip of a character: the
             address stays in a field to fix, and the featured skills are a way out. */}
         {mount.state === "error" && mount.error.status === 404 && (

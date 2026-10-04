@@ -1,0 +1,241 @@
+.page {
+  padding-block: var(--space-8) var(--space-9);
+}
+
+.title {
+  font-size: var(--text-2xl);
+}
+
+/* A menu down the side and one section beside it. The menu is the list of what a person has
+   here; it grows a row when they have something more. */
+.layout {
+  display: grid;
+  grid-template-columns: var(--account-nav-width) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-6);
+  margin-top: var(--space-6);
+}
+
+.nav ul {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.nav a {
+  display: block;
+  padding-inline: var(--space-3);
+  padding-block: calc(var(--space-2) - var(--label-optical))
+    calc(var(--space-2) + var(--label-optical));
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  text-decoration: none;
+}
+
+.nav a:hover {
+  background: var(--color-bg-inset);
+  color: var(--color-text);
+}
+
+.nav a[aria-current="page"] {
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
+  font-weight: var(--weight-medium);
+}
+
+.panel {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-5);
+  border: var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-subtle);
+}
+
+.heading {
+  font-size: var(--text-lg);
+}
+
+.lead {
+  max-width: var(--width-prose);
+  color: var(--color-text-muted);
+}
+
+.hint {
+  color: var(--color-text-faint);
+  font-size: var(--text-sm);
+}
+
+/* Overview */
+
+.identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.name {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  overflow-wrap: anywhere;
+}
+
+.login {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.ways {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.way,
+.leave {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-5);
+  padding: var(--space-4);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+}
+
+.way h3 {
+  font-size: var(--text-md);
+}
+
+.way p,
+.leave p {
+  max-width: var(--width-prose);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* Private repositories */
+
+.steps {
+  display: grid;
+  gap: var(--space-2);
+  max-width: var(--width-prose);
+  padding-left: var(--space-5);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  list-style: decimal;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.installations {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.installation {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.installationHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.selection {
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+/* Rows: a repository, or an app that was allowed something */
+
+.rows {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.row {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+}
+
+.grant {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.rowHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.rowLink {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.rowText {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.rowMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+}
+
+/* Signed out: one short page, centred like the other short pages. */
+.signedOut {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-4);
+  max-width: var(--width-prose);
+  margin-inline: auto;
+  padding-block: var(--space-7);
+  text-align: center;
+}
+
+@media (max-width: 52rem) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+  }
+
+  /* The menu becomes a row to swipe through, above its section. */
+  .nav ul {
+    display: flex;
+    overflow-x: auto;
+  }
+
+  .nav a {
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 40rem) {
+  .panel {
+    padding: var(--space-4);
+  }
+}

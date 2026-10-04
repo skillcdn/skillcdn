@@ -2,7 +2,7 @@ import type { AddressErrorCode } from "@skillcdn/core";
 import { type FormEvent, useId, useState } from "react";
 import { useI18n } from "../i18n/index.js";
 import { appHref, Link, navigate } from "../navigation.js";
-import { addressFromInput, mountHref } from "../router.js";
+import { addressFromInput, mountHref, ownerFromInput, ownerHref } from "../router.js";
 import { EXAMPLE_ADDRESSES, hostOf } from "../site.js";
 import styles from "./address-form.module.css";
 import { Button, cx } from "./ui.js";
@@ -27,6 +27,13 @@ export function AddressForm(props: {
     event.preventDefault();
     const parsed = addressFromInput(value);
     if (!parsed.ok) {
+      // An account's name alone is not an address, but it is somewhere to go: its page.
+      const owner = ownerFromInput(value);
+      if (owner !== undefined) {
+        setErrorCode(undefined);
+        navigate(appHref(ownerHref(owner)));
+        return;
+      }
       setErrorCode(parsed.error.code);
       return;
     }

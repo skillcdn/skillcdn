@@ -4,7 +4,13 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { Readable } from "node:stream";
 import { pathToFileURL } from "node:url";
-import { LEGAL_PAGE_PATHS, type LegalDocumentKind, type SocialCard } from "@skillcdn/core";
+import {
+  AUTH_META_NAME,
+  type GitHostKey,
+  LEGAL_PAGE_PATHS,
+  type LegalDocumentKind,
+  type SocialCard,
+} from "@skillcdn/core";
 import * as z from "zod";
 
 // Serves a build of the web UI (ADR-0009). The server knows nothing about the UI: the build
@@ -110,6 +116,11 @@ export interface PageTags {
   readonly termsUrl?: string | undefined;
   readonly privacyUrl?: string | undefined;
   readonly contactEmail?: string | undefined;
+  /**
+   * The git host people sign in through, when they can sign in on this deployment
+   * (specs/permissions.md). The pages offer signing in only when they are told so.
+   */
+  readonly signIn?: GitHostKey | undefined;
 }
 
 /** How the legal surface travels into a page: standard link types, and one meta for the contact. */
@@ -177,6 +188,9 @@ function headTags(tags: PageTags): { readonly html: string; readonly inlineScrip
     elements.push(
       `<meta name="${LEGAL_TAGS.contact}" content="${escapeAttribute(tags.contactEmail)}">`,
     );
+  }
+  if (tags.signIn !== undefined) {
+    elements.push(`<meta name="${AUTH_META_NAME}" content="${escapeAttribute(tags.signIn)}">`);
   }
   if (tags.googleAnalyticsId !== undefined) {
     // Consent first: consent mode starts with everything denied, nothing is loaded and nothing is
@@ -274,6 +288,8 @@ export interface AddressData {
   readonly mount?: PageAnswer;
   /** The skill the URL asks for, when it asks for one. */
   readonly skill?: PageAnswer;
+  /** For the page of an account: its first page, or why there is none. */
+  readonly owner?: PageAnswer;
 }
 
 /** The contract of the render module in a build, as the UI defines it. */
@@ -324,9 +340,22 @@ export interface WebBundle {
   respond(request: WebRequest): Response | undefined;
   /**
    * The view of an address, rendered with what the server knows about it when the build can
-   * render, else the frame in which the browser renders it.
+   * render, else the frame in which the browser renders it. The page of an account, one segment
+   * short of an address, is rendered the same way. A page rendered `forOne` person, with what
+   * only they may see, is theirs alone: nothing between the server and them keeps it.
    */
-  address(request: WebRequest, data: AddressData, status?: number): Response;
+  address(
+    request: WebRequest,
+    data: AddressData,
+    status?: number,
+    options?: { readonly forOne?: boolean },
+  ): Response;
+  /**
+   * A page the browser completes by asking the REST API itself: the pages of whoever is signed
+   * in. Rendered as far as the build can without data, with the head of that page; the same
+   * for everyone who asks.
+   */
+  view(request: WebRequest): Response;
   /**
    * The front page rendered with the operator's showcase, or `undefined` when the build cannot
    * render it: the prerendered page, with the build's own showcase, answers then.
@@ -901,9 +930,12 @@ export async function loadWebBundle(
       }
       return path === "/robots.txt" ? robots(request) : undefined;
     },
-    address(request, data, status = 200) {
+    address(request, data, status = 200, options = {}) {
+      // Rendered with what one person may see: private to them, and kept by nobody.
+      const keep: Record<string, string> =
+        options.forOne === true ? { "cache-control": "private, no-store" } : {};
       if (renderer === undefined) {
-        return page(request, manifest.shell, HTML, status, ADDRESS_HEADERS);
+        return page(request, manifest.shell, HTML, status, { ...ADDRESS_HEADERS, ...keep });
       }
       const origin = originOf(request);
       const { language, forced } = languageOf(request);
@@ -917,12 +949,35 @@ export async function loadWebBundle(
       if (typeof rendered !== "object" || rendered === null || typeof rendered.html !== "string") {
         throw new WebBundleError("the render module did not return a page");
       }
+      return html(request, withOrigin(rendered.html, origin), language, status, {
+        ...varyOn(forced, ADDRESS_HEADERS.vary),
+        ...keep,
+      });
+    },
+    view(request) {
+      if (renderer === undefined) {
+        return page(request, manifest.shell, HTML);
+      }
+      const origin = originOf(request);
+      const { language, forced } = languageOf(request);
+      // The module renders whatever page the path names; without data it is the page's frame,
+      // its head, and the place the browser fills in.
+      const rendered = renderer.module.renderAddressPage(renderer.template, {
+        language,
+        origin,
+        pathname: request.url.pathname,
+        search: request.url.search,
+        data: {},
+      });
+      if (typeof rendered !== "object" || rendered === null || typeof rendered.html !== "string") {
+        throw new WebBundleError("the render module did not return a page");
+      }
       return html(
         request,
         withOrigin(rendered.html, origin),
         language,
-        status,
-        varyOn(forced, ADDRESS_HEADERS.vary),
+        200,
+        varyOn(forced, undefined),
       );
     },
     landing(request, showcase) {

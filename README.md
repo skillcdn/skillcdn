@@ -33,11 +33,13 @@ Agent skills are already distributed as folders of Markdown in git repos. The mi
 ### Private repo
 
 1. An org admin installs the SkillCDN GitHub App and **selects which repos** it may read. Permissions are contents and metadata, read-only.
-2. A user adds the address to their agent. The agent starts MCP OAuth; we hand off to GitHub login and receive a user token. The GitHub token stays server-side; the agent only ever holds a SkillCDN token.
-3. On every request we ask GitHub whether this user can see this repo and cache the yes/no for a few minutes. Teams, outside collaborators, internal repos, SSO enforcement: GitHub decides, we relay.
-4. Indexing uses the App installation token, never a user token. Membership, team and repo-visibility webhooks invalidate the permission cache.
+2. A user adds the address to their agent. The agent is told where to ask for access and starts MCP OAuth; we hand off to GitHub login and receive a user token. The GitHub token stays server-side; the agent only ever holds a SkillCDN token, good for that one address. Signing in on the site opens the same repositories in the browser.
+3. On every request we ask GitHub whether this user can see this repo and cache the yes/no for a short time. Teams, outside collaborators, internal repos, SSO enforcement: GitHub decides, we relay. A repository someone may not see answers exactly like one that does not exist.
+4. Indexing uses the App installation token, never a user token. Membership, team and repo-visibility webhooks will invalidate the permission cache.
 
-Headless agents get a **project token**: repo-scoped, read-only, expiring, revocable, issued by someone with admin on that repo. That is the only permission layer of our own.
+Authorization is optional: a public repository never asks for it. Headless agents will get a **project token**: repo-scoped, read-only, expiring, revocable, issued by someone with admin on that repo. That is the only permission layer of our own.
+
+Every account has a page at `skillcdn.ai/gh/<owner>` with its public repositories as GitHub lists them, the ones already indexed with skills first.
 
 ### Tools exposed to the agent
 
@@ -62,14 +64,14 @@ The repo declares things; it never ships code that we execute. This is a deliber
 
 SkillCDN reads, indexes and serves what a repository publishes, keeps copies only to serve them, and takes them down on request. The license a skill carries decides whether its content is passed on or only described with a link to its source: permissive licenses are served with their notice, restrictive ones are described unless the repository is verified, and a repository without a license is served with its provenance and never featured ([licenses](docs/specs/skill-repo.md#licenses)). Where to send a takedown request is part of each deployment's own pages.
 
-Specifications: [address scheme](docs/specs/address.md) · [skill-repo convention](docs/specs/skill-repo.md) · [tools](docs/specs/tools.md).
+Specifications: [address scheme](docs/specs/address.md) · [skill-repo convention](docs/specs/skill-repo.md) · [tools](docs/specs/tools.md) · [people and private repositories](docs/specs/permissions.md).
 
 ## Architecture
 
 ```
 [agent]      any MCP client
      |   skillcdn.ai/gh/<owner>/<repo>[@ref][/path]   OAuth, or anonymous for public read
-[api]        stateless MCP over HTTP · permission check · meta tools · REST for the web app · webhook receiver
+[api]        stateless MCP over HTTP · sign-in and OAuth · permission check · meta tools · REST for the web app · webhook receiver
 [worker]     index and re-index on webhook or schedule   (same image as api, different role)
 [check]      read a working tree with the same indexer, for authors before they push   (no database)
 [postgres]   content index (full-text) · permission cache · job queue · later: vectors

@@ -525,3 +525,214 @@ export const legalDocuments = pgTable(
     check("legal_documents_kind_check", sql`${table.kind} in ('terms', 'privacy')`),
   ],
 );
+
+/**
+ * A person who signed in through a git host (docs/specs/permissions.md): which account of the
+ * host they are, and what the host calls them. Identity data, not tenant data: what is a
+ * person's hangs off the user, and every query on it names the user.
+ */
+export const users = pgTable(
+  "users",
+  {
+    id: id(),
+    accountId: uuid()
+      .notNull()
+      .references(() => accounts.id),
+    /** The name the account goes by at the host, when it gives one besides its login. */
+    name: text(),
+    lastLoginAt: instant().notNull(),
+    createdAt: createdAt(),
+    updatedAt: instant().notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("users_account_key").on(table.accountId)],
+);
+
+/**
+ * What the git host issued a user at sign-in, encrypted by the caller before it reaches this
+ * package: used on the server to ask the host what the user can see, and for nothing else.
+ */
+export const userCredentials = pgTable(
+  "user_credentials",
+  {
+    id: id(),
+    userId: uuid()
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** Ciphertext. */
+    accessToken: text().notNull(),
+    /** Null for a token the host issued without an expiry. */
+    accessExpiresAt: instant(),
+    /** Ciphertext; null when the host issues none. */
+    refreshToken: text(),
+    refreshExpiresAt: instant(),
+    createdAt: createdAt(),
+    updatedAt: instant().notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("user_credentials_user_key").on(table.userId)],
+);
+
+/** A browser a user is signed in on. The cookie holds the token; the row holds its hash. */
+export const sessions = pgTable(
+  "sessions",
+  {
+    id: id(),
+    userId: uuid()
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: text().notNull(),
+    expiresAt: instant().notNull(),
+    lastSeenAt: instant().notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex("sessions_token_hash_key").on(table.tokenHash),
+    index("sessions_user_idx").on(table.userId),
+    index("sessions_expires_idx").on(table.expiresAt),
+  ],
+);
+
+/**
+ * A client that asks people for access over OAuth: one that registered itself, or the copy of
+ * the metadata document a client identifies itself with. What it says about itself is its own
+ * word. Not tenant data: a client belongs to nobody here.
+ */
+export const oauthClients = pgTable(
+  "oauth_clients",
+  {
+    id: id(),
+    /** What the client is called in requests: issued at registration, or the document's URL. */
+    clientId: text().notNull(),
+    source: text({ enum: ["registration", "document"] }).notNull(),
+    name: text().notNull(),
+    /** The client's own page, when it names one. */
+    uri: text(),
+    redirectUris: jsonb().$type<string[]>().notNull(),
+    /** How the client proves itself at the token endpoint. */
+    authMethod: text({ enum: ["none", "client_secret_basic", "client_secret_post"] }).notNull(),
+    /** The hash of the secret issued at registration, for a client that proves itself with one. */
+    secretHash: text(),
+    /** For a document: until when the copy stands before it is fetched again. */
+    freshUntil: instant(),
+    createdAt: createdAt(),
+    updatedAt: instant().notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("oauth_clients_client_id_key").on(table.clientId),
+    check("oauth_clients_source_check", sql`${table.source} in ('registration', 'document')`),
+    check(
+      "oauth_clients_auth_method_check",
+      sql`${table.authMethod} in ('none', 'client_secret_basic', 'client_secret_post')`,
+    ),
+  ],
+);
+
+/**
+ * An authorization code on its way from the consent page to the token endpoint: short-lived,
+ * stored as a hash, and deleted by the exchange that uses it.
+ */
+export const oauthCodes = pgTable(
+  "oauth_codes",
+  {
+    id: id(),
+    codeHash: text().notNull(),
+    oauthClientId: uuid()
+      .notNull()
+      .references(() => oauthClients.id, { onDelete: "cascade" }),
+    userId: uuid()
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    redirectUri: text().notNull(),
+    codeChallenge: text().notNull(),
+    scope: text().notNull(),
+    /** The resource as the client named it, and the canonical address it is. */
+    resource: text().notNull(),
+    address: text().notNull(),
+    expiresAt: instant().notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex("oauth_codes_code_hash_key").on(table.codeHash),
+    index("oauth_codes_expires_idx").on(table.expiresAt),
+  ],
+);
+
+/**
+ * What a user allowed a client: to read one address as them. Tokens are issued under it and go
+ * with it when the user takes it back.
+ */
+export const oauthGrants = pgTable(
+  "oauth_grants",
+  {
+    id: id(),
+    userId: uuid()
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    oauthClientId: uuid()
+      .notNull()
+      .references(() => oauthClients.id, { onDelete: "cascade" }),
+    /** Canonical, as the address grammar prints it: the only address its tokens are good for. */
+    address: text().notNull(),
+    /** The resource as the client named it. */
+    resource: text().notNull(),
+    scope: text().notNull(),
+    lastUsedAt: instant(),
+    /** When its newest refresh token expires: past that, nothing can renew it. */
+    expiresAt: instant().notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    index("oauth_grants_user_idx").on(table.userId),
+    index("oauth_grants_client_idx").on(table.oauthClientId),
+    index("oauth_grants_expires_idx").on(table.expiresAt),
+  ],
+);
+
+/**
+ * An access token and the refresh token issued with it, as hashes. A refresh token is used
+ * once: `rotated_at` says when, and the row stays so that a second use is recognized.
+ */
+export const oauthTokens = pgTable(
+  "oauth_tokens",
+  {
+    id: id(),
+    grantId: uuid()
+      .notNull()
+      .references(() => oauthGrants.id, { onDelete: "cascade" }),
+    accessHash: text().notNull(),
+    accessExpiresAt: instant().notNull(),
+    refreshHash: text().notNull(),
+    refreshExpiresAt: instant().notNull(),
+    rotatedAt: instant(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex("oauth_tokens_access_hash_key").on(table.accessHash),
+    uniqueIndex("oauth_tokens_refresh_hash_key").on(table.refreshHash),
+    index("oauth_tokens_grant_idx").on(table.grantId),
+    index("oauth_tokens_refresh_expires_idx").on(table.refreshExpiresAt),
+  ],
+);
+
+/**
+ * The permission cache: what the git host last answered when asked whether a user can see a
+ * repository, and when. Only the yes or no is kept, and only for a short while.
+ */
+export const repoPermissions = pgTable(
+  "repo_permissions",
+  {
+    id: id(),
+    userId: uuid()
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    repoId: uuid()
+      .notNull()
+      .references(() => repos.id, { onDelete: "cascade" }),
+    allowed: boolean().notNull(),
+    checkedAt: instant().notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex("repo_permissions_user_repo_key").on(table.userId, table.repoId),
+    index("repo_permissions_checked_idx").on(table.checkedAt),
+  ],
+);

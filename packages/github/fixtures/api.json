@@ -1,5 +1,5 @@
 {
-  "$comment": "Recorded from api.github.com for the public repository skillcdn/skillcdn without credentials, then trimmed to the fields the adapter reads plus a few it must ignore. No tokens, no private data.",
+  "$comment": "Recorded from api.github.com for the public repository skillcdn/skillcdn and the organization that owns it, without credentials, then trimmed to the fields the adapter reads plus a few it must ignore. No tokens, no private data, no personal accounts.",
   "commit": "0e169f0cf93f93478cf2634eb8082d4e933afde7",
   "blob": {
     "path": "skills/single-skill/SKILL.md",
@@ -58,6 +58,36 @@
         "content-type": "text/plain; charset=utf-8"
       },
       "body": "---\nname: commit-messages\ndescription: Writes commit messages in the Conventional Commits style. Use when the user asks for a commit message or wants to review one.\nlicense: Apache-2.0\nmetadata:\n  author: skillcdn-fixtures\n  version: \"1.0\"\n---\n# Commit messages\n\nWrite the summary line first: `type(scope): summary`, imperative mood, 72 characters or fewer.\n\n1. Pick the type from the change itself: `feat`, `fix`, `docs`, `refactor`, `test`, `build`, `ci` or `chore`.\n2. Name the scope after the part of the codebase that changed.\n3. Use the body to say why the change was made, not what the diff already shows.\n\nBefore you finish, go through [the checklist](references/checklist.md).\n"
+    },
+    "GET /users/skillcdn": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "etag": "W/\"ff2ef6ca04c076ddbac2fcc4c27f6dd66a2e8968dafaae8af867719c0fbbc54b\""
+      },
+      "body": "{\"login\":\"skillcdn\",\"id\":331879177,\"type\":\"Organization\",\"name\":\"SkillCDN\",\"bio\":null,\"public_repos\":2}"
+    },
+    "GET /orgs/skillcdn": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json; charset=utf-8"
+      },
+      "body": "{\"login\":\"skillcdn\",\"id\":331879177,\"description\":\"\"}"
+    },
+    "GET /users/skillcdn/repos?type=owner&sort=pushed&direction=desc&per_page=100&page=1": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "etag": "W/\"ef96f485ebf4042117c932b7c244ad1d3b00bbb046f6250665600ca011f6b4f5\""
+      },
+      "body": "[{\"id\":1379203847,\"name\":\"skills\",\"private\":false,\"visibility\":\"public\",\"fork\":false,\"archived\":false,\"description\":null,\"stargazers_count\":0,\"pushed_at\":\"2026-10-03T02:02:06Z\"},{\"id\":1379202123,\"name\":\"skillcdn\",\"private\":false,\"visibility\":\"public\",\"fork\":false,\"archived\":false,\"description\":null,\"stargazers_count\":0,\"pushed_at\":\"2026-10-02T09:28:06Z\"}]"
+    },
+    "GET /users/skillcdn-no-such-account": {
+      "status": 404,
+      "headers": {
+        "content-type": "application/json; charset=utf-8"
+      },
+      "body": "{\"message\":\"Not Found\",\"status\":\"404\"}"
     }
   }
 }

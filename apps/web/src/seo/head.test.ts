@@ -1,4 +1,10 @@
-import type { RestLegalDocument, RestMount, RestShowcase, RestSkill } from "@skillcdn/core";
+import type {
+  RestLegalDocument,
+  RestMount,
+  RestOwner,
+  RestShowcase,
+  RestSkill,
+} from "@skillcdn/core";
 import { describe, expect, it } from "vitest";
 import { LANGUAGES } from "../i18n/languages.js";
 import { matchRoute } from "../router.js";
@@ -70,6 +76,17 @@ const SKILL: RestSkill = {
       ko: { title: "리뷰", description: "린터가 보지 못하는 것을 살펴 변경을 검토합니다." },
     },
   },
+};
+
+const OWNER: RestOwner["owner"] = {
+  host: "gh",
+  login: "Acme",
+  name: "Acme, Inc.",
+  kind: "organization",
+  avatar: "https://avatars.example/acme.png",
+  bio: null,
+  url: "https://github.com/Acme",
+  publicRepositories: 3,
 };
 
 describe("buildHead", () => {
@@ -199,6 +216,66 @@ describe("buildHead", () => {
       mount: { ...MOUNT, index: { status: "indexing" } },
     });
     expect(indexing.indexable).toBe(false);
+  });
+
+  it("keeps what is one person's out of search indexes", () => {
+    const mount: RestMount = {
+      ...MOUNT,
+      repository: { ...MOUNT.repository, visibility: "private" },
+    };
+    const head = buildHead(matchRoute("/gh/acme/skills", ""), "en", ORIGIN, { mount });
+    expect(head.indexable).toBe(false);
+    expect(head.canonical).toBeUndefined();
+    expect(head.jsonLd).toEqual([]);
+    // No card either: one is drawn for whoever a link is sent to, and they are not let in.
+    expect(head.image.url).toBe(`${ORIGIN}/og/og-en.png`);
+    expect(
+      buildHead(matchRoute("/gh/acme/skills", "?skill=review"), "en", ORIGIN, {
+        mount,
+        skill: SKILL,
+      }).indexable,
+    ).toBe(false);
+
+    for (const path of ["/account", "/account/apps", "/oauth/consent"]) {
+      for (const language of LANGUAGES) {
+        const page = buildHead(matchRoute(path, ""), language, ORIGIN);
+        expect(page.indexable, path).toBe(false);
+        expect(page.canonical, path).toBeUndefined();
+        expect(page.alternates, path).toEqual([]);
+        expect(page.title, path).toContain("SkillCDN");
+        expect(renderHead(page), path).toContain('<meta name="robots" content="noindex,follow"');
+      }
+    }
+  });
+
+  it("offers the page of an account to search engines once it has something public to show", () => {
+    // Before the page knows the account it is named as its path writes it, and is not one to find.
+    const unknown = buildHead(matchRoute("/gh/Acme", ""), "en", ORIGIN);
+    expect(unknown.title).toBe("acme | SkillCDN");
+    expect(unknown.indexable).toBe(false);
+    expect(unknown.canonical).toBeUndefined();
+    expect(unknown.alternates).toEqual([]);
+    expect(renderHead(unknown)).toContain('<meta name="robots" content="noindex,follow"');
+
+    // Known, it is named as the host spells it, at one URL per language however it was typed.
+    const known = buildHead(matchRoute("/gh/Acme", ""), "ko", ORIGIN, { owner: OWNER });
+    expect(known.title).toBe("Acme | SkillCDN");
+    expect(known.description).toContain("Acme");
+    expect(known.indexable).toBe(true);
+    expect(known.canonical).toBe("https://skills.example/gh/acme?lang=ko");
+    expect(known.alternates).toEqual([
+      { hreflang: "en", href: "https://skills.example/gh/acme" },
+      { hreflang: "ko", href: "https://skills.example/gh/acme?lang=ko" },
+      { hreflang: "x-default", href: "https://skills.example/gh/acme" },
+    ]);
+    expect(renderHead(known)).toContain('<meta name="robots" content="index,follow"');
+
+    // An account with nothing public has a page with nothing on it.
+    const empty = buildHead(matchRoute("/gh/acme", ""), "en", ORIGIN, {
+      owner: { ...OWNER, publicRepositories: 0 },
+    });
+    expect(empty.indexable).toBe(false);
+    expect(empty.canonical).toBeUndefined();
   });
 
   it("names a repository as its manifest does, and describes it in its own words", () => {

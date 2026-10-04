@@ -1,3 +1,4 @@
+import { generateKeyPairSync } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { ConfigError, loadConfig, loadIndexLimits } from "./config.js";
 
@@ -280,5 +281,106 @@ describe("loadConfig", () => {
     expect(error.message).not.toContain("hunter2-secret");
     expect(error.message).toContain("DATABASE_URL");
     expect(error.message).toContain("GITHUB_API_URL");
+  });
+});
+
+describe("signing in", () => {
+  // Made here and thrown away: no key, however useless, is committed.
+  const privateKey = generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey.export({
+    type: "pkcs8",
+    format: "pem",
+  }) as string;
+  const signIn = {
+    DATABASE_URL,
+    PUBLIC_URL: "https://skills.example.test",
+    GITHUB_APP_ID: "123456",
+    GITHUB_APP_PRIVATE_KEY: privateKey,
+    GITHUB_APP_CLIENT_ID: "Iv23liExampleClientId",
+    GITHUB_APP_CLIENT_SECRET: "client-secret-of-the-app",
+    AUTH_SECRET: "an-auth-secret-of-at-least-32-characters",
+  };
+
+  it("is off until it is configured, and then has safe lifetimes", () => {
+    expect(loadConfig({ DATABASE_URL }, noFiles).auth).toBeUndefined();
+    const { auth } = loadConfig(signIn, noFiles);
+    expect(auth).toEqual({
+      github: {
+        appId: "123456",
+        privateKey,
+        clientId: "Iv23liExampleClientId",
+        clientSecret: "client-secret-of-the-app",
+        webUrl: undefined,
+      },
+      secret: "an-auth-secret-of-at-least-32-characters",
+      sessionTtlMs: 30 * 86_400_000,
+      accessTokenTtlMs: 3_600_000,
+      refreshTokenTtlMs: 30 * 86_400_000,
+      permissionTtlMs: 60_000,
+    });
+  });
+
+  it("reads the lifetimes and where people use the git host", () => {
+    const { auth } = loadConfig(
+      {
+        ...signIn,
+        GITHUB_WEB_URL: "https://github.example.test/",
+        SESSION_TTL_DAYS: "7",
+        ACCESS_TOKEN_TTL_SECONDS: "600",
+        REFRESH_TOKEN_TTL_DAYS: "14",
+        PERMISSION_TTL_SECONDS: "0",
+      },
+      noFiles,
+    );
+    expect(auth).toMatchObject({
+      github: { webUrl: "https://github.example.test" },
+      sessionTtlMs: 7 * 86_400_000,
+      accessTokenTtlMs: 600_000,
+      refreshTokenTtlMs: 14 * 86_400_000,
+      permissionTtlMs: 0,
+    });
+  });
+
+  it("takes a key written on one line, and one read from a file", () => {
+    const oneLine = privateKey.trim().replaceAll("\n", "\n");
+    expect(
+      loadConfig({ ...signIn, GITHUB_APP_PRIVATE_KEY: oneLine }, noFiles).auth?.github.privateKey,
+    ).toBe(privateKey.trim());
+    const fromFile = loadConfig(
+      {
+        ...signIn,
+        GITHUB_APP_PRIVATE_KEY: undefined,
+        GITHUB_APP_PRIVATE_KEY_FILE: "/run/secrets/app-key",
+      },
+      (path) => (path === "/run/secrets/app-key" ? privateKey : noFiles()),
+    );
+    expect(fromFile.auth?.github.privateKey).toBe(privateKey.trim());
+  });
+
+  it("wants all of it or none of it, and names what is missing", () => {
+    const { GITHUB_APP_CLIENT_SECRET: _secret, AUTH_SECRET: _auth, ...partial } = signIn;
+    expect(problemsOf(partial).problems).toEqual([
+      "GITHUB_APP_CLIENT_SECRET, AUTH_SECRET: required once any of GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY, GITHUB_APP_CLIENT_ID, GITHUB_APP_CLIENT_SECRET, AUTH_SECRET is set",
+    ]);
+    expect(problemsOf({ DATABASE_URL, AUTH_SECRET: signIn.AUTH_SECRET }).problems[0]).toContain(
+      "GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY, GITHUB_APP_CLIENT_ID, GITHUB_APP_CLIENT_SECRET: required",
+    );
+  });
+
+  it("needs one origin to come back to, a key that is one, and a secret that is not short", () => {
+    const { PUBLIC_URL: _url, ...withoutOrigin } = signIn;
+    expect(problemsOf(withoutOrigin).problems).toEqual([
+      "PUBLIC_URL: required for signing in, which needs one origin to come back to",
+    ]);
+    const badKey = problemsOf({ ...signIn, GITHUB_APP_PRIVATE_KEY: "not-a-key-hunter2" });
+    expect(badKey.problems).toEqual([
+      "GITHUB_APP_PRIVATE_KEY: must be a private key in PEM format",
+    ]);
+    expect(badKey.message).not.toContain("hunter2");
+    expect(problemsOf({ ...signIn, AUTH_SECRET: "short" }).problems).toEqual([
+      "AUTH_SECRET: must be at least 32 characters",
+    ]);
+    expect(problemsOf({ ...signIn, PERMISSION_TTL_SECONDS: "86400" }).problems[0]).toContain(
+      "PERMISSION_TTL_SECONDS",
+    );
   });
 });

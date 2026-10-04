@@ -146,6 +146,28 @@ export async function saveRepository(
   });
 }
 
+/**
+ * Records that the host stopped showing a repository to everyone: it is gone or it is private,
+ * which a look without the right to see it cannot tell apart. Either way nothing may list it as
+ * public any longer. A later look by someone who can see it writes down what it really is.
+ */
+export async function markRepositoryNotPublic(
+  database: Database,
+  scope: RepoScope,
+  now: Date,
+): Promise<void> {
+  await drizzleOf(database)
+    .update(repos)
+    .set({ visibility: "private", updatedAt: now })
+    .where(
+      and(
+        eq(repos.accountId, scope.accountId),
+        eq(repos.id, scope.repoId),
+        eq(repos.visibility, "public"),
+      ),
+    );
+}
+
 /** Forgets an alias, for example when the host says the name no longer exists. */
 export async function deleteRepoAlias(database: Database, alias: RepoAlias): Promise<void> {
   await drizzleOf(database)

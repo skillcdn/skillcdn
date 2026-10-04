@@ -7,11 +7,14 @@ export {
   type AddressErrorCode,
   type AddressRef,
   formatAddress,
+  formatOwnerPath,
   GIT_HOST_KEYS,
   type GitHostKey,
   isPinnedAddress,
   MAX_ADDRESS_LENGTH,
+  type OwnerPath,
   parseAddress,
+  parseOwnerPath,
 } from "./address.js";
 export { browseCatalogFiles, type CatalogFile, folderOverview } from "./browse-tree.js";
 export { decodeText } from "./bytes.js";
@@ -26,7 +29,7 @@ export {
   splitFrontMatter,
 } from "./front-matter.js";
 export { isFullCommitHash, isValidRefName, MAX_REF_LENGTH } from "./git-ref.js";
-export { accountAvatarUrl, rawFileUrl } from "./host-urls.js";
+export { accountAvatarUrl, accountPageUrl, rawFileUrl } from "./host-urls.js";
 export { isImageUrl, MAX_IMAGE_URL_LENGTH } from "./image-source.js";
 export {
   classifyLicenseField,
@@ -74,11 +77,26 @@ export {
   GitHostError,
   type GitHostErrorKind,
   type HostAccount,
+  type HostCredential,
   type HostRepository,
   type RepoCoordinates,
   type RepoTree,
   type TreeEntry,
 } from "./ports/git-host.js";
+export type {
+  GitHostDirectory,
+  HostProfile,
+  HostRepositoryListing,
+  HostRepositoryPage,
+} from "./ports/git-host-directory.js";
+export type {
+  GitHostLogin,
+  HostCredentials,
+  HostInstallation,
+  HostInstallations,
+  HostInstalledRepository,
+  HostUser,
+} from "./ports/git-host-login.js";
 export { discardUsage, type UsageEvent, type UsageSink } from "./ports/usage-sink.js";
 export {
   baseName,
@@ -125,6 +143,31 @@ export {
   relativeRepoPath,
 } from "./repo-path.js";
 export {
+  ACCOUNT_PAGE_PATH,
+  AUTH_META_NAME,
+  AUTH_ROUTES,
+  CONSENT_ERROR_PARAM,
+  CONSENT_PAGE_PATH,
+  CONSENT_REQUEST_PARAM,
+  loginPath,
+  ownerRestPath,
+  RETURN_TO_PARAM,
+  type RestAuthorization,
+  type RestAuthorizationDecision,
+  type RestGrants,
+  type RestMe,
+  type RestMyRepositories,
+  type RestOwner,
+  type RestUser,
+  restAuthorizationDecisionSchema,
+  restAuthorizationSchema,
+  restGrantsSchema,
+  restMeSchema,
+  restMyRepositoriesSchema,
+  restOwnerSchema,
+  restUserSchema,
+} from "./rest/account.js";
+export {
   REST_FEATURED_SKILL_NAMES,
   REST_MOUNT_LIST_LIMIT,
   REST_ROUTES,
@@ -144,6 +187,7 @@ export {
   type RestMount,
   type RestReference,
   type RestRepository,
+  type RestRepositoryCard,
   type RestRepoTranslation,
   type RestSkill,
   type RestSkillSummary,
@@ -163,6 +207,7 @@ export {
   restMountSchema,
   restPath,
   restReferenceSchema,
+  restRepositoryCardSchema,
   restRepositorySchema,
   restRepoTranslationSchema,
   restRepoTranslationsSchema,

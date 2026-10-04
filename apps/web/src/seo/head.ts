@@ -2,6 +2,7 @@ import {
   formatAddress,
   type RestLegalDocument,
   type RestMount,
+  type RestOwner,
   type RestShowcase,
   type RestSkill,
   SOCIAL_ROUTE,
@@ -22,7 +23,7 @@ import {
   skillTitle,
 } from "../i18n/repository-text.js";
 import { firstParagraph, legalTexts } from "../legal.js";
-import { mountHref, PATHS, type Route } from "../router.js";
+import { mountHref, ownerHref, PATHS, type Route } from "../router.js";
 import { showcaseEntries, showcaseTexts } from "../showcase.js";
 import { LINKS } from "../site.js";
 
@@ -53,6 +54,8 @@ export interface PageData {
   readonly skill?: RestSkill | undefined;
   readonly showcase?: RestShowcase | undefined;
   readonly legal?: RestLegalDocument | undefined;
+  /** The account the page of an account is about. */
+  readonly owner?: RestOwner["owner"] | undefined;
 }
 
 export const OG_IMAGE_SIZE = { width: 1200, height: 630 } as const;
@@ -73,6 +76,7 @@ function clip(text: string): string {
  * The path of a page that search engines may index, without a language, or `undefined`. Static
  * pages always are. The view of an address is when it is the living address (no ref, which would
  * be a snapshot of the same page) and its data was there to render: the overview or one skill.
+ * The page of an account is once the account is known to have something public to show.
  */
 function indexablePathOf(route: Route, data: PageData | undefined): string | undefined {
   switch (route.name) {
@@ -88,6 +92,10 @@ function indexablePathOf(route: Route, data: PageData | undefined): string | und
       if (address.ref !== undefined || data?.mount?.index.status !== "ready") {
         return undefined;
       }
+      // What only some people may see is nobody's to find.
+      if (data.mount.repository.visibility === "private") {
+        return undefined;
+      }
       if (
         view.kind === "overview" &&
         view.query === undefined &&
@@ -100,6 +108,12 @@ function indexablePathOf(route: Route, data: PageData | undefined): string | und
       }
       return undefined;
     }
+    case "owner":
+      // What the git host lists for everyone is everyone's to find (ADR-0037). An account with
+      // nothing public has a page with nothing on it, which is nothing to find.
+      return data?.owner !== undefined && data.owner.publicRepositories > 0
+        ? ownerHref(route.owner)
+        : undefined;
     default:
       return undefined;
   }
@@ -199,11 +213,21 @@ export function buildHead(
           ? mountText(route, language, data)
           : route.name === "legal"
             ? legalText(route, language, data)
-            : route.name === "states" || route.name === "og-card"
-              ? { title: t.meta.siteName, description: "" }
-              : route.name === "bad-address"
-                ? { title: `${t.address.invalid} | ${t.meta.siteName}`, description: "" }
-                : t.meta.notFound;
+            : route.name === "owner"
+              ? {
+                  // Named as the host spells it once that is known, as its path writes it before.
+                  title: t.owner.metaTitle(data?.owner?.login ?? route.owner.owner),
+                  description: t.owner.metaDescription(data?.owner?.login ?? route.owner.owner),
+                }
+              : route.name === "account"
+                ? { title: t.account.metaTitle, description: "" }
+                : route.name === "consent"
+                  ? { title: t.authorize.metaTitle, description: "" }
+                  : route.name === "states" || route.name === "og-card"
+                    ? { title: t.meta.siteName, description: "" }
+                    : route.name === "bad-address"
+                      ? { title: `${t.address.invalid} | ${t.meta.siteName}`, description: "" }
+                      : t.meta.notFound;
 
   const jsonLd: Record<string, unknown>[] = [];
   // The front page shows the operator's showcase, else the build's own (ADR-0028).
@@ -273,9 +297,13 @@ export function buildHead(
   const social = showcase[0]?.media.social ?? null;
   // The page of an address unfurls with a card the server draws for it, in this language, with
   // the skill's words when the page shows one (ADR-0032); the language is in the URL so that a
-  // crawler gets the card of the page it read, whatever language it asks for itself.
+  // crawler gets the card of the page it read, whatever language it asks for itself. A private
+  // repository has none: a card is drawn for whoever a link is sent to, and to them the
+  // repository does not exist.
   const drawn =
-    route.name === "mount" && data?.mount !== undefined
+    route.name === "mount" &&
+    data?.mount !== undefined &&
+    data.mount.repository.visibility !== "private"
       ? `${origin}${SOCIAL_ROUTE}${formatAddress(route.address)}?${LANGUAGE_PARAM}=${language}${
           route.view.kind === "skill" ? `&skill=${encodeURIComponent(route.view.path)}` : ""
         }`

@@ -1,11 +1,14 @@
 import type {
   LegalDocumentKind,
+  RestAuthorization,
   RestDiagnostic,
   RestDocumentSummary,
+  RestGrants,
   RestLegalDocument,
   RestRepoTranslation,
   RestSkill,
   RestSkillSummary,
+  RestUser,
 } from "@skillcdn/core";
 
 // Made-up repositories for working on the UI without a server. Every state a page can be in has
@@ -22,6 +25,12 @@ export interface FixtureRepository {
   readonly description?: string;
   /** Whether the operator vouches for the repository. */
   readonly verified?: boolean;
+  /**
+   * Whether only someone who signed in can open it (docs/specs/permissions.md): the fixture
+   * person, once the fixture sign-in was used. To everyone else it is as missing as a
+   * repository that does not exist.
+   */
+  readonly private?: boolean;
   /** The owner's picture as the host serves it; the fixture owner's when left out. */
   readonly avatar?: string;
   /** The picture that stands for the repository, as the page loads it, when it has one. */
@@ -397,6 +406,22 @@ const DEMO_LONG: FixtureRepository = {
 
 export const FIXTURE_REPOSITORIES: Readonly<Record<string, FixtureRepository>> = {
   "acme/skills": ACME_SKILLS,
+  "acme/private-skills": {
+    ...ACME_SKILLS,
+    name: "private-skills",
+    description: "The skills Acme keeps to itself.",
+    verified: false,
+    private: true,
+    manifest: {
+      path: "SKILLCDN.md",
+      name: "Acme private skills",
+      description:
+        "The skills Acme keeps to itself. Only people who can see the repository on GitHub can open them.",
+      language: "en",
+      rules: ACME_RULES.trim(),
+    },
+    commit: "0000000000000000000000000000000000000005",
+  },
   "acme/handbook": {
     owner: "Acme",
     name: "handbook",
@@ -497,6 +522,124 @@ export const FIXTURE_REPOSITORIES: Readonly<Record<string, FixtureRepository>> =
 };
 
 export const FIXTURE_FEATURED = ["acme/skills", "acme/handbook", "demo/indexing", "demo/failed"];
+
+/** The picture of the fixture accounts, as the host would serve one (ADR-0031). */
+export const FIXTURE_AVATAR = "https://avatars.githubusercontent.com/u/583231?s=160&v=4";
+
+/**
+ * Who the fixture sign-in signs in. There is no git host to ask here, so following the sign-in
+ * link signs this person in at once, and signing out signs them out again (fixture-api.ts).
+ */
+export const FIXTURE_USER: RestUser = {
+  host: "gh",
+  login: "octo-dev",
+  name: "Octo Developer",
+  avatar: FIXTURE_AVATAR,
+};
+
+/** Where the git host's app is added to repositories: a page of the host that everyone has. */
+export const FIXTURE_INSTALL_URL = "https://github.com/settings/installations";
+
+export interface FixtureOwner {
+  /** As the host spells it. */
+  readonly login: string;
+  readonly name: string | null;
+  readonly kind: "organization" | "user";
+  readonly bio: string | null;
+  /** How many made-up repositories the host lists besides the ones of FIXTURE_REPOSITORIES. */
+  readonly listed: number;
+}
+
+/**
+ * The accounts that have a page (ADR-0037), by the name an address writes them with: an
+ * organization with indexed skills and more repositories than one page lists, a person whose
+ * repositories are in every state, and the fixture person, who has nothing public. Any other
+ * name is an account that does not exist.
+ */
+export const FIXTURE_OWNERS: Readonly<Record<string, FixtureOwner>> = {
+  acme: {
+    login: "Acme",
+    name: "Acme, Inc.",
+    kind: "organization",
+    bio: "Tools for teams that ship. A made-up organization for the fixtures.",
+    listed: 45,
+  },
+  demo: { login: "demo", name: null, kind: "user", bio: null, listed: 0 },
+  "octo-dev": {
+    login: FIXTURE_USER.login,
+    name: FIXTURE_USER.name,
+    kind: "user",
+    bio: "The person the fixture sign-in signs in.",
+    listed: 0,
+  },
+};
+
+/** The apps the fixture person allowed to read an address as them. */
+export const FIXTURE_GRANTS: RestGrants["items"] = [
+  {
+    id: "11111111-1111-4111-8111-111111111111",
+    client: { name: "Example Agent", uri: "https://agent.example" },
+    address: "/gh/acme/private-skills",
+    createdAt: "2026-09-28T09:12:00.000Z",
+    lastUsedAt: "2026-10-01T16:40:00.000Z",
+  },
+  {
+    id: "22222222-2222-4222-8222-222222222222",
+    client: { name: "A command-line client with a long name that it gave itself", uri: null },
+    address: "/gh/acme/private-skills@v2/skills/release-notes",
+    createdAt: "2026-09-30T11:00:00.000Z",
+    lastUsedAt: null,
+  },
+];
+
+/**
+ * What the consent page is asked about, by the value of its `request` parameter. The real one is
+ * sealed by the authorization endpoint; here it is a name, and any other value is a request that
+ * has expired.
+ */
+export const FIXTURE_AUTHORIZATIONS: Readonly<
+  Record<
+    string,
+    {
+      readonly client: RestAuthorization["client"];
+      readonly address: string;
+      /** The git host could not be asked whether the person can open the address. */
+      readonly unknown?: true;
+    }
+  >
+> = {
+  web: {
+    client: {
+      name: "Example Agent",
+      uri: "https://agent.example",
+      redirectHost: "agent.example",
+      loopback: false,
+    },
+    address: "/gh/acme/private-skills",
+  },
+  local: {
+    client: { name: "Example CLI", uri: null, redirectHost: "127.0.0.1", loopback: true },
+    address: "/gh/acme/private-skills@v2/skills/release-notes",
+  },
+  app: {
+    client: { name: "Example Editor", uri: null, redirectHost: "example-editor:", loopback: true },
+    address: "/gh/acme/private-skills",
+  },
+  "not-visible": {
+    client: {
+      name: "Example Agent",
+      uri: "https://agent.example",
+      redirectHost: "agent.example",
+      loopback: false,
+    },
+    address: "/gh/acme/no-such-repository",
+  },
+  "host-down": {
+    client: { name: "Example CLI", uri: null, redirectHost: "127.0.0.1", loopback: true },
+    address: "/gh/acme/private-skills",
+    unknown: true,
+  },
+};
 
 /**
  * The deployment's own pages (ADR-0029): terms written through the admin API in two languages;

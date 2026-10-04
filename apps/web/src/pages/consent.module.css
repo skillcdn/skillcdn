@@ -1,0 +1,99 @@
+.page {
+  padding-block: var(--space-8) var(--space-9);
+}
+
+/* One question, in one column: nothing on the page competes with it. */
+.card {
+  display: grid;
+  gap: var(--space-4);
+  max-width: var(--width-dialog);
+  margin-inline: auto;
+  padding: var(--space-6);
+  border: var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--color-bg-subtle);
+  box-shadow: var(--shadow-stage);
+}
+
+.title {
+  font-size: var(--text-xl);
+  overflow-wrap: anywhere;
+}
+
+/* Who asks, for what, as whom: a label and its value to a row. */
+.facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-4);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  font-size: var(--text-sm);
+}
+
+.facts dt {
+  color: var(--color-text-faint);
+}
+
+.facts dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.account {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* What the app says about itself beyond its name: its own word, set smaller than ours. */
+.aside {
+  display: block;
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+}
+
+.text {
+  color: var(--color-text-muted);
+}
+
+/* Where the answer goes is the one fact the app cannot make up, so it is not set quietly. */
+.returns {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  overflow-wrap: anywhere;
+}
+
+.hint {
+  color: var(--color-text-faint);
+  font-size: var(--text-sm);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.notYou button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text-faint);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.notYou button:hover:not(:disabled) {
+  color: var(--color-text);
+}
+
+@media (max-width: 40rem) {
+  .card {
+    padding: var(--space-5) var(--space-4);
+  }
+}

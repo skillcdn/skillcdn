@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   type AddressErrorCode,
   formatAddress,
+  formatOwnerPath,
   isPinnedAddress,
   MAX_ADDRESS_LENGTH,
   parseAddress,
+  parseOwnerPath,
 } from "./address.js";
 
 const HASH = "0123456789abcdef0123456789abcdef01234567";
@@ -226,5 +228,51 @@ describe("formatAddress", () => {
       expect(parsed(canonical)).toEqual(address);
       expect(formatAddress(parsed(canonical))).toBe(canonical);
     }
+  });
+});
+
+describe("parseOwnerPath", () => {
+  it.each([
+    ["/gh/acme", { host: "gh", owner: "acme" }],
+    ["/gh/Acme-Inc", { host: "gh", owner: "acme-inc" }],
+    ["/gh/octo_cat", { host: "gh", owner: "octo_cat" }],
+  ])("reads %s as the page of an account", (input, expected) => {
+    expect(parseOwnerPath(input)).toEqual(expected);
+  });
+
+  it("writes the canonical path, which parses back to the same account", () => {
+    const owner = parseOwnerPath("/gh/Acme");
+    expect(owner).toBeDefined();
+    if (owner !== undefined) {
+      expect(formatOwnerPath(owner)).toBe("/gh/acme");
+      expect(parseOwnerPath(formatOwnerPath(owner))).toEqual(owner);
+    }
+  });
+
+  it.each([
+    "",
+    "/",
+    "/gh",
+    "/gh/",
+    "gh/acme",
+    "/gl/acme",
+    "/gh/acme/",
+    "/gh/acme/skills",
+    "/gh/-acme",
+    "/gh/ac%6De",
+    "/gh/..",
+    "/gh/acme?x",
+    `/gh/${"a".repeat(40)}`,
+    `/gh/${RLO}acme`,
+    `/gh/ac${ZWSP}me`,
+    `/gh/${LONE_SURROGATE}`,
+    `/gh/${"a".repeat(MAX_ADDRESS_LENGTH)}`,
+  ])("is not the page of an account: %j", (input) => {
+    expect(parseOwnerPath(input)).toBeUndefined();
+  });
+
+  it("leaves every address to the address parser", () => {
+    expect(parseOwnerPath("/gh/acme/skills@main")).toBeUndefined();
+    expect(parseAddress("/gh/acme").ok).toBe(false);
   });
 });

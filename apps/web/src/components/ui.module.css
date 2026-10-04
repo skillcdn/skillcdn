@@ -205,6 +205,11 @@
   margin-top: var(--space-1);
 }
 
+/* A callout that says two things keeps them a little apart. */
+.calloutBody p + p {
+  margin-top: var(--space-2);
+}
+
 /* Spinner */
 
 .spinner {

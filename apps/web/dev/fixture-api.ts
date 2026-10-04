@@ -1,27 +1,44 @@
 import {
   type Address,
+  AUTH_ROUTES,
+  accountPageUrl,
+  CONSENT_REQUEST_PARAM,
   formatAddress,
   isLegalDocumentKind,
   isPinnedAddress,
   parseAddress,
+  parseOwnerPath,
   REST_FEATURED_SKILL_NAMES,
   REST_MOUNT_LIST_LIMIT,
   REST_ROUTES,
+  RETURN_TO_PARAM,
+  type RestAuthorization,
   type RestBrowse,
   type RestBrowseEntry,
   type RestFeatured,
   type RestFile,
   type RestFind,
   type RestFindItem,
+  type RestGrants,
+  type RestMe,
   type RestMount,
+  type RestMyRepositories,
+  type RestOwner,
+  type RestRepositoryCard,
   type RestShowcase,
   type RestSkill,
 } from "@skillcdn/core";
 import {
+  FIXTURE_AUTHORIZATIONS,
+  FIXTURE_AVATAR,
   FIXTURE_FAILURES,
   FIXTURE_FEATURED,
+  FIXTURE_GRANTS,
+  FIXTURE_INSTALL_URL,
   FIXTURE_LEGAL,
+  FIXTURE_OWNERS,
   FIXTURE_REPOSITORIES,
+  FIXTURE_USER,
   type FixtureRepository,
   summaryOf,
 } from "./fixtures.js";
@@ -32,20 +49,36 @@ import {
 
 export interface FixtureAnswer {
   readonly status: number;
+  /** `undefined` for an answer without a body. */
   readonly body: unknown;
+  /** Where the browser is sent, with a redirect status. */
+  readonly location?: string;
 }
 
 /** How long `demo/slow` stays "indexing" after it was first asked for. */
 const SLOW_INDEXING_MS = 5000;
-/** The picture of the fixture owner, as the host would serve one (ADR-0031). */
-const FIXTURE_AVATAR = "https://avatars.githubusercontent.com/u/583231?s=160&v=4";
 const PAGE_LIMIT = 40_000;
+/** How many repositories a page of an account lists here; the server's pages are the host's. */
+const OWNER_PAGE_SIZE = 30;
+/** Where the fixture sends a browser that has nowhere of its own to go back to. */
+const STATES_PAGE = "/dev/states";
 
 const firstAsked = new Map<string, number>();
+/**
+ * Whether the fixture person is signed in, and what they took back. One developer uses this
+ * server, so it is one fact for the whole of it, without a cookie.
+ */
+let signedIn = false;
+const removedGrants = new Set<string>();
 
-/** Forgets when `demo/slow` was first asked for, so that it starts indexing again. */
+/**
+ * Forgets when `demo/slow` was first asked for, so that it starts indexing again, and who signed
+ * in and what they removed.
+ */
 export function resetFixtureState(): void {
   firstAsked.clear();
+  signedIn = false;
+  removedGrants.clear();
 }
 
 const problem = (status: number, code: string, message: string, extra = {}): FixtureAnswer => ({
@@ -85,8 +118,9 @@ function resolve(
   if (failure !== undefined) {
     return problem(failure.status, failure.code, failure.message);
   }
-  const repository = FIXTURE_REPOSITORIES[key];
-  if (repository === undefined) {
+  const repository = FIXTURE_REPOSITORIES[key] ?? listedRepository(address.owner, address.repo);
+  // A private repository is as missing as one that does not exist until its person signs in.
+  if (repository === undefined || (repository.private === true && !signedIn)) {
     return problem(404, "mount.repo_not_found", "The repository was not found.");
   }
   if (address.ref?.kind === "name" && address.ref.name.startsWith("missing")) {
@@ -124,6 +158,7 @@ function mountBody(
       defaultBranch: repository.defaultBranch,
       description: repository.description ?? null,
       avatar: repository.avatar ?? FIXTURE_AVATAR,
+      visibility: repository.private === true ? "private" : "public",
     },
     ref: ref === undefined ? null : ref.kind === "commit" ? ref.hash : ref.name,
     pinned: isPinnedAddress(address),
@@ -504,54 +539,265 @@ function fileAnswer(
   return { status: 200, body };
 }
 
+/** A repository as a card shows it: on the explorer's front page and on the page of an account. */
+function cardOf(key: string, repository: FixtureRepository, now: number): RestRepositoryCard {
+  const status = stateOf(key, repository, now);
+  return {
+    address: `/gh/${key}`,
+    repository: {
+      host: "gh" as const,
+      owner: repository.owner,
+      name: repository.name,
+      defaultBranch: repository.defaultBranch,
+      description: repository.description ?? null,
+      avatar: repository.avatar ?? FIXTURE_AVATAR,
+    },
+    manifest:
+      status === "ready" && repository.manifest !== undefined
+        ? {
+            name: repository.manifest.name,
+            description: repository.manifest.description,
+            translations: repository.manifest.translations ?? {},
+          }
+        : null,
+    verified: repository.verified === true,
+    image: status === "ready" ? (repository.image ?? null) : null,
+    status,
+    skillCount: status === "ready" ? repository.skills.length : null,
+    skills:
+      status === "ready"
+        ? repository.skills.slice(0, REST_FEATURED_SKILL_NAMES).map((detail) => detail.name)
+        : [],
+  };
+}
+
 function featuredBody(now: number): RestFeatured {
   return {
     items: FIXTURE_FEATURED.flatMap((key) => {
       const repository = FIXTURE_REPOSITORIES[key];
-      if (repository === undefined) {
-        return [];
-      }
-      const status = stateOf(key, repository, now);
-      return [
-        {
-          address: `/gh/${key}`,
-          repository: {
-            host: "gh" as const,
-            owner: repository.owner,
-            name: repository.name,
-            defaultBranch: repository.defaultBranch,
-            description: repository.description ?? null,
-            avatar: repository.avatar ?? FIXTURE_AVATAR,
-          },
-          manifest:
-            status === "ready" && repository.manifest !== undefined
-              ? {
-                  name: repository.manifest.name,
-                  description: repository.manifest.description,
-                  translations: repository.manifest.translations ?? {},
-                }
-              : null,
-          verified: repository.verified === true,
-          image: status === "ready" ? (repository.image ?? null) : null,
-          status,
-          skillCount: status === "ready" ? repository.skills.length : null,
-          skills:
-            status === "ready"
-              ? repository.skills.slice(0, REST_FEATURED_SKILL_NAMES).map((detail) => detail.name)
-              : [],
-        },
-      ];
+      return repository === undefined ? [] : [cardOf(key, repository, now)];
     }),
   };
 }
 
-/** Answers a REST request from fixtures. `undefined` when the URL is not part of the REST API. */
+/** The name of the made-up repositories an account's page lists besides the fixture ones. */
+const LISTED_NAME = /^project-([1-9]\d*)$/;
+
+/**
+ * One of the made-up repositories the page of an account lists. Opening it is what opening most
+ * repositories of an account is: it gets indexed, and holds nothing to serve.
+ */
+function listedRepository(owner: string, name: string): FixtureRepository | undefined {
+  const profile = FIXTURE_OWNERS[owner];
+  const number = Number(LISTED_NAME.exec(name)?.[1] ?? "0");
+  return profile === undefined || number < 1 || number > profile.listed
+    ? undefined
+    : {
+        owner: profile.login,
+        name,
+        defaultBranch: "main",
+        commit: "0000000000000000000000000000000000000006",
+        state: "ready",
+        skills: [],
+        documents: [],
+        diagnostics: [],
+        files: {},
+      };
+}
+
+/** The page of an account (ADR-0037): what is indexed and holds skills first, then the rest. */
+function ownerAnswer(path: string, params: URLSearchParams, now: number): FixtureAnswer {
+  const owner = parseOwnerPath(path);
+  if (owner === undefined) {
+    return problem(400, "owner.invalid", "Write an account as gh/<owner>.");
+  }
+  const page = Number(params.get("page") ?? "1");
+  if (!Number.isInteger(page) || page < 1 || page > 100) {
+    return problem(400, "request.invalid", "Missing or malformed query parameters: page.");
+  }
+  const profile = FIXTURE_OWNERS[owner.owner];
+  if (profile === undefined) {
+    return problem(404, "owner.not_found", "The account was not found.");
+  }
+  // Only what everyone can see: a private repository is on nobody's page.
+  const own = Object.entries(FIXTURE_REPOSITORIES).filter(
+    ([key, repository]) => key.startsWith(`${owner.owner}/`) && repository.private !== true,
+  );
+  const leads = (key: string, repository: FixtureRepository): boolean =>
+    stateOf(key, repository, now) === "ready" && repository.skills.length > 0;
+  const listed: RestOwner["repositories"] = [
+    ...own
+      .filter(([key, repository]) => !leads(key, repository))
+      .map(([key, repository], index) => ({
+        address: `/gh/${key}`,
+        name: repository.name,
+        description: repository.description ?? null,
+        fork: false,
+        archived: false,
+        stars: index * 7,
+        pushedAt: `2026-09-${String(28 - index).padStart(2, "0")}T08:00:00.000Z`,
+      })),
+    ...Array.from({ length: profile.listed }, (_, index) => ({
+      address: `/gh/${owner.owner}/project-${index + 1}`,
+      name: `project-${index + 1}`,
+      description:
+        index % 3 === 0 ? null : `Project ${index + 1}: one of many repositories without skills.`,
+      fork: index % 5 === 4,
+      archived: index % 11 === 10,
+      stars: index % 4 === 0 ? 0 : (index * 37) % 500,
+      pushedAt:
+        index % 9 === 8
+          ? null
+          : `2026-0${8 - (index % 8)}-${String(27 - (index % 27)).padStart(2, "0")}T12:00:00.000Z`,
+    })),
+  ];
+  const start = (page - 1) * OWNER_PAGE_SIZE;
+  const body: RestOwner = {
+    owner: {
+      host: owner.host,
+      login: profile.login,
+      name: profile.name,
+      kind: profile.kind,
+      avatar: FIXTURE_AVATAR,
+      bio: profile.bio,
+      url: accountPageUrl(owner.host, profile.login),
+      publicRepositories: own.length + profile.listed,
+    },
+    indexed:
+      page === 1
+        ? own
+            .filter(([key, repository]) => leads(key, repository))
+            .sort(([, a], [, b]) => b.skills.length - a.skills.length)
+            .map(([key, repository]) => cardOf(key, repository, now))
+        : [],
+    repositories: listed.slice(start, start + OWNER_PAGE_SIZE),
+    nextPage: start + OWNER_PAGE_SIZE < listed.length ? page + 1 : null,
+  };
+  return { status: 200, body };
+}
+
+const signInRequired = (): FixtureAnswer => problem(401, "auth.required", "Sign in to continue.");
+
+/** What the fixture person can reach through the git host's app, by where it is installed. */
+function myRepositoriesBody(): RestMyRepositories {
+  return {
+    installUrl: FIXTURE_INSTALL_URL,
+    installations: [
+      {
+        account: { login: "Acme", kind: "organization", avatar: FIXTURE_AVATAR },
+        manageUrl: FIXTURE_INSTALL_URL,
+        selection: "selected",
+        repositories: Object.entries(FIXTURE_REPOSITORIES)
+          .filter(([key]) => key === "acme/private-skills" || key === "acme/skills")
+          .map(([key, repository]) => ({
+            address: `/gh/${key}`,
+            owner: repository.owner,
+            name: repository.name,
+            description: repository.description ?? null,
+            visibility: repository.private === true ? ("private" as const) : ("public" as const),
+          })),
+        truncated: false,
+      },
+      {
+        account: { login: FIXTURE_USER.login, kind: "user", avatar: FIXTURE_AVATAR },
+        manageUrl: FIXTURE_INSTALL_URL,
+        selection: "all",
+        repositories: [],
+        truncated: false,
+      },
+    ],
+    truncated: false,
+  };
+}
+
+/** What a client asked the fixture person to allow, for the consent page. */
+function authorizationAnswer(params: URLSearchParams): FixtureAnswer {
+  const asked = FIXTURE_AUTHORIZATIONS[params.get(CONSENT_REQUEST_PARAM) ?? ""];
+  const address = asked === undefined ? undefined : parseAddress(asked.address);
+  if (asked === undefined || address === undefined || !address.ok) {
+    return problem(400, "oauth.invalid_request", "The request is not valid or has expired.");
+  }
+  const key = `${address.value.owner}/${address.value.repo}`;
+  const body: RestAuthorization = {
+    client: asked.client,
+    address: asked.address,
+    scope: ["read"],
+    user: signedIn ? FIXTURE_USER : null,
+    visible: signedIn && asked.unknown !== true ? FIXTURE_REPOSITORIES[key] !== undefined : null,
+    installUrl: signedIn ? FIXTURE_INSTALL_URL : null,
+  };
+  return { status: 200, body };
+}
+
+/**
+ * Signing in and out, and what belongs to whoever is signed in (docs/specs/permissions.md).
+ * `undefined` when the request is about none of that.
+ */
+function accountAnswer(url: URL, method: string): FixtureAnswer | undefined {
+  if (url.pathname === AUTH_ROUTES.login) {
+    // No git host to ask: the fixture person is signed in, and goes back to where they were.
+    signedIn = true;
+    const wanted = url.searchParams.get(RETURN_TO_PARAM) ?? "/";
+    const local = wanted.startsWith("/") && !wanted.startsWith("//") && !wanted.includes("\\");
+    return { status: 302, body: undefined, location: local ? wanted : "/" };
+  }
+  if (url.pathname === AUTH_ROUTES.logout && method === "POST") {
+    signedIn = false;
+    return { status: 204, body: undefined };
+  }
+  if (url.pathname === REST_ROUTES.me) {
+    const body: RestMe = { user: signedIn ? FIXTURE_USER : null };
+    return { status: 200, body };
+  }
+  if (url.pathname === `${REST_ROUTES.me}/repositories`) {
+    return signedIn ? { status: 200, body: myRepositoriesBody() } : signInRequired();
+  }
+  const grants = `${REST_ROUTES.me}/grants`;
+  if (url.pathname === grants) {
+    const body: RestGrants = {
+      items: FIXTURE_GRANTS.filter((grant) => !removedGrants.has(grant.id)),
+    };
+    return signedIn ? { status: 200, body } : signInRequired();
+  }
+  if (url.pathname.startsWith(`${grants}/`) && method === "DELETE") {
+    if (!signedIn) {
+      return signInRequired();
+    }
+    const id = decodeURIComponent(url.pathname.slice(grants.length + 1));
+    if (removedGrants.has(id) || !FIXTURE_GRANTS.some((grant) => grant.id === id)) {
+      return problem(404, "grant.not_found", "No such grant.");
+    }
+    removedGrants.add(id);
+    return { status: 200, body: { id, removed: true } };
+  }
+  if (url.pathname === REST_ROUTES.authorization) {
+    return authorizationAnswer(url.searchParams);
+  }
+  if (url.pathname === REST_ROUTES.decision && method === "POST") {
+    // There is no app to go back to, so either answer comes back to the list of states.
+    return signedIn ? { status: 200, body: { redirect: STATES_PAGE } } : signInRequired();
+  }
+  return undefined;
+}
+
+/**
+ * Answers a REST request from fixtures, and the fixture sign-in. `undefined` when the URL is
+ * neither.
+ */
 export function handleFixtureRequest(
   url: URL,
   now: number = Date.now(),
+  method = "GET",
 ): FixtureAnswer | undefined {
+  const account = accountAnswer(url, method);
+  if (account !== undefined) {
+    return account;
+  }
   if (url.pathname === REST_ROUTES.featured) {
     return { status: 200, body: featuredBody(now) };
+  }
+  if (url.pathname.startsWith(`${REST_ROUTES.owners}/`)) {
+    return ownerAnswer(url.pathname.slice(REST_ROUTES.owners.length), url.searchParams, now);
   }
   if (url.pathname === REST_ROUTES.showcase) {
     // No operator's showcase: the pages show the build's own, which is what is designed here.

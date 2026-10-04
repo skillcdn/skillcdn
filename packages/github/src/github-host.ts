@@ -5,8 +5,12 @@ import {
   type ArchiveFile,
   type ArchiveRequest,
   type GitHost,
+  type GitHostDirectory,
   GitHostError,
+  type GitHostKey,
+  type HostProfile,
   type HostRepository,
+  type HostRepositoryPage,
   hasForbiddenCodePoint,
   isFullCommitHash,
   parseRepoPath,
@@ -16,7 +20,9 @@ import {
   type TreeEntry,
 } from "@skillcdn/core";
 import * as z from "zod";
-import { type FetchLike, GitHubHttp, type TokenProvider } from "./http.js";
+import { GitHubApp, type GitHubAppCredentials } from "./app.js";
+import { type FetchLike, GitHubHttp, type RequestCredential, type TokenProvider } from "./http.js";
+import { decodeJson } from "./json.js";
 import { readTar, TarError } from "./tar.js";
 
 export const GITHUB_API_BASE_URL = "https://api.github.com";
@@ -30,6 +36,13 @@ export interface GitHubHostOptions {
   readonly userAgent: string;
   /** Optional credential for public repositories: it only raises the rate limit. */
   readonly token?: TokenProvider;
+  /**
+   * The app whose installations private repositories are read through. Left out, coordinates
+   * that ask for the installation's credential name nothing.
+   */
+  readonly app?: GitHubAppCredentials;
+  /** Milliseconds since the epoch; the system clock when left out. */
+  readonly now?: () => number;
   /**
    * Origins the API may redirect an archive download to, besides its own. Defaults to the
    * download host of github.com when the base URL is github.com, and to none otherwise.
@@ -50,8 +63,13 @@ const RAW_ACCEPT = "application/vnd.github.raw+json";
 
 /** GitHub caps a description at 350 characters. Anything unprintable is not a description. */
 const MAX_DESCRIPTION_LENGTH = 350;
+/** How many repositories a page of an account's listing holds: the host's own maximum. */
+const LISTING_PAGE_SIZE = 100;
+/** The host stops paging a listing long before this. */
+const MAX_LISTING_PAGE = 100;
 
-function cleanDescription(value: string | null | undefined): string | undefined {
+/** One line of what the host says about something, or nothing when it is not printable. */
+export function cleanDescription(value: string | null | undefined): string | undefined {
   if (typeof value !== "string") {
     return undefined;
   }
@@ -75,6 +93,32 @@ const repositorySchema = z.object({
     type: z.string(),
   }),
 });
+
+const profileSchema = z.object({
+  id: z.number().int().positive(),
+  login: z.string().min(1),
+  type: z.string(),
+  name: z.string().nullable().optional(),
+  bio: z.string().nullable().optional(),
+  public_repos: z.number().int().nonnegative().optional(),
+});
+
+/** An organization says what it is in a field an account's profile does not have. */
+const organizationSchema = z.object({ description: z.string().nullable().optional() });
+
+const listingSchema = z.array(
+  z.object({
+    id: z.number().int().positive(),
+    name: z.string().min(1),
+    private: z.boolean(),
+    visibility: z.string().optional(),
+    fork: z.boolean().optional(),
+    archived: z.boolean().optional(),
+    description: z.string().nullable().optional(),
+    stargazers_count: z.number().int().nonnegative().optional(),
+    pushed_at: z.string().nullable().optional(),
+  }),
+);
 
 const treeSchema = z.object({
   truncated: z.boolean(),
@@ -106,20 +150,10 @@ async function* upTo(
   }
 }
 
-function decodeJson<Schema extends z.ZodType>(body: Uint8Array, schema: Schema): z.infer<Schema> {
-  let value: unknown;
-  try {
-    value = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(body));
-  } catch (error) {
-    throw new GitHostError("invalid", "the git host sent a reply that is not JSON", {
-      cause: error,
-    });
-  }
-  const parsed = schema.safeParse(value);
-  if (!parsed.success) {
-    throw new GitHostError("invalid", "the git host sent a reply in an unexpected shape");
-  }
-  return parsed.data;
+/** An instant the host wrote, as an ISO 8601 instant, or nothing when it is not one. */
+function instantOf(value: string | null | undefined): string | undefined {
+  const time = typeof value === "string" ? Date.parse(value) : Number.NaN;
+  return Number.isFinite(time) ? new Date(time).toISOString() : undefined;
 }
 
 function repoPath(coordinates: RepoCoordinates): string {
@@ -153,8 +187,17 @@ function baseNameOf(rawPath: string): string {
   return rawPath.slice(rawPath.lastIndexOf("/") + 1);
 }
 
-/** The GitHub implementation of the git-host port, for repositories readable with one credential. */
-export function createGitHubHost(options: GitHubHostOptions): GitHost {
+/**
+ * What every call to the host goes through: the HTTP behavior they share and, when the operator
+ * registered one, the app. The repository adapter and the login adapter of one deployment share
+ * a connection, so that they share its caches and its tokens.
+ */
+export interface GitHubConnection {
+  readonly http: GitHubHttp;
+  readonly app: GitHubApp | undefined;
+}
+
+export function connectGitHub(options: GitHubHostOptions): GitHubConnection {
   const baseUrl = options.baseUrl ?? GITHUB_API_BASE_URL;
   const http = new GitHubHttp({
     baseUrl,
@@ -168,12 +211,106 @@ export function createGitHubHost(options: GitHubHostOptions): GitHost {
     retryBaseDelayMs: options.retryBaseDelayMs ?? 250,
     maxCacheEntries: options.maxCacheEntries ?? 1000,
   });
+  const app =
+    options.app === undefined
+      ? undefined
+      : new GitHubApp(http, options.app, options.now ?? (() => Date.now()));
+  return { http, app };
+}
+
+/** The GitHub implementation of the git-host port and of its directory of accounts. */
+export interface GitHubHost extends GitHost, GitHostDirectory {}
+
+/**
+ * Repositories are read with the deployment's own credential or, when their coordinates say
+ * so, with the one the host issues the app for its installation on them.
+ */
+export function createGitHubHost(
+  options: GitHubHostOptions,
+  connection: GitHubConnection = connectGitHub(options),
+): GitHubHost {
+  const { http, app } = connection;
+
+  /**
+   * The credential the coordinates ask for. An installation that is not there is a repository
+   * that is not there: the caller cannot tell the two apart, and must not.
+   */
+  const credentialFor = async (
+    coordinates: RepoCoordinates,
+  ): Promise<RequestCredential | undefined> => {
+    if (coordinates.credential !== "installation") {
+      return undefined;
+    }
+    const credential = await app?.installationCredential(coordinates);
+    if (credential === undefined) {
+      throw new GitHostError("not_found", "not found on the git host");
+    }
+    return credential;
+  };
 
   return {
+    async getProfile(_host: GitHostKey, login: string): Promise<HostProfile> {
+      const reply = await http.get(`/users/${encodeURIComponent(login)}`, {
+        accept: JSON_ACCEPT,
+        conditional: true,
+      });
+      const profile = decodeJson(reply.body, profileSchema);
+      const organization = profile.type === "Organization";
+      let bio = cleanDescription(profile.bio);
+      if (organization && bio === undefined) {
+        // What an organization says about itself is worth one more request, not a failed page.
+        bio = await http
+          .get(`/orgs/${encodeURIComponent(login)}`, { accept: JSON_ACCEPT, conditional: true })
+          .then(
+            (answer) => cleanDescription(decodeJson(answer.body, organizationSchema).description),
+            () => undefined,
+          );
+      }
+      return {
+        hostAccountId: String(profile.id),
+        login: profile.login,
+        kind: organization ? "organization" : "user",
+        name: cleanDescription(profile.name),
+        bio,
+        publicRepositories: profile.public_repos ?? 0,
+      };
+    },
+
+    async listPublicRepositories(
+      _host: GitHostKey,
+      login: string,
+      page: number,
+    ): Promise<HostRepositoryPage> {
+      if (!Number.isInteger(page) || page < 1 || page > MAX_LISTING_PAGE) {
+        throw new GitHostError("invalid", "a listing is read by page, from 1");
+      }
+      const reply = await http.get(
+        `/users/${encodeURIComponent(login)}/repos?type=owner&sort=pushed&direction=desc&per_page=${LISTING_PAGE_SIZE}&page=${page}`,
+        { accept: JSON_ACCEPT, conditional: true },
+      );
+      const listed = decodeJson(reply.body, listingSchema);
+      return {
+        // Whatever credential asked, only what the host reports as public is passed on.
+        repositories: listed
+          .filter((entry) => !entry.private && (entry.visibility ?? "public") === "public")
+          .map((entry) => ({
+            hostRepoId: String(entry.id),
+            name: entry.name,
+            description: cleanDescription(entry.description),
+            fork: entry.fork === true,
+            archived: entry.archived === true,
+            stars: entry.stargazers_count ?? 0,
+            pushedAt: instantOf(entry.pushed_at),
+          })),
+        hasMore: /rel="next"/.test(reply.headers.get("link") ?? ""),
+      };
+    },
+
     async getRepository(coordinates: RepoCoordinates): Promise<HostRepository> {
       const reply = await http.get(repoPath(coordinates), {
         accept: JSON_ACCEPT,
         conditional: true,
+        credential: await credentialFor(coordinates),
       });
       const repository = decodeJson(reply.body, repositorySchema);
       return {
@@ -199,6 +336,7 @@ export function createGitHubHost(options: GitHubHostOptions): GitHost {
       const encoded = name.split("/").map(encodeURIComponent).join("/");
       const reply = await http.get(`${repoPath(coordinates)}/commits/${encoded}`, {
         accept: SHA_ACCEPT,
+        credential: await credentialFor(coordinates),
         // A pinned commit never changes, so there is nothing to revalidate.
         conditional: ref?.kind !== "commit",
         maxBytes: 1024,
@@ -218,6 +356,7 @@ export function createGitHubHost(options: GitHubHostOptions): GitHost {
       }
       const reply = await http.get(`${repoPath(coordinates)}/git/trees/${commit}?recursive=1`, {
         accept: JSON_ACCEPT,
+        credential: await credentialFor(coordinates),
         notFoundStatuses: [409, 422],
       });
       const tree = decodeJson(reply.body, treeSchema);
@@ -246,6 +385,7 @@ export function createGitHubHost(options: GitHubHostOptions): GitHost {
       }
       const reply = await http.get(`${repoPath(coordinates)}/git/blobs/${hash}`, {
         accept: RAW_ACCEPT,
+        credential: await credentialFor(coordinates),
         maxBytes,
         notFoundStatuses: [422],
       });
@@ -262,6 +402,7 @@ export function createGitHubHost(options: GitHubHostOptions): GitHost {
       }
       const response = await http.open(`${repoPath(coordinates)}/tarball/${commit}`, {
         accept: JSON_ACCEPT,
+        credential: await credentialFor(coordinates),
         signal: AbortSignal.timeout(options.downloadTimeoutMs ?? 120_000),
         notFoundStatuses: [409, 422],
       });

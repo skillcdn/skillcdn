@@ -26,6 +26,39 @@ export const connectEn = {
   helpBody:
     "Menus move between app versions and workspace settings. Check the official guide, or ask your workspace administrator to allow custom connections.",
   official: "Official setup guide",
+  /**
+   * On the page of a private repository: the app has to sign in, once, before it can read it.
+   * One sentence per app says how that app starts it; the steps that differ are given whole.
+   */
+  private: {
+    title: "This repository is private",
+    body: "Your AI app signs in as you before it can read it. A SkillCDN page opens in your browser: sign in with GitHub and allow the app. Only people who can see the repository on GitHub get in.",
+    signIn: {
+      chatgpt:
+        "ChatGPT opens the sign-in page when you select Create. Sign in with GitHub and allow ChatGPT.",
+      claude:
+        "Claude asks you to sign in once the connector is added. Sign in with GitHub and allow Claude.",
+      cursor:
+        "Cursor asks you to log in to the server. Sign in with GitHub in the browser and allow Cursor.",
+      vscode:
+        "VS Code asks to authenticate with the server. Allow it, then sign in with GitHub and allow VS Code.",
+      claudeCode:
+        "In Claude Code, enter /mcp, choose the server and select Authenticate. Sign in with GitHub and allow Claude Code.",
+      codex:
+        "The add command opens the sign-in page in your browser by itself. Sign in with GitHub and allow Codex. If no page opened, run the login command below.",
+      gemini:
+        "In Gemini CLI, enter the auth command below. Sign in with GitHub in the browser and allow Gemini CLI.",
+      other:
+        "Choose OAuth where the app asks how to authenticate. Sign in with GitHub in the page it opens and allow the app.",
+    },
+    /** The steps that are different for a private repository, in place of the usual ones. */
+    steps: {
+      chatgpt:
+        "Enter a name and, as the description, the sentence in the example. Keep the connection on Server URL and paste your connection address. Leave Authentication on OAuth, tick the acknowledgement and select Create.",
+      other:
+        "Add a server and paste your connection address. Choose HTTP (Streamable HTTP), and OAuth for authentication.",
+    },
+  },
   firstMessage: {
     label: "Connected? Send a first message",
     text: (server: string) =>

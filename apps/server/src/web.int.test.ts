@@ -2,7 +2,8 @@ import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillc
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadWebBundle, type WebBundle } from "./http/web.js";
 import { createFixtureHost, fixtureCommits } from "./testing/fixture-host.js";
-import { createHarness } from "./testing/harness.js";
+import { createFixtureLogin } from "./testing/fixture-login.js";
+import { createHarness, SIGN_IN_URL } from "./testing/harness.js";
 import { createWebBuild, type WebBuildFixture } from "./testing/web-build.js";
 
 const BROWSER = { accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" };
@@ -180,9 +181,52 @@ describe("a server with a web build", () => {
     expect((await inputOf(missing)).data).toEqual({
       mount: { error: { status: 404, code: "mount.repo_not_found", message: expect.any(String) } },
     });
-    const bad = await h.request("/gh/acme", { headers: BROWSER });
+    const bad = await h.request("/gh/acme/skills.git", { headers: BROWSER });
     expect(bad.status).toBe(404);
     expect((await inputOf(bad)).data).toEqual({});
+  });
+
+  it("renders the page of an account, one segment short of an address, with what the host shows everyone", async () => {
+    const host = createFixtureHost("web-owner");
+    const h = createHarness(testDatabase, { web, host });
+    // One document for everyone, rendered with the answer the page would otherwise ask the REST
+    // API for: a crawler reads what a person sees.
+    const page = await h.request("/gh/Acme", { headers: BROWSER });
+    expect(page.status).toBe(200);
+    expect(page.headers.get("vary")).toContain("accept");
+    expect(page.headers.get("cache-control")).toBe("public, max-age=0, must-revalidate");
+    const input = await inputOf(page);
+    expect(input).toMatchObject({ pathname: "/gh/Acme" });
+    const answer = (input.data as { owner?: { ready?: unknown } }).owner?.ready;
+    expect(answer).toMatchObject({ owner: { login: "Acme" }, nextPage: 2 });
+    expect(answer).toEqual(await (await h.request("/api/v1/owners/gh/acme")).json());
+    // Looking at the page reads no repository: nothing is indexed because of it.
+    expect(host.calls.getTree).toBe(0);
+
+    // An account that is not there is a page that says so, with the status that says so; and
+    // when the host cannot be asked, the page says that instead of pretending to be empty.
+    const missing = await h.request("/gh/nobody-by-this-name", { headers: BROWSER });
+    expect(missing.status).toBe(404);
+    expect((await inputOf(missing)).data).toEqual({
+      owner: { error: { status: 404, code: "owner.not_found", message: expect.any(String) } },
+    });
+    const down = createFixtureHost("web-owner-down");
+    down.fail("getProfile");
+    const unreachable = await createHarness(testDatabase, { web, host: down }).request("/gh/acme", {
+      headers: BROWSER,
+    });
+    expect(unreachable.status).toBe(503);
+    expect((await inputOf(unreachable)).data).toEqual({
+      owner: { error: { status: 503, code: "mount.unavailable", message: expect.any(String) } },
+    });
+    // To anything that speaks MCP the path is still not an address.
+    const protocol = await h.request("/gh/acme", {
+      method: "POST",
+      headers: { accept: "application/json, text/event-stream" },
+      body: "{}",
+    });
+    expect(protocol.status).toBe(400);
+    expect(await protocol.json()).toMatchObject({ error: { code: "address.missing_repo" } });
   });
 
   it("renders the front page and llms.txt with the operator's showcase, and serves the build's own without one", async () => {
@@ -317,12 +361,12 @@ describe("a server with a web build", () => {
     expect((await h.request("/social/not%20an%20address")).status).toBe(404);
   });
 
-  it("lists the featured and the vouched-for repositories in the sitemap, and nothing else", async () => {
+  it("lists the featured and the vouched-for repositories in the sitemap, with the pages of their accounts, and nothing else", async () => {
     // Until the operator features something, the reference repository is featured (ADR-0028).
     const fresh = createHarness(testDatabase, { web });
-    expect(await (await fresh.request("/sitemap.xml")).text()).toContain(
-      "<loc>https://skills.example/gh/skillcdn/skills</loc>",
-    );
+    const first = await (await fresh.request("/sitemap.xml")).text();
+    expect(first).toContain("<loc>https://skills.example/gh/skillcdn/skills</loc>");
+    expect(first).toContain("<loc>https://skills.example/gh/skillcdn</loc>");
     const h = createHarness(testDatabase, { web });
     await h.lists.add("featured", "/gh/acme/multi-skill/skills");
     await h.lists.add("verified", "/gh/Acme/single-skill");
@@ -339,6 +383,11 @@ describe("a server with a web build", () => {
     expect(xml).not.toContain("private-repo");
     expect(xml).not.toContain("<loc>https://skills.example/gh/acme/multi-skill</loc>");
     expect(xml).not.toContain("skillcdn/skills");
+    // The page of the account those repositories belong to is listed with them, once, in
+    // every language (ADR-0037).
+    expect(xml.split("<loc>https://skills.example/gh/acme</loc>")).toHaveLength(2);
+    expect(xml.split("<loc>https://skills.example/gh/acme?lang=ko</loc>")).toHaveLength(2);
+    expect(xml).not.toContain("<loc>https://skills.example/gh/skillcdn</loc>");
     expect((await h.request("/robots.txt")).status).toBe(200);
   });
 
@@ -402,5 +451,73 @@ describe("a server without a web build", () => {
     const address = await h.request("/gh/acme/no-such-repo", { headers: BROWSER });
     expect(address.status).toBe(404);
     expect(await address.json()).toMatchObject({ error: { code: "mount.repo_not_found" } });
+  });
+});
+
+describe("the pages of a deployment where people sign in", () => {
+  const SECRET = "/gh/acme/secret-skills";
+
+  it("renders a private repository for the person who can see it, and for nobody to keep", async () => {
+    const signedIn = await loadWebBundle(build.root, {
+      publicUrl: SIGN_IN_URL,
+      tags: { signIn: "gh" },
+    });
+    const h = createHarness(testDatabase, {
+      web: signedIn,
+      login: createFixtureLogin(),
+      host: createFixtureHost("web-private"),
+    });
+    const nobody = await h.request(SECRET, { headers: BROWSER });
+    expect(nobody.status).toBe(404);
+    expect((await inputOf(nobody)).data).toMatchObject({
+      mount: { error: { status: 404, code: "mount.repo_not_found" } },
+    });
+
+    const cookie = await h.signIn("alice");
+    const page = await h.request(SECRET, { headers: { ...BROWSER, cookie } });
+    expect(page.status).toBe(200);
+    expect(page.headers.get("cache-control")).toBe("private, no-store");
+    expect(page.headers.get("vary")).toContain("accept");
+    expect((await inputOf(page)).data).toMatchObject({
+      mount: { ready: { repository: { name: "secret-skills", visibility: "private" } } },
+    });
+    // Someone signed in who cannot see it gets the page nobody gets.
+    const carol = await h.request(SECRET, {
+      headers: { ...BROWSER, cookie: await h.signIn("carol") },
+    });
+    expect(carol.status).toBe(404);
+    // A public repository's page is the same for everyone, signed in or not, and may be kept.
+    const open = await h.request("/gh/acme/multi-skill", { headers: { ...BROWSER, cookie } });
+    expect(open.headers.get("cache-control")).toBe("public, max-age=0, must-revalidate");
+    // There is no preview and no icon of what is not public: both are asked for by nobody.
+    expect((await h.request(`/social${SECRET}`)).status).toBe(404);
+    expect((await h.request(`/icon${SECRET}`)).status).toBe(404);
+  });
+
+  it("tells every page that people can sign in, and serves the pages they sign in on", async () => {
+    const signedIn = await loadWebBundle(build.root, {
+      publicUrl: SIGN_IN_URL,
+      tags: { signIn: "gh" },
+    });
+    const h = createHarness(testDatabase, { web: signedIn, login: createFixtureLogin() });
+    expect(await (await h.request("/", { headers: BROWSER })).text()).toContain(
+      '<meta name="skillcdn-auth" content="gh">',
+    );
+    for (const path of ["/account", "/account/repositories", "/oauth/consent?request=x"]) {
+      const page = await h.request(path, { headers: BROWSER });
+      expect(page.status, path).toBe(200);
+      // One document for everyone: what is a person's arrives through the REST API.
+      expect(page.headers.get("cache-control"), path).toBe("public, max-age=0, must-revalidate");
+      expect(await inputOf(page)).toMatchObject({ pathname: path.split("?")[0], data: {} });
+    }
+
+    // Where nobody can sign in, the pages say nothing of it and those paths are nothing.
+    const plain = createHarness(testDatabase, { web });
+    expect(await (await plain.request("/", { headers: BROWSER })).text()).not.toContain(
+      "skillcdn-auth",
+    );
+    for (const path of ["/account", "/oauth/consent"]) {
+      expect((await plain.request(path, { headers: BROWSER })).status, path).toBe(404);
+    }
   });
 });

@@ -2,11 +2,20 @@ import type { AddressRef, GitHostKey } from "../address.js";
 import { DomainError } from "../errors.js";
 import type { RepoPath } from "../repo-path.js";
 
-/** Where a repository lives, as written in an address. */
+/**
+ * Which credential the host is asked with: the deployment's own, which sees what everyone sees,
+ * or the one the host issues the app for its installation on the repository, which is how a
+ * private repository is read (docs/specs/permissions.md). Never a user's.
+ */
+export type HostCredential = "deployment" | "installation";
+
+/** Where a repository lives, as written in an address, and with which credential it is read. */
 export interface RepoCoordinates {
   readonly host: GitHostKey;
   readonly owner: string;
   readonly repo: string;
+  /** Left out: the deployment's own credential. */
+  readonly credential?: HostCredential;
 }
 
 export interface HostAccount {
@@ -71,7 +80,13 @@ export type GitHostErrorKind =
   /** Worth retrying: network failures and server errors. */
   | "transient"
   /** The host understood the request and will never serve it, for example an oversized blob. */
-  | "invalid";
+  | "invalid"
+  /**
+   * The host refused the credential itself: expired, revoked or never valid. Only calls made
+   * with a person's credential say so (the login port); for every other call a refused
+   * credential is `not_found`.
+   */
+  | "unauthorized";
 
 export class GitHostError extends DomainError {
   readonly kind: GitHostErrorKind;

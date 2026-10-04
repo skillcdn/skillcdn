@@ -16,6 +16,13 @@ export const REST_ROUTES = {
   featured: "/api/v1/featured",
   showcase: "/api/v1/showcase",
   legal: "/api/v1/legal",
+  /** The page of an account: `/api/v1/owners/gh/<owner>` (account.ts). */
+  owners: "/api/v1/owners",
+  /** Whoever is signed in, and what is theirs (account.ts). */
+  me: "/api/v1/me",
+  /** What a client asked to be authorized for, and the person's answer (account.ts). */
+  authorization: "/api/v1/oauth/request",
+  decision: "/api/v1/oauth/decision",
 } as const;
 
 /** How many skills and how many documents a mount overview lists. The counts are complete. */
@@ -108,6 +115,11 @@ export const restRepositorySchema = z.object({
   description: z.nullable(z.string()),
   /** The owner's picture as the host serves it: an https URL, loaded by the browser (ADR-0031). */
   avatar: z.string(),
+  /**
+   * Whether everyone can see the repository or only the people the host lets
+   * (specs/permissions.md). A `private` one is only ever answered to someone who signed in.
+   */
+  visibility: z.optional(z.enum(["public", "private"])),
 });
 
 /** What people see in one language instead of a skill's name and description. */
@@ -316,28 +328,29 @@ export const restFileSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 
-export const restFeaturedSchema = z.object({
-  items: z.array(
+/** A repository on a card: what the explorer features, and what the page of an account leads with. */
+export const restRepositoryCardSchema = z.object({
+  address: z.string(),
+  repository: restRepositorySchema,
+  /** The name and description the repository gives itself, once indexed, or `null`. */
+  manifest: z.nullable(
     z.object({
-      address: z.string(),
-      repository: restRepositorySchema,
-      /** The name and description the repository gives itself, once indexed, or `null`. */
-      manifest: z.nullable(
-        z.object({
-          name: z.nullable(z.string()),
-          description: z.string(),
-          translations: restRepoTranslationsSchema,
-        }),
-      ),
-      /** Whether the operator, or later the owner, vouches for the repository. */
-      verified: z.boolean(),
-      /** The picture that stands for the address, as on the mount, or `null`. */
-      image: z.nullable(z.string()),
-      status: z.enum(["ready", "indexing", "failed"]),
-      skillCount: z.nullable(count),
-      skills: z.array(z.string()),
+      name: z.nullable(z.string()),
+      description: z.string(),
+      translations: restRepoTranslationsSchema,
     }),
   ),
+  /** Whether the operator, or later the owner, vouches for the repository. */
+  verified: z.boolean(),
+  /** The picture that stands for the address, as on the mount, or `null`. */
+  image: z.nullable(z.string()),
+  status: z.enum(["ready", "indexing", "failed"]),
+  skillCount: z.nullable(count),
+  skills: z.array(z.string()),
+});
+
+export const restFeaturedSchema = z.object({
+  items: z.array(restRepositoryCardSchema),
 });
 
 export const restErrorSchema = z.object({
@@ -367,5 +380,6 @@ export type RestFind = z.infer<typeof restFindSchema>;
 export type RestSkill = z.infer<typeof restSkillSchema>;
 export type RestDirectoryEntry = z.infer<typeof restDirectoryEntrySchema>;
 export type RestFile = z.infer<typeof restFileSchema>;
+export type RestRepositoryCard = z.infer<typeof restRepositoryCardSchema>;
 export type RestFeatured = z.infer<typeof restFeaturedSchema>;
 export type RestError = z.infer<typeof restErrorSchema>;

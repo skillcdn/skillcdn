@@ -22,6 +22,14 @@ export function rawFileUrl(
   }
 }
 
+/** The page of an account at its host: where a reader is sent for the account itself. */
+export function accountPageUrl(host: GitHostKey, login: string): string {
+  switch (host) {
+    case "gh":
+      return `https://github.com/${encodeURIComponent(login)}`;
+  }
+}
+
 /**
  * The picture of an account as the host serves it, `size` pixels square, by the host's immutable
  * id for the account, which survives a rename.

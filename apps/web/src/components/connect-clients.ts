@@ -56,13 +56,42 @@ export function isTerminalClient(client: ConnectClient): boolean {
   return client === "claudeCode" || client === "codex" || client === "gemini";
 }
 
-/** The same complete endpoint is used in copyable setup and the illustrated preview. */
-export function clientConfiguration(client: ConnectClient, name: string, url: string): string {
+/**
+ * What a person types to make a terminal client sign in to a server that asks for it, where
+ * the client has a command for that: a private repository is read as its person
+ * (docs/specs/connect-guide.md). `undefined` where the client asks by itself. Codex CLI signs in
+ * from its add command already; its own command is for when that did not happen.
+ */
+export function clientSignInCommand(client: ConnectClient, name: string): string | undefined {
+  switch (client) {
+    case "codex":
+      return `codex mcp login ${name}`;
+    case "gemini":
+      return `/mcp auth ${name}`;
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * The same complete endpoint is used in copyable setup and the illustrated preview. `signIn`
+ * says that the server asks its clients to sign in, as a private repository does: Codex CLI is
+ * then told which address the sign-in is for, because the server issues a token for one address
+ * and not every version of the client says which by itself.
+ */
+export function clientConfiguration(
+  client: ConnectClient,
+  name: string,
+  url: string,
+  signIn = false,
+): string {
   switch (client) {
     case "claudeCode":
       return `claude mcp add --transport http ${name} ${url}`;
     case "codex":
-      return `codex mcp add ${name} --url ${url}`;
+      return signIn
+        ? `codex mcp add ${name} --url ${url} --oauth-resource ${url}`
+        : `codex mcp add ${name} --url ${url}`;
     case "gemini":
       return `gemini mcp add --transport http ${name} ${url}`;
     case "vscode":

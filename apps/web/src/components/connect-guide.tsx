@@ -7,12 +7,13 @@ import {
   CONNECT_CLIENTS,
   type ConnectClient,
   clientConfiguration,
+  clientSignInCommand,
   isTerminalClient,
 } from "./connect-clients.js";
 import styles from "./connect-guide.module.css";
 import { ConnectWalkthrough } from "./connect-walkthrough.js";
 import { Tabs } from "./tabs.js";
-import { cx } from "./ui.js";
+import { Callout, cx } from "./ui.js";
 import ui from "./ui.module.css";
 
 /**
@@ -61,11 +62,14 @@ function ClientGuide({
   name,
   url,
   description,
+  signIn,
 }: {
   readonly client: ConnectClient;
   readonly name: string;
   readonly url: string;
   readonly description: string;
+  /** The repository is private: the app has to sign in as its person before it can read it. */
+  readonly signIn: boolean;
 }) {
   const { t, language } = useI18n();
   const c = t.connect.clients[client];
@@ -79,7 +83,8 @@ function ClientGuide({
         : client === "claude"
           ? claudeInstallLink(name, url)
           : undefined;
-  const configuration = clientConfiguration(client, name, url);
+  const configuration = clientConfiguration(client, name, url, signIn);
+  const signInCommand = signIn ? clientSignInCommand(client, name) : undefined;
   const addressCard = (
     <div className={styles.copyAddress}>
       <div className={styles.copyLabel}>
@@ -149,9 +154,22 @@ function ClientGuide({
         name={name}
         url={url}
         description={description}
+        signIn={signIn}
       />
+      {/* What a private repository adds: the app signs in, once, and how this app starts it. */}
+      {signIn && (
+        <Callout title={t.connect.private.title}>
+          <p>{t.connect.private.body}</p>
+          <p>{t.connect.private.signIn[client]}</p>
+        </Callout>
+      )}
       {terminal ? (
-        <CodeBlock code={configuration} label={t.connect.preview.terminal} copy />
+        <>
+          <CodeBlock code={configuration} label={t.connect.preview.terminal} copy />
+          {signInCommand !== undefined && (
+            <CodeBlock code={signInCommand} label={t.connect.preview.terminal} copy />
+          )}
+        </>
       ) : (
         install !== undefined && (
           <details className={styles.manual}>
@@ -199,6 +217,7 @@ export function ConnectGuide({
   const url = `${origin}${formatAddress(address)}`;
   const manifest = mount?.index.status === "ready" ? mount.index.manifest : undefined;
   const name = serverNameOf(address, manifest?.name);
+  const signIn = mount?.repository.visibility === "private";
   // What an app that asks for a description is told: the repository's own words, shortened to
   // what such a field holds, so that an agent choosing among servers knows what this one is for.
   const repository =
@@ -217,7 +236,14 @@ export function ConnectGuide({
     label: t.connect.clients[client].label,
     icon: <ClientIcon client={client} />,
     content: (
-      <ClientGuide key={client} client={client} name={name} url={url} description={description} />
+      <ClientGuide
+        key={client}
+        client={client}
+        name={name}
+        url={url}
+        description={description}
+        signIn={signIn}
+      />
     ),
   }));
 

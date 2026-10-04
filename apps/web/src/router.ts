@@ -1,10 +1,15 @@
 import {
+  ACCOUNT_PAGE_PATH,
   type Address,
   type AddressError,
+  CONSENT_PAGE_PATH,
   formatAddress,
+  formatOwnerPath,
   LEGAL_PAGE_PATHS,
   type LegalDocumentKind,
+  type OwnerPath,
   parseAddress,
+  parseOwnerPath,
 } from "@skillcdn/core";
 
 // A few kinds of page and no nesting, so the router is a function from a URL to a route.
@@ -15,10 +20,23 @@ export type MountView =
   | { readonly kind: "skill"; readonly path: string }
   | { readonly kind: "file"; readonly path: string };
 
+/**
+ * The sections of the pages of whoever is signed in, in the order the side menu lists them. A
+ * feature that belongs to a person gets a section here, a path under `/account`, and a page.
+ */
+export const ACCOUNT_SECTIONS = ["overview", "repositories", "apps"] as const;
+export type AccountSection = (typeof ACCOUNT_SECTIONS)[number];
+
 export type Route =
   | { readonly name: "landing" }
   | { readonly name: "explore" }
   | { readonly name: "mount"; readonly address: Address; readonly view: MountView }
+  /** The page of an account of the git host: one segment short of an address (ADR-0037). */
+  | { readonly name: "owner"; readonly owner: OwnerPath }
+  /** The pages of whoever is signed in. */
+  | { readonly name: "account"; readonly section: AccountSection }
+  /** Where a person is asked whether an app may read an address for them. */
+  | { readonly name: "consent" }
   /** A page of the deployment's own: its terms or its privacy policy (ADR-0029). */
   | { readonly name: "legal"; readonly kind: LegalDocumentKind }
   | { readonly name: "bad-address"; readonly error: AddressError }
@@ -33,11 +51,23 @@ export const PATHS = {
   explore: "/explore",
   terms: LEGAL_PAGE_PATHS.terms,
   privacy: LEGAL_PAGE_PATHS.privacy,
+  account: ACCOUNT_PAGE_PATH,
+  consent: CONSENT_PAGE_PATH,
   states: "/dev/states",
   ogCard: "/dev/og",
 } as const;
 
 const MOUNT_PREFIX = "/gh/";
+
+/** The path of a section of the account pages; the first section is the account page itself. */
+export function accountHref(section: AccountSection = "overview"): string {
+  return section === "overview" ? PATHS.account : `${PATHS.account}/${section}`;
+}
+
+/** The path of the page of an account. */
+export function ownerHref(owner: OwnerPath): string {
+  return formatOwnerPath(owner);
+}
 
 export function matchRoute(pathname: string, search: string, development = false): Route {
   if (pathname === PATHS.landing) {
@@ -52,7 +82,22 @@ export function matchRoute(pathname: string, search: string, development = false
   if (pathname === PATHS.privacy) {
     return { name: "legal", kind: "privacy" };
   }
+  if (pathname === PATHS.consent) {
+    return { name: "consent" };
+  }
+  if (pathname === PATHS.account || pathname.startsWith(`${PATHS.account}/`)) {
+    const wanted =
+      pathname === PATHS.account ? "overview" : pathname.slice(PATHS.account.length + 1);
+    const section = ACCOUNT_SECTIONS.find(
+      (candidate) => candidate === wanted && accountHref(candidate) === pathname,
+    );
+    return section === undefined ? { name: "not-found" } : { name: "account", section };
+  }
   if (pathname.startsWith(MOUNT_PREFIX)) {
+    const owner = parseOwnerPath(pathname);
+    if (owner !== undefined) {
+      return { name: "owner", owner };
+    }
     const parsed = parseAddress(pathname);
     if (!parsed.ok) {
       return { name: "bad-address", error: parsed.error };
@@ -121,4 +166,14 @@ export function addressFromInput(input: string): ReturnType<typeof parseAddress>
     return parseAddress("/gh");
   }
   return parseAddress(`/${/^gh\//.test(bare) ? bare : `gh/${bare}`}`);
+}
+
+/** The page of an account, when what a person typed is an account's name and nothing more. */
+export function ownerFromInput(input: string): OwnerPath | undefined {
+  const text = input
+    .trim()
+    .replace(/^https?:\/\/(?:www\.)?github\.com\//i, "")
+    .replace(/^https?:\/\/[^/]+/i, "")
+    .replace(/^\/+|\/+$/g, "");
+  return parseOwnerPath(`/${/^gh\//.test(text) ? text : `gh/${text}`}`);
 }

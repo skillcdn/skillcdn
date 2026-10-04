@@ -1,31 +1,48 @@
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
+  restAuthorizationDecisionSchema,
+  restAuthorizationSchema,
   restBrowseSchema,
   restErrorSchema,
   restFeaturedSchema,
   restFileSchema,
   restFindSchema,
+  restGrantsSchema,
   restLegalDocumentSchema,
+  restMeSchema,
   restMountSchema,
+  restMyRepositoriesSchema,
+  restOwnerSchema,
   restShowcaseSchema,
   restSkillSchema,
 } from "@skillcdn/core";
 import { describe, expect, it } from "vitest";
 import { LANGUAGES } from "../src/i18n/languages.js";
-import { handleFixtureRequest, resetFixtureState } from "./fixture-api.js";
-import { FIXTURE_FAILURES, FIXTURE_REPOSITORIES } from "./fixtures.js";
+import { type FixtureAnswer, handleFixtureRequest, resetFixtureState } from "./fixture-api.js";
+import {
+  FIXTURE_AUTHORIZATIONS,
+  FIXTURE_FAILURES,
+  FIXTURE_GRANTS,
+  FIXTURE_REPOSITORIES,
+  FIXTURE_USER,
+} from "./fixtures.js";
 
-const ask = (path: string, now = 0) =>
-  handleFixtureRequest(new URL(path, "http://fixtures.invalid"), now) ?? {
+const send = (method: string, path: string, now = 0): FixtureAnswer =>
+  handleFixtureRequest(new URL(path, "http://fixtures.invalid"), now, method) ?? {
     status: 0,
     body: undefined,
   };
+
+const ask = (path: string, now = 0): FixtureAnswer => send("GET", path, now);
 
 // The fixtures stand in for the server while the UI is designed. They are only useful as long
 // as they have the shapes the server is tested against.
 describe("the fixture API", () => {
   it("answers for every fixture repository with bodies the REST schemas accept", () => {
+    // Signed in, so that the private one answers as well.
+    resetFixtureState();
+    ask("/auth/gh/login");
     for (const [key, repository] of Object.entries(FIXTURE_REPOSITORIES)) {
       const mount = ask(`/api/v1/mounts/gh/${key}`);
       expect(mount.status, key).toBe(200);
@@ -55,6 +72,7 @@ describe("the fixture API", () => {
     expect(restLegalDocumentSchema.safeParse(ask("/api/v1/legal/terms").body).success).toBe(true);
     expect(ask("/api/v1/legal/privacy").status).toBe(404);
     expect(ask("/api/v1/legal/other").status).toBe(404);
+    resetFixtureState();
   });
 
   it("answers failures with the error shape and the status of the spec", () => {
@@ -245,6 +263,119 @@ describe("the fixture API", () => {
     const later = ask("/api/v1/files/gh/demo/slow?path=README.md", 1_010_000);
     expect(later.status).toBe(200);
     expect(restFileSchema.parse(later.body)).toMatchObject({ kind: "file", path: "README.md" });
+  });
+
+  it("signs the fixture person in and out, and answers what is theirs only in between", () => {
+    resetFixtureState();
+    expect(restMeSchema.parse(ask("/api/v1/me").body)).toEqual({ user: null });
+    for (const path of ["/api/v1/me/repositories", "/api/v1/me/grants"]) {
+      const refused = ask(path);
+      expect(refused.status, path).toBe(401);
+      expect(restErrorSchema.parse(refused.body).error.code, path).toBe("auth.required");
+    }
+    // Signed out, a private repository is as missing as one that does not exist.
+    expect(ask("/api/v1/mounts/gh/acme/private-skills").status).toBe(404);
+
+    // Signing in is a navigation that comes back to a page of this origin, and to no other.
+    expect(ask("/auth/gh/login?return_to=%2Faccount%2Fapps")).toMatchObject({
+      status: 302,
+      location: "/account/apps",
+    });
+    expect(ask("/auth/gh/login?return_to=https%3A%2F%2Felsewhere.example").location).toBe("/");
+    expect(ask("/auth/gh/login?return_to=%2F%2Felsewhere.example").location).toBe("/");
+    expect(restMeSchema.parse(ask("/api/v1/me").body).user).toEqual(FIXTURE_USER);
+
+    const mine = restMyRepositoriesSchema.parse(ask("/api/v1/me/repositories").body);
+    expect(
+      mine.installations.flatMap((installation) =>
+        installation.repositories.map((repository) => repository.visibility),
+      ),
+    ).toEqual(expect.arrayContaining(["private", "public"]));
+    const mount = restMountSchema.parse(ask("/api/v1/mounts/gh/acme/private-skills").body);
+    expect(mount.repository.visibility).toBe("private");
+
+    const grants = restGrantsSchema.parse(ask("/api/v1/me/grants").body);
+    expect(grants.items).toHaveLength(FIXTURE_GRANTS.length);
+    const removal = `/api/v1/me/grants/${grants.items[0]?.id}`;
+    expect(send("DELETE", removal).status).toBe(200);
+    expect(send("DELETE", removal).status).toBe(404);
+    expect(restGrantsSchema.parse(ask("/api/v1/me/grants").body).items).toHaveLength(
+      FIXTURE_GRANTS.length - 1,
+    );
+
+    expect(send("POST", "/auth/logout").status).toBe(204);
+    expect(restMeSchema.parse(ask("/api/v1/me").body)).toEqual({ user: null });
+    resetFixtureState();
+  });
+
+  it("answers the page of an account with indexed skills first and the rest in pages", () => {
+    resetFixtureState();
+    const first = restOwnerSchema.parse(ask("/api/v1/owners/gh/acme").body);
+    expect(first.owner).toMatchObject({ login: "Acme", kind: "organization" });
+    expect(first.indexed.map((card) => card.address)).toEqual(["/gh/acme/skills"]);
+    expect(first.nextPage).toBe(2);
+    const second = restOwnerSchema.parse(ask("/api/v1/owners/gh/acme?page=2").body);
+    expect(second.indexed).toEqual([]);
+    expect(second.nextPage).toBeNull();
+
+    // Every public repository once, and the private one nowhere, signed in or not.
+    const addresses = [...first.indexed, ...first.repositories, ...second.repositories].map(
+      (repository) => repository.address,
+    );
+    expect(new Set(addresses).size).toBe(addresses.length);
+    expect(addresses).toHaveLength(first.owner.publicRepositories);
+    ask("/auth/gh/login");
+    const signedIn = restOwnerSchema.parse(ask("/api/v1/owners/gh/acme").body);
+    expect(
+      [...signedIn.indexed, ...signedIn.repositories].map((repository) => repository.address),
+    ).not.toContain("/gh/acme/private-skills");
+    resetFixtureState();
+
+    // A listed repository opens like any other, and holds nothing to serve.
+    const listed = restMountSchema.parse(
+      ask(`/api/v1/mounts${second.repositories.at(-1)?.address}`).body,
+    );
+    expect(listed.index).toMatchObject({ status: "ready", skillCount: 0, documentCount: 0 });
+
+    expect(restOwnerSchema.parse(ask("/api/v1/owners/gh/octo-dev").body)).toMatchObject({
+      indexed: [],
+      repositories: [],
+      nextPage: null,
+    });
+    for (const [path, status, code] of [
+      ["/api/v1/owners/gh/no-such-account", 404, "owner.not_found"],
+      ["/api/v1/owners/gh/acme/skills", 400, "owner.invalid"],
+      ["/api/v1/owners/gh/acme?page=0", 400, "request.invalid"],
+    ] as const) {
+      const answer = ask(path);
+      expect(answer.status, path).toBe(status);
+      expect(restErrorSchema.parse(answer.body).error.code, path).toBe(code);
+    }
+  });
+
+  it("tells the consent page what a client asks for, as whoever is signed in sees it", () => {
+    resetFixtureState();
+    for (const name of Object.keys(FIXTURE_AUTHORIZATIONS)) {
+      const anonymous = restAuthorizationSchema.parse(
+        ask(`/api/v1/oauth/request?request=${name}`).body,
+      );
+      expect(anonymous, name).toMatchObject({ user: null, visible: null, installUrl: null });
+    }
+    const expired = ask("/api/v1/oauth/request?request=gone");
+    expect(expired.status).toBe(400);
+    expect(restErrorSchema.parse(expired.body).error.code).toBe("oauth.invalid_request");
+    expect(send("POST", "/api/v1/oauth/decision").status).toBe(401);
+
+    ask("/auth/gh/login");
+    const visible = (name: string) =>
+      restAuthorizationSchema.parse(ask(`/api/v1/oauth/request?request=${name}`).body).visible;
+    expect([visible("web"), visible("local"), visible("not-visible")]).toEqual([true, true, false]);
+    // And one the git host could not be asked about: neither yes nor no.
+    expect(visible("host-down")).toBeNull();
+    expect(
+      restAuthorizationDecisionSchema.parse(send("POST", "/api/v1/oauth/decision").body),
+    ).toEqual({ redirect: "/dev/states" });
+    resetFixtureState();
   });
 
   it("leaves everything that is not the REST API to the development server", () => {

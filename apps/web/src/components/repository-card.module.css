@@ -1,0 +1,165 @@
+/* A repository on a card: the explorer's featured list and the page of an account are made of
+   these. */
+
+/* Cards of unequal height fill columns from the top, so the page has no gaps to mind: as many
+   columns as fit, up to three. */
+.grid {
+  columns: 3 17rem;
+  column-gap: var(--space-4);
+}
+
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: var(--space-4);
+  /* Glass (tokens.css): the hairline is the last background layer, so the border itself is left
+     transparent for it to paint on. */
+  /* The border stays transparent until the pointer arrives, so that nothing flat is painted over
+     the lens ring and the outermost line anyone sees is the refracted one. It is still a border
+     at rest, at full width and no colour: taking the width away instead would move the contents
+     of the card by a pixel the moment it came back. */
+  border: 1px solid transparent;
+  border-radius: var(--radius-xl);
+  background: var(--glass-surface);
+  backdrop-filter: var(--glass-backdrop);
+  box-shadow: var(--glass-sheen), var(--glass-lift);
+  overflow: hidden;
+  break-inside: avoid;
+  transition:
+    border-color var(--transition),
+    background var(--transition),
+    box-shadow var(--transition);
+}
+
+/* The repository's own picture, whatever its shape, fills the top of the card at two to one;
+   its middle is what shows. */
+.cardArt {
+  aspect-ratio: 2 / 1;
+  border-bottom: var(--border);
+  background: var(--color-bg-inset);
+}
+
+.cardArt img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
+}
+
+.card:hover,
+.card:focus-within {
+  border-color: var(--color-accent);
+  background: var(--glass-surface-hover);
+  box-shadow: var(--glass-sheen), var(--glass-lift), var(--glow);
+}
+
+.card:focus-within {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* The owner's picture, then the name and the address beside it. */
+.cardHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.cardTitles {
+  min-width: 0;
+}
+
+.cardTitle {
+  font-size: var(--text-md);
+  overflow-wrap: anywhere;
+}
+
+/* The whole card is the way in: the title's link stretches over it. */
+.cardLink {
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.cardLink:hover {
+  color: var(--color-text);
+}
+
+.cardLink::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.cardLink:focus-visible {
+  outline: none;
+}
+
+.cardAddress {
+  color: var(--color-text-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+.cardText {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.cardMeta:empty {
+  display: none;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.chips li {
+  /* On the grid, and lifted as a badge is; the code face needs its own value for that. */
+  padding-inline: var(--space-2);
+  padding-block: calc(var(--space-1) - var(--label-optical-code))
+    calc(var(--space-1) + var(--label-optical-code));
+  border: var(--border);
+  border-radius: var(--radius-full);
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.chips .chipMore {
+  border-color: transparent;
+  color: var(--color-text-faint);
+  font-family: var(--font-sans);
+  /* Set in the interface face, so it takes that face lift rather than the code one. */
+  padding-block: calc(var(--space-1) - var(--label-optical))
+    calc(var(--space-1) + var(--label-optical));
+}
+
+/* The refracted rim (tokens.css). Under the content and over the pane's own face, so the words
+   stay off it; `border-radius: inherit` keeps it on the corners. */
+.card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  padding: var(--glass-lens-width);
+  border-radius: inherit;
+  backdrop-filter: var(--glass-lens);
+  background: var(--color-glass-edge);
+  mask: var(--glass-lens-mask);
+  mask-composite: exclude;
+  pointer-events: none;
+}

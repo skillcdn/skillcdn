@@ -10,7 +10,12 @@ import {
   typingClock,
   usePreviewLoop,
 } from "./connect-animation.js";
-import { type ConnectClient, clientConfiguration, isTerminalClient } from "./connect-clients.js";
+import {
+  type ConnectClient,
+  clientConfiguration,
+  clientSignInCommand,
+  isTerminalClient,
+} from "./connect-clients.js";
 import styles from "./connect-preview.module.css";
 import { PreviewCopy } from "./connect-preview-copy.js";
 
@@ -89,6 +94,7 @@ export function ConnectPreview({
   name,
   url,
   description,
+  signIn = false,
 }: {
   readonly client: ConnectClient;
   readonly step: number;
@@ -96,6 +102,8 @@ export function ConnectPreview({
   readonly url: string;
   /** What to describe the server as where an app asks: the repository's own words, shortened. */
   readonly description: string;
+  /** The repository is private: the scene shows the app signing in where it differs for that. */
+  readonly signIn?: boolean;
 }) {
   const { t } = useI18n();
   const p = t.connect.preview;
@@ -104,9 +112,11 @@ export function ConnectPreview({
   const editor = client === "cursor" || client === "vscode";
   // What the scene does sets its loop: the first step of Claude and ChatGPT opens a menu and
   // chooses from it, two clicks; ChatGPT's form is typed, then a choice is made in it, then it
-  // is submitted; the other forms, the chats and the terminals type and send.
+  // is submitted; the other forms, the chats and the terminals type and send. For a private
+  // repository ChatGPT's list stays on what it comes up on, so its form is typed and submitted
+  // like the others.
   const loop: PreviewLoop =
-    step === 1 && client === "chatgpt"
+    step === 1 && client === "chatgpt" && !signIn
       ? "fill"
       : terminal || step === 2 || (step === 1 && !editor)
         ? "type"
@@ -115,7 +125,8 @@ export function ConnectPreview({
           : "click";
   const { root, time } = usePreviewLoop(loop);
   const file = client === "vscode" ? ".vscode/mcp.json" : ".cursor/mcp.json";
-  const code = clientConfiguration(client, name, url);
+  const code = clientConfiguration(client, name, url, signIn);
+  const signInCommand = signIn ? clientSignInCommand(client, name) : undefined;
 
   // Claude and ChatGPT bring an added server into a chat on their own, so their chats show no
   // menu to switch it on and no mention to make; the message is the whole of the step. The
@@ -194,7 +205,16 @@ export function ConnectPreview({
         </div>
       )}
       <Field label={client === "chatgpt" ? p.serverUrl : p.url} value={url} highlight />
-      {client === "chatgpt" ? (
+      {client === "chatgpt" && signIn ? (
+        // A private repository is read as its person: the list is left on what it comes up on.
+        <div className={styles.formRow}>
+          <span>{p.authentication}</span>
+          <span className={styles.selectValue}>
+            {p.oauth}
+            <Chevron />
+          </span>
+        </div>
+      ) : client === "chatgpt" ? (
         // The authentication list comes up on OAuth and the step says to choose none: the
         // scene's pointer opens the list, takes the entry, and the field then shows the choice.
         <div className={styles.formRow}>
@@ -219,7 +239,7 @@ export function ConnectPreview({
           <div className={styles.formRow}>
             <span>{p.authentication}</span>
             <span className={styles.selectValue}>
-              {p.none}
+              {signIn ? p.oauth : p.none}
               <Chevron />
             </span>
           </div>
@@ -242,7 +262,7 @@ export function ConnectPreview({
         </div>
       )}
       <div className={styles.formActions}>
-        <Highlight action pointer={client !== "chatgpt"} point="submit">
+        <Highlight action pointer={client !== "chatgpt" || signIn} point="submit">
           {client === "chatgpt" ? p.create : client === "claude" ? p.continue : p.add}
         </Highlight>
       </div>
@@ -264,8 +284,10 @@ export function ConnectPreview({
         <div className={styles.terminalCommands} key={step}>
           {step === 1 ? (
             <>
+              {/* Signing in to a private repository: Codex did it when the server was added,
+                  Gemini CLI does it from inside, and Claude Code offers it in the list itself. */}
               <PreviewCopy text={launch} />
-              <PreviewCopy text={client === "gemini" ? "/mcp list" : "/mcp"} />
+              <PreviewCopy text={client === "gemini" ? (signInCommand ?? "/mcp list") : "/mcp"} />
             </>
           ) : (
             <PreviewCopy text={step === 0 ? code : ask} />

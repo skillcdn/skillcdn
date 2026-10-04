@@ -7,15 +7,31 @@ import {
   discardUsage,
   type Entitlements,
   type GitHost,
+  type GitHostDirectory,
+  type GitHostLogin,
   type IndexLimits,
   type UsageSink,
 } from "@skillcdn/core";
 import { createBlobStore, createDatabase, type Database } from "@skillcdn/db";
-import { createGitHubHost } from "@skillcdn/github";
+import {
+  connectGitHub,
+  createGitHubHost,
+  createGitHubLogin,
+  type GitHubHostOptions,
+} from "@skillcdn/github";
 import type { Hono } from "hono";
 import { systemClock } from "../adapters/system-clock.js";
-import { type Config, ConfigError } from "../config/config.js";
-import { createApp } from "../http/app.js";
+import { UserCredentials } from "../auth/credentials.js";
+import { AuthJanitor } from "../auth/janitor.js";
+import { LOGIN_HOST, Login } from "../auth/login.js";
+import { AuthorizationServer } from "../auth/oauth/authorization-server.js";
+import { OAuthClients } from "../auth/oauth/clients.js";
+import { type DocumentFetcher, fetchPublicDocument } from "../auth/oauth/document-fetch.js";
+import { Permissions } from "../auth/permissions.js";
+import { createSecrets } from "../auth/secrets.js";
+import { Sessions } from "../auth/sessions.js";
+import { type AuthConfig, type Config, ConfigError } from "../config/config.js";
+import { type AppAuth, createApp } from "../http/app.js";
 import { createClientAddressResolver } from "../http/client-address.js";
 import type { AppEnv } from "../http/request-context.js";
 import { loadWebBundle, type WebBundle, WebBundleError } from "../http/web.js";
@@ -28,6 +44,7 @@ import { OperatorImages } from "../operator/images.js";
 import { LegalDocuments } from "../operator/legal.js";
 import { OperatorLists } from "../operator/lists.js";
 import { Showcase } from "../operator/showcase.js";
+import { OwnerService } from "../owners/owner-service.js";
 import { SocialCards } from "../social/cards.js";
 import { PictureFetcher } from "../social/pictures.js";
 import { noUsageStats, UsageRecorder, type UsageStats } from "../stats/usage-recorder.js";
@@ -35,10 +52,21 @@ import { SERVER_NAME, SERVER_VERSION } from "../version.js";
 
 /** How much older than its TTL a cached fact may be when the git host cannot be asked. */
 const STALE_GRACE_FACTOR = 10;
+/** How often what time has ended is removed from the sign-in tables. */
+const JANITOR_INTERVAL_MS = 15 * 60_000;
 
 export interface ApiPorts {
   readonly database: Database;
   readonly gitHost: GitHost;
+  /** Who the accounts of the git host are, for their pages. Left out, there are no such pages. */
+  readonly directory?: GitHostDirectory | undefined;
+  /** How people sign in through the git host. Needed, with `auth` configured, for anyone to. */
+  readonly login?: GitHostLogin | undefined;
+  /**
+   * How a client's metadata document is fetched; from the public internet when left out. Tests
+   * hand in one that never leaves the process.
+   */
+  readonly fetchClientDocument?: DocumentFetcher | undefined;
   readonly clock: Clock;
   readonly entitlements: Entitlements;
   readonly usage: UsageSink;
@@ -57,6 +85,13 @@ export interface ApiPorts {
 
 export type ApiConfig = Pick<Config, "mounts" | "indexing"> & {
   readonly web?: { readonly publicUrl?: string | undefined };
+  /** Left out, nobody signs in. What it needs of the git host arrives through the ports. */
+  readonly auth?:
+    | (Omit<AuthConfig, "github"> & {
+        /** In place of the built-in bound on clients nobody has used; for tests. */
+        readonly maxUnusedClients?: number;
+      })
+    | undefined;
   /** Left out, there is no admin API. */
   readonly admin?: Config["admin"];
   /** Left out, no proxy is trusted and every request is logged. */
@@ -77,6 +112,8 @@ export function createApi(
   readonly showcase: Showcase;
   readonly images: OperatorImages;
   readonly legal: LegalDocuments;
+  /** What signing in is made of, when people can. */
+  readonly auth: AppAuth | undefined;
 } {
   const { database, gitHost, clock, usage, logger } = ports;
   const blobStore = createBlobStore(database);
@@ -88,6 +125,82 @@ export function createApi(
   const images = new OperatorImages({ database, clock });
   const legal = new LegalDocuments({ database, clock });
   const entitlements = createOperatorEntitlements(lists, ports.entitlements);
+
+  // People sign in only where the deployment is configured for it and the git host can be
+  // asked who they are. Everything that follows from it hangs off this one value: without it
+  // there are no sessions, no tokens, and nothing but public repositories.
+  let auth: AppAuth | undefined;
+  let permissions: Permissions | undefined;
+  if (config.auth !== undefined && ports.login !== undefined) {
+    const origin = config.web?.publicUrl;
+    if (origin === undefined) {
+      throw new ConfigError([
+        "PUBLIC_URL: required for signing in, which needs one origin to come back to",
+      ]);
+    }
+    const secrets = createSecrets(config.auth.secret);
+    const secure = origin.startsWith("https://");
+    const credentials = new UserCredentials({
+      database,
+      login: ports.login,
+      secrets,
+      clock,
+      logger,
+    });
+    const sessions = new Sessions({
+      database,
+      clock,
+      logger,
+      ttlMs: config.auth.sessionTtlMs,
+      secure,
+    });
+    const clients = new OAuthClients({
+      database,
+      clock,
+      logger,
+      fetchDocument: ports.fetchClientDocument ?? fetchPublicDocument,
+      ...(config.auth.maxUnusedClients === undefined
+        ? {}
+        : { maxUnusedClients: config.auth.maxUnusedClients }),
+    });
+    permissions = new Permissions({
+      database,
+      login: ports.login,
+      credentials,
+      clock,
+      ttlMs: config.auth.permissionTtlMs,
+    });
+    auth = {
+      origin,
+      sessions,
+      credentials,
+      clients,
+      hostLogin: ports.login,
+      clock,
+      login: new Login({
+        database,
+        login: ports.login,
+        credentials,
+        sessions,
+        secrets,
+        clock,
+        logger,
+        origin,
+        secure,
+      }),
+      authorization: new AuthorizationServer({
+        database,
+        clients,
+        secrets,
+        clock,
+        logger,
+        origin,
+        accessTokenTtlMs: config.auth.accessTokenTtlMs,
+        refreshTokenTtlMs: config.auth.refreshTokenTtlMs,
+      }),
+    };
+  }
+
   const mounts = new MountService({
     database,
     gitHost,
@@ -98,7 +211,20 @@ export function createApi(
     staleGraceMs: Math.max(config.mounts.repoTtlMs, config.mounts.refTtlMs) * STALE_GRACE_FACTOR,
     isVerified: (key) => lists.isVerified(key),
     imageOf: (address) => images.imageFor(address),
+    permissions,
   });
+  const owners =
+    ports.directory === undefined
+      ? undefined
+      : new OwnerService({
+          database,
+          directory: ports.directory,
+          lists,
+          images,
+          clock,
+          ttlMs: config.mounts.repoTtlMs,
+          isPublic: (coordinates) => mounts.isPublic(coordinates),
+        });
   const snapshots = new SnapshotService({
     database,
     gitHost,
@@ -127,6 +253,8 @@ export function createApi(
 
   const app = createApp({
     database,
+    auth,
+    owners,
     mounts,
     snapshots,
     reader,
@@ -160,7 +288,7 @@ export function createApi(
       publicUrl: config.web?.publicUrl,
     },
   });
-  return { app, snapshots, lists, showcase, images, legal };
+  return { app, snapshots, lists, showcase, images, legal, auth };
 }
 
 /**
@@ -178,7 +306,8 @@ export async function runApi(config: Config, logger: Logger): Promise<void> {
     try {
       web = await loadWebBundle(config.web.root, {
         publicUrl: config.web.publicUrl,
-        tags: config.web.tags,
+        // The pages offer signing in where the deployment is configured for it.
+        tags: { ...config.web.tags, signIn: config.auth === undefined ? undefined : LOGIN_HOST },
       });
     } catch (error) {
       if (error instanceof WebBundleError) {
@@ -196,21 +325,59 @@ export async function runApi(config: Config, logger: Logger): Promise<void> {
     );
   }
 
+  if (config.auth !== undefined && web === undefined) {
+    // Signing in and agreeing to a client happen on pages; without them a person has nowhere
+    // to do either, and a client would be sent to a page that is not there.
+    throw new ConfigError(["WEB_ROOT: required for signing in, which happens on the web UI"]);
+  }
+
   const recorder = config.stats.enabled
     ? new UsageRecorder({ database, clock: systemClock, logger, secret: config.stats.hashSecret })
     : undefined;
   recorder?.start(config.stats.flushMs);
+
+  // One connection to the git host for everything: reading repositories, as the deployment or
+  // through the app's installations, and signing people in through the same app.
+  const github: GitHubHostOptions = {
+    baseUrl: config.github.apiUrl,
+    userAgent: `${SERVER_NAME}/${SERVER_VERSION}`,
+    token: async () => config.github.token,
+    ...(config.auth === undefined
+      ? {}
+      : {
+          app: { appId: config.auth.github.appId, privateKey: config.auth.github.privateKey },
+        }),
+  };
+  const connection = connectGitHub(github);
+  const gitHost = createGitHubHost(github, connection);
+  const login =
+    config.auth === undefined
+      ? undefined
+      : createGitHubLogin(
+          {
+            ...github,
+            clientId: config.auth.github.clientId,
+            clientSecret: config.auth.github.clientSecret,
+            ...(config.auth.github.webUrl === undefined
+              ? {}
+              : { webUrl: config.auth.github.webUrl }),
+          },
+          connection,
+        );
+  const janitor =
+    config.auth === undefined
+      ? undefined
+      : new AuthJanitor({ database, clock: systemClock, logger });
+  janitor?.start(JANITOR_INTERVAL_MS);
 
   let shuttingDown = false;
   const { app, snapshots } = createApi(config, {
     web,
     stats: recorder,
     database,
-    gitHost: createGitHubHost({
-      baseUrl: config.github.apiUrl,
-      userAgent: `${SERVER_NAME}/${SERVER_VERSION}`,
-      token: async () => config.github.token,
-    }),
+    gitHost,
+    directory: gitHost,
+    login,
     clock: systemClock,
     // Ports with a default implementation. A build that layers its own packages on top of this
     // image replaces them here; nothing else in the codebase knows about plans or billing.
@@ -269,6 +436,7 @@ export async function runApi(config: Config, logger: Logger): Promise<void> {
 
   await snapshots.close();
   await recorder?.close();
+  await janitor?.close();
   await database.close();
   logger.info("shutdown complete");
 }

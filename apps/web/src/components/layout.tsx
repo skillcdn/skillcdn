@@ -7,6 +7,7 @@ import { BrandSymbol } from "./brand.js";
 import { ConsentBanner } from "./consent-banner.js";
 import { LanguageSwitcher } from "./language-switcher.js";
 import styles from "./layout.module.css";
+import { UserMenu } from "./user-menu.js";
 
 export function Layout(props: { readonly children: ReactNode }) {
   const { t } = useI18n();
@@ -47,6 +48,7 @@ export function Layout(props: { readonly children: ReactNode }) {
           </nav>
           <div className={styles.controls}>
             <LanguageSwitcher />
+            <UserMenu />
           </div>
         </div>
       </header>

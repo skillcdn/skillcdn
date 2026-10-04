@@ -1,0 +1,148 @@
+.page {
+  padding-block: var(--space-8) var(--space-9);
+}
+
+/* The head of a page, centred like the page of a repository: the picture, the name, what the
+   account is, and the way out to the git host. */
+.header {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+  text-align: center;
+}
+
+.avatar {
+  margin-bottom: var(--space-2);
+}
+
+.title {
+  font-size: var(--text-2xl);
+  overflow-wrap: anywhere;
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: var(--space-1) var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.facts code {
+  color: var(--color-text);
+}
+
+.bio {
+  max-width: var(--width-prose);
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2) var(--space-4);
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.section {
+  margin-top: var(--space-8);
+}
+
+.heading {
+  margin-bottom: var(--space-2);
+  font-size: var(--text-xl);
+}
+
+.lead {
+  margin-bottom: var(--space-5);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* The host's own list: plain rows, as many columns as fit, quieter than the cards above them
+   because nothing is known about what they hold yet. */
+.repositories {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: var(--space-3);
+}
+
+.repository {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border: var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-subtle);
+  transition:
+    border-color var(--transition),
+    background var(--transition);
+}
+
+.repository:hover,
+.repository:focus-within {
+  border-color: var(--color-accent);
+  background: var(--color-bg-inset);
+}
+
+.repositoryHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* The whole row is the way in: the name's link stretches over it. */
+.repositoryName {
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.repositoryName:hover {
+  color: var(--color-text);
+}
+
+.repositoryName::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.repositoryText {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.repositoryMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+}
+
+.repositoryMeta:empty {
+  display: none;
+}
+
+.more {
+  margin-top: var(--space-5);
+  text-align: center;
+}
+
+.lost {
+  margin-top: var(--space-5);
+}

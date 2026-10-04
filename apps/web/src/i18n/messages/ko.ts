@@ -1,3 +1,4 @@
+import { accountKo } from "./account-ko.js";
 import { connectKo } from "./connect-ko.js";
 import type { Messages } from "./en.js";
 import { landingKo } from "./landing-ko.js";
@@ -89,6 +90,8 @@ export const ko: Messages = {
 
   connect: connectKo,
 
+  ...accountKo,
+
   landing: landingKo,
 
   explore: {
@@ -121,6 +124,8 @@ export const ko: Messages = {
     unverifiedHint:
       "이 콘텐츠는 저장소에서 그대로 가져온 것이며, 저장소 소유자가 SkillCDN에서 확인 절차를 거치지 않았습니다. 신뢰하기 전에 직접 검토하세요.",
     viewOnHost: "GitHub에서 보기",
+    private: "비공개",
+    privateHint: "GitHub에서 이 저장소를 볼 수 있는 사람만 이 페이지를 열고 연결할 수 있어요.",
     use: {
       these: "내 AI에 이 주소를 연결하면 이 스킬들을 쓸 수 있어요.",
       this: "내 AI에 이 주소를 연결하면 이 스킬을 쓸 수 있어요.",
@@ -257,7 +262,7 @@ export const ko: Messages = {
       },
       "mount.repo_not_found": {
         title: "저장소를 찾을 수 없습니다",
-        body: "존재하지 않거나 공개 저장소가 아닙니다. 비공개 저장소는 아직 지원하지 않습니다.",
+        body: "존재하지 않거나 비공개 저장소입니다.",
       },
       "mount.ref_not_found": {
         title: "ref를 찾을 수 없습니다",

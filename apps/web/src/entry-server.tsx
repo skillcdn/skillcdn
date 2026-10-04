@@ -1,4 +1,10 @@
-import type { RestLegalDocument, RestMount, RestShowcase, RestSkill } from "@skillcdn/core";
+import type {
+  RestLegalDocument,
+  RestMount,
+  RestOwner,
+  RestShowcase,
+  RestSkill,
+} from "@skillcdn/core";
 import { StrictMode } from "react";
 import { renderToString } from "react-dom/server";
 import { type InitialData, type InitialResource, renderInitialData } from "./api/initial-data.js";
@@ -14,8 +20,11 @@ import {
   type Language,
   withLanguage,
 } from "./i18n/languages.js";
+import { AccountPage } from "./pages/account.js";
+import { ConsentPage } from "./pages/consent.js";
 import { LegalPage } from "./pages/legal.js";
 import { MountPage } from "./pages/mount.js";
+import { OwnerPage } from "./pages/owner.js";
 import { matchRoute, PATHS } from "./router.js";
 import { buildHead, type PageData, renderHead } from "./seo/head.js";
 import { showcaseEntries, showcaseTexts } from "./showcase.js";
@@ -46,6 +55,18 @@ export interface RenderedPage {
   /** Answers the page was rendered with, for the browser to continue from. */
   readonly initialData?: InitialData;
 }
+
+/**
+ * The pages the browser loads only when someone opens them, here at once: what the server
+ * renders has to be there when it renders.
+ */
+const SERVER_PAGES = {
+  mount: MountPage,
+  legal: LegalPage,
+  owner: OwnerPage,
+  account: AccountPage,
+  consent: ConsentPage,
+};
 
 /** The markers in index.html that a rendered page fills. */
 export const TEMPLATE_MARKERS = {
@@ -123,12 +144,16 @@ export interface AddressPageInput {
   readonly pathname: string;
   /** The query string, `?` included, or empty. */
   readonly search: string;
-  /** The answers the page would ask the REST API for: what the address serves, and one skill. */
+  /**
+   * The answers the page would ask the REST API for: what the address serves and one skill, or
+   * for the page of an account, its first page.
+   */
   readonly data: {
     readonly mount?: InitialResource | undefined;
     readonly skill?: InitialResource | undefined;
     readonly browse?: InitialResource | undefined;
     readonly find?: InitialResource | undefined;
+    readonly owner?: InitialResource | undefined;
   };
 }
 
@@ -140,13 +165,22 @@ export interface AddressPageOutput {
 
 /**
  * The explorer view of an address, rendered with its data so that a crawler reads the page as a
- * person would see it, and the browser takes over where the server left off.
+ * person would see it, and the browser takes over where the server left off. The page of an
+ * account is rendered the same way, with what the git host shows everyone (ADR-0037). The server
+ * asks for the pages the browser fills in by itself the same way, without data: the pages of
+ * whoever is signed in and the consent page come back as their frame and their head.
  */
 export function renderAddressPage(template: string, input: AddressPageInput): AddressPageOutput {
   const language = isLanguage(input.language) ? input.language : DEFAULT_LANGUAGE;
   const route = matchRoute(input.pathname, input.search);
   const initialData: Record<string, InitialResource> = {};
-  const pageData: { mount?: RestMount; skill?: RestSkill } = {};
+  const pageData: { mount?: RestMount; skill?: RestSkill; owner?: RestOwner["owner"] } = {};
+  if (route.name === "owner" && input.data.owner !== undefined) {
+    initialData[resourceKeys.owner(route.owner)] = input.data.owner;
+    if (input.data.owner.ready !== undefined) {
+      pageData.owner = (input.data.owner.ready as RestOwner).owner;
+    }
+  }
   if (route.name === "mount") {
     const { address, view } = route;
     if (input.data.mount !== undefined) {
@@ -179,7 +213,7 @@ export function renderAddressPage(template: string, input: AddressPageInput): Ad
         initialLocation={{ pathname: input.pathname, search: input.search }}
         origin={input.origin}
         initialData={initialData}
-        mountPage={MountPage}
+        pages={SERVER_PAGES}
         preferredLanguage={language}
       />
     </StrictMode>,
@@ -278,7 +312,7 @@ export function renderLegalPage(template: string, input: LegalPageInput): Addres
         initialLocation={{ pathname: input.pathname, search: input.search }}
         origin={input.origin}
         initialData={initialData}
-        legalPage={LegalPage}
+        pages={SERVER_PAGES}
         preferredLanguage={language}
       />
     </StrictMode>,

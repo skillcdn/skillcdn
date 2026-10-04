@@ -9,28 +9,49 @@ import {
 } from "react";
 import { type InitialData, InitialDataContext } from "./api/initial-data.js";
 import styles from "./app.module.css";
+import { SessionProvider } from "./auth/session.js";
 import { Layout } from "./components/layout.js";
 import { Container, Skeleton } from "./components/ui.js";
 import { I18nContext, LanguagePreferenceContext, messagesFor } from "./i18n/index.js";
 import { LANGUAGE_PENDING_ATTRIBUTE, type Language, resolveLanguage } from "./i18n/languages.js";
 import { type AppLocation, LocationProvider, useLocation } from "./navigation.js";
+import type { AccountPageProps } from "./pages/account.js";
+import type { ConsentPageProps } from "./pages/consent.js";
 import { ExplorePage } from "./pages/explore.js";
 import { LandingPage } from "./pages/landing.js";
 import type { LegalPageProps } from "./pages/legal.js";
 import type { MountPageProps } from "./pages/mount.js";
+import type { OwnerPageProps } from "./pages/owner.js";
 import { BadAddressPage, NotFoundPage } from "./pages/simple.js";
 import { matchRoute, type Route } from "./router.js";
 import { applyHead, buildHead } from "./seo/head.js";
 
-// The explorer view and the deployment's own pages bring the Markdown renderer with them. The
-// front pages do not need it, so in the browser it loads when someone opens one of those. The
-// server, which renders them with their data, passes the components in instead (entry-server.tsx).
-const LazyMountPage = lazy(() =>
-  import("./pages/mount.js").then((module) => ({ default: module.MountPage })),
-);
-const LazyLegalPage = lazy(() =>
-  import("./pages/legal.js").then((module) => ({ default: module.LegalPage })),
-);
+/**
+ * The pages that are not on the way of every visitor: the explorer view and the deployment's own
+ * pages bring the Markdown renderer with them, and the page of an account, the pages of whoever
+ * is signed in and the consent page are for the few who go there. In the browser each loads when
+ * someone opens it. The server, which renders them, passes the components in instead
+ * (entry-server.tsx).
+ */
+export interface PageComponents {
+  readonly mount: ComponentType<MountPageProps>;
+  readonly legal: ComponentType<LegalPageProps>;
+  readonly owner: ComponentType<OwnerPageProps>;
+  readonly account: ComponentType<AccountPageProps>;
+  readonly consent: ComponentType<ConsentPageProps>;
+}
+
+const LAZY_PAGES: PageComponents = {
+  mount: lazy(() => import("./pages/mount.js").then((module) => ({ default: module.MountPage }))),
+  legal: lazy(() => import("./pages/legal.js").then((module) => ({ default: module.LegalPage }))),
+  owner: lazy(() => import("./pages/owner.js").then((module) => ({ default: module.OwnerPage }))),
+  account: lazy(() =>
+    import("./pages/account.js").then((module) => ({ default: module.AccountPage })),
+  ),
+  consent: lazy(() =>
+    import("./pages/consent.js").then((module) => ({ default: module.ConsentPage })),
+  ),
+};
 
 // Only a development build knows this page; in production the import is never reached, so the
 // bundler leaves the page and its fixtures out.
@@ -52,10 +73,8 @@ export interface AppProps {
   readonly shell?: boolean;
   /** Answers the page was rendered with on the server, by resource key. */
   readonly initialData?: InitialData;
-  /** The explorer view, when it must render at once rather than load. */
-  readonly mountPage?: ComponentType<MountPageProps>;
-  /** A page of the deployment's own, when it must render at once rather than load. */
-  readonly legalPage?: ComponentType<LegalPageProps>;
+  /** The pages that must render at once rather than load: what the server renders. */
+  readonly pages?: Partial<PageComponents>;
   /**
    * The language a URL without one is shown in: the visitor's choice (which a URL that forces a
    * language makes) or their browser's, read by the browser entry. The server passes the one the
@@ -64,21 +83,22 @@ export interface AppProps {
   readonly preferredLanguage?: Language;
 }
 
-function pageOf(
-  route: Route,
-  origin: string,
-  MountPage: ComponentType<MountPageProps>,
-  LegalPage: ComponentType<LegalPageProps>,
-): ReactNode {
+function pageOf(route: Route, origin: string, pages: PageComponents): ReactNode {
   switch (route.name) {
     case "landing":
       return <LandingPage origin={origin} />;
     case "explore":
       return <ExplorePage origin={origin} />;
     case "mount":
-      return <MountPage origin={origin} address={route.address} view={route.view} />;
+      return <pages.mount origin={origin} address={route.address} view={route.view} />;
+    case "owner":
+      return <pages.owner origin={origin} owner={route.owner} />;
+    case "account":
+      return <pages.account origin={origin} section={route.section} />;
+    case "consent":
+      return <pages.consent origin={origin} />;
     case "legal":
-      return <LegalPage origin={origin} kind={route.kind} />;
+      return <pages.legal origin={origin} kind={route.kind} />;
     case "bad-address":
       return <BadAddressPage origin={origin} error={route.error} />;
     case "states":
@@ -90,11 +110,20 @@ function pageOf(
   }
 }
 
+/** The routes whose pages write their own heads once they know what they show. */
+const OWN_HEAD: ReadonlySet<Route["name"]> = new Set([
+  "mount",
+  "landing",
+  "legal",
+  "owner",
+  "account",
+  "consent",
+]);
+
 function Routed(props: {
   readonly origin: string;
   readonly shell: boolean;
-  readonly mountPage: ComponentType<MountPageProps>;
-  readonly legalPage: ComponentType<LegalPageProps>;
+  readonly pages: PageComponents;
   readonly preferredLanguage: Language | undefined;
 }) {
   const location = useLocation();
@@ -102,11 +131,9 @@ function Routed(props: {
   const i18n = useMemo(() => ({ language, t: messagesFor(language) }), [language]);
   const route = matchRoute(location.pathname, location.search, import.meta.env.DEV);
 
-  // The view of an address, the front page and the deployment's own pages write their own heads
-  // once they know what they show (pages/mount.tsx, pages/landing.tsx, pages/legal.tsx).
   // biome-ignore lint/correctness/useExhaustiveDependencies: the route is a function of the location
   useEffect(() => {
-    if (route.name !== "mount" && route.name !== "landing" && route.name !== "legal") {
+    if (!OWN_HEAD.has(route.name)) {
       applyHead(buildHead(route, language, props.origin));
     }
   }, [location.pathname, location.search, language, props.origin]);
@@ -142,9 +169,7 @@ function Routed(props: {
         {props.shell ? (
           placeholder
         ) : (
-          <Suspense fallback={placeholder}>
-            {pageOf(route, props.origin, props.mountPage, props.legalPage)}
-          </Suspense>
+          <Suspense fallback={placeholder}>{pageOf(route, props.origin, props.pages)}</Suspense>
         )}
       </Layout>
     </I18nContext.Provider>
@@ -154,17 +179,21 @@ function Routed(props: {
 export function App(props: AppProps) {
   const [preferred, setPreferred] = useState(props.preferredLanguage);
   const preference = useMemo(() => ({ preferred, setPreferred }), [preferred]);
+  const pages = useMemo(() => ({ ...LAZY_PAGES, ...props.pages }), [props.pages]);
   return (
     <InitialDataContext.Provider value={props.initialData ?? {}}>
       <LanguagePreferenceContext.Provider value={preference}>
         <LocationProvider initial={props.initialLocation}>
-          <Routed
-            origin={props.origin}
-            shell={props.shell === true}
-            mountPage={props.mountPage ?? LazyMountPage}
-            legalPage={props.legalPage ?? LazyLegalPage}
-            preferredLanguage={preferred}
-          />
+          {/* Who is signed in is one fact for the whole page: the header, and whatever page
+              shows something that is a person's, read it from here. */}
+          <SessionProvider>
+            <Routed
+              origin={props.origin}
+              shell={props.shell === true}
+              pages={pages}
+              preferredLanguage={preferred}
+            />
+          </SessionProvider>
         </LocationProvider>
       </LanguagePreferenceContext.Provider>
     </InitialDataContext.Provider>

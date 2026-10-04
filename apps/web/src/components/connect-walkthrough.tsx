@@ -9,15 +9,22 @@ export function ConnectWalkthrough({
   name,
   url,
   description,
+  signIn = false,
 }: {
   readonly client: ConnectClient;
   readonly name: string;
   readonly url: string;
   readonly description: string;
+  /** The repository is private: the steps that differ for it are shown in place of the usual. */
+  readonly signIn?: boolean;
 }) {
   const { t } = useI18n();
   const c = t.connect.clients[client];
   const [step, setStep] = useState(0);
+  // The one step of an app's three that says how to authenticate, where it says so at all.
+  const stepsForSignIn: Partial<Record<ConnectClient, string>> = t.connect.private.steps;
+  const textOf = (text: string, index: number): string =>
+    signIn && index === 1 ? (stepsForSignIn[client] ?? text) : text;
 
   return (
     <ol className={styles.walkthrough} aria-label={t.connect.follow(c.label)}>
@@ -29,7 +36,7 @@ export function ConnectWalkthrough({
             </span>
             <span>
               <strong>{c.titles[index]}</strong>
-              <span className={styles.stepText}>{text}</span>
+              <span className={styles.stepText}>{textOf(text, index)}</span>
             </span>
           </>
         );
@@ -55,6 +62,7 @@ export function ConnectWalkthrough({
                 name={name}
                 url={url}
                 description={description}
+                signIn={signIn}
               />
             </figure>
           </li>

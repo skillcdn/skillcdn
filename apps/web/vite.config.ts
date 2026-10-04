@@ -6,27 +6,45 @@ import { handleFixtureRequest } from "./dev/fixture-api.js";
 /** Long enough to see loading states, short enough not to be in the way. */
 const FIXTURE_LATENCY_MS = 350;
 
-/** Answers the REST API from fixtures, so the UI runs without a server behind it. */
+/**
+ * Answers the REST API from fixtures, and signs the fixture person in and out, so the UI runs
+ * without a server behind it.
+ */
 function fixtureApi(): Plugin {
   return {
     name: "skillcdn-fixture-api",
     configureServer(server) {
       server.middlewares.use((request, response, next) => {
-        const answer = handleFixtureRequest(new URL(request.url ?? "/", "http://fixtures.invalid"));
+        const answer = handleFixtureRequest(
+          new URL(request.url ?? "/", "http://fixtures.invalid"),
+          Date.now(),
+          request.method ?? "GET",
+        );
         if (answer === undefined) {
           next();
           return;
         }
         setTimeout(() => {
           response.statusCode = answer.status;
-          response.setHeader("content-type", "application/json; charset=utf-8");
           response.setHeader("cache-control", "no-store");
+          if (answer.location !== undefined) {
+            response.setHeader("location", answer.location);
+          }
+          if (answer.body === undefined) {
+            response.end();
+            return;
+          }
+          response.setHeader("content-type", "application/json; charset=utf-8");
           response.end(JSON.stringify(answer.body));
         }, FIXTURE_LATENCY_MS);
       });
     },
   };
 }
+
+/** A request for a page, which the development server answers itself whatever the path. */
+const wantsPage = (request: { method?: string; headers: { accept?: string } }): boolean =>
+  request.method === "GET" && (request.headers.accept ?? "").includes("text/html");
 
 /** Where each mode sends the REST API and MCP, unless SKILLCDN_API_URL says otherwise. */
 const API_BY_MODE: Readonly<Record<string, string>> = {
@@ -61,8 +79,17 @@ export default defineConfig(({ mode, isSsrBuild }) => {
               "/gh": {
                 target: apiUrl,
                 changeOrigin: true,
+                bypass: (request) => (wantsPage(request) ? "/index.html" : undefined),
+              },
+              // Signing in and out are the server's, and so is its authorization server, apart
+              // from the one page of it that belongs to the UI: the page that asks for consent.
+              "/auth": { target: apiUrl, changeOrigin: true },
+              "/.well-known": { target: apiUrl, changeOrigin: true },
+              "/oauth": {
+                target: apiUrl,
+                changeOrigin: true,
                 bypass: (request) =>
-                  request.method === "GET" && (request.headers.accept ?? "").includes("text/html")
+                  wantsPage(request) && (request.url ?? "").startsWith("/oauth/consent")
                     ? "/index.html"
                     : undefined,
               },
