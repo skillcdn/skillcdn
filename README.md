@@ -28,14 +28,14 @@ Agent skills are already distributed as folders of Markdown in git repos. The mi
 1. An agent connects to `skillcdn.ai/gh/owner/repo`.
 2. The first request triggers a lazy index of the repo (Markdown, small JSON, skill manifests). The index is cached per repo and commit and shared by everyone.
 3. The agent sees a small, fixed set of meta tools rather than one tool per skill.
-4. Without the GitHub App the index refreshes on a schedule. With the App installed, push webhooks refresh only what changed.
+4. A branch or a tag is looked up again after a short while. With the GitHub App installed, a push is served by the very next request, and only what changed is fetched.
 
 ### Private repo
 
 1. An org admin installs the SkillCDN GitHub App and **selects which repos** it may read. Permissions are contents and metadata, read-only.
 2. A user adds the address to their agent. The agent is told where to ask for access and starts MCP OAuth; we hand off to GitHub login and receive a user token. The GitHub token stays server-side; the agent only ever holds a SkillCDN token, good for that one address. Signing in on the site opens the same repositories in the browser.
 3. On every request we ask GitHub whether this user can see this repo and cache the yes/no for a short time. Teams, outside collaborators, internal repos, SSO enforcement: GitHub decides, we relay. A repository someone may not see answers exactly like one that does not exist.
-4. Indexing uses the App installation token, never a user token. Membership, team and repo-visibility webhooks will invalidate the permission cache.
+4. Indexing uses the App installation token, never a user token. GitHub's webhooks end a cached answer at once: a repository made private, the App removed, a person who revoked it, and, where the App may read an organization's members, a change of collaborators, teams or members.
 
 Authorization is optional: a public repository never asks for it. Headless agents will get a **project token**: repo-scoped, read-only, expiring, revocable, issued by someone with admin on that repo. That is the only permission layer of our own.
 

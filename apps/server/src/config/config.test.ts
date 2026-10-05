@@ -310,6 +310,7 @@ describe("signing in", () => {
         clientId: "Iv23liExampleClientId",
         clientSecret: "client-secret-of-the-app",
         webUrl: undefined,
+        webhookSecret: undefined,
       },
       secret: "an-auth-secret-of-at-least-32-characters",
       sessionTtlMs: 30 * 86_400_000,
@@ -354,6 +355,27 @@ describe("signing in", () => {
       (path) => (path === "/run/secrets/app-key" ? privateKey : noFiles()),
     );
     expect(fromFile.auth?.github.privateKey).toBe(privateKey.trim());
+  });
+
+  it("reads the secret of the app's webhook, with the app and not without it", () => {
+    const secret = "a-webhook-secret-of-at-least-32-characters";
+    expect(
+      loadConfig({ ...signIn, GITHUB_APP_WEBHOOK_SECRET: secret }, noFiles).auth?.github
+        .webhookSecret,
+    ).toBe(secret);
+    const fromFile = loadConfig(
+      { ...signIn, GITHUB_APP_WEBHOOK_SECRET_FILE: "/run/secrets/webhook" },
+      (path) => (path === "/run/secrets/webhook" ? `${secret}\n` : noFiles()),
+    );
+    expect(fromFile.auth?.github.webhookSecret).toBe(secret);
+
+    const alone = problemsOf({ DATABASE_URL, GITHUB_APP_WEBHOOK_SECRET: secret });
+    expect(alone.problems).toEqual([
+      "GITHUB_APP_WEBHOOK_SECRET: belongs to the app, and is read only with GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY, GITHUB_APP_CLIENT_ID, GITHUB_APP_CLIENT_SECRET, AUTH_SECRET",
+    ]);
+    const short = problemsOf({ ...signIn, GITHUB_APP_WEBHOOK_SECRET: "hunter2" });
+    expect(short.problems).toEqual(["GITHUB_APP_WEBHOOK_SECRET: must be at least 32 characters"]);
+    expect(short.message).not.toContain("hunter2");
   });
 
   it("wants all of it or none of it, and names what is missing", () => {

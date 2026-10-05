@@ -115,6 +115,13 @@ export interface FixtureHost extends GitHost, GitHostDirectory {
    * public list no longer names it, and the name is nothing to the deployment's credential.
    */
   hide(repo: string): void;
+  /**
+   * Moves `main`, and so the default branch, of every repository to a commit nobody has seen,
+   * as a push does, and answers with that commit.
+   */
+  push(): string;
+  /** Takes the app off a private repository: its installation reads it no longer. */
+  uninstall(repo: string): void;
   /** Makes every later call of a method fail as an unreachable host does. */
   fail(method: "getRepository" | "resolveRef" | "getTree" | "readBlob" | "getProfile"): void;
 }
@@ -149,8 +156,10 @@ export function createFixtureHost(
   let gate: Promise<void> = Promise.resolve();
   const known = new Set(readdirSync(FIXTURES_ROOT).filter((name) => !name.includes(".")));
   const hidden = new Set<string>();
+  const uninstalled = new Set<string>();
   const failing = new Set<string>();
-  const commits = fixtureCommits(variant);
+  const commits: { main: string; release: string } = { ...fixtureCommits(variant) };
+  let pushes = 0;
   /** What the host shows everyone: the fixture repositories nobody made private. */
   const listed = (): string[] => [...known].filter((name) => !hidden.has(name)).sort();
 
@@ -168,6 +177,9 @@ export function createFixtureHost(
       (coordinates.repo in INSTALLED_PRIVATE_REPOSITORIES || hidden.has(coordinates.repo)) &&
       credential !== "installation"
     ) {
+      throw new GitHostError("not_found", "not found on the git host");
+    }
+    if (credential === "installation" && uninstalled.has(coordinates.repo)) {
       throw new GitHostError("not_found", "not found on the git host");
     }
   };
@@ -225,6 +237,14 @@ export function createFixtureHost(
     },
     hide(repo) {
       hidden.add(repo);
+    },
+    push() {
+      pushes += 1;
+      commits.main = sha1(`main ${variant} after push ${pushes}`);
+      return commits.main;
+    },
+    uninstall(repo) {
+      uninstalled.add(repo);
     },
     fail(method) {
       failing.add(method);

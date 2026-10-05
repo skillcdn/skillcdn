@@ -8,6 +8,7 @@ import {
   type Entitlements,
   type GitHost,
   type GitHostDirectory,
+  type GitHostEventSource,
   type GitHostLogin,
   type IndexLimits,
   type UsageSink,
@@ -15,6 +16,7 @@ import {
 import { createBlobStore, createDatabase, type Database } from "@skillcdn/db";
 import {
   connectGitHub,
+  createGitHubEvents,
   createGitHubHost,
   createGitHubLogin,
   type GitHubHostOptions,
@@ -30,6 +32,7 @@ import { Permissions } from "../auth/permissions.js";
 import { createSecrets } from "../auth/secrets.js";
 import { Sessions } from "../auth/sessions.js";
 import { type AuthConfig, type Config, ConfigError } from "../config/config.js";
+import { HostEvents } from "../events/host-events.js";
 import { type AppAuth, createApp } from "../http/app.js";
 import { createClientAddressResolver } from "../http/client-address.js";
 import type { AppEnv } from "../http/request-context.js";
@@ -62,6 +65,11 @@ export interface ApiPorts {
   readonly directory?: GitHostDirectory | undefined;
   /** How people sign in through the git host. Needed, with `auth` configured, for anyone to. */
   readonly login?: GitHostLogin | undefined;
+  /**
+   * What reads the git host's deliveries. Given, the deployment receives the host's events and
+   * ends what it remembers when they say so; left out, there is no such route.
+   */
+  readonly events?: GitHostEventSource | undefined;
   /**
    * How a client's metadata document is fetched; from the public internet when left out. Tests
    * hand in one that never leaves the process.
@@ -254,6 +262,19 @@ export function createApi(
   const app = createApp({
     database,
     auth,
+    webhooks:
+      ports.events === undefined
+        ? undefined
+        : {
+            source: ports.events,
+            events: new HostEvents({
+              database,
+              clock,
+              host: ports.events.host,
+              repoTtlMs: config.mounts.repoTtlMs,
+              refTtlMs: config.mounts.refTtlMs,
+            }),
+          },
     owners,
     mounts,
     snapshots,
@@ -375,6 +396,10 @@ export async function runApi(config: Config, logger: Logger): Promise<void> {
     gitHost,
     directory: gitHost,
     login,
+    events:
+      config.auth?.github.webhookSecret === undefined
+        ? undefined
+        : createGitHubEvents({ secret: config.auth.github.webhookSecret }),
     clock: systemClock,
     // Ports with a default implementation. A build that layers its own packages on top of this
     // image replaces them here; nothing else in the codebase knows about plans or billing.

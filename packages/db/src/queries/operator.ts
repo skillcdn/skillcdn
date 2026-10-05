@@ -89,19 +89,31 @@ export async function purgeRepository(
     )
     .limit(1);
   if (found === undefined) return undefined;
-  return db.transaction(async (tx) => {
+  return purgeRepositoryIndex(database, found.id);
+}
+
+/**
+ * Removes what was indexed for the repository with this id: see {@link purgeRepository}. For a
+ * caller that knows the repository by more than a name, such as one acting on what the git host
+ * reported about it.
+ */
+export async function purgeRepositoryIndex(
+  database: Database,
+  repoId: string,
+): Promise<PurgeResult> {
+  return drizzleOf(database).transaction(async (tx) => {
     // The bodies this repository referred to, noted before its entries go: only those can have
     // become unreferenced, and the table is content-addressed and shared with every other repo.
     const referred = await tx
       .selectDistinct({ sha: indexEntries.blobSha })
       .from(indexEntries)
       .innerJoin(snapshots, eq(indexEntries.snapshotId, snapshots.id))
-      .where(eq(snapshots.repoId, found.id));
+      .where(eq(snapshots.repoId, repoId));
     const removed = await tx
       .delete(snapshots)
-      .where(eq(snapshots.repoId, found.id))
+      .where(eq(snapshots.repoId, repoId))
       .returning({ id: snapshots.id });
-    await tx.delete(repoRefs).where(eq(repoRefs.repoId, found.id));
+    await tx.delete(repoRefs).where(eq(repoRefs.repoId, repoId));
     const unreferenced =
       referred.length === 0
         ? []

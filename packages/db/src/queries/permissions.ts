@@ -1,4 +1,4 @@
-import { and, eq, lt } from "drizzle-orm";
+import { and, eq, inArray, lt } from "drizzle-orm";
 import { type Database, drizzleOf } from "../client.js";
 import { accounts, repoAliases, repoPermissions, repos } from "../schema.js";
 import type { RepoAlias, RepoAliasRecord } from "./repos.js";
@@ -107,6 +107,24 @@ export async function saveRepoPermission(
       target: [repoPermissions.userId, repoPermissions.repoId],
       set: { allowed, checkedAt: now },
     });
+}
+
+/**
+ * Forgets every answer about who can see these repositories, a yes as much as a no: the host is
+ * asked again, as each person, the next time one of them asks.
+ */
+export async function deleteRepoPermissionsOf(
+  database: Database,
+  repoIds: readonly string[],
+): Promise<number> {
+  if (repoIds.length === 0) {
+    return 0;
+  }
+  const rows = await drizzleOf(database)
+    .delete(repoPermissions)
+    .where(inArray(repoPermissions.repoId, [...repoIds]))
+    .returning({ id: repoPermissions.id });
+  return rows.length;
 }
 
 /** Removes the answers given before `before`, which nothing trusts any more. */

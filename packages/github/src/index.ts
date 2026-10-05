@@ -11,3 +11,4 @@ export {
 } from "./github-host.js";
 export { createGitHubLogin, type GitHubLoginOptions, githubWebUrl } from "./github-login.js";
 export type { FetchLike, TokenProvider } from "./http.js";
+export { createGitHubEvents, type GitHubEventsOptions } from "./webhooks.js";

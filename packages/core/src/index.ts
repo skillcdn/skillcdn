@@ -89,6 +89,14 @@ export type {
   HostRepositoryListing,
   HostRepositoryPage,
 } from "./ports/git-host-directory.js";
+export {
+  type GitHostDelivery,
+  GitHostDeliveryError,
+  type GitHostDeliveryProblem,
+  type GitHostEvent,
+  type GitHostEventSource,
+  type HostEventScope,
+} from "./ports/git-host-events.js";
 export type {
   GitHostLogin,
   HostCredentials,

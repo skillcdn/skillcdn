@@ -9,6 +9,7 @@ import {
   deleteExpiredOAuth,
   deleteExpiredSessions,
   deleteOAuthGrant,
+  deleteRepoPermissionsOf,
   deleteSession,
   deleteStaleRepoPermissions,
   deleteUnusedOAuthClients,
@@ -20,6 +21,7 @@ import {
   findRepoPermission,
   findSession,
   findUser,
+  findUserByHostAccount,
   forgetUserAccess,
   getUserCredentials,
   listIndexedRepositories,
@@ -647,6 +649,55 @@ describe("the permission cache", () => {
     expect(await deleteStaleRepoPermissions(database, minutes(2))).toBe(0);
     expect(await deleteStaleRepoPermissions(database, minutes(3))).toBeGreaterThanOrEqual(1);
     expect(await findRepoPermission(database, scope)).toBeUndefined();
+  });
+});
+
+describe("what an event of the git host ends", () => {
+  it("every answer about a repository, for everyone, and nothing about any other", async () => {
+    const [alice, bob] = [await signedIn(), await signedIn()];
+    const repoOf = (name: string) =>
+      saveRepository(
+        database,
+        { host: "gh", owner: "acme", repo: `${name}-${unique()}` },
+        {
+          hostRepoId: String(unique()),
+          name,
+          defaultBranch: "main",
+          description: undefined,
+          visibility: "private",
+          owner: { hostAccountId: "9001", login: "Acme", kind: "organization" },
+        },
+        T0,
+      );
+    const [first, second, third] = [await repoOf("a"), await repoOf("b"), await repoOf("c")];
+    for (const user of [alice, bob]) {
+      for (const repo of [first, second, third]) {
+        await saveRepoPermission(database, { userId: user.id, repoId: repo.id }, true, T0);
+      }
+    }
+    expect(await deleteRepoPermissionsOf(database, [])).toBe(0);
+    expect(await deleteRepoPermissionsOf(database, [first.id, second.id])).toBe(4);
+    for (const user of [alice, bob]) {
+      const answer = (repo: { id: string }) =>
+        findRepoPermission(database, { userId: user.id, repoId: repo.id });
+      expect(await answer(first)).toBeUndefined();
+      expect(await answer(second)).toBeUndefined();
+      expect(await answer(third)).toMatchObject({ allowed: true });
+    }
+  });
+
+  it("finds the person an account of the host is here, when it ever signed in", async () => {
+    const user = await signedIn();
+    expect(
+      await findUserByHostAccount(database, { host: "gh", hostAccountId: user.hostAccountId }),
+    ).toEqual(user);
+    expect(
+      await findUserByHostAccount(database, { host: "gh", hostAccountId: "no-such-account" }),
+    ).toBeUndefined();
+    // An account that owns repositories and never signed in is nobody here.
+    expect(
+      await findUserByHostAccount(database, { host: "gh", hostAccountId: "9001" }),
+    ).toBeUndefined();
   });
 });
 

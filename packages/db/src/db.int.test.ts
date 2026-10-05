@@ -1,4 +1,5 @@
 import { type HostRepository, NO_LICENSE, type ShowcaseTexts } from "@skillcdn/core";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { drizzleOf } from "./client.js";
 import {
@@ -10,10 +11,13 @@ import {
   deleteRepoAlias,
   deleteStaleMissingRepos,
   ensureSnapshot,
+  expireRepoAliases,
+  expireRepoRefs,
   failSnapshot,
   findCachedRef,
   findMissingRepo,
   findRepoByAlias,
+  findRepoByHostId,
   findSkills,
   getEntry,
   getLegalDocument,
@@ -28,11 +32,13 @@ import {
   listOperatorImages,
   listOperatorMedia,
   listOperatorRepositories,
+  listReposOfHostAccount,
   listShowcaseEntries,
   listSkillFiles,
   migrateDatabase,
   type NewIndexEntry,
   purgeRepository,
+  purgeRepositoryIndex,
   putLegalDocument,
   putOperatorImage,
   putOperatorMedia,
@@ -51,7 +57,7 @@ import {
   searchEntries,
   writeSnapshotIndex,
 } from "./index.js";
-import { blobs } from "./schema.js";
+import { blobs, snapshots } from "./schema.js";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "./testing.js";
 
 let testDatabase: TestDatabase;
@@ -211,6 +217,69 @@ describe("repositories", () => {
     });
     const otherAccount = { ...scope, accountId: "00000000-0000-7000-8000-000000000000" };
     expect(await findCachedRef(database, otherAccount, "")).toBeUndefined();
+  });
+
+  it("is found by the host's id, alone or with the others of its account", async () => {
+    const owner = { hostAccountId: "77001", login: "Events", kind: "organization" } as const;
+    const open = hostRepository({ owner, name: "open" });
+    const closed = hostRepository({ owner, name: "closed", visibility: "private" });
+    const first = await saveRepository(
+      database,
+      { host: "gh", owner: "events", repo: "open" },
+      open,
+      T0,
+    );
+    const second = await saveRepository(
+      database,
+      { host: "gh", owner: "events", repo: "closed" },
+      closed,
+      T0,
+    );
+    expect(await findRepoByHostId(database, { host: "gh", hostRepoId: closed.hostRepoId })).toEqual(
+      { repoId: second.id, accountId: second.accountId, visibility: "private" },
+    );
+    expect(
+      await findRepoByHostId(database, { host: "gh", hostRepoId: "no-such-id" }),
+    ).toBeUndefined();
+    const all = await listReposOfHostAccount(database, { host: "gh", hostAccountId: "77001" });
+    expect(all.map((repo) => [repo.repoId, repo.visibility]).sort()).toEqual(
+      [
+        [first.id, "public"],
+        [second.id, "private"],
+      ].sort(),
+    );
+    expect(await listReposOfHostAccount(database, { host: "gh", hostAccountId: "77002" })).toEqual(
+      [],
+    );
+  });
+
+  it("makes what is believed about its names and refs due, and never fresher than it was", async () => {
+    const alias = { host: "gh", owner: "acme", repo: "due" } as const;
+    const repo = await saveRepository(database, alias, hostRepository(), minutes(10));
+    const scope = { accountId: repo.accountId, repoId: repo.id };
+    await saveRepository(database, { ...alias, repo: "due-older" }, repo.repository, minutes(2));
+    await saveCachedRef(database, scope, "", "a".repeat(40), minutes(10));
+    await saveCachedRef(database, scope, "v1", "b".repeat(40), minutes(2));
+
+    await expireRepoAliases(database, scope, minutes(5));
+    await expireRepoRefs(database, scope, minutes(5));
+    // Confirmed after that instant: counted as confirmed then. Confirmed before: left as it was.
+    expect((await findRepoByAlias(database, alias))?.checkedAt).toEqual(minutes(5));
+    expect((await findRepoByAlias(database, { ...alias, repo: "due-older" }))?.checkedAt).toEqual(
+      minutes(2),
+    );
+    expect(await findCachedRef(database, scope, "")).toEqual({
+      commitSha: "a".repeat(40),
+      checkedAt: minutes(5),
+    });
+    expect((await findCachedRef(database, scope, "v1"))?.checkedAt).toEqual(minutes(2));
+    // Another account's scope names no ref of this repository.
+    await expireRepoRefs(
+      database,
+      { ...scope, accountId: "00000000-0000-7000-8000-000000000000" },
+      minutes(1),
+    );
+    expect((await findCachedRef(database, scope, ""))?.checkedAt).toEqual(minutes(5));
   });
 
   it("notes a name that is nothing to the public, once per name, until the note is stale", async () => {
@@ -964,6 +1033,23 @@ describe("the deployment's own pages", () => {
     ]);
     expect(await removeLegalDocument(database, "terms")).toBe(true);
     expect(await removeLegalDocument(database, "terms")).toBe(false);
+  });
+});
+
+describe("purging a repository by its id", () => {
+  it("removes what purging by name removes", async () => {
+    const scope = await readySnapshot([entry({ path: "README.md", blobSha: "sha-by-id" })], {
+      "sha-by-id": "only here",
+    });
+    const [repoId] = await drizzleOf(database)
+      .select({ repoId: snapshots.repoId })
+      .from(snapshots)
+      .where(eq(snapshots.id, scope.snapshotId))
+      .then((rows) => rows.map((row) => row.repoId));
+    expect(repoId).toBeDefined();
+    expect(await purgeRepositoryIndex(database, repoId ?? "")).toEqual({ snapshots: 1, blobs: 1 });
+    expect(await getSnapshot(database, scope)).toBeUndefined();
+    expect(await purgeRepositoryIndex(database, repoId ?? "")).toEqual({ snapshots: 0, blobs: 0 });
   });
 });
 

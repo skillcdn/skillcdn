@@ -2,7 +2,7 @@
 
 The GitHub implementation of the git-host ports defined in `@skillcdn/core`. It is the only place in the codebase that talks to GitHub.
 
-**Status:** reading repositories with the deployment's credential or the app's installation token, signing in and the permission question, and the public listing of an account are implemented. Webhooks follow ([roadmap](../../docs/roadmap.md)).
+**Status:** reading repositories with the deployment's credential or the app's installation token, signing in and the permission question, the public listing of an account, and reading the deliveries of the app's webhook are implemented.
 
 ## Scope
 
@@ -12,7 +12,7 @@ The GitHub implementation of the git-host ports defined in `@skillcdn/core`. It 
 | Installation tokens (`GitHubApp`) | Private repos | The app's private key: a short-lived app token finds the installation that covers a repository and mints a token for it, restricted to reading contents and metadata |
 | Signing in, "which repository does this name mean to this person", where the app is installed for them (`GitHostLogin`) | Sessions, the permission check, the account pages | The app's client id and secret; the person's token |
 | An account's profile and public repositories (`GitHostDirectory`) | The page of an account | None or the optional token |
-| Webhook signature verification | Push, membership, team and visibility events; not built yet | Webhook secret |
+| The app's webhook deliveries (`GitHostEventSource`) | Verifying the signature of a delivery over its raw body, then reading what it ends: refs after a push, what is known about a repository that changed or closed, the answers about who sees what after a change of collaborators, teams or members, an installation that was removed, a person who revoked the app ([ADR-0038](../../docs/adr/0038-the-git-hosts-events-end-what-is-remembered.md)) | The webhook secret |
 
 Other hosts (GitLab, Gitea) are separate packages that implement the same port.
 

@@ -4,7 +4,7 @@ The single deployable. One build, one container image, several process roles ([A
 
 | Role | Command | Purpose | Status |
 |---|---|---|---|
-| `api` | `node dist/main.js api` | MCP over HTTP and the [REST API](../../docs/specs/rest.md), and, where it is configured, signing in, private repositories and the OAuth authorization server of the deployment's addresses ([permissions](../../docs/specs/permissions.md)). Stateless. Later: webhooks. | implemented |
+| `api` | `node dist/main.js api` | MCP over HTTP and the [REST API](../../docs/specs/rest.md), and, where it is configured, signing in, private repositories and the OAuth authorization server of the deployment's addresses ([permissions](../../docs/specs/permissions.md)). Where the deployment shares a secret with the git host's app, it also receives the host's events ([ADR-0038](../../docs/adr/0038-the-git-hosts-events-end-what-is-remembered.md)). Stateless. | implemented |
 | `migrate` | `node dist/main.js migrate` | Apply pending database migrations, then exit. | implemented |
 | `check` | `node dist/main.js check [directory]` | Read a directory as the indexer reads a commit and print what an agent would get: for repository authors, before they push ([convention](../../docs/specs/skill-repo.md), "Checking a repository before pushing"). Needs no database and no git host; exits with `1` when index diagnostics are present. From this checkout: `pnpm --filter @skillcdn/server run start check ../skills`. | implemented |
 | `purge` | `node dist/main.js purge /gh/owner/repo` | Remove what was indexed for a repository: its snapshots, their index entries, its cached refs and the file bodies nothing references any more ([ADR-0026](../../docs/adr/0026-serving-follows-the-license-and-the-operators-lists.md)). Exits with `1` when the repository was never indexed. The same purge is `POST /admin/v1/purge/gh/owner/repo`. | implemented |
@@ -57,6 +57,9 @@ src/
                  lost), permissions.ts (whether a person can see a repository, as the host says),
                  and oauth/: the authorization server, its clients (registered, or a metadata
                  document fetched from the public internet only) and the rules for redirect URIs
+  events/        what the git host says happened, applied to what is remembered (ADR-0038): refs
+                 and names made due, answers forgotten, the index of a repository the app was taken
+                 off removed
   janitor.ts     removes what time has ended: sessions, tokens, and answers of the git host that
                  nothing believes any more
   owners/        the page of an account (ADR-0037): the host's public listing, kept for a while,
@@ -69,7 +72,8 @@ src/
                  the operator's showcase,
                  the deployment's own pages at /terms and /privacy, and the words of the social
                  preview of an address, drawn at /social/<address>; the owner's picture as the
-                 icon of an address's MCP server at /icon/<address>; auth.ts registers everything
+                 icon of an address's MCP server at /icon/<address>; webhooks.ts receives the git
+                 host's deliveries at /webhooks/gh; auth.ts registers everything
                  people sign in with: /auth/*, /api/v1/me/*, the consent page's two questions, and
                  the OAuth endpoints with their metadata
   operator/      the operator's lists, the landing showcase with its uploads, the pictures of

@@ -1,7 +1,7 @@
 # Spec: people, private repositories and access
 
-- Status: **Draft.** Signing in, private repositories on the pages, over REST and over MCP, and the authorization server are implemented. Webhooks that end an answer early and tokens for headless agents are not ([roadmap](../roadmap.md)).
-- Implemented by: `apps/server/src/auth/` and `apps/server/src/mounts/`, the GitHub App and login adapter in `packages/github`, the queries in `packages/db`, and the page contracts in `packages/core/src/rest/account.ts`. Decisions: [ADR-0035](../adr/0035-people-sign-in-through-the-git-hosts-app.md), [ADR-0036](../adr/0036-the-deployment-is-the-authorization-server-of-its-addresses.md).
+- Status: **Draft.** Signing in, private repositories on the pages, over REST and over MCP, the authorization server, and the git host's events that end an answer early are implemented. Tokens for headless agents are not ([roadmap](../roadmap.md)).
+- Implemented by: `apps/server/src/auth/`, `apps/server/src/mounts/` and `apps/server/src/events/`, the GitHub App, login and webhook adapters in `packages/github`, the queries in `packages/db`, and the page contracts in `packages/core/src/rest/account.ts`. Decisions: [ADR-0035](../adr/0035-people-sign-in-through-the-git-hosts-app.md), [ADR-0036](../adr/0036-the-deployment-is-the-authorization-server-of-its-addresses.md), [ADR-0038](../adr/0038-the-git-hosts-events-end-what-is-remembered.md).
 
 Everything here exists only on a deployment that is configured for signing in ([deploy](../../deploy/README.md#signing-in-and-private-repositories)). Without that configuration there are no people, no private repositories and none of these routes: the deployment serves public repositories to everyone, as before.
 
@@ -56,12 +56,42 @@ What follows from a repository not being public:
 
 Whether a person can see a repository is asked of the git host with that person's token and remembered as `(user, repository) → allowed, checked at` in the database, so that every replica shares the answer.
 
-- An answer is believed for `PERMISSION_TTL_SECONDS` (default 60; `0` asks every time). That is the **staleness bound**: someone who loses access at the host keeps it here for at most that long, and someone who gains it waits at most that long. Nothing ends an answer earlier yet; webhooks will ([roadmap](../roadmap.md)).
+- An answer is believed for `PERMISSION_TTL_SECONDS` (default 60; `0` asks every time). That is the **staleness bound**: someone who loses access at the host keeps it here for at most that long, and someone who gains it waits at most that long. The git host's [events](#events-of-the-git-host) end an answer earlier, where the deployment receives them.
 - Every request that reads something not public checks: pages, REST, every MCP call, cached reads included.
 - About a person, only a yes is kept in the database. That a name was nothing to everyone and to the person is remembered for that person, in the process, for the same time: anyone who signed in can ask about any name, each question costs requests to the host, and a stored no would be something a stranger's question could find for a repository and not for a name that is nothing.
 - The name has to mean the same repository to the person and to the app: a renamed or recycled name is another repository, compared by the host's immutable id.
 - When the host cannot be asked and no answer is fresh, the request fails with `503 mount.unavailable` or `mount.rate_limited`. An answer written by a process whose clock runs ahead is not believed longer for that.
-- What is public is another matter and an older rule: that a repository is public is believed for `REPO_TTL_SECONDS`, and somewhat longer while the git host cannot be asked, so that an outage of the host does not take public repositories down. Making a repository private therefore takes effect here within that time, and within the permission time for its own people.
+- What is public is another matter and an older rule: that a repository is public is believed for `REPO_TTL_SECONDS`, and somewhat longer while the git host cannot be asked, so that an outage of the host does not take public repositories down. Making a repository private therefore takes effect here within that time, and within the permission time for its own people, or at once where the host's events are received.
+
+## Events of the git host
+
+Where the deployment shares a secret with the git host's app (`GITHUB_APP_WEBHOOK_SECRET`), the host tells it what changed, and what is remembered ends before its time is up ([ADR-0038](../adr/0038-the-git-hosts-events-end-what-is-remembered.md)). Without the secret the route below does not exist, and the lifetimes above are the only bound.
+
+`POST /webhooks/gh` takes the app's deliveries: the payload as JSON, or as the `payload` field of a form, signed by the host with HMAC-SHA256 under the shared secret (`x-hub-signature-256`), at most 4 MiB. The signature is verified over the bytes as they arrived, in constant time, before anything is parsed.
+
+| Answer | When |
+|---|---|
+| `204` | The delivery was applied, or ends nothing here: most events say nothing about refs or about who sees what, and most are about repositories nobody opened here. |
+| `401 webhook.unsigned` | The host did not sign it with the shared secret. Nothing of it was read. |
+| `400 webhook.malformed` | Signed, and not readable as the event it says it is. |
+| `413 request.too_large` | Larger than is read. What it would have ended ends when its time is up. |
+
+**An event ends what is remembered and establishes nothing.** What a delivery says is not written down as true: facts are made due for asking again, answers are forgotten, and the next request asks the host. A delivery that arrives twice, late or out of order costs a question and changes no answer, so the deployment keeps no record of the deliveries it has seen. Only closing is believed at once: a repository said to have gone private or to be deleted is not public from that moment, and a person who took back what they allowed the app is signed out.
+
+| The host says | What ends |
+|---|---|
+| A branch or a tag was pushed, created or deleted (`push`, `create`, `delete`) | The refs of the repository are due: the next request for a moving address asks where its ref points, and indexes the new commit, which costs what changed. Nothing is indexed before somebody asks. |
+| A repository was renamed, transferred, edited, archived or made public (`repository`, `public`) | Its names and its refs are due, and the answers about who can see it are forgotten. That it opened is not believed: the host is asked. |
+| A repository was made private or deleted (`repository`) | The same, and it is served as public no longer. The index of a deleted repository is removed. |
+| The app was taken off an account, or off repositories (`installation`, `installation_repositories`) | The answers about those repositories are forgotten, and the index of each that was not public is removed: an owner who takes the app off takes back what it read. What is public was read as anyone reads it, and stays. |
+| The app was suspended on an account (`installation`) | The answers about that account's repositories are forgotten. |
+| A person revoked the app (`github_app_authorization`) | Their credential, their sessions, the apps they allowed, and the answers about them, as when the host refuses their token. |
+| A collaborator, a team or a member changed (`member`, `team`, `team_add`, `membership`, `organization`) | The answers about the repository the event names, or about every repository of the organization. |
+
+- Facts are made due, not deleted: while the host cannot be asked, a public repository is still served from what was known, for as long as it would have been without the event. Answers about people are deleted, and without the host there is no access.
+- Everything that ends, ends in the database, so every process of the deployment sees it.
+- Which events the host sends is decided where its app is registered ([deploy](../../deploy/README.md#signing-in-and-private-repositories)). Pushes and changes to a repository are told to an app that may read contents and metadata, which is what reading needs; installations and revocations are told to every app. Changes of collaborators, teams and members are told only to an app that may read an organization's members: without that permission the lifetime of an answer is the bound for them.
+- The lifetimes remain the bound for whatever the host does not announce: an organization that withdraws a person's single sign-on, and a delivery that never arrived, which the host does not send again by itself.
 
 ## Signing in
 
@@ -145,7 +175,6 @@ A redirect URI is `https`, or `http` to this computer (`localhost`, `127.0.0.1`,
 
 ## Not yet
 
-- **Webhooks.** Installation, membership and visibility events will end remembered answers early and re-index on push. Until then the staleness bound above is the bound, and a private repository refreshes like a public one, when its ref is next resolved.
 - **Tokens for headless agents.** An agent with no person in front of it cannot use this flow. A repository-scoped, read-only, expiring token issued by someone who administers the repository is planned.
 - **Other git hosts.** Signing in goes through GitHub, the one adapter there is.
 - **Asserted client keys.** A client's metadata document may name `private_key_jwt`; such a client is treated as a public client, protected by PKCE alone. ChatGPT's document names it as what it would rather use and `none` as what it also can, and the server's metadata offers `none`.

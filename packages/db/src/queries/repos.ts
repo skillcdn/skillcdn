@@ -1,5 +1,5 @@
 import type { GitHostKey, HostRepository } from "@skillcdn/core";
-import { and, eq, lt, sql } from "drizzle-orm";
+import { and, eq, gt, lt, sql } from "drizzle-orm";
 import { type Database, drizzleOf } from "../client.js";
 import { accounts, missingRepos, repoAliases, repoRefs, repos } from "../schema.js";
 
@@ -166,6 +166,79 @@ export async function markRepositoryNotPublic(
         eq(repos.visibility, "public"),
       ),
     );
+}
+
+/** A repository as an event of the git host names it: by the host's immutable id. */
+export interface HostRepoKey {
+  readonly host: GitHostKey;
+  readonly hostRepoId: string;
+}
+
+export interface KnownRepo extends RepoScope {
+  /** What the host last reported. */
+  readonly visibility: "public" | "private";
+}
+
+/** The repository the host knows by this id, when it was ever seen here. */
+export async function findRepoByHostId(
+  database: Database,
+  key: HostRepoKey,
+): Promise<KnownRepo | undefined> {
+  const [row] = await drizzleOf(database)
+    .select({ repoId: repos.id, accountId: repos.accountId, visibility: repos.visibility })
+    .from(repos)
+    .where(and(eq(repos.host, key.host), eq(repos.hostRepoId, key.hostRepoId)))
+    .limit(1);
+  return row;
+}
+
+/** The repositories of the account the host knows by this id, as far as they were seen here. */
+export async function listReposOfHostAccount(
+  database: Database,
+  key: { readonly host: GitHostKey; readonly hostAccountId: string },
+): Promise<KnownRepo[]> {
+  return drizzleOf(database)
+    .select({ repoId: repos.id, accountId: repos.accountId, visibility: repos.visibility })
+    .from(repos)
+    .innerJoin(accounts, eq(accounts.id, repos.accountId))
+    .where(and(eq(accounts.host, key.host), eq(accounts.hostAccountId, key.hostAccountId)));
+}
+
+/**
+ * Ends what is believed about a repository's refs: every ref confirmed after `staleAt` counts
+ * as confirmed then, so the next request asks the host where it points. Nothing is deleted: a
+ * caller that tolerates an old answer while the host cannot be asked still has one.
+ */
+export async function expireRepoRefs(
+  database: Database,
+  scope: RepoScope,
+  staleAt: Date,
+): Promise<void> {
+  await drizzleOf(database)
+    .update(repoRefs)
+    .set({ checkedAt: staleAt })
+    .where(
+      and(
+        eq(repoRefs.accountId, scope.accountId),
+        eq(repoRefs.repoId, scope.repoId),
+        gt(repoRefs.checkedAt, staleAt),
+      ),
+    );
+}
+
+/**
+ * Ends what is believed about a repository's names: every alias confirmed after `staleAt`
+ * counts as confirmed then, so the next request asks the host what the name means now.
+ */
+export async function expireRepoAliases(
+  database: Database,
+  scope: RepoScope,
+  staleAt: Date,
+): Promise<void> {
+  await drizzleOf(database)
+    .update(repoAliases)
+    .set({ checkedAt: staleAt })
+    .where(and(eq(repoAliases.repoId, scope.repoId), gt(repoAliases.checkedAt, staleAt)));
 }
 
 /** Forgets an alias, for example when the host says the name no longer exists. */

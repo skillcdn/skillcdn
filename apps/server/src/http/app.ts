@@ -8,6 +8,7 @@ import {
   CONSENT_PAGE_PATH,
   formatAddress,
   formatOwnerPath,
+  type GitHostEventSource,
   type GitHostLogin,
   ICON_ROUTE,
   ICON_SIZE,
@@ -34,6 +35,7 @@ import type { Login } from "../auth/login.js";
 import type { AuthorizationServer } from "../auth/oauth/authorization-server.js";
 import type { OAuthClients } from "../auth/oauth/clients.js";
 import type { Sessions } from "../auth/sessions.js";
+import type { HostEvents } from "../events/host-events.js";
 import type { SnapshotService } from "../indexer/snapshot-service.js";
 import type { Logger } from "../logger.js";
 import { createMountServer, type ToolDependencies } from "../mcp/tools.js";
@@ -67,6 +69,7 @@ import {
   type WebRequest,
   wantsHtml,
 } from "./web.js";
+import { registerWebhooks } from "./webhooks.js";
 
 /** What signing in is made of, on a deployment where people can (docs/specs/permissions.md). */
 export interface AppAuth {
@@ -85,6 +88,13 @@ export interface AppDependencies {
   readonly database: Database;
   /** Signing in and what stands on it. Left out, nobody signs in and every request is nobody's. */
   readonly auth: AppAuth | undefined;
+  /**
+   * The git host's events and what applies them (ADR-0038). Left out, the deployment receives
+   * none, and what it remembers ends when its time is up.
+   */
+  readonly webhooks:
+    | { readonly source: GitHostEventSource; readonly events: HostEvents }
+    | undefined;
   /** The pages of accounts; left out where the git host's directory is not wired. */
   readonly owners: OwnerService | undefined;
   readonly mounts: MountService;
@@ -411,6 +421,9 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
       },
       asksForPermission: (address) => mounts.asksForPermission(address),
     });
+  }
+  if (dependencies.webhooks !== undefined) {
+    registerWebhooks(app, { ...dependencies.webhooks, logger });
   }
   if (dependencies.admin !== undefined) {
     registerAdmin(app, {

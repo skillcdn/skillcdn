@@ -4,6 +4,7 @@ import {
   allowEverything,
   type Clock,
   type Entitlements,
+  type GitHostEventSource,
   type UsageEvent,
 } from "@skillcdn/core";
 import type { TestDatabase } from "@skillcdn/db/testing";
@@ -77,6 +78,8 @@ export interface HarnessOptions {
   readonly fetch?: (input: string, init: RequestInit) => Promise<Response>;
   /** The git host's side of signing in. Given, people can sign in; left out, nobody can. */
   readonly login?: FixtureLogin;
+  /** What reads the git host's deliveries. Given, the harness receives the host's events. */
+  readonly events?: GitHostEventSource;
   /** The time everything is told; the system's when left out. */
   readonly clock?: Clock;
   /** How long the git host's answer about what a person can see is believed. */
@@ -153,6 +156,7 @@ export function createHarness(testDatabase: TestDatabase, options: HarnessOption
       gitHost: host,
       directory: host,
       login: options.login,
+      events: options.events,
       clock: options.clock ?? { now: () => new Date() },
       entitlements: options.entitlements ?? allowEverything,
       usage: { record: (event) => usage.push(event) },

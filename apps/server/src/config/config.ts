@@ -13,6 +13,7 @@ const SECRET_NAMES = [
   "USAGE_HASH_SECRET",
   "GITHUB_APP_PRIVATE_KEY",
   "GITHUB_APP_CLIENT_SECRET",
+  "GITHUB_APP_WEBHOOK_SECRET",
   "AUTH_SECRET",
 ] as const;
 /** What signing in needs, all of it or none of it. */
@@ -127,6 +128,10 @@ const environmentSchema = z.object({
     .regex(/^[A-Za-z0-9._-]{1,64}$/, "must be the app's client id")
     .optional(),
   GITHUB_APP_CLIENT_SECRET: z.string().min(1).optional(),
+  GITHUB_APP_WEBHOOK_SECRET: z
+    .string()
+    .min(MIN_SECRET_LENGTH, `must be at least ${MIN_SECRET_LENGTH} characters`)
+    .optional(),
   AUTH_SECRET: z
     .string()
     .min(MIN_SECRET_LENGTH, `must be at least ${MIN_SECRET_LENGTH} characters`)
@@ -209,6 +214,11 @@ export interface AuthConfig {
     readonly clientSecret: string;
     /** Where people use the host in a browser. Unset: derived from the API URL. */
     readonly webUrl: string | undefined;
+    /**
+     * What the host signs its deliveries to the app's webhook with. Unset: the deployment
+     * receives no events, and what it remembers ends when its time is up.
+     */
+    readonly webhookSecret: string | undefined;
   };
   /** What stored credentials are encrypted with, and what travels through a browser is sealed with. */
   readonly secret: string;
@@ -344,6 +354,11 @@ function authOf(
   } = env;
   const given = { appId, key, clientId, clientSecret, secret };
   if (Object.values(given).every((value) => value === undefined)) {
+    if (env.GITHUB_APP_WEBHOOK_SECRET !== undefined) {
+      problems.push(
+        `GITHUB_APP_WEBHOOK_SECRET: belongs to the app, and is read only with ${SIGN_IN_NAMES.join(", ")}`,
+      );
+    }
     return undefined;
   }
   if (
@@ -368,7 +383,14 @@ function authOf(
     problems.push("GITHUB_APP_PRIVATE_KEY: must be a private key in PEM format");
   }
   return {
-    github: { appId, privateKey, clientId, clientSecret, webUrl: env.GITHUB_WEB_URL },
+    github: {
+      appId,
+      privateKey,
+      clientId,
+      clientSecret,
+      webUrl: env.GITHUB_WEB_URL,
+      webhookSecret: env.GITHUB_APP_WEBHOOK_SECRET,
+    },
     secret,
     sessionTtlMs: env.SESSION_TTL_DAYS * 86_400_000,
     accessTokenTtlMs: env.ACCESS_TOKEN_TTL_SECONDS * 1000,

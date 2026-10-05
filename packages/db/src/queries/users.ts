@@ -124,6 +124,20 @@ export async function findUser(
   return row === undefined ? undefined : toUser(row);
 }
 
+/** The person an account of the git host is here, when that account ever signed in. */
+export async function findUserByHostAccount(
+  database: Database,
+  key: { readonly host: GitHostKey; readonly hostAccountId: string },
+): Promise<UserRecord | undefined> {
+  const [row] = await drizzleOf(database)
+    .select(userColumns)
+    .from(users)
+    .innerJoin(accounts, eq(accounts.id, users.accountId))
+    .where(and(eq(accounts.host, key.host), eq(accounts.hostAccountId, key.hostAccountId)))
+    .limit(1);
+  return row === undefined ? undefined : toUser(row);
+}
+
 /** What the git host issued the user, or `undefined` when nothing usable is stored. */
 export async function getUserCredentials(
   database: Database,
