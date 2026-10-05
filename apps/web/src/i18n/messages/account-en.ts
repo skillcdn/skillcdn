@@ -13,7 +13,27 @@ const day = (iso: string): string =>
 export const accountEn = {
   auth: {
     signIn: "Sign in",
-    signInWith: "Sign in with GitHub",
+    /** The one button that leaves for GitHub. Signing in and signing up are the same step. */
+    continueWith: "Continue with GitHub",
+    /** Beside that button: for someone GitHub would sign in as an account they do not want here. */
+    switchAccount: "Use a different GitHub account",
+    /**
+     * Under the button: what continuing agrees to, by which of the two the site has. `{terms}`
+     * and `{privacy}` are where the links stand, each under the name given for it below.
+     */
+    agreement: {
+      both: "By continuing, you agree to the {terms} and the {privacy}.",
+      terms: "By continuing, you agree to the {terms}.",
+      privacy: "By continuing, you agree to the {privacy}.",
+      termsName: "Terms of Service",
+      privacyName: "Privacy Policy",
+    },
+    /** The page a person signs in on. */
+    page: {
+      metaTitle: "Sign in | SkillCDN",
+      title: "Sign in to SkillCDN",
+      lead: "Open your private repositories, and manage the apps and tokens connected to them. SkillCDN only reads from GitHub and changes nothing there.",
+    },
     signOut: "Sign out",
     menu: (login: string) => `Account menu for ${login}`,
     profile: "Your profile",
@@ -77,10 +97,6 @@ export const accountEn = {
     metaTitle: "Your account | SkillCDN",
     title: "Your account",
     navigation: "Account sections",
-    signedOut: {
-      title: "Sign in to your account",
-      body: "Sign in with GitHub to open your private repositories here and to see the apps you connected.",
-    },
     sections: {
       overview: "Overview",
       repositories: "Private repositories",

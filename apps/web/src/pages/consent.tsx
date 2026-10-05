@@ -1,12 +1,12 @@
-import { CONSENT_ERROR_PARAM, CONSENT_REQUEST_PARAM, loginPath } from "@skillcdn/core";
+import { CONSENT_ERROR_PARAM, CONSENT_REQUEST_PARAM } from "@skillcdn/core";
 import { useEffect, useState } from "react";
 import { ApiError, api } from "../api/client.js";
 import { resourceKeys } from "../api/keys.js";
 import { useResource } from "../api/use-resource.js";
 import { useSession } from "../auth/session.js";
 import { ErrorCallout } from "../components/error-callout.js";
-import { Avatar, Button, Callout, Container, cx, Skeleton, Spinner } from "../components/ui.js";
-import ui from "../components/ui.module.css";
+import { SignIn } from "../components/sign-in.js";
+import { Avatar, Button, Callout, Container, Skeleton, Spinner } from "../components/ui.js";
 import { useI18n } from "../i18n/index.js";
 import type { Messages } from "../i18n/messages/en.js";
 import { navigate, useLocation } from "../navigation.js";
@@ -80,6 +80,9 @@ export function ConsentPage(props: ConsentPageProps) {
   const resuming = params.has(RESUME_PARAM);
   const [answering, setAnswering] = useState(false);
   const [failure, setFailure] = useState<ApiError>();
+  // Someone who said the account on the page is not theirs: the sign-in that follows has the
+  // git host ask which account, or it would hand the same one straight back.
+  const [switching, setSwitching] = useState(false);
 
   useEffect(() => {
     applyHead(buildHead({ name: "consent" }, language, props.origin));
@@ -168,21 +171,19 @@ export function ConsentPage(props: ConsentPageProps) {
         <div className={styles.card}>
           <h1 className={styles.title}>{t.authorize.signIn.title(client.name)}</h1>
           <p className={styles.text}>{t.authorize.signIn.body}</p>
-          <p className={styles.actions}>
-            <a
-              className={cx(ui.button, ui.primary)}
-              href={loginPath(returnTo)}
-              onClick={() => {
-                try {
-                  window.sessionStorage.setItem(RESUME_KEY, here);
-                } catch {
-                  // Without storage the short way back is the only one; it is tried anyway.
-                }
-              }}
-            >
-              {t.auth.signInWith}
-            </a>
-          </p>
+          {/* The same way out as on the sign-in page, here where the question already stands:
+              sending the person to that page first would be a page that only says "continue". */}
+          <SignIn
+            returnTo={returnTo}
+            chooseAccount={switching}
+            onLeave={() => {
+              try {
+                window.sessionStorage.setItem(RESUME_KEY, here);
+              } catch {
+                // Without storage the short way back is the only one; it is tried anyway.
+              }
+            }}
+          />
         </div>
       </Container>
     );
@@ -302,7 +303,14 @@ export function ConsentPage(props: ConsentPageProps) {
           </p>
         )}
         <p className={styles.notYou}>
-          <button type="button" disabled={answering} onClick={() => void signOut()}>
+          <button
+            type="button"
+            disabled={answering}
+            onClick={() => {
+              setSwitching(true);
+              void signOut();
+            }}
+          >
             {t.authorize.notYou}
           </button>
         </p>

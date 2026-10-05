@@ -1,8 +1,9 @@
-import { type ReactNode, useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { useI18n } from "../i18n/index.js";
+import { useLegalLinks } from "../legal-links.js";
 import { Link } from "../navigation.js";
 import { PATHS } from "../router.js";
-import { type LegalLinks, LINKS, readLegalLinks } from "../site.js";
+import { LINKS } from "../site.js";
 import { BrandSymbol } from "./brand.js";
 import { ConsentBanner } from "./consent-banner.js";
 import { LanguageSwitcher } from "./language-switcher.js";
@@ -11,12 +12,9 @@ import { UserMenu } from "./user-menu.js";
 
 export function Layout(props: { readonly children: ReactNode }) {
   const { t } = useI18n();
-  // The deployment's own pages are written into the head by the server, so they are read once
-  // the page is up: prerendered markup has none, and the first render must match it.
-  const [legal, setLegal] = useState<LegalLinks>({});
-  useEffect(() => {
-    setLegal(readLegalLinks());
-  }, []);
+  // The deployment's own pages are written into the head by the server, so they are known only
+  // once the page is up: until then, as in prerendered markup, the footer has none.
+  const legal = useLegalLinks() ?? {};
   const links = [
     ...(legal.termsUrl === undefined ? [] : [{ href: legal.termsUrl, label: t.footer.terms }]),
     ...(legal.privacyUrl === undefined

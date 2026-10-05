@@ -503,7 +503,13 @@ describe("the pages of a deployment where people sign in", () => {
     expect(await (await h.request("/", { headers: BROWSER })).text()).toContain(
       '<meta name="skillcdn-auth" content="gh">',
     );
-    for (const path of ["/account", "/account/repositories", "/oauth/consent?request=x"]) {
+    for (const path of [
+      "/login",
+      "/login?return_to=%2Fexplore",
+      "/account",
+      "/account/repositories",
+      "/oauth/consent?request=x",
+    ]) {
       const page = await h.request(path, { headers: BROWSER });
       expect(page.status, path).toBe(200);
       // One document for everyone: what is a person's arrives through the REST API.
@@ -516,7 +522,7 @@ describe("the pages of a deployment where people sign in", () => {
     expect(await (await plain.request("/", { headers: BROWSER })).text()).not.toContain(
       "skillcdn-auth",
     );
-    for (const path of ["/account", "/oauth/consent"]) {
+    for (const path of ["/login", "/account", "/oauth/consent"]) {
       expect((await plain.request(path, { headers: BROWSER })).status, path).toBe(404);
     }
   });

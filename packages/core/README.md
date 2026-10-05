@@ -45,6 +45,6 @@ Ancestor `exclude` paths and unreadable manifest scopes take precedence over pub
 
 For the MCP skills extension: `skillDocumentInput` and `assembleSkillDocument` turn a skill's sources into the one document it is served as, so that the indexer's digest and the reader's bytes agree; `renderSkillSections` gives the tools the same sections; `skillListingProblem` says why a skill cannot be listed; `formatSkillUri` and `parseSkillUri` implement the URI grammar; `decodeText` is the one UTF-8 decoder every adapter uses.
 
-`parseOwnerPath` and `formatOwnerPath` read and write `/gh/<owner>`, the path of the page of an account, with the owner rules of the address grammar. `rest/account.ts` also holds the paths the pages and the server share for signing in (`AUTH_ROUTES`, `loginPath`), the account pages and the consent page, so that neither side spells them on its own.
+`parseOwnerPath` and `formatOwnerPath` read and write `/gh/<owner>`, the path of the page of an account, with the owner rules of the address grammar. `rest/account.ts` also holds the paths the pages and the server share for signing in (`AUTH_ROUTES`, `loginPath`, and `SIGN_IN_PAGE_PATH` with `signInPagePath` and what a sign-in that did not complete tells that page), the account pages and the consent page, so that neither side spells them on its own.
 
 Everything public is exported from `src/index.ts`. There are no deep imports.

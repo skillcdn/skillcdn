@@ -153,6 +153,7 @@ export function createFixtureLogin(
         state: request.state,
         redirect_uri: request.redirectUri,
         code_challenge: request.codeChallenge,
+        ...(request.chooseAccount === true ? { prompt: "select_account" } : {}),
       });
       return `${FIXTURE_WEB_URL}/login/oauth/authorize?${query}`;
     },

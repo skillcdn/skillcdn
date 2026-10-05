@@ -281,17 +281,6 @@
   gap: var(--space-3);
 }
 
-/* Signed out: one short page, centred like the other short pages. */
-.signedOut {
-  display: grid;
-  justify-items: center;
-  gap: var(--space-4);
-  max-width: var(--width-prose);
-  margin-inline: auto;
-  padding-block: var(--space-7);
-  text-align: center;
-}
-
 @media (max-width: 52rem) {
   .layout {
     grid-template-columns: minmax(0, 1fr);

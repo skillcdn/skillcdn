@@ -76,7 +76,14 @@ const PAGES: readonly (readonly [string, string])[] = [
     "/gh/acme/private-skills",
     "A private repository: not found until you sign in, then with the sign-in steps in its guide",
   ],
-  ["/account", "Your account: the way to sign in, or the overview once signed in"],
+  ["/login", "The sign-in page (signed out); signed in, it goes on to your account"],
+  [
+    "/login?return_to=/gh/acme/private-skills",
+    "The same, on the way to a private repository: where the header's button leads from there",
+  ],
+  ["/login?error=denied", "A sign-in that was cancelled (signed out only)"],
+  ["/login?error=expired", "A sign-in that took too long (signed out only)"],
+  ["/account", "Your account: the overview once signed in, else on to the sign-in page"],
   ["/account/repositories", "Your private repositories, by where the GitHub app is installed"],
   ["/account/apps", "The apps you allowed; removing one lasts until the server restarts"],
   [
@@ -87,8 +94,10 @@ const PAGES: readonly (readonly [string, string])[] = [
     "/account/tokens?repository=/gh/acme/private-skills",
     "The same, arrived at from a private repository's page",
   ],
-  ["/account?login=denied", "A sign-in that was cancelled (signed out only)"],
-  ["/oauth/consent?request=web", "An app asks to read a private repository"],
+  [
+    "/oauth/consent?request=web",
+    "An app asks to read a private repository; signed out, the page offers to sign in first",
+  ],
   ["/oauth/consent?request=local", "A command-line app asks, and is sent back to this computer"],
   ["/oauth/consent?request=app", "An installed app asks, and is sent back by a link of its own"],
   ["/oauth/consent?request=not-visible", "An app asks for a repository you cannot open"],
@@ -113,7 +122,8 @@ export function StatesPage(_props: { readonly origin: string }) {
       </p>
 
       <h2 className={styles.heading}>Signing in</h2>
-      {/* Real navigations, as signing in is: the fixture server signs its one person in at once. */}
+      {/* A real navigation, as leaving for the git host is: the fixture server signs its one
+          person in at once. The page people sign in on is among the pages below. */}
       <ul className={styles.links}>
         <li>
           <a href={loginPath(PATHS.states)}>Sign in as the fixture person</a>

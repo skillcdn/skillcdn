@@ -17,8 +17,31 @@ export const AUTH_ROUTES = {
   logout: "/auth/logout",
 } as const;
 
-/** The parameter of the login route naming the page to come back to: a path of this origin. */
+/**
+ * The parameter naming the page to come back to, signed in: a path of this origin. The login
+ * route takes it, and so does the sign-in page, which hands it on.
+ */
 export const RETURN_TO_PARAM = "return_to";
+
+/**
+ * The parameter of the login route that asks the git host to let the person pick which of their
+ * accounts to continue with, instead of taking the one its own session has.
+ */
+export const CHOOSE_ACCOUNT_PARAM = "choose_account";
+
+/**
+ * The page where a person chooses to sign in, before their browser leaves for the git host
+ * (ADR-0041). Everything that offers signing in leads here or shows what this page shows.
+ */
+export const SIGN_IN_PAGE_PATH = "/login";
+/** Why a sign-in did not complete, as the sign-in page is told in its query. */
+export const SIGN_IN_ERROR_PARAM = "error";
+/**
+ * What that parameter says: the person said no at the git host, the attempt was not finished in
+ * time or in the browser that began it, or the host did not confirm it.
+ */
+export const SIGN_IN_FAILURES = ["denied", "expired", "failed"] as const;
+export type SignInFailure = (typeof SIGN_IN_FAILURES)[number];
 
 /**
  * How a page learns that people can sign in on this deployment: a meta tag the server writes
@@ -35,9 +58,26 @@ export const CONSENT_REQUEST_PARAM = "request";
 /** Why there is nothing to ask: a request the authorization endpoint could not accept. */
 export const CONSENT_ERROR_PARAM = "error";
 
-/** Where a browser goes to sign in and come back to `returnTo`, a path of this origin. */
-export function loginPath(returnTo: string): string {
-  return `${AUTH_ROUTES.login}?${RETURN_TO_PARAM}=${encodeURIComponent(returnTo)}`;
+/**
+ * Where a browser leaves for the git host to sign in and come back to `returnTo`, a path of this
+ * origin. `chooseAccount` asks the host to let the person pick an account first.
+ */
+export function loginPath(
+  returnTo: string,
+  options: { readonly chooseAccount?: boolean } = {},
+): string {
+  const choose = options.chooseAccount === true ? `&${CHOOSE_ACCOUNT_PARAM}=1` : "";
+  return `${AUTH_ROUTES.login}?${RETURN_TO_PARAM}=${encodeURIComponent(returnTo)}${choose}`;
+}
+
+/**
+ * The sign-in page, for someone who comes back to `returnTo` afterwards; without one the page
+ * decides where a person it signed in goes.
+ */
+export function signInPagePath(returnTo?: string): string {
+  return returnTo === undefined
+    ? SIGN_IN_PAGE_PATH
+    : `${SIGN_IN_PAGE_PATH}?${RETURN_TO_PARAM}=${encodeURIComponent(returnTo)}`;
 }
 
 /** The REST path of the page of an account. */

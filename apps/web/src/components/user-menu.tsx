@@ -8,9 +8,9 @@ import ui from "./ui.module.css";
 import styles from "./user-menu.module.css";
 
 /**
- * Who is signed in, at the end of the header: a way to sign in, or the person's picture with
- * the pages that are theirs behind it. Where nobody can sign in, and until the browser has asked
- * who is, it is nothing at all, which is also what the server renders.
+ * Who is signed in, at the end of the header: the way to the sign-in page, or the person's
+ * picture with the pages that are theirs behind it. Where nobody can sign in, and until the
+ * browser has asked who is, it is nothing at all, which is also what the server renders.
  */
 export function UserMenu() {
   const { t } = useI18n();
@@ -36,14 +36,19 @@ export function UserMenu() {
     return null;
   }
   if (session.status === "anonymous") {
-    // A real navigation: signing in happens at the git host, not in this page.
+    // The page a person signs in on is itself the way to sign in.
+    if (location.pathname === PATHS.signIn) {
+      return null;
+    }
+    // To that page, which comes back to this one: what it shows before the browser leaves for
+    // the git host is not something a button in a header has room for.
     return (
-      <a
+      <Link
         className={cx(ui.button, ui.secondary, ui.small, styles.signIn)}
         href={signInHref(location)}
       >
         {t.auth.signIn}
-      </a>
+      </Link>
     );
   }
 

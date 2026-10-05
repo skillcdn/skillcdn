@@ -426,6 +426,21 @@ describe("signing in", () => {
     });
   });
 
+  it("asks for the host's account picker for someone who wants another account", () => {
+    const sent = (chooseAccount: boolean) =>
+      new URL(
+        login(replay({}).fetchLike).authorizationUrl({
+          state: "the-state",
+          redirectUri: "https://skills.example/auth/gh/callback",
+          codeChallenge: "the-challenge",
+          chooseAccount,
+        }),
+      ).searchParams;
+    expect(sent(true).get("prompt")).toBe("select_account");
+    expect(sent(true).get("state")).toBe("the-state");
+    expect(sent(false).has("prompt")).toBe(false);
+  });
+
   it("exchanges the code for the credential, with the verifier and the app's secret", async () => {
     const { fetchLike, seen } = replay({
       [TOKEN]: json(200, {

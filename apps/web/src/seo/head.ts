@@ -221,13 +221,15 @@ export function buildHead(
                 }
               : route.name === "account"
                 ? { title: t.account.metaTitle, description: "" }
-                : route.name === "consent"
-                  ? { title: t.authorize.metaTitle, description: "" }
-                  : route.name === "states" || route.name === "og-card"
-                    ? { title: t.meta.siteName, description: "" }
-                    : route.name === "bad-address"
-                      ? { title: `${t.address.invalid} | ${t.meta.siteName}`, description: "" }
-                      : t.meta.notFound;
+                : route.name === "sign-in"
+                  ? { title: t.auth.page.metaTitle, description: "" }
+                  : route.name === "consent"
+                    ? { title: t.authorize.metaTitle, description: "" }
+                    : route.name === "states" || route.name === "og-card"
+                      ? { title: t.meta.siteName, description: "" }
+                      : route.name === "bad-address"
+                        ? { title: `${t.address.invalid} | ${t.meta.siteName}`, description: "" }
+                        : t.meta.notFound;
 
   const jsonLd: Record<string, unknown>[] = [];
   // The front page shows the operator's showcase, else the build's own (ADR-0028).

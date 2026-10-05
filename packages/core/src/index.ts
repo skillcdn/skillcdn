@@ -154,6 +154,7 @@ export {
   ACCOUNT_PAGE_PATH,
   AUTH_META_NAME,
   AUTH_ROUTES,
+  CHOOSE_ACCOUNT_PARAM,
   CONSENT_ERROR_PARAM,
   CONSENT_PAGE_PATH,
   CONSENT_REQUEST_PARAM,
@@ -185,6 +186,11 @@ export {
   restRepoTokenRequestSchema,
   restRepoTokensSchema,
   restUserSchema,
+  SIGN_IN_ERROR_PARAM,
+  SIGN_IN_FAILURES,
+  SIGN_IN_PAGE_PATH,
+  type SignInFailure,
+  signInPagePath,
 } from "./rest/account.js";
 export {
   REST_FEATURED_SKILL_NAMES,

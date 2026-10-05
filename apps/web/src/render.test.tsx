@@ -816,6 +816,29 @@ describe("the page of an address", () => {
     }
   });
 
+  it("renders the frame of the sign-in page, which offers nothing before it knows who is there", () => {
+    for (const language of LANGUAGES) {
+      const t = messagesFor(language);
+      const { html, indexable } = renderAddressPage(TEMPLATE, {
+        language,
+        origin: "https://skills.example",
+        pathname: "/login",
+        search: "?return_to=%2Fgh%2Facme%2Fskills",
+        data: {},
+      });
+      expect(indexable).toBe(false);
+      expect(html).toContain('data-prerendered="sign-in"');
+      expect(html).toContain('<meta name="robots" content="noindex,follow"');
+      expect(html).toContain(`<title data-head="">${t.auth.page.metaTitle}</title>`);
+      // One document for everyone, signed in or not: the way out to the git host appears once
+      // the browser knows that nobody is, together with what continuing agrees to.
+      expect(html).toContain(t.common.loading);
+      expect(html).not.toContain(t.auth.continueWith);
+      expect(html).not.toContain("/auth/gh/login");
+      expect(html).not.toContain(t.auth.page.title);
+    }
+  });
+
   it("renders the page of an account with what the host shows everyone, for a crawler to read", () => {
     const render = (language: string, data: Parameters<typeof renderAddressPage>[1]["data"]) =>
       renderAddressPage(TEMPLATE, {

@@ -57,11 +57,16 @@ export interface HostInstallations {
  * `GitHostError`; a credential the host no longer accepts is `unauthorized`.
  */
 export interface GitHostLogin {
-  /** Where a browser is sent to sign in. `codeChallenge` is the S256 challenge of the verifier. */
+  /**
+   * Where a browser is sent to sign in. `codeChallenge` is the S256 challenge of the verifier.
+   * `chooseAccount` asks the host to let the person pick which of their accounts to continue
+   * with, where it can, instead of taking the one its own session has.
+   */
   authorizationUrl(request: {
     readonly state: string;
     readonly redirectUri: string;
     readonly codeChallenge: string;
+    readonly chooseAccount?: boolean;
   }): string;
 
   /** Exchanges the code a sign-in came back with. A code the host refuses is `unauthorized`. */

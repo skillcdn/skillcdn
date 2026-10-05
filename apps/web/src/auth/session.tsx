@@ -1,4 +1,4 @@
-import { loginPath, type RestUser } from "@skillcdn/core";
+import { type RestUser, SIGN_IN_PAGE_PATH, signInPagePath } from "@skillcdn/core";
 import {
   createContext,
   type ReactNode,
@@ -32,7 +32,8 @@ export interface SessionValue {
   readonly signOut: () => Promise<void>;
 }
 
-const SessionContext = createContext<SessionValue>({
+/** Provided by `SessionProvider`; a test provides it directly to render a page for someone. */
+export const SessionContext = createContext<SessionValue>({
   session: { status: "unknown" },
   refresh: () => undefined,
   signOut: async () => undefined,
@@ -49,11 +50,13 @@ export function useUser(): RestUser | undefined {
 }
 
 /**
- * Where a browser goes to sign in and come back to the page it is on. A navigation, not a
- * request: the git host has to show its own page.
+ * Where a person goes to sign in and come back to the page they are on: the sign-in page, which
+ * shows what they continue with and what they agree to before the browser leaves for the git
+ * host (`components/sign-in.tsx`). On that page it is the page itself, as it is.
  */
 export function signInHref(location: { readonly pathname: string; readonly search: string }) {
-  return loginPath(`${location.pathname}${location.search}`);
+  const here = `${location.pathname}${location.search}`;
+  return location.pathname === SIGN_IN_PAGE_PATH ? here : signInPagePath(here);
 }
 
 /**

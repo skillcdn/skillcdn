@@ -1,11 +1,14 @@
 import { randomBytes } from "node:crypto";
 import {
-  ACCOUNT_PAGE_PATH,
   AUTH_ROUTES,
   type Clock,
   GitHostError,
   type GitHostKey,
   type GitHostLogin,
+  RETURN_TO_PARAM,
+  SIGN_IN_ERROR_PARAM,
+  SIGN_IN_PAGE_PATH,
+  type SignInFailure,
 } from "@skillcdn/core";
 import { type Database, saveLogin, type UserRecord } from "@skillcdn/db";
 import * as z from "zod";
@@ -16,7 +19,8 @@ import { readCookie, type Sessions, writeCookie } from "./sessions.js";
 
 // Signing in through the git host (docs/specs/permissions.md). The browser leaves for the host
 // with a cookie that remembers what it left for, and comes back with a code; the code becomes
-// the host's credential, which stays here, and a session, which is all the browser gets.
+// the host's credential, which stays here, and a session, which is all the browser gets. What
+// did not complete goes back to the sign-in page, which says so and offers to try again.
 
 /** The git host people sign in through. */
 export const LOGIN_HOST: GitHostKey = "gh";
@@ -25,10 +29,6 @@ const LOGIN_COOKIE = "skillcdn_login";
 /** How long a person has to sign in at the host before the attempt is forgotten. */
 const LOGIN_TTL_MS = 10 * 60_000;
 const MAX_RETURN_TO_LENGTH = 2048;
-
-/** What the pages are told when a sign-in did not complete, as a query parameter of the page. */
-export const LOGIN_RESULT_PARAM = "login";
-export type LoginFailure = "denied" | "expired" | "failed";
 
 const pendingSchema = z.object({
   state: z.string().min(1),
@@ -111,8 +111,14 @@ export class Login {
     });
   }
 
-  /** Sends the browser to the git host, remembering where it wanted to go afterwards. */
-  begin(returnTo: string | undefined): LoginStep {
+  /**
+   * Sends the browser to the git host, remembering where it wanted to go afterwards.
+   * `chooseAccount` has the host ask which account the person continues with.
+   */
+  begin(
+    returnTo: string | undefined,
+    options: { readonly chooseAccount?: boolean } = {},
+  ): LoginStep {
     const { login, secrets, clock, origin } = this.#options;
     const state = randomBytes(24).toString("base64url");
     const verifier = randomBytes(32).toString("base64url");
@@ -127,6 +133,7 @@ export class Login {
         state,
         redirectUri: this.#redirectUri,
         codeChallenge: pkceChallenge(verifier),
+        ...(options.chooseAccount === true ? { chooseAccount: true } : {}),
       }),
       cookies: [this.#cookie(pending, Math.floor(LOGIN_TTL_MS / 1000))],
     };
@@ -135,18 +142,25 @@ export class Login {
   /**
    * Finishes a sign-in with what the git host sent the browser back with. Whatever happens, the
    * browser is sent on to a page of this deployment: the one it left for, signed in, or the
-   * account page with what went wrong.
+   * sign-in page with what went wrong.
    */
   async complete(
     query: { readonly code?: string; readonly state?: string; readonly error?: string },
     cookieHeader: string | null | undefined,
   ): Promise<LoginStep> {
-    const { secrets, clock, logger } = this.#options;
+    const { secrets, clock, logger, origin } = this.#options;
     const forget = this.#cookie("", 0);
-    const failed = (failure: LoginFailure): LoginStep => ({
-      redirect: `${ACCOUNT_PAGE_PATH}?${LOGIN_RESULT_PARAM}=${failure}`,
-      cookies: [forget],
-    });
+    /**
+     * Back to the sign-in page, which says what happened and offers to try again: for the page
+     * this attempt was for, as long as the browser still carries which that was.
+     */
+    const failed = (failure: SignInFailure, returnTo?: string): LoginStep => {
+      const told = new URLSearchParams({ [SIGN_IN_ERROR_PARAM]: failure });
+      if (returnTo !== undefined) {
+        told.set(RETURN_TO_PARAM, safeReturnTo(returnTo, origin));
+      }
+      return { redirect: `${SIGN_IN_PAGE_PATH}?${told}`, cookies: [forget] };
+    };
 
     const sealed = readCookie(cookieHeader, this.#cookieName);
     const pending =
@@ -156,13 +170,14 @@ export class Login {
     if (pending === undefined || !pending.success) {
       return failed("expired");
     }
+    const { returnTo } = pending.data;
     // The answer has to be to the question this browser asked, or someone else's sign-in
     // could be finished in it.
     if (query.state === undefined || !sameSecret(query.state, pending.data.state)) {
-      return failed("failed");
+      return failed("failed", returnTo);
     }
     if (query.code === undefined) {
-      return failed(query.error === "access_denied" ? "denied" : "failed");
+      return failed(query.error === "access_denied" ? "denied" : "failed", returnTo);
     }
     let user: UserRecord;
     try {
@@ -172,12 +187,12 @@ export class Login {
         throw error;
       }
       logger.warn({ err: error, kind: error.kind }, "a sign-in did not complete");
-      return failed("failed");
+      return failed("failed", returnTo);
     }
     return {
       // Checked when it was sealed, and again here: where a browser is sent never rests on the
       // seal alone.
-      redirect: safeReturnTo(pending.data.returnTo, this.#options.origin),
+      redirect: safeReturnTo(returnTo, origin),
       cookies: [forget, await this.#options.sessions.start(user)],
     };
   }

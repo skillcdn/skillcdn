@@ -1,0 +1,39 @@
+.page {
+  padding-block: var(--space-8) var(--space-9);
+}
+
+/* One decision in one narrow column, centred like the other short pages: what to continue with,
+   and nothing beside it that competes. */
+.card {
+  display: grid;
+  gap: var(--space-4);
+  max-width: var(--width-sign-in);
+  margin-inline: auto;
+  padding: var(--space-6);
+  border: var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--color-bg-subtle);
+  box-shadow: var(--shadow-stage);
+  text-align: center;
+}
+
+.title {
+  font-size: var(--text-xl);
+}
+
+.lead {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  text-wrap: balance;
+}
+
+/* What went wrong reads from the left, as a callout does everywhere else. */
+.problem {
+  text-align: start;
+}
+
+@media (max-width: 40rem) {
+  .card {
+    padding: var(--space-5) var(--space-4);
+  }
+}

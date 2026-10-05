@@ -454,5 +454,10 @@
   /* The narrowest a field of a form on those pages gets before the fields stack. */
   --account-field-width: 12rem;
   --width-dialog: 32rem;
+  /* The column a person signs in in: narrower than a question, since it holds one button. */
+  --width-sign-in: 26rem;
+  /* The git host's mark on the button that leaves for it: a shade larger than the label's own
+     letters, as a mark beside a word is drawn. */
+  --host-mark-size: 1.25rem;
   --shadow-stage: 0 1.5rem 5rem #00000033;
 }

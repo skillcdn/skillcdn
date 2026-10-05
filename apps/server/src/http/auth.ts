@@ -2,6 +2,7 @@ import {
   type Address,
   AUTH_ROUTES,
   accountAvatarUrl,
+  CHOOSE_ACCOUNT_PARAM,
   type Clock,
   CONSENT_REQUEST_PARAM,
   formatAddress,
@@ -21,6 +22,7 @@ import {
   type RestRepoTokens,
   type RestUser,
   ROOT_PATH,
+  signInPagePath,
 } from "@skillcdn/core";
 import {
   type Database,
@@ -34,7 +36,7 @@ import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import * as z from "zod";
 import { CredentialsLostError, type UserCredentials } from "../auth/credentials.js";
-import type { Login, LoginStep } from "../auth/login.js";
+import { type Login, type LoginStep, safeReturnTo } from "../auth/login.js";
 import {
   type AuthorizationServer,
   OAUTH_ROUTES,
@@ -162,8 +164,34 @@ export function registerAuth(app: Hono<AppEnv>, dependencies: AuthDependencies):
     return signInRequired(c);
   };
 
+  /**
+   * A sign-in begins on the deployment's own pages (ADR-0041), where a person sees which host
+   * they continue with and what they agree to by it. A browser says where a navigation comes
+   * from, and one that comes from anywhere else, a link on another site or an address typed, is
+   * not a person pressing that button. A request that says nothing is from a browser too old to
+   * say, which could not sign in at all if silence were refused.
+   */
+  const begunOnOwnPages = (c: Context<AppEnv>): boolean => {
+    const site = c.req.header("sec-fetch-site");
+    return site === undefined || site === "same-origin";
+  };
+
   // Signing in and out. Navigations, so they answer with redirects; nothing here is cached.
-  app.get(AUTH_ROUTES.login, (c) => follow(c, login.begin(c.req.query(RETURN_TO_PARAM))));
+  app.get(AUTH_ROUTES.login, (c) => {
+    const returnTo = c.req.query(RETURN_TO_PARAM);
+    if (!begunOnOwnPages(c)) {
+      // To the page that offers it, with the way back kept: following a link signs nobody in.
+      c.header("cache-control", "no-store");
+      return c.redirect(
+        signInPagePath(returnTo === undefined ? undefined : safeReturnTo(returnTo, origin)),
+        302,
+      );
+    }
+    return follow(
+      c,
+      login.begin(returnTo, { chooseAccount: c.req.query(CHOOSE_ACCOUNT_PARAM) === "1" }),
+    );
+  });
 
   app.get(AUTH_ROUTES.callback, async (c) => {
     const { code, state, error } = c.req.query();

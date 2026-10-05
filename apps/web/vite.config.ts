@@ -10,11 +10,24 @@ const FIXTURE_BODY_BYTES = 64 * 1024;
 
 /**
  * Answers the REST API from fixtures, and signs the fixture person in and out, so the UI runs
- * without a server behind it.
+ * without a server behind it. Only the development server does: a build has no fixtures in it.
  */
 function fixtureApi(): Plugin {
   return {
     name: "skillcdn-fixture-api",
+    apply: "serve",
+    // What a server writes into the head of every page for a deployment that has them, under
+    // the standard link types the pages read (`LEGAL_TAGS` in src/site.ts): its terms as a page
+    // of its own, which the fixtures have written, and its privacy policy as a page kept
+    // elsewhere. The footer and the sign-in button show both, and this is where they are seen.
+    transformIndexHtml: () => [
+      { tag: "link", attrs: { rel: "terms-of-service", href: "/terms" }, injectTo: "head" },
+      {
+        tag: "link",
+        attrs: { rel: "privacy-policy", href: "https://example.com/privacy" },
+        injectTo: "head",
+      },
+    ],
     configureServer(server) {
       server.middlewares.use(async (request, response, next) => {
         // What a request carries, for the few that carry something: small, and JSON.

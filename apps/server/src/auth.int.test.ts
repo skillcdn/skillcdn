@@ -139,25 +139,28 @@ describe("signing in", () => {
 
   it("does not finish a sign-in that this browser did not start", async () => {
     const { request, login } = harness();
-    const begun = await request(AUTH_ROUTES.login);
+    const begun = await request(`${AUTH_ROUTES.login}?return_to=/gh/acme/secret-skills`);
     const state = new URL(begun.headers.get("location") ?? "").searchParams.get("state") ?? "";
     const cookie = begun.headers.getSetCookie()[0]?.split(";")[0] ?? "";
     const code = login.codeFor("alice", state);
+    // What did not complete goes back to the sign-in page, which says why and offers to try
+    // again: for the page the attempt was for, while the browser still carries which that was.
+    const kept = "&return_to=%2Fgh%2Facme%2Fsecret-skills";
 
     const noCookie = await request(`${AUTH_ROUTES.callback}?code=${code}&state=${state}`);
-    expect(noCookie.headers.get("location")).toBe("/account?login=expired");
+    expect(noCookie.headers.get("location")).toBe("/login?error=expired");
     const otherState = await request(`${AUTH_ROUTES.callback}?code=${code}&state=someone-elses`, {
       headers: { cookie },
     });
-    expect(otherState.headers.get("location")).toBe("/account?login=failed");
+    expect(otherState.headers.get("location")).toBe(`/login?error=failed${kept}`);
     const denied = await request(`${AUTH_ROUTES.callback}?error=access_denied&state=${state}`, {
       headers: { cookie },
     });
-    expect(denied.headers.get("location")).toBe("/account?login=denied");
+    expect(denied.headers.get("location")).toBe(`/login?error=denied${kept}`);
     const badCode = await request(`${AUTH_ROUTES.callback}?code=not-a-code&state=${state}`, {
       headers: { cookie },
     });
-    expect(badCode.headers.get("location")).toBe("/account?login=failed");
+    expect(badCode.headers.get("location")).toBe(`/login?error=failed${kept}`);
     // The same sealed value under the name without the prefix, as a neighbouring host could
     // set it for this one: that is not the cookie this server reads.
     const planted = await request(
@@ -165,11 +168,60 @@ describe("signing in", () => {
       { headers: { cookie: cookie.replace(/^__Host-/, "") } },
     );
     expect(cookie).toMatch(/^__Host-/);
-    expect(planted.headers.get("location")).toBe("/account?login=expired");
+    expect(planted.headers.get("location")).toBe("/login?error=expired");
     for (const response of [noCookie, otherState, denied, badCode, planted]) {
+      expect(response.headers.get("cache-control")).toBe("no-store");
       expect(
         response.headers.getSetCookie().some((value) => value.includes("skillcdn_session")),
       ).toBe(false);
+    }
+  });
+
+  it("begins only for a browser that came from its own pages, and shows everyone else the sign-in page", async () => {
+    const { request } = harness();
+    const begin = (query: string, site?: string) =>
+      request(
+        `${AUTH_ROUTES.login}${query}`,
+        site === undefined ? {} : { headers: { "sec-fetch-site": site } },
+      );
+    // A link on another site, a page of a neighbouring host, an address typed or a bookmark:
+    // none of them is a person pressing the button, so none of them leaves for the git host.
+    for (const site of ["cross-site", "same-site", "none"]) {
+      const shown = await begin("?return_to=%2Fgh%2Facme%2Fsecret-skills%3Flang%3Dko", site);
+      expect(shown.status, site).toBe(302);
+      expect(shown.headers.get("location"), site).toBe(
+        "/login?return_to=%2Fgh%2Facme%2Fsecret-skills%3Flang%3Dko",
+      );
+      expect(shown.headers.get("cache-control"), site).toBe("no-store");
+      // Nothing was begun: no attempt is remembered in the browser.
+      expect(shown.headers.getSetCookie(), site).toEqual([]);
+    }
+    expect((await begin("", "cross-site")).headers.get("location")).toBe("/login");
+    // The way back is a page of this origin there too, or the front page.
+    expect(
+      (await begin("?return_to=https%3A%2F%2Fevil.test%2F", "cross-site")).headers.get("location"),
+    ).toBe("/login?return_to=%2F");
+
+    // From its own pages, and from a browser too old to say where it comes from, it begins.
+    for (const site of ["same-origin", undefined]) {
+      const begun = await begin("?return_to=%2Fexplore", site);
+      expect(new URL(begun.headers.get("location") ?? "").origin, String(site)).toBe(
+        "https://git.test",
+      );
+      expect(begun.headers.getSetCookie(), String(site)).toHaveLength(1);
+    }
+  });
+
+  it("asks the git host to let the person choose an account only when the page says so", async () => {
+    const { request } = harness();
+    const sent = async (query: string) =>
+      new URL((await request(`${AUTH_ROUTES.login}${query}`)).headers.get("location") ?? "")
+        .searchParams;
+    expect((await sent("?return_to=%2Faccount&choose_account=1")).get("prompt")).toBe(
+      "select_account",
+    );
+    for (const query of ["?return_to=%2Faccount", "?choose_account=0", "?choose_account=yes"]) {
+      expect((await sent(query)).has("prompt"), query).toBe(false);
     }
   });
 

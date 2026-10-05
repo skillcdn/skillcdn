@@ -12,9 +12,9 @@ The typeface that draws Hangul in the web UI (`apps/web`), shipped as unmodified
 
 ## Lobe Icons
 
-The OpenAI, Claude, Cursor, Codex and Gemini marks in `apps/web/public/clients/` identify the clients supported by the connection guide.
+The OpenAI, Claude, Cursor, Codex and Gemini marks in `apps/web/public/clients/` identify the clients supported by the connection guide. The GitHub mark in `apps/web/public/hosts/` stands on the button that signs people in through GitHub.
 
-- Source: [Lobe Icons](https://github.com/lobehub/lobe-icons/tree/2e76c48721e91b9aaa40803a0fa2eb8aca7399c4/packages/static-svg/icons), snapshot `2e76c48721e91b9aaa40803a0fa2eb8aca7399c4`. Claude and Gemini use the color variants (`claude-color.svg`, `gemini-color.svg`). The files are byte for byte as the source ships them; the pages show them as images, so nothing in them meets the content security policy.
+- Source: [Lobe Icons](https://github.com/lobehub/lobe-icons/tree/2e76c48721e91b9aaa40803a0fa2eb8aca7399c4/packages/static-svg/icons), snapshot `2e76c48721e91b9aaa40803a0fa2eb8aca7399c4`. Claude and Gemini use the color variants (`claude-color.svg`, `gemini-color.svg`). The files are byte for byte as the source ships them; the pages show them as images, so nothing in them meets the content security policy. The GitHub mark is shown as a mask, which keeps its shape as shipped and draws it in the colour of the button's label, white.
 - Copyright (c) 2023 LobeHub. License: MIT; the complete notice ships as [`licenses/lobe-icons.txt`](apps/web/public/licenses/lobe-icons.txt).
 - Product names and marks belong to their respective owners. Their use identifies interoperability and does not imply endorsement.
 

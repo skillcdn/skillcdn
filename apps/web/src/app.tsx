@@ -14,6 +14,7 @@ import { Layout } from "./components/layout.js";
 import { Container, Skeleton } from "./components/ui.js";
 import { I18nContext, LanguagePreferenceContext, messagesFor } from "./i18n/index.js";
 import { LANGUAGE_PENDING_ATTRIBUTE, type Language, resolveLanguage } from "./i18n/languages.js";
+import { LegalLinksProvider } from "./legal-links.js";
 import { type AppLocation, LocationProvider, useLocation } from "./navigation.js";
 import type { AccountPageProps } from "./pages/account.js";
 import type { ConsentPageProps } from "./pages/consent.js";
@@ -22,21 +23,23 @@ import { LandingPage } from "./pages/landing.js";
 import type { LegalPageProps } from "./pages/legal.js";
 import type { MountPageProps } from "./pages/mount.js";
 import type { OwnerPageProps } from "./pages/owner.js";
+import type { SignInPageProps } from "./pages/sign-in.js";
 import { BadAddressPage, NotFoundPage } from "./pages/simple.js";
 import { matchRoute, type Route } from "./router.js";
 import { applyHead, buildHead } from "./seo/head.js";
 
 /**
  * The pages that are not on the way of every visitor: the explorer view and the deployment's own
- * pages bring the Markdown renderer with them, and the page of an account, the pages of whoever
- * is signed in and the consent page are for the few who go there. In the browser each loads when
- * someone opens it. The server, which renders them, passes the components in instead
- * (entry-server.tsx).
+ * pages bring the Markdown renderer with them, and the page of an account, the sign-in page, the
+ * pages of whoever is signed in and the consent page are for the few who go there. In the
+ * browser each loads when someone opens it. The server, which renders them, passes the
+ * components in instead (entry-server.tsx).
  */
 export interface PageComponents {
   readonly mount: ComponentType<MountPageProps>;
   readonly legal: ComponentType<LegalPageProps>;
   readonly owner: ComponentType<OwnerPageProps>;
+  readonly signIn: ComponentType<SignInPageProps>;
   readonly account: ComponentType<AccountPageProps>;
   readonly consent: ComponentType<ConsentPageProps>;
 }
@@ -45,6 +48,9 @@ const LAZY_PAGES: PageComponents = {
   mount: lazy(() => import("./pages/mount.js").then((module) => ({ default: module.MountPage }))),
   legal: lazy(() => import("./pages/legal.js").then((module) => ({ default: module.LegalPage }))),
   owner: lazy(() => import("./pages/owner.js").then((module) => ({ default: module.OwnerPage }))),
+  signIn: lazy(() =>
+    import("./pages/sign-in.js").then((module) => ({ default: module.SignInPage })),
+  ),
   account: lazy(() =>
     import("./pages/account.js").then((module) => ({ default: module.AccountPage })),
   ),
@@ -93,6 +99,8 @@ function pageOf(route: Route, origin: string, pages: PageComponents): ReactNode 
       return <pages.mount origin={origin} address={route.address} view={route.view} />;
     case "owner":
       return <pages.owner origin={origin} owner={route.owner} />;
+    case "sign-in":
+      return <pages.signIn origin={origin} />;
     case "account":
       return <pages.account origin={origin} section={route.section} />;
     case "consent":
@@ -116,6 +124,7 @@ const OWN_HEAD: ReadonlySet<Route["name"]> = new Set([
   "landing",
   "legal",
   "owner",
+  "sign-in",
   "account",
   "consent",
 ]);
@@ -187,12 +196,16 @@ export function App(props: AppProps) {
           {/* Who is signed in is one fact for the whole page: the header, and whatever page
               shows something that is a person's, read it from here. */}
           <SessionProvider>
-            <Routed
-              origin={props.origin}
-              shell={props.shell === true}
-              pages={pages}
-              preferredLanguage={preferred}
-            />
+            {/* And so are the deployment's terms and privacy policy: the footer links to them,
+                and whoever signs in is told that they agree to them. */}
+            <LegalLinksProvider>
+              <Routed
+                origin={props.origin}
+                shell={props.shell === true}
+                pages={pages}
+                preferredLanguage={preferred}
+              />
+            </LegalLinksProvider>
           </SessionProvider>
         </LocationProvider>
       </LanguagePreferenceContext.Provider>

@@ -1,0 +1,45 @@
+/* One button as wide as its column, and under it what pressing it agrees to: close enough to the
+   button to be read with it, and small enough not to be mistaken for a second thing to do. */
+
+.signIn {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.leave {
+  gap: var(--space-3);
+  min-height: var(--control-large);
+  font-size: var(--text-md);
+}
+
+/* The host's mark as its file ships it, in the colour of the label beside it: the file is the
+   shape and the label's colour is the fill, so the mark is never redrawn here. */
+.mark {
+  flex: none;
+  width: var(--host-mark-size);
+  height: var(--host-mark-size);
+  background: currentColor;
+  mask: url("/hosts/github.svg") center / contain no-repeat;
+}
+
+.agreement,
+.other {
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+  text-wrap: balance;
+}
+
+/* Links in small print stay small print: the underline says they are links, and the accent is
+   left to the one button above them. A name is one thing to press, so it does not break in two
+   where the sentence wraps. */
+.agreement a,
+.other a {
+  color: inherit;
+  text-decoration: underline;
+  white-space: nowrap;
+}
+
+.agreement a:hover,
+.other a:hover {
+  color: var(--color-text);
+}

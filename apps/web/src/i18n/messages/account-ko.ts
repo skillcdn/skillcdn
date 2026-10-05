@@ -12,7 +12,20 @@ const day = (iso: string): string =>
 export const accountKo: typeof accountEn = {
   auth: {
     signIn: "로그인",
-    signInWith: "GitHub로 로그인",
+    continueWith: "GitHub로 계속하기",
+    switchAccount: "다른 GitHub 계정 사용",
+    agreement: {
+      both: "계속하면 {terms}과 {privacy}에 동의하게 됩니다.",
+      terms: "계속하면 {terms}에 동의하게 됩니다.",
+      privacy: "계속하면 {privacy}에 동의하게 됩니다.",
+      termsName: "이용약관",
+      privacyName: "개인정보 처리방침",
+    },
+    page: {
+      metaTitle: "로그인 | SkillCDN",
+      title: "SkillCDN에 로그인",
+      lead: "비공개 저장소를 열고, 연결한 앱과 토큰을 관리할 수 있어요. SkillCDN은 GitHub에서 읽기만 하고 아무것도 바꾸지 않아요.",
+    },
     signOut: "로그아웃",
     menu: (login: string) => `${login} 계정 메뉴`,
     profile: "내 프로필",
@@ -75,10 +88,6 @@ export const accountKo: typeof accountEn = {
     metaTitle: "내 계정 | SkillCDN",
     title: "내 계정",
     navigation: "계정 메뉴",
-    signedOut: {
-      title: "내 계정에 로그인하세요",
-      body: "GitHub로 로그인하면 비공개 저장소를 여기서 열고, 연결한 앱을 확인할 수 있어요.",
-    },
     sections: {
       overview: "한눈에 보기",
       repositories: "비공개 저장소",

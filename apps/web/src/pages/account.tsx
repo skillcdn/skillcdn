@@ -29,7 +29,6 @@ import {
 } from "../components/ui.js";
 import ui from "../components/ui.module.css";
 import { useI18n } from "../i18n/index.js";
-import type { Messages } from "../i18n/messages/en.js";
 import { Link, navigate, useLocation } from "../navigation.js";
 import {
   ACCOUNT_SECTIONS,
@@ -52,14 +51,6 @@ interface SectionProps {
   readonly user: RestUser;
   /** The origin of the deployment: what an address is a path of. */
   readonly origin: string;
-}
-
-type LoginFailure = keyof Messages["auth"]["failures"];
-
-/** What a sign-in that did not complete left in the URL, when it left something we know. */
-function loginFailureOf(search: string, t: Messages): LoginFailure | undefined {
-  const code = new URLSearchParams(search).get("login");
-  return code !== null && code in t.auth.failures ? (code as LoginFailure) : undefined;
 }
 
 const profileHref = (user: RestUser): string =>
@@ -590,38 +581,25 @@ export function AccountPage(props: AccountPageProps) {
     applyHead(buildHead({ name: "account", section }, language, origin));
   }, [section, language, origin]);
 
-  if (session.status === "unknown") {
-    return (
-      <Container className={styles.page}>
-        <Skeleton lines={6} label={t.common.loading} />
-      </Container>
-    );
-  }
+  // Nothing here is anyone's until somebody is signed in: the way in is the sign-in page, which
+  // comes back to this section as it was asked for. It takes this page's place in the history,
+  // so that going back does not land on a page that sends the person away again.
+  const signedOut = session.status === "anonymous";
+  const signIn = signInHref(location);
+  useEffect(() => {
+    if (signedOut) {
+      navigate(signIn, { replace: true });
+    }
+  }, [signedOut, signIn]);
+
   // Where nobody can sign in there are no such pages.
   if (session.status === "disabled") {
     return <NotFoundPage />;
   }
-  if (session.status === "anonymous") {
-    const failure = loginFailureOf(location.search, t);
+  if (session.status !== "user") {
     return (
       <Container className={styles.page}>
-        <div className={styles.signedOut}>
-          {failure !== undefined && (
-            <Callout tone="warning" title={t.auth.failures[failure].title}>
-              {t.auth.failures[failure].body}
-            </Callout>
-          )}
-          <h1 className={styles.title}>{t.account.signedOut.title}</h1>
-          <p className={styles.lead}>{t.account.signedOut.body}</p>
-          <p>
-            <a
-              className={cx(ui.button, ui.primary)}
-              href={signInHref({ pathname: location.pathname, search: "" })}
-            >
-              {t.auth.signInWith}
-            </a>
-          </p>
-        </div>
+        <Skeleton lines={6} label={t.common.loading} />
       </Container>
     );
   }

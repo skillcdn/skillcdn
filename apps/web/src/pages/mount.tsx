@@ -161,10 +161,10 @@ function PrivateHint() {
     return (
       <Callout
         action={
-          // A real navigation: signing in happens at the git host, and comes back here.
-          <a className={cx(ui.button, ui.secondary, ui.small)} href={signInHref(location)}>
-            {t.auth.signInWith}
-          </a>
+          // To the sign-in page, which comes back here once the person is signed in.
+          <Link className={cx(ui.button, ui.secondary, ui.small)} href={signInHref(location)}>
+            {t.auth.signIn}
+          </Link>
         }
       >
         {t.auth.privateSignedOut}
