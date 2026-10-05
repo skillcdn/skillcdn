@@ -1,14 +1,14 @@
 import { useEffect, useRef } from "react";
-import { signInHref, useSession } from "../auth/session.js";
+import { useSession } from "../auth/session.js";
 import { useI18n } from "../i18n/index.js";
 import { Link, navigate, useLocation } from "../navigation.js";
 import { accountHref, ownerHref, PATHS } from "../router.js";
-import { Avatar, cx } from "./ui.js";
-import ui from "./ui.module.css";
+import { useSignInDialog } from "./sign-in-dialog.js";
+import { Avatar, Button } from "./ui.js";
 import styles from "./user-menu.module.css";
 
 /**
- * Who is signed in, at the end of the header: the way to the sign-in page, or the person's
+ * Who is signed in, at the end of the header: the way to the sign-in dialog, or the person's
  * picture with the pages that are theirs behind it. Where nobody can sign in, and until the
  * browser has asked who is, it is nothing at all, which is also what the server renders.
  */
@@ -16,6 +16,7 @@ export function UserMenu() {
   const { t } = useI18n();
   const { session, signOut } = useSession();
   const location = useLocation();
+  const openSignIn = useSignInDialog();
   const disclosure = useRef<HTMLDetailsElement>(null);
 
   useEffect(() => {
@@ -36,19 +37,12 @@ export function UserMenu() {
     return null;
   }
   if (session.status === "anonymous") {
-    // The page a person signs in on is itself the way to sign in.
-    if (location.pathname === PATHS.signIn) {
-      return null;
-    }
-    // To that page, which comes back to this one: what it shows before the browser leaves for
-    // the git host is not something a button in a header has room for.
+    // Opens the dialog over this page, which is where the person is back afterwards: what it
+    // shows before the browser leaves for the git host is not something a header has room for.
     return (
-      <Link
-        className={cx(ui.button, ui.secondary, ui.small, styles.signIn)}
-        href={signInHref(location)}
-      >
+      <Button size="sm" className={styles.signIn} onClick={openSignIn}>
         {t.auth.signIn}
-      </Link>
+      </Button>
     );
   }
 

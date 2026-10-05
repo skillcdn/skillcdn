@@ -17,25 +17,23 @@ export const AUTH_ROUTES = {
   logout: "/auth/logout",
 } as const;
 
-/**
- * The parameter naming the page to come back to, signed in: a path of this origin. The login
- * route takes it, and so does the sign-in page, which hands it on.
- */
+/** The parameter of the login route naming the page to come back to: a path of this origin. */
 export const RETURN_TO_PARAM = "return_to";
 
 /**
- * The page where a person chooses to sign in, before their browser leaves for the git host
- * (ADR-0041). Everything that offers signing in leads here or shows what this page shows.
+ * The parameter by which the server asks a page to open the sign-in dialog over itself
+ * (ADR-0043): any page takes it, and the page drops it from its URL once it has read it.
  */
-export const SIGN_IN_PAGE_PATH = "/login";
-/** Why a sign-in did not complete, as the sign-in page is told in its query. */
-export const SIGN_IN_ERROR_PARAM = "error";
+export const SIGN_IN_PARAM = "sign_in";
 /**
- * What that parameter says: the person said no at the git host, the attempt was not finished in
- * time or in the browser that began it, or the host did not confirm it.
+ * Why a sign-in did not complete: the person said no at the git host, the attempt was not
+ * finished in time or in the browser that began it, or the host did not confirm it.
  */
 export const SIGN_IN_FAILURES = ["denied", "expired", "failed"] as const;
 export type SignInFailure = (typeof SIGN_IN_FAILURES)[number];
+/** What that parameter says: only to open the dialog, or why the last attempt did not complete. */
+export const SIGN_IN_REQUESTS = ["open", ...SIGN_IN_FAILURES] as const;
+export type SignInRequest = (typeof SIGN_IN_REQUESTS)[number];
 
 /**
  * How a page learns that people can sign in on this deployment: a meta tag the server writes
@@ -61,13 +59,11 @@ export function loginPath(returnTo: string): string {
 }
 
 /**
- * The sign-in page, for someone who comes back to `returnTo` afterwards; without one the page
- * decides where a person it signed in goes.
+ * A page of this origin, a path with or without a query, asked to open the sign-in dialog over
+ * itself: the page a sign-in was for is where it is offered, and offered again.
  */
-export function signInPagePath(returnTo?: string): string {
-  return returnTo === undefined
-    ? SIGN_IN_PAGE_PATH
-    : `${SIGN_IN_PAGE_PATH}?${RETURN_TO_PARAM}=${encodeURIComponent(returnTo)}`;
+export function signInPath(page: string, request: SignInRequest = "open"): string {
+  return `${page}${page.includes("?") ? "&" : "?"}${SIGN_IN_PARAM}=${request}`;
 }
 
 /** The REST path of the page of an account. */

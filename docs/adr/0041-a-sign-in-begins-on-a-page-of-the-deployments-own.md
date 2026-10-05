@@ -1,6 +1,6 @@
 # ADR-0041: A sign-in begins on a page of the deployment's own
 
-- Status: Accepted; point 5, and the rejection of the account picker on every sign-in, are superseded by [ADR-0042](0042-every-sign-in-passes-the-git-hosts-account-picker.md)
+- Status: Accepted; point 5, and the rejection of the account picker on every sign-in, are superseded by [ADR-0042](0042-every-sign-in-passes-the-git-hosts-account-picker.md); points 1, 4 and 6, and the rejection of a dialog, are superseded by [ADR-0043](0043-a-sign-in-begins-in-a-dialog-over-the-page.md)
 - Date: 2026-10-05
 - Builds on [ADR-0035](0035-people-sign-in-through-the-git-hosts-app.md). The contract is in [specs/permissions.md](../specs/permissions.md#signing-in).
 

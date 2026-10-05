@@ -24,7 +24,6 @@ import {
   REST_MOUNT_LIST_LIMIT,
   type RestShowcase,
   type RestSkill,
-  SIGN_IN_PAGE_PATH,
   SOCIAL_ROUTE,
 } from "@skillcdn/core";
 import { type Database, getSchemaStatus, type UserRecord } from "@skillcdn/db";
@@ -923,15 +922,9 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
       withShowcase(c, (request, showcase) => bundle.landing(request, showcase)),
     );
     if (auth !== undefined) {
-      // The page people sign in on, the pages of whoever is signed in, and the page that asks
-      // them about a client: one document for everyone, which the browser fills in with what
-      // the REST API tells it.
-      for (const path of [
-        SIGN_IN_PAGE_PATH,
-        ACCOUNT_PAGE_PATH,
-        `${ACCOUNT_PAGE_PATH}/*`,
-        CONSENT_PAGE_PATH,
-      ]) {
+      // The pages of whoever is signed in, and the page that asks them about a client: one
+      // document for everyone, which the browser fills in with what the REST API tells it.
+      for (const path of [ACCOUNT_PAGE_PATH, `${ACCOUNT_PAGE_PATH}/*`, CONSENT_PAGE_PATH]) {
         app.on(["GET", "HEAD"], path, async (c) => bundle.view(await pageRequestOf(c)));
       }
     }

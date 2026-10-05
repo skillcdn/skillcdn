@@ -454,8 +454,23 @@
   /* The narrowest a field of a form on those pages gets before the fields stack. */
   --account-field-width: 12rem;
   --width-dialog: 32rem;
-  /* The column a person signs in in: narrower than a question, since it holds one button. */
+  /* The dialog a person signs in from: narrower than a question, since it holds one button. Its
+     mark stands in a badge on a stage of its own, with a light behind it and rings that leave
+     it, widen to `reach` times its size and fade, one every `period`. */
   --width-sign-in: 26rem;
+  --sign-in-stage: 7.5rem;
+  --sign-in-glow: 15rem;
+  --sign-in-badge: 4rem;
+  --sign-in-symbol: 2.5rem;
+  --sign-in-badge-glow: 0 0.5rem 2rem -0.25rem
+    color-mix(in srgb, var(--color-accent) 55%, transparent);
+  --sign-in-ring-reach: 2.6;
+  --sign-in-ring-period: 3.6s;
+  --sign-in-arrive: 200ms;
+  /* What lies over a page while a dialog is open on it: dark enough that the page steps back,
+     and out of focus, so that the dialog is the one thing to read. */
+  --color-scrim: #05080dbf;
+  --scrim-backdrop: blur(6px);
   /* The git host's mark on the button that leaves for it: a shade larger than the label's own
      letters, as a mark beside a word is drawn. */
   --host-mark-size: 1.25rem;

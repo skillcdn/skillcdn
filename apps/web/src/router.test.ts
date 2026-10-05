@@ -8,7 +8,6 @@ import {
   mountHref,
   ownerFromInput,
   ownerHref,
-  returnPathOf,
   TOKEN_REPOSITORY_PARAM,
   tokensHref,
 } from "./router.js";
@@ -95,37 +94,16 @@ describe("matchRoute", () => {
     expect(new URLSearchParams(search).get(TOKEN_REPOSITORY_PARAM)).toBe("/gh/acme/skills");
   });
 
-  it("has one page to sign in on, which knows where to come back to", () => {
-    expect(matchRoute("/login", "")).toEqual({ name: "sign-in" });
-    expect(matchRoute("/login", "?return_to=%2Fexplore&lang=ko")).toEqual({ name: "sign-in" });
-    expect(matchRoute("/login/", "")).toEqual({ name: "not-found" });
-    expect(matchRoute("/signin", "")).toEqual({ name: "not-found" });
+  it("has no page to sign in on: signing in is a dialog over any page", () => {
+    expect(matchRoute("/login", "")).toEqual({ name: "not-found" });
     // Where the browser leaves for the git host is the server's, not a page.
     expect(matchRoute("/auth/gh/login", "")).toEqual({ name: "not-found" });
-
-    expect(returnPathOf("?return_to=%2Fgh%2Facme%2Fskills%40v2%3Fskill%3Da%2520b")).toBe(
-      "/gh/acme/skills@v2?skill=a%20b",
-    );
-    expect(returnPathOf("?lang=ko&return_to=%2Faccount%2Ftokens%23made")).toBe(
-      "/account/tokens#made",
-    );
-    // Only a path of this origin, and never the sign-in page again.
-    for (const search of [
-      "",
-      "?return_to=",
-      "?return_to=explore",
-      "?return_to=https%3A%2F%2Fevil.test%2F",
-      "?return_to=%2F%2Fevil.test%2Fpath",
-      "?return_to=%2F%5Cevil.test",
-      "?return_to=%2Flogin",
-      "?return_to=%2Flogin%3Freturn_to%3D%252Fexplore",
-      "?return_to=%2Flogin%23top",
-      `?return_to=%2F${"a".repeat(3000)}`,
-    ]) {
-      expect(returnPathOf(search), search).toBeUndefined();
-    }
-    // A page whose name merely begins like it is a page like any other.
-    expect(returnPathOf("?return_to=%2Flogins")).toBe("/logins");
+    // What asks a page to open the dialog changes nothing about which page it is.
+    expect(matchRoute("/explore", "?sign_in=open")).toEqual({ name: "explore" });
+    expect(matchRoute("/account/tokens", "?sign_in=denied")).toEqual({
+      name: "account",
+      section: "tokens",
+    });
   });
 
   it("has one page that asks about a connecting app", () => {

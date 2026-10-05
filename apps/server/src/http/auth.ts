@@ -21,7 +21,7 @@ import {
   type RestRepoTokens,
   type RestUser,
   ROOT_PATH,
-  signInPagePath,
+  signInPath,
 } from "@skillcdn/core";
 import {
   type Database,
@@ -164,7 +164,7 @@ export function registerAuth(app: Hono<AppEnv>, dependencies: AuthDependencies):
   };
 
   /**
-   * A sign-in begins on the deployment's own pages (ADR-0041), where a person sees which host
+   * A sign-in begins on the deployment's own pages (ADR-0043), where a person sees which host
    * they continue with and what they agree to by it. A browser says where a navigation comes
    * from, and one that comes from anywhere else, a link on another site or an address typed, is
    * not a person pressing that button. A request that says nothing is from a browser too old to
@@ -179,12 +179,9 @@ export function registerAuth(app: Hono<AppEnv>, dependencies: AuthDependencies):
   app.get(AUTH_ROUTES.login, (c) => {
     const returnTo = c.req.query(RETURN_TO_PARAM);
     if (!begunOnOwnPages(c)) {
-      // To the page that offers it, with the way back kept: following a link signs nobody in.
+      // To the page it was for, which offers it over itself: following a link signs nobody in.
       c.header("cache-control", "no-store");
-      return c.redirect(
-        signInPagePath(returnTo === undefined ? undefined : safeReturnTo(returnTo, origin)),
-        302,
-      );
+      return c.redirect(signInPath(safeReturnTo(returnTo, origin)), 302);
     }
     return follow(c, login.begin(returnTo));
   });

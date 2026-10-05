@@ -1,0 +1,195 @@
+/* One decision in one narrow card over the page it was asked on: the mark, a welcome, and the
+   one way out to the git host. The page stays where it is behind a veil, and does not scroll
+   while the dialog is open. */
+
+:global(html):has(.dialog[open]) {
+  overflow: hidden;
+}
+
+.dialog {
+  width: min(var(--width-sign-in), calc(100vw - 2 * var(--space-4)));
+  max-width: none;
+  max-height: calc(100dvh - 2 * var(--space-4));
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-xl);
+  background: none;
+  color: var(--color-text);
+  box-shadow: var(--shadow-stage);
+  overscroll-behavior: contain;
+}
+
+.dialog::backdrop {
+  background: var(--color-scrim);
+  backdrop-filter: var(--scrim-backdrop);
+}
+
+/* The card fills the dialog to its edge, so that a press on the dialog itself is a press beside
+   the card: that is how the component tells one from the other. */
+.card {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  border: var(--border);
+  border-radius: inherit;
+  background: var(--color-bg-subtle);
+  text-align: center;
+  overflow: hidden;
+}
+
+/* The mark with what it stands for around it: one source, reaching outward. The rings leave the
+   badge, widen and fade, one half a turn behind the other. */
+.stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: var(--sign-in-stage);
+}
+
+/* A light behind the mark, which ends where its own box does: the card cuts what is left. */
+.stage::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: var(--sign-in-glow);
+  aspect-ratio: 1;
+  border-radius: var(--radius-full);
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--color-accent) 30%, transparent),
+    transparent
+  );
+}
+
+.badge {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--sign-in-badge);
+  height: var(--sign-in-badge);
+  border: var(--border-lit);
+  border-radius: var(--radius-full);
+  background: var(--color-accent-solid);
+  color: var(--color-accent-contrast);
+  box-shadow: var(--sign-in-badge-glow);
+}
+
+.symbol {
+  width: var(--sign-in-symbol);
+  height: var(--sign-in-symbol);
+}
+
+/* Still, the rings stand where a moment of their way out would show them. */
+.ring {
+  position: absolute;
+  width: var(--sign-in-badge);
+  height: var(--sign-in-badge);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-full);
+  transform: scale(1.5);
+  opacity: 0.32;
+}
+
+.ring + .ring {
+  transform: scale(2);
+  opacity: 0.14;
+}
+
+.title {
+  font-size: var(--text-xl);
+  text-wrap: balance;
+}
+
+.lead {
+  margin-top: calc(-1 * var(--space-2));
+  color: var(--color-text-muted);
+  font-size: var(--text-md);
+  text-wrap: balance;
+}
+
+/* What went wrong reads from the left, as a callout does everywhere else. */
+.problem {
+  text-align: start;
+}
+
+.close {
+  position: absolute;
+  inset-block-start: var(--space-3);
+  inset-inline-end: var(--space-3);
+  display: grid;
+  place-items: center;
+  width: var(--control-size);
+  height: var(--control-size);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-text-faint);
+  transition:
+    background var(--transition),
+    color var(--transition);
+}
+
+.close:hover {
+  background: var(--color-bg-raised);
+  color: var(--color-text);
+}
+
+.close svg {
+  width: var(--text-md);
+  height: var(--text-md);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+@media (max-width: 40rem) {
+  .card {
+    padding: var(--space-5) var(--space-4);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dialog[open] {
+    animation: arrive var(--sign-in-arrive) ease-out;
+  }
+
+  .dialog[open]::backdrop {
+    animation: veil var(--sign-in-arrive) ease-out;
+  }
+
+  .ring,
+  .ring + .ring {
+    animation: reach var(--sign-in-ring-period) ease-out infinite;
+  }
+
+  .ring + .ring {
+    animation-delay: calc(var(--sign-in-ring-period) / -2);
+  }
+}
+
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translateY(var(--space-3)) scale(0.98);
+  }
+}
+
+@keyframes veil {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes reach {
+  from {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+
+  to {
+    transform: scale(var(--sign-in-ring-reach));
+    opacity: 0;
+  }
+}

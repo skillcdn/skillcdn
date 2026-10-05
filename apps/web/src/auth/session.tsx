@@ -1,4 +1,4 @@
-import { type RestUser, SIGN_IN_PAGE_PATH, signInPagePath } from "@skillcdn/core";
+import type { RestUser } from "@skillcdn/core";
 import {
   createContext,
   type ReactNode,
@@ -47,16 +47,6 @@ export function useSession(): SessionValue {
 export function useUser(): RestUser | undefined {
   const { session } = useSession();
   return session.status === "user" ? session.user : undefined;
-}
-
-/**
- * Where a person goes to sign in and come back to the page they are on: the sign-in page, which
- * shows what they continue with and what they agree to before the browser leaves for the git
- * host (`components/sign-in.tsx`). On that page it is the page itself, as it is.
- */
-export function signInHref(location: { readonly pathname: string; readonly search: string }) {
-  const here = `${location.pathname}${location.search}`;
-  return location.pathname === SIGN_IN_PAGE_PATH ? here : signInPagePath(here);
 }
 
 /**

@@ -26,12 +26,14 @@ export const accountEn = {
       termsName: "Terms of Service",
       privacyName: "Privacy Policy",
     },
-    /** The page a person signs in on. */
-    page: {
-      metaTitle: "Sign in | SkillCDN",
-      title: "Sign in to SkillCDN",
-      lead: "Open your private repositories, and manage the apps and tokens connected to them. SkillCDN only reads from GitHub and changes nothing there.",
+    /** The dialog a person signs in from, over the page they are on. */
+    dialog: {
+      title: "Welcome to SkillCDN",
+      lead: "Sign in and make the most of everything here.",
+      close: "Close",
     },
+    /** On the account pages, to someone who is not signed in. */
+    accountSignedOut: "Sign in to see your account.",
     signOut: "Sign out",
     menu: (login: string) => `Account menu for ${login}`,
     profile: "Your profile",

@@ -25,7 +25,6 @@ import { ConsentPage } from "./pages/consent.js";
 import { LegalPage } from "./pages/legal.js";
 import { MountPage } from "./pages/mount.js";
 import { OwnerPage } from "./pages/owner.js";
-import { SignInPage } from "./pages/sign-in.js";
 import { matchRoute, PATHS } from "./router.js";
 import { buildHead, type PageData, renderHead } from "./seo/head.js";
 import { showcaseEntries, showcaseTexts } from "./showcase.js";
@@ -65,7 +64,6 @@ const SERVER_PAGES = {
   mount: MountPage,
   legal: LegalPage,
   owner: OwnerPage,
-  signIn: SignInPage,
   account: AccountPage,
   consent: ConsentPage,
 };
@@ -169,9 +167,8 @@ export interface AddressPageOutput {
  * The explorer view of an address, rendered with its data so that a crawler reads the page as a
  * person would see it, and the browser takes over where the server left off. The page of an
  * account is rendered the same way, with what the git host shows everyone (ADR-0037). The server
- * asks for the pages the browser fills in by itself the same way, without data: the sign-in
- * page, the pages of whoever is signed in and the consent page come back as their frame and
- * their head.
+ * asks for the pages the browser fills in by itself the same way, without data: the pages of
+ * whoever is signed in and the consent page come back as their frame and their head.
  */
 export function renderAddressPage(template: string, input: AddressPageInput): AddressPageOutput {
   const language = isLanguage(input.language) ? input.language : DEFAULT_LANGUAGE;

@@ -143,24 +143,24 @@ describe("signing in", () => {
     const state = new URL(begun.headers.get("location") ?? "").searchParams.get("state") ?? "";
     const cookie = begun.headers.getSetCookie()[0]?.split(";")[0] ?? "";
     const code = login.codeFor("alice", state);
-    // What did not complete goes back to the sign-in page, which says why and offers to try
-    // again: for the page the attempt was for, while the browser still carries which that was.
-    const kept = "&return_to=%2Fgh%2Facme%2Fsecret-skills";
+    // What did not complete goes back to the page the attempt was for, which says why over
+    // itself and offers to try again: the front page, once the browser no longer carries which.
+    const kept = "/gh/acme/secret-skills?sign_in=";
 
     const noCookie = await request(`${AUTH_ROUTES.callback}?code=${code}&state=${state}`);
-    expect(noCookie.headers.get("location")).toBe("/login?error=expired");
+    expect(noCookie.headers.get("location")).toBe("/?sign_in=expired");
     const otherState = await request(`${AUTH_ROUTES.callback}?code=${code}&state=someone-elses`, {
       headers: { cookie },
     });
-    expect(otherState.headers.get("location")).toBe(`/login?error=failed${kept}`);
+    expect(otherState.headers.get("location")).toBe(`${kept}failed`);
     const denied = await request(`${AUTH_ROUTES.callback}?error=access_denied&state=${state}`, {
       headers: { cookie },
     });
-    expect(denied.headers.get("location")).toBe(`/login?error=denied${kept}`);
+    expect(denied.headers.get("location")).toBe(`${kept}denied`);
     const badCode = await request(`${AUTH_ROUTES.callback}?code=not-a-code&state=${state}`, {
       headers: { cookie },
     });
-    expect(badCode.headers.get("location")).toBe(`/login?error=failed${kept}`);
+    expect(badCode.headers.get("location")).toBe(`${kept}failed`);
     // The same sealed value under the name without the prefix, as a neighbouring host could
     // set it for this one: that is not the cookie this server reads.
     const planted = await request(
@@ -168,7 +168,7 @@ describe("signing in", () => {
       { headers: { cookie: cookie.replace(/^__Host-/, "") } },
     );
     expect(cookie).toMatch(/^__Host-/);
-    expect(planted.headers.get("location")).toBe("/login?error=expired");
+    expect(planted.headers.get("location")).toBe("/?sign_in=expired");
     for (const response of [noCookie, otherState, denied, badCode, planted]) {
       expect(response.headers.get("cache-control")).toBe("no-store");
       expect(
@@ -177,7 +177,7 @@ describe("signing in", () => {
     }
   });
 
-  it("begins only for a browser that came from its own pages, and shows everyone else the sign-in page", async () => {
+  it("begins only for a browser that came from its own pages, and offers it to everyone else on the page it was for", async () => {
     const { request } = harness();
     const begin = (query: string, site?: string) =>
       request(
@@ -189,18 +189,19 @@ describe("signing in", () => {
     for (const site of ["cross-site", "same-site", "none"]) {
       const shown = await begin("?return_to=%2Fgh%2Facme%2Fsecret-skills%3Flang%3Dko", site);
       expect(shown.status, site).toBe(302);
+      // The page they were on the way to, asked to open the sign-in dialog over itself.
       expect(shown.headers.get("location"), site).toBe(
-        "/login?return_to=%2Fgh%2Facme%2Fsecret-skills%3Flang%3Dko",
+        "/gh/acme/secret-skills?lang=ko&sign_in=open",
       );
       expect(shown.headers.get("cache-control"), site).toBe("no-store");
       // Nothing was begun: no attempt is remembered in the browser.
       expect(shown.headers.getSetCookie(), site).toEqual([]);
     }
-    expect((await begin("", "cross-site")).headers.get("location")).toBe("/login");
+    expect((await begin("", "cross-site")).headers.get("location")).toBe("/?sign_in=open");
     // The way back is a page of this origin there too, or the front page.
     expect(
       (await begin("?return_to=https%3A%2F%2Fevil.test%2F", "cross-site")).headers.get("location"),
-    ).toBe("/login?return_to=%2F");
+    ).toBe("/?sign_in=open");
 
     // From its own pages, and from a browser too old to say where it comes from, it begins.
     for (const site of ["same-origin", undefined]) {

@@ -3,14 +3,16 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { api } from "../api/client.js";
 import { resourceKeys } from "../api/keys.js";
 import { useResource } from "../api/use-resource.js";
-import { signInHref, useSession } from "../auth/session.js";
+import { useSession } from "../auth/session.js";
 import { AddressForm } from "../components/address-form.js";
 import { ConnectGuide } from "../components/connect-guide.js";
 import { ConnectStrip } from "../components/connect-strip.js";
 import { ErrorCallout } from "../components/error-callout.js";
+import { useSignInDialog } from "../components/sign-in-dialog.js";
 import {
   Avatar,
   Badge,
+  Button,
   Callout,
   Container,
   cx,
@@ -22,7 +24,7 @@ import {
 import ui from "../components/ui.module.css";
 import { useI18n } from "../i18n/index.js";
 import { repositoryDescription, repositoryName, translationFor } from "../i18n/repository-text.js";
-import { Link, useLocation } from "../navigation.js";
+import { Link } from "../navigation.js";
 import { accountHref, type MountView, PATHS } from "../router.js";
 import { applyHead, buildHead } from "../seo/head.js";
 import { hostTreeUrl } from "./host-links.js";
@@ -156,15 +158,15 @@ function MountHeader(props: {
 function PrivateHint() {
   const { t } = useI18n();
   const { session } = useSession();
-  const location = useLocation();
+  const openSignIn = useSignInDialog();
   if (session.status === "anonymous") {
     return (
       <Callout
         action={
-          // To the sign-in page, which comes back here once the person is signed in.
-          <Link className={cx(ui.button, ui.secondary, ui.small)} href={signInHref(location)}>
+          // The dialog opens over this page, which shows itself again once they are signed in.
+          <Button size="sm" onClick={openSignIn}>
             {t.auth.signIn}
-          </Link>
+          </Button>
         }
       >
         {t.auth.privateSignedOut}

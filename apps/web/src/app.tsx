@@ -11,6 +11,7 @@ import { type InitialData, InitialDataContext } from "./api/initial-data.js";
 import styles from "./app.module.css";
 import { SessionProvider } from "./auth/session.js";
 import { Layout } from "./components/layout.js";
+import { SignInDialogProvider } from "./components/sign-in-dialog.js";
 import { Container, Skeleton } from "./components/ui.js";
 import { I18nContext, LanguagePreferenceContext, messagesFor } from "./i18n/index.js";
 import { LANGUAGE_PENDING_ATTRIBUTE, type Language, resolveLanguage } from "./i18n/languages.js";
@@ -23,15 +24,14 @@ import { LandingPage } from "./pages/landing.js";
 import type { LegalPageProps } from "./pages/legal.js";
 import type { MountPageProps } from "./pages/mount.js";
 import type { OwnerPageProps } from "./pages/owner.js";
-import type { SignInPageProps } from "./pages/sign-in.js";
 import { BadAddressPage, NotFoundPage } from "./pages/simple.js";
 import { matchRoute, type Route } from "./router.js";
 import { applyHead, buildHead } from "./seo/head.js";
 
 /**
  * The pages that are not on the way of every visitor: the explorer view and the deployment's own
- * pages bring the Markdown renderer with them, and the page of an account, the sign-in page, the
- * pages of whoever is signed in and the consent page are for the few who go there. In the
+ * pages bring the Markdown renderer with them, and the page of an account, the pages of
+ * whoever is signed in and the consent page are for the few who go there. In the
  * browser each loads when someone opens it. The server, which renders them, passes the
  * components in instead (entry-server.tsx).
  */
@@ -39,7 +39,6 @@ export interface PageComponents {
   readonly mount: ComponentType<MountPageProps>;
   readonly legal: ComponentType<LegalPageProps>;
   readonly owner: ComponentType<OwnerPageProps>;
-  readonly signIn: ComponentType<SignInPageProps>;
   readonly account: ComponentType<AccountPageProps>;
   readonly consent: ComponentType<ConsentPageProps>;
 }
@@ -48,9 +47,6 @@ const LAZY_PAGES: PageComponents = {
   mount: lazy(() => import("./pages/mount.js").then((module) => ({ default: module.MountPage }))),
   legal: lazy(() => import("./pages/legal.js").then((module) => ({ default: module.LegalPage }))),
   owner: lazy(() => import("./pages/owner.js").then((module) => ({ default: module.OwnerPage }))),
-  signIn: lazy(() =>
-    import("./pages/sign-in.js").then((module) => ({ default: module.SignInPage })),
-  ),
   account: lazy(() =>
     import("./pages/account.js").then((module) => ({ default: module.AccountPage })),
   ),
@@ -99,8 +95,6 @@ function pageOf(route: Route, origin: string, pages: PageComponents): ReactNode 
       return <pages.mount origin={origin} address={route.address} view={route.view} />;
     case "owner":
       return <pages.owner origin={origin} owner={route.owner} />;
-    case "sign-in":
-      return <pages.signIn origin={origin} />;
     case "account":
       return <pages.account origin={origin} section={route.section} />;
     case "consent":
@@ -124,7 +118,6 @@ const OWN_HEAD: ReadonlySet<Route["name"]> = new Set([
   "landing",
   "legal",
   "owner",
-  "sign-in",
   "account",
   "consent",
 ]);
@@ -174,13 +167,17 @@ function Routed(props: {
 
   return (
     <I18nContext.Provider value={i18n}>
-      <Layout>
-        {props.shell ? (
-          placeholder
-        ) : (
-          <Suspense fallback={placeholder}>{pageOf(route, props.origin, props.pages)}</Suspense>
-        )}
-      </Layout>
+      {/* The dialog a person signs in from lies over whatever page they are on, so it is held
+          here, around all of them: the header and the pages only ask for it. */}
+      <SignInDialogProvider>
+        <Layout>
+          {props.shell ? (
+            placeholder
+          ) : (
+            <Suspense fallback={placeholder}>{pageOf(route, props.origin, props.pages)}</Suspense>
+          )}
+        </Layout>
+      </SignInDialogProvider>
     </I18nContext.Provider>
   );
 }

@@ -10,9 +10,7 @@ import {
   type OwnerPath,
   parseAddress,
   parseOwnerPath,
-  RETURN_TO_PARAM,
   ROOT_PATH,
-  SIGN_IN_PAGE_PATH,
 } from "@skillcdn/core";
 
 // A few kinds of page and no nesting, so the router is a function from a URL to a route.
@@ -36,8 +34,6 @@ export type Route =
   | { readonly name: "mount"; readonly address: Address; readonly view: MountView }
   /** The page of an account of the git host: one segment short of an address (ADR-0037). */
   | { readonly name: "owner"; readonly owner: OwnerPath }
-  /** Where a person chooses to sign in, before their browser leaves for the git host. */
-  | { readonly name: "sign-in" }
   /** The pages of whoever is signed in. */
   | { readonly name: "account"; readonly section: AccountSection }
   /** Where a person is asked whether an app may read an address for them. */
@@ -56,7 +52,6 @@ export const PATHS = {
   explore: "/explore",
   terms: LEGAL_PAGE_PATHS.terms,
   privacy: LEGAL_PAGE_PATHS.privacy,
-  signIn: SIGN_IN_PAGE_PATH,
   account: ACCOUNT_PAGE_PATH,
   consent: CONSENT_PAGE_PATH,
   states: "/dev/states",
@@ -84,29 +79,6 @@ export function ownerHref(owner: OwnerPath): string {
   return formatOwnerPath(owner);
 }
 
-/** Longer than any page here is addressed by, and as much as the server reads of one. */
-const MAX_RETURN_PATH_LENGTH = 2048;
-
-/**
- * The page the sign-in page is to come back to, as its own URL names it: a path of this origin
- * that is not the sign-in page again, or `undefined`. The server checks the same before it sends
- * a browser anywhere; this is for the one move the page makes by itself, for someone who turns
- * out to be signed in already.
- */
-export function returnPathOf(search: string): string | undefined {
-  const value = new URLSearchParams(search).get(RETURN_TO_PARAM);
-  if (
-    value === null ||
-    value.length > MAX_RETURN_PATH_LENGTH ||
-    !value.startsWith("/") ||
-    value.startsWith("//") ||
-    value.includes("\\")
-  ) {
-    return undefined;
-  }
-  return value.split(/[?#]/, 1)[0] === PATHS.signIn ? undefined : value;
-}
-
 export function matchRoute(pathname: string, search: string, development = false): Route {
   if (pathname === PATHS.landing) {
     return { name: "landing" };
@@ -122,9 +94,6 @@ export function matchRoute(pathname: string, search: string, development = false
   }
   if (pathname === PATHS.consent) {
     return { name: "consent" };
-  }
-  if (pathname === PATHS.signIn) {
-    return { name: "sign-in" };
   }
   if (pathname === PATHS.account || pathname.startsWith(`${PATHS.account}/`)) {
     const wanted =

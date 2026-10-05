@@ -168,8 +168,8 @@ export function ConsentPage(props: ConsentPageProps) {
         <div className={styles.card}>
           <h1 className={styles.title}>{t.authorize.signIn.title(client.name)}</h1>
           <p className={styles.text}>{t.authorize.signIn.body}</p>
-          {/* The same way out as on the sign-in page, here where the question already stands:
-              sending the person to that page first would be a page that only says "continue". */}
+          {/* The same way out as in the sign-in dialog, here where the question already stands:
+              a dialog over this page would only say "continue" a second time. */}
           <SignIn
             returnTo={returnTo}
             onLeave={() => {

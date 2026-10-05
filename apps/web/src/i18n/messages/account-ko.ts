@@ -20,11 +20,12 @@ export const accountKo: typeof accountEn = {
       termsName: "이용약관",
       privacyName: "개인정보 처리방침",
     },
-    page: {
-      metaTitle: "로그인 | SkillCDN",
-      title: "SkillCDN에 로그인",
-      lead: "비공개 저장소를 열고, 연결한 앱과 토큰을 관리할 수 있어요. SkillCDN은 GitHub에서 읽기만 하고 아무것도 바꾸지 않아요.",
+    dialog: {
+      title: "SkillCDN에 오신 걸 환영해요",
+      lead: "로그인하고 모든 기능을 활용해 보세요.",
+      close: "닫기",
     },
+    accountSignedOut: "로그인하면 내 계정을 볼 수 있어요.",
     signOut: "로그아웃",
     menu: (login: string) => `${login} 계정 메뉴`,
     profile: "내 프로필",

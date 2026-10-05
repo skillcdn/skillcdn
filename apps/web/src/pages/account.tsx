@@ -12,11 +12,12 @@ import { type ComponentType, type FormEvent, useEffect, useState } from "react";
 import { ApiError, api } from "../api/client.js";
 import { resourceKeys } from "../api/keys.js";
 import { useResource } from "../api/use-resource.js";
-import { signInHref, useSession } from "../auth/session.js";
+import { useSession } from "../auth/session.js";
 import { CodeBlock } from "../components/code-block.js";
 import { tokenSetup } from "../components/connect-clients.js";
 import { serverNameOf } from "../components/connect-guide.js";
 import { ErrorCallout } from "../components/error-callout.js";
+import { useSignInDialog } from "../components/sign-in-dialog.js";
 import {
   Avatar,
   Badge,
@@ -574,27 +575,44 @@ const SECTION_PAGES: Record<AccountSection, ComponentType<SectionProps>> = {
 export function AccountPage(props: AccountPageProps) {
   const { t, language } = useI18n();
   const { session } = useSession();
-  const location = useLocation();
+  const openSignIn = useSignInDialog();
   const { section, origin } = props;
 
   useEffect(() => {
     applyHead(buildHead({ name: "account", section }, language, origin));
   }, [section, language, origin]);
 
-  // Nothing here is anyone's until somebody is signed in: the way in is the sign-in page, which
-  // comes back to this section as it was asked for. It takes this page's place in the history,
-  // so that going back does not land on a page that sends the person away again.
+  // Nothing here is anyone's until somebody is signed in: the sign-in dialog opens over the
+  // page by itself, and signing in from it comes back to this section as it was asked for.
   const signedOut = session.status === "anonymous";
-  const signIn = signInHref(location);
   useEffect(() => {
     if (signedOut) {
-      navigate(signIn, { replace: true });
+      openSignIn();
     }
-  }, [signedOut, signIn]);
+  }, [signedOut, openSignIn]);
 
   // Where nobody can sign in there are no such pages.
   if (session.status === "disabled") {
     return <NotFoundPage />;
+  }
+  if (signedOut) {
+    // What is left for someone who closed the dialog: what the page is, and the way back to it.
+    return (
+      <Container className={styles.page}>
+        <h1 className={styles.title}>{t.account.title}</h1>
+        <div className={styles.signedOut}>
+          <Callout
+            action={
+              <Button size="sm" onClick={openSignIn}>
+                {t.auth.signIn}
+              </Button>
+            }
+          >
+            {t.auth.accountSignedOut}
+          </Callout>
+        </div>
+      </Container>
+    );
   }
   if (session.status !== "user") {
     return (

@@ -185,11 +185,12 @@ export {
   restRepoTokenRequestSchema,
   restRepoTokensSchema,
   restUserSchema,
-  SIGN_IN_ERROR_PARAM,
   SIGN_IN_FAILURES,
-  SIGN_IN_PAGE_PATH,
+  SIGN_IN_PARAM,
+  SIGN_IN_REQUESTS,
   type SignInFailure,
-  signInPagePath,
+  type SignInRequest,
+  signInPath,
 } from "./rest/account.js";
 export {
   REST_FEATURED_SKILL_NAMES,

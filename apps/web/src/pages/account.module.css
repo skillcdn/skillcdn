@@ -6,6 +6,12 @@
   font-size: var(--text-2xl);
 }
 
+/* All there is for someone signed out: one line and the way in, under the title. */
+.signedOut {
+  max-width: var(--width-dialog);
+  margin-top: var(--space-5);
+}
+
 /* A menu down the side and one section beside it. The menu is the list of what a person has
    here; it grows a row when they have something more. */
 .layout {

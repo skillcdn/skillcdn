@@ -5,10 +5,8 @@ import {
   GitHostError,
   type GitHostKey,
   type GitHostLogin,
-  RETURN_TO_PARAM,
-  SIGN_IN_ERROR_PARAM,
-  SIGN_IN_PAGE_PATH,
   type SignInFailure,
+  signInPath,
 } from "@skillcdn/core";
 import { type Database, saveLogin, type UserRecord } from "@skillcdn/db";
 import * as z from "zod";
@@ -20,7 +18,7 @@ import { readCookie, type Sessions, writeCookie } from "./sessions.js";
 // Signing in through the git host (docs/specs/permissions.md). The browser leaves for the host
 // with a cookie that remembers what it left for, and comes back with a code; the code becomes
 // the host's credential, which stays here, and a session, which is all the browser gets. What
-// did not complete goes back to the sign-in page, which says so and offers to try again.
+// did not complete goes back to the page it was for, which says so and offers to try again.
 
 /** The git host people sign in through. */
 export const LOGIN_HOST: GitHostKey = "gh";
@@ -134,8 +132,8 @@ export class Login {
 
   /**
    * Finishes a sign-in with what the git host sent the browser back with. Whatever happens, the
-   * browser is sent on to a page of this deployment: the one it left for, signed in, or the
-   * sign-in page with what went wrong.
+   * browser is sent on to the page it left for: signed in, or asked to open the sign-in dialog
+   * with what went wrong.
    */
   async complete(
     query: { readonly code?: string; readonly state?: string; readonly error?: string },
@@ -144,16 +142,13 @@ export class Login {
     const { secrets, clock, logger, origin } = this.#options;
     const forget = this.#cookie("", 0);
     /**
-     * Back to the sign-in page, which says what happened and offers to try again: for the page
-     * this attempt was for, as long as the browser still carries which that was.
+     * Back to the page this attempt was for, which says what happened over itself and offers to
+     * try again (ADR-0043): the front page, once the browser no longer carries which that was.
      */
-    const failed = (failure: SignInFailure, returnTo?: string): LoginStep => {
-      const told = new URLSearchParams({ [SIGN_IN_ERROR_PARAM]: failure });
-      if (returnTo !== undefined) {
-        told.set(RETURN_TO_PARAM, safeReturnTo(returnTo, origin));
-      }
-      return { redirect: `${SIGN_IN_PAGE_PATH}?${told}`, cookies: [forget] };
-    };
+    const failed = (failure: SignInFailure, returnTo?: string): LoginStep => ({
+      redirect: signInPath(safeReturnTo(returnTo, origin), failure),
+      cookies: [forget],
+    });
 
     const sealed = readCookie(cookieHeader, this.#cookieName);
     const pending =
