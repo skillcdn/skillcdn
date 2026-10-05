@@ -757,6 +757,28 @@ describe("addresses that cannot be served", () => {
     expect(host.calls.getRepository).toBe(1);
   });
 
+  it("shares that a name does not exist with every process, for as long as it is believed", async () => {
+    let now = Date.now();
+    const clock = { now: () => new Date(now) };
+    const ask = async (process: ReturnType<typeof harness>) => {
+      const response = await process.request("/gh/acme/nowhere-for-anyone", {
+        method: "POST",
+        body: "{}",
+      });
+      expect(response.status).toBe(404);
+      return process.host.calls.getRepository;
+    };
+    expect(await ask(harness({ clock }))).toBe(1);
+    // Another process has a memory of its own, and finds the note the first one left.
+    expect(await ask(harness({ clock }))).toBe(0);
+    // A note is believed as long as the first process believes its own, and no longer.
+    now += 61_000;
+    expect(await ask(harness({ clock }))).toBe(1);
+    // A note from a clock that runs ahead is not believed at all.
+    now -= 3_600_000;
+    expect(await ask(harness({ clock }))).toBe(1);
+  });
+
   it("rejects malformed addresses before touching the git host", async () => {
     const { request, host } = harness();
     for (const path of [

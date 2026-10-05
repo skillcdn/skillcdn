@@ -8,9 +8,11 @@ import {
   createBlobStore,
   type Database,
   deleteRepoAlias,
+  deleteStaleMissingRepos,
   ensureSnapshot,
   failSnapshot,
   findCachedRef,
+  findMissingRepo,
   findRepoByAlias,
   findSkills,
   getEntry,
@@ -44,6 +46,7 @@ import {
   renewSnapshotLease,
   type SnapshotScope,
   saveCachedRef,
+  saveMissingRepo,
   saveRepository,
   searchEntries,
   writeSnapshotIndex,
@@ -208,6 +211,20 @@ describe("repositories", () => {
     });
     const otherAccount = { ...scope, accountId: "00000000-0000-7000-8000-000000000000" };
     expect(await findCachedRef(database, otherAccount, "")).toBeUndefined();
+  });
+
+  it("notes a name that is nothing to the public, once per name, until the note is stale", async () => {
+    const alias = { host: "gh", owner: "acme", repo: "nothing-here" } as const;
+    expect(await findMissingRepo(database, alias)).toBeUndefined();
+    await saveMissingRepo(database, alias, T0);
+    await saveMissingRepo(database, alias, minutes(2));
+    await saveMissingRepo(database, { ...alias, repo: "nor-here" }, T0);
+    expect(await findMissingRepo(database, alias)).toEqual(minutes(2));
+    expect(await findMissingRepo(database, { ...alias, owner: "other" })).toBeUndefined();
+
+    expect(await deleteStaleMissingRepos(database, minutes(1))).toBe(1);
+    expect(await findMissingRepo(database, { ...alias, repo: "nor-here" })).toBeUndefined();
+    expect(await findMissingRepo(database, alias)).toEqual(minutes(2));
   });
 });
 

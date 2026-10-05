@@ -55,9 +55,10 @@ src/
                  making and hashing), login.ts (the round trip to the git host), sessions.ts,
                  credentials.ts (the person's token of the host, encrypted, renewed, forgotten when
                  lost), permissions.ts (whether a person can see a repository, as the host says),
-                 janitor.ts (removes what has expired), and oauth/: the authorization server, its
-                 clients (registered, or a metadata document fetched from the public internet only)
-                 and the rules for redirect URIs
+                 and oauth/: the authorization server, its clients (registered, or a metadata
+                 document fetched from the public internet only) and the rules for redirect URIs
+  janitor.ts     removes what time has ended: sessions, tokens, and answers of the git host that
+                 nothing believes any more
   owners/        the page of an account (ADR-0037): the host's public listing, kept for a while,
                  with the indexed repositories that hold skills first
   http/          Hono app: /healthz, /readyz, the route that turns a URL into a mount, the REST API,

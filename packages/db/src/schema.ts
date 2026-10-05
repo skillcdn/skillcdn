@@ -99,6 +99,31 @@ export const repoAliases = pgTable(
   ],
 );
 
+/**
+ * `owner/name` spellings the git host showed nobody in particular a repository under, the last
+ * time a request without a credential asked: nothing by that name, or nothing public. Kept so
+ * that every process stops asking the host about the name for a while. A lookup index like
+ * `repo_aliases`, not tenant data: a name here belongs to no account. Only requests from nobody
+ * in particular write it, so a row says the same about a private repository as about a name
+ * that is nothing at all.
+ */
+export const missingRepos = pgTable(
+  "missing_repos",
+  {
+    id: id(),
+    host: text().notNull(),
+    owner: text().notNull(),
+    name: text().notNull(),
+    /** When the host last showed the public nothing under the name. */
+    checkedAt: instant().notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex("missing_repos_name_key").on(table.host, table.owner, table.name),
+    index("missing_repos_checked_idx").on(table.checkedAt),
+  ],
+);
+
 /** Cache of moving refs. The empty ref is the default branch. */
 export const repoRefs = pgTable(
   "repo_refs",

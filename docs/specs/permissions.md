@@ -26,7 +26,7 @@ Five credentials are involved, and none of them is in two places:
 
 An address is resolved the same way for the pages, the REST API and MCP. Who the request is for comes from its credential: a session for the pages and REST, an access token for MCP, and nobody without one.
 
-**For nobody in particular**, the name is looked up as everyone sees it, with the deployment's own credential. A public repository is served. Anything else is not found, and that the name is nothing to the public is remembered for a while, for the next request from nobody.
+**For nobody in particular**, the name is looked up as everyone sees it, with the deployment's own credential. A public repository is served. Anything else is not found, and that the name is nothing to the public is remembered for as long as facts about names are (`REPO_TTL_SECONDS`), for the next request from nobody: in the process, and in the database, so that every process of the deployment stops asking the host about the name.
 
 **For a person**, in this order:
 
@@ -58,7 +58,7 @@ Whether a person can see a repository is asked of the git host with that person'
 
 - An answer is believed for `PERMISSION_TTL_SECONDS` (default 60; `0` asks every time). That is the **staleness bound**: someone who loses access at the host keeps it here for at most that long, and someone who gains it waits at most that long. Nothing ends an answer earlier yet; webhooks will ([roadmap](../roadmap.md)).
 - Every request that reads something not public checks: pages, REST, every MCP call, cached reads included.
-- Only a yes is kept in the database. That a name was nothing to everyone and to the person is remembered for that person, in the process, for the same time: anyone who signed in can ask about any name, each question costs requests to the host, and a stored no would be something a stranger's question could find for a repository and not for a name that is nothing.
+- About a person, only a yes is kept in the database. That a name was nothing to everyone and to the person is remembered for that person, in the process, for the same time: anyone who signed in can ask about any name, each question costs requests to the host, and a stored no would be something a stranger's question could find for a repository and not for a name that is nothing.
 - The name has to mean the same repository to the person and to the app: a renamed or recycled name is another repository, compared by the host's immutable id.
 - When the host cannot be asked and no answer is fresh, the request fails with `503 mount.unavailable` or `mount.rate_limited`. An answer written by a process whose clock runs ahead is not believed longer for that.
 - What is public is another matter and an older rule: that a repository is public is believed for `REPO_TTL_SECONDS`, and somewhat longer while the git host cannot be asked, so that an outage of the host does not take public repositories down. Making a repository private therefore takes effect here within that time, and within the permission time for its own people.

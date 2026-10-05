@@ -22,7 +22,6 @@ import {
 import type { Hono } from "hono";
 import { systemClock } from "../adapters/system-clock.js";
 import { UserCredentials } from "../auth/credentials.js";
-import { AuthJanitor } from "../auth/janitor.js";
 import { LOGIN_HOST, Login } from "../auth/login.js";
 import { AuthorizationServer } from "../auth/oauth/authorization-server.js";
 import { OAuthClients } from "../auth/oauth/clients.js";
@@ -36,6 +35,7 @@ import { createClientAddressResolver } from "../http/client-address.js";
 import type { AppEnv } from "../http/request-context.js";
 import { loadWebBundle, type WebBundle, WebBundleError } from "../http/web.js";
 import { SnapshotService } from "../indexer/snapshot-service.js";
+import { Janitor } from "../janitor.js";
 import type { Logger } from "../logger.js";
 import { MountReader } from "../mounts/mount-reader.js";
 import { MountService } from "../mounts/mount-service.js";
@@ -52,7 +52,7 @@ import { SERVER_NAME, SERVER_VERSION } from "../version.js";
 
 /** How much older than its TTL a cached fact may be when the git host cannot be asked. */
 const STALE_GRACE_FACTOR = 10;
-/** How often what time has ended is removed from the sign-in tables. */
+/** How often what time has ended is removed from the tables that hold it. */
 const JANITOR_INTERVAL_MS = 15 * 60_000;
 
 export interface ApiPorts {
@@ -364,11 +364,8 @@ export async function runApi(config: Config, logger: Logger): Promise<void> {
           },
           connection,
         );
-  const janitor =
-    config.auth === undefined
-      ? undefined
-      : new AuthJanitor({ database, clock: systemClock, logger });
-  janitor?.start(JANITOR_INTERVAL_MS);
+  const janitor = new Janitor({ database, clock: systemClock, logger });
+  janitor.start(JANITOR_INTERVAL_MS);
 
   let shuttingDown = false;
   const { app, snapshots } = createApi(config, {
@@ -436,7 +433,7 @@ export async function runApi(config: Config, logger: Logger): Promise<void> {
 
   await snapshots.close();
   await recorder?.close();
-  await janitor?.close();
+  await janitor.close();
   await database.close();
   logger.info("shutdown complete");
 }

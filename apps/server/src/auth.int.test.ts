@@ -6,7 +6,7 @@ import {
   restMountSchema,
   restMyRepositoriesSchema,
 } from "@skillcdn/core";
-import { getUserCredentials } from "@skillcdn/db";
+import { deleteStaleMissingRepos, getUserCredentials } from "@skillcdn/db";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MountService, type RepoPermissions } from "./mounts/mount-service.js";
@@ -296,6 +296,9 @@ describe("a private repository", () => {
     }
     // Indexing asks the host too; what follows counts only what a request causes.
     await h.snapshots.idle();
+    // Nobody in particular asked about either name lately: the tests before this one did, and
+    // what they left is what any such question leaves, for the one name as for the other.
+    await deleteStaleMissingRepos(testDatabase.database, new Date(Date.now() + 86_400_000));
 
     /** One request, and everything the git host was asked because of it. */
     const probe = async (replica: Harness, path: string, cookie?: string) => {

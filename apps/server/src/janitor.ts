@@ -3,15 +3,19 @@ import {
   type Database,
   deleteExpiredOAuth,
   deleteExpiredSessions,
+  deleteStaleMissingRepos,
   deleteStaleRepoPermissions,
   deleteUnusedOAuthClients,
 } from "@skillcdn/db";
-import type { Logger } from "../logger.js";
+import type { Logger } from "./logger.js";
 
 /** A registration nobody allowed anything within this long was a one-off. */
 const UNUSED_CLIENT_MS = 7 * 24 * 60 * 60_000;
-/** An answer of the git host this old is trusted by nothing, whatever the configured lifetime. */
-const STALE_PERMISSION_MS = 24 * 60 * 60_000;
+/**
+ * An answer of the git host this old is trusted by nothing, whatever the configured lifetime:
+ * what a person may see, and that a name was nothing to the public.
+ */
+const STALE_ANSWER_MS = 24 * 60 * 60_000;
 
 /**
  * Removes what time has ended: sessions, codes, tokens and grants past their end, answers of
@@ -19,7 +23,7 @@ const STALE_PERMISSION_MS = 24 * 60 * 60_000;
  * it is needed for correctness, since every read checks the time itself; this only keeps the
  * tables from growing. Every process may run it: deleting twice deletes once.
  */
-export class AuthJanitor {
+export class Janitor {
   readonly #database: Database;
   readonly #clock: Clock;
   readonly #logger: Logger;
@@ -40,25 +44,22 @@ export class AuthJanitor {
   sweep(): Promise<void> {
     this.#running = this.#running.then(async () => {
       const now = this.#clock.now();
+      const stale = new Date(now.getTime() - STALE_ANSWER_MS);
       try {
         const sessions = await deleteExpiredSessions(this.#database, now);
         const oauth = await deleteExpiredOAuth(this.#database, now);
-        const permissions = await deleteStaleRepoPermissions(
-          this.#database,
-          new Date(now.getTime() - STALE_PERMISSION_MS),
-        );
+        const permissions = await deleteStaleRepoPermissions(this.#database, stale);
+        const missing = await deleteStaleMissingRepos(this.#database, stale);
         const clients = await deleteUnusedOAuthClients(
           this.#database,
           new Date(now.getTime() - UNUSED_CLIENT_MS),
         );
-        if (sessions + oauth.codes + oauth.grants + oauth.tokens + permissions + clients > 0) {
-          this.#logger.info(
-            { sessions, ...oauth, permissions, clients },
-            "expired sign-in state removed",
-          );
+        const removed = { sessions, ...oauth, permissions, missing, clients };
+        if (Object.values(removed).some((count) => count > 0)) {
+          this.#logger.info(removed, "what time has ended was removed");
         }
       } catch (error) {
-        this.#logger.warn({ err: error }, "expired sign-in state was not removed");
+        this.#logger.warn({ err: error }, "what time has ended was not removed");
       }
     });
     return this.#running;

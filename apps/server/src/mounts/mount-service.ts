@@ -16,11 +16,13 @@ import {
   type Database,
   deleteRepoAlias,
   findCachedRef,
+  findMissingRepo,
   findRepoByAlias,
   markRepositoryNotPublic,
   type RepoAliasRecord,
   type RepoRecord,
   saveCachedRef,
+  saveMissingRepo,
   saveRepository,
   type UserRecord,
 } from "@skillcdn/db";
@@ -179,7 +181,8 @@ export class MountService {
   /**
    * Names the host recently said do not exist, and until when that is believed. Asking again
    * costs a request against the host's quota every time, and anyone can ask for any name. Only
-   * requests from nobody in particular write it: see {@link MountService.resolve}.
+   * requests from nobody in particular write it: see {@link MountService.resolve}. The database
+   * holds the same notes for every process (`missing_repos`); this is what is at hand.
    */
   readonly #missing = new Map<string, number>();
 
@@ -415,6 +418,16 @@ export class MountService {
     if (cached !== undefined && age !== undefined && age < repoTtlMs) {
       return cached;
     }
+    // What a request like this one found out a moment ago in another process: the same answer,
+    // without asking the host again. A note from a clock that runs ahead is not believed longer.
+    const missedAt = await findMissingRepo(database, coordinates);
+    if (missedAt !== undefined) {
+      const since = clock.now().getTime() - missedAt.getTime();
+      if (since >= 0 && since < repoTtlMs) {
+        this.#rememberMissing(name, missedAt.getTime() + repoTtlMs);
+        throw new MountError("repo_not_found", "The repository was not found.");
+      }
+    }
     try {
       const repository = await gitHost.getRepository(coordinates);
       const saved = await saveRepository(database, coordinates, repository, clock.now());
@@ -424,7 +437,7 @@ export class MountService {
       // Seen by a credential that sees more than the public does. It stays as invisible as any
       // other private repository, and is not asked about again for a while.
       if (remember) {
-        this.#rememberMissing(name, clock.now().getTime() + repoTtlMs);
+        await this.#noteMissing(coordinates, name);
       }
       throw new MountError("repo_not_found", "The repository was not found.");
     } catch (error) {
@@ -444,7 +457,7 @@ export class MountService {
           );
         }
         if (remember) {
-          this.#rememberMissing(name, clock.now().getTime() + repoTtlMs);
+          await this.#noteMissing(coordinates, name);
         }
         throw new MountError("repo_not_found", "The repository was not found.", { cause: error });
       }
@@ -560,6 +573,21 @@ export class MountService {
       }
       throw hostUnavailable(error);
     }
+  }
+
+  /**
+   * Notes that the name is nothing to the public, for this process and, through the database,
+   * for every other one. Only a question from nobody in particular gets here.
+   */
+  async #noteMissing(coordinates: RepoCoordinates, name: string): Promise<void> {
+    const { database, clock, repoTtlMs } = this.#options;
+    const now = clock.now();
+    this.#rememberMissing(name, now.getTime() + repoTtlMs);
+    await saveMissingRepo(
+      database,
+      { host: coordinates.host, owner: coordinates.owner, repo: coordinates.repo },
+      now,
+    );
   }
 
   #rememberMissing(name: string, until: number): void {

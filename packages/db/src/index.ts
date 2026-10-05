@@ -84,7 +84,9 @@ export {
 export {
   type CachedRef,
   deleteRepoAlias,
+  deleteStaleMissingRepos,
   findCachedRef,
+  findMissingRepo,
   findRepoByAlias,
   markRepositoryNotPublic,
   type RepoAlias,
@@ -92,6 +94,7 @@ export {
   type RepoRecord,
   type RepoScope,
   saveCachedRef,
+  saveMissingRepo,
   saveRepository,
 } from "./queries/repos.js";
 export {

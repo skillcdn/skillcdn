@@ -38,7 +38,7 @@ Goal: an agent that connects to an address knows what it got and uses it well, w
 Design points still open (record the outcome in the spec or an ADR):
 
 - Pinned commits that the host serves through a repository without being part of its history (see the open questions in the address spec).
-- Abuse controls for the anonymous endpoints. The server bounds its own work: request and index size limits, bounded indexing per process, a short in-process memory of names that do not exist. Limiting requests per client is the job of whatever sits in front of the server. Still missing here: a negative cache shared between replicas.
+- Abuse controls for the anonymous endpoints: decided. The server bounds its own work: request and index size limits, bounded indexing per process, and a short memory of names that are nothing to the public, which every process shares through the database ([permissions](specs/permissions.md#what-is-served-to-whom)). Limiting requests per client is the job of whatever sits in front of the server.
 
 ## Now: milestone 4, ready for public operation
 

@@ -1,7 +1,7 @@
 import type { GitHostKey, HostRepository } from "@skillcdn/core";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, lt, sql } from "drizzle-orm";
 import { type Database, drizzleOf } from "../client.js";
-import { accounts, repoAliases, repoRefs, repos } from "../schema.js";
+import { accounts, missingRepos, repoAliases, repoRefs, repos } from "../schema.js";
 
 export interface RepoRecord {
   readonly id: string;
@@ -179,6 +179,55 @@ export async function deleteRepoAlias(database: Database, alias: RepoAlias): Pro
         eq(repoAliases.name, alias.repo),
       ),
     );
+}
+
+/**
+ * When a request from nobody in particular last found the name to be nothing to the public, if
+ * one did and the note is still kept. How long that is believed is the caller's rule.
+ */
+export async function findMissingRepo(
+  database: Database,
+  alias: RepoAlias,
+): Promise<Date | undefined> {
+  const [row] = await drizzleOf(database)
+    .select({ checkedAt: missingRepos.checkedAt })
+    .from(missingRepos)
+    .where(
+      and(
+        eq(missingRepos.host, alias.host),
+        eq(missingRepos.owner, alias.owner),
+        eq(missingRepos.name, alias.repo),
+      ),
+    )
+    .limit(1);
+  return row?.checkedAt;
+}
+
+/**
+ * Notes that the host just showed the public nothing under the name. Only a request from nobody
+ * in particular may cause it: what a person's question finds out is theirs alone.
+ */
+export async function saveMissingRepo(
+  database: Database,
+  alias: RepoAlias,
+  now: Date,
+): Promise<void> {
+  await drizzleOf(database)
+    .insert(missingRepos)
+    .values({ host: alias.host, owner: alias.owner, name: alias.repo, checkedAt: now })
+    .onConflictDoUpdate({
+      target: [missingRepos.host, missingRepos.owner, missingRepos.name],
+      set: { checkedAt: now },
+    });
+}
+
+/** Removes the notes made before `before`, which nothing believes any more. */
+export async function deleteStaleMissingRepos(database: Database, before: Date): Promise<number> {
+  const rows = await drizzleOf(database)
+    .delete(missingRepos)
+    .where(lt(missingRepos.checkedAt, before))
+    .returning({ id: missingRepos.id });
+  return rows.length;
 }
 
 export interface CachedRef {
