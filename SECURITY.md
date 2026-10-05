@@ -18,7 +18,7 @@ In scope:
 Things we especially want to hear about:
 
 - Reading a private repository's content without permission on the git host, including through caches or search.
-- Token leakage of any kind: git-host tokens, SkillCDN tokens, project tokens, webhook secrets.
+- Token leakage of any kind: git-host tokens, SkillCDN tokens, repository tokens, webhook secrets.
 - Any path by which repository content is executed rather than treated as data.
 - Request forgery through git-host adapters, path traversal, and resource exhaustion through crafted repositories.
 

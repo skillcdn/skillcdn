@@ -19,6 +19,7 @@ export const accountKo: typeof accountEn = {
     account: "내 계정",
     repositories: "비공개 저장소",
     apps: "연결된 앱",
+    tokens: "토큰",
     privateSignedOut:
       "비공개 저장소인가요? GitHub로 로그인하면 접근 권한이 있는 저장소를 열 수 있어요.",
     privateSignedIn:
@@ -82,6 +83,7 @@ export const accountKo: typeof accountEn = {
       overview: "한눈에 보기",
       repositories: "비공개 저장소",
       apps: "연결된 앱",
+      tokens: "토큰",
     },
     overview: {
       lead: "GitHub로 로그인되어 있어요. SkillCDN은 내가 무엇을 볼 수 있는지만 GitHub에 물어보고, 거기서 아무것도 바꾸지 못해요.",
@@ -92,6 +94,8 @@ export const accountKo: typeof accountEn = {
       repositoriesAction: "비공개 저장소 설정하기",
       appsBody: "내 이름으로 비공개 저장소를 읽도록 허용한 AI 앱이에요.",
       appsAction: "연결된 앱 보기",
+      tokensBody: "예약 작업이나 서버처럼 로그인할 수 없는 에이전트에 쓰는 토큰이에요.",
+      tokensAction: "토큰 관리하기",
       signOutBody:
         "로그아웃하면 이 브라우저의 로그인만 끝나요. 연결한 앱은 직접 삭제하기 전까지 계속 동작해요.",
     },
@@ -128,6 +132,51 @@ export const accountKo: typeof accountEn = {
       remove: "삭제",
       removeLabel: (client: string, address: string) => `${address}에서 ${client} 삭제`,
       removed: "삭제했어요. 앱이 다시 요청해야 해요.",
+    },
+    tokens: {
+      lead: "토큰이 있으면 예약 작업이나 서버처럼 로그인할 사람이 없는 에이전트도 비공개 저장소 하나를 내 이름으로 읽을 수 있어요. 토큰을 가진 사람은 누구나 그 저장소를 읽을 수 있으니 비밀번호처럼 보관하세요. 직접 쓰는 AI 앱에는 토큰이 필요 없어요. 앱이 로그인하니까요.",
+      form: {
+        title: "토큰 만들기",
+        repository: "저장소",
+        name: "이름",
+        namePlaceholder: "야간 작업",
+        nameHint: "이름은 나만 볼 수 있어요. 토큰을 쓸 곳의 이름을 붙여 두세요.",
+        expires: "만료",
+        lifetime: (days: number) => (days === 365 ? "1년 뒤" : `${days}일 뒤`),
+        make: "토큰 만들기",
+        making: "만드는 중…",
+      },
+      noRepositories: {
+        title: "아직 비공개 저장소가 없어요",
+        body: "토큰은 SkillCDN GitHub 앱이 설치된 비공개 저장소에 만들어요. 공개 저장소에는 토큰이 필요 없어요.",
+        action: "비공개 저장소 설정하기",
+      },
+      made: {
+        title: "지금 토큰을 복사하세요",
+        body: "이번 한 번만 보여 드려요. 이 페이지도 다시 보여 줄 수 없으니, 잃어버렸다면 삭제하고 새로 만드세요.",
+        token: "토큰",
+        give: "에이전트에 넣기",
+        giveBody: (repository: string) =>
+          `에이전트는 저장소 주소에 연결하고 요청마다 토큰을 보내요. ${repository}의 모든 브랜치, 태그, 폴더를 읽을 수 있고 다른 것은 읽지 못해요.`,
+        claudeCode: "Claude Code",
+        codex: "Codex",
+        other: "헤더",
+        otherHint: "그 밖의 클라이언트는 이 주소에 연결하고, 요청마다 이 헤더를 보내면 돼요.",
+        address: "주소",
+        done: "복사했어요",
+      },
+      list: "내 토큰",
+      none: {
+        title: "토큰이 없어요",
+        body: "만든 토큰이 여기에 나타나요. 비밀 값은 다시 보이지 않아요.",
+      },
+      madeAt: (iso: string) => `${day(iso)} 만듦`,
+      expiresAt: (iso: string) => `${day(iso)} 만료`,
+      lastUsed: (iso: string) => `${day(iso)} 마지막 사용`,
+      neverUsed: "아직 사용한 적 없음",
+      remove: "삭제",
+      removeLabel: (label: string, address: string) => `${address}의 토큰 ${label} 삭제`,
+      removed: "삭제했어요. 이 토큰은 더 이상 쓸 수 없어요.",
     },
   },
 

@@ -284,6 +284,22 @@ export const en = {
         title: "Ref not found",
         body: "This repository has no such branch or tag, and no such commit in the history of its default branch. If the ref contains a slash, end it with a colon, for example @release/1.2:",
       },
+      "token.limit": {
+        title: "No room for another token",
+        body: "An account holds a limited number of tokens. Remove one that is no longer used.",
+      },
+      "token.public_repository": {
+        title: "No token needed",
+        body: "A public repository is read without a token, by anyone.",
+      },
+      "token.invalid": {
+        title: "This token cannot be made",
+        body: "Choose a repository and a lifetime, and give the token a short name.",
+      },
+      "token.not_found": {
+        title: "No such token",
+        body: "It was removed already.",
+      },
       "mount.not_allowed": {
         title: "Not served here",
         body: "This deployment does not serve this repository.",

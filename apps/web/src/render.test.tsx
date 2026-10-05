@@ -776,11 +776,15 @@ describe("the page of an address", () => {
       expect(mine.html).toContain(t.connect.private.signIn.chatgpt);
       expect(mine.html).toContain(t.connect.private.steps.chatgpt);
       expect(mine.html).not.toContain(t.connect.clients.chatgpt.steps[1]);
+      // And where an agent that cannot sign in gets a token for this very repository.
+      expect(mine.html).toContain('href="/account/tokens?repository=%2Fgh%2Facme%2Fskills"');
+      expect(mine.html).toContain(t.connect.private.headlessAction);
 
       const everyones = shown("public");
       expect(everyones.indexable).toBe(true);
       expect(everyones.html).not.toContain(`>${t.mount.private}<`);
       expect(everyones.html).not.toContain(t.connect.private.title);
+      expect(everyones.html).not.toContain("/account/tokens");
       expect(everyones.html).toContain(t.connect.clients.chatgpt.steps[1]);
     }
   });

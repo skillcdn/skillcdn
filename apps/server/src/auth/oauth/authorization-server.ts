@@ -124,6 +124,10 @@ export interface AuthorizationRequestView {
   readonly scope: readonly string[];
 }
 
+/** What a refused token is told, for every reason alike, so that a refusal does not say why. */
+export const INVALID_TOKEN_DESCRIPTION =
+  "The access token is not valid for this address, or has expired.";
+
 export type BearerOutcome =
   /** No credential was presented. */
   | { readonly status: "anonymous" }
@@ -550,11 +554,7 @@ export class AuthorizationServer {
       return { status: "anonymous" };
     }
     const { database, clock, logger } = this.#options;
-    // One description for every reason, so that a refusal does not say what was wrong with it.
-    const invalid: BearerOutcome = {
-      status: "invalid",
-      description: "The access token is not valid for this address, or has expired.",
-    };
+    const invalid: BearerOutcome = { status: "invalid", description: INVALID_TOKEN_DESCRIPTION };
     const token = /^Bearer\s+(\S+)$/i.exec(authorization.trim())?.[1];
     if (token === undefined) {
       return invalid;

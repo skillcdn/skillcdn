@@ -20,6 +20,7 @@ import {
   MEDIA_ROUTE,
   parseAddress,
   parseOwnerPath,
+  REPO_TOKEN_PREFIX,
   REST_MOUNT_LIST_LIMIT,
   type RestShowcase,
   type RestSkill,
@@ -32,8 +33,13 @@ import { cors } from "hono/cors";
 import * as z from "zod";
 import { CredentialsLostError, type UserCredentials } from "../auth/credentials.js";
 import type { Login } from "../auth/login.js";
-import type { AuthorizationServer } from "../auth/oauth/authorization-server.js";
+import {
+  type AuthorizationServer,
+  type BearerOutcome,
+  INVALID_TOKEN_DESCRIPTION,
+} from "../auth/oauth/authorization-server.js";
 import type { OAuthClients } from "../auth/oauth/clients.js";
+import type { RepoTokens } from "../auth/repo-tokens.js";
 import type { Sessions } from "../auth/sessions.js";
 import type { HostEvents } from "../events/host-events.js";
 import type { SnapshotService } from "../indexer/snapshot-service.js";
@@ -79,6 +85,8 @@ export interface AppAuth {
   readonly login: Login;
   readonly authorization: AuthorizationServer;
   readonly clients: OAuthClients;
+  /** The tokens people make for agents that have nobody to sign in. */
+  readonly tokens: RepoTokens;
   readonly credentials: UserCredentials;
   readonly hostLogin: GitHostLogin;
   readonly clock: Clock;
@@ -336,7 +344,21 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
       };
       // A credential that is no good stands for nobody. What everyone is served needs none and
       // is served all the same; anything else then says that the credential is no good.
-      const bearer = await auth.authorization.verify(c.req.header("authorization"), address);
+      const header = c.req.header("authorization");
+      const presented = /^Bearer\s+(\S+)$/i.exec(header?.trim() ?? "")?.[1];
+      let bearer: BearerOutcome;
+      // A token made for a repository is good at every address of it, and of nothing else.
+      let onlyRepo: string | undefined;
+      if (presented?.startsWith(REPO_TOKEN_PREFIX) === true) {
+        const access = await auth.tokens.verify(presented, address);
+        bearer =
+          access === undefined
+            ? { status: "invalid", description: INVALID_TOKEN_DESCRIPTION }
+            : { status: "valid", user: access.user };
+        onlyRepo = access?.repoId;
+      } else {
+        bearer = await auth.authorization.verify(header, address);
+      }
       user = bearer.status === "valid" ? bearer.user : undefined;
       try {
         const viewer = user;
@@ -344,6 +366,18 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
           address,
           viewer === undefined ? undefined : async () => viewer,
         );
+        // The name the token was made under means another repository by now: the token is not
+        // this repository's. What everyone is served is served all the same.
+        if (
+          onlyRepo !== undefined &&
+          onlyRepo !== mount.repo.id &&
+          mount.repo.repository.visibility !== "public"
+        ) {
+          return challenge("auth.invalid_token", INVALID_TOKEN_DESCRIPTION, {
+            code: "invalid_token",
+            description: INVALID_TOKEN_DESCRIPTION,
+          });
+        }
         startIndexing(mount);
         return mount;
       } catch (error) {
@@ -420,6 +454,7 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
         }
       },
       asksForPermission: (address) => mounts.asksForPermission(address),
+      open: (address, user) => resolveFor(address, async () => user),
     });
   }
   if (dependencies.webhooks !== undefined) {

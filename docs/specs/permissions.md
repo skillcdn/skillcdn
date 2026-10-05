@@ -1,7 +1,7 @@
 # Spec: people, private repositories and access
 
-- Status: **Draft.** Signing in, private repositories on the pages, over REST and over MCP, the authorization server, and the git host's events that end an answer early are implemented. Tokens for headless agents are not ([roadmap](../roadmap.md)).
-- Implemented by: `apps/server/src/auth/`, `apps/server/src/mounts/` and `apps/server/src/events/`, the GitHub App, login and webhook adapters in `packages/github`, the queries in `packages/db`, and the page contracts in `packages/core/src/rest/account.ts`. Decisions: [ADR-0035](../adr/0035-people-sign-in-through-the-git-hosts-app.md), [ADR-0036](../adr/0036-the-deployment-is-the-authorization-server-of-its-addresses.md), [ADR-0038](../adr/0038-the-git-hosts-events-end-what-is-remembered.md).
+- Status: **Draft.** Signing in, private repositories on the pages, over REST and over MCP, the authorization server, the git host's events that end an answer early, and tokens for agents with nobody to sign in are implemented.
+- Implemented by: `apps/server/src/auth/`, `apps/server/src/mounts/` and `apps/server/src/events/`, the GitHub App, login and webhook adapters in `packages/github`, the queries in `packages/db`, and the page contracts in `packages/core/src/rest/account.ts`. Decisions: [ADR-0035](../adr/0035-people-sign-in-through-the-git-hosts-app.md), [ADR-0036](../adr/0036-the-deployment-is-the-authorization-server-of-its-addresses.md), [ADR-0038](../adr/0038-the-git-hosts-events-end-what-is-remembered.md), [ADR-0040](../adr/0040-a-token-for-an-agent-reads-one-repository-as-its-maker.md).
 
 Everything here exists only on a deployment that is configured for signing in ([deploy](../../deploy/README.md#signing-in-and-private-repositories)). Without that configuration there are no people, no private repositories and none of these routes: the deployment serves public repositories to everyone, as before.
 
@@ -12,7 +12,7 @@ Everything here exists only on a deployment that is configured for signing in ([
 - **What is not public is served to exactly the people the host shows it to**, and only where the git host's app is installed on the repository. To everyone else it does not exist, in the same words and after the same work as a name that really does not.
 - **Fail closed.** No answer is no access. When the git host cannot be asked whether a person can see a repository, the request fails; an answer about a person that has run out is never stretched.
 
-Five credentials are involved, and none of them is in two places:
+Six credentials are involved, and none of them is in two places:
 
 | Credential | Who holds it | What it is used for |
 |---|---|---|
@@ -21,10 +21,11 @@ Five credentials are involved, and none of them is in two places:
 | The person's token of the git host | The server, encrypted at rest | Asking the host what that person can see, and listing where the app is installed for them. Never reading content, never leaving the server. |
 | A session | The person's browser, as a cookie | The pages and the REST API. |
 | An access token of this deployment | The person's AI app | One address, over MCP. |
+| A repository token of this deployment | An agent with nobody to sign in, given it by the person who made it | One repository, over MCP, as that person. |
 
 ## What is served to whom
 
-An address is resolved the same way for the pages, the REST API and MCP. Who the request is for comes from its credential: a session for the pages and REST, an access token for MCP, and nobody without one.
+An address is resolved the same way for the pages, the REST API and MCP. Who the request is for comes from its credential: a session for the pages and REST, an access token or a repository token for MCP, and nobody without one.
 
 **For nobody in particular**, the name is looked up as everyone sees it, with the deployment's own credential. A public repository is served. Anything else is not found, and that the name is nothing to the public is remembered for as long as facts about names are (`REPO_TTL_SECONDS`), for the next request from nobody: in the process, and in the database, so that every process of the deployment stops asking the host about the name.
 
@@ -105,7 +106,7 @@ People sign in through the git host's app ([ADR-0035](../adr/0035-people-sign-in
 
 - **The session** is a random token in a cookie and its SHA-256 in the database, so the `api` role keeps no session state and any replica answers any request. The cookie is `HttpOnly`, `SameSite=Lax`, for the whole origin, and over TLS `Secure` under the name `__Host-skillcdn_session` (plain `skillcdn_session` on `http`, for development). A session ends `SESSION_TTL_DAYS` (default 30) after it was last used.
 - **The person's token** is sealed with AES-256-GCM under a key derived from `AUTH_SECRET`, bound to the user it belongs to, and read in one place. Where the host issues expiring tokens it is renewed with its refresh token, once for all requests that find it expired. It is never logged and never part of an answer.
-- **Losing the credential signs the person out everywhere.** When the host refuses the token and it cannot be renewed (the person revoked the app, or the refresh token ran out), the stored credential, every session, every grant to an app, and every remembered answer of that person are deleted. They sign in again and allow their apps again.
+- **Losing the credential signs the person out everywhere.** When the host refuses the token and it cannot be renewed (the person revoked the app, or the refresh token ran out), the stored credential, every session, every grant to an app, every token they made, and every remembered answer of that person are deleted. They sign in again, allow their apps again and make their tokens again.
 - A request that changes something for the person signed in (`POST /auth/logout`, `DELETE /api/v1/me/grants/<id>`, `POST /api/v1/oauth/decision`) is accepted only with the deployment's own `origin`, on top of the cookie not travelling with other sites' requests.
 
 What a signed-in person has here is in the [REST API](rest.md#people): who they are, the repositories they can reach through the app, and the apps they allowed.
@@ -167,14 +168,25 @@ A redirect URI is `https`, or `http` to this computer (`localhost`, `127.0.0.1`,
 ### Tokens
 
 - An access token allows reading **one address**: the exact canonical address the client named as `resource`, ref and path included. At any other address it is `invalid_token`. The one scope is `read`.
-- Tokens are opaque random strings, recognizable by prefix (`scdn_at_` access, `scdn_rt_` refresh, `scdn_c_` code, `scdn_client_` and `scdn_cs_` for a registered client and its secret, `scdn_s_` session), and stored only as SHA-256 hashes.
+- Tokens are opaque random strings, recognizable by prefix (`scdn_at_` access, `scdn_rt_` refresh, `scdn_c_` code, `scdn_client_` and `scdn_cs_` for a registered client and its secret, `scdn_s_` session, `scdn_repo_` for a [repository token](#tokens-for-agents-with-nobody-to-sign-in)), and stored only as SHA-256 hashes.
 - An access token lasts `ACCESS_TOKEN_TTL_SECONDS` (default one hour). A refresh token lasts `REFRESH_TOKEN_TTL_DAYS` (default 30) from the last exchange and is rotated: every exchange answers with a new pair. A refresh token presented again within a minute of its first use is answered with another new pair, for a client that did not receive the answer and for clients that share one credential store; presented later, it revokes the whole grant, because by then two holders of one refresh token means one of them should not have it.
 - A token says who allowed it, never what they may see: every request checks the person's access with the git host as above. Removing access at the host therefore ends it here within the staleness bound, without anything being revoked.
 - `POST /oauth/revoke` (RFC 7009) revokes the grant a token belongs to, for the client it was issued to. The person removes a grant from their account pages, which ends it at once.
 - What a person can make is bounded. A grant keeps its eight newest token pairs, so a refresh token presented again and again stops being one; a person keeps a hundred grants, and allowing one more ends the one used longest ago.
 
+## Tokens for agents with nobody to sign in
+
+A scheduled job or a server has no browser and no person to agree to anything. A person gives it a **repository token** instead ([ADR-0040](../adr/0040-a-token-for-an-agent-reads-one-repository-as-its-maker.md)): made on their account pages, shown once, and sent by the agent with every request as `Authorization: Bearer <token>`.
+
+- **Who makes one, and for what.** A signed-in person, for a repository that is not public and that they can open right now. A repository they cannot open and a name that is nothing are the same `404`; a public repository is refused, because it needs no token. No role at the git host is asked for.
+- **What it reads.** Every address of that one repository, at any ref and path, over MCP. It reads as its maker: each request is resolved and checked with the git host as that person's own would be, so the token opens nothing they cannot open at that moment, and the staleness bound and the host's events apply to it as to everything else. The pages and the REST API do not take it.
+- **Where it is good.** At addresses that name the repository as the token was made for it, while that name still means the same repository to the host. Anywhere else it is a token that is no good: `401` with `invalid_token`, or the request is served as anyone's where the address is public.
+- **How it ends.** At the end of the lifetime chosen when it was made, from a day to a year; when its maker removes it, at once; and with everything else of theirs when the git host stops vouching for them. Nothing brings an ended token back.
+- **What it is.** A random string that begins `scdn_repo_`, stored as its SHA-256, like every other secret handed out here. A person holds at most fifty that have not expired; one more is refused with `409`, and none is ended to make room.
+
+The requests behind the account pages are in the [REST API](rest.md#people): listing, making and removing.
+
 ## Not yet
 
-- **Tokens for headless agents.** An agent with no person in front of it cannot use this flow. A repository-scoped, read-only, expiring token issued by someone who administers the repository is planned.
 - **Other git hosts.** Signing in goes through GitHub, the one adapter there is.
 - **Asserted client keys.** A client's metadata document may name `private_key_jwt`; such a client is treated as a public client, protected by PKCE alone. ChatGPT's document names it as what it would rather use and `none` as what it also can, and the server's metadata offers `none`.

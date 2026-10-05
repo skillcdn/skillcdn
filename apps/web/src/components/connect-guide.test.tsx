@@ -8,6 +8,7 @@ import {
   CONNECT_CLIENTS,
   clientConfiguration,
   clientSignInCommand,
+  tokenSetup,
 } from "./connect-clients.js";
 import {
   ConnectGuide,
@@ -204,6 +205,20 @@ describe("connection onboarding", () => {
       expect(Object.keys(t.connect.private.steps).sort()).toEqual(["chatgpt", "other"]);
     },
   );
+
+  it("writes what an agent is given with a token: a command where a client takes one, else the header", () => {
+    const url = "https://skills.example/gh/acme/private";
+    const token = "scdn_repo_example";
+    expect(tokenSetup("claudeCode", "team-skills", url, token)).toBe(
+      `claude mcp add --transport http team-skills ${url} --header "Authorization: Bearer ${token}"`,
+    );
+    // Codex reads the token from a variable, so that no file of its own holds it.
+    expect(tokenSetup("codex", "team-skills", url, token).split("\n")).toEqual([
+      `export SKILLCDN_TOKEN=${token}`,
+      `codex mcp add team-skills --url ${url} --bearer-token-env-var SKILLCDN_TOKEN`,
+    ]);
+    expect(tokenSetup("other", "team-skills", url, token)).toBe(`Authorization: Bearer ${token}`);
+  });
 
   it("keeps the mounted endpoint intact in install links and configurations", () => {
     const url = "https://skills.example/gh/acme/skills@release/1.2:docs";

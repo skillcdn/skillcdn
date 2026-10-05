@@ -268,6 +268,22 @@ export const ko: Messages = {
         title: "ref를 찾을 수 없습니다",
         body: "이 저장소에 그런 브랜치나 태그가 없고, 기본 브랜치의 기록에 그런 커밋도 없습니다. ref에 슬래시가 들어 있다면 콜론으로 끝내세요. 예: @release/1.2:",
       },
+      "token.limit": {
+        title: "토큰을 더 만들 수 없습니다",
+        body: "한 계정이 가질 수 있는 토큰 수에는 한도가 있습니다. 쓰지 않는 토큰을 삭제해 주세요.",
+      },
+      "token.public_repository": {
+        title: "토큰이 필요 없습니다",
+        body: "공개 저장소는 누구나 토큰 없이 읽을 수 있습니다.",
+      },
+      "token.invalid": {
+        title: "이 토큰은 만들 수 없습니다",
+        body: "저장소와 만료 기간을 고르고, 짧은 이름을 붙여 주세요.",
+      },
+      "token.not_found": {
+        title: "토큰을 찾을 수 없습니다",
+        body: "이미 삭제된 토큰입니다.",
+      },
       "mount.not_allowed": {
         title: "여기서는 제공하지 않습니다",
         body: "이 배포에서는 이 저장소를 제공하지 않습니다.",

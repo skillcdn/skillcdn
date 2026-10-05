@@ -451,6 +451,8 @@
   --user-menu-name-width: 9rem;
   /* The side menu of the account pages, and the column a person is asked a question in. */
   --account-nav-width: 13rem;
+  /* The narrowest a field of a form on those pages gets before the fields stack. */
+  --account-field-width: 12rem;
   --width-dialog: 32rem;
   --shadow-stage: 0 1.5rem 5rem #00000033;
 }

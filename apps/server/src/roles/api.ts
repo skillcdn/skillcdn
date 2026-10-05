@@ -29,6 +29,7 @@ import { AuthorizationServer } from "../auth/oauth/authorization-server.js";
 import { OAuthClients } from "../auth/oauth/clients.js";
 import { type DocumentFetcher, fetchPublicDocument } from "../auth/oauth/document-fetch.js";
 import { Permissions } from "../auth/permissions.js";
+import { RepoTokens } from "../auth/repo-tokens.js";
 import { createSecrets } from "../auth/secrets.js";
 import { Sessions } from "../auth/sessions.js";
 import { type AuthConfig, type Config, ConfigError } from "../config/config.js";
@@ -183,6 +184,7 @@ export function createApi(
       sessions,
       credentials,
       clients,
+      tokens: new RepoTokens({ database, clock, logger }),
       hostLogin: ports.login,
       clock,
       login: new Login({

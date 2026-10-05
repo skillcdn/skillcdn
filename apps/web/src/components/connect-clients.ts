@@ -73,6 +73,34 @@ export function clientSignInCommand(client: ConnectClient, name: string): string
   }
 }
 
+/** The name of the variable a terminal client reads a token from, where it reads one from there. */
+export const TOKEN_VARIABLE = "SKILLCDN_TOKEN";
+
+/**
+ * How an agent that has nobody to sign in is given a token it sends with every request
+ * (docs/specs/connect-guide.md): the command of the two terminal clients that take one, and the
+ * header itself for everything else.
+ */
+export function tokenSetup(
+  client: "claudeCode" | "codex" | "other",
+  name: string,
+  url: string,
+  token: string,
+): string {
+  switch (client) {
+    case "claudeCode":
+      return `claude mcp add --transport http ${name} ${url} --header "Authorization: Bearer ${token}"`;
+    case "codex":
+      // Codex reads the token from the environment, so that it is in no configuration file.
+      return [
+        `export ${TOKEN_VARIABLE}=${token}`,
+        `codex mcp add ${name} --url ${url} --bearer-token-env-var ${TOKEN_VARIABLE}`,
+      ].join("\n");
+    default:
+      return `Authorization: Bearer ${token}`;
+  }
+}
+
 /**
  * The same complete endpoint is used in copyable setup and the illustrated preview. `signIn`
  * says that the server asks its clients to sign in, as a private repository does: Codex CLI is

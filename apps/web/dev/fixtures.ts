@@ -5,6 +5,7 @@ import type {
   RestDocumentSummary,
   RestGrants,
   RestLegalDocument,
+  RestRepoTokens,
   RestRepoTranslation,
   RestSkill,
   RestSkillSummary,
@@ -588,6 +589,26 @@ export const FIXTURE_GRANTS: RestGrants["items"] = [
     client: { name: "A command-line client with a long name that it gave itself", uri: null },
     address: "/gh/acme/private-skills@v2/skills/release-notes",
     createdAt: "2026-09-30T11:00:00.000Z",
+    lastUsedAt: null,
+  },
+];
+
+/** The tokens the fixture person made for agents that have nobody to sign in. */
+export const FIXTURE_TOKENS: RestRepoTokens["items"] = [
+  {
+    id: "33333333-3333-4333-8333-333333333333",
+    address: "/gh/acme/private-skills",
+    label: "Nightly release notes",
+    createdAt: "2026-09-20T08:00:00.000Z",
+    expiresAt: "2026-12-19T08:00:00.000Z",
+    lastUsedAt: "2026-10-03T02:00:00.000Z",
+  },
+  {
+    id: "44444444-4444-4444-8444-444444444444",
+    address: "/gh/acme/private-skills",
+    label: "A server with a long name that somebody typed in a hurry",
+    createdAt: "2026-10-01T10:30:00.000Z",
+    expiresAt: "2026-10-08T10:30:00.000Z",
     lastUsedAt: null,
   },
 ];

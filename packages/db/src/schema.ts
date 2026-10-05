@@ -761,3 +761,35 @@ export const repoPermissions = pgTable(
     index("repo_permissions_checked_idx").on(table.checkedAt),
   ],
 );
+
+/**
+ * A token a user made for one repository, for an agent that has nobody to sign in
+ * (docs/specs/permissions.md). The row holds the hash of the secret. Whoever presents the
+ * secret reads as the user who made it, at the addresses of that repository, until it expires
+ * or is taken back: what the user may see is asked of the git host on every request, as ever.
+ */
+export const repoTokens = pgTable(
+  "repo_tokens",
+  {
+    id: id(),
+    userId: uuid()
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    repoId: uuid()
+      .notNull()
+      .references(() => repos.id, { onDelete: "cascade" }),
+    /** Canonical, as the address grammar prints a repository: the name the token was made under. */
+    address: text().notNull(),
+    /** What its maker calls it. */
+    label: text().notNull(),
+    tokenHash: text().notNull(),
+    expiresAt: instant().notNull(),
+    lastUsedAt: instant(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex("repo_tokens_token_hash_key").on(table.tokenHash),
+    index("repo_tokens_user_idx").on(table.userId),
+    index("repo_tokens_expires_idx").on(table.expiresAt),
+  ],
+);

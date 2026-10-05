@@ -7,16 +7,28 @@ import {
   formatAddress,
   GitHostError,
   type GitHostLogin,
+  hasForbiddenCodePoint,
   parseAddress,
+  REPO_TOKEN_MAX_DAYS,
+  REPO_TOKEN_MAX_LABEL_LENGTH,
   REST_ROUTES,
   RETURN_TO_PARAM,
   type RestAuthorization,
   type RestGrants,
   type RestMe,
   type RestMyRepositories,
+  type RestNewRepoToken,
+  type RestRepoTokens,
   type RestUser,
+  ROOT_PATH,
 } from "@skillcdn/core";
-import { type Database, deleteOAuthGrant, listOAuthGrants, type UserRecord } from "@skillcdn/db";
+import {
+  type Database,
+  deleteOAuthGrant,
+  listOAuthGrants,
+  type RepoTokenRecord,
+  type UserRecord,
+} from "@skillcdn/db";
 import type { Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
@@ -29,9 +41,10 @@ import {
   OAuthProtocolError,
 } from "../auth/oauth/authorization-server.js";
 import { ClientLimitError, ClientMetadataError, type OAuthClients } from "../auth/oauth/clients.js";
+import { MAX_REPO_TOKENS_PER_USER, type RepoTokens } from "../auth/repo-tokens.js";
 import type { Sessions } from "../auth/sessions.js";
 import type { Logger } from "../logger.js";
-import { MountError } from "../mounts/mount-service.js";
+import { type Mount, MountError } from "../mounts/mount-service.js";
 import type { AppEnv } from "./request-context.js";
 import { CORS_MAX_AGE_SECONDS, errorBody, hostFailure } from "./rest.js";
 
@@ -48,6 +61,7 @@ export interface AuthDependencies {
   readonly login: Login;
   readonly authorization: AuthorizationServer;
   readonly clients: OAuthClients;
+  readonly tokens: RepoTokens;
   readonly credentials: UserCredentials;
   readonly hostLogin: GitHostLogin;
   readonly clock: Clock;
@@ -62,6 +76,11 @@ export interface AuthDependencies {
    * ask for access. Rejects when the git host could not be asked.
    */
   readonly asksForPermission: (address: Address) => Promise<boolean>;
+  /**
+   * What an address is to the person, resolved as their own request for it would be. Rejects
+   * with a `MountError` for what they cannot open, a name that is nothing included.
+   */
+  readonly open: (address: Address, user: UserRecord) => Promise<Mount>;
 }
 
 /** The size of the pictures the pages ask the host for: 80 CSS pixels on a 2x screen. */
@@ -71,6 +90,28 @@ const MAX_FORM_BYTES = 64 * 1024;
 /** A sealed request is a few hundred characters; this is far more than any is. */
 const MAX_SEALED_LENGTH = 8192;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const newTokenSchema = z.object({
+  address: z.string().min(1).max(2048),
+  label: z
+    .string()
+    .transform((value) => value.trim())
+    .pipe(z.string().min(1).max(REPO_TOKEN_MAX_LABEL_LENGTH))
+    .refine((value) => !hasForbiddenCodePoint(value)),
+  expiresInDays: z.number().int().min(1).max(REPO_TOKEN_MAX_DAYS),
+});
+
+/** What a token is to the person who made it: everything but the secret. */
+function restRepoToken(record: RepoTokenRecord): RestRepoTokens["items"][number] {
+  return {
+    id: record.id,
+    address: record.address,
+    label: record.label,
+    createdAt: record.createdAt.toISOString(),
+    expiresAt: record.expiresAt.toISOString(),
+    lastUsedAt: record.lastUsedAt?.toISOString() ?? null,
+  };
+}
 
 const decisionSchema = z.object({
   request: z.string().min(1).max(MAX_SEALED_LENGTH),
@@ -89,6 +130,7 @@ export function restUser(user: UserRecord): RestUser {
 export function registerAuth(app: Hono<AppEnv>, dependencies: AuthDependencies): void {
   const { origin, database, sessions, login, authorization, clients, credentials, hostLogin } =
     dependencies;
+  const { tokens } = dependencies;
   const { clock, logger } = dependencies;
 
   const sessionUser = (c: Context<AppEnv>): Promise<UserRecord | undefined> =>
@@ -245,6 +287,117 @@ export function registerAuth(app: Hono<AppEnv>, dependencies: AuthDependencies):
     return removed
       ? c.json({ id, removed: true })
       : c.json(errorBody("grant.not_found", "No such grant."), 404);
+  });
+
+  // The tokens a person makes for agents that have nobody to sign in (ADR-0040).
+  app.get(`${REST_ROUTES.me}/tokens`, async (c) => {
+    const user = await sessionUser(c);
+    if (user === undefined) {
+      return signInRequired(c);
+    }
+    const body: RestRepoTokens = {
+      items: (await tokens.list(user)).map(restRepoToken),
+      limit: MAX_REPO_TOKENS_PER_USER,
+    };
+    return c.json(body);
+  });
+
+  app.post(
+    `${REST_ROUTES.me}/tokens`,
+    bodyLimit({
+      maxSize: MAX_FORM_BYTES,
+      onError: (c) => c.json(errorBody("request.too_large", "The request body is too large."), 413),
+    }),
+    async (c) => {
+      if (!fromOwnPages(c)) {
+        return foreignOrigin(c);
+      }
+      const user = await sessionUser(c);
+      if (user === undefined) {
+        return signInRequired(c);
+      }
+      const parsed = newTokenSchema.safeParse(await c.req.json().catch(() => undefined));
+      const address = parsed.success ? parseAddress(parsed.data.address) : undefined;
+      if (!parsed.success || address === undefined || !address.ok) {
+        return c.json(
+          errorBody(
+            "token.invalid",
+            `A token needs a repository, a name of at most ${REPO_TOKEN_MAX_LABEL_LENGTH} characters, and a lifetime of 1 to ${REPO_TOKEN_MAX_DAYS} days.`,
+          ),
+          400,
+        );
+      }
+      if (address.value.ref !== undefined || address.value.path !== ROOT_PATH) {
+        return c.json(
+          errorBody(
+            "token.not_a_repository",
+            "A token is made for a repository, and reads every ref and path of it: name the repository alone.",
+          ),
+          400,
+        );
+      }
+      let mount: Mount;
+      try {
+        // As their own request for it would be answered: a repository they cannot open and a
+        // name that is nothing are the same not-found, here as everywhere.
+        mount = await dependencies.open(address.value, user);
+      } catch (error) {
+        if (!(error instanceof MountError)) {
+          throw error;
+        }
+        if (error.retryAfterSeconds !== undefined) {
+          c.header("retry-after", String(error.retryAfterSeconds));
+        }
+        const status =
+          error.reason === "rate_limited" || error.reason === "unavailable"
+            ? 503
+            : error.reason === "not_allowed"
+              ? 403
+              : 404;
+        return c.json(errorBody(error.code, error.detail), status);
+      }
+      if (mount.repo.repository.visibility === "public") {
+        return c.json(
+          errorBody(
+            "token.public_repository",
+            "A public repository is read without a token, by anyone.",
+          ),
+          400,
+        );
+      }
+      const made = await tokens.create(user, mount.repo, address.value, parsed.data);
+      if (made === undefined) {
+        return c.json(
+          errorBody(
+            "token.limit",
+            `An account holds at most ${MAX_REPO_TOKENS_PER_USER} tokens. Remove one that is no longer used.`,
+          ),
+          409,
+        );
+      }
+      logger.info(
+        { user: user.id, token: made.record.id, requestId: c.get("requestId") },
+        "repository token made",
+      );
+      const body: RestNewRepoToken = { token: made.token, item: restRepoToken(made.record) };
+      return c.json(body, 201);
+    },
+  );
+
+  app.delete(`${REST_ROUTES.me}/tokens/:id`, async (c) => {
+    if (!fromOwnPages(c)) {
+      return foreignOrigin(c);
+    }
+    const user = await sessionUser(c);
+    if (user === undefined) {
+      return signInRequired(c);
+    }
+    const id = c.req.param("id");
+    const removed = UUID.test(id) && (await tokens.remove(user, id));
+    logger.info({ user: user.id, removed, requestId: c.get("requestId") }, "token removal");
+    return removed
+      ? c.json({ id, removed: true })
+      : c.json(errorBody("token.not_found", "No such token."), 404);
   });
 
   // The consent page's two questions: what is being asked, and what the person answers.

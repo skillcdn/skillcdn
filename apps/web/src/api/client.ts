@@ -17,7 +17,10 @@ import {
   type RestMe,
   type RestMount,
   type RestMyRepositories,
+  type RestNewRepoToken,
   type RestOwner,
+  type RestRepoTokenRequest,
+  type RestRepoTokens,
   type RestShowcase,
   type RestSkill,
   restAuthorizationDecisionSchema,
@@ -32,8 +35,10 @@ import {
   restMeSchema,
   restMountSchema,
   restMyRepositoriesSchema,
+  restNewRepoTokenSchema,
   restOwnerSchema,
   restPath,
+  restRepoTokensSchema,
   restShowcaseSchema,
   restSkillSchema,
 } from "@skillcdn/core";
@@ -164,6 +169,27 @@ export const api = {
     await send(
       "DELETE",
       `${REST_ROUTES.me}/grants/${encodeURIComponent(id)}`,
+      undefined,
+      undefined,
+    );
+  },
+
+  myTokens: (signal: AbortSignal): Promise<RestRepoTokens> =>
+    getJson(`${REST_ROUTES.me}/tokens`, {}, restRepoTokensSchema, signal),
+
+  /** Makes a token and answers with its secret, which the server shows this once. */
+  makeToken: async (request: RestRepoTokenRequest): Promise<RestNewRepoToken> => {
+    const made = await send("POST", `${REST_ROUTES.me}/tokens`, request, restNewRepoTokenSchema);
+    if (made === undefined) {
+      throw new ApiError(0, "invalid_response", "The server answered unexpectedly.");
+    }
+    return made;
+  },
+
+  removeToken: async (id: string): Promise<void> => {
+    await send(
+      "DELETE",
+      `${REST_ROUTES.me}/tokens/${encodeURIComponent(id)}`,
       undefined,
       undefined,
     );

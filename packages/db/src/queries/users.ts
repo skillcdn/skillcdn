@@ -6,6 +6,7 @@ import {
   oauthCodes,
   oauthGrants,
   repoPermissions,
+  repoTokens,
   sessions,
   userCredentials,
   users,
@@ -279,8 +280,8 @@ export async function deleteSession(database: Database, tokenHash: string): Prom
 }
 
 /**
- * Signs a user out of everything: their sessions, what they allowed clients, and what was
- * remembered about what they can see. What losing the git host's credential means, since all of
+ * Signs a user out of everything: their sessions, what they allowed clients, the tokens they
+ * made, and what was remembered about what they can see. What losing the git host's credential means, since all of
  * it stood on that credential. The user stays, and so does whatever the host issues them next.
  */
 export async function forgetUserAccess(database: Database, userId: string): Promise<void> {
@@ -289,6 +290,7 @@ export async function forgetUserAccess(database: Database, userId: string): Prom
     await tx.delete(oauthCodes).where(eq(oauthCodes.userId, userId));
     // Tokens go with their grants.
     await tx.delete(oauthGrants).where(eq(oauthGrants.userId, userId));
+    await tx.delete(repoTokens).where(eq(repoTokens.userId, userId));
     await tx.delete(repoPermissions).where(eq(repoPermissions.userId, userId));
   });
 }

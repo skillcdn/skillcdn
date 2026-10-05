@@ -15,7 +15,7 @@ Read the root [`CLAUDE.md`](../../CLAUDE.md) first. Mistakes here are the hardes
 - Primary keys are `uuid` with `DEFAULT uuidv7()`. The one exception is a content-addressed table, which is keyed by its hash. Timestamps are `timestamptz`. Every table has `created_at`.
 - Every tenant-scoped table carries `account_id`, and every query on it takes the account as a required argument. A table that is deliberately not tenant-scoped (a lookup read before the account is known, a content-addressed store) says so in `README.md`, with the rule that keeps it safe.
 - Index entries for a `(repo, commit)` are immutable: insert and delete, never update.
-- Secrets at rest: this package never sees a token. Git-host user tokens are encrypted by the caller before they reach it; sessions, authorization codes, access and refresh tokens and client secrets arrive as hashes, and so will project tokens. A column that would hold a usable credential is a mistake.
+- Secrets at rest: this package never sees a token. Git-host user tokens are encrypted by the caller before they reach it; sessions, authorization codes, access and refresh tokens, client secrets and repository tokens arrive as hashes. A column that would hold a usable credential is a mistake.
 - The job queue's schema belongs to the queue library. Never touch its tables.
 
 ## Queries

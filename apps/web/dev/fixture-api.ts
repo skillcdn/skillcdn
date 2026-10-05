@@ -8,6 +8,9 @@ import {
   isPinnedAddress,
   parseAddress,
   parseOwnerPath,
+  REPO_TOKEN_MAX_DAYS,
+  REPO_TOKEN_MAX_LABEL_LENGTH,
+  REPO_TOKEN_PREFIX,
   REST_FEATURED_SKILL_NAMES,
   REST_MOUNT_LIST_LIMIT,
   REST_ROUTES,
@@ -23,10 +26,13 @@ import {
   type RestMe,
   type RestMount,
   type RestMyRepositories,
+  type RestNewRepoToken,
   type RestOwner,
   type RestRepositoryCard,
+  type RestRepoTokens,
   type RestShowcase,
   type RestSkill,
+  restRepoTokenRequestSchema,
 } from "@skillcdn/core";
 import {
   FIXTURE_AUTHORIZATIONS,
@@ -38,6 +44,7 @@ import {
   FIXTURE_LEGAL,
   FIXTURE_OWNERS,
   FIXTURE_REPOSITORIES,
+  FIXTURE_TOKENS,
   FIXTURE_USER,
   type FixtureRepository,
   summaryOf,
@@ -70,6 +77,11 @@ const firstAsked = new Map<string, number>();
  */
 let signedIn = false;
 const removedGrants = new Set<string>();
+/** The tokens the fixture person made since the server started, newest first, and took back. */
+const madeTokens: RestRepoTokens["items"][number][] = [];
+const removedTokens = new Set<string>();
+/** How many tokens the fixture says a person may hold, as the server does. */
+const TOKEN_LIMIT = 50;
 
 /**
  * Forgets when `demo/slow` was first asked for, so that it starts indexing again, and who signed
@@ -79,6 +91,8 @@ export function resetFixtureState(): void {
   firstAsked.clear();
   signedIn = false;
   removedGrants.clear();
+  madeTokens.length = 0;
+  removedTokens.clear();
 }
 
 const problem = (status: number, code: string, message: string, extra = {}): FixtureAnswer => ({
@@ -733,7 +747,81 @@ function authorizationAnswer(params: URLSearchParams): FixtureAnswer {
  * Signing in and out, and what belongs to whoever is signed in (docs/specs/permissions.md).
  * `undefined` when the request is about none of that.
  */
-function accountAnswer(url: URL, method: string): FixtureAnswer | undefined {
+/** The tokens of the fixture person: listing them, making one from `body`, taking one back. */
+function tokensAnswer(
+  url: URL,
+  method: string,
+  now: number,
+  body: unknown,
+): FixtureAnswer | undefined {
+  const tokens = `${REST_ROUTES.me}/tokens`;
+  const held = () =>
+    [...madeTokens, ...FIXTURE_TOKENS].filter((token) => !removedTokens.has(token.id));
+  if (url.pathname === tokens && method === "GET") {
+    const listed: RestRepoTokens = { items: held(), limit: TOKEN_LIMIT };
+    return signedIn ? { status: 200, body: listed } : signInRequired();
+  }
+  if (url.pathname === tokens && method === "POST") {
+    if (!signedIn) {
+      return signInRequired();
+    }
+    const request = restRepoTokenRequestSchema.safeParse(body);
+    const label = request.success ? request.data.label.trim() : "";
+    if (
+      !request.success ||
+      label.length === 0 ||
+      label.length > REPO_TOKEN_MAX_LABEL_LENGTH ||
+      request.data.expiresInDays < 1 ||
+      request.data.expiresInDays > REPO_TOKEN_MAX_DAYS
+    ) {
+      return problem(400, "token.invalid", "A token needs a repository, a name and a lifetime.");
+    }
+    const repository = myRepositoriesBody()
+      .installations.flatMap((installation) => installation.repositories)
+      .find((candidate) => candidate.address === request.data.address);
+    if (repository === undefined) {
+      return problem(404, "mount.repo_not_found", "The repository was not found.");
+    }
+    if (repository.visibility === "public") {
+      return problem(400, "token.public_repository", "A public repository needs no token.");
+    }
+    if (held().length >= TOKEN_LIMIT) {
+      return problem(409, "token.limit", "An account holds a limited number of tokens.");
+    }
+    const number = String(madeTokens.length + 1).padStart(12, "0");
+    const item = {
+      id: `55555555-5555-4555-8555-${number}`,
+      address: repository.address,
+      label,
+      createdAt: new Date(now).toISOString(),
+      expiresAt: new Date(now + request.data.expiresInDays * 86_400_000).toISOString(),
+      lastUsedAt: null,
+    };
+    madeTokens.unshift(item);
+    // Not a secret: the fixture server reads nothing with it.
+    const made: RestNewRepoToken = { token: `${REPO_TOKEN_PREFIX}fixture-${number}`, item };
+    return { status: 201, body: made };
+  }
+  if (url.pathname.startsWith(`${tokens}/`) && method === "DELETE") {
+    if (!signedIn) {
+      return signInRequired();
+    }
+    const id = decodeURIComponent(url.pathname.slice(tokens.length + 1));
+    if (!held().some((token) => token.id === id)) {
+      return problem(404, "token.not_found", "No such token.");
+    }
+    removedTokens.add(id);
+    return { status: 200, body: { id, removed: true } };
+  }
+  return undefined;
+}
+
+function accountAnswer(
+  url: URL,
+  method: string,
+  now: number,
+  body: unknown,
+): FixtureAnswer | undefined {
   if (url.pathname === AUTH_ROUTES.login) {
     // No git host to ask: the fixture person is signed in, and goes back to where they were.
     signedIn = true;
@@ -770,6 +858,10 @@ function accountAnswer(url: URL, method: string): FixtureAnswer | undefined {
     removedGrants.add(id);
     return { status: 200, body: { id, removed: true } };
   }
+  const tokens = tokensAnswer(url, method, now, body);
+  if (tokens !== undefined) {
+    return tokens;
+  }
   if (url.pathname === REST_ROUTES.authorization) {
     return authorizationAnswer(url.searchParams);
   }
@@ -781,15 +873,16 @@ function accountAnswer(url: URL, method: string): FixtureAnswer | undefined {
 }
 
 /**
- * Answers a REST request from fixtures, and the fixture sign-in. `undefined` when the URL is
- * neither.
+ * Answers a REST request from fixtures, and the fixture sign-in. `body` is what the request
+ * carried, parsed, for the few that carry something. `undefined` when the URL is neither.
  */
 export function handleFixtureRequest(
   url: URL,
   now: number = Date.now(),
   method = "GET",
+  body?: unknown,
 ): FixtureAnswer | undefined {
-  const account = accountAnswer(url, method);
+  const account = accountAnswer(url, method, now, body);
   if (account !== undefined) {
     return account;
   }

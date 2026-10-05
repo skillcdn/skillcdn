@@ -61,6 +61,7 @@ export function UserMenu() {
     { href: accountHref("overview"), label: t.auth.account },
     { href: accountHref("repositories"), label: t.auth.repositories },
     { href: accountHref("apps"), label: t.auth.apps },
+    { href: accountHref("tokens"), label: t.auth.tokens },
   ];
   return (
     <details

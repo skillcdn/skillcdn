@@ -13,7 +13,9 @@ import {
   restMeSchema,
   restMountSchema,
   restMyRepositoriesSchema,
+  restNewRepoTokenSchema,
   restOwnerSchema,
+  restRepoTokensSchema,
   restShowcaseSchema,
   restSkillSchema,
 } from "@skillcdn/core";
@@ -25,11 +27,12 @@ import {
   FIXTURE_FAILURES,
   FIXTURE_GRANTS,
   FIXTURE_REPOSITORIES,
+  FIXTURE_TOKENS,
   FIXTURE_USER,
 } from "./fixtures.js";
 
-const send = (method: string, path: string, now = 0): FixtureAnswer =>
-  handleFixtureRequest(new URL(path, "http://fixtures.invalid"), now, method) ?? {
+const send = (method: string, path: string, now = 0, body?: unknown): FixtureAnswer =>
+  handleFixtureRequest(new URL(path, "http://fixtures.invalid"), now, method, body) ?? {
     status: 0,
     body: undefined,
   };
@@ -268,7 +271,7 @@ describe("the fixture API", () => {
   it("signs the fixture person in and out, and answers what is theirs only in between", () => {
     resetFixtureState();
     expect(restMeSchema.parse(ask("/api/v1/me").body)).toEqual({ user: null });
-    for (const path of ["/api/v1/me/repositories", "/api/v1/me/grants"]) {
+    for (const path of ["/api/v1/me/repositories", "/api/v1/me/grants", "/api/v1/me/tokens"]) {
       const refused = ask(path);
       expect(refused.status, path).toBe(401);
       expect(restErrorSchema.parse(refused.body).error.code, path).toBe("auth.required");
@@ -305,6 +308,53 @@ describe("the fixture API", () => {
 
     expect(send("POST", "/auth/logout").status).toBe(204);
     expect(restMeSchema.parse(ask("/api/v1/me").body)).toEqual({ user: null });
+    resetFixtureState();
+  });
+
+  it("lists the fixture person's tokens, makes one that shows its secret once, and takes one back", () => {
+    resetFixtureState();
+    const TOKENS = "/api/v1/me/tokens";
+    const request = { address: "/gh/acme/private-skills", label: " Nightly ", expiresInDays: 30 };
+    expect(send("POST", TOKENS, 0, request).status).toBe(401);
+    ask("/auth/gh/login");
+    const listed = restRepoTokensSchema.parse(ask(TOKENS).body);
+    expect(listed.items).toEqual(FIXTURE_TOKENS);
+
+    const now = Date.parse("2026-10-04T00:00:00.000Z");
+    const made = send("POST", TOKENS, now, request);
+    expect(made.status).toBe(201);
+    const token = restNewRepoTokenSchema.parse(made.body);
+    expect(token.item).toMatchObject({
+      address: "/gh/acme/private-skills",
+      label: "Nightly",
+      createdAt: "2026-10-04T00:00:00.000Z",
+      expiresAt: "2026-11-03T00:00:00.000Z",
+      lastUsedAt: null,
+    });
+    // The newest comes first, and the list never holds a secret.
+    const after = restRepoTokensSchema.parse(ask(TOKENS).body);
+    expect(after.items.map((item) => item.id)).toEqual([
+      token.item.id,
+      ...FIXTURE_TOKENS.map((item) => item.id),
+    ]);
+    expect(JSON.stringify(after)).not.toContain(token.token);
+
+    for (const [body, status, code] of [
+      [{ ...request, address: "/gh/acme/skills" }, 400, "token.public_repository"],
+      [{ ...request, address: "/gh/acme/nothing-here" }, 404, "mount.repo_not_found"],
+      [{ ...request, label: "  " }, 400, "token.invalid"],
+      [{ ...request, expiresInDays: 0 }, 400, "token.invalid"],
+      [undefined, 400, "token.invalid"],
+    ] as const) {
+      const refused = send("POST", TOKENS, now, body);
+      expect(refused.status, JSON.stringify(body)).toBe(status);
+      expect(restErrorSchema.parse(refused.body).error.code).toBe(code);
+    }
+
+    const removal = `${TOKENS}/${token.item.id}`;
+    expect(send("DELETE", removal).status).toBe(200);
+    expect(send("DELETE", removal).status).toBe(404);
+    expect(restRepoTokensSchema.parse(ask(TOKENS).body).items).toEqual(FIXTURE_TOKENS);
     resetFixtureState();
   });
 

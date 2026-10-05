@@ -79,6 +79,14 @@ const PAGES: readonly (readonly [string, string])[] = [
   ["/account", "Your account: the way to sign in, or the overview once signed in"],
   ["/account/repositories", "Your private repositories, by where the GitHub app is installed"],
   ["/account/apps", "The apps you allowed; removing one lasts until the server restarts"],
+  [
+    "/account/tokens",
+    "Your tokens: making one shows its secret once; what you make and remove lasts until the server restarts",
+  ],
+  [
+    "/account/tokens?repository=/gh/acme/private-skills",
+    "The same, arrived at from a private repository's page",
+  ],
   ["/account?login=denied", "A sign-in that was cancelled (signed out only)"],
   ["/oauth/consent?request=web", "An app asks to read a private repository"],
   ["/oauth/consent?request=local", "A command-line app asks, and is sent back to this computer"],

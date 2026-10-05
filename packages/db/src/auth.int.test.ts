@@ -4,12 +4,15 @@ import {
   claimSnapshot,
   countUnusedOAuthClients,
   createOAuthGrant,
+  createRepoToken,
   createSession,
   type Database,
   deleteExpiredOAuth,
+  deleteExpiredRepoTokens,
   deleteExpiredSessions,
   deleteOAuthGrant,
   deleteRepoPermissionsOf,
+  deleteRepoToken,
   deleteSession,
   deleteStaleRepoPermissions,
   deleteUnusedOAuthClients,
@@ -19,6 +22,7 @@ import {
   findOAuthClient,
   findRepoByAlias,
   findRepoPermission,
+  findRepoTokenAccess,
   findSession,
   findUser,
   findUserByHostAccount,
@@ -26,6 +30,7 @@ import {
   getUserCredentials,
   listIndexedRepositories,
   listOAuthGrants,
+  listRepoTokens,
   markRepositoryNotPublic,
   type NewIndexEntry,
   type OAuthTokenPair,
@@ -40,6 +45,7 @@ import {
   saveUserCredentials,
   takeOAuthCode,
   touchOAuthGrant,
+  touchRepoToken,
   touchSession,
   writeSnapshotIndex,
 } from "./index.js";
@@ -649,6 +655,126 @@ describe("the permission cache", () => {
     expect(await deleteStaleRepoPermissions(database, minutes(2))).toBe(0);
     expect(await deleteStaleRepoPermissions(database, minutes(3))).toBeGreaterThanOrEqual(1);
     expect(await findRepoPermission(database, scope)).toBeUndefined();
+  });
+});
+
+describe("repository tokens", () => {
+  const privateRepo = () =>
+    saveRepository(
+      database,
+      { host: "gh", owner: "acme", repo: `tokens-${unique()}` },
+      {
+        hostRepoId: String(unique()),
+        name: "tokens",
+        defaultBranch: "main",
+        description: undefined,
+        visibility: "private",
+        owner: { hostAccountId: "9001", login: "Acme", kind: "organization" },
+      },
+      T0,
+    );
+  const input = (userId: string, repoId: string, patch: { expiresAt?: Date; now?: Date } = {}) => ({
+    userId,
+    repoId,
+    address: "/gh/acme/tokens",
+    label: "The nightly job",
+    tokenHash: `hash-${unique()}`,
+    expiresAt: patch.expiresAt ?? minutes(60),
+    now: patch.now ?? T0,
+  });
+
+  it("answer for their hash while they last, with who made them and where they are good", async () => {
+    const user = await signedIn();
+    const repo = await privateRepo();
+    const made = input(user.id, repo.id);
+    const record = await createRepoToken(database, made, 10);
+    expect(record).toEqual({
+      id: expect.any(String),
+      repoId: repo.id,
+      address: "/gh/acme/tokens",
+      label: "The nightly job",
+      createdAt: T0,
+      expiresAt: minutes(60),
+      lastUsedAt: undefined,
+    });
+    expect(await findRepoTokenAccess(database, made.tokenHash, minutes(59))).toEqual({
+      tokenId: record?.id,
+      user,
+      repoId: repo.id,
+      address: "/gh/acme/tokens",
+      lastUsedAt: undefined,
+    });
+    expect(await findRepoTokenAccess(database, made.tokenHash, minutes(60))).toBeUndefined();
+    expect(await findRepoTokenAccess(database, "another-hash", T0)).toBeUndefined();
+
+    await touchRepoToken(database, record?.id ?? "", minutes(5));
+    expect((await findRepoTokenAccess(database, made.tokenHash, minutes(6)))?.lastUsedAt).toEqual(
+      minutes(5),
+    );
+    expect((await listRepoTokens(database, user.id, minutes(6)))[0]?.lastUsedAt).toEqual(
+      minutes(5),
+    );
+  });
+
+  it("are listed for their maker, newest first, and taken back by nobody else", async () => {
+    const [user, other] = [await signedIn(), await signedIn()];
+    const repo = await privateRepo();
+    const first = await createRepoToken(database, input(user.id, repo.id), 10);
+    const second = await createRepoToken(
+      database,
+      input(user.id, repo.id, { now: minutes(1), expiresAt: minutes(30) }),
+      10,
+    );
+    expect((await listRepoTokens(database, user.id, minutes(2))).map((token) => token.id)).toEqual([
+      second?.id,
+      first?.id,
+    ]);
+    // One that has expired is on no list.
+    expect((await listRepoTokens(database, user.id, minutes(30))).map((token) => token.id)).toEqual(
+      [first?.id],
+    );
+    expect(await listRepoTokens(database, other.id, minutes(2))).toEqual([]);
+
+    const tokenId = first?.id ?? "";
+    expect(await deleteRepoToken(database, { userId: other.id, tokenId })).toBe(false);
+    expect(await deleteRepoToken(database, { userId: user.id, tokenId })).toBe(true);
+    expect(await deleteRepoToken(database, { userId: user.id, tokenId })).toBe(false);
+    expect((await listRepoTokens(database, user.id, minutes(2))).map((token) => token.id)).toEqual([
+      second?.id,
+    ]);
+  });
+
+  it("are bounded per user: one more than the limit is not stored, and none is ended for it", async () => {
+    const user = await signedIn();
+    const repo = await privateRepo();
+    const short = input(user.id, repo.id, { expiresAt: minutes(10) });
+    expect(await createRepoToken(database, short, 2)).toBeDefined();
+    expect(await createRepoToken(database, input(user.id, repo.id), 2)).toBeDefined();
+    expect(await createRepoToken(database, input(user.id, repo.id), 2)).toBeUndefined();
+    expect(await listRepoTokens(database, user.id, minutes(1))).toHaveLength(2);
+    expect(await findRepoTokenAccess(database, short.tokenHash, minutes(1))).toBeDefined();
+    // One that has expired does not count against its maker, and another user's never does.
+    expect(
+      await createRepoToken(database, input(user.id, repo.id, { now: minutes(10) }), 2),
+    ).toBeDefined();
+    const other = await signedIn();
+    expect(await createRepoToken(database, input(other.id, repo.id), 1)).toBeDefined();
+  });
+
+  it("are removed once they have expired, and go with everything else their maker had", async () => {
+    const user = await signedIn();
+    const repo = await privateRepo();
+    const brief = input(user.id, repo.id, { expiresAt: minutes(5) });
+    const lasting = input(user.id, repo.id);
+    await createRepoToken(database, brief, 10);
+    await createRepoToken(database, lasting, 10);
+    expect(await deleteExpiredRepoTokens(database, minutes(4))).toBe(0);
+    expect(await deleteExpiredRepoTokens(database, minutes(5))).toBeGreaterThanOrEqual(1);
+    expect(await findRepoTokenAccess(database, lasting.tokenHash, minutes(6))).toBeDefined();
+
+    await forgetUserAccess(database, user.id);
+    expect(await findRepoTokenAccess(database, lasting.tokenHash, minutes(6))).toBeUndefined();
+    expect(await listRepoTokens(database, user.id, minutes(6))).toEqual([]);
   });
 });
 

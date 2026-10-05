@@ -5,6 +5,8 @@ import { handleFixtureRequest } from "./dev/fixture-api.js";
 
 /** Long enough to see loading states, short enough not to be in the way. */
 const FIXTURE_LATENCY_MS = 350;
+/** More than any request to the fixtures carries. */
+const FIXTURE_BODY_BYTES = 64 * 1024;
 
 /**
  * Answers the REST API from fixtures, and signs the fixture person in and out, so the UI runs
@@ -14,11 +16,29 @@ function fixtureApi(): Plugin {
   return {
     name: "skillcdn-fixture-api",
     configureServer(server) {
-      server.middlewares.use((request, response, next) => {
+      server.middlewares.use(async (request, response, next) => {
+        // What a request carries, for the few that carry something: small, and JSON.
+        let body: unknown;
+        if (request.method === "POST") {
+          const chunks: Buffer[] = [];
+          let size = 0;
+          for await (const chunk of request) {
+            size += (chunk as Buffer).length;
+            if (size <= FIXTURE_BODY_BYTES) {
+              chunks.push(chunk as Buffer);
+            }
+          }
+          try {
+            body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+          } catch {
+            body = undefined;
+          }
+        }
         const answer = handleFixtureRequest(
           new URL(request.url ?? "/", "http://fixtures.invalid"),
           Date.now(),
           request.method ?? "GET",
+          body,
         );
         if (answer === undefined) {
           next();

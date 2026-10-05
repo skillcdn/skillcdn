@@ -1,5 +1,7 @@
 import { type Address, compactSummary, formatAddress, type RestMount } from "@skillcdn/core";
 import { useI18n } from "../i18n/index.js";
+import { Link } from "../navigation.js";
+import { tokensHref } from "../router.js";
 import { ClientIcon } from "./client-icon.js";
 import { CodeBlock, CopyButton } from "./code-block.js";
 import {
@@ -59,12 +61,14 @@ export function claudeInstallLink(name: string, url: string): string {
 
 function ClientGuide({
   client,
+  address,
   name,
   url,
   description,
   signIn,
 }: {
   readonly client: ConnectClient;
+  readonly address: Address;
   readonly name: string;
   readonly url: string;
   readonly description: string;
@@ -161,6 +165,10 @@ function ClientGuide({
         <Callout title={t.connect.private.title}>
           <p>{t.connect.private.body}</p>
           <p>{t.connect.private.signIn[client]}</p>
+          <p>
+            {t.connect.private.headless}{" "}
+            <Link href={tokensHref(address)}>{t.connect.private.headlessAction}</Link>
+          </p>
         </Callout>
       )}
       {terminal ? (
@@ -239,6 +247,7 @@ export function ConnectGuide({
       <ClientGuide
         key={client}
         client={client}
+        address={address}
         name={name}
         url={url}
         description={description}

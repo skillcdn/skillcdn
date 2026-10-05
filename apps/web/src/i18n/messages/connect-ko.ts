@@ -44,6 +44,8 @@ export const connectKo: typeof connectEn = {
       other:
         "앱이 인증 방식을 물으면 OAuth를 고르세요. 열리는 페이지에서 GitHub로 로그인하고 앱을 허용하세요.",
     },
+    headless: "예약 작업이나 서버처럼 로그인할 수 없는 에이전트는 토큰을 써요.",
+    headlessAction: "토큰 만들기",
     steps: {
       chatgpt:
         "이름을 적고, 설명에는 예시 화면의 문장을 넣으세요. 연결은 서버 URL로 둔 채 연결 주소를 붙여 넣고, 인증은 OAuth 그대로 둔 뒤 확인란에 체크하고 만들기를 누르세요.",

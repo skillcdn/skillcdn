@@ -20,6 +20,7 @@ export const accountEn = {
     account: "Your account",
     repositories: "Private repositories",
     apps: "Connected apps",
+    tokens: "Tokens",
     /** Under a repository that was not found: it may be one the visitor has to sign in for. */
     privateSignedOut: "Is it private? Sign in with GitHub to open a repository you have access to.",
     privateSignedIn:
@@ -84,6 +85,7 @@ export const accountEn = {
       overview: "Overview",
       repositories: "Private repositories",
       apps: "Connected apps",
+      tokens: "Tokens",
     },
     overview: {
       lead: "You are signed in with GitHub. SkillCDN only ever asks GitHub what you can see; it cannot change anything there.",
@@ -94,6 +96,8 @@ export const accountEn = {
       repositoriesAction: "Set up private repositories",
       appsBody: "The AI apps you allowed to read a private repository as you.",
       appsAction: "See connected apps",
+      tokensBody: "For an agent that cannot sign in, such as a scheduled job or a server.",
+      tokensAction: "Manage tokens",
       signOutBody:
         "Signing out ends this browser's session. Apps you connected keep working until you remove them.",
     },
@@ -131,6 +135,52 @@ export const accountEn = {
       remove: "Remove",
       removeLabel: (client: string, address: string) => `Remove ${client} from ${address}`,
       removed: "Removed. The app has to ask again.",
+    },
+    tokens: {
+      lead: "A token lets an agent that has nobody to sign in, such as a scheduled job or a server, read one private repository as you. Whoever holds the token can read that repository, so keep it where you keep passwords. The AI apps you use yourself need none: they sign in.",
+      form: {
+        title: "Make a token",
+        repository: "Repository",
+        name: "Name",
+        namePlaceholder: "Nightly job",
+        nameHint: "Only you see the name. Call it after whatever will use the token.",
+        expires: "Expires",
+        lifetime: (days: number) => (days === 365 ? "In 1 year" : `In ${days} days`),
+        make: "Make token",
+        making: "Making…",
+      },
+      noRepositories: {
+        title: "No private repository yet",
+        body: "A token is made for a private repository that the SkillCDN GitHub app is installed on. A public repository needs none.",
+        action: "Set up private repositories",
+      },
+      made: {
+        title: "Copy your token now",
+        body: "It is shown this once. Nobody can show it to you again, this page included: if it is lost, remove it and make another.",
+        token: "Token",
+        give: "Give it to the agent",
+        giveBody: (repository: string) =>
+          `The agent connects to the address of the repository and sends the token with every request. It can read ${repository} at any branch, tag and folder, and nothing else.`,
+        claudeCode: "Claude Code",
+        codex: "Codex",
+        other: "Header",
+        otherHint:
+          "Anything else connects to this address and sends this header with every request.",
+        address: "Address",
+        done: "Done, I copied it",
+      },
+      list: "Your tokens",
+      none: {
+        title: "No tokens",
+        body: "The tokens you make are listed here, without their secret.",
+      },
+      madeAt: (iso: string) => `Made ${day(iso)}`,
+      expiresAt: (iso: string) => `Expires ${day(iso)}`,
+      lastUsed: (iso: string) => `Last used ${day(iso)}`,
+      neverUsed: "Not used yet",
+      remove: "Remove",
+      removeLabel: (label: string, address: string) => `Remove the token ${label} for ${address}`,
+      removed: "Removed. The token stopped working.",
     },
   },
 

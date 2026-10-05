@@ -10,6 +10,7 @@ import {
   type OwnerPath,
   parseAddress,
   parseOwnerPath,
+  ROOT_PATH,
 } from "@skillcdn/core";
 
 // A few kinds of page and no nesting, so the router is a function from a URL to a route.
@@ -24,7 +25,7 @@ export type MountView =
  * The sections of the pages of whoever is signed in, in the order the side menu lists them. A
  * feature that belongs to a person gets a section here, a path under `/account`, and a page.
  */
-export const ACCOUNT_SECTIONS = ["overview", "repositories", "apps"] as const;
+export const ACCOUNT_SECTIONS = ["overview", "repositories", "apps", "tokens"] as const;
 export type AccountSection = (typeof ACCOUNT_SECTIONS)[number];
 
 export type Route =
@@ -62,6 +63,15 @@ const MOUNT_PREFIX = "/gh/";
 /** The path of a section of the account pages; the first section is the account page itself. */
 export function accountHref(section: AccountSection = "overview"): string {
   return section === "overview" ? PATHS.account : `${PATHS.account}/${section}`;
+}
+
+/** The parameter of the tokens section that names the repository a token is about to be made for. */
+export const TOKEN_REPOSITORY_PARAM = "repository";
+
+/** Where a token is made for the repository of an address: the tokens section, with it chosen. */
+export function tokensHref(address: Address): string {
+  const repository = formatAddress({ ...address, ref: undefined, path: ROOT_PATH });
+  return `${accountHref("tokens")}?${TOKEN_REPOSITORY_PARAM}=${encodeURIComponent(repository)}`;
 }
 
 /** The path of the page of an account. */

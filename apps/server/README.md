@@ -55,7 +55,8 @@ src/
                  making and hashing), login.ts (the round trip to the git host), sessions.ts,
                  credentials.ts (the person's token of the host, encrypted, renewed, forgotten when
                  lost), permissions.ts (whether a person can see a repository, as the host says),
-                 and oauth/: the authorization server, its clients (registered, or a metadata
+                 repo-tokens.ts (the tokens people make for agents with nobody to sign in,
+                 ADR-0040), and oauth/: the authorization server, its clients (registered, or a metadata
                  document fetched from the public internet only) and the rules for redirect URIs
   events/        what the git host says happened, applied to what is remembered (ADR-0038): refs
                  and names made due, answers forgotten, the index of a repository the app was taken

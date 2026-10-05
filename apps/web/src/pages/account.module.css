@@ -206,6 +206,81 @@
   font-size: var(--text-xs);
 }
 
+/* Tokens: a short form, the secret while it can still be copied, and the list. */
+
+.subheading {
+  font-size: var(--text-md);
+}
+
+.tokenForm,
+.made {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-4);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+}
+
+/* The one thing on the page that will not be there again: it is lit like the current choice. */
+.made {
+  gap: var(--space-3);
+  border-color: var(--color-accent);
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(var(--account-field-width), 1fr));
+  align-items: start;
+  gap: var(--space-3) var(--space-4);
+}
+
+.field {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.field label {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.control {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--control-size);
+  padding-inline: var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-subtle);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  transition:
+    border-color var(--transition),
+    box-shadow var(--transition);
+}
+
+.control:focus-visible {
+  border-color: var(--color-accent);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-accent-subtle);
+}
+
+.control::placeholder {
+  color: var(--color-text-faint);
+}
+
+.formActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
 /* Signed out: one short page, centred like the other short pages. */
 .signedOut {
   display: grid;

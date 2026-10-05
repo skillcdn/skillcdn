@@ -115,6 +115,54 @@ export const restGrantsSchema = z.object({
 });
 export type RestGrants = z.infer<typeof restGrantsSchema>;
 
+/** What a repository token begins with, so that whoever finds one knows what it found. */
+export const REPO_TOKEN_PREFIX = "scdn_repo_";
+/** The longest a repository token may last, in days, and the lifetimes the pages offer. */
+export const REPO_TOKEN_MAX_DAYS = 366;
+export const REPO_TOKEN_LIFETIMES_DAYS = [7, 30, 90, 365] as const;
+export const REPO_TOKEN_DEFAULT_DAYS = 90;
+/** How long the name a person gives a token may be. */
+export const REPO_TOKEN_MAX_LABEL_LENGTH = 60;
+
+/** A repository token as its maker sees it afterwards: everything but the secret. */
+const restRepoTokenSchema = z.object({
+  id: z.string(),
+  /** The repository it reads: canonical, an address without a ref or a path. */
+  address: z.string(),
+  /** What its maker called it. */
+  label: z.string(),
+  /** ISO 8601 instants. */
+  createdAt: z.string(),
+  expiresAt: z.string(),
+  lastUsedAt: z.nullable(z.string()),
+});
+
+/**
+ * `GET /api/v1/me/tokens`: the tokens the person made for agents that have nobody to sign in,
+ * newest first, and how many they may hold at once.
+ */
+export const restRepoTokensSchema = z.object({
+  items: z.array(restRepoTokenSchema),
+  limit: count,
+});
+export type RestRepoTokens = z.infer<typeof restRepoTokensSchema>;
+
+/** What `POST /api/v1/me/tokens` is sent: the repository, a name for the token, and its lifetime. */
+export const restRepoTokenRequestSchema = z.object({
+  /** An address without a ref or a path: `/gh/owner/repo`. */
+  address: z.string(),
+  label: z.string(),
+  expiresInDays: z.int(),
+});
+export type RestRepoTokenRequest = z.infer<typeof restRepoTokenRequestSchema>;
+
+/** The answer to `POST /api/v1/me/tokens`: the secret, this once, and what was stored about it. */
+export const restNewRepoTokenSchema = z.object({
+  token: z.string(),
+  item: restRepoTokenSchema,
+});
+export type RestNewRepoToken = z.infer<typeof restNewRepoTokenSchema>;
+
 /**
  * `GET /api/v1/owners/gh/<owner>`: an account of the git host as everyone sees it, the public
  * repositories of it that this deployment has indexed and found skills in, and a page of its

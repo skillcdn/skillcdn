@@ -84,6 +84,17 @@ export {
   saveRepoPermission,
 } from "./queries/permissions.js";
 export {
+  createRepoToken,
+  deleteExpiredRepoTokens,
+  deleteRepoToken,
+  findRepoTokenAccess,
+  listRepoTokens,
+  type RepoTokenAccess,
+  type RepoTokenInput,
+  type RepoTokenRecord,
+  touchRepoToken,
+} from "./queries/repo-tokens.js";
+export {
   type CachedRef,
   deleteRepoAlias,
   deleteStaleMissingRepos,

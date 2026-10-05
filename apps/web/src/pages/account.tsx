@@ -1,9 +1,21 @@
-import type { RestUser } from "@skillcdn/core";
-import { type ComponentType, useEffect, useState } from "react";
+import {
+  formatAddress,
+  parseAddress,
+  REPO_TOKEN_DEFAULT_DAYS,
+  REPO_TOKEN_LIFETIMES_DAYS,
+  REPO_TOKEN_MAX_LABEL_LENGTH,
+  type RestNewRepoToken,
+  type RestUser,
+  ROOT_PATH,
+} from "@skillcdn/core";
+import { type ComponentType, type FormEvent, useEffect, useState } from "react";
 import { ApiError, api } from "../api/client.js";
 import { resourceKeys } from "../api/keys.js";
 import { useResource } from "../api/use-resource.js";
 import { signInHref, useSession } from "../auth/session.js";
+import { CodeBlock } from "../components/code-block.js";
+import { tokenSetup } from "../components/connect-clients.js";
+import { serverNameOf } from "../components/connect-guide.js";
 import { ErrorCallout } from "../components/error-callout.js";
 import {
   Avatar,
@@ -19,7 +31,14 @@ import ui from "../components/ui.module.css";
 import { useI18n } from "../i18n/index.js";
 import type { Messages } from "../i18n/messages/en.js";
 import { Link, navigate, useLocation } from "../navigation.js";
-import { ACCOUNT_SECTIONS, type AccountSection, accountHref, ownerHref, PATHS } from "../router.js";
+import {
+  ACCOUNT_SECTIONS,
+  type AccountSection,
+  accountHref,
+  ownerHref,
+  PATHS,
+  TOKEN_REPOSITORY_PARAM,
+} from "../router.js";
 import { applyHead, buildHead } from "../seo/head.js";
 import styles from "./account.module.css";
 import { NotFoundPage } from "./simple.js";
@@ -31,6 +50,8 @@ export interface AccountPageProps {
 
 interface SectionProps {
   readonly user: RestUser;
+  /** The origin of the deployment: what an address is a path of. */
+  readonly origin: string;
 }
 
 type LoginFailure = keyof Messages["auth"]["failures"];
@@ -78,6 +99,12 @@ function Overview({ user }: SectionProps) {
       body: o.appsBody,
       href: accountHref("apps"),
       action: o.appsAction,
+    },
+    {
+      title: t.account.sections.tokens,
+      body: o.tokensBody,
+      href: accountHref("tokens"),
+      action: o.tokensAction,
     },
   ];
   return (
@@ -279,6 +306,267 @@ function Apps({ user }: SectionProps) {
   );
 }
 
+/** A repository as an address names it, when the text is the address of one and nothing more. */
+function repositoryOf(text: string | null): string | undefined {
+  const parsed = text === null ? undefined : parseAddress(text);
+  return parsed?.ok === true && parsed.value.ref === undefined && parsed.value.path === ROOT_PATH
+    ? formatAddress(parsed.value)
+    : undefined;
+}
+
+/** How a repository is written where it is read, not typed: without the host's key. */
+const shortName = (address: string): string => address.replace(/^\/gh\//, "");
+
+const failureOf = (error: unknown): ApiError =>
+  error instanceof ApiError ? error : new ApiError(0, "unknown", "Unexpected failure.");
+
+/**
+ * The tokens the person made for agents that have nobody to sign in, the way to make one and
+ * the way to take one back. A token's secret is on the page once, right after it was made.
+ */
+function Tokens({ user, origin }: SectionProps) {
+  const { t } = useI18n();
+  const k = t.account.tokens;
+  const location = useLocation();
+  const tokens = useResource(resourceKeys.myTokens(user.login), (signal) => api.myTokens(signal));
+  const mine = useResource(resourceKeys.myRepositories(user.login), (signal) =>
+    api.myRepositories(signal),
+  );
+  const [chosen, setChosen] = useState<string>();
+  const [label, setLabel] = useState("");
+  const [days, setDays] = useState<number>(REPO_TOKEN_DEFAULT_DAYS);
+  const [making, setMaking] = useState(false);
+  const [made, setMade] = useState<RestNewRepoToken>();
+  const [removing, setRemoving] = useState<string>();
+  const [removed, setRemoved] = useState(false);
+  const [failure, setFailure] = useState<ApiError>();
+  useEndedSession(
+    (tokens.state === "error" && isRefusal(tokens.error)) ||
+      (mine.state === "error" && isRefusal(mine.error)) ||
+      isRefusal(failure),
+  );
+
+  // The page of a private repository sends people here with its address, which is then the
+  // first choice; the rest are the private repositories the app is installed on for them.
+  const wanted = repositoryOf(new URLSearchParams(location.search).get(TOKEN_REPOSITORY_PARAM));
+  const listed =
+    mine.state === "ready"
+      ? mine.value.installations.flatMap((installation) =>
+          installation.repositories
+            .filter((repository) => repository.visibility === "private")
+            .map((repository) => repository.address),
+        )
+      : [];
+  const choices = [...new Set([...(wanted === undefined ? [] : [wanted]), ...listed])];
+  const address = chosen !== undefined && choices.includes(chosen) ? chosen : choices[0];
+
+  const make = (event: FormEvent) => {
+    event.preventDefault();
+    if (address === undefined || label.trim() === "" || making) {
+      return;
+    }
+    setMaking(true);
+    setFailure(undefined);
+    setRemoved(false);
+    api.makeToken({ address, label: label.trim(), expiresInDays: days }).then(
+      (token) => {
+        setMaking(false);
+        setMade(token);
+        setLabel("");
+        tokens.reload();
+      },
+      (error: unknown) => {
+        setMaking(false);
+        setFailure(failureOf(error));
+      },
+    );
+  };
+
+  const remove = (id: string) => {
+    setRemoving(id);
+    setFailure(undefined);
+    api.removeToken(id).then(
+      () => {
+        setRemoving(undefined);
+        setRemoved(true);
+        // A secret that no longer opens anything is not worth showing.
+        setMade((current) => (current?.item.id === id ? undefined : current));
+        tokens.reload();
+      },
+      (error: unknown) => {
+        setRemoving(undefined);
+        setFailure(failureOf(error));
+      },
+    );
+  };
+
+  const madeFor = made === undefined ? undefined : parseAddress(made.item.address);
+  const agent =
+    made === undefined || madeFor?.ok !== true
+      ? undefined
+      : { name: serverNameOf(madeFor.value), url: `${origin}${made.item.address}` };
+
+  return (
+    <>
+      <p className={styles.lead}>{k.lead}</p>
+      {/* Said to whoever cannot see the row go, too. */}
+      <p className="visually-hidden" role="status">
+        {removed ? k.removed : ""}
+      </p>
+      {failure !== undefined && <ErrorCallout error={failure} />}
+
+      {made !== undefined && agent !== undefined && (
+        <div className={styles.made}>
+          <Callout tone="warning" title={k.made.title}>
+            {k.made.body}
+          </Callout>
+          <CodeBlock code={made.token} label={k.made.token} copy />
+          <h3 className={styles.subheading}>{k.made.give}</h3>
+          <p className={styles.rowText}>{k.made.giveBody(shortName(made.item.address))}</p>
+          <CodeBlock
+            code={tokenSetup("claudeCode", agent.name, agent.url, made.token)}
+            label={k.made.claudeCode}
+            copy
+          />
+          <CodeBlock
+            code={tokenSetup("codex", agent.name, agent.url, made.token)}
+            label={k.made.codex}
+            copy
+          />
+          <p className={styles.rowText}>{k.made.otherHint}</p>
+          <CodeBlock code={agent.url} label={k.made.address} copy />
+          <CodeBlock
+            code={tokenSetup("other", agent.name, agent.url, made.token)}
+            label={k.made.other}
+            copy
+          />
+          <div className={styles.formActions}>
+            <Button size="sm" onClick={() => setMade(undefined)}>
+              {k.made.done}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {mine.state === "loading" && <Skeleton lines={3} label={t.common.loading} />}
+      {mine.state === "error" && <ErrorCallout error={mine.error} onRetry={mine.reload} />}
+      {mine.state === "ready" &&
+        (address === undefined ? (
+          <EmptyState title={k.noRepositories.title}>
+            <p>{k.noRepositories.body}</p>
+            <p>
+              <Link
+                className={cx(ui.button, ui.secondary, ui.small)}
+                href={accountHref("repositories")}
+              >
+                {k.noRepositories.action}
+              </Link>
+            </p>
+          </EmptyState>
+        ) : (
+          <form className={styles.tokenForm} onSubmit={make}>
+            <h3 className={styles.subheading}>{k.form.title}</h3>
+            <div className={styles.fields}>
+              <div className={styles.field}>
+                <label htmlFor="token-repository">{k.form.repository}</label>
+                <select
+                  id="token-repository"
+                  className={styles.control}
+                  value={address}
+                  disabled={making}
+                  onChange={(event) => setChosen(event.target.value)}
+                >
+                  {choices.map((choice) => (
+                    <option key={choice} value={choice}>
+                      {shortName(choice)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className={styles.field}>
+                <label htmlFor="token-name">{k.form.name}</label>
+                <input
+                  id="token-name"
+                  className={styles.control}
+                  type="text"
+                  autoComplete="off"
+                  maxLength={REPO_TOKEN_MAX_LABEL_LENGTH}
+                  placeholder={k.form.namePlaceholder}
+                  aria-describedby="token-name-hint"
+                  value={label}
+                  disabled={making}
+                  onChange={(event) => setLabel(event.target.value)}
+                />
+              </div>
+              <div className={styles.field}>
+                <label htmlFor="token-expires">{k.form.expires}</label>
+                <select
+                  id="token-expires"
+                  className={styles.control}
+                  value={days}
+                  disabled={making}
+                  onChange={(event) => setDays(Number(event.target.value))}
+                >
+                  {REPO_TOKEN_LIFETIMES_DAYS.map((lifetime) => (
+                    <option key={lifetime} value={lifetime}>
+                      {k.form.lifetime(lifetime)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <p id="token-name-hint" className={styles.hint}>
+              {k.form.nameHint}
+            </p>
+            <div className={styles.formActions}>
+              <Button type="submit" variant="primary" disabled={making || label.trim() === ""}>
+                {making ? k.form.making : k.form.make}
+              </Button>
+            </div>
+          </form>
+        ))}
+
+      <h3 className={styles.subheading}>{k.list}</h3>
+      {tokens.state === "loading" && <Skeleton lines={3} label={t.common.loading} />}
+      {tokens.state === "error" && <ErrorCallout error={tokens.error} onRetry={tokens.reload} />}
+      {tokens.state === "ready" &&
+        (tokens.value.items.length === 0 ? (
+          <EmptyState title={k.none.title}>{k.none.body}</EmptyState>
+        ) : (
+          <ul className={styles.rows}>
+            {tokens.value.items.map((token) => (
+              <li key={token.id} className={cx(styles.row, styles.grant)}>
+                <div>
+                  <div className={styles.rowHead}>
+                    <strong>{token.label}</strong>
+                  </div>
+                  <p className={styles.rowText}>
+                    <Link href={token.address}>{shortName(token.address)}</Link>
+                  </p>
+                  <p className={styles.rowMeta}>
+                    <span>{k.madeAt(token.createdAt)}</span>
+                    <span>{k.expiresAt(token.expiresAt)}</span>
+                    <span>
+                      {token.lastUsedAt === null ? k.neverUsed : k.lastUsed(token.lastUsedAt)}
+                    </span>
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  disabled={removing !== undefined}
+                  aria-label={k.removeLabel(token.label, shortName(token.address))}
+                  onClick={() => remove(token.id)}
+                >
+                  {k.remove}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        ))}
+    </>
+  );
+}
+
 /**
  * What each section of the account pages shows. A feature that belongs to a person adds its
  * section to `ACCOUNT_SECTIONS` in the router, its words to the packs, and its page here; the
@@ -288,6 +576,7 @@ const SECTION_PAGES: Record<AccountSection, ComponentType<SectionProps>> = {
   overview: Overview,
   repositories: Repositories,
   apps: Apps,
+  tokens: Tokens,
 };
 
 /** The pages of whoever is signed in: one menu down the side, one section beside it. */
@@ -357,7 +646,7 @@ export function AccountPage(props: AccountPageProps) {
           <h2 id="account-section" className={styles.heading}>
             {t.account.sections[section]}
           </h2>
-          <Section key={`${section} ${session.user.login}`} user={session.user} />
+          <Section key={`${section} ${session.user.login}`} user={session.user} origin={origin} />
         </section>
       </div>
     </Container>

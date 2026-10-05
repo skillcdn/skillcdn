@@ -26,6 +26,7 @@ export const resourceKeys = {
   /** What is the signed-in person's: asked again whenever someone else signs in. */
   myRepositories: (login: string): string => `me ${login} repositories`,
   myGrants: (login: string): string => `me ${login} grants`,
+  myTokens: (login: string): string => `me ${login} tokens`,
   /** What a client asked to be allowed, as whoever is looking sees it. */
   authorization: (request: string, login: string | undefined): string =>
     `authorization ${login ?? ""} ${request}`,

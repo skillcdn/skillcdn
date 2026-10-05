@@ -51,6 +51,9 @@ export const connectEn = {
       other:
         "Choose OAuth where the app asks how to authenticate. Sign in with GitHub in the page it opens and allow the app.",
     },
+    /** For an agent that cannot do any of that: a job, a server. */
+    headless: "An agent that cannot sign in, such as a scheduled job or a server, uses a token.",
+    headlessAction: "Make a token",
     /** The steps that are different for a private repository, in place of the usual ones. */
     steps: {
       chatgpt:

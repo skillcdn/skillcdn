@@ -1,4 +1,4 @@
-import { formatAddress } from "@skillcdn/core";
+import { formatAddress, parseAddress } from "@skillcdn/core";
 import { describe, expect, it } from "vitest";
 import {
   ACCOUNT_SECTIONS,
@@ -8,6 +8,8 @@ import {
   mountHref,
   ownerFromInput,
   ownerHref,
+  TOKEN_REPOSITORY_PARAM,
+  tokensHref,
 } from "./router.js";
 
 describe("matchRoute", () => {
@@ -74,6 +76,22 @@ describe("matchRoute", () => {
     expect(matchRoute("/account/", "")).toEqual({ name: "not-found" });
     expect(matchRoute("/account/billing", "")).toEqual({ name: "not-found" });
     expect(matchRoute("/accounts", "")).toEqual({ name: "not-found" });
+  });
+
+  it("sends whoever wants a token for a repository to the tokens section, with it chosen", () => {
+    const at = (text: string) => {
+      const parsed = parseAddress(text);
+      if (!parsed.ok) {
+        throw new Error(`not an address: ${text}`);
+      }
+      return tokensHref(parsed.value);
+    };
+    expect(at("/gh/acme/skills")).toBe("/account/tokens?repository=%2Fgh%2Facme%2Fskills");
+    // A token is a repository's: the ref and the path of the page it was asked from are left.
+    expect(at("/gh/Acme/Skills@release/1.2:docs")).toBe(at("/gh/acme/skills"));
+    const [path, search] = at("/gh/acme/skills").split("?");
+    expect(matchRoute(path ?? "", `?${search}`)).toEqual({ name: "account", section: "tokens" });
+    expect(new URLSearchParams(search).get(TOKEN_REPOSITORY_PARAM)).toBe("/gh/acme/skills");
   });
 
   it("has one page that asks about a connecting app", () => {
