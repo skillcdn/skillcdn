@@ -46,11 +46,8 @@ export const accountEn = {
     privateSignedIn:
       "A private repository opens once the SkillCDN GitHub app is installed on it and your account can see it.",
     privateManage: "See your repositories",
+    /** Why a sign-in did not complete, when it was not the person who stopped it. */
     failures: {
-      denied: {
-        title: "Sign-in was cancelled",
-        body: "Nothing changed. You can sign in whenever you like.",
-      },
       expired: {
         title: "That sign-in took too long",
         body: "Start again, and finish at GitHub within ten minutes.",

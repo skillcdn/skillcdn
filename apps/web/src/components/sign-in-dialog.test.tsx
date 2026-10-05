@@ -71,7 +71,7 @@ describe("the sign-in dialog", () => {
     "says why a sign-in did not complete, and offers it again, in %s",
     (language) => {
       const t = messagesFor(language);
-      for (const failure of ["denied", "expired", "failed"] as const) {
+      for (const failure of ["expired", "failed"] as const) {
         const html = render(language, "/explore", `?sign_in=${failure}`, ANONYMOUS);
         expect(html, failure).toContain(t.auth.failures[failure].title);
         expect(html, failure).toContain(t.auth.failures[failure].body);
@@ -79,6 +79,16 @@ describe("the sign-in dialog", () => {
       }
     },
   );
+
+  it("only offers it again to someone who cancelled at the git host, which they know they did", () => {
+    const t = messagesFor("en");
+    const html = render("en", "/explore", "?sign_in=denied", ANONYMOUS);
+    expect(html).toContain('href="/auth/gh/login?return_to=%2Fexplore"');
+    for (const failure of Object.values(t.auth.failures)) {
+      expect(html).not.toContain(failure.title);
+    }
+    expect(html).toBe(render("en", "/explore", "?sign_in=open", ANONYMOUS));
+  });
 
   it("stays shut on a page that was not asked, and for a word it does not know", () => {
     for (const search of [

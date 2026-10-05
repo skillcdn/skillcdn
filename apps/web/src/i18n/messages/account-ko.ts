@@ -39,10 +39,6 @@ export const accountKo: typeof accountEn = {
       "비공개 저장소는 SkillCDN GitHub 앱이 설치되어 있고 내 계정으로 볼 수 있을 때 열립니다.",
     privateManage: "내 저장소 보기",
     failures: {
-      denied: {
-        title: "로그인을 취소했어요",
-        body: "바뀐 것은 없어요. 언제든 다시 로그인할 수 있어요.",
-      },
       expired: {
         title: "로그인 시간이 지났어요",
         body: "처음부터 다시 시작해서 10분 안에 GitHub에서 마쳐 주세요.",

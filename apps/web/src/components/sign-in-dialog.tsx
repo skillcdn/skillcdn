@@ -1,10 +1,4 @@
-import {
-  SIGN_IN_FAILURES,
-  SIGN_IN_PARAM,
-  SIGN_IN_REQUESTS,
-  type SignInFailure,
-  type SignInRequest,
-} from "@skillcdn/core";
+import { SIGN_IN_PARAM, SIGN_IN_REQUESTS, type SignInRequest } from "@skillcdn/core";
 import {
   createContext,
   type ReactNode,
@@ -53,7 +47,7 @@ export function useSignInDialog(): () => void {
 }
 
 function SignInDialog(props: {
-  readonly failure: SignInFailure | undefined;
+  readonly failure: "expired" | "failed" | undefined;
   readonly returnTo: string;
   readonly onClose: () => void;
 }) {
@@ -161,7 +155,9 @@ export function SignInDialogProvider(props: { readonly children: ReactNode }) {
       {props.children}
       {session.status === "anonymous" && request !== undefined && (
         <SignInDialog
-          failure={SIGN_IN_FAILURES.find((failure) => failure === request)}
+          // Someone who said no at the git host knows that they did: the dialog is back, with
+          // the way in, and says nothing about it. What they did not choose is explained.
+          failure={request === "expired" || request === "failed" ? request : undefined}
           returnTo={pageOf(location)}
           onClose={close}
         />

@@ -81,7 +81,10 @@ const PAGES: readonly (readonly [string, string])[] = [
     "/gh/acme/private-skills?sign_in=open",
     "The same, over a private repository: what the header's button opens from there",
   ],
-  ["/explore?sign_in=denied", "A sign-in that was cancelled (signed out only)"],
+  [
+    "/explore?sign_in=denied",
+    "A sign-in that was cancelled: the dialog again, and nothing said (signed out only)",
+  ],
   ["/explore?sign_in=expired", "A sign-in that took too long (signed out only)"],
   ["/account", "Your account: the overview once signed in, else the sign-in dialog over it"],
   ["/account/repositories", "Your private repositories, by where the GitHub app is installed"],
