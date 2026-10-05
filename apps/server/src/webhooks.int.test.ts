@@ -77,6 +77,11 @@ const commitOf = async (h: Pick<Harness, "request">, repo: string, cookie?: stri
 /** How far the index of what the address serves has come: `ready` only while it is kept. */
 const indexOf = async (h: Pick<Harness, "request">, repo: string, cookie?: string) =>
   (await mountOf(h, repo, cookie)).index.status;
+/**
+ * How long a test asks for an index before it gives up. Indexing is not waited for by the
+ * request that starts it, and a machine that runs the whole suite at once takes its time.
+ */
+const INDEXED_WITHIN = { timeout: 15_000, interval: 50 };
 
 describe("the receiver of the git host's events", () => {
   it("does not exist on a deployment that shares no secret with the host", async () => {
@@ -313,7 +318,7 @@ describe("what an event ends", () => {
     await vi.waitFor(async () => {
       expect(await indexOf(h, "secret-skills", alice)).toBe("ready");
       expect(await indexOf(h, "multi-skill")).toBe("ready");
-    });
+    }, INDEXED_WITHIN);
 
     host.uninstall("secret-skills");
     // Without an event its people go on reading what was indexed, for as long as the host's
@@ -347,7 +352,7 @@ describe("what an event ends", () => {
       expect(await indexOf(h, "secret-skills", alice)).toBe("ready");
       expect(await indexOf(h, "other-secrets", alice)).toBe("ready");
       expect(await indexOf(h, "hostile")).toBe("ready");
-    });
+    }, INDEXED_WITHIN);
 
     const response = await deliver(h, "installation", {
       action: "deleted",
