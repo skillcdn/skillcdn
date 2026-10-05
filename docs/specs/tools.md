@@ -129,3 +129,5 @@ A skill this mount describes without serving is not listed by the extension, and
 
 - Whether unverified public repositories keep search once owner verification exists.
 - Whether `read_repo_file` should accept multiple paths for files needed only on some runs.
+- Whether a page of `skills/list` and `resources/list` should hold more than 20 skills. A client that walks a list to its end stops after a number of pages: the TypeScript SDK's client after 64 by default, with an error, which is 1,280 skills at this size. A mount that lists more is out of such a client's reach until the application around it raises the limit, and one that lists a few hundred costs it a request for every 20.
+- Whether `tools/list`, `prompts/list` and `server/discover` should say how long they may be kept, as the extension's answers do. The SDK builds them, and on the current revision they leave with its defaults, `ttlMs: 0` and `cacheScope: private`: stale at once, so a client may ask again every time it needs them, although the tools and the prompt are the same at every address.
