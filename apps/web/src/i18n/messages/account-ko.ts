@@ -13,7 +13,6 @@ export const accountKo: typeof accountEn = {
   auth: {
     signIn: "로그인",
     continueWith: "GitHub로 계속하기",
-    switchAccount: "다른 GitHub 계정 사용",
     agreement: {
       both: "계속하면 {terms}과 {privacy}에 동의하게 됩니다.",
       terms: "계속하면 {terms}에 동의하게 됩니다.",

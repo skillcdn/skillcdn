@@ -16,11 +16,4 @@ describe("the paths of signing in", () => {
     // Without a page to come back to, the sign-in page is asked for alone.
     expect(signInPagePath()).toBe("/login");
   });
-
-  it("asks for the git host's account picker only when told to", () => {
-    expect(loginPath("/account", { chooseAccount: true })).toBe(
-      "/auth/gh/login?return_to=%2Faccount&choose_account=1",
-    );
-    expect(loginPath("/account", { chooseAccount: false })).toBe(loginPath("/account"));
-  });
 });

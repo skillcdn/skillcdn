@@ -15,8 +15,6 @@ export const accountEn = {
     signIn: "Sign in",
     /** The one button that leaves for GitHub. Signing in and signing up are the same step. */
     continueWith: "Continue with GitHub",
-    /** Beside that button: for someone GitHub would sign in as an account they do not want here. */
-    switchAccount: "Use a different GitHub account",
     /**
      * Under the button: what continuing agrees to, by which of the two the site has. `{terms}`
      * and `{privacy}` are where the links stand, each under the name given for it below.

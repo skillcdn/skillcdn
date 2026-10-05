@@ -80,9 +80,6 @@ export function ConsentPage(props: ConsentPageProps) {
   const resuming = params.has(RESUME_PARAM);
   const [answering, setAnswering] = useState(false);
   const [failure, setFailure] = useState<ApiError>();
-  // Someone who said the account on the page is not theirs: the sign-in that follows has the
-  // git host ask which account, or it would hand the same one straight back.
-  const [switching, setSwitching] = useState(false);
 
   useEffect(() => {
     applyHead(buildHead({ name: "consent" }, language, props.origin));
@@ -175,7 +172,6 @@ export function ConsentPage(props: ConsentPageProps) {
               sending the person to that page first would be a page that only says "continue". */}
           <SignIn
             returnTo={returnTo}
-            chooseAccount={switching}
             onLeave={() => {
               try {
                 window.sessionStorage.setItem(RESUME_KEY, here);
@@ -303,14 +299,8 @@ export function ConsentPage(props: ConsentPageProps) {
           </p>
         )}
         <p className={styles.notYou}>
-          <button
-            type="button"
-            disabled={answering}
-            onClick={() => {
-              setSwitching(true);
-              void signOut();
-            }}
-          >
+          {/* Signed out, the page offers to sign in again, and the git host asks as whom. */}
+          <button type="button" disabled={answering} onClick={() => void signOut()}>
             {t.authorize.notYou}
           </button>
         </p>

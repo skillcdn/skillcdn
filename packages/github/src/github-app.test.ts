@@ -408,7 +408,7 @@ describe("signing in", () => {
     expect(githubWebUrl("http://localhost:8080/api/v3")).toBe("http://localhost:8080");
   });
 
-  it("sends people to the host with a state and a challenge", () => {
+  it("sends people to the host with a state and a challenge, to its account picker every time", () => {
     const url = new URL(
       login(replay({}).fetchLike).authorizationUrl({
         state: "the-state",
@@ -423,22 +423,10 @@ describe("signing in", () => {
       state: "the-state",
       code_challenge: "the-challenge",
       code_challenge_method: "S256",
+      // Left to itself the host signs in whoever its own session has, without a page: with
+      // this it shows which account that is, and the way to another, before it sends them back.
+      prompt: "select_account",
     });
-  });
-
-  it("asks for the host's account picker for someone who wants another account", () => {
-    const sent = (chooseAccount: boolean) =>
-      new URL(
-        login(replay({}).fetchLike).authorizationUrl({
-          state: "the-state",
-          redirectUri: "https://skills.example/auth/gh/callback",
-          codeChallenge: "the-challenge",
-          chooseAccount,
-        }),
-      ).searchParams;
-    expect(sent(true).get("prompt")).toBe("select_account");
-    expect(sent(true).get("state")).toBe("the-state");
-    expect(sent(false).has("prompt")).toBe(false);
   });
 
   it("exchanges the code for the credential, with the verifier and the app's secret", async () => {

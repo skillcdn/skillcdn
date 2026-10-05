@@ -212,19 +212,6 @@ describe("signing in", () => {
     }
   });
 
-  it("asks the git host to let the person choose an account only when the page says so", async () => {
-    const { request } = harness();
-    const sent = async (query: string) =>
-      new URL((await request(`${AUTH_ROUTES.login}${query}`)).headers.get("location") ?? "")
-        .searchParams;
-    expect((await sent("?return_to=%2Faccount&choose_account=1")).get("prompt")).toBe(
-      "select_account",
-    );
-    for (const query of ["?return_to=%2Faccount", "?choose_account=0", "?choose_account=yes"]) {
-      expect((await sent(query)).has("prompt"), query).toBe(false);
-    }
-  });
-
   it("signs out only when its own pages ask, and the session is gone for good", async () => {
     const h = harness();
     const cookie = await h.signIn("bob");

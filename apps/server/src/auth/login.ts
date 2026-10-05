@@ -111,14 +111,8 @@ export class Login {
     });
   }
 
-  /**
-   * Sends the browser to the git host, remembering where it wanted to go afterwards.
-   * `chooseAccount` has the host ask which account the person continues with.
-   */
-  begin(
-    returnTo: string | undefined,
-    options: { readonly chooseAccount?: boolean } = {},
-  ): LoginStep {
+  /** Sends the browser to the git host, remembering where it wanted to go afterwards. */
+  begin(returnTo: string | undefined): LoginStep {
     const { login, secrets, clock, origin } = this.#options;
     const state = randomBytes(24).toString("base64url");
     const verifier = randomBytes(32).toString("base64url");
@@ -133,7 +127,6 @@ export class Login {
         state,
         redirectUri: this.#redirectUri,
         codeChallenge: pkceChallenge(verifier),
-        ...(options.chooseAccount === true ? { chooseAccount: true } : {}),
       }),
       cookies: [this.#cookie(pending, Math.floor(LOGIN_TTL_MS / 1000))],
     };

@@ -2,7 +2,6 @@ import {
   type Address,
   AUTH_ROUTES,
   accountAvatarUrl,
-  CHOOSE_ACCOUNT_PARAM,
   type Clock,
   CONSENT_REQUEST_PARAM,
   formatAddress,
@@ -187,10 +186,7 @@ export function registerAuth(app: Hono<AppEnv>, dependencies: AuthDependencies):
         302,
       );
     }
-    return follow(
-      c,
-      login.begin(returnTo, { chooseAccount: c.req.query(CHOOSE_ACCOUNT_PARAM) === "1" }),
-    );
+    return follow(c, login.begin(returnTo));
   });
 
   app.get(AUTH_ROUTES.callback, async (c) => {

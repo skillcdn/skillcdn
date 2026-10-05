@@ -9,18 +9,11 @@ import { SignIn } from "./sign-in.js";
 const TERMS = "https://skills.example/terms";
 const PRIVACY = "https://elsewhere.example/privacy";
 
-function render(
-  language: Language,
-  legal: LegalLinks | undefined,
-  props: { readonly returnTo?: string; readonly chooseAccount?: boolean } = {},
-): string {
+function render(language: Language, legal: LegalLinks | undefined): string {
   return renderToStaticMarkup(
     <I18nContext value={{ language, t: messagesFor(language) }}>
       <LegalLinksContext value={legal}>
-        <SignIn
-          returnTo={props.returnTo ?? "/gh/acme/skills"}
-          chooseAccount={props.chooseAccount}
-        />
+        <SignIn returnTo="/gh/acme/skills" />
       </LegalLinksContext>
     </I18nContext>,
   );
@@ -52,11 +45,10 @@ describe("the way out to the git host", () => {
         `<a href="${PRIVACY}" target="_blank" rel="noopener noreferrer">${agreement.privacyName}</a>`,
       );
       expect(html).not.toContain("{");
-      // Beside the button, the way to another account of the host.
-      expect(html).toContain(
-        'href="/auth/gh/login?return_to=%2Fgh%2Facme%2Fskills&amp;choose_account=1"',
-      );
-      expect(html).toContain(t.auth.switchAccount);
+      // One way out and no other: which account it is for is the git host's to show and to
+      // let the person change, on its own page, every time.
+      expect(html.match(/\/auth\/gh\/login/g)).toHaveLength(1);
+      expect(html.match(/<a /g)).toHaveLength(3);
       expect(html).not.toContain('style="');
     },
   );
@@ -92,14 +84,5 @@ describe("the way out to the git host", () => {
     const html = render("en", undefined);
     expect(html).not.toContain("/auth/gh/login");
     expect(html).toContain(messagesFor("en").common.loading);
-  });
-
-  it("has the host ask which account for someone who said the last one was not theirs", () => {
-    const t = messagesFor("en");
-    const html = render("en", { termsUrl: TERMS }, { returnTo: "/account", chooseAccount: true });
-    expect(html).toContain('href="/auth/gh/login?return_to=%2Faccount&amp;choose_account=1"');
-    // The button already does it, so the smaller way beside it is not offered twice.
-    expect(html.match(/\/auth\/gh\/login/g)).toHaveLength(1);
-    expect(html).not.toContain(t.auth.switchAccount);
   });
 });

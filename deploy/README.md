@@ -178,6 +178,7 @@ Then set `GITHUB_APP_ID` and `GITHUB_APP_CLIENT_ID` from the app's page, generat
 
 What then happens, and what to know when operating it:
 
+- A person signs in from the deployment's sign-in page, and every time GitHub shows its account picker first, so that they see which account they continue with before they are back ([ADR-0042](../docs/adr/0042-every-sign-in-passes-the-git-hosts-account-picker.md)). Nothing is configured for it.
 - An owner installs the app on the repositories it may read. A person signs in, and the server asks GitHub, as that person, whether they can see a repository; content is read with the app's installation token, never with a person's. A private repository without the app installed is not found, for its members too.
 - The person's GitHub token is stored encrypted under `AUTH_SECRET` and used for nothing but asking. Sessions, authorization codes and the tokens of AI apps are stored as hashes. `AUTH_SECRET` is the one value to guard: keep it with your other secrets, the same on every replica.
 - `PERMISSION_TTL_SECONDS` is the staleness bound for whatever the git host does not announce. With the webhook active, a push is served by the next request, a repository made private or deleted closes at once, a person who revokes the app is signed out, and taking the app off a repository that is not public removes what was indexed of it. GitHub does not send a failed delivery again by itself: the lifetimes cover a delivery that never arrived, and an operator can send one again from the app's settings for a few days.

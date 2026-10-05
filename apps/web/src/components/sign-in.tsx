@@ -56,16 +56,13 @@ function Agreement(props: { readonly legal: LegalLinks }) {
  * continuing agrees to. Signing in and signing up are the same step, so every place that lets a
  * person sign in shows this, or links to the page that does (ADR-0041): nobody leaves for the
  * host without having seen which host that is and what they accept by it. That is also why
- * nothing here is shown before the deployment's own links are known.
+ * nothing here is shown before the deployment's own links are known. Which account they
+ * continue with is shown at the host, which is asked to every time (ADR-0042): this page cannot
+ * know, and so offers no way to choose.
  */
 export function SignIn(props: {
   /** The page to come back to, signed in: a path of this origin. */
   readonly returnTo: string;
-  /**
-   * Have the host ask which account, for someone who has just said the one it would take is
-   * not theirs. Anyone else is offered that as the smaller way beside the button.
-   */
-  readonly chooseAccount?: boolean;
   /** Called as the browser leaves, by a page that keeps something until the person is back. */
   readonly onLeave?: () => void;
 }) {
@@ -74,26 +71,18 @@ export function SignIn(props: {
   if (legal === undefined) {
     return <Skeleton lines={2} label={t.common.loading} />;
   }
-  const choosing = props.chooseAccount === true;
   return (
     <div className={styles.signIn}>
       {/* A real navigation: signing in happens at the git host, not in this page. */}
       <a
         className={cx(ui.button, ui.primary, styles.leave)}
-        href={loginPath(props.returnTo, { chooseAccount: choosing })}
+        href={loginPath(props.returnTo)}
         onClick={props.onLeave}
       >
         <span className={styles.mark} aria-hidden="true" />
         {t.auth.continueWith}
       </a>
       <Agreement legal={legal} />
-      {!choosing && (
-        <p className={styles.other}>
-          <a href={loginPath(props.returnTo, { chooseAccount: true })} onClick={props.onLeave}>
-            {t.auth.switchAccount}
-          </a>
-        </p>
-      )}
     </div>
   );
 }

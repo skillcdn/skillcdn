@@ -188,12 +188,12 @@ export function createGitHubLogin(
         state: request.state,
         code_challenge: request.codeChallenge,
         code_challenge_method: "S256",
+        // The host's own account picker, every time: it shows which account the person
+        // continues with and the way to another. Without it the host shows a page only the
+        // first time, or to someone signed in to several accounts, and otherwise sends the
+        // browser straight back as whoever its own session has.
+        prompt: "select_account",
       });
-      if (request.chooseAccount === true) {
-        // The host's own picker, with the way to another account in it. Without this it shows
-        // one only to someone signed in to several accounts at once.
-        query.set("prompt", "select_account");
-      }
       return `${webUrl}/login/oauth/authorize?${query}`;
     },
 

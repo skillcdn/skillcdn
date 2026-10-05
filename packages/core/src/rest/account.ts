@@ -24,12 +24,6 @@ export const AUTH_ROUTES = {
 export const RETURN_TO_PARAM = "return_to";
 
 /**
- * The parameter of the login route that asks the git host to let the person pick which of their
- * accounts to continue with, instead of taking the one its own session has.
- */
-export const CHOOSE_ACCOUNT_PARAM = "choose_account";
-
-/**
  * The page where a person chooses to sign in, before their browser leaves for the git host
  * (ADR-0041). Everything that offers signing in leads here or shows what this page shows.
  */
@@ -60,14 +54,10 @@ export const CONSENT_ERROR_PARAM = "error";
 
 /**
  * Where a browser leaves for the git host to sign in and come back to `returnTo`, a path of this
- * origin. `chooseAccount` asks the host to let the person pick an account first.
+ * origin.
  */
-export function loginPath(
-  returnTo: string,
-  options: { readonly chooseAccount?: boolean } = {},
-): string {
-  const choose = options.chooseAccount === true ? `&${CHOOSE_ACCOUNT_PARAM}=1` : "";
-  return `${AUTH_ROUTES.login}?${RETURN_TO_PARAM}=${encodeURIComponent(returnTo)}${choose}`;
+export function loginPath(returnTo: string): string {
+  return `${AUTH_ROUTES.login}?${RETURN_TO_PARAM}=${encodeURIComponent(returnTo)}`;
 }
 
 /**

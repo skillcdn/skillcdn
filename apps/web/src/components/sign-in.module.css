@@ -22,8 +22,7 @@
   mask: url("/hosts/github.svg") center / contain no-repeat;
 }
 
-.agreement,
-.other {
+.agreement {
   color: var(--color-text-faint);
   font-size: var(--text-xs);
   text-wrap: balance;
@@ -32,14 +31,12 @@
 /* Links in small print stay small print: the underline says they are links, and the accent is
    left to the one button above them. A name is one thing to press, so it does not break in two
    where the sentence wraps. */
-.agreement a,
-.other a {
+.agreement a {
   color: inherit;
   text-decoration: underline;
   white-space: nowrap;
 }
 
-.agreement a:hover,
-.other a:hover {
+.agreement a:hover {
   color: var(--color-text);
 }

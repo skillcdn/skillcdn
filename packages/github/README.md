@@ -40,6 +40,7 @@ const login = createGitHubLogin(options, connection); // GitHostLogin
 ```
 
 - Every failure is a `GitHostError` with a `kind`: `not_found` (which also covers forbidden, and a repository the app is not installed on), `rate_limited` (with `retryAfterSeconds`), `transient`, `invalid`, or `unauthorized`, which only a person's own credential produces: the host no longer accepts it, and its holder has to sign in again.
+- A sign-in always asks GitHub for its account picker (`prompt=select_account`): GitHub shows which account the person continues with, and the way to another, where it would otherwise send them straight back as whoever its own session has ([ADR-0042](../../docs/adr/0042-every-sign-in-passes-the-git-hosts-account-picker.md)).
 - The installation of a repository and its token are kept in memory, the token until shortly before it ends and a missing installation for a minute; requests that need the same token share one mint. A person's token is never kept, and nothing asked with one is cached.
 - Repository facts and moving refs are revalidated with `If-None-Match`; a `304` does not count against the rate limit. The cache is in memory, bounded, and an optimization only.
 - Redirects are followed only within the configured origin, so credentials never leave it. Reply bodies are read up to a cap, whatever `content-length` claims.
