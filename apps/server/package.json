@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.1.3",
-    "@modelcontextprotocol/server": "^2.1.0",
+    "@modelcontextprotocol/server": "^2.2.0",
     "@napi-rs/canvas": "^1.0.10",
     "@skillcdn/core": "workspace:*",
     "@skillcdn/db": "workspace:*",
@@ -29,7 +29,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@modelcontextprotocol/client": "^2.1.0",
+    "@modelcontextprotocol/client": "^2.2.0",
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

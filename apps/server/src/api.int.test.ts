@@ -18,9 +18,10 @@ import {
 } from "@skillcdn/db";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import * as z from "zod";
 import { INDEX_VERSION } from "./indexer/build-index.js";
 import { createFixtureHost, fixtureCommits } from "./testing/fixture-host.js";
-import { createHarness, type HarnessOptions } from "./testing/harness.js";
+import { CURRENT_REVISION, createHarness, type HarnessOptions } from "./testing/harness.js";
 import { listedPaths } from "./testing/tool-text.js";
 
 let testDatabase: TestDatabase;
@@ -1158,6 +1159,71 @@ describe("clients from the previous protocol era", () => {
       headers: { accept: "text/event-stream" },
     });
     expect(getRequest.status).toBe(405);
+  });
+});
+
+// The SDK's client speaks the previous era unless it is asked for the current revision, so every
+// other test of this suite runs in that era. These talk to the same server the way the current
+// revision does: no handshake, no session, every request on its own.
+describe("clients of the current protocol revision", () => {
+  const skillsPage = z.object({
+    skills: z.array(z.object({ uri: z.string() })),
+    ttlMs: z.number().int().nonnegative(),
+    cacheScope: z.enum(["public", "private"]),
+  });
+
+  it("serves discovery, the tools and the skills extension without a handshake", async () => {
+    const client = await harness().connect("/gh/acme/single-skill", { revision: "current" });
+    try {
+      expect(client.getNegotiatedProtocolVersion()).toBe(CURRENT_REVISION);
+      expect(client.getServerVersion()).toMatchObject({ name: "skillcdn" });
+      expect(client.getInstructions()).toContain("Acme/single-skill");
+      expect(client.getServerCapabilities()).toMatchObject({
+        extensions: { "io.modelcontextprotocol/skills": { directoryRead: true } },
+      });
+
+      const { tools } = await client.listTools();
+      expect(tools.map((tool) => tool.name)).toEqual([
+        "browse_repo",
+        "search_repo",
+        "load_skill",
+        "read_repo_file",
+      ]);
+      const loaded = await call(client, "load_skill", { path: "SKILL.md" });
+      expect(loaded.isError).toBe(false);
+      expect(loaded.text).toContain("Skill: commit-messages");
+
+      // The extension's own method, the list the client walks page by page, and a read.
+      const listed = await client.request({ method: "skills/list", params: {} }, skillsPage);
+      const uris = listed.skills.map((skill) => skill.uri);
+      expect(uris).toHaveLength(1);
+      expect(listed.cacheScope).toBe("public");
+      expect(listed.ttlMs).toBeGreaterThan(0);
+      const { resources } = await client.listResources();
+      expect(resources.map((resource) => resource.uri)).toEqual(uris);
+      const read = await client.readResource({ uri: uris[0] ?? "" });
+      expect(JSON.stringify(read.contents)).toContain("commit-messages");
+    } finally {
+      await client.close();
+    }
+  });
+
+  it("ends a subscription it has nothing to send on, instead of holding its stream open", async () => {
+    // What an address offers does not change within a connection, and the capabilities say so:
+    // there is nothing a subscription could be told. A stream held open for one is a connection
+    // kept for nothing, for as long as the client cares to keep it.
+    const client = await harness().connect("/gh/acme/single-skill", { revision: "current" });
+    try {
+      const subscription = await client.listen({
+        toolsListChanged: true,
+        promptsListChanged: true,
+        resourcesListChanged: true,
+      });
+      expect(subscription.honoredFilter).toEqual({});
+      expect(await subscription.closed).toBe("graceful");
+    } finally {
+      await client.close();
+    }
   });
 });
 

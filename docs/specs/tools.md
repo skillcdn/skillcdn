@@ -92,6 +92,8 @@ The server info carries the manifest's name and description when available, othe
 
 One MCP prompt, `use_skill`, takes a required `path` and starts loading the exact skill. If its context continues, the response directs the agent to `load_skill` with the continuation. Skills do not each add a prompt to the client's command menu.
 
+The endpoint answers both protocol eras that clients speak ([ADR-0006](../adr/0006-mcp-sdk-v2-per-request-servers.md)): the earlier revisions, which open with a handshake, and the current one, in which every request stands on its own. What a mount offers does not change within a connection, so it declares no list changes and no resource subscriptions, and the server never sends a notification of its own. A `subscriptions/listen` request of the current revision is acknowledged with nothing honored and ended at once: no stream is held open for it.
+
 SkillCDN keeps no implicit selected team or role. Users can express their focus through their client's instructions or their request; folder descriptions help the agent choose a relevant scope.
 
 ## The skills extension

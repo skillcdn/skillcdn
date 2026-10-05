@@ -30,6 +30,8 @@ import type { FixtureLogin } from "./fixture-login.js";
 export const BASE_URL = "http://skillcdn.test";
 /** The origin of a harness where people can sign in: signing in wants one origin, and a secure one. */
 export const SIGN_IN_URL = "https://skillcdn.test";
+/** The protocol revision without a handshake or a session, which a client has to ask for. */
+export const CURRENT_REVISION = "2026-07-28";
 
 export interface Harness {
   readonly app: Hono<AppEnv>;
@@ -50,8 +52,15 @@ export interface Harness {
   /** What signing in is made of; `undefined` in a harness without it. */
   readonly auth: AppAuth | undefined;
   readonly usage: UsageEvent[];
-  /** An MCP client connected to an address, from `peer` (the socket address) when given. */
-  connect(address: string, options?: { readonly peer?: string }): Promise<Client>;
+  /**
+   * An MCP client connected to an address, from `peer` (the socket address) when given. It
+   * speaks the previous protocol era, as the SDK's client does unless told otherwise, and
+   * {@link CURRENT_REVISION} when `revision` asks for it.
+   */
+  connect(
+    address: string,
+    options?: { readonly peer?: string; readonly revision?: "current" },
+  ): Promise<Client>;
   request(path: string, init?: RequestInit): Promise<Response>;
   /**
    * Signs a person of the fixture login in as their browser would, and answers with the Cookie
@@ -193,7 +202,14 @@ export function createHarness(testDatabase: TestDatabase, options: HarnessOption
     usage,
     request,
     async connect(address, options = {}) {
-      const client = new Client({ name: "skillcdn-test", version: "0.0.0" });
+      const client = new Client(
+        { name: "skillcdn-test", version: "0.0.0" },
+        // Pinned, so that a server which stopped speaking the revision fails the test instead
+        // of being talked to in the previous era.
+        options.revision === "current"
+          ? { versionNegotiation: { mode: { pin: CURRENT_REVISION } } }
+          : {},
+      );
       const env =
         options.peer === undefined
           ? undefined
