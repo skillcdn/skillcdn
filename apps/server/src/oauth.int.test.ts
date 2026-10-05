@@ -3,6 +3,7 @@ import {
   Client,
   type OAuthClientMetadata,
   type OAuthClientProvider,
+  type OAuthDiscoveryState,
   type StoredOAuthClientInformation,
   type StoredOAuthTokens,
   StreamableHTTPClientTransport,
@@ -1162,6 +1163,7 @@ describe("an MCP client that signs in", () => {
     #client: StoredOAuthClientInformation | undefined;
     #tokens: StoredOAuthTokens | undefined;
     #verifier = "";
+    #discovery: OAuthDiscoveryState | undefined;
 
     get redirectUrl(): string {
       return REDIRECT;
@@ -1196,6 +1198,19 @@ describe("an MCP client that signs in", () => {
     codeVerifier() {
       return this.#verifier;
     }
+    // Kept across the redirect, as the verifier is: without it the SDK cannot tell, when the
+    // person comes back, that the server it is about to hand the code to is the one it sent
+    // them to, and it says so and goes on.
+    saveDiscoveryState(state: OAuthDiscoveryState) {
+      this.#discovery = state;
+    }
+    discoveryState() {
+      return this.#discovery;
+    }
+    /** Which authorization server the client says what it keeps belongs to. */
+    boundTo() {
+      return { client: this.#client?.issuer, tokens: this.#tokens?.issuer };
+    }
   }
 
   it("discovers where to ask, registers, has the person agree, and reads the private repository", async () => {
@@ -1219,6 +1234,9 @@ describe("an MCP client that signs in", () => {
 
     const back = await consent(h, `${opened?.pathname}${opened?.search}`, await h.signIn("alice"));
     await first.finishAuth(back.searchParams);
+    // The client keeps its registration and its tokens for this issuer and no other: the name
+    // the server gives itself in its metadata and in the answer the person came back with.
+    expect(provider.boundTo()).toEqual({ client: ISSUER, tokens: ISSUER });
 
     const client = new Client({ name: "skillcdn-test", version: "0.0.0" });
     await client.connect(transportOf());
