@@ -60,9 +60,26 @@ export function signInHref(location: { readonly pathname: string; readonly searc
 }
 
 /**
- * Asks the server who is signed in, once the page is up. The server renders every page without
- * knowing, so that one document serves everyone; the first render in the browser matches it, and
- * the answer arrives after.
+ * Tells `restored` whenever the browser brings the page back as it was left, out of its
+ * back-forward cache, instead of loading it. Such a page still shows who was signed in when it
+ * was left: someone who signed in and goes back would find a page that offers to sign them in.
+ * Returns the way to stop listening.
+ */
+export function onPageRestored(page: EventTarget, restored: () => void): () => void {
+  const shown = (event: Event) => {
+    if ((event as PageTransitionEvent).persisted) {
+      restored();
+    }
+  };
+  page.addEventListener("pageshow", shown);
+  return () => page.removeEventListener("pageshow", shown);
+}
+
+/**
+ * Asks the server who is signed in, once the page is up, and again when the browser brings the
+ * page back out of its cache. The server renders every page without knowing, so that one
+ * document serves everyone; the first render in the browser matches it, and the answer arrives
+ * after.
  */
 export function SessionProvider(props: { readonly children: ReactNode }) {
   const [session, setSession] = useState<Session>({ status: "unknown" });
@@ -100,6 +117,7 @@ export function SessionProvider(props: { readonly children: ReactNode }) {
   }, [asked]);
 
   const refresh = useCallback(() => setAsked((count) => count + 1), []);
+  useEffect(() => onPageRestored(window, refresh), [refresh]);
   const signOut = useCallback(async () => {
     await api.signOut();
     setSession({ status: "anonymous" });
