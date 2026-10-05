@@ -37,7 +37,7 @@ Agent skills are already distributed as folders of Markdown in git repos. The mi
 3. On every request we ask GitHub whether this user can see this repo and cache the yes/no for a short time. Teams, outside collaborators, internal repos, SSO enforcement: GitHub decides, we relay. A repository someone may not see answers exactly like one that does not exist.
 4. Indexing uses the App installation token, never a user token. GitHub's webhooks end a cached answer at once: a repository made private, the App removed, a person who revoked it, and, where the App may read an organization's members, a change of collaborators, teams or members.
 
-Authorization is optional: a public repository never asks for it. An agent that has nobody to sign in, such as a scheduled job or a server, is given a **repository token**: made by a person on their account pages, good for one repository, read-only, expiring and revocable. It reads as the person who made it, so GitHub still decides what it opens: there is no permission layer of our own.
+Authorization is optional: a public repository never asks for it. An agent that has nobody to sign in, such as a scheduled job or a server, is given a **repository token**: made on their account pages by anyone who can read the repository, good for that one repository, read-only, expiring and revocable. It reads as the person who made it, so GitHub still decides what it opens: there is no permission layer of our own.
 
 Every account has a page at `skillcdn.ai/gh/<owner>` with its public repositories as GitHub lists them, the ones already indexed with skills first.
 

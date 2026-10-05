@@ -29,7 +29,3 @@ The VS Code mark in `apps/web/public/clients/vscode.svg`.
 ## npm packages in the web build
 
 The pages bundle npm packages, each under its own permissive license. The build writes their licenses and notices to `licenses/npm.txt` in the web build (`apps/web/scripts/collect-licenses.mjs`), served next to the pages at `/licenses/npm.txt`, and `pnpm check` refuses a production dependency whose license is not on the allowlist (`scripts/check-licenses.mjs`). The server's own dependencies travel with it in `node_modules`, licenses included.
-
-## Showcase media
-
-The concept clip and the pictures in `apps/web/public/showcase/` are original AI-generated concept media made for this project on September 23, 2026 and re-encoded for the web. They depict no real product, run or person, and the page says so next to the clip. The originals carry content credentials that the re-encoding did not keep; a regenerated clip must carry them through, which is on the [roadmap](docs/roadmap.md).
