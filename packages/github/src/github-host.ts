@@ -133,7 +133,30 @@ const treeSchema = z.object({
   ),
 });
 
+/** What is read of a comparison of two commits: how many commits the base has that the head lacks. */
+const comparisonSchema = z.object({ behind_by: z.number().int().nonnegative() });
+/** A comparison asked for without its commits and files is small; this bounds a reply that is not. */
+const COMPARISON_MAX_BYTES = 1024 * 1024;
+/** A name that may be the first digits of a commit hash. */
+const SHORT_HASH = /^[0-9a-f]{7,39}$/i;
+
 const SYMLINK_MODE = "120000";
+
+/**
+ * Where the host is asked for a ref name: among the repository's branches, then among its tags,
+ * and nowhere else. The host keeps other refs under a repository, the head of every pull
+ * request among them, which anyone can make point at content of their own; asked for a bare
+ * name, it looks through all of them as git does. A name that says which kind it is
+ * (`refs/heads/..`, `heads/..`, `refs/tags/..`, `tags/..`) is taken at its word first.
+ */
+function refCandidates(name: string): string[] {
+  const kind = (value: string): boolean => value.startsWith("heads/") || value.startsWith("tags/");
+  if (name.startsWith("refs/")) {
+    const rest = name.slice("refs/".length);
+    return kind(rest) ? [rest] : [];
+  }
+  return [...(kind(name) ? [name] : []), `heads/${name}`, `tags/${name}`];
+}
 
 /** Ends quietly once `maxBytes` have passed: what came before is still good. */
 async function* upTo(
@@ -332,22 +355,83 @@ export function createGitHubHost(
     },
 
     async resolveRef(coordinates: RepoCoordinates, ref: AddressRef | undefined): Promise<string> {
-      const name = ref === undefined ? "HEAD" : ref.kind === "commit" ? ref.hash : ref.name;
-      const encoded = name.split("/").map(encodeURIComponent).join("/");
-      const reply = await http.get(`${repoPath(coordinates)}/commits/${encoded}`, {
-        accept: SHA_ACCEPT,
-        credential: await credentialFor(coordinates),
-        // A pinned commit never changes, so there is nothing to revalidate.
-        conditional: ref?.kind !== "commit",
-        maxBytes: 1024,
-        // 422: no commit for this ref. 409: the repository is empty.
-        notFoundStatuses: [409, 422],
-      });
-      const commit = new TextDecoder().decode(reply.body).trim().toLowerCase();
-      if (!isFullCommitHash(commit)) {
-        throw new GitHostError("invalid", "the git host did not answer with a commit hash");
+      const credential = await credentialFor(coordinates);
+      /** The commit the host's commits endpoint finds under a name, which it reads as git does. */
+      const commitAt = async (name: string): Promise<string> => {
+        const encoded = name.split("/").map(encodeURIComponent).join("/");
+        const reply = await http.get(`${repoPath(coordinates)}/commits/${encoded}`, {
+          accept: SHA_ACCEPT,
+          credential,
+          conditional: true,
+          maxBytes: 1024,
+          // 422: no commit for this ref. 409: the repository is empty.
+          notFoundStatuses: [409, 422],
+        });
+        const commit = new TextDecoder().decode(reply.body).trim().toLowerCase();
+        if (!isFullCommitHash(commit)) {
+          throw new GitHostError("invalid", "the git host did not answer with a commit hash");
+        }
+        return commit;
+      };
+      /**
+       * Whether a commit is part of the history of the default branch. The host answers for any
+       * commit of a repository's fork network under the repository's name, so that a commit
+       * exists says nothing about whose it is; what the default branch leads back to is the
+       * repository's own. The comparison is asked for by its second page, which carries the
+       * counts without the commits and the files.
+       */
+      const inDefaultBranch = async (commit: string): Promise<boolean> => {
+        const head = await commitAt("HEAD");
+        if (head === commit) {
+          return true;
+        }
+        try {
+          const reply = await http.get(
+            `${repoPath(coordinates)}/compare/${commit}...${head}?per_page=1&page=2`,
+            { accept: JSON_ACCEPT, credential, maxBytes: COMPARISON_MAX_BYTES },
+          );
+          // Nothing the commit has is missing from the branch: the branch contains it.
+          return decodeJson(reply.body, comparisonSchema).behind_by === 0;
+        } catch (error) {
+          // No such commit, or one that shares no history with the branch.
+          if (error instanceof GitHostError && error.kind === "not_found") {
+            return false;
+          }
+          throw error;
+        }
+      };
+
+      if (ref === undefined) {
+        return commitAt("HEAD");
       }
-      return commit;
+      if (ref.kind === "commit") {
+        const commit = ref.hash.toLowerCase();
+        if (!(await inDefaultBranch(commit))) {
+          throw new GitHostError("not_found", "not a commit of the default branch's history");
+        }
+        return commit;
+      }
+      for (const candidate of refCandidates(ref.name)) {
+        try {
+          return await commitAt(candidate);
+        } catch (error) {
+          if (!(error instanceof GitHostError) || error.kind !== "not_found") {
+            throw error;
+          }
+        }
+      }
+      // Neither a branch nor a tag: the first digits of a commit hash, when the host knows one
+      // by them and it is the repository's own.
+      if (SHORT_HASH.test(ref.name)) {
+        const commit = await commitAt(ref.name);
+        if (await inDefaultBranch(commit)) {
+          return commit;
+        }
+      }
+      throw new GitHostError(
+        "not_found",
+        "no branch, tag or commit of the repository by this name",
+      );
     },
 
     async getTree(coordinates: RepoCoordinates, commit: string): Promise<RepoTree> {

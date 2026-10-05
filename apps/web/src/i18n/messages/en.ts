@@ -282,7 +282,7 @@ export const en = {
       },
       "mount.ref_not_found": {
         title: "Ref not found",
-        body: "There is no such branch, tag or commit in this repository. If the ref contains a slash, end it with a colon, for example @release/1.2:",
+        body: "This repository has no such branch or tag, and no such commit in the history of its default branch. If the ref contains a slash, end it with a colon, for example @release/1.2:",
       },
       "mount.not_allowed": {
         title: "Not served here",

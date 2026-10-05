@@ -29,20 +29,34 @@
       },
       "body": "6957cea1f161e5e18dd64f9cd5613404fd20045b"
     },
-    "GET /repos/skillcdn/skillcdn/commits/0e169f0cf93f93478cf2634eb8082d4e933afde7": {
+    "GET /repos/skillcdn/skillcdn/commits/heads/main": {
       "status": 200,
       "headers": {
         "content-type": "application/vnd.github.sha; charset=utf-8",
-        "etag": "\"0e169f0cf93f93478cf2634eb8082d4e933afde7\""
+        "etag": "\"e3ad1163d04e652d3037a24f35e0bb3b33f2e5e9\""
       },
-      "body": "0e169f0cf93f93478cf2634eb8082d4e933afde7"
+      "body": "e3ad1163d04e652d3037a24f35e0bb3b33f2e5e9"
     },
-    "GET /repos/skillcdn/skillcdn/commits/no-such-ref": {
+    "GET /repos/skillcdn/skillcdn/commits/heads/no-such-ref": {
       "status": 422,
       "headers": {
         "content-type": "application/json; charset=utf-8"
       },
-      "body": "{\"message\":\"No commit found for SHA: no-such-ref\",\"documentation_url\":\"https://docs.github.com/rest/commits/commits#get-a-commit\",\"status\":\"422\"}"
+      "body": "{\"message\":\"No commit found for SHA: heads/no-such-ref\",\"documentation_url\":\"https://docs.github.com/rest/commits/commits#get-a-commit\",\"status\":\"422\"}"
+    },
+    "GET /repos/skillcdn/skillcdn/commits/tags/no-such-ref": {
+      "status": 422,
+      "headers": {
+        "content-type": "application/json; charset=utf-8"
+      },
+      "body": "{\"message\":\"No commit found for SHA: tags/no-such-ref\",\"documentation_url\":\"https://docs.github.com/rest/commits/commits#get-a-commit\",\"status\":\"422\"}"
+    },
+    "GET /repos/skillcdn/skillcdn/compare/0e169f0cf93f93478cf2634eb8082d4e933afde7...6957cea1f161e5e18dd64f9cd5613404fd20045b?per_page=1&page=2": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json; charset=utf-8"
+      },
+      "body": "{\"status\":\"ahead\",\"ahead_by\":1,\"behind_by\":0,\"total_commits\":1,\"base_commit\":{\"sha\":\"0e169f0cf93f93478cf2634eb8082d4e933afde7\"},\"merge_base_commit\":{\"sha\":\"0e169f0cf93f93478cf2634eb8082d4e933afde7\"},\"commits\":[]}"
     },
     "GET /repos/skillcdn/skillcdn/git/trees/0e169f0cf93f93478cf2634eb8082d4e933afde7?recursive=1": {
       "status": 200,

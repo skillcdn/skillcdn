@@ -141,50 +141,178 @@ describe("getRepository", () => {
 });
 
 describe("resolveRef", () => {
-  it("resolves the default branch, a name and a pinned commit", async () => {
-    const { fetchLike, seen } = replay({
-      "GET /repos/skillcdn/skillcdn/commits/release/1.2": {
-        status: 200,
-        headers: {},
-        body: fixture.commit,
-      },
-    });
+  const COMMITS = "GET /repos/skillcdn/skillcdn/commits";
+  const COMPARE = "GET /repos/skillcdn/skillcdn/compare";
+  /** The head of the default branch, as it was when the replies were recorded. */
+  const HEAD = fixture.responses[`${COMMITS}/HEAD`]?.body ?? "";
+  const hash = (commit: string): RecordedResponse => ({ status: 200, headers: {}, body: commit });
+  /** What the host answers for a name it has no commit under, as it was recorded. */
+  const unknown = fixture.responses[`${COMMITS}/heads/no-such-ref`] as RecordedResponse;
+  const keys = (seen: readonly SeenRequest[]) => seen.map((request) => request.key);
+
+  it("resolves the default branch, and a name as a branch of the repository", async () => {
+    const { fetchLike, seen } = replay();
     const github = host(fetchLike);
-    expect(await github.resolveRef(repo, undefined)).toMatch(/^[0-9a-f]{40}$/);
-    expect(await github.resolveRef(repo, { kind: "commit", hash: fixture.commit })).toBe(
+    expect(await github.resolveRef(repo, undefined)).toBe(HEAD);
+    expect(await github.resolveRef(repo, { kind: "name", name: "main" })).toMatch(/^[0-9a-f]{40}$/);
+    expect(keys(seen)).toEqual([`${COMMITS}/HEAD`, `${COMMITS}/heads/main`]);
+  });
+
+  it("looks for a name among the branches, then among the tags", async () => {
+    const { fetchLike, seen } = replay({
+      [`${COMMITS}/heads/v1.2.0`]: unknown,
+      [`${COMMITS}/tags/v1.2.0`]: hash(fixture.commit),
+    });
+    expect(await host(fetchLike).resolveRef(repo, { kind: "name", name: "v1.2.0" })).toBe(
       fixture.commit,
     );
-    expect(await github.resolveRef(repo, { kind: "name", name: "release/1.2" })).toBe(
+    expect(keys(seen)).toEqual([`${COMMITS}/heads/v1.2.0`, `${COMMITS}/tags/v1.2.0`]);
+  });
+
+  it("takes a name that says what kind of ref it is at its word", async () => {
+    for (const [name, asked] of [
+      ["refs/heads/release/1.2", ["heads/release/1.2"]],
+      ["refs/tags/v1", ["tags/v1"]],
+      ["heads/release/1.2", ["heads/release/1.2"]],
+      ["tags/v1", ["tags/v1"]],
+    ] as const) {
+      const { fetchLike, seen } = replay({ [`${COMMITS}/${asked[0]}`]: hash(fixture.commit) });
+      expect(await host(fetchLike).resolveRef(repo, { kind: "name", name })).toBe(fixture.commit);
+      expect(keys(seen)).toEqual(asked.map((path) => `${COMMITS}/${path}`));
+    }
+    // A branch whose own name begins that way is still found, after the ref it would shadow.
+    const { fetchLike, seen } = replay({
+      [`${COMMITS}/heads/x`]: unknown,
+      [`${COMMITS}/heads/heads/x`]: hash(fixture.commit),
+    });
+    expect(await host(fetchLike).resolveRef(repo, { kind: "name", name: "heads/x" })).toBe(
       fixture.commit,
     );
-    expect(seen.map((request) => request.key)).toContain(
-      "GET /repos/skillcdn/skillcdn/commits/release/1.2",
+    expect(keys(seen)).toEqual([`${COMMITS}/heads/x`, `${COMMITS}/heads/heads/x`]);
+  });
+
+  it("never asks for a ref that is neither a branch nor a tag of the repository", async () => {
+    // The host keeps the head of every pull request under the repository, and whoever opens
+    // one decides what it points at. Asked by a bare name, the host would find it.
+    for (const name of [
+      "refs/pull/7/head",
+      "refs/pull/7/merge",
+      "refs/remotes/origin/main",
+      "refs/notes/commits",
+      "refs/",
+    ]) {
+      const { fetchLike, seen } = replay();
+      const error = await failureOf(host(fetchLike).resolveRef(repo, { kind: "name", name }));
+      expect(error.kind).toBe("not_found");
+      expect(seen).toEqual([]);
+    }
+    // Without the prefix it is a name like any other: a branch or a tag called that, or nothing.
+    const { fetchLike, seen } = replay({
+      [`${COMMITS}/heads/pull/7/head`]: unknown,
+      [`${COMMITS}/tags/pull/7/head`]: unknown,
+    });
+    const error = await failureOf(
+      host(fetchLike).resolveRef(repo, { kind: "name", name: "pull/7/head" }),
     );
+    expect(error.kind).toBe("not_found");
+    expect(keys(seen)).toEqual([`${COMMITS}/heads/pull/7/head`, `${COMMITS}/tags/pull/7/head`]);
   });
 
   it("percent-encodes ref names without touching the slashes", async () => {
     const { fetchLike, seen } = replay({
-      "GET /repos/skillcdn/skillcdn/commits/feature/a%23b%3Fc": {
-        status: 200,
-        headers: {},
-        body: fixture.commit,
-      },
+      [`${COMMITS}/heads/feature/a%23b%3Fc`]: hash(fixture.commit),
     });
     await host(fetchLike).resolveRef(repo, { kind: "name", name: "feature/a#b?c" });
-    expect(seen[0]?.key).toBe("GET /repos/skillcdn/skillcdn/commits/feature/a%23b%3Fc");
+    expect(seen[0]?.key).toBe(`${COMMITS}/heads/feature/a%23b%3Fc`);
   });
 
   it("reports an unknown ref as not found", async () => {
-    const { fetchLike } = replay();
+    const { fetchLike, seen } = replay();
     const error = await failureOf(
       host(fetchLike).resolveRef(repo, { kind: "name", name: "no-such-ref" }),
     );
     expect(error.kind).toBe("not_found");
+    // Not the digits of a commit hash, so not asked for as one.
+    expect(keys(seen)).toEqual([`${COMMITS}/heads/no-such-ref`, `${COMMITS}/tags/no-such-ref`]);
+  });
+
+  it("resolves a commit that is part of the default branch's history", async () => {
+    const { fetchLike, seen } = replay();
+    const github = host(fetchLike);
+    expect(await github.resolveRef(repo, { kind: "commit", hash: fixture.commit })).toBe(
+      fixture.commit,
+    );
+    // The comparison is asked for by its second page: the counts, without commits and files.
+    expect(keys(seen)).toEqual([
+      `${COMMITS}/HEAD`,
+      `${COMPARE}/${fixture.commit}...${HEAD}?per_page=1&page=2`,
+    ]);
+    // The head of the branch is in its history without asking.
+    expect(await github.resolveRef(repo, { kind: "commit", hash: HEAD })).toBe(HEAD);
+    expect(seen).toHaveLength(3);
+  });
+
+  it("refuses a commit the host serves under the repository's name that is not the repository's", async () => {
+    // A commit of a fork: the host knows it under the parent's name, compares it, and counts
+    // what it has that the default branch lacks. Written in the shape the host documents.
+    const foreign = "f".repeat(40);
+    const comparison = `${COMPARE}/${foreign}...${HEAD}?per_page=1&page=2`;
+    for (const reply of [
+      json(200, { status: "behind", ahead_by: 0, behind_by: 1, total_commits: 0, commits: [] }),
+      json(200, { status: "diverged", ahead_by: 12, behind_by: 3, total_commits: 12, commits: [] }),
+      // No history in common with the branch, and no such commit at all.
+      json(404, { message: "No common ancestor between ffffff and main.", status: "404" }),
+      json(404, { message: "Not Found", status: "404" }),
+    ]) {
+      const { fetchLike } = replay({ [comparison]: reply });
+      const error = await failureOf(
+        host(fetchLike).resolveRef(repo, { kind: "commit", hash: foreign }),
+      );
+      expect(error.kind).toBe("not_found");
+    }
+    // A reply that does not say is no confirmation.
+    const { fetchLike } = replay({ [comparison]: json(200, { status: "ahead" }) });
+    expect(
+      (await failureOf(host(fetchLike).resolveRef(repo, { kind: "commit", hash: foreign }))).kind,
+    ).toBe("invalid");
+  });
+
+  it("resolves the first digits of a commit hash, for a commit of the repository's own only", async () => {
+    const short = fixture.commit.slice(0, 7);
+    const lookedUp = {
+      [`${COMMITS}/heads/${short}`]: unknown,
+      [`${COMMITS}/tags/${short}`]: unknown,
+    };
+    const own = replay({ ...lookedUp, [`${COMMITS}/${short}`]: hash(fixture.commit) });
+    expect(await host(own.fetchLike).resolveRef(repo, { kind: "name", name: short })).toBe(
+      fixture.commit,
+    );
+    expect(keys(own.seen)).toEqual([
+      `${COMMITS}/heads/${short}`,
+      `${COMMITS}/tags/${short}`,
+      `${COMMITS}/${short}`,
+      `${COMMITS}/HEAD`,
+      `${COMPARE}/${fixture.commit}...${HEAD}?per_page=1&page=2`,
+    ]);
+
+    const foreign = "f".repeat(40);
+    const fork = replay({
+      ...lookedUp,
+      [`${COMMITS}/${short}`]: hash(foreign),
+      [`${COMPARE}/${foreign}...${HEAD}?per_page=1&page=2`]: json(200, {
+        status: "behind",
+        ahead_by: 0,
+        behind_by: 1,
+      }),
+    });
+    expect(
+      (await failureOf(host(fork.fetchLike).resolveRef(repo, { kind: "name", name: short }))).kind,
+    ).toBe("not_found");
   });
 
   it("rejects a reply that is not a commit hash", async () => {
     const { fetchLike } = replay({
-      "GET /repos/skillcdn/skillcdn/commits/HEAD": {
+      [`${COMMITS}/HEAD`]: {
         status: 200,
         headers: {},
         body: "<html>",

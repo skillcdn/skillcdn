@@ -10,8 +10,10 @@ import {
   claimSnapshot,
   createDatabase,
   ensureSnapshot,
+  findCachedRef,
   findRepoByAlias,
   type NewIndexEntry,
+  saveCachedRef,
   writeSnapshotIndex,
 } from "@skillcdn/db";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
@@ -805,6 +807,49 @@ describe("addresses that cannot be served", () => {
     const body = (await response.json()) as { error: { code: string; message: string } };
     expect(body.error.code).toBe("mount.ref_not_found");
     expect(body.error.message).toContain('"@release/1.3:"');
+  });
+
+  it("serves a commit hash only when the host confirms it as the repository's own", async () => {
+    const host = createFixtureHost("pinned-own");
+    const { request } = harness({ host });
+    const own = fixtureCommits("pinned-own").main;
+    // A commit the host does not confirm: one that is nowhere, or one of a fork of the
+    // repository, which a host serves under the repository's name all the same.
+    const foreign = "f".repeat(40);
+    expect((await request(`/api/v1/mounts/gh/acme/licensed@${own}`)).status).toBe(200);
+    const refused = await request(`/api/v1/mounts/gh/acme/licensed@${foreign}`);
+    expect(refused.status).toBe(404);
+    expect(await refused.json()).toEqual({
+      error: {
+        code: "mount.ref_not_found",
+        message:
+          "The commit was not found in the history of this repository's default branch. A commit hash is served from there only; address anything else by the name of its branch or tag.",
+      },
+    });
+
+    // What an older release remembered about a commit was only that it exists, under the bare
+    // hash. That is not looked at: the host is asked, and what it confirms is kept under a key
+    // of its own.
+    const repo = await findRepoByAlias(testDatabase.database, {
+      host: "gh",
+      owner: "acme",
+      repo: "licensed",
+    });
+    if (repo === undefined) {
+      throw new Error("the repository was not saved");
+    }
+    const scope = { accountId: repo.accountId, repoId: repo.id };
+    await saveCachedRef(testDatabase.database, scope, foreign, foreign, new Date());
+    const asked = host.calls.resolveRef;
+    expect((await request(`/api/v1/mounts/gh/acme/licensed@${foreign}`)).status).toBe(404);
+    expect(host.calls.resolveRef).toBe(asked + 1);
+    expect(await findCachedRef(testDatabase.database, scope, `commit:${own}`)).toMatchObject({
+      commitSha: own,
+    });
+    expect(await findCachedRef(testDatabase.database, scope, own)).toBeUndefined();
+    // Confirmed once, a pinned commit is not asked about again.
+    expect((await request(`/api/v1/mounts/gh/acme/licensed@${own}`)).status).toBe(200);
+    expect(host.calls.resolveRef).toBe(asked + 1);
   });
 
   it("asks the entitlements port before serving", async () => {

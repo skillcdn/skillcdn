@@ -139,6 +139,8 @@ export interface MountServiceOptions {
 }
 
 const MAX_REMEMBERED_MISSING = 10_000;
+/** What the key of a pinned commit begins with among a repository's remembered refs. */
+const PINNED_KEY = "commit:";
 
 interface ResolvedCommit {
   readonly commit: string;
@@ -146,6 +148,13 @@ interface ResolvedCommit {
 }
 
 function refNotFound(address: Address): MountError {
+  if (address.ref?.kind === "commit") {
+    // One message for a commit that is nowhere and for one that is somebody else's.
+    return new MountError(
+      "ref_not_found",
+      "The commit was not found in the history of this repository's default branch. A commit hash is served from there only; address anything else by the name of its branch or tag.",
+    );
+  }
   const ref = address.ref?.kind === "name" ? address.ref.name : undefined;
   // The hint is derived from the address alone, so it says nothing about the repository.
   const [firstSegment] = address.path.split("/");
@@ -172,7 +181,8 @@ function hostUnavailable(error: GitHostError): MountError {
 /**
  * Resolves addresses through the database first and the git host second. Facts about names and
  * moving refs are trusted for a TTL, revalidated after it, and tolerated a little longer when the
- * host cannot be asked. Pinned commits are confirmed once and then never again.
+ * host cannot be asked. A pinned commit is confirmed once, as a commit of the repository's own
+ * history, and then never again.
  */
 export class MountService {
   readonly #options: MountServiceOptions;
@@ -211,11 +221,14 @@ export class MountService {
       );
     }
 
+    // A pinned commit is remembered under a key no ref name can have: git allows no colon in
+    // one. What was remembered under the bare hash was confirmed to exist, which is less than
+    // is asked now, and is not looked at any more.
     const refKey =
       address.ref === undefined
         ? ""
         : address.ref.kind === "commit"
-          ? address.ref.hash
+          ? `${PINNED_KEY}${address.ref.hash}`
           : address.ref.name;
     let resolved: ResolvedCommit;
     try {

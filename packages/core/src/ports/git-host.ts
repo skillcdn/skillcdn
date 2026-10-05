@@ -111,7 +111,14 @@ export class GitHostError extends DomainError {
 export interface GitHost {
   getRepository(coordinates: RepoCoordinates): Promise<HostRepository>;
 
-  /** Resolves a ref to a full commit hash. `undefined` means the default branch. */
+  /**
+   * Resolves a ref to a full commit hash. `undefined` means the default branch. Only what is the
+   * repository's own resolves: a name is a branch of it or, when it has no such branch, a tag
+   * of it, never another ref the host keeps under it; a commit hash, full or short, is a commit
+   * in the history of its default branch. A host may answer for more under a repository's name,
+   * such as the commits of its forks and the heads of pull requests, and none of that is the
+   * repository's. Everything else is `not_found`.
+   */
   resolveRef(coordinates: RepoCoordinates, ref: AddressRef | undefined): Promise<string>;
 
   /** Lists every entry of the commit's tree, without following symlinks or submodules. */

@@ -1,6 +1,6 @@
 # Spec: address scheme
 
-- Status: **Draft.** The grammar has not changed since milestone 1 and becomes normative with the surface of [ADR-0024](../adr/0024-skills-travel-through-the-mcp-skills-extension.md); the open questions below remain open.
+- Status: **Draft.** The grammar has not changed since milestone 1 and becomes normative with the surface of [ADR-0024](../adr/0024-skills-travel-through-the-mcp-skills-extension.md); the open questions below remain open. What a ref may resolve to is decided in [ADR-0039](../adr/0039-an-address-serves-only-what-is-the-repositorys-own.md).
 - Implemented by: `packages/core` (`parseAddress`, `formatAddress`). Nothing else parses addresses.
 
 An address identifies what an agent mounts. It is the path of the MCP endpoint URL, so the whole onboarding is one URL.
@@ -54,10 +54,11 @@ Parsing never consults the repository. An address means the same thing whatever 
 - **Connect the repository root by default.** One connection can browse different areas of work and read shared references. A sub-path remains a supported access boundary, not a different path notation.
 - **Content paths are repository-root paths.** On `/gh/acme/library/marketing`, `get_skill` still takes `marketing/skills/ad-copy/SKILL.md`, and file reads retain that same prefix. Names and shortened directory aliases are not content identifiers. Paths outside the mount are rejected. Applicable ancestor rules are delivered only through skill-context pages, without allowing arbitrary file reads above the mount ([tools](tools.md)).
 - **Pagination identifies one indexed view.** Cursors bind to the commit's snapshot and reading-rule version, mount and request. A changed snapshot or request requires restarting the page sequence.
+- **Only what is the repository's own.** A ref name is a branch of the repository or, when it has no branch of that name, a tag of it. A commit hash is served only for a commit in the history of the default branch. A git host answers for more under a repository's name, such as the commits of its forks and the heads of pull requests made to it, and an address serves none of that: it is not found, like a ref that does not exist ([ADR-0039](../adr/0039-an-address-serves-only-what-is-the-repositorys-own.md)). A commit elsewhere in the repository is addressed by the name of its branch or tag.
 - **Pinned** addresses (full commit hash) always serve the same content and may be cached indefinitely.
 - **Moving** addresses resolve to a commit at request time. Resolution is cached briefly; a push ends it earlier where the deployment receives the git host's events ([permissions](permissions.md#events-of-the-git-host)).
 - **An address is also what a person allows an AI app to read.** Over MCP an address is an OAuth protected resource, and an access token is good at exactly one canonical address, ref and path included ([permissions](permissions.md#tokens)).
-- **A short commit hash** is accepted wherever the host resolves it, but it is a moving ref: a prefix that is unique today can become ambiguous later, so it is never cached as immutable.
+- **A short commit hash** is accepted wherever the host resolves it to a commit of the default branch's history, when no branch or tag has that name, but it is a moving ref: a prefix that is unique today can become ambiguous later, so it is never cached as immutable.
 - **Repository identity.** After the first resolution a repository is identified by the host's immutable numeric id. The `owner/repo` spelling is a lookup alias that is re-pointed after a rename or a transfer, so an index survives both and a recycled name never inherits another repository's index.
 - The parser is pure and total: every input yields either a parsed address or a typed error. It never throws on hostile input and never touches the network.
 
@@ -75,6 +76,5 @@ The same URL answers people. When the deployment serves the web UI, a `GET` or `
 
 ## Open questions
 
-- **Commits that do not belong to the repository.** Some hosts serve a commit through a repository even when it only exists in a fork of it. A pinned address could then show someone else's content under the repository's name. Candidate: accept a pinned commit only when it is reachable from a branch or tag of the repository, and say so in the result otherwise.
-- Fully qualified refs (`refs/tags/v1`, `heads/main`) are valid ref names and go to the host as they are. Whether the canonical form should fold them into the short name is undecided.
+- Fully qualified refs (`refs/tags/v1`, `heads/main`) are valid ref names, read as the branch or tag they say they are. Whether the canonical form should fold them into the short name is undecided.
 - Commit hashes longer than 40 digits (SHA-256 repositories) are treated as ref names until a host adapter supports them.

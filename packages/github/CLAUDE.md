@@ -8,6 +8,7 @@ Read the root [`CLAUDE.md`](../../CLAUDE.md) first. This package holds the most 
 - **Be cheap.** Send conditional requests, prefer tree and blob endpoints over per-file calls, honor `retry-after` and secondary rate limits, and back off with jitter.
 - **The app's key signs and stays.** The private key is used to sign the app's own short-lived token and for nothing else; installation tokens are minted with read-only contents and metadata, whatever the installation would allow.
 - **Webhooks:** verify the HMAC signature over the raw body with a constant-time comparison before parsing anything. A delivery is read into what it ends (`GitHostEvent`), never into facts: nothing a payload says about a commit, a name or a visibility is passed on as true.
+- **Only the repository's own.** The host answers for more under a repository's name than the repository holds: any commit of its fork network, and the head of every pull request made to it. A ref name is asked for as a branch and then as a tag (`commits/heads/..`, `commits/tags/..`), never bare, since a bare name is looked up the way git would, pull request heads included. A commit hash is confirmed by comparing it with the default branch before anything is read by it (ADR-0039).
 - **Base URL is operator configuration**, passed in by the caller. It is never derived from user input.
 - **This package never reads the environment.**
 - **Tests** run against recorded fixtures. Scrub fixtures before committing: no tokens, no private repository data, no real user identifiers. CI makes no live calls.

@@ -8,7 +8,7 @@ The GitHub implementation of the git-host ports defined in `@skillcdn/core`. It 
 
 | Capability | Used for | Credential |
 |---|---|---|
-| Resolve a ref to a commit; read trees, blobs and archives (`GitHost`) | Indexing and reads | None or an optional token for public repos; the App installation token when the coordinates say `credential: "installation"` |
+| Resolve a ref to a commit of the repository's own: a name among its branches and then its tags, a commit hash by comparison with the default branch ([ADR-0039](../../docs/adr/0039-an-address-serves-only-what-is-the-repositorys-own.md)); read trees, blobs and archives (`GitHost`) | Indexing and reads | None or an optional token for public repos; the App installation token when the coordinates say `credential: "installation"` |
 | Installation tokens (`GitHubApp`) | Private repos | The app's private key: a short-lived app token finds the installation that covers a repository and mints a token for it, restricted to reading contents and metadata |
 | Signing in, "which repository does this name mean to this person", where the app is installed for them (`GitHostLogin`) | Sessions, the permission check, the account pages | The app's client id and secret; the person's token |
 | An account's profile and public repositories (`GitHostDirectory`) | The page of an account | None or the optional token |

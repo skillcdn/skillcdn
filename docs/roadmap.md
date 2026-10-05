@@ -37,7 +37,7 @@ Goal: an agent that connects to an address knows what it got and uses it well, w
 
 Design points still open (record the outcome in the spec or an ADR):
 
-- Pinned commits that the host serves through a repository without being part of its history (see the open questions in the address spec).
+- Commits and refs that the host answers for under a repository's name without their being the repository's: decided in [ADR-0039](adr/0039-an-address-serves-only-what-is-the-repositorys-own.md) and built. A name is a branch or a tag of the repository and nothing else; a commit hash is served from the history of the default branch only.
 - Abuse controls for the anonymous endpoints: decided. The server bounds its own work: request and index size limits, bounded indexing per process, and a short memory of names that are nothing to the public, which every process shares through the database ([permissions](specs/permissions.md#what-is-served-to-whom)). Limiting requests per client is the job of whatever sits in front of the server.
 
 ## Now: milestone 4, ready for public operation

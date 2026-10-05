@@ -266,7 +266,7 @@ export const ko: Messages = {
       },
       "mount.ref_not_found": {
         title: "ref를 찾을 수 없습니다",
-        body: "이 저장소에는 그런 브랜치, 태그 또는 커밋이 없습니다. ref에 슬래시가 들어 있다면 콜론으로 끝내세요. 예: @release/1.2:",
+        body: "이 저장소에 그런 브랜치나 태그가 없고, 기본 브랜치의 기록에 그런 커밋도 없습니다. ref에 슬래시가 들어 있다면 콜론으로 끝내세요. 예: @release/1.2:",
       },
       "mount.not_allowed": {
         title: "여기서는 제공하지 않습니다",
