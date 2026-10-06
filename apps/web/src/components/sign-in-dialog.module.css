@@ -71,8 +71,9 @@
   height: var(--sign-in-badge);
   border: var(--border-lit);
   border-radius: var(--radius-full);
-  background: var(--color-accent-solid);
-  color: var(--color-accent-contrast);
+  /* The symbol brings its own blue, so the badge is a dark disc for it to stand on, lit at the
+     rim and glowing below, rather than the accent it would vanish into. */
+  background: var(--color-bg-inset);
   box-shadow: var(--sign-in-badge-glow);
 }
 
