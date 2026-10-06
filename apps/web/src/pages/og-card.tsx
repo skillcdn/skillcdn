@@ -1,4 +1,4 @@
-import { BrandSymbol } from "../components/brand.js";
+import { BrandLogo } from "../components/brand.js";
 import { useI18n } from "../i18n/index.js";
 import { DEFAULT_SHOWCASE_MEDIA } from "../site.js";
 import styles from "./og-card.module.css";
@@ -10,10 +10,7 @@ export function OgCard() {
   return (
     <div className={styles.card}>
       <img className={styles.art} src={DEFAULT_SHOWCASE_MEDIA.poster} alt="" />
-      <div className={styles.brand}>
-        <BrandSymbol />
-        <span>{t.meta.siteName}</span>
-      </div>
+      <BrandLogo className={styles.brand} />
       <p className={styles.title}>
         {t.landing.title}
         <span>{t.landing.titleAccent}</span>

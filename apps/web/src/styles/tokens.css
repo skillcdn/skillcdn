@@ -429,7 +429,10 @@
   /* The caret at the end of a question. Larger than the picker's, because it stands alone at the
      far end of a wide row rather than tucked against a word. */
   --faq-caret: 1.25rem;
+  /* The lockup in the header and the footer: its height, and its height on a narrow screen,
+     where the bar has to hold it beside the navigation and the language picker. */
   --brand-size: 1.875rem;
+  --brand-size-compact: 1.5rem;
   --brand-large: 3rem;
   /* The language picker. The globe is set to the label's own size rather than larger: a mark that
      outweighs the word beside it reads as out of line even when it is centred on it. The caret is

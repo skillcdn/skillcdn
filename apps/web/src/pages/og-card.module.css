@@ -24,18 +24,14 @@
   object-position: 30% center;
   mask-image: linear-gradient(90deg, transparent, black 45%);
 }
+/* The lockup; the wordmark takes the text colour, the symbol brings its own. It keeps its own
+   width in the column, where a flex item would otherwise be stretched to the card's. */
 .brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 32px;
-  font-weight: 700;
-  letter-spacing: -1.4px;
-}
-.brand svg {
-  width: 38px;
-  height: 38px;
-  color: var(--color-accent);
+  display: block;
+  align-self: flex-start;
+  width: auto;
+  height: 40px;
+  color: var(--color-text);
 }
 .title {
   max-width: 600px;

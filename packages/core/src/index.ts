@@ -16,6 +16,13 @@ export {
   parseAddress,
   parseOwnerPath,
 } from "./address.js";
+export {
+  BRAND_LOCKUP_WIDTH,
+  BRAND_SYMBOL_COLOR,
+  BRAND_SYMBOL_PATH,
+  BRAND_WORDMARK_BOX,
+  BRAND_WORDMARK_PATH,
+} from "./brand.js";
 export { browseCatalogFiles, type CatalogFile, folderOverview } from "./browse-tree.js";
 export { decodeText } from "./bytes.js";
 export { contextPage } from "./context-page.js";

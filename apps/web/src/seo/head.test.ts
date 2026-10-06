@@ -126,7 +126,7 @@ describe("buildHead", () => {
       expect(head.jsonLd[0]?.publisher).toMatchObject({
         "@type": "Organization",
         name: "SkillCDN",
-        logo: `${ORIGIN}/brand/logo.svg`,
+        logo: `${ORIGIN}/brand/logo-black.png`,
       });
       expect(head.jsonLd[2]).toMatchObject({
         contentUrl: `${ORIGIN}${DEFAULT_SHOWCASE_MEDIA.clip}`,

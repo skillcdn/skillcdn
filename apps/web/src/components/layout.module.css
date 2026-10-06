@@ -137,11 +137,7 @@
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
   color: var(--color-text);
-  font-size: var(--text-xl);
-  font-weight: var(--weight-display);
-  letter-spacing: var(--tracking-display);
   text-decoration: none;
 }
 
@@ -149,10 +145,12 @@
   color: var(--color-text);
 }
 
-.symbol {
+/* The lockup: the symbol in its own blue, the wordmark in the text colour, as tall as the brand
+   size and as wide as that makes it. */
+.logo {
   flex: none;
-  color: var(--color-accent);
-  width: var(--brand-size);
+  display: block;
+  width: auto;
   height: var(--brand-size);
 }
 
@@ -211,10 +209,8 @@
 .footerBrand {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-  font-size: var(--text-xl);
-  font-weight: var(--weight-display);
-  letter-spacing: var(--tracking-display);
+  margin: 0;
+  color: var(--color-text);
 }
 
 .footerLinks {
@@ -248,6 +244,11 @@
   .bar {
     gap: var(--space-3);
     padding-inline: var(--space-4);
+  }
+
+  /* A narrow bar holds the lockup, what navigates the site and the language picker in one row. */
+  .logo {
+    height: var(--brand-size-compact);
   }
 
   .nav {

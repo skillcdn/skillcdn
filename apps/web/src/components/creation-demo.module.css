@@ -56,7 +56,6 @@
   flex: none;
   width: var(--space-5);
   height: var(--space-5);
-  color: var(--color-accent);
 }
 .assistant p {
   line-height: var(--leading-code);

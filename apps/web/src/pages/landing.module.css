@@ -352,7 +352,6 @@
     var(--color-bg-subtle);
 }
 .startSymbol {
-  color: var(--color-accent);
   width: var(--brand-large);
   height: var(--brand-large);
   margin: 0 auto var(--space-5);

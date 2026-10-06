@@ -2,10 +2,18 @@ import {
   createCanvas,
   GlobalFonts,
   loadImage,
+  Path2D,
   type SKRSContext2D,
   type Image as SkiaImage,
 } from "@napi-rs/canvas";
-import { SOCIAL_CARD_SIZE, type SocialCard } from "@skillcdn/core";
+import {
+  BRAND_LOCKUP_WIDTH,
+  BRAND_SYMBOL_COLOR,
+  BRAND_SYMBOL_PATH,
+  BRAND_WORDMARK_PATH,
+  SOCIAL_CARD_SIZE,
+  type SocialCard,
+} from "@skillcdn/core";
 
 // Draws the social preview of an address (ADR-0032): the same dark ground as the pages, the
 // owner's picture, what the page is, its name, where it is, what it says of itself, a few facts
@@ -46,6 +54,8 @@ const TEXT_SIZE = 30;
 const TEXT_LEADING = 44;
 const MAX_TITLE_LINES = 2;
 const MAX_TEXT_LINES = 3;
+/** The lockup at the foot of the card, as tall as the row of pills it stands in, less a little air. */
+const BRAND_HEIGHT = 36;
 
 let registered = false;
 
@@ -204,35 +214,6 @@ function drawAvatar(ctx: SKRSContext2D, picture: SkiaImage | undefined): void {
   ctx.stroke();
 }
 
-/** The mark of the site: the branching symbol of public/brand/symbol.svg, at the size of the wordmark. */
-function drawSymbol(ctx: SKRSContext2D, x: number, y: number, size: number): void {
-  const scale = size / 32;
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.scale(scale, scale);
-  ctx.strokeStyle = COLORS.accent;
-  ctx.fillStyle = COLORS.accent;
-  ctx.lineWidth = 2.4;
-  ctx.lineCap = "round";
-  ctx.beginPath();
-  ctx.moveTo(10, 16);
-  ctx.lineTo(14.5, 16);
-  ctx.bezierCurveTo(18, 16, 17.5, 10, 22, 10);
-  ctx.moveTo(14.5, 16);
-  ctx.bezierCurveTo(18, 16, 17.5, 22, 22, 22);
-  ctx.stroke();
-  for (const [cx, cy, r] of [
-    [10, 16, 3],
-    [22.4, 10, 2.5],
-    [22.4, 22, 2.5],
-  ] as const) {
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.restore();
-}
-
 /** A check in a filled circle, the mark of a vouched-for repository, before its word. */
 function drawCheck(ctx: SKRSContext2D, x: number, y: number, size: number): void {
   ctx.save();
@@ -280,15 +261,22 @@ function drawPills(ctx: SKRSContext2D, card: SocialCard, y: number): void {
   });
 }
 
-function drawBrand(ctx: SKRSContext2D, siteName: string, y: number): void {
-  const size = 32;
-  ctx.font = `700 ${size}px ${STACK}`;
-  ctx.textBaseline = "middle";
+/**
+ * The mark of the site, symbol and wordmark, `height` tall with its right edge at `right` and its
+ * middle at `middle`: the same path data the pages draw, the symbol in its own blue and the
+ * wordmark white on the dark ground, as the pages have it. The wordmark is the site's name, so the
+ * card does not set it in type as well.
+ */
+function drawBrand(ctx: SKRSContext2D, right: number, middle: number, height: number): void {
+  const scale = height / 100;
+  ctx.save();
+  ctx.translate(right - BRAND_LOCKUP_WIDTH * scale, middle - height / 2);
+  ctx.scale(scale, scale);
+  ctx.fillStyle = BRAND_SYMBOL_COLOR;
+  ctx.fill(new Path2D(BRAND_SYMBOL_PATH));
   ctx.fillStyle = COLORS.text;
-  const width = ctx.measureText(siteName).width;
-  const x = WIDTH - MARGIN - width;
-  ctx.fillText(siteName, x, y + 1);
-  drawSymbol(ctx, x - size - 10, y - size / 2, size);
+  ctx.fill(new Path2D(BRAND_WORDMARK_PATH));
+  ctx.restore();
 }
 
 /**
@@ -358,7 +346,7 @@ export async function drawSocialCard(
 
   const rowY = HEIGHT - MARGIN - 48;
   drawPills(ctx, card, rowY);
-  drawBrand(ctx, card.siteName, rowY + 24);
+  drawBrand(ctx, WIDTH - MARGIN, rowY + 24, BRAND_HEIGHT);
 
   return new Uint8Array(canvas.toBuffer("image/png"));
 }

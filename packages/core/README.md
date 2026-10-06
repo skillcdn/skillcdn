@@ -14,6 +14,7 @@ Pure domain logic. No I/O, no Node.js APIs, no workspace dependencies: it runs u
 | Permission rules: the decision logic, given facts fetched elsewhere | [specs/permissions.md](../../docs/specs/permissions.md) |
 | REST contracts: the schemas of the public API, and of what a signed-in person has (`rest/account.ts`) | [specs/rest.md](../../docs/specs/rest.md) |
 | Ports: git host (`GitHost` for content, `GitHostLogin` for signing in and what a person can see, `GitHostDirectory` for an account's public listing, `GitHostEventSource` for what the host says happened, as the events that end what is remembered), blob store, clock and ids, `Entitlements`, `UsageSink` | [architecture.md](../../docs/architecture.md#extension-points) |
+| The mark of the site as path data, so that the pages, the favicon and the social previews the server draws show one shape | [apps/web/README.md](../../apps/web/README.md) |
 
 ## What does not
 

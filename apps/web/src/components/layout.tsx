@@ -4,7 +4,7 @@ import { useLegalLinks } from "../legal-links.js";
 import { Link } from "../navigation.js";
 import { PATHS } from "../router.js";
 import { LINKS } from "../site.js";
-import { BrandSymbol } from "./brand.js";
+import { BrandLogo } from "./brand.js";
 import { ConsentBanner } from "./consent-banner.js";
 import { LanguageSwitcher } from "./language-switcher.js";
 import styles from "./layout.module.css";
@@ -36,8 +36,7 @@ export function Layout(props: { readonly children: ReactNode }) {
       <header className={styles.header}>
         <div className={styles.bar}>
           <Link className={styles.brand} href={PATHS.landing} aria-label={t.nav.home}>
-            <BrandSymbol className={styles.symbol} />
-            <span>{t.meta.siteName}</span>
+            <BrandLogo className={styles.logo} />
           </Link>
           <nav className={styles.nav} aria-label={t.nav.main}>
             <Link href={PATHS.explore}>{t.nav.explore}</Link>
@@ -60,8 +59,7 @@ export function Layout(props: { readonly children: ReactNode }) {
               deployment has it. What the site promises sits under them, quietly. */}
           <div className={styles.footerTop}>
             <p className={styles.footerBrand}>
-              <BrandSymbol className={styles.symbol} />
-              <span>{t.meta.siteName}</span>
+              <BrandLogo className={styles.logo} title={t.meta.siteName} />
             </p>
             {links.length > 0 && (
               <ul className={styles.footerLinks}>

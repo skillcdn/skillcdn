@@ -238,7 +238,7 @@ export function buildHead(
       "@type": "Organization",
       name: t.meta.siteName,
       url: `${origin}${PATHS.landing}`,
-      logo: `${origin}/brand/logo.svg`,
+      logo: `${origin}/brand/logo-black.png`,
       sameAs: [LINKS.repository],
     };
     jsonLd.push(
