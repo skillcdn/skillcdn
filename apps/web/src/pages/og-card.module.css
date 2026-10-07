@@ -24,14 +24,14 @@
   object-position: 30% center;
   mask-image: linear-gradient(90deg, transparent, black 45%);
 }
-/* The lockup; the wordmark takes the text colour, the symbol brings its own. It keeps its own
+/* The lockup; the wordmark in the brand's white, the symbol in its own blue. It keeps its own
    width in the column, where a flex item would otherwise be stretched to the card's. */
 .brand {
   display: block;
   align-self: flex-start;
   width: auto;
   height: 40px;
-  color: var(--color-text);
+  color: var(--color-wordmark);
 }
 .title {
   max-width: 600px;

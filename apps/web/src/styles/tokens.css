@@ -31,6 +31,10 @@
   --color-text: #e8ebf0;
   --color-text-muted: #9aa4b2;
   --color-text-faint: #8b97a9;
+  /* The wordmark on the pages' own ground: white, as the brand files have it, and not the text
+     white, which is a shade cooler and dimmer -- the name of the site is the one word on a page
+     that is drawn, not set, and it is drawn in the brand's own white everywhere it appears. */
+  --color-wordmark: #ffffff;
 
   /* Large address fields carry their own light-surface text colors. */
   --color-bg-invert: #ffffff;
@@ -430,9 +434,12 @@
      far end of a wide row rather than tucked against a word. */
   --faq-caret: 1.25rem;
   /* The lockup in the header and the footer: its height, and its height on a narrow screen,
-     where the bar has to hold it beside the navigation and the language picker. */
-  --brand-size: 1.875rem;
-  --brand-size-compact: 1.5rem;
+     where the bar has to hold it beside the navigation and the language picker. The letters of
+     the wordmark stand three quarters as tall as the lockup, so at this height they are about
+     the size of the words beside them in the bar; at the old 1.875rem they were half as tall
+     again as anything else on the line, and the bar read as a banner. */
+  --brand-size: 1.25rem;
+  --brand-size-compact: 1.125rem;
   --brand-large: 3rem;
   /* The language picker. The globe is set to the label's own size rather than larger: a mark that
      outweighs the word beside it reads as out of line even when it is centred on it. The caret is
@@ -464,7 +471,7 @@
   --sign-in-stage: 7.5rem;
   --sign-in-glow: 15rem;
   --sign-in-badge: 4rem;
-  --sign-in-symbol: 2.5rem;
+  --sign-in-symbol: 2.25rem;
   --sign-in-badge-glow: 0 0.5rem 2rem -0.25rem
     color-mix(in srgb, var(--color-accent) 55%, transparent);
   --sign-in-ring-reach: 2.6;

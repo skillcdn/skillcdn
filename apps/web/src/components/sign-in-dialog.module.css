@@ -69,10 +69,12 @@
   place-items: center;
   width: var(--sign-in-badge);
   height: var(--sign-in-badge);
-  border: var(--border-lit);
+  /* A disc with a fill of its own takes a fixed line, as a surface does; the lit hairline is for
+     a box that has nothing behind its edge, and here it read as a bright ring. */
+  border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-full);
-  /* The symbol brings its own blue, so the badge is a dark disc for it to stand on, lit at the
-     rim and glowing below, rather than the accent it would vanish into. */
+  /* The symbol brings its own blue, so the badge is a dark disc for it to stand on, edged and
+     glowing below, rather than the accent it would vanish into. */
   background: var(--color-bg-inset);
   box-shadow: var(--sign-in-badge-glow);
 }

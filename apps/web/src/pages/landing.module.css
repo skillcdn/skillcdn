@@ -351,18 +351,21 @@
     radial-gradient(ellipse at 50% 100%, var(--color-atmosphere-soft), transparent 70%),
     var(--color-bg-subtle);
 }
+/* The symbol stands a little clear of the words under it. */
 .startSymbol {
+  display: block;
   width: var(--brand-large);
   height: var(--brand-large);
-  margin: 0 auto var(--space-5);
+  margin: 0 auto var(--space-6);
 }
+/* The steps stand clear of the lead above them, as the button stands clear of them. */
 .startSteps {
   display: flex;
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
   gap: var(--space-5);
-  margin: var(--space-5) auto var(--space-6);
+  margin: var(--space-6) auto;
   font-size: var(--text-sm);
   color: var(--color-text-muted);
 }

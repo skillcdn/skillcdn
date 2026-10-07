@@ -41,6 +41,8 @@ const COLORS = {
   point: "#ffb13a",
   pointSubtle: "#2a1a0e",
   contrast: "#ffffff",
+  /* The wordmark's white (`--color-wordmark` on the pages): the brand's own, not the text's. */
+  wordmark: "#ffffff",
 } as const;
 
 const { width: WIDTH, height: HEIGHT } = SOCIAL_CARD_SIZE;
@@ -264,8 +266,8 @@ function drawPills(ctx: SKRSContext2D, card: SocialCard, y: number): void {
 /**
  * The mark of the site, symbol and wordmark, `height` tall with its right edge at `right` and its
  * middle at `middle`: the same path data the pages draw, the symbol in its own blue and the
- * wordmark white on the dark ground, as the pages have it. The wordmark is the site's name, so the
- * card does not set it in type as well.
+ * wordmark in the brand's white, as the pages and the brand files have it. The wordmark is the
+ * site's name, so the card does not set it in type as well.
  */
 function drawBrand(ctx: SKRSContext2D, right: number, middle: number, height: number): void {
   const scale = height / 100;
@@ -274,7 +276,7 @@ function drawBrand(ctx: SKRSContext2D, right: number, middle: number, height: nu
   ctx.scale(scale, scale);
   ctx.fillStyle = BRAND_SYMBOL_COLOR;
   ctx.fill(new Path2D(BRAND_SYMBOL_PATH));
-  ctx.fillStyle = COLORS.text;
+  ctx.fillStyle = COLORS.wordmark;
   ctx.fill(new Path2D(BRAND_WORDMARK_PATH));
   ctx.restore();
 }

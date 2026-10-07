@@ -145,13 +145,14 @@
   color: var(--color-text);
 }
 
-/* The lockup: the symbol in its own blue, the wordmark in the text colour, as tall as the brand
+/* The lockup: the symbol in its own blue, the wordmark in the brand's white, as tall as the brand
    size and as wide as that makes it. */
 .logo {
   flex: none;
   display: block;
   width: auto;
   height: var(--brand-size);
+  color: var(--color-wordmark);
 }
 
 /* The brand takes the left, the controls the right, and the bar fills its width. */
