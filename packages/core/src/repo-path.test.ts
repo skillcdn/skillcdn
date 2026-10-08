@@ -8,6 +8,7 @@ import {
   type RepoPathErrorCode,
   ROOT_PATH,
   relativeRepoPath,
+  resolveRepoPath,
 } from "./repo-path.js";
 
 function path(input: string): RepoPath {
@@ -71,5 +72,40 @@ describe("repo path helpers", () => {
     expect(relativeRepoPath(path("skills"), path("skills/ads/SKILL.md"))).toBe("ads/SKILL.md");
     expect(relativeRepoPath(path("skills"), path("skills"))).toBe("");
     expect(relativeRepoPath(path("skills"), path("skills-private/x"))).toBeUndefined();
+  });
+});
+
+describe("resolveRepoPath", () => {
+  const directory = path("marketing/skills/ad");
+
+  it.each([
+    ["references/style.md", "marketing/skills/ad/references/style.md"],
+    ["./references/style.md", "marketing/skills/ad/references/style.md"],
+    ["../../docs/shared.md", "marketing/docs/shared.md"],
+    ["../../../docs/shared.md", "docs/shared.md"],
+    ["/docs/shared.md", "docs/shared.md"],
+    ["/", ""],
+    ["..", "marketing/skills"],
+  ])("resolves %s against the directory to %s", (destination, resolved) => {
+    expect(resolveRepoPath(directory, destination)).toBe(resolved);
+  });
+
+  it("resolves from the root as the directory", () => {
+    expect(resolveRepoPath(ROOT_PATH, "docs/a.md")).toBe("docs/a.md");
+    expect(resolveRepoPath(ROOT_PATH, "/docs/a.md")).toBe("docs/a.md");
+    expect(resolveRepoPath(ROOT_PATH, "../a.md")).toBeUndefined();
+  });
+
+  it.each([
+    "",
+    "../../../../docs/shared.md",
+    "/../docs/shared.md",
+    "references//style.md",
+    "references/style.md/",
+    "references\\style.md",
+    `docs/${"a".repeat(MAX_REPO_PATH_LENGTH)}.md`,
+    "docs/a\u0000b.md",
+  ])("rejects %j rather than repairing it", (destination) => {
+    expect(resolveRepoPath(directory, destination)).toBeUndefined();
   });
 });

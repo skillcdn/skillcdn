@@ -148,6 +148,38 @@ describe("repository-root publication and progressive loading", () => {
     });
   });
 
+  it("delivers a shared page with the skill on a mount that does not contain it", async () => {
+    const page = "# Shared\n\nWhat every skill of the tool family knows.";
+    const path = "marketing/skills/write/SKILL.md";
+    const { h, address } = await repository("shared-include-mount", {
+      "SKILLCDN.md": "---\ndescription: Shared collection.\ndocuments: [docs]\n---\nCompany rules.",
+      "docs/shared.md": page,
+      [path]: skill("Write the result.", "write", "skillcdn:\n  include: [/docs/shared.md]\n"),
+    });
+    const nested = `${address}/marketing/skills/write`;
+    for (const at of [address, nested]) {
+      const loaded = await load(h, at, path);
+      expect(loaded.complete).toBe(true);
+      expect(loaded.included).toEqual(["docs/shared.md"]);
+      expect(loaded.includedContents).toEqual([
+        { path: "docs/shared.md", content: page, truncated: false },
+      ]);
+      expect(loaded.files).toEqual([]);
+    }
+    // The page arrives with the skill, as the ancestor rules do; its path still does not
+    // become a file the mount reads.
+    const outside = await h.request(`/api/v1/files${nested}?path=docs/shared.md`);
+    expect(outside.status).toBe(404);
+    const client = await h.connect(nested);
+    const result = await client.callTool({ name: "load_skill", arguments: { path } });
+    expect(result.isError).not.toBe(true);
+    const sections = skillSectionsOf(textOf(result));
+    expect(sections.included).toEqual([
+      { path: "docs/shared.md", content: page, continues: false },
+    ]);
+    await client.close();
+  });
+
   it("continues long ancestor rules outside the mount without losing their content or provenance", async () => {
     const company = `Company begins. ${"a".repeat(55_000)} Company ends.`;
     const team = `Team begins. ${"b".repeat(31_000)} Team ends.`;

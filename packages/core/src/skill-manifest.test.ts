@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { parseRepoPath, type RepoPath, ROOT_PATH } from "./repo-path.js";
 import {
   MAX_SKILL_DESCRIPTION_LENGTH,
   MAX_SKILL_MANIFEST_LENGTH,
@@ -18,8 +19,14 @@ const MINIMAL = [
   "",
 ].join("\n");
 
-function parsed(text: string, directoryName: string | undefined = "release-notes") {
-  const result = parseSkillManifest(text, { directoryName });
+function path(value: string): RepoPath {
+  const result = parseRepoPath(value);
+  if (!result.ok) throw new Error(`invalid test path ${value}`);
+  return result.value;
+}
+
+function parsed(text: string, directory = "skills/release-notes") {
+  const result = parseSkillManifest(text, { directory: path(directory) });
   if (!result.ok) {
     throw new Error(`expected the manifest to parse, got ${result.error.code}`);
   }
@@ -27,7 +34,7 @@ function parsed(text: string, directoryName: string | undefined = "release-notes
 }
 
 function errorCode(text: string): SkillManifestErrorCode | undefined {
-  const result = parseSkillManifest(text, { directoryName: undefined });
+  const result = parseSkillManifest(text, { directory: ROOT_PATH });
   return result.ok ? undefined : result.error.code;
 }
 
@@ -71,7 +78,10 @@ describe("parseSkillManifest", () => {
       ].join("\n"),
     );
     expect(warnings).toEqual([]);
-    expect(manifest.include).toEqual(["references/style.md", "assets/template.json"]);
+    expect(manifest.include).toEqual([
+      "skills/release-notes/references/style.md",
+      "skills/release-notes/assets/template.json",
+    ]);
     expect(manifest.translations).toEqual({
       ko: { title: "릴리스 노트", description: "병합된 변경 사항으로 릴리스 노트를 작성합니다." },
       "pt-BR": { title: undefined, description: "Escreve notas de versão." },
@@ -93,6 +103,9 @@ describe("parseSkillManifest", () => {
         "    - SKILL.md",
         "    - references/ok.md",
         "    - 7",
+        "    - /SKILLCDN.md",
+        "    - ../../../outside.md",
+        "    - /",
         "  translations:",
         "    Korean:",
         "      title: x",
@@ -105,13 +118,46 @@ describe("parseSkillManifest", () => {
         "---",
       ].join("\n"),
     );
-    expect(manifest.include).toEqual([".hidden/notes.md", "references/ok.md"]);
+    expect(manifest.include).toEqual([
+      "skills/release-notes/.hidden/notes.md",
+      "skills/release-notes/references/ok.md",
+    ]);
     expect(manifest.translations).toEqual({
       de: { title: undefined, description: "Schreibt Versionshinweise." },
     });
     expect(warnings.map((warning) => warning.code)).toEqual(["ignored_field", "ignored_field"]);
-    expect(warnings[0]?.message).toContain('4 "skillcdn.include" entries are ignored');
+    expect(warnings[0]?.message).toContain('7 "skillcdn.include" entries are ignored');
     expect(warnings[1]?.message).toContain('3 "translations" entries are ignored');
+  });
+
+  it("resolves an include written from the repository root or through the parent directories", () => {
+    // Whether a page outside the skill directory may travel with the skill is the indexer's
+    // decision (ADR-0044); the parser only resolves the path as a link destination.
+    const { manifest, warnings } = parsed(
+      [
+        "---",
+        "name: release-notes",
+        "description: Drafts release notes.",
+        "skillcdn:",
+        "  include:",
+        "    - /docs/tool/models.md",
+        "    - ../../docs/tool/decodes.md",
+        "    - ./references/style.md",
+        "    - /docs/tool/models.md",
+        "---",
+      ].join("\n"),
+    );
+    expect(warnings).toEqual([]);
+    expect(manifest.include).toEqual([
+      "docs/tool/models.md",
+      "docs/tool/decodes.md",
+      "skills/release-notes/references/style.md",
+    ]);
+    expect(
+      parsed(MINIMAL.replace("---\n#", "skillcdn:\n  include: [docs/a.md]\n---\n#"), ""),
+    ).toMatchObject({
+      manifest: { include: ["docs/a.md"] },
+    });
   });
 
   it("ignores a skillcdn key that is not a mapping", () => {
@@ -140,7 +186,7 @@ describe("parseSkillManifest", () => {
   it("explains the colon that turns a description into a mapping", () => {
     const result = parseSkillManifest(
       "---\nname: a\ndescription: Makes a video: fast and cheap.\n---\n",
-      { directoryName: undefined },
+      { directory: ROOT_PATH },
     );
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -182,7 +228,7 @@ describe("parseSkillManifest", () => {
   });
 
   it("does not compare the name with the directory at the mounted root", () => {
-    expect(parsed(MINIMAL, undefined).warnings).toEqual([]);
+    expect(parsed(MINIMAL, "").warnings).toEqual([]);
   });
 
   it("warns about names that break the naming convention, and still serves the skill", () => {
@@ -262,7 +308,7 @@ describe("parseSkillManifest with hostile input", () => {
   it("preserves long descriptions with a compatibility warning inside the YAML size bound", () => {
     const description = "d".repeat(MAX_SKILL_DESCRIPTION_LENGTH + 100);
     const parsed = parseSkillManifest(`---\nname: a\ndescription: ${description}\n---\n# A`, {
-      directoryName: "a",
+      directory: path("a"),
     });
     expect(parsed.ok).toBe(true);
     if (parsed.ok) {

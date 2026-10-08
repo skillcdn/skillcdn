@@ -1,6 +1,6 @@
 import { splitFrontMatter } from "./front-matter.js";
 import { parentDirectory } from "./repo-layout.js";
-import { MAX_REPO_PATH_LENGTH, parseRepoPath, type RepoPath } from "./repo-path.js";
+import { MAX_REPO_PATH_LENGTH, type RepoPath, resolveRepoPath } from "./repo-path.js";
 
 /** Work bounds for untrusted Markdown; these are independent of the repository size. */
 export const MAX_MARKDOWN_REFERENCES = 200;
@@ -38,20 +38,7 @@ export function resolveMarkdownReference(source: RepoPath, href: string): RepoPa
   ) {
     return undefined;
   }
-  const directory = parentDirectory(source);
-  const segments =
-    destination.startsWith("/") || directory.length === 0 ? [] : directory.split("/");
-  for (const segment of destination.replace(/^\//, "").split("/")) {
-    if (segment === ".") continue;
-    if (segment === "..") {
-      if (segments.length === 0) return undefined;
-      segments.pop();
-    } else {
-      segments.push(segment);
-    }
-  }
-  const parsed = parseRepoPath(segments.join("/"));
-  return parsed.ok ? parsed.value : undefined;
+  return resolveRepoPath(parentDirectory(source), destination);
 }
 
 /** Remove code and front-matter before interpreting link syntax. */

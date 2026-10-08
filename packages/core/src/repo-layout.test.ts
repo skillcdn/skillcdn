@@ -5,6 +5,7 @@ import {
   isExcludedPath,
   isHiddenPath,
   isServedPath,
+  isSharedIncludePath,
   nearestDirectoryAtOrAbove,
   owningSkillDirectory,
   parentDirectory,
@@ -225,5 +226,72 @@ describe("owningSkillDirectory", () => {
     const rootSkill = new Set([path("")]);
     expect(owningSkillDirectory(path("references/a.md"), rootSkill)).toBe("");
     expect(owningSkillDirectory(path("SKILL.md"), rootSkill)).toBe("");
+  });
+});
+
+describe("isSharedIncludePath", () => {
+  // A root manifest declares docs; the marketing and media areas declare their own docs; the
+  // product area has no manifest of its own, so the root's declaration governs it.
+  const scope: ServedScope = {
+    skillDirectories: new Set([
+      path("marketing/skills/ad"),
+      path("media/skills/drama"),
+      path("product/skills/brief"),
+    ]),
+    manifestDirectories: new Set([path(""), path("marketing"), path("media")]),
+    documentDirectories: new Map([
+      [path(""), [path("docs")]],
+      [path("marketing"), [path("marketing/docs")]],
+      [path("media"), [path("media/docs")]],
+    ]),
+    excludedPaths: new Set([path("docs/private.md")]),
+  };
+  const ad = path("marketing/skills/ad");
+
+  it.each([
+    ["docs/tool/models.md", true],
+    ["docs/tool/data.json", true],
+    ["marketing/docs/style.md", true],
+    // A sibling area's pages: served, but declared by a manifest that is not above the skill.
+    ["media/docs/style.md", false],
+    // The skill's own files are not shared pages, and neither are another skill's.
+    ["marketing/skills/ad/references/style.md", false],
+    ["media/skills/drama/references/cast.md", false],
+    // Not a document: outside every declared directory, a manifest, hidden, excluded, or
+    // the wrong kind of file.
+    ["marketing/notes.md", false],
+    ["README.md", false],
+    ["SKILLCDN.md", false],
+    ["docs/.drafts/plan.md", false],
+    ["docs/private.md", false],
+    ["docs/tool/table.csv", false],
+  ])("%s as a shared page of marketing/skills/ad -> %s", (input, shared) => {
+    expect(isSharedIncludePath(path(input), ad, scope)).toBe(shared);
+  });
+
+  it("reads the root's default docs where no manifest governs", () => {
+    const none: ServedScope = {
+      skillDirectories: new Set([path("skills/ad")]),
+      manifestDirectories: new Set(),
+      documentDirectories: new Map(),
+    };
+    expect(isSharedIncludePath(path("docs/shared.md"), path("skills/ad"), none)).toBe(true);
+    expect(isSharedIncludePath(path("notes/shared.md"), path("skills/ad"), none)).toBe(false);
+    expect(isSharedIncludePath(path("docs/shared.md"), path("product/skills/brief"), scope)).toBe(
+      true,
+    );
+  });
+
+  it("does not let an include list stand in for a document declaration", () => {
+    const declared: ServedScope = {
+      ...scope,
+      includedFiles: new Set([path("marketing/notes.md")]),
+    };
+    expect(isSharedIncludePath(path("marketing/notes.md"), ad, declared)).toBe(false);
+  });
+
+  it("keeps a page below a broken manifest out", () => {
+    const broken: ServedScope = { ...scope, brokenManifestDirectories: new Set([path("docs")]) };
+    expect(isSharedIncludePath(path("docs/tool/models.md"), ad, broken)).toBe(false);
   });
 });

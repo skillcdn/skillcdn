@@ -53,6 +53,30 @@ export function parseRepoPath(input: string): Result<RepoPath, RepoPathError> {
   return ok(input as RepoPath);
 }
 
+/**
+ * Resolves a path written the way a link destination is: from the repository root when it starts
+ * with `/`, otherwise relative to `directory`, with `.` and `..` segments. `undefined` when it
+ * would leave the repository or is not a valid path; never a repair.
+ */
+export function resolveRepoPath(directory: RepoPath, destination: string): RepoPath | undefined {
+  if (destination.length === 0 || destination.length > MAX_REPO_PATH_LENGTH) {
+    return undefined;
+  }
+  const segments =
+    destination.startsWith("/") || directory.length === 0 ? [] : directory.split("/");
+  for (const segment of destination.replace(/^\//, "").split("/")) {
+    if (segment === ".") continue;
+    if (segment === "..") {
+      if (segments.length === 0) return undefined;
+      segments.pop();
+    } else {
+      segments.push(segment);
+    }
+  }
+  const parsed = parseRepoPath(segments.join("/"));
+  return parsed.ok ? parsed.value : undefined;
+}
+
 /** Joins two validated paths. The result cannot leave `base` because neither side can contain `..`. */
 export function joinRepoPath(base: RepoPath, relative: RepoPath): RepoPath {
   if (base.length === 0) {

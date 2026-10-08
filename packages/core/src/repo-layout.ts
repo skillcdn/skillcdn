@@ -1,4 +1,10 @@
-import { joinRepoPath, type RepoPath, ROOT_PATH, relativeRepoPath } from "./repo-path.js";
+import {
+  isWithinRepoPath,
+  joinRepoPath,
+  type RepoPath,
+  ROOT_PATH,
+  relativeRepoPath,
+} from "./repo-path.js";
 
 // How SkillCDN reads a repository; see docs/specs/skill-repo.md.
 
@@ -179,4 +185,33 @@ export function isServedPath(path: RepoPath, scope: ServedScope): boolean {
   }
   const declared = scope.documentDirectories.get(governing) ?? [];
   return declared.some((directory) => isPublicDescendant(path, directory));
+}
+
+/**
+ * Whether a skill at `skillDirectory` may include `path` from outside its own directory
+ * (ADR-0044): a shared page is a Markdown or JSON document served under a document directory
+ * that the manifest governing it declares (the root's `docs` where no manifest governs), and
+ * that manifest is at or above the skill, as the manifests whose rules the skill carries are.
+ * A file of a skill, an excluded file and a file only a link reaches are not shared pages.
+ */
+export function isSharedIncludePath(
+  path: RepoPath,
+  skillDirectory: RepoPath,
+  scope: ServedScope,
+): boolean {
+  const kind = classifyRepoFile(path);
+  if ((kind !== "markdown" && kind !== "json") || isWithinRepoPath(skillDirectory, path)) {
+    return false;
+  }
+  if (owningSkillDirectory(path, scope.skillDirectories) !== undefined) {
+    return false;
+  }
+  const governing =
+    nearestDirectoryAtOrAbove(parentDirectory(path), scope.manifestDirectories) ?? ROOT_PATH;
+  if (!isWithinRepoPath(governing, skillDirectory)) {
+    return false;
+  }
+  // Served as a document in its own right, not by the grace of some skill's include list.
+  const { includedFiles: _, ...withoutIncludes } = scope;
+  return isServedPath(path, withoutIncludes);
 }

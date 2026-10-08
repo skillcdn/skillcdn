@@ -104,6 +104,33 @@ describe("the check role", () => {
     expect(report).not.toContain("node_modules/pkg");
   });
 
+  it("names the shared pages a skill carries, apart from its own files", async () => {
+    const root = await mkdtemp(join(tmpdir(), "skillcdn-check-shared-"));
+    const files = {
+      "SKILLCDN.md": "---\ndescription: Shared pages.\ndocuments: [docs]\n---\n# Rules\n",
+      "docs/tool/models.md": "# Models\n\nWhat the tool's models do.\n",
+      "marketing/skills/ad/SKILL.md":
+        "---\nname: ad\ndescription: Makes an ad.\nskillcdn:\n  include:\n    - /docs/tool/models.md\n    - references/own.md\n    - /media/docs/cast.md\n---\n# Ad\n",
+      "marketing/skills/ad/references/own.md": "# Own\n",
+      "media/SKILLCDN.md": "---\ndescription: Media.\n---\n",
+      "media/docs/cast.md": "# Cast\n",
+    };
+    for (const [name, contents] of Object.entries(files)) {
+      const parts = name.split("/");
+      await mkdir(join(root, ...parts.slice(0, -1)), { recursive: true });
+      await writeFile(join(root, ...parts), contents);
+    }
+    const { code, report } = await check(root);
+    expect(code).toBe(0);
+    expect(report).toContain(
+      "- ad (marketing/skills/ad)\n  Makes an ad.\n  files: 1 (1 returned with the skill)\n  shared pages returned with the skill, outside its directory: docs/tool/models.md\n",
+    );
+    expect(report).toContain(
+      '- "skillcdn.include" entry ignored: media/docs/cast.md is outside the skill directory',
+    );
+    expect(report).toContain("Documents outside the skills: 2\n- docs/tool/models.md - Models\n");
+  });
+
   it("says when the directory cannot be read", async () => {
     const { code, report } = await check(join(FIXTURES, "does-not-exist"));
     expect(code).toBe(2);

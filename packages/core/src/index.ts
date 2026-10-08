@@ -120,6 +120,7 @@ export {
   isHiddenPath,
   isReadmePath,
   isServedPath,
+  isSharedIncludePath,
   nearestDirectoryAtOrAbove,
   owningSkillDirectory,
   parentDirectory,
@@ -156,6 +157,7 @@ export {
   type RepoPathErrorCode,
   ROOT_PATH,
   relativeRepoPath,
+  resolveRepoPath,
 } from "./repo-path.js";
 export {
   ACCOUNT_PAGE_PATH,

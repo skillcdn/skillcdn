@@ -641,6 +641,138 @@ describe("what the skills extension lists", () => {
     expect(result.byPath.get("docs/guide.md")?.digest).toBe(digestOf("# Guide\n"));
   });
 
+  it("carries a shared page a manifest above the skill declares, and digests it with the skill", async () => {
+    const rules = manifest("# Rules\n\nAsk first.", "documents: [docs]\n");
+    const area = manifest("# Marketing\n\nSell well.", "documents: [docs]\n");
+    const ad = skill(
+      "Make the ad.",
+      "skillcdn:\n  include: [/docs/tool/models.md, ../../docs/style.md, references/own.md]\n",
+    );
+    const result = await index({
+      "SKILLCDN.md": rules,
+      "marketing/SKILLCDN.md": area,
+      "marketing/skills/example/SKILL.md": ad,
+      "marketing/skills/example/references/own.md": "Own notes.",
+      "marketing/docs/style.md": "House style.",
+      "docs/tool/models.md": "# Models\n\nHow the tool's models behave.",
+    });
+    expect(result.diagnostics).toEqual([]);
+    const listed = result.byPath.get("marketing/skills/example/SKILL.md");
+    // The include list is kept as repository-root paths, in the author's order.
+    expect(listed).toMatchObject({
+      listed: true,
+      frontMatter: {
+        include: [
+          "docs/tool/models.md",
+          "marketing/docs/style.md",
+          "marketing/skills/example/references/own.md",
+        ],
+        warnings: [],
+      },
+    });
+    const input = skillDocumentInput({
+      commit: "a".repeat(40),
+      skill: { path: path("marketing/skills/example/SKILL.md"), text: ad },
+      manifests: [
+        { path: path("SKILLCDN.md"), text: rules },
+        { path: path("marketing/SKILLCDN.md"), text: area },
+      ],
+      included: [
+        { path: path("docs/tool/models.md"), text: "# Models\n\nHow the tool's models behave." },
+        { path: path("marketing/docs/style.md"), text: "House style." },
+        { path: path("marketing/skills/example/references/own.md"), text: "Own notes." },
+      ],
+    });
+    if (input === undefined) throw new Error("the skill must assemble");
+    const document = assembleSkillDocument(input);
+    expect(listed?.digest).toBe(digestOf(document));
+    expect(document).toContain("--- included file: docs/tool/models.md ---");
+    // The page stays a document of the repository in its own right: searched, not a skill's file.
+    expect(result.byPath.get("docs/tool/models.md")).toMatchObject({
+      visible: true,
+      searchable: true,
+      skillDir: undefined,
+      title: "Models",
+    });
+  });
+
+  it("drops an include outside the skill that is not such a page, and says so", async () => {
+    const rules = manifest("# Rules", "documents: [docs]\nexclude: [docs/private.md]\n");
+    const ad = skill(
+      "Make the ad.",
+      [
+        "skillcdn:",
+        "  include:",
+        "    - /docs/shared.md",
+        "    - /media/docs/cast.md",
+        "    - /notes/plan.md",
+        "    - /skills/other/reference.md",
+        "    - /docs/private.md",
+        "    - /docs/.drafts/next.md",
+        "",
+      ].join("\n"),
+    );
+    const result = await index({
+      "SKILLCDN.md": rules,
+      "media/SKILLCDN.md": manifest("# Media", "documents: [docs]\n"),
+      "marketing/skills/example/SKILL.md": ad,
+      "docs/shared.md": "Shared.",
+      "docs/private.md": "Private.",
+      "docs/.drafts/next.md": "Draft.",
+      "media/docs/cast.md": "A sibling area's page.",
+      "notes/plan.md": "Not served.",
+      "skills/other/SKILL.md": skill("Other."),
+      "skills/other/reference.md": "Another skill's file.",
+    });
+    const listed = result.byPath.get("marketing/skills/example/SKILL.md");
+    expect(listed).toMatchObject({ listed: true, frontMatter: { include: ["docs/shared.md"] } });
+    expect(listed?.frontMatter?.warnings).toEqual(
+      [
+        "media/docs/cast.md",
+        "notes/plan.md",
+        "skills/other/reference.md",
+        "docs/private.md",
+        "docs/.drafts/next.md",
+      ].map((dropped) =>
+        expect.stringContaining(`"skillcdn.include" entry ignored: ${dropped} is outside`),
+      ),
+    );
+    // Naming a page in an include list publishes nothing outside the skill directory.
+    for (const name of ["notes/plan.md", "docs/private.md", "docs/.drafts/next.md"]) {
+      expect(result.byPath.get(name)).toMatchObject({ visible: false });
+    }
+    // The document is assembled from what was kept, in the author's order.
+    const input = skillDocumentInput({
+      commit: "a".repeat(40),
+      skill: { path: path("marketing/skills/example/SKILL.md"), text: ad },
+      manifests: [{ path: path("SKILLCDN.md"), text: rules }],
+      included: [{ path: path("docs/shared.md"), text: "Shared." }],
+    });
+    if (input === undefined) throw new Error("the skill must assemble");
+    expect(listed?.digest).toBe(digestOf(assembleSkillDocument(input)));
+  });
+
+  it("keeps a skill off the extension while a shared page it includes cannot be served", async () => {
+    const result = await index(
+      {
+        "skills/example/SKILL.md": skill("Fine.", "skillcdn:\n  include: [/docs/big.md]\n"),
+        "docs/big.md": `# Big\n\n${"x".repeat(5000)}`,
+      },
+      { limits: { maxIndexedFileBytes: 4096, maxReadableFileBytes: 4096 } },
+    );
+    expect(result.byPath.get("skills/example/SKILL.md")).toMatchObject({
+      listed: false,
+      searchable: true,
+      frontMatter: { include: ["docs/big.md"], unlisted: "file_unavailable" },
+    });
+    expect(result.byPath.get("skills/example/SKILL.md")?.frontMatter?.warnings).toContainEqual(
+      expect.stringContaining("docs/big.md"),
+    );
+    // Listed and readable as a document where the limits allow, not searched (ADR-0033).
+    expect(result.byPath.get("docs/big.md")).toMatchObject({ visible: true, kind: "other" });
+    expect(result.truncated).toBe(false);
+  });
+
   it("keeps a skill with the tools, and says why, when a host could not hold it whole", async () => {
     const result = await index(
       {

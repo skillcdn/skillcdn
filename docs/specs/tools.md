@@ -50,7 +50,7 @@ The context is the body of the document the skills extension serves for the skil
 
 1. Every applicable `SKILLCDN.md` body, from the repository root to the nearest manifest, each under `--- applicable rules: <path> ---`.
 2. The skill's own body, under `--- instructions ---`.
-3. Files declared in `skillcdn.include`, in declaration order, each under `--- included file: <path> ---`.
+3. Files declared in `skillcdn.include`, in declaration order, each under `--- included file: <path> ---`; a shared page outside the skill directory arrives here too, under its repository-root path ([format](skill-repo.md#shared-pages)).
 
 The front matter of the document is not repeated as YAML; its fields are the header lines of the result (`Skill`, `Description`, `License`, `Compatibility`, `Allowed tools`, `Metadata`). The `License` line names the license the reader resolved for the skill and where it found it, which may be a file rather than the field ([licenses](skill-repo.md#licenses)).
 
@@ -58,7 +58,7 @@ A skill whose license keeps its content at the source is **described only** ([li
 
 The reader admits at most 16 KiB (16,384 UTF-8 bytes) of context text per page, and a page carries all of it unless the response byte budget below ends it sooner. A page may end inside a rule or file; the result marks the fragment, returns `complete: false` and supplies `nextCursor`. Continue `load_skill` with the same path and cursor until the context is complete before using the skill. Outer rules are not discarded to make inner rules fit. Missing or unreadable required content leaves `complete: false`; when another page cannot repair it, no continuation is supplied and the diagnostic explains why.
 
-On a sub-path mount the rule chain still starts at the repository root. Ancestor rules outside the mount arrive through `load_skill` and its continuation. Their paths remain canonical, but `read_repo_file` cannot use those paths to escape the mount. A link to another manifest does not add that manifest's rules; ancestry determines the rule chain.
+On a sub-path mount the rule chain still starts at the repository root. Ancestor rules outside the mount arrive through `load_skill` and its continuation, and so does a shared page the skill includes from outside the mount. Their paths remain canonical, but `read_repo_file` cannot use those paths to escape the mount. A link to another manifest does not add that manifest's rules; ancestry determines the rule chain.
 
 The first page names the skill's supporting files in path order, up to 3 KiB of paths and the [REST](rest.md) listing's bound; when more exist it says so, and `browse_repo` pages through the directory. Continuation pages repeat neither the files nor the references. References identify files to read when needed; they are not automatically included in the skill's context unless `skillcdn.include` also declares them.
 
@@ -102,7 +102,7 @@ A mount declares the extension `io.modelcontextprotocol/skills` with `directoryR
 
 | Method | Answer |
 |---|---|
-| `skills/list` | The listed skills inside the mount in path order, 20 per page with `nextCursor`. Each entry carries the skill's `uri`, its served `frontmatter` as data, and `resources`: every served file inside the skill directory, the files of nested skills included, with `uri`, `digest` (`sha256:` and 64 hex digits over the bytes a read returns) and `size`. A file over the read limit is not among them: the skill's `SKILL.md` names it with its size and where to fetch it ([format](skill-repo.md#what-the-skills-extension-serves)). |
+| `skills/list` | The listed skills inside the mount in path order, 20 per page with `nextCursor`. Each entry carries the skill's `uri`, its served `frontmatter` as data, and `resources`: every served file inside the skill directory, the files of nested skills included, with `uri`, `digest` (`sha256:` and 64 hex digits over the bytes a read returns) and `size`. A file over the read limit is not among them: the skill's `SKILL.md` names it with its size and where to fetch it ([format](skill-repo.md#what-the-skills-extension-serves)). Neither is a shared page the skill includes: its text is inside the `SKILL.md` ([format](skill-repo.md#shared-pages)). |
 | `skills/get` | The same entry for one listed skill by URI. |
 | `resources/read` | The bytes a URI names, as text (`text/markdown`, `application/json`, ...) or as base64 (`blob`) when they are not text. The `SKILL.md` of a skill is the assembled document. |
 | `resources/directory/read` | The direct children of a directory URI: `name`, `uri` and `mimeType`, with `inode/directory` for a directory. |

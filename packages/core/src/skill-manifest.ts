@@ -8,8 +8,8 @@ import {
   requiredLine,
   requiredText,
 } from "./manifest-fields.js";
-import { classifyRepoFile } from "./repo-layout.js";
-import { parseRepoPath, type RepoPath } from "./repo-path.js";
+import { baseName, classifyRepoFile } from "./repo-layout.js";
+import { type RepoPath, resolveRepoPath } from "./repo-path.js";
 import { err, ok, type Result } from "./result.js";
 
 // Field rules follow the Agent Skills specification; what SkillCDN adds lives under one key,
@@ -41,8 +41,10 @@ export interface SkillManifest {
   readonly allowedTools: string | undefined;
   readonly metadata: Readonly<Record<string, string>>;
   /**
-   * Files the skill needs on every run, relative to its directory: `get` returns them with
-   * the skill, so that an agent does not read them one by one.
+   * Files the skill needs on every run, as repository-root paths: `load_skill` and the skills
+   * extension return them with the skill, so that an agent does not read them one by one. A
+   * path inside the skill directory names one of its files; a path outside it names a shared
+   * page of the repository, which the indexer admits or drops (ADR-0044).
    */
   readonly include: readonly RepoPath[];
   /** The title and the description in other languages, by language tag. */
@@ -84,8 +86,11 @@ export interface ParsedSkillManifest {
 }
 
 export interface SkillManifestContext {
-  /** Name of the directory holding the manifest; `undefined` when that is the mounted root. */
-  readonly directoryName: string | undefined;
+  /**
+   * The directory holding the manifest, as a repository-root path; the root for a root skill.
+   * Its name is what `name` is checked against, and include paths are resolved from it.
+   */
+  readonly directory: RepoPath;
 }
 
 function fail(
@@ -96,32 +101,39 @@ function fail(
 }
 
 /**
- * The `include` sequence: paths of Markdown or JSON files inside the skill directory. An entry
- * that is anything else is dropped and reported, never guessed at.
+ * The `include` sequence: paths of Markdown or JSON files, written as a link destination is,
+ * relative to the skill directory or from the repository root with a leading `/`. An entry that
+ * is anything else is dropped and reported, never guessed at. Whether a path outside the skill
+ * directory names a shared page the skill may carry is for the indexer to decide, which knows
+ * the repository (ADR-0044).
  */
-function readIncludedFiles(value: unknown, ignored: (message: string) => void): RepoPath[] {
+function readIncludedFiles(
+  value: unknown,
+  directory: RepoPath,
+  ignored: (message: string) => void,
+): RepoPath[] {
   if (value === undefined || value === null) {
     return [];
   }
   const files: RepoPath[] = [];
   let dropped = 0;
   for (const item of Array.isArray(value) ? value : [undefined]) {
-    const parsed = typeof item === "string" ? parseRepoPath(item.trim()) : undefined;
-    const kind = parsed?.ok === true ? classifyRepoFile(parsed.value) : undefined;
+    const path = typeof item === "string" ? resolveRepoPath(directory, item.trim()) : undefined;
+    const kind = path === undefined ? undefined : classifyRepoFile(path);
     const usable =
-      parsed?.ok === true &&
-      parsed.value.length > 0 &&
+      path !== undefined &&
+      path.length > 0 &&
       (kind === "markdown" || kind === "json") &&
       files.length < MAX_INCLUDED_FILES;
     if (!usable) {
       dropped += 1;
-    } else if (!files.includes(parsed.value)) {
-      files.push(parsed.value);
+    } else if (!files.includes(path)) {
+      files.push(path);
     }
   }
   if (dropped > 0) {
     ignored(
-      `${dropped} "skillcdn.include" entries are ignored: expected at most ${MAX_INCLUDED_FILES} relative paths of Markdown or JSON files inside the skill directory`,
+      `${dropped} "skillcdn.include" entries are ignored: expected at most ${MAX_INCLUDED_FILES} paths of Markdown or JSON files, relative to the skill directory or from the repository root with a leading "/"`,
     );
   }
   return files;
@@ -181,7 +193,8 @@ export function parseSkillManifest(
       message: '"name" should use lowercase letters, digits and single hyphens only',
     });
   }
-  if (context.directoryName !== undefined && context.directoryName !== name) {
+  // The directory rule does not apply to a root skill: the root has no name of its own.
+  if (context.directory.length > 0 && baseName(context.directory) !== name) {
     warnings.push({
       code: "name_directory_mismatch",
       message: '"name" should match the name of the directory that holds SKILL.md',
@@ -198,7 +211,7 @@ export function parseSkillManifest(
   let translations: Readonly<Record<string, SkillTranslation>> = Object.create(null);
   const own = fields.get("skillcdn");
   if (own instanceof Map) {
-    include = readIncludedFiles(own.get("include"), ignored);
+    include = readIncludedFiles(own.get("include"), context.directory, ignored);
     translations = readTranslations(own.get("translations"), pickSkillTranslation, ignored);
   } else if (own !== undefined && own !== null) {
     ignored('"skillcdn" is ignored: expected a mapping');

@@ -1,7 +1,6 @@
 import {
   assembleSkillDocument,
   type BlobStore,
-  baseName,
   classifyLicenseFile,
   classifyRepoFile,
   DomainError,
@@ -17,6 +16,7 @@ import {
   isHiddenSkill,
   isReadmePath,
   isServedPath,
+  isSharedIncludePath,
   isWithinRepoPath,
   joinRepoPath,
   type LicenseFact,
@@ -58,7 +58,7 @@ import { gitBlobHash, sha256Hex } from "./git-hash.js";
  * is rebuilt when it is next asked for (`ensureSnapshot` in @skillcdn/db); without the bump, a
  * deployment keeps serving what the old rules produced until the repository moves on.
  */
-export const INDEX_VERSION = 8;
+export const INDEX_VERSION = 9;
 
 const MAX_DIAGNOSTICS = 50;
 const FETCH_CONCURRENCY = 8;
@@ -492,9 +492,7 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
         );
         continue;
       }
-      const parsed = parseSkillManifest(text, {
-        directoryName: directory.length === 0 ? undefined : baseName(directory),
-      });
+      const parsed = parseSkillManifest(text, { directory });
       if (parsed.ok) {
         const { manifest, warnings } = parsed.value;
         skills.set(directory, {
@@ -541,10 +539,14 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
   }
 
   const skillDirectories = new Set(skills.keys());
+  // An include inside the skill directory publishes its file, hidden or not. One outside it
+  // publishes nothing: it names a shared page that is served as a document in its own right,
+  // under a manifest at or above the skill, or it is dropped and the author told (ADR-0044).
   const includedFiles = new Set<RepoPath>();
   for (const [directory, skill] of skills) {
     for (const include of skill.frontMatter?.include ?? []) {
-      includedFiles.add(joinRepoPath(directory, include as RepoPath));
+      const path = include as RepoPath;
+      if (isWithinRepoPath(directory, path)) includedFiles.add(path);
     }
   }
   const scope: ServedScope = {
@@ -554,6 +556,28 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
     includedFiles,
     ...policy,
   };
+  for (const [directory, skill] of skills) {
+    const include = (skill.frontMatter?.include ?? []) as readonly RepoPath[];
+    const dropped = include.filter(
+      (path) => !isWithinRepoPath(directory, path) && !isSharedIncludePath(path, directory, scope),
+    );
+    if (dropped.length === 0 || skill.frontMatter === undefined) continue;
+    const kept = include.filter((path) => !dropped.includes(path));
+    skills.set(directory, {
+      ...skill,
+      frontMatter: {
+        ...skill.frontMatter,
+        ...(kept.length === 0 ? { include: undefined } : { include: kept }),
+        warnings: [
+          ...skill.frontMatter.warnings,
+          ...dropped.map(
+            (path) =>
+              `"skillcdn.include" entry ignored: ${path} is outside the skill directory and not a document under a directory that a manifest at or above the skill declares`,
+          ),
+        ],
+      },
+    });
+  }
   const linkedFiles = new Set<RepoPath>();
   const overviewDirectories = new Set<RepoPath>([ROOT_PATH]);
   for (const { entry } of candidates) {
@@ -755,11 +779,20 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
   }
   // A body is stored once per hash, so a file that several copies of a skill share spends the
   // byte budget once: counting it per copy marked a repository partial for content it holds.
+  // The shared pages a skill includes are outside its directory, and are fetched with its files
+  // under the same read limit, since the document is assembled from them (ADR-0044).
+  const sharedIncludesOf = (listing: Listing): Candidate[] =>
+    (listing.skill.frontMatter?.include ?? [])
+      .filter((path) => !isWithinRepoPath(listing.directory, path as RepoPath))
+      .flatMap((path) => {
+        const candidate = byCandidatePath.get(path as RepoPath);
+        return candidate === undefined ? [] : [candidate];
+      });
   const wanted = new Set<string>();
   await fetchBodies(
     listings
       .filter((listing) => listing.problem === undefined)
-      .flatMap((listing) => listing.held)
+      .flatMap((listing) => [...listing.held, ...sharedIncludesOf(listing)])
       .filter((candidate) => !texts.has(candidate.entry.hash))
       .filter((candidate) => {
         if (wanted.has(candidate.entry.hash)) return false;
@@ -829,8 +862,8 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
           isWithinRepoPath(parentDirectory(manifest.path as RepoPath), listing.directory),
       )
       .sort((a, b) => a.path.length - b.path.length);
-    const included = (listing.skill.frontMatter?.include ?? []).map((relative) => {
-      const path = joinRepoPath(listing.directory, relative as RepoPath);
+    const included = (listing.skill.frontMatter?.include ?? []).map((include) => {
+      const path = include as RepoPath;
       const candidate = byCandidatePath.get(path);
       return { path, text: candidate === undefined ? undefined : texts.get(candidate.entry.hash) };
     });

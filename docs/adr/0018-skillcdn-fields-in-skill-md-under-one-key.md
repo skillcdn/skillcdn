@@ -1,6 +1,6 @@
 # ADR-0018: What SkillCDN adds to `SKILL.md` lives under one key: files that come with the skill, and translations
 
-- Status: Accepted; the hidden-file restriction on includes in point 2 is superseded by ADR-0022, and ADR-0025 strips the key from what is served
+- Status: Accepted; the hidden-file restriction on includes in point 2 is superseded by ADR-0022, ADR-0025 strips the key from what is served, and ADR-0044 lets an include name a shared page outside the skill directory
 - Date: 2026-09-23
 
 ## Context

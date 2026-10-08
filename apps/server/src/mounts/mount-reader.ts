@@ -889,13 +889,14 @@ export class MountReader {
         text: await blobStore.read(row.blobSha),
       })),
     );
+    // Included paths are repository-root paths: a file of the skill, or a shared page outside
+    // it that the index admitted (ADR-0044); either way the index holds it.
     const included = await Promise.all(
-      (skill.frontMatter?.include ?? []).map(async (relative) => {
-        const parsed = parseRepoPath(relative);
-        const path = parsed.ok ? joinRepoPath(directory, parsed.value) : undefined;
-        const entry = path === undefined ? undefined : await getEntry(database, scope, path);
+      (skill.frontMatter?.include ?? []).map(async (include) => {
+        const parsed = parseRepoPath(include);
+        const entry = parsed.ok ? await getEntry(database, scope, parsed.value) : undefined;
         return {
-          path: path ?? directory,
+          path: parsed.ok ? parsed.value : directory,
           text: entry === undefined ? undefined : await blobStore.read(entry.blobSha),
         };
       }),
@@ -1151,7 +1152,7 @@ export class MountReader {
     const [files, entries, included] = await Promise.all([
       listSkillFiles(database, scope, skill.skillDir ?? "", MAX_LISTED_SKILL_FILES + 1),
       this.#entriesOf(scope),
-      this.#includedFiles(mount, scope, skill.skillDir ?? "", skill.frontMatter?.include ?? []),
+      this.#includedFiles(scope, skill.frontMatter?.include ?? []),
     ]);
     const ancestors = entries
       .filter(
@@ -1287,32 +1288,24 @@ export class MountReader {
   /**
    * Indexed bodies of required files, in declaration order. skill() pages these together with
    * the skill and its rules. Unindexed files stay unavailable even if another read warms a blob.
+   * The paths are repository-root paths; a shared page outside the skill directory arrives with
+   * the skill even on a mount that does not contain it, as the ancestor rules do (ADR-0044),
+   * though `read_repo_file` still cannot read it there by its path.
    */
-  async #includedFiles(
-    mount: Mount,
-    scope: ReadScope,
-    skillDir: string,
-    include: readonly string[],
-  ): Promise<IncludedFile[]> {
+  async #includedFiles(scope: ReadScope, include: readonly string[]): Promise<IncludedFile[]> {
     const { database, blobStore } = this.#dependencies;
-    const base = parseRepoPath(skillDir);
     const read = await Promise.all(
-      include.map(async (relative) => {
-        const parsed = parseRepoPath(relative);
-        if (!base.ok || !parsed.ok) {
+      include.map(async (include) => {
+        const parsed = parseRepoPath(include);
+        if (!parsed.ok) {
           return undefined;
         }
-        const absolute = joinRepoPath(base.value, parsed.value);
-        const path = belowMount(mount, absolute);
-        if (path === undefined) {
-          return undefined;
-        }
-        const entry = await getEntry(database, scope, absolute);
+        const entry = await getEntry(database, scope, parsed.value);
         const text =
           entry?.kind === "markdown" || entry?.kind === "json"
             ? await blobStore.read(entry.blobSha)
             : undefined;
-        return { path, text };
+        return { path: parsed.value, text };
       }),
     );
     const included: IncludedFile[] = [];

@@ -205,6 +205,53 @@ describe("the MCP skills extension", () => {
     }
   });
 
+  it("carries a shared page inside the served document without listing it as a resource", async () => {
+    const { h, address } = repository("ext-shared-include", {
+      "SKILLCDN.md":
+        "---\ndescription: Collection guidance.\ndocuments: [docs]\n---\n# Rules\n\nAsk first.",
+      "docs/shared.md": "# Shared\n\nWhat the family knows.",
+      "skills/write/SKILL.md": skill(
+        "Write the document.",
+        "write",
+        "skillcdn:\n  include: [/docs/shared.md, style.md]\n",
+      ),
+      "skills/write/style.md": "Short sentences.",
+    });
+    await ready(h, address);
+    const client = await h.connect(address);
+    try {
+      const prefix = "skill://gh/acme/multi-skill";
+      const listed = listSchema.parse(
+        await client.request({ method: "skills/list", params: {} }, listSchema),
+      );
+      const write = listed.skills.find((item) => item.uri === `${prefix}/skills/write/SKILL.md`);
+      if (write === undefined) throw new Error("the skill must be listed");
+      // The resources are the files of the skill directory; the shared page is in the text.
+      expect(write.resources.map((file) => file.uri)).toEqual([
+        `${prefix}/skills/write/SKILL.md`,
+        `${prefix}/skills/write/style.md`,
+      ]);
+      const read = await client.readResource({ uri: write.uri });
+      const document = (read.contents[0] as { text?: string }).text ?? "";
+      expect(sha256(new TextEncoder().encode(document))).toBe(write.resources[0]?.digest);
+      expect(document).toContain(
+        "> Assembled by SkillCDN from `SKILLCDN.md`, `skills/write/SKILL.md`, `docs/shared.md` and `skills/write/style.md` at commit `",
+      );
+      expect(document).toContain(
+        renderSkillSections({
+          rules: [{ path: "SKILLCDN.md", body: "# Rules\n\nAsk first." }],
+          body: "Write the document.",
+          included: [
+            { path: "docs/shared.md", content: "# Shared\n\nWhat the family knows." },
+            { path: "skills/write/style.md", content: "Short sentences." },
+          ],
+        }),
+      );
+    } finally {
+      await client.close();
+    }
+  });
+
   it("names a root skill's files after the skill, and says so in the instructions", async () => {
     const host = createFixtureHost("ext-root");
     const h = createHarness(database, { host, indexWaitMs: 100 });

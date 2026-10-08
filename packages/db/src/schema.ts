@@ -225,7 +225,10 @@ export interface SkillFrontMatter {
   readonly allowedTools?: string;
   readonly metadata: Readonly<Record<string, string>>;
   readonly warnings: readonly string[];
-  /** Skill only: the files it needs on every run, relative to its directory. */
+  /**
+   * Skill only: the files it needs on every run, as repository-root paths: files of its own
+   * directory, and the shared pages outside it that the index admitted (ADR-0044).
+   */
   readonly include?: readonly string[];
   /** By language tag: the title (skill) or name (repository), and the description. */
   readonly translations?: Readonly<Record<string, StoredTranslation>>;

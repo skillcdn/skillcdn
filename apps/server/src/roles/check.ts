@@ -16,6 +16,7 @@ import {
   INSTRUCTIONS_MAX_LENGTH,
   type IndexDiagnostic,
   type IndexLimits,
+  isWithinRepoPath,
   type MountCatalog,
   parseRepoPath,
   type RepoPath,
@@ -301,12 +302,19 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
       (entry) => entry.visible && entry.skillDir === directory && entry.kind !== "skill",
     );
     const included = skill.frontMatter?.include ?? [];
+    // A shared page travels with the skill wherever SkillCDN serves it, and nowhere else: a
+    // copy taken from the git host has its path and must fetch it (ADR-0044).
+    const shared = included.filter((path) => !isWithinRepoPath(pathOf(directory), pathOf(path)));
+    const own = included.length - shared.length;
     const omitted = skill.frontMatter?.omitted ?? [];
     const license = skill.frontMatter?.licenseFact;
     write(
       `- ${skill.name ?? "?"} (${directory === "" ? "." : directory})\n` +
         `  ${skill.description ?? ""}\n` +
-        `  files: ${owned.length}${included.length === 0 ? "" : ` (${included.length} returned with the skill)`}\n` +
+        `  files: ${owned.length}${own === 0 ? "" : ` (${own} returned with the skill)`}\n` +
+        (shared.length === 0
+          ? ""
+          : `  shared pages returned with the skill, outside its directory: ${shared.join(", ")}\n`) +
         (omitted.length === 0
           ? ""
           : `  over the read limit, named in the served document with their source: ${omitted.map((file) => `${file.path} (${file.size} bytes)`).join(", ")}\n`) +
