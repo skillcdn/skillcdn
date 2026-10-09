@@ -155,6 +155,8 @@ The business model is not in this codebase. What the code provides is structure 
 
 Trunk-based development. Maintainers currently push directly to `main`; a pull-request gate comes later. CI runs on every push: lint, build, typecheck, tests, secret scan, and an image build that is then exercised. `main` is kept releasable: a deployment pins a green commit and builds the image from it. Publishing images and rolling them out happen outside this repository; [`deploy/README.md`](../deploy/README.md) defines the contract.
 
+Three packages are published to npm under the `@skillcdn` scope, `cli`, `indexer` and `core`, each with its own version and changelog from changesets, published by the release workflow through the registry's trusted publishing, with provenance and no stored secret ([ADR-0046](adr/0046-packages-are-published-to-npm-through-trusted-publishing.md)). The server has no version of its own: a deployment pins a commit.
+
 Because old and new versions overlap during a rollout:
 
 - migrations follow expand, then contract, across separate releases;

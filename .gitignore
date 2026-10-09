@@ -33,6 +33,9 @@ tmp/
 # Logs
 *.log
 
+# The license copied next to a package while it is packed (scripts/pack-license.mjs)
+packages/*/LICENSE.md
+
 # Editors and OS
 .DS_Store
 Thumbs.db

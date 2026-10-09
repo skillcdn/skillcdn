@@ -22,7 +22,7 @@ pnpm dev
 
 ## Process
 
-1. Make one logical change. Add tests. Update the docs listed in the "Documentation protocol" table in `CLAUDE.md`.
+1. Make one logical change. Add tests. Update the docs listed in the "Documentation protocol" table in `CLAUDE.md`. A change to a published package (`packages/core`, `packages/indexer`, `packages/cli`) also adds a changeset: `pnpm changeset`.
 2. Commit with [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): summary`.
 3. Run `pnpm check`.
 4. **Maintainers** currently push directly to `main` (`git pull --rebase` first); a pull-request flow will replace this later. **Everyone else:** fork, open a pull request against `main` and fill in the checklist.

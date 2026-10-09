@@ -1,10 +1,26 @@
 {
   "name": "@skillcdn/cli",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "description": "The skillcdn command: check a skill repository before pushing, as SkillCDN would index it.",
   "license": "FSL-1.1-ALv2",
+  "homepage": "https://skillcdn.ai",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/skillcdn/skillcdn.git",
+    "directory": "packages/cli"
+  },
+  "bugs": "https://github.com/skillcdn/skillcdn/issues",
+  "keywords": [
+    "skillcdn",
+    "mcp",
+    "agent-skills",
+    "skills",
+    "cli"
+  ],
   "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
   "bin": {
     "skillcdn": "./dist/bin.js"
   },
@@ -12,11 +28,16 @@
     "dist",
     "!dist/**/*.tsbuildinfo"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -b tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --passWithNoTests",
-    "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\""
+    "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\"",
+    "prepack": "node ../../scripts/pack-license.mjs copy",
+    "postpack": "node ../../scripts/pack-license.mjs remove"
   },
   "dependencies": {
     "@skillcdn/indexer": "workspace:^"

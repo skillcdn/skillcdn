@@ -7,6 +7,7 @@ Everything needed to build the image and hand it to whatever runs it. This repos
 | [`Dockerfile`](Dockerfile) | The one multi-stage image. Roles `api`, `worker`, `migrate` and `check` are selected by the container command. |
 | [`compose.dev.yaml`](compose.dev.yaml) | Local development dependencies (PostgreSQL 18). Not a production topology. |
 | [`../.github/workflows/ci.yml`](../.github/workflows/ci.yml) | Lint, build, typecheck, tests (integration tests run against a PostgreSQL service container), secret scan, and an image build that is then exercised: exit codes, `migrate`, readiness, non-root user, clean shutdown. It needs no secrets. |
+| [`../.github/workflows/release.yml`](../.github/workflows/release.yml) | Versions and publishes the npm packages from the pending changesets: a pull request that bumps versions and changelogs, and, once it is merged, a publish through the registry's trusted publishing, with provenance and no stored secret ([ADR-0046](../docs/adr/0046-packages-are-published-to-npm-through-trusted-publishing.md)). |
 
 A compose bundle and install script for self-hosting are planned ([roadmap](../docs/roadmap.md)).
 
@@ -245,5 +246,6 @@ Set once in GitHub; none of it can be expressed in files here.
 
 - Branch protection on `main` is intentionally off for now: maintainers push directly. When the team moves to pull requests, require them together with the `CI` checks and a linear history.
 - Enable secret scanning with push protection, Dependabot alerts and private vulnerability reporting.
-- Actions: default `GITHUB_TOKEN` permission read-only; require approval before running workflows from first-time contributors.
+- Actions: default `GITHUB_TOKEN` permission read-only; require approval before running workflows from first-time contributors. Allow GitHub Actions to create and approve pull requests (`Actions > General`): the release workflow opens its version pull request with that.
+- On npm, each package under the `@skillcdn` scope has this repository registered as its trusted publisher (`skillcdn/skillcdn`, workflow `release.yml`, no environment), and then requires two-factor authentication with tokens disallowed. The first version of a new package is published by a maintainer by hand, before the publisher can be registered.
 - No cloud credentials, environments or deployment secrets belong to this repository. If a workflow here ever asks for one, that is a mistake.

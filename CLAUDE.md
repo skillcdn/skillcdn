@@ -39,11 +39,11 @@ apps/
   server/     the single deployable; roles: api | worker | migrate | check (Node 24)
   web/        optional web UI: landing and explorer; REST only, prerendered per language
 packages/
-  core/       pure domain logic and ports; no I/O, no Node APIs
+  core/       pure domain logic and ports; no I/O, no Node APIs                 @skillcdn/core on npm
   db/         PostgreSQL schema, migrations, query layer
   github/     GitHub implementation of the git-host port
-  indexer/    the reading rules: a commit or a working tree read into an index, and the check
-  cli/        the skillcdn command for repository authors: skillcdn check
+  indexer/    the reading rules: a commit or a working tree read into an index   @skillcdn/indexer on npm
+  cli/        the skillcdn command for repository authors: skillcdn check        @skillcdn/cli on npm
 apps/server/fixtures/.repositories/  test-only repository fixtures; the public reference repository is skillcdn/skills
 deploy/       Dockerfile, compose files, the contract for whoever operates the image
 docs/         architecture, specs, ADRs, roadmap
@@ -63,6 +63,7 @@ Run everything from the repository root through pnpm. Do not use `npm`, `npx` or
 | One package | `pnpm turbo run test --filter=@skillcdn/core` |
 | One test file | `pnpm --filter @skillcdn/core exec vitest run src/address.test.ts` (build upstream packages first) |
 | Lint and format | `pnpm lint` · `pnpm lint:fix` |
+| Record what a change means to a published package | `pnpm changeset` (writes `.changeset/<name>.md`; a file written by hand does the same) |
 | No control or invisible characters in tracked files (part of `pnpm check`) | `pnpm check:text` |
 | Watch mode (server) | `pnpm dev` |
 | The web UI on its own, against fixtures (no database, no server) | `pnpm dev:web` · against a running server: `pnpm dev:web:api` · against the hosted service: `pnpm dev:web:live` |
@@ -82,6 +83,7 @@ Packages compile to `dist/` and consume each other's compiled output. Going thro
 
 - `pnpm check` passes.
 - New behavior has tests; a bug fix starts with a failing regression test.
+- A change to a published package (`core`, `indexer`, `cli`) carries a changeset, written for whoever installs it ([ADR-0046](docs/adr/0046-packages-are-published-to-npm-through-trusted-publishing.md)).
 - Docs are updated per the table below, in the same change.
 - No secrets, no operations details, no business logic (rules 1, 6, 7).
 - The change is safe to deploy on its own: `main` is always releasable and every push may ship.
@@ -93,6 +95,7 @@ Packages compile to `dist/` and consume each other's compiled output. Going thro
 - **For now, maintainers commit and push directly to `main`.** There is no pull-request gate and no branch protection yet; a pull-request flow comes later. Do not create branches or open pull requests unless asked. Nothing stands between a push and `main`, so the discipline is yours: run `pnpm check` first, `git pull --rebase` before pushing, keep commits small, and treat a red CI run on `main` as the first thing to fix.
 - Never force-push or rewrite `main`, skip hooks with `--no-verify`, or commit build output.
 - Keep the `Co-Authored-By` trailer your agent adds, so AI-authored changes stay traceable.
+- **Releases.** The release workflow opens one pull request that bumps the versions and changelogs of the packages with pending changesets; merging it publishes them to npm, with provenance. Nobody runs `pnpm publish` by hand, except a maintainer for the first version of a new package (ADR-0046).
 
 ## Documentation protocol
 
@@ -101,6 +104,7 @@ Documentation is part of the change, not a follow-up. A future session starts wi
 | When you change... | Update in the same change |
 |---|---|
 | Public behavior: address grammar, tool names or schemas, skill-repo convention, REST API | `docs/specs/*`; root `README.md` if the overview changes |
+| What a published package does or exports | a changeset in `.changeset/`, which becomes the package's changelog; the package's `README.md` when its usage changes |
 | Packages, boundaries, runtime components, data flow, security model | `docs/architecture.md`; the repository map above; an ADR |
 | A decision future contributors might reasonably undo | new ADR in `docs/adr/` (never edit an accepted ADR; supersede it) |
 | Environment variables or configuration | config module, `.env.example`, the table in `deploy/README.md` |

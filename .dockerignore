@@ -1,6 +1,7 @@
 # Keep the build context small and secret-free. Mirrors .gitignore, plus things an image never needs.
 .git
 .github
+.changeset
 .claude
 .turbo
 .vscode

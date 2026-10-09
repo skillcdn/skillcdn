@@ -1,11 +1,26 @@
 {
   "name": "@skillcdn/core",
-  "version": "0.0.0",
-  "private": true,
-  "description": "Pure domain logic: address scheme, skill-repo convention, permission rules, tool contracts, ports.",
+  "version": "0.1.0",
+  "description": "The contracts of SkillCDN: the address scheme, the skill-repo convention, tool and REST schemas, the types of an index, and the ports.",
   "license": "FSL-1.1-ALv2",
+  "homepage": "https://skillcdn.ai",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/skillcdn/skillcdn.git",
+    "directory": "packages/core"
+  },
+  "bugs": "https://github.com/skillcdn/skillcdn/issues",
+  "keywords": [
+    "skillcdn",
+    "mcp",
+    "agent-skills",
+    "skills"
+  ],
   "type": "module",
   "sideEffects": false,
+  "engines": {
+    "node": ">=24"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -16,11 +31,16 @@
     "dist",
     "!dist/**/*.tsbuildinfo"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -b tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --passWithNoTests",
-    "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\""
+    "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\"",
+    "prepack": "node ../../scripts/pack-license.mjs copy",
+    "postpack": "node ../../scripts/pack-license.mjs remove"
   },
   "devDependencies": {
     "typescript": "catalog:",

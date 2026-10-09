@@ -99,6 +99,8 @@ deploy/       Dockerfile, compose files, the contract for whoever operates the i
 docs/         architecture, specs, ADRs, roadmap
 ```
 
+On npm, under the `@skillcdn` scope: [`@skillcdn/cli`](https://www.npmjs.com/package/@skillcdn/cli), the `skillcdn check` command that reads a repository as SkillCDN would index it (`npx @skillcdn/cli check`); [`@skillcdn/indexer`](https://www.npmjs.com/package/@skillcdn/indexer), the reading rules; and [`@skillcdn/core`](https://www.npmjs.com/package/@skillcdn/core), the contracts. Each has its own version and changelog ([ADR-0046](docs/adr/0046-packages-are-published-to-npm-through-trusted-publishing.md)).
+
 | | hosted (skillcdn.ai) | self-hosted / air-gapped |
 |---|---|---|
 | runtime | the container image, on AWS | the same image with compose |
