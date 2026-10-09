@@ -1,7 +1,7 @@
-import type { LicenseKind, RepoFileKind } from "@skillcdn/core";
+import type { LicenseKind, RepoFileKind, SkillFrontMatter } from "@skillcdn/core";
 import { and, eq, inArray, isNull, ne, not, or, type SQL, sql } from "drizzle-orm";
 import { type Database, drizzleOf } from "../client.js";
-import { indexEntries, type SkillFrontMatter } from "../schema.js";
+import { indexEntries } from "../schema.js";
 import { SEARCH_CONFIG, type SnapshotScope } from "./snapshots.js";
 
 export interface EntryRecord {

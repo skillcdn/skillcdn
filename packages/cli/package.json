@@ -1,0 +1,29 @@
+{
+  "name": "@skillcdn/cli",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The skillcdn command: check a skill repository before pushing, as SkillCDN would index it.",
+  "license": "FSL-1.1-ALv2",
+  "type": "module",
+  "bin": {
+    "skillcdn": "./dist/bin.js"
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.tsbuildinfo"
+  ],
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\""
+  },
+  "dependencies": {
+    "@skillcdn/indexer": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

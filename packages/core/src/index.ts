@@ -38,6 +38,13 @@ export {
 export { isFullCommitHash, isValidRefName, MAX_REF_LENGTH } from "./git-ref.js";
 export { accountAvatarUrl, accountPageUrl, rawFileUrl } from "./host-urls.js";
 export { isImageUrl, MAX_IMAGE_URL_LENGTH } from "./image-source.js";
+export type {
+  IndexEntry,
+  SkillFrontMatter,
+  SnapshotDiagnostic,
+  SnapshotIndex,
+  StoredTranslation,
+} from "./index-entry.js";
 export {
   classifyLicenseField,
   classifyLicenseFile,

@@ -19,9 +19,9 @@ import {
   type SnapshotScope,
   writeSnapshotIndex,
 } from "@skillcdn/db";
+import { buildSnapshotIndex, INDEX_VERSION } from "@skillcdn/indexer";
 import type { Logger } from "../logger.js";
 import type { Mount } from "../mounts/mount-service.js";
-import { buildSnapshotIndex, INDEX_VERSION } from "./build-index.js";
 
 export type SnapshotOutcome =
   | { readonly status: "ready"; readonly snapshot: SnapshotRecord }

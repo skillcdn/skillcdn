@@ -214,6 +214,9 @@ importers:
       '@skillcdn/github':
         specifier: workspace:*
         version: link:../../packages/github
+      '@skillcdn/indexer':
+        specifier: workspace:*
+        version: link:../../packages/indexer
       hono:
         specifier: ^4.13.12
         version: 4.13.12
@@ -280,6 +283,22 @@ importers:
         specifier: 'catalog:'
         version: 5.0.3(@types/node@24.19.1)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(tsx@4.23.13)(yaml@2.9.1))
 
+  packages/cli:
+    dependencies:
+      '@skillcdn/indexer':
+        specifier: workspace:^
+        version: link:../indexer
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.19.1
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.3(@types/node@24.19.1)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(tsx@4.23.13)(yaml@2.9.1))
+
   packages/core:
     dependencies:
       yaml:
@@ -342,6 +361,22 @@ importers:
       vitest:
         specifier: 'catalog:'
         version: 5.0.3(@types/node@24.19.1)(vite@8.3.2(@types/node@24.19.1))
+
+  packages/indexer:
+    dependencies:
+      '@skillcdn/core':
+        specifier: workspace:^
+        version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.19.1
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.3(@types/node@24.19.1)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(tsx@4.23.13)(yaml@2.9.1))
 
 packages:
 

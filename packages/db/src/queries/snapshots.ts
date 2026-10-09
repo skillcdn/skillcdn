@@ -1,12 +1,7 @@
-import type { LicenseFact, LicenseKind, RepoFileKind } from "@skillcdn/core";
+import type { LicenseFact, SnapshotDiagnostic, SnapshotIndex } from "@skillcdn/core";
 import { and, eq, lt, lte, or, sql } from "drizzle-orm";
 import { type Database, drizzleOf } from "../client.js";
-import {
-  indexEntries,
-  type SkillFrontMatter,
-  type SnapshotDiagnostic,
-  snapshots,
-} from "../schema.js";
+import { indexEntries, snapshots } from "../schema.js";
 import type { RepoScope } from "./repos.js";
 
 export type SnapshotStatus = "pending" | "indexing" | "ready" | "failed";
@@ -205,43 +200,6 @@ export async function failSnapshot(
       updatedAt: failure.now,
     })
     .where(heldBy(scope, owner));
-}
-
-export interface NewIndexEntry {
-  readonly path: string;
-  readonly kind: RepoFileKind;
-  readonly size: number;
-  readonly blobSha: string;
-  readonly skillDir: string | undefined;
-  readonly name: string | undefined;
-  readonly title: string | undefined;
-  readonly description: string | undefined;
-  readonly frontMatter: SkillFrontMatter | undefined;
-  /** Make the entry searchable: canonical metadata plus its search body. */
-  readonly searchable: boolean;
-  /** Parsed body without presentation-only front-matter; omitted to search the raw blob. */
-  readonly searchBody?: string;
-  /** False for a file outside the skills and the document directories: known, never served. */
-  readonly visible: boolean;
-  /** SHA-256 of the served bytes, in hex, when they are stored (ADR-0025). */
-  readonly digest?: string;
-  /** The size of what is served; for an assembled `SKILL.md` it differs from `size`. */
-  readonly servedSize?: number;
-  /** True for a skill the MCP skills extension lists. */
-  readonly listed?: boolean;
-  /** For a skill: what its license allows (ADR-0026). */
-  readonly licenseKind?: LicenseKind;
-}
-
-export interface SnapshotIndex {
-  readonly entries: readonly NewIndexEntry[];
-  readonly truncated: boolean;
-  readonly indexedBytes: number;
-  readonly diagnostics: readonly SnapshotDiagnostic[];
-  /** The license that governs the repository outside its skills (ADR-0026). */
-  readonly license: LicenseFact;
-  /** The version of the reading rules that built it; see `ensureSnapshot`. */
-  readonly version: number;
 }
 
 /** The text-search configuration. Index and query must agree, so it is not configurable. */

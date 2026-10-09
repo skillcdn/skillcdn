@@ -1,4 +1,10 @@
-import type { LegalTexts, LicenseFact, ShowcaseTexts } from "@skillcdn/core";
+import type {
+  LegalTexts,
+  LicenseFact,
+  ShowcaseTexts,
+  SkillFrontMatter,
+  SnapshotDiagnostic,
+} from "@skillcdn/core";
 import { sql } from "drizzle-orm";
 import {
   bigint,
@@ -199,76 +205,6 @@ export const snapshots = pgTable(
     ),
   ],
 );
-
-export interface SnapshotDiagnostic {
-  readonly path: string;
-  readonly code: string;
-  readonly message: string;
-}
-
-/** What people see in one language instead of a name and a description. */
-export interface StoredTranslation {
-  /** A skill's translated title. */
-  readonly title?: string;
-  /** A repository's translated name. */
-  readonly name?: string;
-  readonly description?: string;
-}
-
-/**
- * Front-matter of a skill manifest, as validated by the convention parser. A repository manifest
- * (`SKILLCDN.md`) stores its front-matter here too, with the document directories it declares.
- */
-export interface SkillFrontMatter {
-  readonly license?: string;
-  readonly compatibility?: string;
-  readonly allowedTools?: string;
-  readonly metadata: Readonly<Record<string, string>>;
-  readonly warnings: readonly string[];
-  /**
-   * Skill only: the files it needs on every run, as repository-root paths: files of its own
-   * directory, and the shared pages outside it that the index admitted (ADR-0044).
-   */
-  readonly include?: readonly string[];
-  /** By language tag: the title (skill) or name (repository), and the description. */
-  readonly translations?: Readonly<Record<string, StoredTranslation>>;
-  /** Repository manifest only: the directories it serves, relative to its own directory. */
-  readonly documents?: readonly string[];
-  /** Repository manifest only: relative files or subtrees never published. Empty means self. */
-  readonly exclude?: readonly string[];
-  /** Repository manifest only: the tag of the language the repository is written in. */
-  readonly language?: string;
-  /**
-   * Repository manifest only: the picture it declares (ADR-0031), as a repository-root path of a
-   * file the tree has, or as an `https` URL.
-   */
-  readonly image?: string;
-  /** Local Markdown destinations, normalized to repository-root paths. */
-  readonly references?: readonly { readonly href: string; readonly path: string }[];
-  /** Readable through a link, without becoming an independent catalog/search document. */
-  readonly linkedOnly?: boolean;
-  /** Readable as a directory introduction, without creating a catalog/search document. */
-  readonly overviewOnly?: boolean;
-  /** A present but unreadable repository manifest still defines a closed boundary. */
-  readonly manifestError?: string;
-  /** Skill only: why the MCP skills extension does not list it (ADR-0025), when it does not. */
-  readonly unlisted?: string;
-  /**
-   * Skill only: the files of the skill over the read limit when the commit was indexed
-   * (ADR-0033): left out of what is served, and named in the served document with where their
-   * bytes are at the host. Kept here so that a read assembles the document the index digested.
-   */
-  readonly omitted?: readonly {
-    readonly path: string;
-    readonly size: number;
-    readonly sourceUrl: string;
-  }[];
-  /**
-   * The license that governs the file (ADR-0026): for a skill, the one resolved for it; for a
-   * license file, what the file itself says.
-   */
-  readonly licenseFact?: LicenseFact;
-}
 
 /** One file of a snapshot. Immutable: rows are inserted and deleted, never updated. */
 export const indexEntries = pgTable(

@@ -1,3 +1,9 @@
+import type {
+  IndexEntry,
+  SnapshotDiagnostic,
+  SnapshotIndex,
+  StoredTranslation,
+} from "@skillcdn/core";
 import {
   assembleSkillDocument,
   type BlobStore,
@@ -43,12 +49,6 @@ import {
   summarizeMarkdown,
   type TreeEntry,
 } from "@skillcdn/core";
-import type {
-  NewIndexEntry,
-  SnapshotDiagnostic,
-  SnapshotIndex,
-  StoredTranslation,
-} from "@skillcdn/db";
 import { gitBlobHash, sha256Hex } from "./git-hash.js";
 
 /**
@@ -331,9 +331,9 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
         byPath(a, b),
     );
 
-  const manifests = new Map<RepoPath, NewIndexEntry>();
-  const skills = new Map<RepoPath, NewIndexEntry>();
-  const documents = new Map<RepoPath, NewIndexEntry>();
+  const manifests = new Map<RepoPath, IndexEntry>();
+  const skills = new Map<RepoPath, IndexEntry>();
+  const documents = new Map<RepoPath, IndexEntry>();
   /** Skill manifests that could not be read as skills. */
   const unreadSkills = new Set<RepoPath>();
   /** Per manifest directory, the document directories it declares. A broken one declares none. */
@@ -710,7 +710,7 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
         path: manifest.path as RepoPath,
         value: manifest.frontMatter?.license ?? "",
       }));
-  const licenseOf = (directory: RepoPath, skill: NewIndexEntry): LicenseFact =>
+  const licenseOf = (directory: RepoPath, skill: IndexEntry): LicenseFact =>
     resolveLicense({
       skillFile: licenseFacts.get(directory),
       skillField:
@@ -732,7 +732,7 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
   // entry says why.
   interface Listing {
     readonly directory: RepoPath;
-    readonly skill: NewIndexEntry;
+    readonly skill: IndexEntry;
     /** Every served file inside the directory, the files of nested skills included. */
     readonly files: readonly Candidate[];
     /** The files within the read limit: what the skill is served with. */
@@ -889,7 +889,7 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
     const bytes = new TextEncoder().encode(assembleSkillDocument(input));
     listing.document = { digest: sha256Hex(bytes), size: bytes.byteLength };
   }
-  const listedSkills = new Map<string, NewIndexEntry>();
+  const listedSkills = new Map<string, IndexEntry>();
   /** The directories of the skills that leave search, and take their files with them. */
   const silenced = new Set<RepoPath>();
   for (const { directory, skill, problem, detail, document, omitted } of listings) {
@@ -920,7 +920,7 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
     });
   }
 
-  const entries: NewIndexEntry[] = files.map((entry) => {
+  const entries: IndexEntry[] = files.map((entry) => {
     const skill = skills.get(parentDirectory(entry.path));
     const indexed =
       skill !== undefined && skill.path === entry.path

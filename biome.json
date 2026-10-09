@@ -67,7 +67,7 @@
       }
     },
     {
-      "includes": ["apps/server/src/config/**"],
+      "includes": ["apps/server/src/config/**", "packages/cli/src/bin.ts"],
       "linter": {
         "rules": {
           "style": {

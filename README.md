@@ -73,7 +73,7 @@ Specifications: [address scheme](docs/specs/address.md) · [skill-repo conventio
      |   skillcdn.ai/gh/<owner>/<repo>[@ref][/path]   OAuth, or anonymous for public read
 [api]        stateless MCP over HTTP · sign-in and OAuth · permission check · meta tools · REST for the web app · webhook receiver
 [worker]     index and re-index on webhook or schedule   (same image as api, different role)
-[check]      read a working tree with the same indexer, for authors before they push   (no database)
+[check]      read a working tree with the same indexer, for authors before they push: the image's role, or the skillcdn command   (no database)
 [postgres]   content index (full-text) · permission cache · job queue · later: vectors
 [git host]   GitHub (App) · GitLab / Gitea (self-hosted, air-gapped)
 ```
@@ -92,6 +92,8 @@ packages/
   core/       address parser, skill-repo convention, permission rules, tool contracts, ports   pure TS
   db/         schema, migrations, query layer                           Drizzle + PostgreSQL
   github/     GitHub App, user-token and contents adapter               implements the git-host port
+  indexer/    the reading rules: a commit or a working tree read into an index   Node.js, no database
+  cli/        the skillcdn command for repository authors: skillcdn check        bin
 apps/server/fixtures/.repositories/  test-only repository fixtures
 deploy/       Dockerfile, compose files, the contract for whoever operates the image
 docs/         architecture, specs, ADRs, roadmap

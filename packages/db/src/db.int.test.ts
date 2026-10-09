@@ -1,4 +1,9 @@
-import { type HostRepository, NO_LICENSE, type ShowcaseTexts } from "@skillcdn/core";
+import {
+  type HostRepository,
+  type IndexEntry,
+  NO_LICENSE,
+  type ShowcaseTexts,
+} from "@skillcdn/core";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { drizzleOf } from "./client.js";
@@ -36,7 +41,6 @@ import {
   listShowcaseEntries,
   listSkillFiles,
   migrateDatabase,
-  type NewIndexEntry,
   purgeRepository,
   purgeRepositoryIndex,
   putLegalDocument,
@@ -89,7 +93,7 @@ function hostRepository(patch: Partial<HostRepository> = {}): HostRepository {
   };
 }
 
-async function readySnapshot(entries: NewIndexEntry[], bodies: Record<string, string> = {}) {
+async function readySnapshot(entries: IndexEntry[], bodies: Record<string, string> = {}) {
   const alias = { host: "gh" as const, owner: `owner${nextHostId}`, repo: "skills" };
   const repo = await saveRepository(database, alias, hostRepository(), T0);
   const snapshot = await ensureSnapshot(
@@ -124,7 +128,7 @@ async function readySnapshot(entries: NewIndexEntry[], bodies: Record<string, st
   return scope;
 }
 
-function entry(patch: Partial<NewIndexEntry> & Pick<NewIndexEntry, "path">): NewIndexEntry {
+function entry(patch: Partial<IndexEntry> & Pick<IndexEntry, "path">): IndexEntry {
   return {
     kind: "markdown",
     size: 10,

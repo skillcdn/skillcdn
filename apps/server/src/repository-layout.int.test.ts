@@ -12,9 +12,8 @@ import {
 } from "@skillcdn/core";
 import { createBlobStore } from "@skillcdn/db";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
+import { gitBlobHash, INDEX_LIMIT_DEFAULTS } from "@skillcdn/indexer";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { INDEX_LIMIT_DEFAULTS } from "./config/config.js";
-import { gitBlobHash } from "./indexer/git-hash.js";
 import { MountReader } from "./mounts/mount-reader.js";
 import { MountService } from "./mounts/mount-service.js";
 import { createFixtureHost, fixtureCommits } from "./testing/fixture-host.js";

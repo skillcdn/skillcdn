@@ -262,11 +262,13 @@ The `SKILL.md` a listed skill is served as is assembled from its sources, and it
 
 ## Checking a repository before pushing
 
-The server image has a `check` role that reads a directory as the indexer reads a commit, with the same parsers and the same limits, and prints what an agent would get: the manifest, the repository's license, every skill with its files, warnings, its license and whether the skills extension lists it, the documents outside the skills, linked references, what is not served, index diagnostics, and the instructions a client is told on connect. It needs no database and no git host, executes nothing from the directory, and exits with `1` when index diagnostics are present, so it can gate a push.
+The `skillcdn check` command (`@skillcdn/cli` on npm) reads a directory as the indexer reads a commit, with the same code, the same parsers and the same limits, and prints what an agent would get: the manifest, the repository's license, every skill with its files, warnings, its license and whether the skills extension lists it, the documents outside the skills, linked references, what is not served, index diagnostics, and the instructions a client is told on connect. It needs no database and no git host, executes nothing from the directory, and exits with `1` when index diagnostics are present, so it can gate a push. The server image has the same code as its `check` role.
 
 ```sh
-pnpm --filter @skillcdn/server run start check ../skills      # from a checkout of this repository
-node dist/main.js check /path/to/repository                    # from the image
+npx @skillcdn/cli check                                        # the current directory
+pnpm dlx @skillcdn/cli check /path/to/repository
+node packages/cli/dist/bin.js check ../skills                  # from a checkout of this repository, after pnpm build
+docker run --rm -v "$PWD:/repo:ro" skillcdn check /repo        # from the image
 ```
 
 The working-tree reader does not follow symbolic links and excludes repository administration and dependency directories. Hidden content otherwise follows the same declarations as indexing. It reads a working directory rather than a commit, so untracked or ignored files can make its report differ from what was pushed. Only the `INDEX_*` limits are read from the environment ([deploy](../../deploy/README.md)).

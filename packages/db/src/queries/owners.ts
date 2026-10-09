@@ -1,14 +1,7 @@
-import type { GitHostKey } from "@skillcdn/core";
+import type { GitHostKey, StoredTranslation } from "@skillcdn/core";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { type Database, drizzleOf } from "../client.js";
-import {
-  accounts,
-  indexEntries,
-  repoRefs,
-  repos,
-  type StoredTranslation,
-  snapshots,
-} from "../schema.js";
+import { accounts, indexEntries, repoRefs, repos, snapshots } from "../schema.js";
 
 // What the page of an account leads with (docs/adr/0037): the repositories of the account that
 // are indexed and hold skills, read from the index alone. Asking never touches the git host and

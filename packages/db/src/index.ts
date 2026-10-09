@@ -137,10 +137,8 @@ export {
   failSnapshot,
   getSnapshot,
   getSnapshotDiagnostics,
-  type NewIndexEntry,
   releaseSnapshot,
   renewSnapshotLease,
-  type SnapshotIndex,
   type SnapshotRecord,
   type SnapshotScope,
   type SnapshotStatus,
@@ -177,4 +175,3 @@ export {
   touchSession,
   type UserRecord,
 } from "./queries/users.js";
-export type { SkillFrontMatter, SnapshotDiagnostic, StoredTranslation } from "./schema.js";

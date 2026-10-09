@@ -24,6 +24,7 @@
     "@skillcdn/core": "workspace:*",
     "@skillcdn/db": "workspace:*",
     "@skillcdn/github": "workspace:*",
+    "@skillcdn/indexer": "workspace:*",
     "hono": "^4.13.12",
     "pino": "^10.3.1",
     "zod": "catalog:"

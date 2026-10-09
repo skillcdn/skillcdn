@@ -35,13 +35,15 @@ Four properties shape everything else:
 | `packages/core` | Address scheme, skill-repo convention, permission rules, tool contracts, and the ports everything else implements. Pure: no I/O, no Node APIs, usable in a browser. | nothing |
 | `packages/db` | PostgreSQL schema, migrations, query layer. | `core` |
 | `packages/github` | GitHub implementation of the git-host ports: contents, the app's installation tokens, signing in and what a person can see, the public listing of an account, and the deliveries of the app's webhook. | `core` |
-| `apps/server` | Composition root: configuration, HTTP and MCP surface, jobs, adapter wiring. | `core`, `db`, `github` |
+| `packages/indexer` | The reading rules ([ADR-0045](adr/0045-the-indexer-is-a-package-and-check-is-a-command.md)): a commit read into an index through the git-host port, a working tree read the same way for `check`, `INDEX_VERSION`, and the limits with the variables they are read from. Node.js only: no database, no environment. | `core` |
+| `packages/cli` | The `skillcdn` command for repository authors: `skillcdn check [directory]`. Arguments, environment and exit codes; the rules are the indexer's. | `indexer` |
+| `apps/server` | Composition root: configuration, HTTP and MCP surface, jobs, adapter wiring. | `core`, `db`, `github`, `indexer` |
 | `apps/web` | Optional web UI: landing page and explorer, in several languages. Talks to `api` over REST only; builds to static files, prerendered per language ([ADR-0009](adr/0009-web-ui-prerendered-per-language.md)), plus a render module the server calls for the page of an address ([ADR-0011](adr/0011-address-pages-rendered-on-the-server.md)) and for the front page with the operator's showcase ([ADR-0028](adr/0028-the-front-page-and-the-explorer-are-operator-content.md)). | `core` (types, schemas, address parsing) |
 
 Where new things go:
 
 - A new git host is a new package that implements the git-host port from `core`.
-- The indexing pipeline, MCP handlers, job definitions and the S3 blob-store adapter start as modules inside `apps/server`. They move into a package when a second consumer appears, not before.
+- MCP handlers, job definitions and the S3 blob-store adapter start as modules inside `apps/server`. They move into a package when a second consumer appears, not before: the indexing pipeline moved to `packages/indexer` when the `check` command became one ([ADR-0045](adr/0045-the-indexer-is-a-package-and-check-is-a-command.md)).
 - Anything that needs the network, the clock, randomness or the environment is a port in `core` with an adapter elsewhere.
 
 ## Runtime: one image, several roles
@@ -53,7 +55,7 @@ Where new things go:
 | `api` | Serves HTTP. Holds no state another replica needs. | Any number of replicas. |
 | `worker` | Consumes the job queue and runs schedules. Jobs are idempotent and resumable, so a worker may be stopped at any moment. | Any number; interruptible capacity is fine. |
 | `migrate` | Applies pending migrations, then exits. | Run once, before a new version rolls out. |
-| `check` | Reads a directory as the indexer reads a commit and prints what an agent would get; for repository authors, before they push ([ADR-0020](adr/0020-a-check-role-reads-a-working-tree-with-the-indexer.md)). Needs no database and no git host. | Runs on an author's machine or in a repository's CI, then exits. |
+| `check` | Reads a directory as the indexer reads a commit and prints what an agent would get; for repository authors, before they push ([ADR-0020](adr/0020-a-check-role-reads-a-working-tree-with-the-indexer.md)). Needs no database and no git host. The same code is the `skillcdn check` command of `packages/cli`, for authors without the image. | Runs on an author's machine or in a repository's CI, then exits. |
 | `purge` | Removes what was indexed for one repository, then exits ([ADR-0026](adr/0026-serving-follows-the-license-and-the-operators-lists.md)). The same purge is a route of the admin API. | Runs from an operator's shell when content must go. |
 
 For a single-container install, a configuration flag lets `api` run the worker loop in-process.

@@ -65,7 +65,7 @@ async function run(role: Exclude<Role, "check">, argument: string | undefined): 
 async function runCheck(directory: string): Promise<void> {
   try {
     const limits = loadIndexLimits();
-    const { checkDirectory } = await import("./roles/check.js");
+    const { checkDirectory } = await import("@skillcdn/indexer");
     process.exitCode = await checkDirectory({
       directory,
       limits,

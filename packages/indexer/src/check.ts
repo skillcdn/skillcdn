@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
+import type { IndexEntry } from "@skillcdn/core";
 import {
   type BlobStore,
   BROWSE_DEFAULT_LIMIT,
@@ -26,9 +27,8 @@ import {
   splitFrontMatter,
   type TreeEntry,
 } from "@skillcdn/core";
-import type { NewIndexEntry } from "@skillcdn/db";
-import { buildSnapshotIndex } from "../indexer/build-index.js";
-import { gitBlobHash } from "../indexer/git-hash.js";
+import { buildSnapshotIndex } from "./build-index.js";
+import { gitBlobHash } from "./git-hash.js";
 
 // The `check` role: a working tree read by the same indexer that reads a commit, and a report
 // of what an agent would get. For repository authors, before they push; it needs no database
@@ -137,14 +137,14 @@ async function readWorkingTree(
   return { files, skipped };
 }
 
-function warningsLine(entry: NewIndexEntry, indent: string): string {
+function warningsLine(entry: IndexEntry, indent: string): string {
   const warnings = entry.frontMatter?.warnings ?? [];
   return warnings.length === 0
     ? `${indent}warnings: none\n`
     : `${indent}warnings:\n${warnings.map((warning) => `${indent}- ${warning}\n`).join("")}`;
 }
 
-function translationsLine(entry: NewIndexEntry, indent: string): string {
+function translationsLine(entry: IndexEntry, indent: string): string {
   const tags = Object.keys(entry.frontMatter?.translations ?? {});
   return tags.length === 0 ? "" : `${indent}translations: ${tags.join(", ")}\n`;
 }
@@ -209,7 +209,7 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
     signal: new AbortController().signal,
   });
 
-  const byPath = (a: NewIndexEntry, b: NewIndexEntry): number => (a.path < b.path ? -1 : 1);
+  const byPath = (a: IndexEntry, b: IndexEntry): number => (a.path < b.path ? -1 : 1);
   const manifest = index.entries.find(
     (entry) => entry.visible && entry.kind === "manifest" && entry.path === "SKILLCDN.md",
   );
@@ -231,7 +231,7 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
     code: diagnostic.code,
     message: diagnostic.message,
   }));
-  const rulesOf = (entry: NewIndexEntry): string => {
+  const rulesOf = (entry: IndexEntry): string => {
     const text = texts.get(entry.blobSha);
     const split = text === undefined ? undefined : splitFrontMatter(text);
     return split?.kind === "found" ? split.body.trim() : "";

@@ -11,11 +11,6 @@
     "types": ["node"]
   },
   "include": ["src"],
-  "exclude": ["src/**/*.test.ts", "src/testing/**"],
-  "references": [
-    { "path": "../../packages/core/tsconfig.build.json" },
-    { "path": "../../packages/db/tsconfig.build.json" },
-    { "path": "../../packages/github/tsconfig.build.json" },
-    { "path": "../../packages/indexer/tsconfig.build.json" }
-  ]
+  "exclude": ["src/**/*.test.ts"],
+  "references": [{ "path": "../indexer/tsconfig.build.json" }]
 }

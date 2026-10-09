@@ -1,6 +1,7 @@
 import { createPrivateKey } from "node:crypto";
 import { readFileSync } from "node:fs";
 import type { IndexLimits } from "@skillcdn/core";
+import { readIndexLimits } from "@skillcdn/indexer";
 import * as z from "zod";
 import { type Cidr, parseCidr } from "../http/client-address.js";
 
@@ -26,16 +27,6 @@ const SIGN_IN_NAMES = [
 ] as const;
 /** Shorter than this, a token or a secret is guessable enough to be a mistake. */
 const MIN_SECRET_LENGTH = 32;
-
-/** The limits on the work one repository may cause, unless the `INDEX_*` variables say otherwise. */
-export const INDEX_LIMIT_DEFAULTS: IndexLimits = {
-  maxTreeEntries: 20_000,
-  maxIndexedFiles: 2000,
-  maxIndexedFileBytes: 262_144,
-  maxIndexedTotalBytes: 33_554_432,
-  maxReadableFileBytes: 2_097_152,
-  maxArchiveBytes: 268_435_456,
-};
 
 const integer = (fallback: number, min: number, max: number) =>
   z.coerce.number().int().min(min).max(max).default(fallback);
@@ -72,27 +63,6 @@ const cidrList = z
     }
     return networks;
   });
-
-const indexLimitFields = {
-  INDEX_MAX_TREE_ENTRIES: integer(INDEX_LIMIT_DEFAULTS.maxTreeEntries, 1, 1_000_000),
-  INDEX_MAX_FILES: integer(INDEX_LIMIT_DEFAULTS.maxIndexedFiles, 1, 100_000),
-  INDEX_MAX_FILE_BYTES: integer(INDEX_LIMIT_DEFAULTS.maxIndexedFileBytes, 1024, 16_777_216),
-  INDEX_MAX_TOTAL_BYTES: integer(INDEX_LIMIT_DEFAULTS.maxIndexedTotalBytes, 1024, 1_073_741_824),
-  READ_MAX_FILE_BYTES: integer(INDEX_LIMIT_DEFAULTS.maxReadableFileBytes, 1024, 16_777_216),
-  INDEX_MAX_ARCHIVE_BYTES: integer(INDEX_LIMIT_DEFAULTS.maxArchiveBytes, 1_048_576, 17_179_869_184),
-};
-const indexLimitsSchema = z.object(indexLimitFields);
-
-function indexLimitsOf(env: z.infer<typeof indexLimitsSchema>): IndexLimits {
-  return {
-    maxTreeEntries: env.INDEX_MAX_TREE_ENTRIES,
-    maxIndexedFiles: env.INDEX_MAX_FILES,
-    maxIndexedFileBytes: env.INDEX_MAX_FILE_BYTES,
-    maxIndexedTotalBytes: env.INDEX_MAX_TOTAL_BYTES,
-    maxReadableFileBytes: env.READ_MAX_FILE_BYTES,
-    maxArchiveBytes: env.INDEX_MAX_ARCHIVE_BYTES,
-  };
-}
 
 const environmentSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("production"),
@@ -187,7 +157,6 @@ const environmentSchema = z.object({
   // 0: this process indexes nothing and serves only what another process has indexed.
   INDEX_CONCURRENCY: integer(2, 0, 64),
   INDEX_LEASE_SECONDS: integer(120, 10, 3600),
-  ...indexLimitFields,
 });
 
 export interface WebTags {
@@ -422,7 +391,13 @@ export function loadConfig(
       );
     }
   }
-  if (!parsed.success || problems.length > 0) {
+  const limits = readIndexLimits(present);
+  if (!limits.ok) {
+    for (const problem of limits.error) {
+      problems.push(`${problem.variable}: ${problem.rule}`);
+    }
+  }
+  if (!parsed.success || !limits.ok || problems.length > 0) {
     throw new ConfigError(problems);
   }
 
@@ -475,7 +450,7 @@ export function loadConfig(
       waitMs: env.INDEX_WAIT_MS,
       concurrency: env.INDEX_CONCURRENCY,
       leaseMs: env.INDEX_LEASE_SECONDS * 1000,
-      limits: indexLimitsOf(env),
+      limits: limits.value,
     },
   };
 }
@@ -485,14 +460,9 @@ export function loadConfig(
  * database nor a git host: the rest of the environment is not looked at.
  */
 export function loadIndexLimits(environment: Environment = process.env): IndexLimits {
-  const present = Object.fromEntries(
-    Object.entries(environment).filter(([, value]) => value !== undefined && value !== ""),
-  );
-  const parsed = indexLimitsSchema.safeParse(present);
-  if (!parsed.success) {
-    throw new ConfigError(
-      parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`),
-    );
+  const limits = readIndexLimits(environment);
+  if (!limits.ok) {
+    throw new ConfigError(limits.error.map((problem) => `${problem.variable}: ${problem.rule}`));
   }
-  return indexLimitsOf(parsed.data);
+  return limits.value;
 }

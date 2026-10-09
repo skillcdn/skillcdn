@@ -1,4 +1,4 @@
-import { type HostRepository, NO_LICENSE } from "@skillcdn/core";
+import { type HostRepository, type IndexEntry, NO_LICENSE } from "@skillcdn/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   claimSnapshot,
@@ -32,7 +32,6 @@ import {
   listOAuthGrants,
   listRepoTokens,
   markRepositoryNotPublic,
-  type NewIndexEntry,
   type OAuthTokenPair,
   revokeOAuthToken,
   rotateOAuthRefresh,
@@ -828,7 +827,7 @@ describe("what an event of the git host ends", () => {
 });
 
 describe("the indexed repositories of an account", () => {
-  const entry = (path: string, patch: Partial<NewIndexEntry> = {}): NewIndexEntry => ({
+  const entry = (path: string, patch: Partial<IndexEntry> = {}): IndexEntry => ({
     path,
     kind: "markdown",
     size: 10,
@@ -843,7 +842,7 @@ describe("the indexed repositories of an account", () => {
     visible: true,
     ...patch,
   });
-  const skill = (directory: string, name: string, patch: Partial<NewIndexEntry> = {}) =>
+  const skill = (directory: string, name: string, patch: Partial<IndexEntry> = {}) =>
     entry(`${directory}/SKILL.md`, {
       kind: "skill",
       skillDir: directory,
@@ -856,7 +855,7 @@ describe("the indexed repositories of an account", () => {
   async function indexed(
     owner: HostRepository["owner"],
     name: string,
-    entries: NewIndexEntry[],
+    entries: IndexEntry[],
     options: { visibility?: "public" | "private"; status?: "ready" | "pending" } = {},
   ) {
     const repo = await saveRepository(

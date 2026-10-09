@@ -42,12 +42,14 @@ packages/
   core/       pure domain logic and ports; no I/O, no Node APIs
   db/         PostgreSQL schema, migrations, query layer
   github/     GitHub implementation of the git-host port
+  indexer/    the reading rules: a commit or a working tree read into an index, and the check
+  cli/        the skillcdn command for repository authors: skillcdn check
 apps/server/fixtures/.repositories/  test-only repository fixtures; the public reference repository is skillcdn/skills
 deploy/       Dockerfile, compose files, the contract for whoever operates the image
 docs/         architecture, specs, ADRs, roadmap
 ```
 
-Dependencies point inward only: `server → db, github → core`. `core` imports nothing from the workspace and nothing from Node. `web` may import `core` and nothing else. A package can only import what its own `package.json` declares, and only from another package's entry point (never `@skillcdn/x/src/...`). Changing these edges needs an ADR.
+Dependencies point inward only: `server → db, github, indexer → core`, and `cli → indexer`. `core` imports nothing from the workspace and nothing from Node. `web` may import `core` and nothing else. A package can only import what its own `package.json` declares, and only from another package's entry point (never `@skillcdn/x/src/...`). Changing these edges needs an ADR.
 
 ## Commands
 

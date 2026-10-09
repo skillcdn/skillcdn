@@ -48,6 +48,7 @@ import {
   type SkillRules,
   type SkillServing,
   type SkillTranslation,
+  type StoredTranslation,
   servesInFull,
   skillDocumentInput,
   skillUriPrefix,
@@ -71,7 +72,6 @@ import {
   listSkillResources,
   type SnapshotRecord,
   type SnapshotScope,
-  type StoredTranslation,
   searchEntries,
   servedEntries,
 } from "@skillcdn/db";

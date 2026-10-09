@@ -3,6 +3,7 @@ import {
   GitHostError,
   INDEXING_NOTICE,
   INSTRUCTIONS_MAX_LENGTH,
+  type IndexEntry,
   NO_LICENSE,
   PROVENANCE_NOTICE,
 } from "@skillcdn/core";
@@ -12,14 +13,13 @@ import {
   ensureSnapshot,
   findCachedRef,
   findRepoByAlias,
-  type NewIndexEntry,
   saveCachedRef,
   writeSnapshotIndex,
 } from "@skillcdn/db";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
+import { INDEX_VERSION } from "@skillcdn/indexer";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as z from "zod";
-import { INDEX_VERSION } from "./indexer/build-index.js";
 import { createFixtureHost, fixtureCommits } from "./testing/fixture-host.js";
 import { CURRENT_REVISION, createHarness, type HarnessOptions } from "./testing/harness.js";
 import { listedPaths } from "./testing/tool-text.js";
@@ -968,7 +968,7 @@ describe("an index rebuilt under newer reading rules", () => {
     );
     const scope = { accountId: snapshot.accountId, snapshotId: snapshot.id };
     expect(await claimSnapshot(database, scope, "newer-process", now, 60_000)).toBeDefined();
-    const rebuilt: NewIndexEntry = {
+    const rebuilt: IndexEntry = {
       path: "SKILL.md",
       kind: "skill",
       size: 1,

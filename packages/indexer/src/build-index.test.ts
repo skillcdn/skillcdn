@@ -15,9 +15,9 @@ import {
   type TreeEntry,
 } from "@skillcdn/core";
 import { describe, expect, it } from "vitest";
-import { INDEX_LIMIT_DEFAULTS } from "../config/config.js";
 import { buildSnapshotIndex } from "./build-index.js";
 import { gitBlobHash } from "./git-hash.js";
+import { INDEX_LIMIT_DEFAULTS } from "./limits.js";
 
 function path(value: string): RepoPath {
   const parsed = parseRepoPath(value);
