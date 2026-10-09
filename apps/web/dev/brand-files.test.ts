@@ -125,6 +125,25 @@ describe("the brand files", () => {
     expect(storedFirstPixel(bytes)).toEqual([255, 255, 255, 0]);
   });
 
+  it("ship the symbol with room around it as an account picture, transparent and on white", async () => {
+    const transparent = readFileSync(publicFile("brand/avatar.png"));
+    const avatar = await picture(transparent);
+    expect([avatar.width, avatar.height]).toEqual([1024, 1024]);
+    expect(avatar.at(0, 0)[3], "transparent at the corner").toBe(0);
+    expect(avatar.at(512, 0)[3], "room above the symbol").toBe(0);
+    expect(avatar.symbol, "the share of the picture that is the symbol").toBeGreaterThan(0.15);
+    expect(avatar.symbol, "the symbol keeps its room").toBeLessThan(0.35);
+    expect(storedFirstPixel(transparent)).toEqual([255, 255, 255, 0]);
+
+    const tile = await picture(readFileSync(publicFile("brand/avatar-white.png")));
+    expect([tile.width, tile.height]).toEqual([1024, 1024]);
+    expect(tile.transparent, "opaque throughout").toBe(0);
+    expect(tile.at(0, 0)).toEqual([255, 255, 255, 255]);
+    expect(tile.at(512, 0)).toEqual([255, 255, 255, 255]);
+    expect(tile.symbol).toBeGreaterThan(0.15);
+    expect(tile.symbol).toBeLessThan(0.35);
+  });
+
   it("ship the lockup as pictures, each with the ground it is meant for underneath", async () => {
     for (const [colour, ground] of [
       ["black", [255, 255, 255, 0]],

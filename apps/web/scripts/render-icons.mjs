@@ -25,6 +25,9 @@ const publicDir = join(dirname(fileURLToPath(import.meta.url)), "..", "public");
 
 /** How much of a tile's height the symbol takes: inside the safe zone of a maskable icon. */
 const TILE_SYMBOL_HEIGHT = 0.58;
+/** How much of an account picture the symbol takes: room around it for the rounding and the ring. */
+const AVATAR_SYMBOL_HEIGHT = 0.64;
+const AVATAR_SIZE = 1024;
 
 /** The ground of the tiles: what the manifest says the pages open on. */
 const manifest = JSON.parse(readFileSync(join(publicDir, "manifest.webmanifest"), "utf8"));
@@ -148,6 +151,14 @@ const files = {
   "icon-512.png": tile(512),
   "favicon.ico": ico([16, 32, 48].map((size) => ({ size, png: transparent(size) }))),
   "brand/symbol.png": transparent(512),
+  // The account picture (the organization's on the git host): the symbol with room around it,
+  // transparent and white underneath, and on a white tile for a place that cannot show that.
+  "brand/avatar.png": transparentPng(draw(AVATAR_SIZE, AVATAR_SIZE * AVATAR_SYMBOL_HEIGHT), WHITE),
+  "brand/avatar-white.png": draw(
+    AVATAR_SIZE,
+    AVATAR_SIZE * AVATAR_SYMBOL_HEIGHT,
+    "#ffffff",
+  ).toBuffer("image/png"),
   "brand/logo-black.png": transparentPng(drawLockup(1200, "#000000"), WHITE),
   "brand/logo-white.png": transparentPng(drawLockup(1200, "#ffffff"), BLACK),
 };
