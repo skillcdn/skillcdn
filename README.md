@@ -124,6 +124,8 @@ On npm, under the `@skillcdn` scope, each with its own version and changelog ([A
 | [`@skillcdn/indexer`](https://www.npmjs.com/package/@skillcdn/indexer) | [![npm](https://img.shields.io/npm/v/@skillcdn/indexer)](https://www.npmjs.com/package/@skillcdn/indexer) | the reading rules: a commit or a working tree read into an index |
 | [`@skillcdn/core`](https://www.npmjs.com/package/@skillcdn/core) | [![npm](https://img.shields.io/npm/v/@skillcdn/core)](https://www.npmjs.com/package/@skillcdn/core) | the contracts: addresses, the convention, tool and REST schemas, the ports |
 
+**Related repositories.** [`skillcdn/skills`](https://github.com/skillcdn/skills) is the reference skill repository, the one the explorer offers to try. [`skillcdn/console`](https://github.com/skillcdn/console) is the reference console: where an organization runs its work with AI agents, a board of the work, the agents at it, and the decisions that wait for a person. Like the skills repository, it is an example that follows the standard and is meant for real use, packaged on npm so that anyone can start from it; it builds on the published packages and the REST API like any other consumer, defines nothing of the specification, and nothing here depends on it ([ADR-0047](docs/adr/0047-the-console-is-a-separate-repository-built-on-the-published-packages.md)).
+
 
 | | hosted (skillcdn.ai) | self-hosted / air-gapped |
 |---|---|---|

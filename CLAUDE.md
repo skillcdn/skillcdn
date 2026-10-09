@@ -49,6 +49,8 @@ deploy/       Dockerfile, compose files, the contract for whoever operates the i
 docs/         architecture, specs, ADRs, roadmap
 ```
 
+Two reference repositories sit beside this one and are never imported from it: `skillcdn/skills`, the reference skill repository, and `skillcdn/console`, the reference console for an organization that runs its work with agents. Both are examples that follow the standard and are meant for real use; the console consumes the published packages and the REST API like any other consumer and defines nothing of the specification ([ADR-0047](docs/adr/0047-the-console-is-a-separate-repository-built-on-the-published-packages.md)).
+
 Dependencies point inward only: `server → db, github, indexer → core`, and `cli → indexer`. `core` imports nothing from the workspace and nothing from Node. `web` may import `core` and nothing else. A package can only import what its own `package.json` declares, and only from another package's entry point (never `@skillcdn/x/src/...`). Changing these edges needs an ADR.
 
 ## Commands

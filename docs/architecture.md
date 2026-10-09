@@ -46,6 +46,13 @@ Where new things go:
 - MCP handlers, job definitions and the S3 blob-store adapter start as modules inside `apps/server`. They move into a package when a second consumer appears, not before: the indexing pipeline moved to `packages/indexer` when the `check` command became one ([ADR-0045](adr/0045-the-indexer-is-a-package-and-check-is-a-command.md)).
 - Anything that needs the network, the clock, randomness or the environment is a port in `core` with an adapter elsewhere.
 
+## Related repositories
+
+Two reference repositories sit beside this one: examples that follow the standard and are meant for real use. Nothing here imports from either, and neither defines anything of the specification:
+
+- [`skillcdn/skills`](https://github.com/skillcdn/skills), the reference skill repository, in the format [specs/skill-repo.md](specs/skill-repo.md) specifies: what the explorer offers to try, and the one a fresh deployment shows.
+- [`skillcdn/console`](https://github.com/skillcdn/console), the reference console: where an organization runs its work with AI agents, a board of the work, the agents at it, and the decisions that wait for a person. It has its own repository, versions and releases, and is packaged on npm so that anyone can build their own console from it ([ADR-0047](adr/0047-the-console-is-a-separate-repository-built-on-the-published-packages.md)). It consumes `@skillcdn/core` from npm and the REST API of a deployment, like any other consumer; `apps/web` stays the UI of a deployment.
+
 ## Runtime: one image, several roles
 
 `apps/server` builds into a single container image. The container command selects the role:
