@@ -114,6 +114,58 @@ describe("summarizeMarkdown", () => {
     expect(summarizeMarkdown(text).description).toBe("See the guide for details, really.");
   });
 
+  it("skips an HTML block to the blank line that ends it, however its lines are indented", () => {
+    const text = [
+      '<div align="center">',
+      '  <a href="https://example.com/">',
+      "    <picture>",
+      '      <source media="(prefers-color-scheme: dark)" srcset="dark.svg">',
+      '      <img alt="Example" src="light.svg" width="360">',
+      "    </picture>",
+      "  </a>",
+      "  <p><strong>One line of promise.</strong></p>",
+      "</div>",
+      "",
+      "> **Status: early.** Not a promise.",
+      "",
+      "Point an agent at an address and it gets the skills.",
+      "",
+    ].join("\n");
+    expect(summarizeMarkdown(text)).toEqual({
+      title: undefined,
+      description: "Point an agent at an address and it gets the skills.",
+      body: text,
+    });
+  });
+
+  it("skips a comment and a raw-text element to their closing marker, blank lines included", () => {
+    const comment = [
+      "<!--",
+      "a note",
+      "",
+      "# not a title",
+      "-->",
+      "",
+      "# Title",
+      "",
+      "The intro.",
+      "",
+    ].join("\n");
+    expect(summarizeMarkdown(comment)).toMatchObject({ title: "Title", description: "The intro." });
+    const pre = ["<pre>", "", "# not a title", "</pre>", "", "The intro.", ""].join("\n");
+    expect(summarizeMarkdown(pre).description).toBe("The intro.");
+    const script = ["<script>", "", "let x = 1;", "</script>", "", "The intro.", ""].join("\n");
+    expect(summarizeMarkdown(script).description).toBe("The intro.");
+    const closed = ["<!-- one line -->", "<pre>x</pre>", "The intro.", ""].join("\n");
+    expect(summarizeMarkdown(closed).description).toBe("The intro.");
+  });
+
+  it("does not take a tag's name for a raw-text element's", () => {
+    // `<preview>` is not `<pre>`: the block ends at the blank line, not at a closing tag that never comes.
+    const text = ["<preview>", "  <b>x</b>", "</preview>", "", "The intro.", ""].join("\n");
+    expect(summarizeMarkdown(text).description).toBe("The intro.");
+  });
+
   it("keeps the front-matter description over the body", () => {
     const text = "---\ndescription: From the front-matter.\n---\n# T\n\nFrom the body.\n";
     expect(summarizeMarkdown(text).description).toBe("From the front-matter.");
@@ -146,6 +198,11 @@ describe("summarizeMarkdown with hostile input", () => {
     const started = Date.now();
     expect(summarizeMarkdown(hostile).title).toBeUndefined();
     expect(Date.now() - started).toBeLessThan(1000);
+  });
+
+  it("leaves no description for an HTML block that never ends, within the lines it scans", () => {
+    const text = `<div>\n${"a line of it\n".repeat(300)}\nThe intro.\n`;
+    expect(summarizeMarkdown(text).description).toBeUndefined();
   });
 
   it("only scans the top of the document", () => {

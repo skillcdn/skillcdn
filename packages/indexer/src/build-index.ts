@@ -58,7 +58,7 @@ import { gitBlobHash, sha256Hex } from "./git-hash.js";
  * is rebuilt when it is next asked for (`ensureSnapshot` in @skillcdn/db); without the bump, a
  * deployment keeps serving what the old rules produced until the repository moves on.
  */
-export const INDEX_VERSION = 9;
+export const INDEX_VERSION = 10;
 
 const MAX_DIAGNOSTICS = 50;
 const FETCH_CONCURRENCY = 8;
