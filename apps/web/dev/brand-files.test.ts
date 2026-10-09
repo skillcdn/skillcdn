@@ -41,15 +41,26 @@ async function picture(bytes: Uint8Array) {
   };
   let symbol = 0;
   let transparent = 0;
+  let other = 0;
   for (let y = 0; y < image.height; y++) {
     for (let x = 0; x < image.width; x++) {
       const pixel = at(x, y);
       if (pixel[3] === 0) transparent++;
       else if (near(pixel, SYMBOL_BLUE)) symbol++;
+      else if (pixel[3] === 255) other++;
     }
   }
   const area = image.width * image.height;
-  return { width: image.width, height: image.height, at, symbol: symbol / area, transparent };
+  // `symbol` is the share of the picture in the symbol's blue; `other` counts the opaque pixels
+  // of any other colour, which a transparent picture of the symbol must not have.
+  return {
+    width: image.width,
+    height: image.height,
+    at,
+    symbol: symbol / area,
+    transparent,
+    other,
+  };
 }
 
 /**
@@ -122,10 +133,11 @@ describe("the brand files", () => {
     expect([symbol.width, symbol.height]).toEqual([512, 512]);
     expect(symbol.at(0, 0)[3], "transparent at the corner").toBe(0);
     expect(symbol.symbol, "the share of the picture that is the symbol").toBeGreaterThan(0.5);
+    expect(symbol.other, "no colour but the symbol's blue").toBe(0);
     expect(storedFirstPixel(bytes)).toEqual([255, 255, 255, 0]);
   });
 
-  it("ship the symbol with room around it as an account picture, transparent and on white", async () => {
+  it("ship the symbol with room around it as an account picture, transparent, white underneath", async () => {
     const transparent = readFileSync(publicFile("brand/avatar.png"));
     const avatar = await picture(transparent);
     expect([avatar.width, avatar.height]).toEqual([1024, 1024]);
@@ -134,14 +146,7 @@ describe("the brand files", () => {
     expect(avatar.symbol, "the share of the picture that is the symbol").toBeGreaterThan(0.15);
     expect(avatar.symbol, "the symbol keeps its room").toBeLessThan(0.35);
     expect(storedFirstPixel(transparent)).toEqual([255, 255, 255, 0]);
-
-    const tile = await picture(readFileSync(publicFile("brand/avatar-white.png")));
-    expect([tile.width, tile.height]).toEqual([1024, 1024]);
-    expect(tile.transparent, "opaque throughout").toBe(0);
-    expect(tile.at(0, 0)).toEqual([255, 255, 255, 255]);
-    expect(tile.at(512, 0)).toEqual([255, 255, 255, 255]);
-    expect(tile.symbol).toBeGreaterThan(0.15);
-    expect(tile.symbol).toBeLessThan(0.35);
+    expect(avatar.other, "no colour but the symbol's blue").toBe(0);
   });
 
   it("ship the lockup as pictures, each with the ground it is meant for underneath", async () => {

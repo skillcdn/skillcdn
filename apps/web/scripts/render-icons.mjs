@@ -151,14 +151,9 @@ const files = {
   "icon-512.png": tile(512),
   "favicon.ico": ico([16, 32, 48].map((size) => ({ size, png: transparent(size) }))),
   "brand/symbol.png": transparent(512),
-  // The account picture (the organization's on the git host): the symbol with room around it,
-  // transparent and white underneath, and on a white tile for a place that cannot show that.
+  // The account picture (the organization's on the git host): the symbol, in its own blue as
+  // everywhere, with room around it, transparent and white underneath.
   "brand/avatar.png": transparentPng(draw(AVATAR_SIZE, AVATAR_SIZE * AVATAR_SYMBOL_HEIGHT), WHITE),
-  "brand/avatar-white.png": draw(
-    AVATAR_SIZE,
-    AVATAR_SIZE * AVATAR_SYMBOL_HEIGHT,
-    "#ffffff",
-  ).toBuffer("image/png"),
   "brand/logo-black.png": transparentPng(drawLockup(1200, "#000000"), WHITE),
   "brand/logo-white.png": transparentPng(drawLockup(1200, "#ffffff"), BLACK),
 };
