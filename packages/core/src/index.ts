@@ -16,6 +16,7 @@ export {
   parseAddress,
   parseOwnerPath,
 } from "./address.js";
+export { renderBrandBadge } from "./badge.js";
 export {
   BRAND_LOCKUP_WIDTH,
   BRAND_SYMBOL_COLOR,
@@ -301,6 +302,7 @@ export {
   VIDEO_CONTENT_TYPES,
 } from "./rest/showcase.js";
 export {
+  BADGE_ROUTE,
   ICON_ROUTE,
   ICON_SIZE,
   SOCIAL_CARD_SIZE,

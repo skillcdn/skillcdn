@@ -15,6 +15,13 @@ export const SOCIAL_ROUTE = "/social";
 export const ICON_ROUTE = "/icon";
 export const ICON_SIZE = 128;
 
+/**
+ * Where the server answers the badge of an address, `/badge/gh/<owner>/<repo>...`: the symbol,
+ * the name of the service and how many skills the address serves, as an SVG for the README of
+ * the repository (`renderBrandBadge` draws it).
+ */
+export const BADGE_ROUTE = "/badge";
+
 /** The size link previews expect. */
 export const SOCIAL_CARD_SIZE = { width: 1200, height: 630 } as const;
 

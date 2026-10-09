@@ -4,6 +4,7 @@ import {
   ACCOUNT_PAGE_PATH,
   type Address,
   accountAvatarUrl,
+  BADGE_ROUTE,
   type Clock,
   CONSENT_PAGE_PATH,
   formatAddress,
@@ -22,8 +23,10 @@ import {
   parseOwnerPath,
   REPO_TOKEN_PREFIX,
   REST_MOUNT_LIST_LIMIT,
+  type RestMount,
   type RestShowcase,
   type RestSkill,
+  renderBrandBadge,
   SOCIAL_ROUTE,
 } from "@skillcdn/core";
 import { type Database, getSchemaStatus, type UserRecord } from "@skillcdn/db";
@@ -564,6 +567,48 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
     });
   }
 
+  // The badge of an address (specs/rest.md): the symbol, the name of the service and how many
+  // skills the address serves, as an SVG for the README of the repository. Asking for it
+  // resolves the address and starts indexing it, as the page does; until the index is ready the
+  // badge says so and is kept only briefly, so that the next look gets the count.
+  app.on(["GET", "HEAD"], `${BADGE_ROUTE}/*`, async (c) => {
+    const request = webRequestOf(c);
+    const parsed = parseAddress(request.url.pathname.slice(BADGE_ROUTE.length));
+    if (!parsed.ok) {
+      return c.notFound();
+    }
+    let mount: Mount;
+    try {
+      mount = await mounts.resolve(parsed.value);
+      startIndexing(mount);
+    } catch (error) {
+      if (error instanceof MountError) {
+        return c.notFound();
+      }
+      throw error;
+    }
+    try {
+      const body = mountBody(mount, await reader.overview(mount, REST_MOUNT_LIST_LIMIT));
+      const value = badgeValue(body.index);
+      const key = [body.address, mount.commit, value].join("\n");
+      return bytesResponse(request, {
+        bytes: new TextEncoder().encode(renderBrandBadge(value)),
+        contentType: "image/svg+xml; charset=utf-8",
+        etag: `"${createHash("sha1").update(key).digest("hex")}"`,
+        cacheControl: body.index.status === "ready" ? "public, max-age=3600" : "public, max-age=60",
+      });
+    } catch (error) {
+      if (error instanceof ReaderInputError) {
+        return c.notFound();
+      }
+      const known = hostFailure(error);
+      if (known === undefined) {
+        throw error;
+      }
+      return c.json(errorBody(known.code, known.message), known.status as 503);
+    }
+  });
+
   // The icon of the MCP server of an address (specs/tools.md): the owner's picture as the git
   // host serves it, at one size, from this origin, because a client fetches a server's icon from
   // the server's own origin and from nowhere else. Fetched without credentials and kept for a
@@ -950,4 +995,11 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
   });
 
   return app;
+}
+/** What the badge of an address says: the count once the index is ready, else where it stands. */
+function badgeValue(index: RestMount["index"]): string {
+  if (index.status === "ready") {
+    return index.skillCount === 1 ? "1 skill" : `${index.skillCount} skills`;
+  }
+  return index.status === "indexing" ? "indexing" : "unavailable";
 }

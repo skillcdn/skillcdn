@@ -361,6 +361,43 @@ describe("a server with a web build", () => {
     expect((await h.request("/social/not%20an%20address")).status).toBe(404);
   });
 
+  it("answers the badge of an address with how many skills it serves", async () => {
+    const host = createFixtureHost("web-badge");
+    const h = createHarness(testDatabase, { web, host });
+    const address = `/gh/acme/multi-skill@${fixtureCommits("web-badge").main}`;
+
+    // Asked for before the index is ready, the badge says so and is kept only briefly.
+    const early = await h.request(`/badge${address}`);
+    expect(early.status).toBe(200);
+    expect(early.headers.get("content-type")).toBe("image/svg+xml; charset=utf-8");
+    await h.snapshots.idle();
+    const mount = (await (await h.request(`/api/v1/mounts${address}`)).json()) as {
+      readonly index: { readonly status: string; readonly skillCount?: number };
+    };
+    expect(mount.index.status).toBe("ready");
+
+    const badge = await h.request(`/badge${address}`);
+    expect(badge.status).toBe(200);
+    expect(badge.headers.get("content-type")).toBe("image/svg+xml; charset=utf-8");
+    expect(badge.headers.get("cache-control")).toBe("public, max-age=3600");
+    const svg = await badge.text();
+    expect(svg).toContain(`>${mount.index.skillCount} skills</text>`);
+    expect(svg).toContain(`aria-label="SkillCDN: ${mount.index.skillCount} skills"`);
+    expect(svg).toContain(">SkillCDN</text>");
+    if (early.headers.get("cache-control") === "public, max-age=60") {
+      expect(await early.text()).toContain(">indexing</text>");
+    }
+
+    // The same badge is answered as unchanged; an address that is nothing has none.
+    const again = await h.request(`/badge${address}`, {
+      headers: { "if-none-match": badge.headers.get("etag") ?? "" },
+    });
+    expect(again.status).toBe(304);
+    expect((await h.request(`/badge${address}`, { method: "HEAD" })).status).toBe(200);
+    expect((await h.request("/badge/gh/acme/no-such-repo")).status).toBe(404);
+    expect((await h.request("/badge/not%20an%20address")).status).toBe(404);
+  });
+
   it("lists the featured and the vouched-for repositories in the sitemap, with the pages of their accounts, and nothing else", async () => {
     // Until the operator features something, the reference repository is featured (ADR-0028).
     const fresh = createHarness(testDatabase, { web });
@@ -489,8 +526,9 @@ describe("the pages of a deployment where people sign in", () => {
     // A public repository's page is the same for everyone, signed in or not, and may be kept.
     const open = await h.request("/gh/acme/multi-skill", { headers: { ...BROWSER, cookie } });
     expect(open.headers.get("cache-control")).toBe("public, max-age=0, must-revalidate");
-    // There is no preview and no icon of what is not public: both are asked for by nobody.
+    // There is no preview, no badge and no icon of what is not public: all are asked for by nobody.
     expect((await h.request(`/social${SECRET}`)).status).toBe(404);
+    expect((await h.request(`/badge${SECRET}`)).status).toBe(404);
     expect((await h.request(`/icon${SECRET}`)).status).toBe(404);
   });
 

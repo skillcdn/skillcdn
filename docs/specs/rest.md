@@ -164,6 +164,16 @@ What the consent page asks and answers ([permissions](permissions.md#the-flow)).
 
 The social preview of the page of an address ([ADR-0032](../adr/0032-social-previews-are-drawn-by-the-server-for-each-address.md)): a 1200 by 630 PNG the server draws with the owner's picture, the name, the address, the description and a few facts, in the language `lang` names (else the one the request asks for, with `vary: accept-language`), and for the skill at the canonical `SKILL.md` path `skill` names when given. The page of an address names it as its `og:image`. Asking for it resolves the address and starts indexing it, as asking for the page does; a card drawn before the index is ready says less and is drawn again once it is. `404` for an address that is nothing, a repository that is not public (a card is drawn for whoever a link is sent to), a skill that is not there, or a deployment without the web UI. Answered with `cache-control: public, max-age=3600`, an ETag, and byte ranges.
 
+### `GET /badge/<address>`
+
+The badge of an address, for the README of its repository: an SVG 20 pixels tall with the symbol, the name of the service and how many skills the address serves (`12 skills`), or `indexing` until the index is ready and `unavailable` when it failed. Asking for it resolves the address and starts indexing it, as asking for the page does. `404` for an address that is nothing or a repository that is not public (a badge is shown to whoever reads the README). Answered with `cache-control: public, max-age=3600` (`max-age=60` until the index is ready), an ETag, and byte ranges. In a README, linked to the page of the address:
+
+```md
+[![SkillCDN](https://skillcdn.ai/badge/gh/<owner>/<repo>)](https://skillcdn.ai/gh/<owner>/<repo>)
+```
+
+The badge carries the symbol; the [trademark policy](../../TRADEMARKS.md) allows it, as served, for a repository the deployment serves.
+
 ### `GET /icon/<address>`
 
 The icon of the MCP server of an address ([tools](tools.md#connection-and-prompt)): the owner's picture as the git host serves it, 128 pixels square, fetched without credentials and served on from this origin, because a client fetches a server's icon from the server's own origin and from nowhere else. Served only when the bytes are a PNG, JPEG, GIF or WebP by their own first bytes, whatever the host said; `404` otherwise, and for an address that is nothing or not public. Answered with the image's type, `cache-control: public, max-age=86400` (an account's picture rarely changes), an ETag that names the account and the size, and byte ranges.
