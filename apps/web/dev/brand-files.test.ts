@@ -195,6 +195,19 @@ describe("the brand files", () => {
     }
   });
 
+  it("ship the lockup on the pages' own ground at two to one, as a banner", async () => {
+    const manifest = JSON.parse(read("manifest.webmanifest")) as {
+      readonly background_color: string;
+    };
+    const banner = await picture(readFileSync(publicFile("brand/banner.png")));
+    expect([banner.width, banner.height]).toEqual([1200, 600]);
+    expect(banner.transparent, "opaque throughout").toBe(0);
+    expect(banner.at(0, 0)).toEqual(opaque(manifest.background_color));
+    expect(banner.at(1199, 599)).toEqual(opaque(manifest.background_color));
+    expect(banner.symbol, "the symbol is there").toBeGreaterThan(0.01);
+    expect(banner.at(600, 300)[3], "the wordmark is there, in white").toBe(255);
+  });
+
   it("keep the favicon transparent, white underneath, in the sizes a browser asks for", () => {
     const frames = icoFrames(readFileSync(publicFile("favicon.ico")));
     expect(frames.map((frame) => frame.size)).toEqual([16, 32, 48]);

@@ -62,6 +62,24 @@ function drawLockup(width, ink) {
   return canvas;
 }
 
+/** The banner: the lockup on the pages' own ground at two to one, for where a picture of the site is wanted. */
+const BANNER = { width: 1200, height: 600, lockup: 0.55 };
+function drawBanner() {
+  const canvas = createCanvas(BANNER.width, BANNER.height);
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = TILE_GROUND;
+  ctx.fillRect(0, 0, BANNER.width, BANNER.height);
+  const width = BANNER.width * BANNER.lockup;
+  const scale = width / BRAND_LOCKUP_WIDTH;
+  ctx.translate((BANNER.width - width) / 2, (BANNER.height - 100 * scale) / 2);
+  ctx.scale(scale, scale);
+  ctx.fillStyle = BRAND_SYMBOL_COLOR;
+  ctx.fill(new Path2D(BRAND_SYMBOL_PATH));
+  ctx.fillStyle = "#ffffff";
+  ctx.fill(new Path2D(BRAND_WORDMARK_PATH));
+  return canvas.toBuffer("image/png");
+}
+
 const CRC_TABLE = new Uint32Array(256).map((_, n) => {
   let c = n;
   for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
@@ -156,6 +174,7 @@ const files = {
   "brand/avatar.png": transparentPng(draw(AVATAR_SIZE, AVATAR_SIZE * AVATAR_SYMBOL_HEIGHT), WHITE),
   "brand/logo-black.png": transparentPng(drawLockup(1200, "#000000"), WHITE),
   "brand/logo-white.png": transparentPng(drawLockup(1200, "#ffffff"), BLACK),
+  "brand/banner.png": drawBanner(),
 };
 for (const [name, bytes] of Object.entries(files)) {
   writeFileSync(join(publicDir, name), bytes);
