@@ -262,7 +262,7 @@ The `SKILL.md` a listed skill is served as is assembled from its sources, and it
 
 ## Checking a repository before pushing
 
-The `skillcdn check` command (`@skillcdn/cli` on npm) reads a directory as the indexer reads a commit, with the same code, the same parsers and the same limits, and prints what an agent would get: the manifest, the repository's license, every skill with its files, warnings, its license and whether the skills extension lists it, the documents outside the skills, linked references, what is not served, index diagnostics, and the instructions a client is told on connect. It needs no database and no git host, executes nothing from the directory, and exits with `1` when index diagnostics are present, so it can gate a push. The server image has the same code as its `check` role.
+The `skillcdn check` command (`@skillcdn/cli` on npm) reads a directory as the indexer reads a commit, with the same code, the same parsers and the same limits, and prints what an agent would get, headed by the version of the reading rules it applied: the manifest, the repository's license, every skill with its files, warnings, its license and whether the skills extension lists it, the documents outside the skills, linked references, what is not served, index diagnostics, and the instructions a client is told on connect. It needs no database and no git host, executes nothing from the directory, and exits with `1` when index diagnostics are present, so it can gate a push. The server image has the same code as its `check` role.
 
 ```sh
 npx @skillcdn/cli check                                        # the current directory

@@ -41,6 +41,7 @@ describe("the skillcdn command", () => {
     const { code, out, err } = await run(["check", root]);
     expect(code).toBe(0);
     expect(err).toBe("");
+    expect(out).toMatch(/as SkillCDN would index it \(reading rules version \d+\): 2 files/);
     expect(out).toContain("Skills: 1");
     expect(out).toContain("- greeting (skills/greeting)");
     expect(out).toContain("Documents outside the skills: 1\n- docs/guide.md");

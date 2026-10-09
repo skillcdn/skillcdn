@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { INDEX_VERSION } from "./build-index.js";
 import { checkDirectory } from "./check.js";
 import { INDEX_LIMIT_DEFAULTS } from "./limits.js";
 
@@ -38,7 +39,9 @@ describe("checking a working tree", () => {
     await writeFile(join(root, "node_modules", "pkg", "SKILL.md"), "not a skill\n");
     const { code, report } = await check(root);
     expect(code).toBe(0);
-    expect(report).toContain("2 files; 2 .git entries, symbolic links or node_modules skipped");
+    expect(report).toContain(
+      `as SkillCDN would index it (reading rules version ${INDEX_VERSION}): 2 files; 2 .git entries, symbolic links or node_modules skipped`,
+    );
     expect(report).toContain("- hello (skills/hello)");
     expect(report).toContain("- hidden (.agents/skills/hidden)");
     expect(report).not.toContain("node_modules/pkg");

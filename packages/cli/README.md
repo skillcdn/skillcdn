@@ -15,7 +15,7 @@ Or add it to the repository (`npm install --save-dev @skillcdn/cli`) and run `sk
 
 ## What it prints
 
-The repository manifest, the license, every skill with its files, its warnings, its license and whether the MCP skills extension lists it, the documents outside the skills, linked references, what is not served, the index diagnostics, and the instructions a client is told on connect. An index diagnostic is something the indexer could not read as intended, with the same reason a deployment shows; a `SKILL.md` whose front-matter is not valid YAML is the usual one.
+First the version of the reading rules it applied, so that a report can be told apart from one made under other rules. Then the repository manifest, the license, every skill with its files, its warnings, its license and whether the MCP skills extension lists it, the documents outside the skills, linked references, what is not served, the index diagnostics, and the instructions a client is told on connect. An index diagnostic is something the indexer could not read as intended, with the same reason a deployment shows; a `SKILL.md` whose front-matter is not valid YAML is the usual one.
 
 Exit codes: `0` when there are no index diagnostics, `1` when there are, `2` when the directory cannot be read, so a push or a job can be gated on it. `64` is a usage error and `78` a limit variable that cannot be read.
 

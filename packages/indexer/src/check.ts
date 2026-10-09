@@ -27,7 +27,7 @@ import {
   splitFrontMatter,
   type TreeEntry,
 } from "@skillcdn/core";
-import { buildSnapshotIndex } from "./build-index.js";
+import { buildSnapshotIndex, INDEX_VERSION } from "./build-index.js";
 import { gitBlobHash } from "./git-hash.js";
 
 // The `check` role: a working tree read by the same indexer that reads a commit, and a report
@@ -254,7 +254,7 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
   const overview = folderOverview(catalogFiles, ROOT_PATH);
 
   write(
-    `Read ${root} as SkillCDN would index it: ${files.length} files` +
+    `Read ${root} as SkillCDN would index it (reading rules version ${INDEX_VERSION}): ${files.length} files` +
       `${skipped === 0 ? "" : `; ${skipped} .git entries, symbolic links or node_modules skipped`}` +
       `${index.truncated ? "; over the indexing limits, so the index is partial" : ""}.\n\n`,
   );
