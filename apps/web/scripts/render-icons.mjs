@@ -4,11 +4,12 @@
 //   pnpm --filter @skillcdn/web run generate:icons     (build core first)
 //
 // The icons a platform shows in its own chrome (the home screen, an app list, a launcher) are the
-// symbol on a white tile: some of those platforms cannot show a transparent icon and paint one on
-// black. The brand symbol, the lockups and the favicon stay transparent, with the ground they
-// are meant for stored under their transparent pixels (white, or black under the white lockup),
-// so that a reader which drops the alpha channel shows them on that ground.
-import { writeFileSync } from "node:fs";
+// symbol on the pages' own ground, the one the web manifest declares, since those platforms need
+// an opaque icon and this is the colour the page opens on. The brand symbol, the lockups and the
+// favicon stay transparent, with the ground they are meant for stored under their transparent
+// pixels (white, or black under the white lockup), so that a reader which drops the alpha channel
+// shows them on that ground rather than on black.
+import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deflateSync } from "node:zlib";
@@ -24,6 +25,10 @@ const publicDir = join(dirname(fileURLToPath(import.meta.url)), "..", "public");
 
 /** How much of a tile's height the symbol takes: inside the safe zone of a maskable icon. */
 const TILE_SYMBOL_HEIGHT = 0.58;
+
+/** The ground of the tiles: what the manifest says the pages open on. */
+const manifest = JSON.parse(readFileSync(join(publicDir, "manifest.webmanifest"), "utf8"));
+const TILE_GROUND = manifest.background_color;
 
 /** The symbol, centred, `size` tall, in a `width` by `width` canvas, on `ground` or on nothing. */
 function draw(width, size, ground) {
@@ -134,7 +139,7 @@ function ico(frames) {
 
 const WHITE = [255, 255, 255];
 const BLACK = [0, 0, 0];
-const tile = (width) => draw(width, width * TILE_SYMBOL_HEIGHT, "#ffffff").toBuffer("image/png");
+const tile = (width) => draw(width, width * TILE_SYMBOL_HEIGHT, TILE_GROUND).toBuffer("image/png");
 const transparent = (width) => transparentPng(draw(width, width), WHITE);
 
 const files = {

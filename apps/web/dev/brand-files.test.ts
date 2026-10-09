@@ -18,7 +18,13 @@ const exists = (path: string) => readFileSync(publicFile(path)).byteLength > 0;
 type Pixel = readonly [number, number, number, number];
 
 const SYMBOL_BLUE: Pixel = [0x3a, 0x6d, 0xd4, 255];
-const WHITE: Pixel = [255, 255, 255, 255];
+/** An opaque pixel of the colour a CSS hex value names. */
+const opaque = (hex: string): Pixel => [
+  Number.parseInt(hex.slice(1, 3), 16),
+  Number.parseInt(hex.slice(3, 5), 16),
+  Number.parseInt(hex.slice(5, 7), 16),
+  255,
+];
 const near = (pixel: Pixel, colour: Pixel) =>
   pixel.every((channel, index) => Math.abs(channel - (colour[index] ?? 0)) <= 8);
 
@@ -133,7 +139,11 @@ describe("the brand files", () => {
     }
   });
 
-  it("show the symbol on a white tile where a platform cannot show a transparent icon", async () => {
+  it("show the symbol on the pages' own ground where a platform needs an opaque icon", async () => {
+    const manifest = JSON.parse(read("manifest.webmanifest")) as {
+      readonly background_color: string;
+    };
+    const ground = opaque(manifest.background_color);
     for (const [file, size] of [
       ["apple-touch-icon.png", 180],
       ["icon-192.png", 192],
@@ -150,7 +160,7 @@ describe("the brand files", () => {
         [size >> 1, 0],
         [0, size >> 1],
       ] as const) {
-        expect(icon.at(x, y), `${file} at ${x},${y}`).toEqual(WHITE);
+        expect(icon.at(x, y), `${file} at ${x},${y}`).toEqual(ground);
       }
       // Inside the safe zone of a maskable icon: the symbol's box is 0.58 of the tile each way,
       // and the symbol fills about two thirds of its box.
