@@ -1,8 +1,25 @@
-# SkillCDN
+<div align="center">
+  <a href="https://skillcdn.ai">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/skillcdn/skillcdn/main/apps/web/public/brand/logo-white.svg">
+      <img alt="SkillCDN" src="https://raw.githubusercontent.com/skillcdn/skillcdn/main/apps/web/public/brand/logo-black.svg" width="360">
+    </picture>
+  </a>
+  <p><strong>Turn any git repository into an MCP server.</strong></p>
+  <p>
+    <a href="https://github.com/skillcdn/skillcdn/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/skillcdn/skillcdn/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+    <a href="https://github.com/skillcdn/skillcdn/actions/workflows/release.yml"><img alt="Release" src="https://github.com/skillcdn/skillcdn/actions/workflows/release.yml/badge.svg?branch=main"></a>
+    <a href="https://www.npmjs.com/package/@skillcdn/cli"><img alt="@skillcdn/cli on npm" src="https://img.shields.io/npm/v/@skillcdn/cli?label=%40skillcdn%2Fcli"></a>
+    <a href="LICENSE.md"><img alt="License: FSL-1.1-ALv2" src="https://img.shields.io/badge/license-FSL--1.1--ALv2-3a6dd4"></a>
+  </p>
+  <p>
+    <a href="https://skillcdn.ai">skillcdn.ai</a> · <a href="docs/specs/">Specifications</a> · <a href="docs/architecture.md">Architecture</a> · <a href="docs/roadmap.md">Roadmap</a> · <a href="CONTRIBUTING.md">Contributing</a>
+  </p>
+</div>
 
 > **Status: pre-alpha.** This README describes what we are building. [docs/roadmap.md](docs/roadmap.md) says what exists today. Nothing here is a commitment to a public API yet.
 
-**SkillCDN turns any git repository into an MCP server.** Point an agent at `skillcdn.ai/gh/<owner>/<repo>` and it gets the skills, playbooks and documents in that repo as tools. No hosting, no packaging, no publish step: the repo *is* the skill.
+Point an agent at `skillcdn.ai/gh/<owner>/<repo>` and it gets the skills, playbooks and documents in that repo as tools. No hosting, no packaging, no publish step: the repo *is* the skill.
 
 ```
 skillcdn.ai/gh/<owner>/<repo>                    default branch, latest
@@ -99,7 +116,14 @@ deploy/       Dockerfile, compose files, the contract for whoever operates the i
 docs/         architecture, specs, ADRs, roadmap
 ```
 
-On npm, under the `@skillcdn` scope: [`@skillcdn/cli`](https://www.npmjs.com/package/@skillcdn/cli), the `skillcdn check` command that reads a repository as SkillCDN would index it (`npx @skillcdn/cli check`); [`@skillcdn/indexer`](https://www.npmjs.com/package/@skillcdn/indexer), the reading rules; and [`@skillcdn/core`](https://www.npmjs.com/package/@skillcdn/core), the contracts. Each has its own version and changelog ([ADR-0046](docs/adr/0046-packages-are-published-to-npm-through-trusted-publishing.md)).
+On npm, under the `@skillcdn` scope, each with its own version and changelog ([ADR-0046](docs/adr/0046-packages-are-published-to-npm-through-trusted-publishing.md)):
+
+| Package | Version | What it is |
+|---|---|---|
+| [`@skillcdn/cli`](https://www.npmjs.com/package/@skillcdn/cli) | [![npm](https://img.shields.io/npm/v/@skillcdn/cli)](https://www.npmjs.com/package/@skillcdn/cli) | the `skillcdn check` command: reads a repository as SkillCDN would index it (`npx @skillcdn/cli check`) |
+| [`@skillcdn/indexer`](https://www.npmjs.com/package/@skillcdn/indexer) | [![npm](https://img.shields.io/npm/v/@skillcdn/indexer)](https://www.npmjs.com/package/@skillcdn/indexer) | the reading rules: a commit or a working tree read into an index |
+| [`@skillcdn/core`](https://www.npmjs.com/package/@skillcdn/core) | [![npm](https://img.shields.io/npm/v/@skillcdn/core)](https://www.npmjs.com/package/@skillcdn/core) | the contracts: addresses, the convention, tool and REST schemas, the ports |
+
 
 | | hosted (skillcdn.ai) | self-hosted / air-gapped |
 |---|---|---|

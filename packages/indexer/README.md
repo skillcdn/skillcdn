@@ -1,4 +1,13 @@
-# @skillcdn/indexer
+<p align="center">
+  <a href="https://skillcdn.ai"><img alt="SkillCDN" src="https://raw.githubusercontent.com/skillcdn/skillcdn/main/apps/web/public/brand/symbol.svg" width="72"></a>
+</p>
+<h1 align="center">@skillcdn/indexer</h1>
+<p align="center">The reading rules of SkillCDN: a commit or a working tree read into an index, and what an agent would get from it.</p>
+<p align="center">
+  <a href="https://www.npmjs.com/package/@skillcdn/indexer"><img alt="npm" src="https://img.shields.io/npm/v/@skillcdn/indexer"></a>
+  <a href="https://github.com/skillcdn/skillcdn/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/skillcdn/skillcdn/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+  <a href="https://github.com/skillcdn/skillcdn/blob/main/LICENSE.md"><img alt="License: FSL-1.1-ALv2" src="https://img.shields.io/badge/license-FSL--1.1--ALv2-3a6dd4"></a>
+</p>
 
 The reading rules of [SkillCDN](https://skillcdn.ai) as code: how a commit becomes an index, and what an agent gets from it. The server indexes every commit with this package, and the `skillcdn check` command ([`@skillcdn/cli`](https://www.npmjs.com/package/@skillcdn/cli)) reads a working tree with the same code, so a repository that passes `check` is served as `check` showed it ([ADR-0045](https://github.com/skillcdn/skillcdn/blob/main/docs/adr/0045-the-indexer-is-a-package-and-check-is-a-command.md)).
 

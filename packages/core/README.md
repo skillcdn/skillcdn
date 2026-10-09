@@ -1,6 +1,15 @@
-# @skillcdn/core
+<p align="center">
+  <a href="https://skillcdn.ai"><img alt="SkillCDN" src="https://raw.githubusercontent.com/skillcdn/skillcdn/main/apps/web/public/brand/symbol.svg" width="72"></a>
+</p>
+<h1 align="center">@skillcdn/core</h1>
+<p align="center">The contracts of SkillCDN: the address scheme, the skill-repo convention, tool and REST schemas, the types of an index, and the ports.</p>
+<p align="center">
+  <a href="https://www.npmjs.com/package/@skillcdn/core"><img alt="npm" src="https://img.shields.io/npm/v/@skillcdn/core"></a>
+  <a href="https://github.com/skillcdn/skillcdn/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/skillcdn/skillcdn/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+  <a href="https://github.com/skillcdn/skillcdn/blob/main/LICENSE.md"><img alt="License: FSL-1.1-ALv2" src="https://img.shields.io/badge/license-FSL--1.1--ALv2-3a6dd4"></a>
+</p>
 
-The contracts of [SkillCDN](https://skillcdn.ai), which turns any git repository into an MCP server: the address scheme, the skill-repo convention, the tool contracts, the REST schemas, the types of an index, and the ports the rest of the system implements. Pure TypeScript with no I/O and no Node.js APIs: it runs unchanged in the server, in tests, in a browser, and in whatever else reads or writes a SkillCDN address.
+[SkillCDN](https://skillcdn.ai) turns any git repository into an MCP server. This package is its contracts: the address scheme, the skill-repo convention, the tool contracts, the REST schemas, the types of an index, and the ports the rest of the system implements. Pure TypeScript with no I/O and no Node.js APIs: it runs unchanged in the server, in tests, in a browser, and in whatever else reads or writes a SkillCDN address.
 
 ```sh
 npm install @skillcdn/core

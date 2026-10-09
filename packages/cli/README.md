@@ -1,4 +1,14 @@
-# @skillcdn/cli
+<p align="center">
+  <a href="https://skillcdn.ai"><img alt="SkillCDN" src="https://raw.githubusercontent.com/skillcdn/skillcdn/main/apps/web/public/brand/symbol.svg" width="72"></a>
+</p>
+<h1 align="center">@skillcdn/cli</h1>
+<p align="center">The <code>skillcdn</code> command: check a skill repository before pushing, as SkillCDN would index it.</p>
+<p align="center">
+  <a href="https://www.npmjs.com/package/@skillcdn/cli"><img alt="npm" src="https://img.shields.io/npm/v/@skillcdn/cli"></a>
+  <a href="https://www.npmjs.com/package/@skillcdn/cli"><img alt="node" src="https://img.shields.io/node/v/@skillcdn/cli"></a>
+  <a href="https://github.com/skillcdn/skillcdn/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/skillcdn/skillcdn/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+  <a href="https://github.com/skillcdn/skillcdn/blob/main/LICENSE.md"><img alt="License: FSL-1.1-ALv2" src="https://img.shields.io/badge/license-FSL--1.1--ALv2-3a6dd4"></a>
+</p>
 
 The `skillcdn` command. It does one thing for now: `skillcdn check` reads a directory as [SkillCDN](https://skillcdn.ai) would index it and prints what an agent would get, so that the author of a skill repository sees it before pushing.
 
