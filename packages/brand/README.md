@@ -55,6 +55,8 @@ Show the marks as they are: the symbol in its blue, the wordmark in black or whi
 
 The files are trademarks and copyrighted works of KDX Labs Corp. They are not licensed under the FSL-1.1-ALv2 of the SkillCDN source code, nor under the license of whatever depends on this package. The [SkillCDN Trademark Policy](https://github.com/skillcdn/skillcdn/blob/main/TRADEMARKS.md) says what you may do without asking and what needs written permission; [LICENSE.md](LICENSE.md) applies it to these files. Showing them is right where the policy allows it and wrong where it does not, whatever installed them.
 
+To say that a repository is served by SkillCDN, show the badge a deployment serves for its address (`/badge/<address>`, [REST](https://github.com/skillcdn/skillcdn/blob/main/docs/specs/rest.md#get-badgeaddress)), as served and linked to that address: the policy allows it, it carries the symbol and says where the repository is served, and it is not in this package.
+
 ## Where they come from
 
 The SVG files are the path data of `@skillcdn/core` written out, and `scripts/render.mjs` draws every raster file from the same data (`pnpm --filter @skillcdn/brand run render`, with `core` built); `brand.test.ts` keeps every file equal to it. A change of a mark is a change of the path data in `core`, a run of the script, and a release of both packages.
