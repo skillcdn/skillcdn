@@ -1,5 +1,13 @@
 # @skillcdn/indexer
 
+## 0.2.2
+
+### Patch Changes
+
+- [`2a62df4`](https://github.com/skillcdn/skillcdn/commit/2a62df4432ea4d57796ec692fc9612f652d67bd7) Thanks [@samo-lucid](https://github.com/samo-lucid)! - The reading rules are at version 10: a README whose HTML block has indented lines is summarized by its first paragraph of prose, not by the markup. A commit indexed under the previous version is rebuilt when it is next asked for.
+- Updated dependencies [[`2a62df4`](https://github.com/skillcdn/skillcdn/commit/2a62df4432ea4d57796ec692fc9612f652d67bd7), [`ac3130a`](https://github.com/skillcdn/skillcdn/commit/ac3130a4ebbb0fb5a0f1ff46b12a70413b8eda12)]:
+  - @skillcdn/core@0.2.0
+
 ## 0.2.1
 
 ### Patch Changes

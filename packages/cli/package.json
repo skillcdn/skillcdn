@@ -1,6 +1,6 @@
 {
   "name": "@skillcdn/cli",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "The skillcdn command: check a skill repository before pushing, as SkillCDN would index it.",
   "license": "FSL-1.1-ALv2",
   "homepage": "https://skillcdn.ai",

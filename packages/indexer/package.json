@@ -1,6 +1,6 @@
 {
   "name": "@skillcdn/indexer",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "The reading rules of SkillCDN: a commit or a working tree read into an index, and what an agent would get from it.",
   "license": "FSL-1.1-ALv2",
   "homepage": "https://skillcdn.ai",

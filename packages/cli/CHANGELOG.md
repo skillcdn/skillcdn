@@ -1,5 +1,13 @@
 # @skillcdn/cli
 
+## 0.1.3
+
+### Patch Changes
+
+- [`411baec`](https://github.com/skillcdn/skillcdn/commit/411baecb6fb14c10b36dff6c19576b7f876b00c2) Thanks [@samo-lucid](https://github.com/samo-lucid)! - The README shows the SkillCDN symbol from `@skillcdn/brand`, the package the brand files now live in.
+- Updated dependencies [[`2a62df4`](https://github.com/skillcdn/skillcdn/commit/2a62df4432ea4d57796ec692fc9612f652d67bd7)]:
+  - @skillcdn/indexer@0.2.2
+
 ## 0.1.2
 
 ### Patch Changes
