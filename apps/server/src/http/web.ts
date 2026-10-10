@@ -50,6 +50,12 @@ const manifestSchema = z.object({
         files: filesByLanguage,
         /** Listed in the sitemap. */
         indexable: z.boolean(),
+        /**
+         * The languages the page is written in, which the sitemap lists it in; left out, every
+         * language it has a file for. A page whose text is in one language has a file per
+         * language for the frame around it, and is one page to find.
+         */
+        alternates: z.array(language).min(1).max(64).optional(),
         contentType: z.string().max(100).optional(),
       }),
     )
@@ -322,6 +328,11 @@ interface RenderModule {
     origin: string,
     data: { readonly mount: unknown; readonly skill?: unknown },
   ): unknown;
+  /**
+   * The words of the social preview of a page of the documentation (ADR-0049): the index for an
+   * empty slug. `undefined` for a slug that is no page. An older build has no such thing.
+   */
+  docsSocialCard?(language: string, origin: string, slug: string): unknown;
   /** A page of the deployment's own with its document, or with why there is none (ADR-0029). */
   renderLegalPage?(
     template: string,
@@ -382,6 +393,15 @@ export interface WebBundle {
   social(
     request: WebRequest,
     data: { readonly mount: unknown; readonly skill?: unknown },
+  ): { readonly card: SocialCard; readonly language: string; readonly forced: boolean } | undefined;
+  /**
+   * The words of the social preview of a page of the documentation (ADR-0049), the index for an
+   * empty slug, in the language the request asks for; `undefined` when there is no such page,
+   * or the build cannot say.
+   */
+  docsSocial(
+    request: WebRequest,
+    slug: string,
   ): { readonly card: SocialCard; readonly language: string; readonly forced: boolean } | undefined;
   /** The font files the build ships for drawing (ADR-0032); none in an older build. */
   readonly fonts: readonly string[];
@@ -613,6 +633,11 @@ export async function loadWebBundle(
       throw new WebBundleError("a page in the manifest has no file for the default language");
     }
   }
+  for (const route of manifest.routes) {
+    if (route.alternates?.some((code) => route.files[code] === undefined) === true) {
+      throw new WebBundleError(`${route.path} is listed in a language it has no file for`);
+    }
+  }
 
   /** Page files of the manifest, as text with placeholders, and with the operator's tags. */
   const pages = new Map<string, string>();
@@ -832,7 +857,7 @@ export async function loadWebBundle(
           sitemapEntry(
             origin,
             route.path,
-            languages.filter((code) => route.files[code] !== undefined),
+            route.alternates ?? languages.filter((code) => route.files[code] !== undefined),
           ),
         ),
       ...pages.flatMap((path) => sitemapEntry(origin, path, languages)),
@@ -908,6 +933,22 @@ export async function loadWebBundle(
       const parsed = socialCardSchema.safeParse(
         render.call(renderer.module, language, originOf(request), data),
       );
+      if (!parsed.success) {
+        throw new WebBundleError("the render module did not return a social card");
+      }
+      return { card: parsed.data, language, forced };
+    },
+    docsSocial(request, slug) {
+      const render = renderer?.module.docsSocialCard;
+      if (renderer === undefined || render === undefined) {
+        return undefined;
+      }
+      const { language, forced } = languageOf(request);
+      const card = render.call(renderer.module, language, originOf(request), slug);
+      if (card === undefined) {
+        return undefined;
+      }
+      const parsed = socialCardSchema.safeParse(card);
       if (!parsed.success) {
         throw new WebBundleError("the render module did not return a social card");
       }

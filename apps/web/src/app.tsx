@@ -19,6 +19,7 @@ import { LegalLinksProvider } from "./legal-links.js";
 import { type AppLocation, LocationProvider, useLocation } from "./navigation.js";
 import type { AccountPageProps } from "./pages/account.js";
 import type { ConsentPageProps } from "./pages/consent.js";
+import type { DocsPageProps } from "./pages/docs.js";
 import { ExplorePage } from "./pages/explore.js";
 import { LandingPage } from "./pages/landing.js";
 import type { LegalPageProps } from "./pages/legal.js";
@@ -29,15 +30,16 @@ import { matchRoute, type Route } from "./router.js";
 import { applyHead, buildHead } from "./seo/head.js";
 
 /**
- * The pages that are not on the way of every visitor: the explorer view and the deployment's own
- * pages bring the Markdown renderer with them, and the page of an account, the pages of
- * whoever is signed in and the consent page are for the few who go there. In the
- * browser each loads when someone opens it. The server, which renders them, passes the
- * components in instead (entry-server.tsx).
+ * The pages that are not on the way of every visitor: the explorer view, the deployment's own
+ * pages and the documentation bring the Markdown renderer with them (the documentation its
+ * text as well), and the page of an account, the pages of whoever is signed in and the consent
+ * page are for the few who go there. In the browser each loads when someone opens it. The
+ * server, which renders them, passes the components in instead (entry-server.tsx).
  */
 export interface PageComponents {
   readonly mount: ComponentType<MountPageProps>;
   readonly legal: ComponentType<LegalPageProps>;
+  readonly docs: ComponentType<DocsPageProps>;
   readonly owner: ComponentType<OwnerPageProps>;
   readonly account: ComponentType<AccountPageProps>;
   readonly consent: ComponentType<ConsentPageProps>;
@@ -46,6 +48,7 @@ export interface PageComponents {
 const LAZY_PAGES: PageComponents = {
   mount: lazy(() => import("./pages/mount.js").then((module) => ({ default: module.MountPage }))),
   legal: lazy(() => import("./pages/legal.js").then((module) => ({ default: module.LegalPage }))),
+  docs: lazy(() => import("./pages/docs.js").then((module) => ({ default: module.DocsPage }))),
   owner: lazy(() => import("./pages/owner.js").then((module) => ({ default: module.OwnerPage }))),
   account: lazy(() =>
     import("./pages/account.js").then((module) => ({ default: module.AccountPage })),
@@ -101,6 +104,8 @@ function pageOf(route: Route, origin: string, pages: PageComponents): ReactNode 
       return <pages.consent origin={origin} />;
     case "legal":
       return <pages.legal origin={origin} kind={route.kind} />;
+    case "docs":
+      return <pages.docs origin={origin} slug={route.slug} />;
     case "bad-address":
       return <BadAddressPage origin={origin} error={route.error} />;
     case "states":

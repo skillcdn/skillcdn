@@ -13,7 +13,7 @@
     <a href="LICENSE.md"><img alt="License: FSL-1.1-ALv2" src="https://img.shields.io/badge/license-FSL--1.1--ALv2-3a6dd4"></a>
   </p>
   <p>
-    <a href="https://skillcdn.ai">skillcdn.ai</a> · <a href="docs/specs/">Specifications</a> · <a href="docs/architecture.md">Architecture</a> · <a href="docs/roadmap.md">Roadmap</a> · <a href="CONTRIBUTING.md">Contributing</a>
+    <a href="https://skillcdn.ai">skillcdn.ai</a> · <a href="https://skillcdn.ai/docs">Documentation</a> · <a href="docs/specs/">Specifications</a> · <a href="docs/architecture.md">Architecture</a> · <a href="docs/roadmap.md">Roadmap</a> · <a href="CONTRIBUTING.md">Contributing</a>
   </p>
 </div>
 

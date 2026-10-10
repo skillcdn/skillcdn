@@ -35,3 +35,8 @@ docs
 !LICENSE.md
 !THIRD-PARTY-NOTICES.md
 !TRADEMARKS.md
+# The documentation the web UI renders into its pages at build time (docs/nav.json names the files).
+!docs/nav.json
+!docs/guide/*.md
+!docs/specs/*.md
+!deploy/README.md

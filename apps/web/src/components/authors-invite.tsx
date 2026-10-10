@@ -1,5 +1,7 @@
+import { AUTHORS_GUIDE_SLUG } from "../docs/catalog.js";
 import { useI18n } from "../i18n/index.js";
-import { LINKS } from "../site.js";
+import { Link } from "../navigation.js";
+import { docsHref } from "../router.js";
 import { AddressForm } from "./address-form.js";
 import styles from "./authors-invite.module.css";
 import { cx } from "./ui.js";
@@ -23,10 +25,7 @@ export function AuthorsInvite(props: {
       <div className={styles.copy}>
         <h2>{copy.title}</h2>
         <p>{copy.body}</p>
-        <a href={LINKS.convention}>
-          {copy.convention}
-          <span aria-hidden="true"> ↗</span>
-        </a>
+        <Link href={docsHref(AUTHORS_GUIDE_SLUG)}>{copy.convention}</Link>
       </div>
       <AddressForm origin={props.origin} label={copy.check} footnote={props.footnote} />
     </section>

@@ -1,0 +1,24 @@
+# ADR-0049: The documentation is rendered into the pages from the repository's own files
+
+- Status: Accepted
+- Date: 2026-10-11
+
+## Context
+
+The repository documents itself in Markdown: the specifications in `docs/specs/`, the deployment contract in `deploy/README.md`, and now guides for the people who use and write skill repositories. The pages of a deployment linked to those files at the git host, where a visitor met a file tree rather than documentation. Publishing them somewhere else, through a hosted documentation service or a second site generator, would mean a second design system and a second language pipeline to keep in step with the pages, a build that is not the image's, documentation an installation without the internet cannot reach, and a version of the documentation that is the latest rather than the one a deployment runs. A wiki of the git host is a second repository, outside the change that alters the behavior it describes. The one rule that holds everything else together is that a topic lives in exactly one Markdown file of this repository, so whatever publishes the documentation has to read those files and nothing else.
+
+## Decision
+
+1. **The pages render the documentation from the repository's own files, when the pages are built.** `docs/nav.json` lists what is published: sections, each with the files it holds, in order, and for each file an optional slug, title and description. A file that is not listed is not published. The build reads the files, resolves every link, and hands the pages a catalog (what there is) and the content (the text of each page); nothing is read at request time, and the server knows the pages only as files of the build.
+2. **Every page has one URL, `/docs/<slug>`, in every language.** The text of a page is written in English; the frame around it (the list of pages, the outline, the links) is in the visitor's language, as the rest of the site is. The page is one to find, in English: its canonical URL is the clean one, it names no translations, the sitemap lists it once, and the frame in another language marks the text as English. A translation of the documentation is a decision for later, not a page with a translated frame.
+3. **The Markdown of each page is served beside it, as `/docs/<slug>.md`**, with every link resolved to an absolute URL, so that an agent reads the documentation as text; `llms.txt` lists the pages that way and `/llms-full.txt` holds every page in one file. The same files are what a deployment serves of this repository over MCP, since `docs/` is a document directory of it.
+4. **A link is resolved when the pages are built, and a link that leads nowhere fails the build.** A link to a published file becomes the page's path, fragment kept, which is checked against the target's headings; a link to any other file or directory of the repository becomes its address at the git host; a picture of the repository is loaded from the host's raw copy. Headings carry the id the git host gives them, so a fragment written for the file at the host names the same heading on the page.
+5. **A page unfurls with a card the server draws for it**, at `/social/docs/<slug>`, as the page of an address does ([ADR-0032](0032-social-previews-are-drawn-by-the-server-for-each-address.md)), with the site's symbol where an owner's picture would be; and it carries the structured data of an article with its breadcrumbs.
+
+## Consequences
+
+- The documentation a deployment serves is the documentation of the commit it runs, offline included, and a change to the behavior and to its documentation is one commit. Anyone who edits a file at the host edits the published page: each page links to where.
+- Writing for the site is writing plain Markdown in `docs/`: no front matter, no components, no markup the host does not render. The build refuses what it cannot publish, and says which file and line.
+- The link check makes the repository's own cross-references true, at the host as well: the first run found two fragments that named no heading.
+- The build of the pages reads files outside the app: the image build carries them, and the task's inputs name them so that a change to the documentation rebuilds the pages.
+- Rejected: a wiki of the git host (a second repository, outside the change, with no languages and no domain); a hosted documentation service or a second site generator (a second design system and language pipeline to keep in step, documentation off the image and off the deployed version, a vendor); rendering at request time from the files or from the database, as the legal pages are (the files are known when the pages are built, and a prerendered page costs nothing to serve); MDX or any format beyond Markdown (the files stop rendering at the host and stop being documents the indexer reads).

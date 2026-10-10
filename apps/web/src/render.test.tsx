@@ -12,12 +12,16 @@ import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { App } from "./app.js";
 import {
+  DOCS_ROUTES,
+  DOCS_SOURCES,
+  docsSocialCard,
   LANGUAGES,
   ORIGIN_PLACEHOLDER,
   renderAddressPage,
   renderDocument,
   renderLandingPage,
   renderLegalPage,
+  renderLlmsFullTxt,
   renderLlmsTxt,
   renderNotFound,
   renderPage,
@@ -1029,6 +1033,81 @@ describe("a page of the deployment's own", () => {
   });
 });
 
+describe("the documentation", () => {
+  it("is prerendered per language around pages written in English, listed and outlined", () => {
+    expect(DOCS_ROUTES[0]?.path).toBe("/docs");
+    expect(DOCS_ROUTES.map((route) => route.path)).toContain("/docs/format");
+    expect(DOCS_ROUTES.every((route) => route.alternates.join() === "en")).toBe(true);
+    for (const language of LANGUAGES) {
+      const t = messagesFor(language);
+      const index = renderPage("/docs", language);
+      expect(index.routeName).toBe("docs");
+      expect(index.body).toContain(t.docs.title);
+      expect(index.body).toContain('href="/docs/format"');
+      expect(index.head).toContain(`<link rel="canonical" href="${ORIGIN_PLACEHOLDER}/docs"`);
+
+      const page = renderPage("/docs/format", language);
+      expect(page.routeName).toBe("docs");
+      expect(page.body).toContain(">The SkillCDN Format</h1>");
+      // The text is English; a frame in another language says so, and marks the text.
+      if (language === "en") {
+        expect(page.body).not.toMatch(/<article[^>]*lang=/);
+        expect(page.body).not.toContain(t.docs.inEnglish);
+      } else {
+        expect(page.body).toMatch(/<article[^>]*lang="en"/);
+        expect(page.body).toContain(t.docs.inEnglish);
+      }
+      // Headings carry their ids, the outline points at them, links to other pages are the
+      // site's own, and the page says where it is edited and where its Markdown is.
+      expect(page.body).toContain('id="licenses"');
+      expect(page.body).toContain('href="#licenses"');
+      expect(page.body).toContain('href="/docs/tools"');
+      expect(page.body).not.toMatch(/href="[^"]*\.\.\//);
+      expect(page.body).toContain('href="/docs/format.md"');
+      expect(page.body).toContain(
+        "github.com/skillcdn/skillcdn/edit/main/docs/specs/skill-repo.md",
+      );
+      expect(page.body).toContain('aria-current="page"');
+      expect(page.head).toContain(
+        `content="${ORIGIN_PLACEHOLDER}/social/docs/format?lang=${language}"`,
+      );
+      expect(page.head).toContain('<meta name="robots" content="index,follow"');
+    }
+  });
+
+  it("serves the Markdown of each page beside it, and every page in one file", () => {
+    const format = DOCS_SOURCES.find((source) => source.path === "/docs/format.md");
+    expect(format?.file).toBe("docs/format.md");
+    expect(format?.text.startsWith("# Spec: the SkillCDN Format")).toBe(true);
+    expect(format?.text).toContain(`](${ORIGIN_PLACEHOLDER}/docs/tools.md`);
+    const full = renderLlmsFullTxt();
+    expect(full).toContain(`Source: ${ORIGIN_PLACEHOLDER}/docs/format.md`);
+    expect(full).toContain("# Spec: the SkillCDN Format");
+    expect(full.indexOf("# Use skills from your AI")).toBeLessThan(
+      full.indexOf("# Spec: the SkillCDN Format"),
+    );
+  });
+
+  it("writes the words of the card of a page, and of the index", () => {
+    expect(docsSocialCard("ko", "https://skills.example", "format")).toMatchObject({
+      kicker: "문서",
+      title: "The SkillCDN Format",
+      subtitle: "skills.example/docs/format",
+      badges: ["레퍼런스"],
+      avatar: "",
+      verified: false,
+      siteName: "SkillCDN",
+    });
+    expect(docsSocialCard("en", "https://skills.example", "")).toMatchObject({
+      kicker: "SkillCDN",
+      title: "Documentation",
+      subtitle: "skills.example/docs",
+      badges: [],
+    });
+    expect(docsSocialCard("fr", "https://skills.example", "nothing")).toBeUndefined();
+  });
+});
+
 describe("llms.txt", () => {
   it("describes the site in plain Markdown, per language", () => {
     for (const language of LANGUAGES) {
@@ -1043,6 +1122,11 @@ describe("llms.txt", () => {
       expect(text).toContain(t.meta.landing.about);
       expect(text).toContain(`${ORIGIN_PLACEHOLDER}${REFERENCE_REPOSITORY_ADDRESS}`);
       expect(text).toContain(t.landing.featured.video.title);
+      // The documentation, each page as Markdown, and all of it in one file.
+      expect(text).toContain(`](${ORIGIN_PLACEHOLDER}/docs/format.md): `);
+      expect(text).toContain(
+        `## Optional\n\n- [${t.docs.allInOne}](${ORIGIN_PLACEHOLDER}/llms-full.txt)`,
+      );
       expect(text).not.toContain("</");
     }
   });

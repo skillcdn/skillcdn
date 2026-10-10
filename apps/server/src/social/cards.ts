@@ -60,7 +60,8 @@ export class SocialCards {
   }
 
   async #draw(key: string, card: SocialCard): Promise<Uint8Array> {
-    const avatar = await this.#pictures.get(card.avatar);
+    // A page with no owner has no picture to fetch; the site's symbol stands in its place.
+    const avatar = card.avatar === "" ? undefined : await this.#pictures.get(card.avatar);
     const bytes = await drawSocialCard(card, avatar);
     for (const [oldest] of this.#kept) {
       if (this.#kept.size < MAX_KEPT) break;

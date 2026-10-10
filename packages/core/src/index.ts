@@ -303,6 +303,7 @@ export {
 } from "./rest/showcase.js";
 export {
   BADGE_ROUTE,
+  DOCS_PAGE_PATH,
   ICON_ROUTE,
   ICON_SIZE,
   SOCIAL_CARD_SIZE,

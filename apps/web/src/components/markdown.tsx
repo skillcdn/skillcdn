@@ -1,6 +1,7 @@
 import type { RestSkill } from "@skillcdn/core";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { createSlugger, headingText } from "../docs/slug.js";
 import { useI18n } from "../i18n/index.js";
 import { Link } from "../navigation.js";
 import styles from "./markdown.module.css";
@@ -98,9 +99,10 @@ function collectHeadings(node: unknown, into: HeadingNode[]): void {
  * heading is rendered one level below that heading, the others keep their distance from it, and
  * each keeps the size of the level it was written at, which becomes its class. The page is one
  * outline, whether the document starts with a title of its own or with its sections, and the
- * document still looks like itself.
+ * document still looks like itself. A document of the site's own also gives each heading its id,
+ * the one the git host would give it, so that a fragment written for the file finds it here.
  */
-function headingsUnder(level: 1 | 2 | 3) {
+function headingsUnder(level: 1 | 2 | 3, anchors: boolean) {
   return () => (tree: unknown) => {
     const headings: HeadingNode[] = [];
     collectHeadings(tree, headings);
@@ -108,8 +110,15 @@ function headingsUnder(level: 1 | 2 | 3) {
     for (const heading of headings) {
       top = Math.min(top, heading.depth);
     }
+    const slugger = createSlugger();
     for (const heading of headings) {
-      heading.data = { ...heading.data, hProperties: { className: styles[`h${heading.depth}`] } };
+      heading.data = {
+        ...heading.data,
+        hProperties: {
+          className: styles[`h${heading.depth}`],
+          ...(anchors ? { id: slugger(headingText(heading)) } : {}),
+        },
+      };
       heading.depth = Math.min(6, heading.depth - top + level + 1);
     }
   };
@@ -129,12 +138,18 @@ export function Markdown(props: {
   /** Where a picture that is a file of the repository is loaded from: its copy at the git host. */
   readonly imageSrc?: (path: string) => string;
   readonly references?: Extract<RestSkill, { status: "ready" }>["skill"]["references"];
+  /**
+   * For a document of the site's own, whose links were resolved when the pages were built
+   * (ADR-0049): a link is followed as written, a path of the site inside the app and the rest
+   * as it is, and every heading carries its id, so that a fragment finds it.
+   */
+  readonly own?: boolean;
 }) {
   const { t } = useI18n();
   return (
     <div className={styles.prose}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, headingsUnder(props.under)]}
+        remarkPlugins={[remarkGfm, headingsUnder(props.under, props.own === true)]}
         // Everything passes through here unchanged; the components below decide what a URL may do.
         urlTransform={(url) => url}
         components={{
@@ -144,6 +159,13 @@ export function Markdown(props: {
             }
             if (href.startsWith("#")) {
               return <a href={href}>{children}</a>;
+            }
+            if (props.own === true) {
+              return href.startsWith("/") ? (
+                <Link href={href}>{children}</Link>
+              ) : (
+                <a href={href}>{children}</a>
+              );
             }
             if (SAFE_LINK.test(href)) {
               return (

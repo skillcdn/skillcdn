@@ -47,7 +47,7 @@ packages/
   brand/      the pictures of the brand as files, under the trademark policy; no code   @skillcdn/brand on npm
 apps/server/fixtures/.repositories/  test-only repository fixtures; the public reference repository is skillcdn/skills
 deploy/       Dockerfile, compose files, the contract for whoever operates the image
-docs/         architecture, specs, ADRs, roadmap
+docs/         architecture, specs, ADRs, roadmap, user guides; nav.json lists what the pages publish under /docs
 ```
 
 Two reference repositories sit beside this one and are never imported from it: `skillcdn/skills`, the reference skill repository, and `skillcdn/console`, the reference console for an organization that runs its work with agents. Both are examples that follow the standard and are meant for real use; the console consumes the published packages and the REST API like any other consumer and defines nothing of the specification ([ADR-0047](docs/adr/0047-the-console-is-a-separate-repository-built-on-the-published-packages.md)).
@@ -107,6 +107,7 @@ Documentation is part of the change, not a follow-up. A future session starts wi
 | When you change... | Update in the same change |
 |---|---|
 | Public behavior: address grammar, tool names or schemas, skill-repo convention, REST API | `docs/specs/*`; root `README.md` if the overview changes |
+| What a repository author or a user of one has to do differently | the guide in `docs/guide/`; a new guide is listed in `docs/nav.json` to be published ([ADR-0049](docs/adr/0049-the-documentation-is-rendered-into-the-pages-from-the-repositorys-own-files.md)) |
 | What a published package does or exports | a changeset in `.changeset/`, which becomes the package's changelog; the package's `README.md` when its usage changes |
 | Packages, boundaries, runtime components, data flow, security model | `docs/architecture.md`; the repository map above; an ADR |
 | A decision future contributors might reasonably undo | new ADR in `docs/adr/` (never edit an accepted ADR; supersede it) |

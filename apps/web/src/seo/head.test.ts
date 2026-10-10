@@ -6,6 +6,7 @@ import type {
   RestSkill,
 } from "@skillcdn/core";
 import { describe, expect, it } from "vitest";
+import { messagesFor } from "../i18n/index.js";
 import { LANGUAGES } from "../i18n/languages.js";
 import { matchRoute } from "../router.js";
 import { DEFAULT_SHOWCASE_MEDIA } from "../site.js";
@@ -200,6 +201,45 @@ describe("buildHead", () => {
     expect(
       buildHead(matchRoute("/", ""), "en", ORIGIN, { showcase: { items: [] } }).image.url,
     ).toBe(`${ORIGIN}/og/og-en.png`);
+  });
+
+  it("offers the documentation to search engines as pages in English, each with a card drawn for it", () => {
+    // The frame is in the visitor's language, the page is not: one URL, no translations of it.
+    const index = buildHead(matchRoute("/docs", "?lang=ko"), "ko", ORIGIN);
+    expect(index.indexable).toBe(true);
+    expect(index.canonical).toBe("https://skills.example/docs");
+    expect(index.alternates).toEqual([
+      { hreflang: "en", href: "https://skills.example/docs" },
+      { hreflang: "x-default", href: "https://skills.example/docs" },
+    ]);
+    expect(index.title).toBe(messagesFor("ko").docs.metaTitle);
+    expect(index.image.url).toBe("https://skills.example/social/docs?lang=ko");
+    expect(index.jsonLd.map((data) => data["@type"])).toEqual(["CollectionPage", "BreadcrumbList"]);
+
+    const page = buildHead(matchRoute("/docs/format", ""), "en", ORIGIN);
+    expect(page.indexable).toBe(true);
+    expect(page.canonical).toBe("https://skills.example/docs/format");
+    expect(page.title).toBe("The SkillCDN Format · Docs | SkillCDN");
+    expect(page.description.length).toBeGreaterThan(20);
+    expect(page.image.url).toBe("https://skills.example/social/docs/format?lang=en");
+    expect(page.image.alt).toBe(page.title);
+    expect(page.jsonLd[0]).toMatchObject({
+      "@type": "TechArticle",
+      headline: "The SkillCDN Format",
+      inLanguage: "en",
+      url: "https://skills.example/docs/format",
+    });
+    const crumbs = page.jsonLd[1] as {
+      readonly "@type": string;
+      readonly itemListElement: readonly { name: string }[];
+    };
+    expect(crumbs["@type"]).toBe("BreadcrumbList");
+    expect(crumbs.itemListElement.map((item) => item.name)).toEqual([
+      "Documentation",
+      "Reference",
+      "The SkillCDN Format",
+    ]);
+    expect(renderHead(page)).toContain('<meta name="robots" content="index,follow"');
   });
 
   it("keeps pages of an address out of search indexes until their data is there", () => {

@@ -110,6 +110,26 @@ export const ko: Messages = {
     next: "다음",
   },
 
+  docs: {
+    title: "문서",
+    lead: "쓰던 AI에서 스킬 저장소를 쓰는 법, 직접 만드는 법, 그리고 그 둘을 뒷받침하는 규약.",
+    metaTitle: "문서 | SkillCDN",
+    metaDescription:
+      "스킬 저장소를 쓰고 만드는 가이드와 SkillCDN이 구현하는 명세: 포맷, 주소, 에이전트가 MCP로 받는 것, REST API, 그리고 직접 운영하는 법.",
+    pageTitle: (title: string) => `${title} · 문서 | SkillCDN`,
+    sections: { guides: "가이드", reference: "레퍼런스", operate: "운영" },
+    navLabel: "문서 목차",
+    allPages: "전체 문서",
+    onThisPage: "이 페이지에서",
+    inEnglish: "이 페이지는 영어로 쓰여 있습니다.",
+    edit: "GitHub에서 이 페이지 수정하기",
+    source: "Markdown 원문",
+    allInOne: "전체 문서를 한 파일로",
+    neighbours: "이전 페이지와 다음 페이지",
+    previous: "이전",
+    next: "다음",
+  },
+
   mount: {
     repository: "저장소",
     defaultBranch: "기본 브랜치",

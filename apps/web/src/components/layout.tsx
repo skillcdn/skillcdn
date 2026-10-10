@@ -40,7 +40,7 @@ export function Layout(props: { readonly children: ReactNode }) {
           </Link>
           <nav className={styles.nav} aria-label={t.nav.main}>
             <Link href={PATHS.explore}>{t.nav.explore}</Link>
-            <a href={LINKS.docs}>{t.nav.docs}</a>
+            <Link href={PATHS.docs}>{t.nav.docs}</Link>
             <a href={LINKS.repository}>{t.nav.github}</a>
           </nav>
           <div className={styles.controls}>

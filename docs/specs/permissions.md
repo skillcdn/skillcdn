@@ -49,7 +49,7 @@ An address is resolved the same way for the pages, the REST API and MCP. Who the
 What follows from a repository not being public:
 
 - Responses are `cache-control: private, no-store`; MCP results carry `cacheScope: "private"`. The page of the address is not offered to search engines and has no social preview, and `/social/` and `/icon/` answer `404` for it, as for a name that is nothing.
-- It is never on a list the deployment makes for everyone: not among the featured repositories, not on the [page of its account](rest.md#get-apiv1ownersghowner), not in the usage statistics.
+- It is never on a list the deployment makes for everyone: not among the featured repositories, not on the [page of its account](rest.md#get-apiv1ownersghownerpage), not in the usage statistics.
 - Its index is the same index: one per `(repository, commit)`, built with the installation token, read only through a mount that was resolved for the person asking. File bodies are stored by their git hash and shared between repositories; a body is only ever read through an index entry of a snapshot the caller was resolved for, and an entry exists only for a hash the host listed in a tree of that repository, so a hash from anywhere else opens nothing.
 - The operator's blocked list still wins: a blocked repository does not exist for its own people either.
 

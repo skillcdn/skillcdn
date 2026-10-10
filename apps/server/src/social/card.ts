@@ -200,13 +200,26 @@ function drawGround(ctx: SKRSContext2D): void {
   ctx.globalAlpha = 1;
 }
 
-function drawAvatar(ctx: SKRSContext2D, picture: SkiaImage | undefined): void {
+/** How much of the tile the symbol takes when it stands where a picture would. */
+const SYMBOL_INSET = 28;
+
+/**
+ * The tile at the top left: the owner's picture, or, for a page that has no owner (a page of the
+ * documentation), the site's own symbol; an empty tile when a picture could not be fetched.
+ */
+function drawAvatar(ctx: SKRSContext2D, picture: SkiaImage | undefined, symbol: boolean): void {
   ctx.save();
   roundedClip(ctx, MARGIN, MARGIN, AVATAR, AVATAR_RADIUS);
   ctx.fillStyle = COLORS.inset;
   ctx.fillRect(MARGIN, MARGIN, AVATAR, AVATAR);
   if (picture !== undefined) {
     ctx.drawImage(picture, MARGIN, MARGIN, AVATAR, AVATAR);
+  } else if (symbol) {
+    const size = AVATAR - 2 * SYMBOL_INSET;
+    ctx.translate(MARGIN + SYMBOL_INSET, MARGIN + SYMBOL_INSET);
+    ctx.scale(size / 100, size / 100);
+    ctx.fillStyle = BRAND_SYMBOL_COLOR;
+    ctx.fill(new Path2D(BRAND_SYMBOL_PATH));
   }
   ctx.restore();
   ctx.strokeStyle = COLORS.border;
@@ -283,7 +296,8 @@ function drawBrand(ctx: SKRSContext2D, right: number, middle: number, height: nu
 
 /**
  * Draws the card as a PNG. `avatar` is the owner's picture as fetched, or nothing, in which
- * case its place stays an empty tile.
+ * case its place stays an empty tile, or shows the site's symbol for a card that names no
+ * picture at all (an empty `avatar`): a page with no owner.
  */
 export async function drawSocialCard(
   card: SocialCard,
@@ -302,7 +316,7 @@ export async function drawSocialCard(
       picture = undefined;
     }
   }
-  drawAvatar(ctx, picture);
+  drawAvatar(ctx, picture, card.avatar === "");
 
   const column = WIDTH - COLUMN - MARGIN;
   ctx.textBaseline = "alphabetic";

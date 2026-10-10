@@ -7,6 +7,7 @@ import {
   BADGE_ROUTE,
   type Clock,
   CONSENT_PAGE_PATH,
+  DOCS_PAGE_PATH,
   formatAddress,
   formatOwnerPath,
   type GitHostEventSource,
@@ -500,6 +501,34 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
   });
   const social = dependencies.social;
   if (web !== undefined && social !== undefined) {
+    // The social preview of a page of the documentation (ADR-0049): drawn from the words the
+    // build writes for the page, with the site's symbol where an owner's picture would be. The
+    // text of the pages is the build's, so a card changes only with the build.
+    const docsSocialPath = `${SOCIAL_ROUTE}${DOCS_PAGE_PATH}`;
+    for (const path of [docsSocialPath, `${docsSocialPath}/*`]) {
+      app.on(["GET", "HEAD"], path, async (c) => {
+        const request = webRequestOf(c);
+        const slug = request.url.pathname.slice(docsSocialPath.length).replace(/^\//, "");
+        if (!/^[a-z0-9-]*$/.test(slug)) {
+          return c.notFound();
+        }
+        const drawn = web.docsSocial(request, slug);
+        if (drawn === undefined) {
+          return c.notFound();
+        }
+        const key = ["docs", drawn.language, slug].join("\n");
+        const response = bytesResponse(request, {
+          bytes: await social.picture(key, drawn.card),
+          contentType: "image/png",
+          etag: `"${createHash("sha1").update(key).digest("hex")}"`,
+          cacheControl: "public, max-age=3600",
+        });
+        if (!drawn.forced) {
+          response.headers.set("vary", "accept-language");
+        }
+        return response;
+      });
+    }
     app.on(["GET", "HEAD"], `${SOCIAL_ROUTE}/*`, async (c) => {
       const request = webRequestOf(c);
       const parsed = parseAddress(request.url.pathname.slice(SOCIAL_ROUTE.length));

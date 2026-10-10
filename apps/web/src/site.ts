@@ -1,23 +1,14 @@
 import { AUTH_META_NAME, REFERENCE_REPOSITORY_ADDRESS } from "@skillcdn/core";
+import { ORIGIN_META_NAME, ORIGIN_PLACEHOLDER, REPOSITORY_URL } from "./site-constants.js";
 
 // Facts about the site that are not copy: where things link to, and how the public origin
-// travels from the server into the page.
+// travels from the server into the page. The constants the build tooling reads as well live in
+// site-constants.ts and are passed through here.
 
-/**
- * What stands in for the public origin in prerendered pages. Whatever serves the pages replaces
- * it with the real origin (ADR-0009), so one build works on any domain. It is a syntactically
- * valid URL so that nothing chokes on it before that happens.
- */
-export const ORIGIN_PLACEHOLDER = "https://origin.skillcdn.invalid";
-
-export const ORIGIN_META_NAME = "skillcdn-origin";
-
-export const REPOSITORY_URL = "https://github.com/skillcdn/skillcdn";
+export { ORIGIN_META_NAME, ORIGIN_PLACEHOLDER, REPOSITORY_URL };
 
 export const LINKS = {
   repository: REPOSITORY_URL,
-  docs: `${REPOSITORY_URL}/tree/main/docs`,
-  convention: `${REPOSITORY_URL}/blob/main/docs/specs/skill-repo.md`,
   license: `${REPOSITORY_URL}/blob/main/LICENSE.md`,
 } as const;
 

@@ -1,0 +1,36 @@
+{
+  "sections": [
+    {
+      "id": "guides",
+      "pages": [
+        { "file": "docs/guide/use-skills.md", "slug": "use-skills" },
+        { "file": "docs/guide/write-a-repository.md", "slug": "write-a-repository" }
+      ]
+    },
+    {
+      "id": "reference",
+      "pages": [
+        { "file": "docs/specs/skill-repo.md", "slug": "format", "title": "The SkillCDN Format" },
+        { "file": "docs/specs/address.md", "slug": "addresses", "title": "Addresses" },
+        { "file": "docs/specs/tools.md", "slug": "tools", "title": "What an agent gets over MCP" },
+        { "file": "docs/specs/rest.md", "slug": "rest-api", "title": "REST API" },
+        {
+          "file": "docs/specs/permissions.md",
+          "slug": "permissions",
+          "title": "People, private repositories and access"
+        }
+      ]
+    },
+    {
+      "id": "operate",
+      "pages": [
+        {
+          "file": "deploy/README.md",
+          "slug": "self-hosting",
+          "title": "Self-hosting",
+          "description": "Build the image, configure it through the environment and run a deployment of your own: the admin API, signing in, what a public deployment must show, a reverse proxy, and how a release is built."
+        }
+      ]
+    }
+  ]
+}

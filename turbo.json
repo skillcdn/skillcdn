@@ -20,6 +20,29 @@
       "outputs": [],
       "passThroughEnv": ["TEST_DATABASE_URL"]
     },
+    "@skillcdn/web#build": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "!**/*.test.ts",
+        "../../docs/nav.json",
+        "../../docs/guide/*.md",
+        "../../docs/specs/*.md",
+        "../../deploy/README.md"
+      ],
+      "outputs": ["dist/**"]
+    },
+    "@skillcdn/web#test": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "../../docs/nav.json",
+        "../../docs/guide/*.md",
+        "../../docs/specs/*.md",
+        "../../deploy/README.md"
+      ],
+      "outputs": []
+    },
     "dev": {
       "dependsOn": ["build"],
       "cache": false,

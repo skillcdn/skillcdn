@@ -133,6 +133,11 @@ jobs:
           curl -fsS -H 'accept: text/html' 'http://127.0.0.1:11188/?lang=ko' | grep -q '<html lang="ko">'
           curl -sS -H 'accept: text/html' 'http://127.0.0.1:11188/gh/skillcdn/skills.git' | grep -q 'data-prerendered="bad-address"'
           curl -fsS 'http://127.0.0.1:11188/sitemap.xml' | grep -q 'hreflang="ko"'
+          # The documentation is rendered into the pages from the repository's own files, with
+          # the Markdown of each page beside it and a card drawn for it.
+          curl -fsS -H 'accept: text/html' 'http://127.0.0.1:11188/docs/format' | grep -q 'data-prerendered="docs"'
+          curl -fsS 'http://127.0.0.1:11188/docs/format.md' | grep -q '^# '
+          curl -fsS -o /dev/null -w '%{content_type}\n' 'http://127.0.0.1:11188/social/docs/format' | grep -q 'image/png'
           curl -fsS 'http://127.0.0.1:11188/api/v1/featured' | grep -q '"items"'
           # The notices ship with the pages and with the image.
           curl -fsS 'http://127.0.0.1:11188/licenses/npm.txt' | grep -q '^react '

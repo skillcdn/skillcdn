@@ -282,8 +282,15 @@ describe("files", () => {
 describe("what crawlers ask for", () => {
   it("is a sitemap of the indexable pages and the given addresses in every language, each pointing at the others", async () => {
     const xml = await web.sitemap(request("/sitemap.xml"), ["/gh/acme/skills"]).text();
-    expect(xml.match(/<url>/g)).toHaveLength(6);
+    expect(xml.match(/<url>/g)).toHaveLength(7);
     expect(xml).toContain("<loc>https://skills.example/</loc>");
+    // A page written in one language is listed in that one, however many frames it has.
+    expect(xml).toContain("<loc>https://skills.example/docs/format</loc>");
+    expect(xml).not.toContain("/docs/format?lang=ko");
+    expect(xml).not.toContain("/docs/format.md");
+    expect(xml).toContain(
+      '<xhtml:link rel="alternate" hreflang="x-default" href="https://skills.example/docs/format"/>',
+    );
     expect(xml).toContain("<loc>https://skills.example/?lang=ko</loc>");
     expect(xml).toContain("<loc>https://skills.example/explore?lang=ko</loc>");
     expect(xml).toContain("<loc>https://skills.example/gh/acme/skills?lang=ko</loc>");
@@ -298,6 +305,24 @@ describe("what crawlers ask for", () => {
     );
     expect(xml).not.toContain("llms.txt");
     expect(web.respond(request("/sitemap.xml"))).toBeUndefined();
+  });
+
+  it("serves a page of the documentation framed in the language asked, its Markdown beside it, and the words of its card", async () => {
+    expect(await answer("/docs/format?lang=ko").text()).toContain("framed in Korean");
+    expect(answer("/docs/format").headers.get("content-language")).toBe("en");
+    const markdown = answer("/docs/format.md", { headers: { "accept-language": "ko" } });
+    expect(markdown.headers.get("content-type")).toBe("text/markdown; charset=utf-8");
+    expect(markdown.headers.get("content-security-policy")).toBeNull();
+    expect(await markdown.text()).toContain("[the tools](https://skills.example/docs/tools.md)");
+    // The words of the card are the build's, in the language the request asks for.
+    const card = web.docsSocial(request("/social/docs/format?lang=ko"), "format");
+    expect(card).toMatchObject({
+      language: "ko",
+      forced: true,
+      card: { title: "The format", subtitle: "skills.example/docs/format (ko)", avatar: "" },
+    });
+    expect(web.docsSocial(request("/social/docs"), "")?.card.title).toBe("Documentation");
+    expect(web.docsSocial(request("/social/docs/nothing"), "nothing")).toBeUndefined();
   });
 
   it("is a robots.txt that keeps crawlers away from the API and nothing else", async () => {
@@ -377,6 +402,20 @@ describe("loadWebBundle", () => {
     await expect(
       loadWebBundle("/this/directory/does/not/exist", { publicUrl: undefined }),
     ).rejects.toBeInstanceOf(WebBundleError);
+  });
+
+  it("refuses a page listed in a language it has no file for", async () => {
+    const listed = createWebBuild({
+      ...WEB_BUILD_MANIFEST,
+      routes: [
+        ...WEB_BUILD_MANIFEST.routes,
+        { path: "/docs/more", files: { en: "index.html" }, indexable: true, alternates: ["fr"] },
+      ],
+    });
+    await expect(loadWebBundle(listed.root, { publicUrl: undefined })).rejects.toThrow(
+      /\/docs\/more is listed in a language it has no file for/,
+    );
+    listed.remove();
   });
 
   it("refuses a render module that cannot be loaded, or one without a template", async () => {

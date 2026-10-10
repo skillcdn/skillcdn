@@ -1,15 +1,18 @@
+import { DOCS_CONTENT } from "virtual:skillcdn-docs-content";
 import type {
   RestLegalDocument,
   RestMount,
   RestOwner,
   RestShowcase,
   RestSkill,
+  SocialCard,
 } from "@skillcdn/core";
 import { StrictMode } from "react";
 import { renderToString } from "react-dom/server";
 import { type InitialData, type InitialResource, renderInitialData } from "./api/initial-data.js";
 import { resourceKeys } from "./api/keys.js";
 import { App } from "./app.js";
+import { DOCS_PAGES, docsPage, docsSectionLabel } from "./docs/catalog.js";
 import { messagesFor } from "./i18n/index.js";
 import {
   DEFAULT_LANGUAGE,
@@ -22,10 +25,11 @@ import {
 } from "./i18n/languages.js";
 import { AccountPage } from "./pages/account.js";
 import { ConsentPage } from "./pages/consent.js";
+import { DocsPage } from "./pages/docs.js";
 import { LegalPage } from "./pages/legal.js";
 import { MountPage } from "./pages/mount.js";
 import { OwnerPage } from "./pages/owner.js";
-import { matchRoute, PATHS } from "./router.js";
+import { docsHref, matchRoute, PATHS } from "./router.js";
 import { buildHead, type PageData, renderHead } from "./seo/head.js";
 import { showcaseEntries, showcaseTexts } from "./showcase.js";
 import { LINKS, ORIGIN_PLACEHOLDER } from "./site.js";
@@ -46,6 +50,37 @@ export const STATIC_PAGES = [
   { name: "explore", path: PATHS.explore, file: "explore/index", indexable: true },
 ] as const;
 
+/**
+ * The pages of the documentation (ADR-0049), prerendered like the static pages, with the frame
+ * in every language around a text that is written in one: the index, then every page in the
+ * order the navigation lists them. `alternates` names the languages the sitemap lists a page in.
+ */
+export const DOCS_ROUTES: readonly {
+  readonly path: string;
+  readonly file: string;
+  readonly indexable: boolean;
+  readonly alternates: readonly Language[];
+}[] = [
+  { path: PATHS.docs, file: "docs/index", indexable: true, alternates: [DEFAULT_LANGUAGE] },
+  ...DOCS_PAGES.map((page) => ({
+    path: docsHref(page.slug),
+    file: `docs/${page.slug}/index`,
+    indexable: true,
+    alternates: [DEFAULT_LANGUAGE],
+  })),
+];
+
+/** The Markdown of each page of the documentation, served beside the page for agents. */
+export const DOCS_SOURCES: readonly {
+  readonly path: string;
+  readonly file: string;
+  readonly text: string;
+}[] = DOCS_PAGES.map((page) => ({
+  path: `${docsHref(page.slug)}.md`,
+  file: `docs/${page.slug}.md`,
+  text: DOCS_CONTENT[page.slug]?.source ?? "",
+}));
+
 export interface RenderedPage {
   readonly htmlLang: string;
   readonly head: string;
@@ -63,6 +98,7 @@ export interface RenderedPage {
 const SERVER_PAGES = {
   mount: MountPage,
   legal: LegalPage,
+  docs: DocsPage,
   owner: OwnerPage,
   account: AccountPage,
   consent: ConsentPage,
@@ -89,6 +125,7 @@ function render(path: string, language: Language, shell: boolean): RenderedPage 
           initialLocation={{ pathname: path, search }}
           origin={ORIGIN_PLACEHOLDER}
           shell={shell}
+          pages={SERVER_PAGES}
         />
       </StrictMode>,
     ),
@@ -328,9 +365,74 @@ export function renderLegalPage(template: string, input: LegalPageInput): Addres
 }
 
 /**
+ * The words of the social preview of a page of the documentation (ADR-0049), drawn by the server
+ * as the card of an address is: the index for an empty slug, else the page, in the language the
+ * frame is shown in. `undefined` for a slug that is no page.
+ */
+export function docsSocialCard(
+  language: string,
+  origin: string,
+  slug: string,
+): SocialCard | undefined {
+  const t = messagesFor(isLanguage(language) ? language : DEFAULT_LANGUAGE);
+  const host = origin.replace(/^https?:\/\//, "");
+  const common = { verified: false, avatar: "", siteName: t.meta.siteName };
+  if (slug === "") {
+    return {
+      ...common,
+      kicker: t.meta.siteName,
+      title: t.docs.title,
+      subtitle: `${host}${PATHS.docs}`,
+      description: t.docs.lead,
+      badges: [],
+    };
+  }
+  const page = docsPage(slug);
+  return page === undefined
+    ? undefined
+    : {
+        ...common,
+        kicker: t.docs.title,
+        title: page.title,
+        subtitle: `${host}${docsHref(page.slug)}`,
+        description: page.description,
+        badges: [docsSectionLabel(t, page.section)],
+      };
+}
+
+/**
+ * Every page of the documentation in one plain-text file, after the llms-full.txt convention:
+ * what the site is, the list of pages, then the Markdown of each with where it is served.
+ */
+export function renderLlmsFullTxt(): string {
+  const t = messagesFor(DEFAULT_LANGUAGE);
+  const origin = ORIGIN_PLACEHOLDER;
+  return [
+    `# ${t.meta.siteName}: ${t.docs.title}`,
+    "",
+    `> ${t.docs.metaDescription}`,
+    "",
+    t.meta.landing.about,
+    "",
+    ...DOCS_PAGES.map(
+      (page) => `- [${page.title}](${origin}${docsHref(page.slug)}.md): ${page.description}`,
+    ),
+    "",
+    ...DOCS_PAGES.flatMap((page) => [
+      "---",
+      "",
+      `Source: ${origin}${docsHref(page.slug)}.md`,
+      "",
+      (DOCS_CONTENT[page.slug]?.source ?? "").trimEnd(),
+      "",
+    ]),
+  ].join("\n");
+}
+
+/**
  * A plain-text description of the site for language models, after the llms.txt convention: what
  * it is in one sentence, what there is to make (the operator's showcase, else the build's own),
- * how it goes, and where the pages are.
+ * how it goes, where the pages are, and the documentation as Markdown.
  */
 export function renderLlmsTxt(language: Language, showcase?: RestShowcase): string {
   const t = messagesFor(language);
@@ -368,12 +470,19 @@ export function renderLlmsTxt(language: Language, showcase?: RestShowcase): stri
     `## ${t.landing.faq.title}`,
     "",
     ...t.landing.faq.items.flatMap((item) => [`### ${item.question}`, "", item.answer, ""]),
-    `## ${t.nav.docs}`,
+    `## ${t.docs.title}`,
     "",
+    `- [${t.docs.title}](${origin}${withLanguage(PATHS.docs, language)}): ${t.docs.lead}`,
+    ...DOCS_PAGES.map(
+      (page) => `- [${page.title}](${origin}${docsHref(page.slug)}.md): ${page.description}`,
+    ),
     `- [${t.explore.title}](${origin}${withLanguage(PATHS.explore, language)}): ${t.explore.lead}`,
-    `- [${t.landing.authors.convention}](${LINKS.convention})`,
     `- [${t.footer.source}](${LINKS.repository})`,
     `- [${t.footer.license}](${LINKS.license})`,
+    "",
+    "## Optional",
+    "",
+    `- [${t.docs.allInOne}](${origin}/llms-full.txt)`,
     "",
   ];
   return lines.join("\n");

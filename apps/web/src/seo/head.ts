@@ -7,6 +7,7 @@ import {
   type RestSkill,
   SOCIAL_ROUTE,
 } from "@skillcdn/core";
+import { docsPage, docsSectionLabel } from "../docs/catalog.js";
 import { messagesFor } from "../i18n/index.js";
 import {
   DEFAULT_LANGUAGE,
@@ -23,7 +24,7 @@ import {
   skillTitle,
 } from "../i18n/repository-text.js";
 import { firstParagraph, legalTexts } from "../legal.js";
-import { mountHref, ownerHref, PATHS, type Route } from "../router.js";
+import { docsHref, mountHref, ownerHref, PATHS, type Route } from "../router.js";
 import { showcaseEntries, showcaseTexts } from "../showcase.js";
 import { LINKS } from "../site.js";
 
@@ -87,6 +88,8 @@ function indexablePathOf(route: Route, data: PageData | undefined): string | und
     case "legal":
       // Written into the deployment, the page is one to find; not written, there is none.
       return data?.legal === undefined ? undefined : PATHS[route.kind];
+    case "docs":
+      return docsHref(route.slug);
     case "mount": {
       const { address, view } = route;
       if (address.ref !== undefined || data?.mount?.index.status !== "ready") {
@@ -191,6 +194,20 @@ function legalText(
   };
 }
 
+function docsText(
+  route: Extract<Route, { name: "docs" }>,
+  language: Language,
+): { readonly title: string; readonly description: string } {
+  const t = messagesFor(language);
+  if (route.slug === undefined) {
+    return { title: t.docs.metaTitle, description: t.docs.metaDescription };
+  }
+  const page = docsPage(route.slug);
+  return page === undefined
+    ? t.meta.notFound
+    : { title: t.docs.pageTitle(page.title), description: clip(page.description) };
+}
+
 export function buildHead(
   route: Route,
   language: Language,
@@ -201,7 +218,10 @@ export function buildHead(
   const path = indexablePathOf(route, data);
   const urlIn = (code: Language) =>
     path === undefined ? undefined : `${origin}${withLanguage(path, code)}`;
-  const canonical = urlIn(language);
+  // The documentation is written in English, whatever language the frame around it is shown
+  // in: one URL is the page, in that language, and the others are not translations of it.
+  const written: readonly Language[] = route.name === "docs" ? [DEFAULT_LANGUAGE] : LANGUAGES;
+  const canonical = urlIn(route.name === "docs" ? DEFAULT_LANGUAGE : language);
   const inLanguage = LANGUAGE_INFO[language].htmlLang;
 
   const text =
@@ -213,21 +233,23 @@ export function buildHead(
           ? mountText(route, language, data)
           : route.name === "legal"
             ? legalText(route, language, data)
-            : route.name === "owner"
-              ? {
-                  // Named as the host spells it once that is known, as its path writes it before.
-                  title: t.owner.metaTitle(data?.owner?.login ?? route.owner.owner),
-                  description: t.owner.metaDescription(data?.owner?.login ?? route.owner.owner),
-                }
-              : route.name === "account"
-                ? { title: t.account.metaTitle, description: "" }
-                : route.name === "consent"
-                  ? { title: t.authorize.metaTitle, description: "" }
-                  : route.name === "states" || route.name === "og-card"
-                    ? { title: t.meta.siteName, description: "" }
-                    : route.name === "bad-address"
-                      ? { title: `${t.address.invalid} | ${t.meta.siteName}`, description: "" }
-                      : t.meta.notFound;
+            : route.name === "docs"
+              ? docsText(route, language)
+              : route.name === "owner"
+                ? {
+                    // Named as the host spells it once that is known, as its path writes it before.
+                    title: t.owner.metaTitle(data?.owner?.login ?? route.owner.owner),
+                    description: t.owner.metaDescription(data?.owner?.login ?? route.owner.owner),
+                  }
+                : route.name === "account"
+                  ? { title: t.account.metaTitle, description: "" }
+                  : route.name === "consent"
+                    ? { title: t.authorize.metaTitle, description: "" }
+                    : route.name === "states" || route.name === "og-card"
+                      ? { title: t.meta.siteName, description: "" }
+                      : route.name === "bad-address"
+                        ? { title: `${t.address.invalid} | ${t.meta.siteName}`, description: "" }
+                        : t.meta.notFound;
 
   const jsonLd: Record<string, unknown>[] = [];
   // The front page shows the operator's showcase, else the build's own (ADR-0028).
@@ -293,6 +315,58 @@ export function buildHead(
       })),
     });
   }
+  if (route.name === "docs" && canonical !== undefined) {
+    // A page of the documentation is an article of the site, found by its breadcrumbs: the
+    // documentation, its section, the page. The index is the collection of them.
+    const page = route.slug === undefined ? undefined : docsPage(route.slug);
+    const site = { "@type": "WebSite", name: t.meta.siteName, url: `${origin}${PATHS.landing}` };
+    const docsLanguage = LANGUAGE_INFO[DEFAULT_LANGUAGE].htmlLang;
+    jsonLd.push(
+      page === undefined
+        ? {
+            "@context": "https://schema.org",
+            "@type": "CollectionPage",
+            name: t.docs.title,
+            description: t.docs.metaDescription,
+            url: canonical,
+            inLanguage: docsLanguage,
+            isPartOf: site,
+          }
+        : {
+            "@context": "https://schema.org",
+            "@type": "TechArticle",
+            headline: page.title,
+            description: page.description,
+            url: canonical,
+            mainEntityOfPage: canonical,
+            inLanguage: docsLanguage,
+            isPartOf: site,
+            publisher: {
+              "@type": "Organization",
+              name: t.meta.siteName,
+              url: `${origin}${PATHS.landing}`,
+              logo: `${origin}/brand/logo-black.png`,
+            },
+          },
+    );
+    const crumbs = [
+      { name: t.docs.title, item: `${origin}${PATHS.docs}` },
+      ...(page === undefined
+        ? []
+        : [{ name: docsSectionLabel(t, page.section) }, { name: page.title, item: canonical }]),
+    ];
+    jsonLd.push({
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: crumbs.map((crumb, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        name: crumb.name,
+        ...("item" in crumb ? { item: crumb.item } : {}),
+      })),
+    });
+  }
+
   // A showcase entry may bring its own picture for link previews; the build's card otherwise.
   const social = showcase[0]?.media.social ?? null;
   // The page of an address unfurls with a card the server draws for it, in this language, with
@@ -300,6 +374,7 @@ export function buildHead(
   // crawler gets the card of the page it read, whatever language it asks for itself. A private
   // repository has none: a card is drawn for whoever a link is sent to, and to them the
   // repository does not exist.
+  // A page of the documentation unfurls with a card drawn the same way, under its own path.
   const drawn =
     route.name === "mount" &&
     data?.mount !== undefined &&
@@ -307,7 +382,9 @@ export function buildHead(
       ? `${origin}${SOCIAL_ROUTE}${formatAddress(route.address)}?${LANGUAGE_PARAM}=${language}${
           route.view.kind === "skill" ? `&skill=${encodeURIComponent(route.view.path)}` : ""
         }`
-      : undefined;
+      : route.name === "docs" && canonical !== undefined
+        ? `${origin}${SOCIAL_ROUTE}${docsHref(route.slug)}?${LANGUAGE_PARAM}=${language}`
+        : undefined;
   if (route.name === "mount" && canonical !== undefined && data?.mount !== undefined) {
     const { repository } = data.mount;
     const manifest = data.mount.index.status === "ready" ? data.mount.index.manifest : null;
@@ -344,7 +421,7 @@ export function buildHead(
       path === undefined
         ? []
         : [
-            ...LANGUAGES.map((code) => ({
+            ...written.map((code) => ({
               hreflang: LANGUAGE_INFO[code].htmlLang,
               href: `${origin}${withLanguage(path, code)}`,
             })),

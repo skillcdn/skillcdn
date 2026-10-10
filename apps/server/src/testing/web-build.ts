@@ -31,6 +31,19 @@ export const WEB_BUILD_MANIFEST = {
       indexable: false,
       contentType: "text/plain; charset=utf-8",
     },
+    // A page of the documentation: the frame in every language around a text in one (ADR-0049).
+    {
+      path: "/docs/format",
+      files: { en: "docs/format/index.html", ko: "docs/format/index.ko.html" },
+      indexable: true,
+      alternates: ["en"],
+    },
+    {
+      path: "/docs/format.md",
+      files: { en: "docs/format.md" },
+      indexable: false,
+      contentType: "text/markdown; charset=utf-8",
+    },
   ],
   shell: { en: "shell.html", ko: "shell.ko.html" },
   notFound: { en: "not-found.html", ko: "not-found.ko.html" },
@@ -87,6 +100,19 @@ export function socialCard(language, origin, data) {
     siteName: "SkillCDN",
   };
 }
+export function docsSocialCard(language, origin, slug) {
+  if (slug !== "" && slug !== "format") return undefined;
+  return {
+    kicker: slug === "" ? "SkillCDN" : "Documentation",
+    title: slug === "" ? "Documentation" : "The format",
+    subtitle: origin.replace(/^https?:\\/\\//, "") + "/docs" + (slug === "" ? "" : "/" + slug) + " (" + language + ")",
+    description: "What a page says.",
+    badges: slug === "" ? [] : ["Reference"],
+    verified: false,
+    avatar: "",
+    siteName: "SkillCDN",
+  };
+}
 `;
 
 const TEMPLATE_SOURCE =
@@ -138,6 +164,12 @@ export function createWebBuild(
   write("not-found.ko.html", page("ko", "Not found in Korean"));
   write("404.html", page("en", "Shell"));
   write("llms.txt", `# Site\n\n${ORIGIN_PLACEHOLDER}/gh/owner/repo\n`);
+  write("docs/format/index.html", page("en", "The format"));
+  write("docs/format/index.ko.html", page("ko", "The format, framed in Korean"));
+  write(
+    "docs/format.md",
+    `# The format\n\nRead [the tools](${ORIGIN_PLACEHOLDER}/docs/tools.md).\n`,
+  );
   write("assets/index-abc123.js", "console.log('bundle');\n");
   write("favicon.svg", "<svg xmlns='http://www.w3.org/2000/svg'/>\n");
   write("showcase/clip.mp4", "not a video, but served like one\n");

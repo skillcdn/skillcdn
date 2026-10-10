@@ -121,6 +121,29 @@ export const en = {
     next: "Next",
   },
 
+  /** The documentation (ADR-0049): the frame around pages written in English. */
+  docs: {
+    title: "Documentation",
+    lead: "How to use a skill repository from the AI you already have, how to write one, and the contracts behind both.",
+    metaTitle: "Documentation | SkillCDN",
+    metaDescription:
+      "Guides for using and writing skill repositories, and the specifications SkillCDN implements: the format, addresses, what an agent gets over MCP, the REST API, and how to run a deployment of your own.",
+    pageTitle: (title: string) => `${title} · Docs | SkillCDN`,
+    /** The sections of docs/nav.json, by id. A test keeps the two lists equal. */
+    sections: { guides: "Guides", reference: "Reference", operate: "Operate" },
+    navLabel: "Documentation",
+    allPages: "All pages",
+    onThisPage: "On this page",
+    inEnglish: "This page is written in English.",
+    edit: "Edit this page on GitHub",
+    source: "Markdown source",
+    /** In llms.txt: the one file with every page in it. */
+    allInOne: "Every page of the documentation in one file",
+    neighbours: "Previous and next page",
+    previous: "Previous",
+    next: "Next",
+  },
+
   mount: {
     repository: "Repository",
     defaultBranch: "Default branch",

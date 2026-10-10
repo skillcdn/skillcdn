@@ -3,6 +3,7 @@ import {
   type Address,
   type AddressError,
   CONSENT_PAGE_PATH,
+  DOCS_PAGE_PATH,
   formatAddress,
   formatOwnerPath,
   LEGAL_PAGE_PATHS,
@@ -12,6 +13,7 @@ import {
   parseOwnerPath,
   ROOT_PATH,
 } from "@skillcdn/core";
+import { hasDocsPage } from "./docs/catalog.js";
 
 // A few kinds of page and no nesting, so the router is a function from a URL to a route.
 // Paths are the same in every language; the language travels in the query (i18n/languages.ts).
@@ -40,6 +42,8 @@ export type Route =
   | { readonly name: "consent" }
   /** A page of the deployment's own: its terms or its privacy policy (ADR-0029). */
   | { readonly name: "legal"; readonly kind: LegalDocumentKind }
+  /** The documentation (ADR-0049): its index without a slug, else one of its pages. */
+  | { readonly name: "docs"; readonly slug: string | undefined }
   | { readonly name: "bad-address"; readonly error: AddressError }
   /** Every state of every page, for whoever works on the design. Only in development. */
   | { readonly name: "states" }
@@ -50,6 +54,7 @@ export type Route =
 export const PATHS = {
   landing: "/",
   explore: "/explore",
+  docs: DOCS_PAGE_PATH,
   terms: LEGAL_PAGE_PATHS.terms,
   privacy: LEGAL_PAGE_PATHS.privacy,
   account: ACCOUNT_PAGE_PATH,
@@ -79,12 +84,24 @@ export function ownerHref(owner: OwnerPath): string {
   return formatOwnerPath(owner);
 }
 
+/** The path of a page of the documentation, or of its index. */
+export function docsHref(slug?: string): string {
+  return slug === undefined ? PATHS.docs : `${PATHS.docs}/${slug}`;
+}
+
 export function matchRoute(pathname: string, search: string, development = false): Route {
   if (pathname === PATHS.landing) {
     return { name: "landing" };
   }
   if (pathname === PATHS.explore) {
     return { name: "explore" };
+  }
+  if (pathname === PATHS.docs) {
+    return { name: "docs", slug: undefined };
+  }
+  if (pathname.startsWith(`${PATHS.docs}/`)) {
+    const slug = pathname.slice(PATHS.docs.length + 1);
+    return hasDocsPage(slug) ? { name: "docs", slug } : { name: "not-found" };
   }
   if (pathname === PATHS.terms) {
     return { name: "legal", kind: "terms" };

@@ -22,12 +22,19 @@ export const ICON_SIZE = 128;
  */
 export const BADGE_ROUTE = "/badge";
 
+/**
+ * Where the pages render the repository's own documentation, `/docs` and `/docs/<page>`, with the
+ * Markdown source of each page beside it as `/docs/<page>.md` (ADR-0049). The server draws the
+ * social preview of a page of it at `SOCIAL_ROUTE` followed by the page's path.
+ */
+export const DOCS_PAGE_PATH = "/docs";
+
 /** The size link previews expect. */
 export const SOCIAL_CARD_SIZE = { width: 1200, height: 630 } as const;
 
 /** The words and the pictures of one card, as the render module writes them for a page. */
 export interface SocialCard {
-  /** What the page is: a repository, a skill. */
+  /** What the page is: a repository, a skill, a page of the documentation. */
   readonly kicker: string;
   readonly title: string;
   /** Where it is: the address, and the repository's name when the title is not it. */
@@ -36,7 +43,10 @@ export interface SocialCard {
   /** Short facts, each a pill: how many skills, whether it is verified. */
   readonly badges: readonly string[];
   readonly verified: boolean;
-  /** The owner's picture, an https URL the server fetches to draw it. */
+  /**
+   * The owner's picture, an https URL the server fetches to draw it; empty for a page that has
+   * no owner, such as a page of the documentation, where the site's own symbol stands.
+   */
   readonly avatar: string;
   readonly siteName: string;
 }

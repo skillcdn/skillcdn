@@ -4,6 +4,7 @@ import {
   ACCOUNT_SECTIONS,
   accountHref,
   addressFromInput,
+  docsHref,
   matchRoute,
   mountHref,
   ownerFromInput,
@@ -23,6 +24,23 @@ describe("matchRoute", () => {
     expect(matchRoute("/privacy", "?lang=ko")).toEqual({ name: "legal", kind: "privacy" });
     expect(matchRoute("/terms/", "")).toEqual({ name: "not-found" });
     expect(matchRoute("/nothing", "")).toEqual({ name: "not-found" });
+  });
+
+  it("knows the documentation and its pages, and nothing that is not one of them", () => {
+    expect(matchRoute("/docs", "")).toEqual({ name: "docs", slug: undefined });
+    expect(matchRoute("/docs", "?lang=ko")).toEqual({ name: "docs", slug: undefined });
+    expect(matchRoute("/docs/format", "")).toEqual({ name: "docs", slug: "format" });
+    expect(docsHref("format")).toBe("/docs/format");
+    expect(docsHref()).toBe("/docs");
+    for (const path of [
+      "/docs/",
+      "/docs/nothing",
+      "/docs/format/",
+      "/docs/format.md",
+      "/docs/Format",
+    ]) {
+      expect(matchRoute(path, ""), path).toEqual({ name: "not-found" });
+    }
   });
 
   it("reads an address and the view of it from the URL", () => {

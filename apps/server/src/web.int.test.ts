@@ -361,6 +361,34 @@ describe("a server with a web build", () => {
     expect((await h.request("/social/not%20an%20address")).status).toBe(404);
   });
 
+  it("draws the social preview of a page of the documentation, with nothing to fetch for it", async () => {
+    const h = createHarness(testDatabase, { web });
+    const card = await h.request("/social/docs/format?lang=ko");
+    expect(card.status).toBe(200);
+    expect(card.headers.get("content-type")).toBe("image/png");
+    expect(card.headers.get("cache-control")).toBe("public, max-age=3600");
+    expect(card.headers.get("vary")).toBeNull();
+    const bytes = new Uint8Array(await card.arrayBuffer());
+    expect([...bytes.subarray(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    expect([view.getUint32(16), view.getUint32(20)]).toEqual([1200, 630]);
+    expect(
+      (
+        await h.request("/social/docs/format?lang=ko", {
+          headers: { "if-none-match": card.headers.get("etag") ?? "" },
+        })
+      ).status,
+    ).toBe(304);
+    // The index has a card too; without a language in the URL it follows the request.
+    const index = await h.request("/social/docs");
+    expect(index.status).toBe(200);
+    expect(index.headers.get("vary")).toBe("accept-language");
+    // A slug that is no page, or not one as written, is nothing.
+    expect((await h.request("/social/docs/nothing")).status).toBe(404);
+    expect((await h.request("/social/docs/Format")).status).toBe(404);
+    expect((await h.request("/social/docs/format/more")).status).toBe(404);
+  });
+
   it("answers the badge of an address with how many skills it serves", async () => {
     const host = createFixtureHost("web-badge");
     const h = createHarness(testDatabase, { web, host });

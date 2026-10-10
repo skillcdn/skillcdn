@@ -18,12 +18,15 @@ const TEMPLATE_FILE = "template.html";
 
 const {
   DEFAULT_LANGUAGE,
+  DOCS_ROUTES,
+  DOCS_SOURCES,
   LANGUAGE_PARAM,
   LANGUAGES,
   ORIGIN_PLACEHOLDER,
   STATIC_PAGES,
   TEMPLATE_MARKERS,
   renderDocument,
+  renderLlmsFullTxt,
   renderLlmsTxt,
   renderNotFound,
   renderPage,
@@ -72,6 +75,37 @@ for (const page of STATIC_PAGES) {
   }
   routes.push({ path: page.path, files, indexable: page.indexable });
 }
+
+// The documentation (ADR-0049): a page per language around a text written in one, the text
+// itself as Markdown beside each page, and every page in one file for language models.
+for (const page of DOCS_ROUTES) {
+  const files = byLanguage((language) => `${page.file}${suffixOf(language)}.html`);
+  for (const language of LANGUAGES) {
+    writePage(files[language], renderPage(page.path, language));
+  }
+  routes.push({
+    path: page.path,
+    files,
+    indexable: page.indexable,
+    alternates: [...page.alternates],
+  });
+}
+for (const source of DOCS_SOURCES) {
+  write(source.file, source.text);
+  routes.push({
+    path: source.path,
+    files: { [DEFAULT_LANGUAGE]: source.file },
+    indexable: false,
+    contentType: "text/markdown; charset=utf-8",
+  });
+}
+write("llms-full.txt", renderLlmsFullTxt());
+routes.push({
+  path: "/llms-full.txt",
+  files: { [DEFAULT_LANGUAGE]: "llms-full.txt" },
+  indexable: false,
+  contentType: "text/plain; charset=utf-8",
+});
 
 const llms = byLanguage((language) => `llms${suffixOf(language)}.txt`);
 for (const language of LANGUAGES) {
