@@ -1,0 +1,72 @@
+{
+  "name": "@skillcdn/brand",
+  "version": "0.1.0",
+  "description": "The pictures of the SkillCDN brand as files: the symbol, the wordmark, the lockup and the icons made from them, under the SkillCDN trademark policy.",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "homepage": "https://skillcdn.ai",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/skillcdn/skillcdn.git",
+    "directory": "packages/brand"
+  },
+  "bugs": "https://github.com/skillcdn/skillcdn/issues",
+  "keywords": [
+    "skillcdn",
+    "brand",
+    "logo"
+  ],
+  "type": "module",
+  "exports": {
+    "./symbol.svg": "./symbol.svg",
+    "./symbol.png": "./symbol.png",
+    "./wordmark-black.svg": "./wordmark-black.svg",
+    "./wordmark-white.svg": "./wordmark-white.svg",
+    "./logo-black.svg": "./logo-black.svg",
+    "./logo-black.png": "./logo-black.png",
+    "./logo-white.svg": "./logo-white.svg",
+    "./logo-white.png": "./logo-white.png",
+    "./avatar.png": "./avatar.png",
+    "./banner.png": "./banner.png",
+    "./favicon.svg": "./favicon.svg",
+    "./favicon.ico": "./favicon.ico",
+    "./apple-touch-icon.png": "./apple-touch-icon.png",
+    "./icon-192.png": "./icon-192.png",
+    "./icon-512.png": "./icon-512.png",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "symbol.svg",
+    "symbol.png",
+    "wordmark-black.svg",
+    "wordmark-white.svg",
+    "logo-black.svg",
+    "logo-black.png",
+    "logo-white.svg",
+    "logo-white.png",
+    "avatar.png",
+    "banner.png",
+    "favicon.svg",
+    "favicon.ico",
+    "apple-touch-icon.png",
+    "icon-192.png",
+    "icon-512.png",
+    "TRADEMARKS.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "render": "node scripts/render.mjs",
+    "prepack": "node ../../scripts/pack-license.mjs copy TRADEMARKS.md",
+    "postpack": "node ../../scripts/pack-license.mjs remove TRADEMARKS.md"
+  },
+  "devDependencies": {
+    "@napi-rs/canvas": "^1.0.10",
+    "@skillcdn/core": "workspace:^",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

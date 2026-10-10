@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://skillcdn.ai"><img alt="SkillCDN" src="https://raw.githubusercontent.com/skillcdn/skillcdn/main/apps/web/public/brand/symbol.svg" width="72"></a>
+  <a href="https://skillcdn.ai"><img alt="SkillCDN" src="https://raw.githubusercontent.com/skillcdn/skillcdn/main/packages/brand/symbol.svg" width="72"></a>
 </p>
 <h1 align="center">@skillcdn/indexer</h1>
 <p align="center">The reading rules of SkillCDN: a commit or a working tree read into an index, and what an agent would get from it.</p>

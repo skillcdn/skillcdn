@@ -33,8 +33,11 @@ tmp/
 # Logs
 *.log
 
-# The license copied next to a package while it is packed (scripts/pack-license.mjs)
+# The license copied next to a package while it is packed (scripts/pack-license.mjs). The brand
+# package carries a license of its own, and what is copied next to it is the trademark policy.
 packages/*/LICENSE.md
+!packages/brand/LICENSE.md
+packages/brand/TRADEMARKS.md
 
 # Editors and OS
 .DS_Store

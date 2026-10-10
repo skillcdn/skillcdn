@@ -1,6 +1,7 @@
 import process from "node:process";
 import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv, type Plugin } from "vite";
+import { brandFiles } from "./dev/brand-files.js";
 import { handleFixtureRequest } from "./dev/fixture-api.js";
 
 /** Long enough to see loading states, short enough not to be in the way. */
@@ -95,7 +96,7 @@ export default defineConfig(({ mode, isSsrBuild }) => {
   const apiUrl = defaultApi === undefined ? undefined : (env.SKILLCDN_API_URL ?? defaultApi);
 
   return {
-    plugins: [react(), ...(apiUrl === undefined ? [fixtureApi()] : [])],
+    plugins: [react(), brandFiles(), ...(apiUrl === undefined ? [fixtureApi()] : [])],
     server: {
       // Next to the integrated server's 11188, so that every local port of the project is one
       // block; another Vite instance takes the next free one.

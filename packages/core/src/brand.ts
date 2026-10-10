@@ -1,6 +1,7 @@
 // The mark of the site, as path data, so that every place that draws it (the pages, the
-// favicon, the social previews the server draws) draws the same shape. The files under
-// apps/web/public/brand/ carry the same paths for whoever needs a picture; a test keeps them equal.
+// favicon, the social previews the server draws) draws the same shape. The files of
+// `@skillcdn/brand` (packages/brand) carry the same paths for whoever needs a picture; a test
+// there keeps them equal.
 
 /** The symbol: two interlocking halves of an S, centred in a 100 by 100 box. */
 export const BRAND_SYMBOL_PATH =

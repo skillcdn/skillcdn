@@ -11,12 +11,12 @@
     "test": "vitest run --passWithNoTests",
     "dev": "vite",
     "generate:fonts": "node scripts/generate-pretendard-css.mjs",
-    "generate:icons": "node scripts/render-icons.mjs",
     "dev:api": "vite --mode api",
     "dev:live": "vite --mode live",
     "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\""
   },
   "dependencies": {
+    "@skillcdn/brand": "workspace:*",
     "@skillcdn/core": "workspace:*",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
@@ -24,7 +24,6 @@
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
-    "@napi-rs/canvas": "^1.0.10",
     "@types/node": "catalog:",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",

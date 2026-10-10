@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://skillcdn.ai"><img alt="SkillCDN" src="https://raw.githubusercontent.com/skillcdn/skillcdn/main/apps/web/public/brand/symbol.svg" width="72"></a>
+  <a href="https://skillcdn.ai"><img alt="SkillCDN" src="https://raw.githubusercontent.com/skillcdn/skillcdn/main/packages/brand/symbol.svg" width="72"></a>
 </p>
 <h1 align="center">@skillcdn/core</h1>
 <p align="center">The contracts of SkillCDN: the address scheme, the skill-repo convention, tool and REST schemas, the types of an index, and the ports.</p>

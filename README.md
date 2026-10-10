@@ -1,8 +1,8 @@
 <div align="center">
   <a href="https://skillcdn.ai">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/skillcdn/skillcdn/main/apps/web/public/brand/logo-white.svg">
-      <img alt="SkillCDN" src="https://raw.githubusercontent.com/skillcdn/skillcdn/main/apps/web/public/brand/logo-black.svg" width="360">
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/skillcdn/skillcdn/main/packages/brand/logo-white.svg">
+      <img alt="SkillCDN" src="https://raw.githubusercontent.com/skillcdn/skillcdn/main/packages/brand/logo-black.svg" width="360">
     </picture>
   </a>
   <p><strong>Turn any git repository into an MCP server.</strong></p>
@@ -111,6 +111,7 @@ packages/
   github/     GitHub App, user-token and contents adapter               implements the git-host port
   indexer/    the reading rules: a commit or a working tree read into an index   Node.js, no database
   cli/        the skillcdn command for repository authors: skillcdn check        bin
+  brand/      the pictures of the brand as files, under the trademark policy    no code
 apps/server/fixtures/.repositories/  test-only repository fixtures
 deploy/       Dockerfile, compose files, the contract for whoever operates the image
 docs/         architecture, specs, ADRs, roadmap
@@ -123,6 +124,7 @@ On npm, under the `@skillcdn` scope, each with its own version and changelog ([A
 | [`@skillcdn/cli`](https://www.npmjs.com/package/@skillcdn/cli) | [![npm](https://img.shields.io/npm/v/@skillcdn/cli)](https://www.npmjs.com/package/@skillcdn/cli) | the `skillcdn check` command: reads a repository as SkillCDN would index it (`npx @skillcdn/cli check`) |
 | [`@skillcdn/indexer`](https://www.npmjs.com/package/@skillcdn/indexer) | [![npm](https://img.shields.io/npm/v/@skillcdn/indexer)](https://www.npmjs.com/package/@skillcdn/indexer) | the reading rules: a commit or a working tree read into an index |
 | [`@skillcdn/core`](https://www.npmjs.com/package/@skillcdn/core) | [![npm](https://img.shields.io/npm/v/@skillcdn/core)](https://www.npmjs.com/package/@skillcdn/core) | the contracts: addresses, the convention, tool and REST schemas, the ports |
+| [`@skillcdn/brand`](https://www.npmjs.com/package/@skillcdn/brand) | [![npm](https://img.shields.io/npm/v/@skillcdn/brand)](https://www.npmjs.com/package/@skillcdn/brand) | the pictures of the brand as files, for the places the [trademark policy](TRADEMARKS.md) allows; not open source ([ADR-0048](docs/adr/0048-the-brand-files-are-a-package-of-their-own-under-the-trademark-policy.md)) |
 
 **Related repositories.** [`skillcdn/skills`](https://github.com/skillcdn/skills) is the reference skill repository, the one the explorer offers to try. [`skillcdn/console`](https://github.com/skillcdn/console) is the reference console: where an organization runs its work with AI agents, a board of the work, the agents at it, and the decisions that wait for a person. Like the skills repository, it is an example that follows the standard and is meant for real use, packaged on npm so that anyone can start from it; it builds on the published packages and the REST API like any other consumer, defines nothing of the specification, and nothing here depends on it ([ADR-0047](docs/adr/0047-the-console-is-a-separate-repository-built-on-the-published-packages.md)).
 

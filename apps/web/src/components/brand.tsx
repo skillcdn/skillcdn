@@ -5,10 +5,11 @@ import {
   BRAND_WORDMARK_PATH,
 } from "@skillcdn/core";
 
-// The mark of the site, drawn from the path data in core so that the pages, the files under
-// public/brand/ and the social previews the server draws all show one shape. The symbol keeps its
-// own blue wherever it stands; the wordmark takes the colour of its place, which on these pages is
-// the brand's white (`--color-wordmark`), the same white the brand files are drawn in.
+// The mark of the site, drawn from the path data in core so that the pages, the files of
+// `@skillcdn/brand` and the social previews the server draws all show one shape. The symbol
+// keeps its own blue wherever it stands; the wordmark takes the colour of its place, which on
+// these pages is the brand's white (`--color-wordmark`), the same white the brand files are
+// drawn in.
 
 /** The symbol alone, in a square box. Decorative: whatever it stands beside names it. */
 export function BrandSymbol(props: { readonly className?: string }) {

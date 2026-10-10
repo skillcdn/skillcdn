@@ -248,6 +248,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@skillcdn/brand':
+        specifier: workspace:*
+        version: link:../../packages/brand
       '@skillcdn/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -264,9 +267,6 @@ importers:
         specifier: ^4.0.1
         version: 4.0.1
     devDependencies:
-      '@napi-rs/canvas':
-        specifier: ^1.0.10
-        version: 1.0.10
       '@types/node':
         specifier: 'catalog:'
         version: 24.19.1
@@ -288,6 +288,24 @@ importers:
       vite:
         specifier: ^8.3.2
         version: 8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(tsx@4.23.13)(yaml@2.9.1)
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.3(@types/node@24.19.1)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(tsx@4.23.13)(yaml@2.9.1))
+
+  packages/brand:
+    devDependencies:
+      '@napi-rs/canvas':
+        specifier: ^1.0.10
+        version: 1.0.10
+      '@skillcdn/core':
+        specifier: workspace:^
+        version: link:../core
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.19.1
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
       vitest:
         specifier: 'catalog:'
         version: 5.0.3(@types/node@24.19.1)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(tsx@4.23.13)(yaml@2.9.1))
