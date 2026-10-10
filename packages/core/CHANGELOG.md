@@ -1,5 +1,11 @@
 # @skillcdn/core
 
+## 0.2.1
+
+### Patch Changes
+
+- [`35e4ca0`](https://github.com/skillcdn/skillcdn/commit/35e4ca049b126a2b2e4eae572b8ecd83f0e26037) Thanks [@samo-lucid](https://github.com/samo-lucid)! - `DOCS_PAGE_PATH` names where a deployment's pages render the repository's own documentation (`/docs`), and a `SocialCard` may carry an empty `avatar` for a page that has no owner, where the site's symbol stands in its place.
+
 ## 0.2.0
 
 ### Minor Changes
