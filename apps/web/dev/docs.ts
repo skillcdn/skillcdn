@@ -22,8 +22,10 @@ import { ORIGIN_PLACEHOLDER, REPOSITORY_URL } from "../src/site-constants.js";
 // them when the pages are built, resolves every link, and hands the pages to the app as two
 // virtual modules: the catalog (what there is), small enough for any page to import, and the
 // content (the text of each page), which only the documentation page loads. A link that leads
-// nowhere fails the build: the pages are made from the repository, so a dead link is a mistake
-// in the repository, and the build is where it is caught.
+// nowhere fails the build of a checkout: the pages are made from the repository, so a dead link
+// is a mistake in the repository, and the build is where it is caught; a copy that has only what
+// it publishes (the image's build context) resolves what it cannot see to the host, and the
+// tests of a checkout keep the check.
 
 export const CATALOG_MODULE = "virtual:skillcdn-docs-catalog";
 export const CONTENT_MODULE = "virtual:skillcdn-docs-content";
@@ -299,11 +301,26 @@ function apply(
   return out;
 }
 
+export interface LoadDocsOptions {
+  /**
+   * Whether `root` holds the whole repository. Then a link to a file that is not there is a dead
+   * link, and the build fails on it. A copy that carries only what is published, such as the
+   * image's build context, resolves such a link to the git host without looking: the check is
+   * made where the repository is whole, in the tests of a checkout. Default: whether `root` is
+   * a checkout, which has `.git`.
+   */
+  readonly complete?: boolean;
+}
+
 /**
- * Reads the published documentation from a checkout of the repository. Throws with every problem
- * it found when the navigation, a file or a link is wrong.
+ * Reads the published documentation from a copy of the repository. Throws with every problem it
+ * found when the navigation, a file or a link is wrong.
  */
-export function loadDocs(root: string = REPOSITORY_ROOT): LoadedDocs {
+export function loadDocs(
+  root: string = REPOSITORY_ROOT,
+  options: LoadDocsOptions = {},
+): LoadedDocs {
+  const complete = options.complete ?? existsSync(join(root, ".git"));
   const problems: string[] = [];
   const nav = readNav(root, problems);
 
@@ -395,11 +412,15 @@ export function loadDocs(root: string = REPOSITORY_ROOT): LoadedDocs {
         continue;
       }
       const onDisk = join(root, ...target.path.split("/"));
-      if (target.path !== "" && !existsSync(onDisk)) {
+      const present = target.path === "" || existsSync(onDisk);
+      if (!present && complete) {
         problems.push(`${at}: "${url}" leads to nothing (${target.path})`);
         continue;
       }
-      const directory = target.path === "" || statSync(onDisk).isDirectory();
+      // What a copy does not have is read as written: a trailing slash names a directory. The
+      // host redirects a file named as a directory, and the reverse, so a wrong guess still lands.
+      const directory =
+        target.path === "" || (present ? statSync(onDisk).isDirectory() : /\/(?:#.*)?$/.test(url));
       const resolved =
         node.type === "image"
           ? `${RAW_URL}${target.path}`

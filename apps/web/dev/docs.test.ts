@@ -176,10 +176,53 @@ describe("loadDocs", () => {
             "",
           ].join("\n"),
         }),
+        { complete: true },
       ),
     ).toThrow(
       /use\.md:5: "missing\.md" leads to nothing[\s\S]*use\.md:5: "\.\.\/\.\.\/\.\.\/etc\/passwd" leaves the repository[\s\S]*use\.md:5: "#nope" names no heading of the page[\s\S]*use\.md:6: "\.\.\/specs\/format\.md#nope" names no heading of docs\/specs\/format\.md[\s\S]*use\.md:6: a link with no destination/,
     );
+  });
+
+  it("resolves what a partial copy does not have to the host, and checks the rest", () => {
+    // The image is built from a copy that carries only the published files: a link to a file
+    // it does not have is read as written, a trailing slash naming a directory.
+    const partial = repository({
+      ...FILES,
+      "docs/guide/use.md": [
+        "# Use",
+        "",
+        "Intro.",
+        "",
+        "## Connect",
+        "",
+        "See [the decision](../adr/0002-second.md#context), [every decision](../adr/),",
+        "[the workflow](../../.github/workflows/ci.yml) and [a page](../specs/format.md#rules).",
+        "",
+      ].join("\n"),
+    });
+    const body = loadDocs(partial).content.use?.body ?? "";
+    expect(body).toContain(
+      "[the decision](https://github.com/skillcdn/skillcdn/blob/main/docs/adr/0002-second.md#context)",
+    );
+    expect(body).toContain(
+      "[every decision](https://github.com/skillcdn/skillcdn/tree/main/docs/adr)",
+    );
+    expect(body).toContain(
+      "[the workflow](https://github.com/skillcdn/skillcdn/blob/main/.github/workflows/ci.yml)",
+    );
+    expect(body).toContain("[a page](/docs/format#rules)");
+    // What is there is still read, and a page's headings are still checked.
+    expect(() => loadDocs(partial, { complete: true })).toThrow(
+      /0002-second\.md#context" leads to nothing/,
+    );
+    expect(() =>
+      loadDocs(
+        repository({
+          ...FILES,
+          "docs/guide/use.md": "# Use\n\nSee [x](../specs/format.md#nope).\n",
+        }),
+      ),
+    ).toThrow(/names no heading of docs\/specs\/format\.md/);
   });
 
   it("refuses a navigation that is wrong, saying what", () => {
@@ -251,7 +294,7 @@ describe("loadDocs", () => {
   });
 
   it("reads the documentation of this repository, every link of it resolving", () => {
-    const docs = loadDocs(REPOSITORY_ROOT);
+    const docs = loadDocs(REPOSITORY_ROOT, { complete: true });
     const pages = docs.catalog.sections.flatMap((section) => section.pages);
     expect(pages.length).toBeGreaterThan(5);
     for (const page of pages) {
