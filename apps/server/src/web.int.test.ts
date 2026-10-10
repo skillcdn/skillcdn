@@ -398,10 +398,19 @@ describe("a server with a web build", () => {
     const early = await h.request(`/badge${address}`);
     expect(early.status).toBe(200);
     expect(early.headers.get("content-type")).toBe("image/svg+xml; charset=utf-8");
-    await h.snapshots.idle();
-    const mount = (await (await h.request(`/api/v1/mounts${address}`)).json()) as {
-      readonly index: { readonly status: string; readonly skillCount?: number };
-    };
+    // The first look books the indexing, and a look right after it can find nothing to wait
+    // for yet (the `indexed` helper of rest.int.test.ts): ask until the index is ready.
+    const mountOf = async () =>
+      (await (await h.request(`/api/v1/mounts${address}`)).json()) as {
+        readonly index: { readonly status: string; readonly skillCount?: number };
+      };
+    const deadline = Date.now() + 20_000;
+    let mount = await mountOf();
+    while (mount.index.status !== "ready" && Date.now() < deadline) {
+      await h.snapshots.idle();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      mount = await mountOf();
+    }
     expect(mount.index.status).toBe("ready");
 
     const badge = await h.request(`/badge${address}`);
