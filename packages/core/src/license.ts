@@ -91,8 +91,34 @@ const has =
   (text) =>
     text.includes(phrase) ? found : undefined;
 
-/** The licenses the reader knows by their text, tried in this order. */
+/**
+ * The Functional Source License, named by the license its text says it turns into (which its
+ * abbreviation and its title both carry), or by its family alone when a text says neither.
+ */
+function functionalSource(text: string): Recognized | undefined {
+  if (!text.includes("functional source license")) return undefined;
+  const future = /\bfsl-1\.1-(alv2|mit)\b|\b(alv2|mit) future license\b/.exec(text);
+  const which = future?.[1] ?? future?.[2];
+  return restrictive(
+    which === "alv2" ? "FSL-1.1-ALv2" : which === "mit" ? "FSL-1.1-MIT" : "FSL-1.1",
+  );
+}
+
+/**
+ * The licenses the reader knows by their text, tried in this order. The licenses that keep
+ * copies at the source come first, because such a text often quotes one that does not: the
+ * license it turns into later (the Functional Source License and the Business Source License
+ * both name one), or the license a condition is added to (the Commons Clause). A text is the
+ * license it names itself, not the one it quotes. The reservation of all rights comes last,
+ * since the copyright line of a permissive text says it too.
+ */
 const KNOWN_TEXTS: readonly ((text: string) => Recognized | undefined)[] = [
+  functionalSource,
+  has("business source license", restrictive("BUSL-1.1")),
+  has("server side public license", restrictive("SSPL-1.0")),
+  (t) => (/\belastic license (?:2\.0|v2)\b/.test(t) ? restrictive("Elastic-2.0") : undefined),
+  has("polyform noncommercial", restrictive("PolyForm-Noncommercial-1.0.0")),
+  has("commons clause", restrictive("Commons-Clause")),
   (t) =>
     t.includes("apache license") && t.includes("version 2.0")
       ? permissive("Apache-2.0")
@@ -154,10 +180,6 @@ const KNOWN_TEXTS: readonly ((text: string) => Recognized | undefined)[] = [
   has("sil open font license", permissive("OFL-1.1")),
   has("blue oak model license", permissive("BlueOak-1.0.0")),
   creativeCommons,
-  has("polyform noncommercial", restrictive("PolyForm-Noncommercial-1.0.0")),
-  has("business source license", restrictive("BUSL-1.1")),
-  has("server side public license", restrictive("SSPL-1.0")),
-  has("commons clause", restrictive("Commons-Clause")),
   has("all rights reserved", restrictive("All rights reserved")),
 ];
 
@@ -238,6 +260,8 @@ const KNOWN_IDS: Readonly<Record<string, Recognized>> = {
   "sspl-1.0": restrictive("SSPL-1.0"),
   "commons-clause": restrictive("Commons-Clause"),
   "elastic-2.0": restrictive("Elastic-2.0"),
+  "fsl-1.1-alv2": restrictive("FSL-1.1-ALv2"),
+  "fsl-1.1-mit": restrictive("FSL-1.1-MIT"),
   "polyform-noncommercial-1.0.0": restrictive("PolyForm-Noncommercial-1.0.0"),
 };
 
@@ -263,6 +287,7 @@ function recognizeId(part: string): Recognized | undefined {
     const name = /-\d\.\d$/.test(id) ? id.toUpperCase() : `${id.toUpperCase()}-4.0`;
     return id.includes("-nc") || id.includes("-nd") ? restrictive(name) : permissive(name);
   }
+  // Any other spelling of the family, which is as closed whichever license it turns into.
   if (id.startsWith("fsl-")) return restrictive("FSL-1.1");
   return undefined;
 }

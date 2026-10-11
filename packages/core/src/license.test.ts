@@ -24,6 +24,9 @@ const MIT =
   'MIT License\n\nCopyright (c) 2026 Acme\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction...';
 const BSD3 =
   "Copyright (c) 2026, Acme\nAll rights reserved.\n\nRedistribution and use in source and binary forms, with or without\nmodification, are permitted provided that the following conditions are met:\n3. Neither the name of the copyright holder nor the names of its contributors may be used...";
+// The license of this repository: it names the license it turns into, and quotes its notice.
+const FSL =
+  '# Functional Source License, Version 1.1, ALv2 Future License\n\n## Abbreviation\n\nFSL-1.1-ALv2\n\n## Notice\n\nCopyright 2026 Acme\n\n## Grant of Future License\n\nWe hereby irrevocably grant you an additional license to use the Software under the Apache License, Version 2.0 that is effective on the second anniversary of the date we make the Software available. On or after that date, you may use the Software under the Apache License, Version 2.0, in which case the following will apply:\n\nLicensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License.';
 
 describe("license files", () => {
   it("are recognized by name, whatever the spelling", () => {
@@ -107,10 +110,30 @@ describe("classifyLicenseText", () => {
     ["PolyForm-Noncommercial-1.0.0", "PolyForm Noncommercial License 1.0.0"],
     ["BUSL-1.1", "Business Source License 1.1"],
     ["SSPL-1.0", "Server Side Public License (SSPL) VERSION 1, OCTOBER 16, 2018"],
+    ["Elastic-2.0", "Elastic License 2.0 (ELv2)"],
     ["Commons-Clause", '"Commons Clause" License Condition v1.0'],
+    ["FSL-1.1-ALv2", FSL],
+    ["FSL-1.1-MIT", "Functional Source License, Version 1.1, MIT Future License"],
+    ["FSL-1.1", "Functional Source License, Version 1.1"],
     ["All rights reserved", "Copyright (c) 2026 Acme. All rights reserved."],
   ])("recognizes %s as one that keeps copies at the source", (name, text) => {
     expect(classifyLicenseText(text)).toEqual({ kind: "restrictive", name });
+  });
+
+  it("reads a text as the license it names itself, not as one it quotes", () => {
+    // The license a source-available text turns into later, the change license of another, and
+    // the license a condition is added to are all quoted by texts that keep copies at the source.
+    expect(classifyLicenseText(FSL)).toEqual({ kind: "restrictive", name: "FSL-1.1-ALv2" });
+    expect(
+      classifyLicenseText(
+        "Business Source License 1.1\n\nChange License: Apache License, Version 2.0",
+      ),
+    ).toEqual({ kind: "restrictive", name: "BUSL-1.1" });
+    expect(
+      classifyLicenseText(
+        `${MIT}\n\n"Commons Clause" License Condition v1.0\n\nThe Software is provided to you by the Licensor under the License, as defined below, subject to the following condition.`,
+      ),
+    ).toEqual({ kind: "restrictive", name: "Commons-Clause" });
   });
 
   it("treats what it does not recognize as restrictive, and looks at a bounded prefix", () => {
@@ -171,6 +194,9 @@ describe("classifyLicenseField", () => {
     ["CC-BY-NC-4.0", "CC-BY-NC-4.0"],
     ["CC BY-NC-SA 4.0", "CC-BY-NC-SA-4.0"],
     ["BUSL-1.1", "BUSL-1.1"],
+    ["FSL-1.1-ALv2", "FSL-1.1-ALv2"],
+    ["FSL-1.1-MIT", "FSL-1.1-MIT"],
+    ["FSL-1.0-Apache-2.0", "FSL-1.1"],
     ["MIT AND Commons-Clause", "MIT / Commons-Clause"],
     ["Ask Acme first", "Ask Acme first"],
   ])("reads %s as restrictive %s", (value, name) => {
