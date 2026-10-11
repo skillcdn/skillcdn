@@ -13,6 +13,12 @@
   background-color: var(--color-sky);
 }
 
+/* A page that is wider than the others: the header, the footer and the page between them take the
+   width together, so that the edges of the three stay in line. The documentation is one. */
+.wide {
+  --width-page: var(--width-docs);
+}
+
 /* The far light lying low in the field: a plain gradient and not a blurred shape on purpose — at
    that distance there is no shape left to see, and the vagueness is what reads as distance. Under
    the near light, which is why it takes the lower index; the air over both is a `::after` and so
@@ -119,8 +125,8 @@
   top: 0;
   z-index: 10;
   border-bottom: var(--border);
-  background: color-mix(in srgb, var(--color-bg) 88%, transparent);
-  backdrop-filter: blur(10px);
+  background: var(--color-chrome);
+  backdrop-filter: var(--chrome-backdrop);
 }
 
 .bar {
@@ -129,7 +135,7 @@
   gap: var(--space-5);
   width: 100%;
   max-width: var(--width-page);
-  height: 3.75rem;
+  height: var(--header-height);
   margin-inline: auto;
   padding-inline: var(--space-5);
 }

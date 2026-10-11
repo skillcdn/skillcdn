@@ -119,7 +119,7 @@ export const ko: Messages = {
     pageTitle: (title: string) => `${title} · 문서 | SkillCDN`,
     sections: { guides: "가이드", reference: "레퍼런스", operate: "운영" },
     navLabel: "문서 목차",
-    allPages: "전체 문서",
+    menu: "메뉴",
     onThisPage: "이 페이지에서",
     inEnglish: "이 페이지는 영어로 쓰여 있습니다.",
     edit: "GitHub에서 이 페이지 수정하기",

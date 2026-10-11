@@ -172,6 +172,20 @@
   /* Layout */
   --width-page: 68rem;
   --width-prose: 46rem;
+  /* The bar across the top of every page, and what it and the bars under it are painted with:
+     the page's own dark, let through a little, over a blur of whatever scrolls under them. */
+  --header-height: 3.75rem;
+  --color-chrome: color-mix(in srgb, var(--color-bg) 88%, transparent);
+  --chrome-backdrop: blur(10px);
+  /* The documentation is wider than a page: the list of pages down one side, the outline of the
+     page down the other, and between them text a shade wider than a page's prose, which is what
+     the two leave it on a wide screen. Narrower, the list folds behind a bar under the header. */
+  --width-docs: 90rem;
+  --width-docs-prose: 48rem;
+  --docs-nav-width: 16rem;
+  --docs-toc-width: 14rem;
+  --docs-bar-height: 3rem;
+  --docs-menu-icon: 1rem;
 
   --focus-ring: 2px solid var(--color-accent);
   --transition: 120ms ease-out;

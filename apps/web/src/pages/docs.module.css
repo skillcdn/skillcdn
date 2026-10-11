@@ -1,15 +1,18 @@
-/* The documentation: a page of the repository's own Markdown, with the list of pages beside it
-   and, where the screen is wide enough, the outline of the page on the other side. Narrower, the
-   list folds into a drawer above the page and the outline is left out. */
+/* The documentation: a page of the repository's own Markdown between the list of pages and, where
+   the screen is wide enough, the outline of the page. The frame is wider than a page of the site
+   (`--width-docs`, which the layout gives the header and the footer as well), so that the two
+   lists leave the text the width of a page of prose. Narrower, the outline goes first; narrower
+   still, the list folds behind a bar under the header, which opens it as a sheet over the page
+   and says where the reader is. */
 
 .page {
-  padding-block: var(--space-7) var(--space-8);
+  padding-bottom: var(--space-8);
 }
 
 .layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-6);
+  padding-top: var(--space-6);
 }
 
 .sidebar,
@@ -17,59 +20,150 @@
   display: none;
 }
 
+/* The bar under the header. It is painted as the header is, and sticks under it. */
+.bar {
+  position: sticky;
+  top: var(--header-height);
+  z-index: 5;
+  border-bottom: var(--border);
+  background: var(--color-chrome);
+  backdrop-filter: var(--chrome-backdrop);
+}
+
+.barInner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: var(--width-page);
+  height: var(--docs-bar-height);
+  margin-inline: auto;
+  padding-inline: var(--space-5);
+}
+
+/* The button that opens the list: the mark changes with what a press will do. */
+.menu {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: calc(-1 * var(--space-2));
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.menu:hover {
+  background: var(--color-bg-raised);
+}
+
+.menu svg {
+  width: var(--docs-menu-icon);
+  height: var(--docs-menu-icon);
+}
+
+.menuClose,
+.menu[aria-expanded="true"] .menuOpen {
+  display: none;
+}
+
+.menu[aria-expanded="true"] .menuClose {
+  display: block;
+}
+
+/* Where the reader is: the section, then the page, which gives way first when the bar is short
+   of room. */
+.crumbs {
+  display: flex;
+  min-width: 0;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.crumbSection {
+  flex: none;
+}
+
+.crumbPage {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  text-overflow: ellipsis;
+}
+
+.crumbPage::before {
+  content: "/";
+  margin-right: var(--space-2);
+  color: var(--color-text-faint);
+}
+
+/* The list as a sheet over the page, under the bar, scrolling on its own while the page behind it
+   holds still. */
+:global(html):has(.sheet) {
+  overflow: hidden;
+}
+
+.sheet {
+  position: fixed;
+  z-index: 5;
+  top: calc(var(--header-height) + var(--docs-bar-height));
+  right: 0;
+  bottom: 0;
+  left: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-5) var(--space-5) var(--space-8);
+  background: var(--color-bg);
+}
+
 @media (min-width: 64rem) {
+  .bar {
+    display: none;
+  }
+
   .layout {
-    grid-template-columns: 14rem minmax(0, 1fr);
-    gap: var(--space-8);
+    grid-template-columns: var(--docs-nav-width) minmax(0, 1fr);
+    gap: var(--space-7);
+    padding-top: var(--space-7);
+  }
+
+  /* The two lists stay in view as the page scrolls, under the header and as far down as the
+     window goes, each scrolling on its own when it is longer than that. */
+  .sidebar,
+  .toc {
+    position: sticky;
+    top: calc(var(--header-height) + var(--space-7));
+    align-self: start;
+    max-height: calc(100dvh - var(--header-height) - var(--space-7));
+    overflow-y: auto;
+    padding-bottom: var(--space-6);
   }
 
   .sidebar {
     display: block;
-    position: sticky;
-    top: var(--space-7);
-    align-self: start;
-    max-height: calc(100vh - var(--space-8));
-    overflow-y: auto;
-  }
-
-  .drawer {
-    display: none;
   }
 }
 
 @media (min-width: 80rem) {
   .layout {
-    grid-template-columns: 14rem minmax(0, 1fr) 13rem;
+    grid-template-columns: var(--docs-nav-width) minmax(0, 1fr) var(--docs-toc-width);
   }
 
   .toc {
     display: block;
-    position: sticky;
-    top: var(--space-7);
-    align-self: start;
-    max-height: calc(100vh - var(--space-8));
-    overflow-y: auto;
     font-size: var(--text-sm);
   }
 }
 
-/* The folded list. */
-.drawer {
-  padding: var(--space-3) var(--space-4);
-  border: var(--border);
-  border-radius: var(--radius-md);
-}
-
-.drawerSummary {
-  cursor: pointer;
-  font-weight: var(--weight-medium);
-}
-
-.drawer[open] .drawerSummary {
-  margin-bottom: var(--space-3);
-}
-
-/* The list of pages. */
+/* The list of pages. Each section's pages hang off one line, and the page the reader is on is
+   the one place the line takes the accent. */
 .navHome {
   display: block;
   color: var(--color-text);
@@ -78,7 +172,7 @@
 }
 
 .navSection {
-  margin-top: var(--space-4);
+  margin-top: var(--space-5);
 }
 
 .navTitle,
@@ -93,6 +187,7 @@
 
 .navList {
   margin-top: var(--space-2);
+  border-left: var(--border);
   list-style: none;
 }
 
@@ -102,28 +197,33 @@
 
 .navList a {
   display: block;
-  margin-left: calc(-1 * var(--space-2));
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-sm);
+  margin-left: -1px;
+  padding: var(--space-1) var(--space-3);
+  border-left: 1px solid transparent;
   color: var(--color-text-muted);
   font-size: var(--text-sm);
   text-decoration: none;
+  transition:
+    color var(--transition),
+    border-color var(--transition);
 }
 
 .navList a:hover {
-  background: var(--color-bg-subtle);
+  border-left-color: var(--color-border-strong);
   color: var(--color-text);
 }
 
 .navList a[aria-current="page"] {
-  background: var(--color-accent-subtle);
+  border-left-color: var(--color-accent);
   color: var(--color-accent);
+  font-weight: var(--weight-medium);
 }
 
-/* The page. */
+/* The page. The text takes the width of this frame rather than a page's. */
 .article {
+  --width-prose: var(--width-docs-prose);
   min-width: 0;
-  max-width: var(--width-prose);
+  max-width: var(--width-docs-prose);
 }
 
 .title {
@@ -147,12 +247,20 @@
   margin-top: var(--space-6);
 }
 
-/* A heading reached by its fragment stops below the header, not under it. */
+/* A heading reached by its fragment stops under the bar, not under it. The document's own
+   scroll padding already clears the header; this clears what the page adds under it, and the
+   outline reads the same line to know which heading the reader is at. */
 .body :is(h2, h3, h4, h5, h6) {
-  scroll-margin-top: var(--space-9);
+  scroll-margin-top: calc(var(--docs-bar-height) + var(--space-3));
 }
 
-/* The index. */
+@media (min-width: 64rem) {
+  .body :is(h2, h3, h4, h5, h6) {
+    scroll-margin-top: var(--space-3);
+  }
+}
+
+/* The index: the pages of each section as cards, as many to a row as fit. */
 .indexSection {
   margin-top: var(--space-7);
 }
@@ -163,16 +271,58 @@
 
 .indexList {
   display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
   gap: var(--space-4);
   margin-top: var(--space-4);
   list-style: none;
 }
 
-.indexList a {
-  font-weight: var(--weight-medium);
+/* Glass (tokens.css), as the cards of the explorer are: the border is left transparent for the
+   hairline to paint on, and takes the accent when the pointer arrives. */
+.card {
+  position: relative;
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  background: var(--glass-surface);
+  backdrop-filter: var(--glass-backdrop);
+  box-shadow: var(--glass-sheen), var(--glass-lift);
+  transition:
+    border-color var(--transition),
+    background var(--transition),
+    box-shadow var(--transition);
 }
 
-.indexList p {
+.card:hover,
+.card:focus-within {
+  border-color: var(--color-accent);
+  background: var(--glass-surface-hover);
+  box-shadow: var(--glass-sheen), var(--glass-lift), var(--glow);
+}
+
+.card:focus-within {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.card a {
+  color: var(--color-text);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+}
+
+/* The whole card is the link. */
+.card a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.card a:focus-visible {
+  outline: none;
+}
+
+.card p {
   margin-top: var(--space-1);
   color: var(--color-text-muted);
   font-size: var(--text-sm);
@@ -193,8 +343,8 @@
 }
 
 .neighbours {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: var(--space-4);
   margin-top: var(--space-5);
 }
@@ -203,7 +353,19 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border: var(--border);
+  border-radius: var(--radius-lg);
+  color: var(--color-text);
   text-decoration: none;
+  transition:
+    border-color var(--transition),
+    color var(--transition);
+}
+
+.neighbours a:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
 }
 
 .neighbours a span {
@@ -213,12 +375,17 @@
   text-transform: uppercase;
 }
 
+.previous {
+  grid-column: 1;
+}
+
 .next {
-  margin-left: auto;
+  grid-column: 2;
   text-align: right;
 }
 
-/* The outline. */
+/* The outline. The headings hang off one line, as the pages do, and the one the reader is at
+   takes the accent. */
 .tocList {
   margin-top: var(--space-2);
   border-left: var(--border);
@@ -231,16 +398,51 @@
 
 .tocList a {
   display: block;
+  margin-left: -1px;
   padding-left: var(--space-3);
+  border-left: 1px solid transparent;
   color: var(--color-text-muted);
   text-decoration: none;
+  transition:
+    color var(--transition),
+    border-color var(--transition);
 }
 
 .tocList a:hover {
   color: var(--color-text);
 }
 
+.tocList a[aria-current] {
+  border-left-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
 .tocDeep a {
   padding-left: var(--space-5);
   font-size: var(--text-xs);
+}
+
+/* Room for a finger on each item of the sheet. After the lists' own rules, which it adds to. */
+.sheet .navList a {
+  padding-block: var(--space-2);
+  font-size: var(--text-md);
+}
+
+@media (max-width: 40rem) {
+  .barInner {
+    padding-inline: var(--space-4);
+  }
+
+  .sheet {
+    padding-inline: var(--space-4);
+  }
+
+  .neighbours {
+    grid-template-columns: 1fr;
+  }
+
+  .previous,
+  .next {
+    grid-column: auto;
+  }
 }

@@ -175,7 +175,7 @@ function Routed(props: {
       {/* The dialog a person signs in from lies over whatever page they are on, so it is held
           here, around all of them: the header and the pages only ask for it. */}
       <SignInDialogProvider>
-        <Layout>
+        <Layout wide={route.name === "docs"}>
           {props.shell ? (
             placeholder
           ) : (

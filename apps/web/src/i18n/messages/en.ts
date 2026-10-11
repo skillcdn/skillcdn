@@ -132,7 +132,8 @@ export const en = {
     /** The sections of docs/nav.json, by id. A test keeps the two lists equal. */
     sections: { guides: "Guides", reference: "Reference", operate: "Operate" },
     navLabel: "Documentation",
-    allPages: "All pages",
+    /** The button on a narrow screen that opens the list of pages. */
+    menu: "Menu",
     onThisPage: "On this page",
     inEnglish: "This page is written in English.",
     edit: "Edit this page on GitHub",

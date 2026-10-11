@@ -8,9 +8,14 @@ import { BrandLogo } from "./brand.js";
 import { ConsentBanner } from "./consent-banner.js";
 import { LanguageSwitcher } from "./language-switcher.js";
 import styles from "./layout.module.css";
+import { cx } from "./ui.js";
 import { UserMenu } from "./user-menu.js";
 
-export function Layout(props: { readonly children: ReactNode }) {
+export function Layout(props: {
+  readonly children: ReactNode;
+  /** A page wider than the others, with the header and the footer as wide as it. */
+  readonly wide?: boolean;
+}) {
   const { t } = useI18n();
   // The deployment's own pages are written into the head by the server, so they are known only
   // once the page is up: until then, as in prerendered markup, the footer has none.
@@ -25,7 +30,7 @@ export function Layout(props: { readonly children: ReactNode }) {
       : [{ href: `mailto:${legal.contactEmail}`, label: t.footer.report }]),
   ];
   return (
-    <div className={styles.page}>
+    <div className={cx(styles.page, props.wide === true && styles.wide)}>
       {/* The field and the far light. It is an element and not another background layer on the
           page because it has to move at its own speed, and only a transform moves without asking
           the main thread for a repaint on every frame. */}
