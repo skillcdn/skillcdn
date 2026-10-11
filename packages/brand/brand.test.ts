@@ -30,8 +30,8 @@ const opaque = (hex: string): Pixel => [
   Number.parseInt(hex.slice(5, 7), 16),
   255,
 ];
-const near = (pixel: Pixel, colour: Pixel) =>
-  pixel.every((channel, index) => Math.abs(channel - (colour[index] ?? 0)) <= 8);
+/** How far a channel may stray from the symbol's blue and still be read as it: the antialiasing. */
+const TOLERANCE = 8;
 
 /** The picture a PNG shows, pixel by pixel, as straight RGBA. */
 async function picture(bytes: Uint8Array) {
@@ -47,13 +47,20 @@ async function picture(bytes: Uint8Array) {
   let symbol = 0;
   let transparent = 0;
   let other = 0;
-  for (let y = 0; y < image.height; y++) {
-    for (let x = 0; x < image.width; x++) {
-      const pixel = at(x, y);
-      if (pixel[3] === 0) transparent++;
-      else if (near(pixel, SYMBOL_BLUE)) symbol++;
-      else if (pixel[3] === 255) other++;
-    }
+  // One pass over the bytes, and no pixel object on the way: the account picture is a million
+  // pixels, and building one for each took this test past its time on a slow machine.
+  const [red, green, blue, opacity] = SYMBOL_BLUE;
+  for (let offset = 0; offset < data.length; offset += 4) {
+    const alpha = data[offset + 3] ?? 0;
+    if (alpha === 0) transparent++;
+    else if (
+      Math.abs((data[offset] ?? 0) - red) <= TOLERANCE &&
+      Math.abs((data[offset + 1] ?? 0) - green) <= TOLERANCE &&
+      Math.abs((data[offset + 2] ?? 0) - blue) <= TOLERANCE &&
+      Math.abs(alpha - opacity) <= TOLERANCE
+    )
+      symbol++;
+    else if (alpha === 255) other++;
   }
   const area = image.width * image.height;
   // `symbol` is the share of the picture in the symbol's blue; `other` counts the opaque pixels
