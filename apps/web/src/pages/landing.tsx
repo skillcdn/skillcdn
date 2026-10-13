@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { track } from "../analytics.js";
 import { api } from "../api/client.js";
 import { resourceKeys } from "../api/keys.js";
 import { useResource } from "../api/use-resource.js";
@@ -61,7 +62,11 @@ export function LandingPage(props: { readonly origin: string }) {
           </h1>
           <p className={styles.lead}>{copy.lead}</p>
           <div className={styles.actions}>
-            <Link className={styles.primary} href={PATHS.explore}>
+            <Link
+              className={styles.primary}
+              href={PATHS.explore}
+              onClick={() => track("cta_click", { id: "hero" })}
+            >
               {copy.primary}
               <ArrowIcon />
             </Link>
@@ -92,7 +97,7 @@ export function LandingPage(props: { readonly origin: string }) {
               <p className={styles.kicker}>{copy.featured.eyebrow}</p>
               <h2>{copy.featured.title}</h2>
             </div>
-            <Link href={PATHS.explore}>
+            <Link href={PATHS.explore} onClick={() => track("cta_click", { id: "featured_all" })}>
               {copy.featured.all}
               <ArrowIcon />
             </Link>
@@ -139,7 +144,11 @@ export function LandingPage(props: { readonly origin: string }) {
               </li>
             ))}
           </ol>
-          <Link className={styles.primary} href={PATHS.explore}>
+          <Link
+            className={styles.primary}
+            href={PATHS.explore}
+            onClick={() => track("cta_click", { id: "start" })}
+          >
             {copy.start.action}
             <ArrowIcon />
           </Link>

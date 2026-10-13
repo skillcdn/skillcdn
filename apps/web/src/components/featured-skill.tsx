@@ -1,5 +1,6 @@
 import type { RestShowcaseEntry, ShowcaseTexts } from "@skillcdn/core";
 import { useEffect, useRef, useState } from "react";
+import { track } from "../analytics.js";
 import { Link } from "../navigation.js";
 import { ClipAnimation, isRefusal } from "./clip-animation.js";
 import styles from "./featured-skill.module.css";
@@ -94,7 +95,11 @@ export function FeaturedSkill(props: {
       <div className={styles.content}>
         {texts.credit !== null && <p className={styles.eyebrow}>{texts.credit}</p>}
         <h3 className={styles.title}>
-          <Link href={entry.address} className={styles.titleLink}>
+          <Link
+            href={entry.address}
+            className={styles.titleLink}
+            onClick={() => track("cta_click", { id: "showcase" })}
+          >
             {texts.title}
           </Link>
         </h3>

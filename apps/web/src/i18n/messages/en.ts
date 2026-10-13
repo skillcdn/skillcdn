@@ -371,6 +371,7 @@ export const en = {
 
   consent: {
     label: "Analytics consent",
+    title: "Analytics, with your OK",
     text: "This site can use analytics cookies to learn which pages help. Nothing is set until you say yes.",
     privacy: "Privacy policy",
     accept: "Allow analytics",

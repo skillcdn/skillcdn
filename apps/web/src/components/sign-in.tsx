@@ -1,4 +1,5 @@
 import { loginPath } from "@skillcdn/core";
+import { rememberSignInStart, track } from "../analytics.js";
 import { useI18n } from "../i18n/index.js";
 import { useLegalLinks } from "../legal-links.js";
 import type { LegalLinks } from "../site.js";
@@ -65,6 +66,8 @@ export function SignIn(props: {
   readonly returnTo: string;
   /** Called as the browser leaves, by a page that keeps something until the person is back. */
   readonly onLeave?: () => void;
+  /** Where the way out stands, for the statistics: in the dialog unless said. */
+  readonly from?: "dialog" | "consent";
 }) {
   const { t } = useI18n();
   const legal = useLegalLinks();
@@ -77,7 +80,11 @@ export function SignIn(props: {
       <a
         className={cx(ui.button, ui.primary, styles.leave)}
         href={loginPath(props.returnTo)}
-        onClick={props.onLeave}
+        onClick={() => {
+          rememberSignInStart();
+          track("sign_in_start", { from: props.from ?? "dialog" });
+          props.onLeave?.();
+        }}
       >
         <span className={styles.mark} aria-hidden="true" />
         {t.auth.continueWith}

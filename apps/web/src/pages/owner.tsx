@@ -1,5 +1,6 @@
 import type { OwnerPath, RestOwner } from "@skillcdn/core";
 import { useEffect } from "react";
+import { pageOfOwner, useAnalyticsPage } from "../analytics.js";
 import { api } from "../api/client.js";
 import { resourceKeys } from "../api/keys.js";
 import { useMorePages } from "../api/use-more-pages.js";
@@ -76,6 +77,14 @@ export function OwnerPage(props: OwnerPageProps) {
   useEffect(() => {
     applyHead(buildHead({ name: "owner", owner }, language, origin, { owner: profile }));
   }, [owner, language, origin, profile]);
+  useAnalyticsPage(
+    pageOfOwner(owner, {
+      ready: first.state === "ready",
+      error: first.state === "error" ? first.error : undefined,
+    }),
+    origin,
+    language,
+  );
 
   if (first.state === "loading") {
     return (

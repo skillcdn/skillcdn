@@ -1,4 +1,6 @@
 import { type Address, compactSummary, formatAddress, type RestMount } from "@skillcdn/core";
+import { useState } from "react";
+import { track } from "../analytics.js";
 import { useI18n } from "../i18n/index.js";
 import { Link } from "../navigation.js";
 import { tokensHref } from "../router.js";
@@ -102,7 +104,13 @@ function ClientGuide({
       </div>
       <div className={styles.copyField}>
         <code>{url}</code>
-        <CopyButton text={url} label={t.connect.copyButton} variant="primary" size="md" />
+        <CopyButton
+          text={url}
+          label={t.connect.copyButton}
+          variant="primary"
+          size="md"
+          onCopied={() => track("connect_start", { client, method: "copy_address" })}
+        />
       </div>
     </div>
   );
@@ -126,6 +134,7 @@ function ClientGuide({
         href={install}
         target={install.startsWith("https://") ? "_blank" : undefined}
         rel={install.startsWith("https://") ? "noopener noreferrer" : undefined}
+        onClick={() => track("connect_start", { client, method: "install" })}
       >
         {t.connect.add(c.label)}
         <span aria-hidden="true">↗</span>
@@ -146,6 +155,7 @@ function ClientGuide({
             href={details.web}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() => track("connect_start", { client, method: "open" })}
           >
             {t.connect.open(c.label)}
             <span aria-hidden="true">↗</span>
@@ -173,9 +183,19 @@ function ClientGuide({
       )}
       {terminal ? (
         <>
-          <CodeBlock code={configuration} label={t.connect.preview.terminal} copy />
+          <CodeBlock
+            code={configuration}
+            label={t.connect.preview.terminal}
+            copy
+            onCopied={() => track("connect_start", { client, method: "copy_config" })}
+          />
           {signInCommand !== undefined && (
-            <CodeBlock code={signInCommand} label={t.connect.preview.terminal} copy />
+            <CodeBlock
+              code={signInCommand}
+              label={t.connect.preview.terminal}
+              copy
+              onCopied={() => track("connect_start", { client, method: "copy_command" })}
+            />
           )}
         </>
       ) : (
@@ -183,12 +203,19 @@ function ClientGuide({
           <details className={styles.manual}>
             <summary>{t.connect.manual}</summary>
             {addressCard}
-            {client !== "claude" && <CodeBlock code={configuration} copy />}
+            {client !== "claude" && (
+              <CodeBlock
+                code={configuration}
+                copy
+                onCopied={() => track("connect_start", { client, method: "copy_config" })}
+              />
+            )}
             {client === "vscode" && (
               <CodeBlock
                 code={`code --add-mcp '${JSON.stringify({ name, type: "http", url })}'`}
                 label={t.connect.preview.terminal}
                 copy
+                onCopied={() => track("connect_start", { client, method: "copy_command" })}
               />
             )}
           </details>
@@ -222,6 +249,8 @@ export function ConnectGuide({
   readonly mount: RestMount | undefined;
 }) {
   const { t } = useI18n();
+  // The client the visitor is looking at, for what the first message is copied for.
+  const [chosen, setChosen] = useState<ConnectClient>(CONNECT_CLIENTS[0]);
   const url = `${origin}${formatAddress(address)}`;
   const manifest = mount?.index.status === "ready" ? mount.index.manifest : undefined;
   const name = serverNameOf(address, manifest?.name);
@@ -270,7 +299,18 @@ export function ConnectGuide({
         <h3>{t.connect.choose}</h3>
         <p className={styles.hint}>{t.connect.pickHint}</p>
       </div>
-      <Tabs label={t.connect.clientsLabel} tabs={tabs} variant="tiles" />
+      <Tabs
+        label={t.connect.clientsLabel}
+        tabs={tabs}
+        variant="tiles"
+        onChange={(id) => {
+          const client = CONNECT_CLIENTS.find((candidate) => candidate === id);
+          if (client !== undefined) {
+            setChosen(client);
+            track("connect_client", { client });
+          }
+        }}
+      />
       <div className={styles.firstMessage}>
         <div className={styles.messageHeading}>
           <span className={styles.messageIcon} aria-hidden="true">
@@ -288,6 +328,7 @@ export function ConnectGuide({
             label={t.connect.firstMessage.copy}
             variant="secondary"
             size="md"
+            onCopied={() => track("message_copy", { client: chosen })}
           />
         </div>
       </div>

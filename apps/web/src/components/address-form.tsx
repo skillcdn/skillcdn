@@ -1,5 +1,6 @@
 import type { AddressErrorCode } from "@skillcdn/core";
 import { type FormEvent, useId, useState } from "react";
+import { track } from "../analytics.js";
 import { useI18n } from "../i18n/index.js";
 import { appHref, Link, navigate } from "../navigation.js";
 import { addressFromInput, mountHref, ownerFromInput, ownerHref } from "../router.js";
@@ -31,13 +32,16 @@ export function AddressForm(props: {
       const owner = ownerFromInput(value);
       if (owner !== undefined) {
         setErrorCode(undefined);
+        track("address_submit", { kind: "owner" });
         navigate(appHref(ownerHref(owner)));
         return;
       }
       setErrorCode(parsed.error.code);
+      track("address_submit", { kind: "invalid" });
       return;
     }
     setErrorCode(undefined);
+    track("address_submit", { kind: "repository" });
     navigate(appHref(mountHref(parsed.value)));
   };
 

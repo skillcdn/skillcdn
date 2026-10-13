@@ -202,6 +202,8 @@ function headTags(tags: PageTags): { readonly html: string; readonly inlineScrip
     // Consent first: consent mode starts with everything denied, nothing is loaded and nothing is
     // stored until the visitor agrees in the banner the pages show, and a browser that signals a
     // privacy preference (Global Privacy Control, Do Not Track) is never asked and never loads it.
+    // The script sends no page view of its own: the pages send theirs, with only what is public
+    // (ADR-0050), once `active` says they may, which the event announces to a page already open.
     // One line, so that its hash in the policy is stable; the banner talks to `skillcdnAnalytics`.
     const bootstrap = [
       "window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}window.gtag=gtag;",
@@ -209,8 +211,9 @@ function headTags(tags: PageTags): { readonly html: string; readonly inlineScrip
       `(function(){var id=${JSON.stringify(tags.googleAnalyticsId)};var key="skillcdn-consent";`,
       'var refused=navigator.globalPrivacyControl===true||navigator.doNotTrack==="1";',
       "var stored=null;try{stored=localStorage.getItem(key)}catch(e){}",
-      'function load(){gtag("consent","update",{analytics_storage:"granted"});var s=document.createElement("script");s.async=true;s.src="https://www.googletagmanager.com/gtag/js?id="+encodeURIComponent(id);document.head.appendChild(s);gtag("js",new Date());gtag("config",id)}',
-      'window.skillcdnAnalytics={ask:!refused&&stored===null,decide:function(granted){try{localStorage.setItem(key,granted?"granted":"denied")}catch(e){}if(granted&&!refused){load()}}};',
+      'var state={ask:!refused&&stored===null,active:false,decide:function(granted){try{localStorage.setItem(key,granted?"granted":"denied")}catch(e){}if(granted&&!refused){load()}}};',
+      'function load(){if(state.active){return}state.active=true;gtag("consent","update",{analytics_storage:"granted"});var s=document.createElement("script");s.async=true;s.src="https://www.googletagmanager.com/gtag/js?id="+encodeURIComponent(id);document.head.appendChild(s);gtag("js",new Date());gtag("config",id,{send_page_view:false});window.dispatchEvent(new Event("skillcdn:analytics"))}',
+      "window.skillcdnAnalytics=state;",
       'if(!refused&&stored==="granted"){load()}})()',
     ].join("");
     inlineScripts.push(bootstrap);

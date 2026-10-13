@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { track } from "../analytics.js";
 import { useSession } from "../auth/session.js";
 import { useI18n } from "../i18n/index.js";
 import { Link, navigate, useLocation } from "../navigation.js";
@@ -40,7 +41,14 @@ export function UserMenu() {
     // Opens the dialog over this page, which is where the person is back afterwards: what it
     // shows before the browser leaves for the git host is not something a header has room for.
     return (
-      <Button size="sm" className={styles.signIn} onClick={openSignIn}>
+      <Button
+        size="sm"
+        className={styles.signIn}
+        onClick={() => {
+          track("sign_in_open", { from: "header" });
+          openSignIn();
+        }}
+      >
         {t.auth.signIn}
       </Button>
     );

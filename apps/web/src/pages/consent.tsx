@@ -1,5 +1,6 @@
 import { CONSENT_ERROR_PARAM, CONSENT_REQUEST_PARAM } from "@skillcdn/core";
 import { useEffect, useState } from "react";
+import { track } from "../analytics.js";
 import { ApiError, api } from "../api/client.js";
 import { resourceKeys } from "../api/keys.js";
 import { useResource } from "../api/use-resource.js";
@@ -172,6 +173,7 @@ export function ConsentPage(props: ConsentPageProps) {
               a dialog over this page would only say "continue" a second time. */}
           <SignIn
             returnTo={returnTo}
+            from="consent"
             onLeave={() => {
               try {
                 window.sessionStorage.setItem(RESUME_KEY, here);
@@ -186,6 +188,7 @@ export function ConsentPage(props: ConsentPageProps) {
   }
 
   const answer = (approve: boolean) => {
+    track("app_consent", { approved: approve });
     setAnswering(true);
     setFailure(undefined);
     api.decide(request, approve).then(

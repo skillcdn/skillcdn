@@ -358,12 +358,16 @@ describe("the tags an operator configures", () => {
     );
     expect(html).toContain('<meta name="skillcdn-contact" content="content@skills.example">');
     // Analytics are consent-gated: consent mode starts denied, the script is loaded by the page
-    // after the visitor agrees, and a privacy signal keeps it off (deploy/README.md).
+    // after the visitor agrees, and a privacy signal keeps it off (deploy/README.md). The script
+    // sends no page view of its own; the pages do, once told that they may (ADR-0050).
     expect(html).toContain('var id="G-ABC123XYZ"');
     expect(html).toContain('gtag("consent","default",{ad_storage:"denied"');
     expect(html).toContain("navigator.globalPrivacyControl===true");
     expect(html).toContain('"https://www.googletagmanager.com/gtag/js?id="+encodeURIComponent(id)');
-    expect(html).toContain("window.skillcdnAnalytics={ask:");
+    expect(html).toContain("var state={ask:!refused&&stored===null,active:false,decide:");
+    expect(html).toContain("window.skillcdnAnalytics=state;");
+    expect(html).toContain('gtag("config",id,{send_page_view:false})');
+    expect(html).toContain('window.dispatchEvent(new Event("skillcdn:analytics"))');
     expect(html).not.toContain('<script async src="https://www.googletagmanager.com');
     const policy = response?.headers.get("content-security-policy") ?? "";
     expect(policy).toMatch(

@@ -14,6 +14,8 @@ export function Tabs(props: {
   readonly tabs: readonly Tab[];
   /** "tiles" stands each choice in a rounded square: a list picked by sight, not read through. */
   readonly variant?: "underline" | "tiles";
+  /** Called with the id of the tab the visitor moved to. */
+  readonly onChange?: (id: string) => void;
 }) {
   const { tabs } = props;
   const tiles = props.variant === "tiles";
@@ -42,6 +44,7 @@ export function Tabs(props: {
       ];
     if (next !== undefined) {
       setActiveId(next.id);
+      if (next.id !== active.id) props.onChange?.(next.id);
       buttons.current.get(next.id)?.focus();
       if (tiles)
         buttons.current.get(next.id)?.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -83,6 +86,7 @@ export function Tabs(props: {
             }
             onClick={(event) => {
               setActiveId(tab.id);
+              if (tab.id !== active.id) props.onChange?.(tab.id);
               if (tiles)
                 event.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" });
             }}

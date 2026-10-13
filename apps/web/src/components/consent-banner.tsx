@@ -1,29 +1,19 @@
 import { useEffect, useState } from "react";
+import type { AnalyticsState } from "../analytics.js";
 import { useI18n } from "../i18n/index.js";
 import { readLegalLinks } from "../site.js";
+import { BrandSymbol } from "./brand.js";
 import styles from "./consent-banner.module.css";
 import { Button } from "./ui.js";
 
 /**
- * What the server's analytics bootstrap leaves on the page when analytics are configured
- * (`deploy/README.md`): whether the visitor is to be asked, and where the answer goes. Without
- * analytics there is nothing here, and the banner never shows.
+ * Asks once whether analytics may run (`src/analytics.ts`): a card in the glass of the site at
+ * the foot of the page, which goes away with the answer. Prerendered pages carry no banner; it
+ * appears after mount, and only when the bootstrap says the visitor is to be asked.
  */
-interface AnalyticsConsent {
-  readonly ask: boolean;
-  decide(granted: boolean): void;
-}
-
-declare global {
-  interface Window {
-    skillcdnAnalytics?: AnalyticsConsent;
-  }
-}
-
-/** Asks once whether analytics may run. Prerendered pages carry no banner; it appears after mount. */
 export function ConsentBanner() {
   const { t } = useI18n();
-  const [consent, setConsent] = useState<AnalyticsConsent | undefined>(undefined);
+  const [consent, setConsent] = useState<AnalyticsState | undefined>(undefined);
   const [privacyUrl, setPrivacyUrl] = useState<string | undefined>(undefined);
   useEffect(() => {
     const found = window.skillcdnAnalytics;
@@ -41,20 +31,29 @@ export function ConsentBanner() {
   };
   return (
     <section className={styles.banner} aria-label={t.consent.label}>
-      <p className={styles.text}>
-        {t.consent.text}
-        {privacyUrl !== undefined && (
-          <>
-            {" "}
-            <a href={privacyUrl}>{t.consent.privacy}</a>
-          </>
-        )}
-      </p>
+      <span className={styles.badge} aria-hidden="true">
+        <BrandSymbol className={styles.symbol} />
+      </span>
+      <div className={styles.words}>
+        <p className={styles.title}>{t.consent.title}</p>
+        <p className={styles.text}>
+          {t.consent.text}
+          {privacyUrl !== undefined && (
+            <>
+              {" "}
+              {/* Beside the page, so that reading it does not lose the question. */}
+              <a href={privacyUrl} target="_blank" rel="noopener noreferrer">
+                {t.consent.privacy}
+              </a>
+            </>
+          )}
+        </p>
+      </div>
       <div className={styles.actions}>
         <Button variant="primary" size="sm" onClick={() => decide(true)}>
           {t.consent.accept}
         </Button>
-        <Button size="sm" onClick={() => decide(false)}>
+        <Button variant="ghost" size="sm" onClick={() => decide(false)}>
           {t.consent.decline}
         </Button>
       </div>

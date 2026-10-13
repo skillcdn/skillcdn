@@ -7,9 +7,10 @@ import {
   useMemo,
   useState,
 } from "react";
+import { pageOfRoute, takeSignInStart, track, useAnalyticsPage } from "./analytics.js";
 import { type InitialData, InitialDataContext } from "./api/initial-data.js";
 import styles from "./app.module.css";
-import { SessionProvider } from "./auth/session.js";
+import { SessionProvider, useSession } from "./auth/session.js";
 import { Layout } from "./components/layout.js";
 import { SignInDialogProvider } from "./components/sign-in-dialog.js";
 import { Container, Skeleton } from "./components/ui.js";
@@ -144,6 +145,22 @@ function Routed(props: {
       applyHead(buildHead(route, language, props.origin));
     }
   }, [location.pathname, location.search, language, props.origin]);
+
+  // Analytics are told of the pages that know what they are from their route; the page of an
+  // address and the page of an account say so themselves, once the server has answered
+  // (src/analytics.ts). A sign-in that left from this tab has completed when the person is
+  // back signed in; one that did not complete is forgotten.
+  useAnalyticsPage(pageOfRoute(route), props.origin, language);
+  const { session } = useSession();
+  useEffect(() => {
+    if (session.status === "user") {
+      if (takeSignInStart()) {
+        track("login", { method: "gh" });
+      }
+    } else if (session.status === "anonymous") {
+      takeSignInStart();
+    }
+  }, [session.status]);
 
   // A page prerendered in the default language is hidden by public/boot.js until it is rendered
   // in the visitor's language, which has now happened.

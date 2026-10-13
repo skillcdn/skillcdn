@@ -1,5 +1,6 @@
 import { type Address, formatAddress, type RestMount, type RestSkill } from "@skillcdn/core";
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { pageOfMount, track, useAnalyticsPage } from "../analytics.js";
 import { api } from "../api/client.js";
 import { resourceKeys } from "../api/keys.js";
 import { useResource } from "../api/use-resource.js";
@@ -164,7 +165,13 @@ function PrivateHint() {
       <Callout
         action={
           // The dialog opens over this page, which shows itself again once they are signed in.
-          <Button size="sm" onClick={openSignIn}>
+          <Button
+            size="sm"
+            onClick={() => {
+              track("sign_in_open", { from: "private" });
+              openSignIn();
+            }}
+          >
             {t.auth.signIn}
           </Button>
         }
@@ -283,6 +290,18 @@ export function MountPage(props: MountPageProps) {
       }),
     );
   }, [address, view, language, origin, loaded, skill]);
+
+  // And so do analytics, once the server has answered: the address when the repository is
+  // public, a name for it otherwise (src/analytics.ts).
+  useAnalyticsPage(
+    pageOfMount(address, view, {
+      mount: loaded,
+      error: mount.state === "error" ? mount.error : undefined,
+      skillLoaded: skill !== undefined,
+    }),
+    origin,
+    language,
+  );
 
   // Name and description, then how to connect an agent, then what it serves. The guide is for
   // the address as a whole, so it is on the page of the address: a folder, a skill, a file or

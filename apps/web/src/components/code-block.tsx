@@ -12,6 +12,8 @@ export function CopyButton(props: {
   readonly variant?: "primary" | "secondary" | "ghost";
   readonly size?: "md" | "sm";
   readonly className?: string;
+  /** Called once the text is on the clipboard. */
+  readonly onCopied?: () => void;
 }) {
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
@@ -32,7 +34,10 @@ export function CopyButton(props: {
       onClick={() => {
         // Without a secure context there is no clipboard; the text stays selectable.
         navigator.clipboard?.writeText(props.text).then(
-          () => setCopied(true),
+          () => {
+            setCopied(true);
+            props.onCopied?.();
+          },
           () => setCopied(false),
         );
       }}
@@ -47,13 +52,15 @@ export function CodeBlock(props: {
   readonly code: string;
   readonly label?: string;
   readonly copy?: boolean;
+  /** Called once the code is on the clipboard. */
+  readonly onCopied?: () => void;
 }) {
   return (
     <figure className={styles.block}>
       {(props.label !== undefined || props.copy === true) && (
         <figcaption className={styles.bar}>
           <span className={styles.label}>{props.label}</span>
-          {props.copy === true && <CopyButton text={props.code} />}
+          {props.copy === true && <CopyButton text={props.code} onCopied={props.onCopied} />}
         </figcaption>
       )}
       <pre className={styles.pre}>

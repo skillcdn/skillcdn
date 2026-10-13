@@ -1,38 +1,110 @@
-/* One bar at the bottom, over nothing that matters: it asks once and goes away. */
+/* The question, asked once, in the glass of the site at the foot of the page: a pane that
+   stands off the page and goes away with the answer. On a wide screen it keeps to a corner,
+   over nothing that matters; on a phone it is as wide as the page. The pane is the same glass
+   as every other pane of the site (tokens.css, "glass"): what makes it one is what is behind it. */
 .banner {
   position: fixed;
-  inset-inline: 0;
-  bottom: 0;
   z-index: 20;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3) var(--space-5);
-  padding: var(--space-4) var(--space-6);
-  background: var(--color-bg-raised);
-  border-top: 1px solid var(--color-border);
+  inset-inline: var(--space-4);
+  bottom: var(--space-4);
+  width: min(var(--width-consent), 100% - 2 * var(--space-4));
+  margin-inline-start: auto;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-3) var(--space-4);
+  align-items: start;
+  padding: var(--space-5);
+  border: 1px solid var(--color-glass-edge);
+  border-radius: var(--radius-xl);
+  background: var(--glass-surface);
+  backdrop-filter: var(--glass-backdrop);
+  box-shadow: var(--glass-sheen), var(--glass-lift);
   color: var(--color-text);
   font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  animation: arrive var(--consent-arrival) ease-out both;
+}
+
+/* It comes up from the foot of the page, as a card laid on a table does. */
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translateY(var(--space-3));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .banner {
+    animation: none;
+  }
+}
+
+/* The mark on a dark disc, as in the sign-in dialog: the symbol brings its own blue. */
+.badge {
+  display: grid;
+  place-items: center;
+  width: var(--consent-badge);
+  height: var(--consent-badge);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-full);
+  background: var(--color-bg-inset);
+}
+
+.symbol {
+  width: var(--consent-symbol);
+  height: var(--consent-symbol);
+}
+
+.words {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-weight: var(--weight-medium);
+  color: var(--color-text);
 }
 
 .text {
   margin: 0;
-  max-width: 60ch;
+  color: var(--color-text-muted);
 }
 
 .text a {
-  color: inherit;
+  color: var(--color-accent);
   text-decoration: underline;
+  text-underline-offset: 0.15em;
 }
 
+.text a:hover {
+  color: var(--color-accent-hover);
+}
+
+/* Under the words, not under the mark. */
 .actions {
+  grid-column: 2;
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
 }
 
 @media (max-width: 40rem) {
   .banner {
-    padding-inline: var(--space-4);
+    grid-template-columns: 1fr;
+    padding: var(--space-4);
+  }
+
+  .badge {
+    display: none;
+  }
+
+  .actions {
+    grid-column: 1;
   }
 }

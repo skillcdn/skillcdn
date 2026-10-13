@@ -9,6 +9,7 @@ import {
   ROOT_PATH,
 } from "@skillcdn/core";
 import { type ComponentType, type FormEvent, useEffect, useState } from "react";
+import { track } from "../analytics.js";
 import { ApiError, api } from "../api/client.js";
 import { resourceKeys } from "../api/keys.js";
 import { useResource } from "../api/use-resource.js";
@@ -362,6 +363,7 @@ function Tokens({ user, origin }: SectionProps) {
     setRemoved(false);
     api.makeToken({ address, label: label.trim(), expiresInDays: days }).then(
       (token) => {
+        track("token_create");
         setMaking(false);
         setMade(token);
         setLabel("");
@@ -603,7 +605,13 @@ export function AccountPage(props: AccountPageProps) {
         <div className={styles.signedOut}>
           <Callout
             action={
-              <Button size="sm" onClick={openSignIn}>
+              <Button
+                size="sm"
+                onClick={() => {
+                  track("sign_in_open", { from: "account" });
+                  openSignIn();
+                }}
+              >
                 {t.auth.signIn}
               </Button>
             }

@@ -481,6 +481,12 @@
   /* The dialog a person signs in from: narrower than a question, since it holds one button. Its
      mark stands in a badge on a stage of its own, with a light behind it and rings that leave
      it, widen to `reach` times its size and fade, one every `period`. */
+  /* The consent banner: a pane the width of the sign-in dialog, its mark on a smaller disc, and
+     how long it takes to come up from the foot of the page. */
+  --width-consent: 26rem;
+  --consent-badge: 2.5rem;
+  --consent-symbol: 1.375rem;
+  --consent-arrival: 360ms;
   --width-sign-in: 26rem;
   --sign-in-stage: 7.5rem;
   --sign-in-glow: 15rem;

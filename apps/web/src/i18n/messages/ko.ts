@@ -351,6 +351,7 @@ export const ko: Messages = {
 
   consent: {
     label: "분석 동의",
+    title: "분석을 허락해 주시겠어요?",
     text: "어떤 페이지가 도움이 되는지 알기 위해 분석 쿠키를 사용할 수 있어요. 동의하기 전에는 아무것도 저장하지 않아요.",
     privacy: "개인정보 처리방침",
     accept: "분석 허용",
