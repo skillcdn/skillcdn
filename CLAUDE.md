@@ -96,6 +96,7 @@ Packages compile to `dist/` and consume each other's compiled output. Going thro
 - [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): summary`, imperative, 72 characters or fewer. Types: `feat fix docs refactor test perf build ci chore revert`. Scopes: `core db github server web deploy docs repo`. The body says why. Breaking changes use `!` and a `BREAKING CHANGE:` footer.
 - One logical change per commit, and every commit passes `pnpm check`.
 - **For now, maintainers commit and push directly to `main`.** There is no pull-request gate and no branch protection yet; a pull-request flow comes later. Do not create branches or open pull requests unless asked. Nothing stands between a push and `main`, so the discipline is yours: run `pnpm check` first, `git pull --rebase` before pushing, keep commits small, and treat a red CI run on `main` as the first thing to fix.
+- Dependabot's pull requests are landed one at a time, by a rebase merge or by cherry-picking the commit onto `main` (`git cherry-pick -x`), checked and pushed like any other commit; a cherry-picked one is closed with a comment naming the commit. Two that touch the lockfile conflict; see Dependencies.
 - Never force-push or rewrite `main`, skip hooks with `--no-verify`, or commit build output.
 - Keep the `Co-Authored-By` trailer your agent adds, so AI-authored changes stay traceable.
 - **Releases.** The release workflow opens one pull request that bumps the versions and changelogs of the packages with pending changesets; merging it publishes them to npm, with provenance. Nobody runs `pnpm publish` by hand, except a maintainer for the first version of a new package (ADR-0046).
@@ -147,7 +148,7 @@ Keep docs lean: current facts and decisions, not history or essays. Git history 
 - Justify every new runtime dependency in the commit message: why it is needed, maintenance health, install scripts, license. Permissive licenses only (MIT, Apache-2.0, BSD, ISC); we ship images, so no copyleft or source-available dependencies.
 - Fonts and other assets that end up in the image are dependencies too, and they must ship inside it: an installation may have no internet, and the pages allow no foreign source. Their license must permit bundling and redistribution. The SIL Open Font License 1.1 is accepted for font files that are not modified, with the copyright and license notice shipped next to them. List every such asset in `THIRD-PARTY-NOTICES.md`.
 - Releases younger than three days are not installable (`minimumReleaseAge`). Bypass only for a security fix, and say so in the commit message.
-- Never hand-edit `pnpm-lock.yaml`; resolve conflicts by running `pnpm install`.
+- Never hand-edit `pnpm-lock.yaml`. A conflict in it is resolved by taking the lockfile of the branch being rebased onto (`git checkout HEAD -- pnpm-lock.yaml` during a rebase) and running `pnpm install`, which re-resolves only what the manifests changed. `pnpm install` on the conflicted file re-resolves far more than the conflict.
 
 ## Working alongside other agents
 
