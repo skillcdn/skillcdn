@@ -86,7 +86,7 @@ src/
   mounts/        address -> repository and commit, through the database first and the git host second;
                  MountReader answers questions about a mount as data, for MCP and REST alike
   indexer/       coordinates who indexes a commit (ADR-0007); the index itself is built by @skillcdn/indexer
-  stats/         daily usage counters and distinct clients per public repository: added up in memory, written in batches
+  stats/         daily usage counters per public repository and for the deployment as a whole, with distinct clients by app: added up in memory, written in batches
   adapters/      implementations of core ports that are not their own package (clock, ...)
   testing/       test support: a git host backed by fixtures/.repositories/, and the git host's side
                  of signing in for three made-up people (not compiled into dist)

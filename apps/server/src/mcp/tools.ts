@@ -23,7 +23,7 @@ import {
 import * as z from "zod";
 import type { Logger } from "../logger.js";
 import { ReaderInputError } from "../mounts/continuation.js";
-import type { MountReader, NotReady } from "../mounts/mount-reader.js";
+import type { IndexedFile, MountReader, NotReady } from "../mounts/mount-reader.js";
 import type { Mount } from "../mounts/mount-service.js";
 import type { UsageStats } from "../stats/usage-recorder.js";
 import { SERVER_NAME, SERVER_VERSION } from "../version.js";
@@ -78,7 +78,11 @@ function cacheHint(mount: Mount, now: Date): { ttlMs: number; cacheScope: "publi
 export async function createMountServer(
   mount: Mount,
   dependencies: ToolDependencies,
-  request: { readonly origin: string },
+  request: {
+    readonly origin: string;
+    /** The client's network address, as resolved behind trusted proxies; counted, never kept. */
+    readonly clientAddress?: string | undefined;
+  },
 ): Promise<McpServer> {
   const { reader, usage, stats, clock, indexWaitMs } = dependencies;
   const repository = `${mount.repo.repository.owner.login}/${mount.repo.repository.name}`;
@@ -122,7 +126,16 @@ export async function createMountServer(
       instructions: renderInstructions(catalog),
     },
   );
-  server.server.oninitialized = () => stats.count(mount, "connection");
+  // Who used the repository: the client at the request's address, through the app it names in
+  // its handshake (the earlier revisions) or in every request (the current one). The SDK gives
+  // the name either way; what it gives for a request of the earlier revisions after the
+  // handshake is nothing, which the recorder takes as "not said".
+  const noteClient = (): void =>
+    stats.client(mount, request.clientAddress, server.server.getClientVersion()?.name);
+  server.server.oninitialized = () => {
+    stats.count(mount, "connection");
+    noteClient();
+  };
   const record = (subject: string): void => {
     usage.record({
       type: "tool_call",
@@ -134,6 +147,16 @@ export async function createMountServer(
       unit: "call",
     });
     stats.count(mount, "tool_call", subject);
+    noteClient();
+  };
+  // What was read, for the statistics: a skill's document counts as a load of the skill
+  // whichever way it was asked for, and any other file as a read of its path.
+  const countRead = (indexed: IndexedFile): void => {
+    if (indexed.kind === "skill") {
+      stats.count(mount, "skill_load", indexed.skillDir ?? "");
+    } else {
+      stats.count(mount, "file_read", indexed.path);
+    }
   };
   const guarded =
     <Input>(tool: string, handler: (input: Input) => Promise<ToolReply>) =>
@@ -217,6 +240,7 @@ export async function createMountServer(
         case "not_ready":
           return notReady(lookup.outcome);
         case "found":
+          if (input.offset === undefined || input.offset === 0) countRead(lookup.indexed);
           return fileReply(lookup.file);
         case "directory":
           return problem(
@@ -324,8 +348,7 @@ export async function createMountServer(
         const answer = await reader.getSkill(mount, params.uri, indexWaitMs);
         if (answer.status !== "ready") throw notIndexed(answer);
         if (answer.skill === undefined) throw invalid(`No listed skill at ${params.uri}.`);
-        const name = answer.skill.frontmatter.name;
-        stats.count(mount, "skill_load", typeof name === "string" ? name : "");
+        stats.count(mount, "skill_load", answer.directory ?? "");
         return { skill: answer.skill, ...cacheHint(mount, clock.now()) };
       }),
   );
@@ -370,6 +393,7 @@ export async function createMountServer(
       const answer = await reader.readResource(mount, request.params.uri, indexWaitMs);
       if (answer.status !== "ready") throw notIndexed(answer);
       if (answer.resource === undefined) throw invalid(`No served file at ${request.params.uri}.`);
+      if (answer.indexed !== undefined) countRead(answer.indexed);
       const { uri: found, mimeType, text, blob } = answer.resource;
       const content =
         text !== undefined

@@ -1,10 +1,27 @@
 import { and, between, desc, eq, gte, sql } from "drizzle-orm";
 import { type Database, drizzleOf } from "../client.js";
-import { accounts, repos, usageClients, usageDaily } from "../schema.js";
+import {
+  accounts,
+  repos,
+  usageClients,
+  usageDaily,
+  usageServiceClients,
+  usageServiceDaily,
+} from "../schema.js";
 import type { RepoScope } from "./repos.js";
 
-/** `client` is how many distinct clients used the repository that day; it appears once the day is folded. */
-export type UsageMetric = "connection" | "tool_call" | "skill_load" | "client";
+/**
+ * What is counted per repository and day: connections, tool calls by tool, skill loads by skill
+ * directory, file reads by path, and `client`, how many distinct clients used the repository
+ * that day, which appears once the day is folded.
+ */
+export type UsageMetric = "connection" | "tool_call" | "skill_load" | "file_read" | "client";
+
+/**
+ * What is counted for the deployment as a whole: the same, with `client_app`, how many distinct
+ * clients used it through each client app (the subject is the name the app gave itself).
+ */
+export type ServiceUsageMetric = UsageMetric | "client_app";
 
 /** A day in UTC, as `YYYY-MM-DD`. */
 export type UsageDay = string;
@@ -137,6 +154,158 @@ export async function foldUsageClients(
   `);
 }
 
+export interface ServiceUsageIncrement {
+  readonly day: UsageDay;
+  readonly metric: ServiceUsageMetric;
+  /** What the metric is about: the tool name, or empty. */
+  readonly subject: string;
+  readonly count: number;
+}
+
+/** Adds to the deployment's own counters, which name no repository; see `addUsage`. */
+export async function addServiceUsage(
+  database: Database,
+  increments: readonly ServiceUsageIncrement[],
+  now: Date,
+): Promise<void> {
+  const merged = new Map<string, ServiceUsageIncrement>();
+  for (const increment of increments) {
+    if (increment.count <= 0) {
+      continue;
+    }
+    const key = JSON.stringify([increment.day, increment.metric, increment.subject]);
+    const existing = merged.get(key);
+    merged.set(
+      key,
+      existing === undefined ? increment : { ...existing, count: existing.count + increment.count },
+    );
+  }
+  const rows = [...merged.values()];
+  for (let start = 0; start < rows.length; start += BATCH_SIZE) {
+    await drizzleOf(database)
+      .insert(usageServiceDaily)
+      .values(
+        rows.slice(start, start + BATCH_SIZE).map((row) => ({
+          day: row.day,
+          metric: row.metric,
+          subject: row.subject,
+          count: row.count,
+          createdAt: now,
+          updatedAt: now,
+        })),
+      )
+      .onConflictDoUpdate({
+        target: [usageServiceDaily.day, usageServiceDaily.metric, usageServiceDaily.subject],
+        set: { count: sql`${usageServiceDaily.count} + excluded.count`, updatedAt: now },
+      });
+  }
+}
+
+export interface ServiceUsageClient {
+  readonly day: UsageDay;
+  /** The keyed hash of the client, as hex. */
+  readonly client: string;
+  /** The name the client app gave itself, or empty when it said nothing. */
+  readonly app: string;
+}
+
+/**
+ * Notes that these clients were seen somewhere on the deployment. A client seen before on that
+ * day is not a new row, but one that was written without an app takes the app it is now seen
+ * with: the earlier protocol revisions name the app once, in the handshake, and the first
+ * request of a day may not be the one that names it.
+ */
+export async function addServiceUsageClients(
+  database: Database,
+  clients: readonly ServiceUsageClient[],
+  now: Date,
+): Promise<void> {
+  const distinct = new Map<string, ServiceUsageClient>();
+  for (const seen of clients) {
+    const key = JSON.stringify([seen.day, seen.client]);
+    const existing = distinct.get(key);
+    if (existing === undefined || (existing.app === "" && seen.app !== "")) {
+      distinct.set(key, seen);
+    }
+  }
+  const rows = [...distinct.values()];
+  for (let start = 0; start < rows.length; start += BATCH_SIZE) {
+    await drizzleOf(database)
+      .insert(usageServiceClients)
+      .values(
+        rows.slice(start, start + BATCH_SIZE).map((row) => ({
+          day: row.day,
+          client: row.client,
+          app: row.app,
+          createdAt: now,
+        })),
+      )
+      .onConflictDoUpdate({
+        target: [usageServiceClients.day, usageServiceClients.client],
+        set: { app: sql`excluded.app` },
+        setWhere: sql`${usageServiceClients.app} = '' and excluded.app <> ''`,
+      });
+  }
+}
+
+/**
+ * Turns the deployment's clients of every day before `before` into `client` and `client_app`
+ * counts in `usage_service_daily`, and deletes the rows of those days. One statement, as
+ * `foldUsageClients` is: a row is moved once, so concurrent folds add up to the same totals.
+ */
+export async function foldServiceUsageClients(
+  database: Database,
+  before: UsageDay,
+  now: Date,
+): Promise<void> {
+  const handle = drizzleOf(database);
+  await handle.execute(sql`
+    with moved as (
+      delete from ${usageServiceClients}
+      where ${usageServiceClients.day} < ${before}
+      returning ${usageServiceClients.day} as day, ${usageServiceClients.app} as app
+    ),
+    totals as (
+      select day, 'client' as metric, '' as subject, count(*) as count from moved group by day
+      union all
+      select day, 'client_app' as metric, app as subject, count(*) as count from moved group by day, app
+    )
+    insert into ${usageServiceDaily} (day, metric, subject, count, created_at, updated_at)
+    select day, metric, subject, count, ${now}, ${now}
+    from totals
+    on conflict (day, metric, subject)
+    do update set count = ${usageServiceDaily}.count + excluded.count, updated_at = excluded.updated_at
+  `);
+}
+
+export interface ServiceUsageTotal {
+  readonly day: UsageDay;
+  readonly metric: ServiceUsageMetric;
+  readonly subject: string;
+  readonly count: number;
+}
+
+/** What was counted for the deployment as a whole, per day, between two days, both included. */
+export async function getServiceUsage(
+  database: Database,
+  range: { readonly from: UsageDay; readonly to: UsageDay },
+): Promise<ServiceUsageTotal[]> {
+  return drizzleOf(database)
+    .select({
+      day: usageServiceDaily.day,
+      metric: usageServiceDaily.metric,
+      subject: usageServiceDaily.subject,
+      count: usageServiceDaily.count,
+    })
+    .from(usageServiceDaily)
+    .where(between(usageServiceDaily.day, range.from, range.to))
+    .orderBy(
+      usageServiceDaily.day,
+      usageServiceDaily.metric,
+      sql`${usageServiceDaily.subject} collate "C"`,
+    );
+}
+
 export interface UsageTotal {
   readonly metric: UsageMetric;
   readonly subject: string;
@@ -204,5 +373,50 @@ export async function listTopRepositories(
     .groupBy(repos.id, repos.host, accounts.login, repos.name)
     .having(options.minimum === undefined ? undefined : gte(total, options.minimum))
     .orderBy(desc(total), sql`${repos.name} collate "C"`)
+    .limit(options.limit);
+}
+
+export interface SubjectUsage extends RepositoryUsage {
+  /** The skill directory, the file path or the tool name, by the metric. */
+  readonly subject: string;
+}
+
+/**
+ * The subjects of one metric with the highest totals between two days, each with its
+ * repository: the most loaded skills, the most read files. Like `listTopRepositories`, it is
+ * not scoped to an account and reads only repositories that are public right now.
+ */
+export async function listTopSubjects(
+  database: Database,
+  options: {
+    readonly metric: Exclude<UsageMetric, "connection" | "client">;
+    readonly from: UsageDay;
+    readonly to: UsageDay;
+    readonly limit: number;
+    readonly minimum?: number;
+  },
+): Promise<SubjectUsage[]> {
+  const total = sql<number>`sum(${usageDaily.count})::bigint`.mapWith(Number);
+  return drizzleOf(database)
+    .select({
+      host: repos.host,
+      owner: accounts.login,
+      name: repos.name,
+      subject: usageDaily.subject,
+      count: total,
+    })
+    .from(usageDaily)
+    .innerJoin(repos, eq(repos.id, usageDaily.repoId))
+    .innerJoin(accounts, eq(accounts.id, repos.accountId))
+    .where(
+      and(
+        eq(usageDaily.metric, options.metric),
+        between(usageDaily.day, options.from, options.to),
+        eq(repos.visibility, "public"),
+      ),
+    )
+    .groupBy(repos.id, repos.host, accounts.login, repos.name, usageDaily.subject)
+    .having(options.minimum === undefined ? undefined : gte(total, options.minimum))
+    .orderBy(desc(total), sql`${repos.name} collate "C"`, sql`${usageDaily.subject} collate "C"`)
     .limit(options.limit);
 }

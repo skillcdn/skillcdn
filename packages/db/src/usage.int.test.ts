@@ -2,17 +2,22 @@ import type { HostRepository } from "@skillcdn/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { drizzleOf } from "./client.js";
 import {
+  addServiceUsage,
+  addServiceUsageClients,
   addUsage,
   addUsageClients,
   type Database,
+  foldServiceUsageClients,
   foldUsageClients,
   getRepoUsage,
+  getServiceUsage,
   listTopRepositories,
+  listTopSubjects,
   type RepoScope,
   saveRepository,
   usageDayOf,
 } from "./index.js";
-import { usageClients } from "./schema.js";
+import { usageClients, usageServiceClients } from "./schema.js";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "./testing.js";
 
 let testDatabase: TestDatabase;
@@ -172,6 +177,128 @@ describe("distinct clients", () => {
       { host: "gh", owner: one.owner, name: "One", count: 4 },
       { host: "gh", owner: two.owner, name: "Two", count: 1 },
     ]);
+  });
+});
+
+describe("the deployment's own counters", () => {
+  it("add up without naming a repository, and are read per day", async () => {
+    const call = (day: string, count: number) =>
+      ({ day, metric: "tool_call", subject: "browse_repo", count }) as const;
+    await addServiceUsage(
+      database,
+      [
+        call("2026-09-01", 2),
+        call("2026-09-01", 3),
+        { day: "2026-09-01", metric: "skill_load", subject: "", count: 1 },
+        { day: "2026-09-02", metric: "file_read", subject: "", count: 4 },
+        { day: "2026-09-02", metric: "file_read", subject: "", count: 0 },
+      ],
+      NOW,
+    );
+    // Another process, later: it adds.
+    await addServiceUsage(database, [call("2026-09-01", 1)], NOW);
+    await addServiceUsage(database, [], NOW);
+    expect(await getServiceUsage(database, { from: "2026-09-01", to: "2026-09-02" })).toEqual([
+      { day: "2026-09-01", metric: "skill_load", subject: "", count: 1 },
+      { day: "2026-09-01", metric: "tool_call", subject: "browse_repo", count: 6 },
+      { day: "2026-09-02", metric: "file_read", subject: "", count: 4 },
+    ]);
+    expect(await getServiceUsage(database, { from: "2026-09-03", to: "2026-09-30" })).toEqual([]);
+  });
+
+  it("count distinct clients once across every repository, and by the app each named", async () => {
+    const seen = (day: string, client: string, app: string) => ({ day, client, app });
+    await addServiceUsageClients(
+      database,
+      [
+        seen("2026-09-10", "a", ""),
+        seen("2026-09-10", "b", "cursor"),
+        // The same client in the same report, now with its app: the app wins.
+        seen("2026-09-10", "a", "claude code"),
+        seen("2026-09-11", "a", ""),
+        seen("2026-09-11", "d", ""),
+      ],
+      NOW,
+    );
+    // Reported again by another process: the first name a client gave stays, a client written
+    // without a name takes the one it is now seen with.
+    await addServiceUsageClients(
+      database,
+      [
+        seen("2026-09-10", "b", ""),
+        seen("2026-09-10", "b", "something else"),
+        seen("2026-09-11", "a", "codex"),
+        seen("2026-09-11", "c", "codex"),
+      ],
+      NOW,
+    );
+    await addServiceUsageClients(database, [], NOW);
+
+    await foldServiceUsageClients(database, "2026-09-11", NOW);
+    expect(await getServiceUsage(database, { from: "2026-09-10", to: "2026-09-11" })).toEqual([
+      { day: "2026-09-10", metric: "client", subject: "", count: 2 },
+      { day: "2026-09-10", metric: "client_app", subject: "claude code", count: 1 },
+      { day: "2026-09-10", metric: "client_app", subject: "cursor", count: 1 },
+    ]);
+    const handle = drizzleOf(database);
+    expect(
+      (
+        await handle
+          .select({ day: usageServiceClients.day, app: usageServiceClients.app })
+          .from(usageServiceClients)
+          .orderBy(usageServiceClients.client)
+      ).map((row) => [row.day, row.app]),
+    ).toEqual([
+      ["2026-09-11", "codex"],
+      ["2026-09-11", "codex"],
+      ["2026-09-11", ""],
+    ]);
+
+    // Folding again moves nothing; the next day folds the rest, the unnamed app among them.
+    await foldServiceUsageClients(database, "2026-09-11", NOW);
+    await foldServiceUsageClients(database, "2026-09-12", NOW);
+    expect(await getServiceUsage(database, { from: "2026-09-11", to: "2026-09-11" })).toEqual([
+      { day: "2026-09-11", metric: "client", subject: "", count: 3 },
+      { day: "2026-09-11", metric: "client_app", subject: "", count: 1 },
+      { day: "2026-09-11", metric: "client_app", subject: "codex", count: 2 },
+    ]);
+    expect(await handle.select({ day: usageServiceClients.day }).from(usageServiceClients)).toEqual(
+      [],
+    );
+  });
+});
+
+describe("listTopSubjects", () => {
+  it("ranks the subjects of one metric across public repositories, and no others", async () => {
+    const loaded = await repository("Loaded");
+    const hidden = await repository("Hidden", { visibility: "private" });
+    const load = (scope: RepoScope, day: string, subject: string, count: number) =>
+      ({ scope, day, metric: "skill_load", subject, count }) as const;
+    await addUsage(
+      database,
+      [
+        load(loaded, "2026-10-01", "skills/a", 5),
+        load(loaded, "2026-10-02", "skills/a", 1),
+        load(loaded, "2026-10-01", "skills/b", 4),
+        load(hidden, "2026-10-01", "skills/z", 100),
+        { scope: loaded, day: "2026-10-01", metric: "file_read", subject: "docs/x.md", count: 9 },
+        // Outside the range.
+        load(loaded, "2026-11-01", "skills/c", 50),
+      ],
+      NOW,
+    );
+    const range = { from: "2026-10-01", to: "2026-10-31" };
+    const skills = await listTopSubjects(database, { metric: "skill_load", ...range, limit: 10 });
+    expect(skills.map((row) => [row.name, row.subject, row.count])).toEqual([
+      ["Loaded", "skills/a", 6],
+      ["Loaded", "skills/b", 4],
+    ]);
+    expect(await listTopSubjects(database, { metric: "file_read", ...range, limit: 1 })).toEqual([
+      { host: "gh", owner: loaded.owner, name: "Loaded", subject: "docs/x.md", count: 9 },
+    ]);
+    expect(
+      await listTopSubjects(database, { metric: "skill_load", ...range, limit: 10, minimum: 5 }),
+    ).toEqual([expect.objectContaining({ subject: "skills/a" })]);
   });
 });
 

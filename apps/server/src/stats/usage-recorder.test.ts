@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clientHash } from "./usage-recorder.js";
+import { clientHash, normalizeClientApp } from "./usage-recorder.js";
 
 // ADR-0027: what a client is written as follows from the secret, the day and the address.
 
@@ -24,5 +24,29 @@ describe("clientHash", () => {
     const hash = clientHash(secret, "2026-09-26", "203.0.113.7");
     expect(hash).not.toContain("203");
     expect(hash).not.toContain("aaaa");
+  });
+});
+
+// The name a client app gives itself is its own word: it is written down as one short line.
+
+describe("normalizeClientApp", () => {
+  it("keeps a name as one lower-case line", () => {
+    expect(normalizeClientApp("Claude Code")).toBe("claude code");
+    expect(normalizeClientApp("  cursor\t1.2\n ")).toBe("cursor 1.2");
+    expect(normalizeClientApp("Visual Studio Code")).toBe("visual studio code");
+  });
+
+  it("takes out what cannot be seen and bounds what is left", () => {
+    const invisible = `x${String.fromCodePoint(0x200b)}y${String.fromCodePoint(0)}z`;
+    expect(normalizeClientApp(invisible)).toBe("x y z");
+    expect(normalizeClientApp("a".repeat(100))).toHaveLength(64);
+    expect(normalizeClientApp(`${"a".repeat(63)} bcd`)).toBe("a".repeat(63));
+  });
+
+  it("is empty for anything that is not a name", () => {
+    expect(normalizeClientApp(undefined)).toBe("");
+    expect(normalizeClientApp(42)).toBe("");
+    expect(normalizeClientApp("   ")).toBe("");
+    expect(normalizeClientApp(String.fromCodePoint(0x200b))).toBe("");
   });
 });

@@ -39,6 +39,7 @@ import {
   parseRepoPath,
   parseSkillUri,
   READ_FILE_DEFAULT_LIMIT,
+  type RepoFileKind,
   type RepoPath,
   type RepoTranslation,
   ROOT_PATH,
@@ -108,8 +109,17 @@ export type SkillLookup =
   /** Indexed, but its body is not in the blob store. */
   | { readonly kind: "unavailable" };
 
+/** What the index says about a file that was read: where it is, what it is, and whose it is. */
+export interface IndexedFile {
+  /** The repository-root path. */
+  readonly path: string;
+  readonly kind: RepoFileKind;
+  /** The directory of the skill the file belongs to, or null outside every skill. */
+  readonly skillDir: string | null;
+}
+
 export type FileLookup =
-  | { readonly kind: "found"; readonly file: FileResult }
+  | { readonly kind: "found"; readonly file: FileResult; readonly indexed: IndexedFile }
   | { readonly kind: "not_ready"; readonly outcome: NotReady }
   /** The path names a directory: its entries are the answer. */
   | { readonly kind: "directory"; readonly directory: DirectoryResult }
@@ -758,12 +768,22 @@ export class MountReader {
     };
   }
 
-  /** One listed skill by URI; `undefined` when the URI names no listed skill of this mount. */
+  /**
+   * One listed skill by URI, with the directory it lives in; `undefined` when the URI names no
+   * listed skill of this mount.
+   */
   async getSkill(
     mount: Mount,
     uri: string,
     waitMs: number,
-  ): Promise<NotReady | { readonly status: "ready"; readonly skill: SkillEntry | undefined }> {
+  ): Promise<
+    | NotReady
+    | {
+        readonly status: "ready";
+        readonly skill: SkillEntry | undefined;
+        readonly directory: string | undefined;
+      }
+  > {
     const { database, snapshots } = this.#dependencies;
     const outcome = await snapshots.ready(mount, waitMs);
     if (outcome.status !== "ready") return outcome;
@@ -773,23 +793,36 @@ export class MountReader {
       path === undefined || !isWithinRepoPath(mount.address.path, path)
         ? undefined
         : await getEntry(database, scope, path);
-    if (entry?.kind !== "skill" || !entry.listed) return { status: "ready", skill: undefined };
+    if (entry?.kind !== "skill" || !entry.listed) {
+      return { status: "ready", skill: undefined, directory: undefined };
+    }
     // A described skill is not listed here, so its URI names nothing (ADR-0026).
     if (!servesInFull(entry.frontMatter?.licenseFact ?? NO_LICENSE, mount.verified)) {
-      return { status: "ready", skill: undefined };
+      return { status: "ready", skill: undefined, directory: undefined };
     }
     return {
       status: "ready",
       skill: await this.#skillEntry(mount, scope, await this.#rootSkill(scope), entry),
+      directory: entry.skillDir ?? ROOT_PATH,
     };
   }
 
-  /** The bytes a URI names, as the listing digested them; `undefined` when it names nothing served. */
+  /**
+   * The bytes a URI names, as the listing digested them, with what the index says about the
+   * file; `undefined` when the URI names nothing served.
+   */
   async readResource(
     mount: Mount,
     uri: string,
     waitMs: number,
-  ): Promise<NotReady | { readonly status: "ready"; readonly resource: Resource | undefined }> {
+  ): Promise<
+    | NotReady
+    | {
+        readonly status: "ready";
+        readonly resource: Resource | undefined;
+        readonly indexed: IndexedFile | undefined;
+      }
+  > {
     const { database, blobStore, snapshots } = this.#dependencies;
     const outcome = await snapshots.ready(mount, waitMs);
     if (outcome.status !== "ready") return outcome;
@@ -800,9 +833,12 @@ export class MountReader {
         ? undefined
         : await getEntry(database, scope, path);
     if (entry === undefined || entry.digest === null)
-      return { status: "ready", resource: undefined };
+      return { status: "ready", resource: undefined, indexed: undefined };
     const license = await this.#licenseAt(scope, outcome.snapshot, entry.path as RepoPath);
-    if (!servesInFull(license, mount.verified)) return { status: "ready", resource: undefined };
+    if (!servesInFull(license, mount.verified)) {
+      return { status: "ready", resource: undefined, indexed: undefined };
+    }
+    const indexed = indexedOf(entry);
     if (entry.kind === "skill") {
       const document = await this.#assembledDocument(mount, scope, entry);
       return {
@@ -811,10 +847,11 @@ export class MountReader {
           document === undefined
             ? undefined
             : { uri, mimeType: "text/markdown", text: document, digest: entry.digest },
+        indexed: document === undefined ? undefined : indexed,
       };
     }
     const bytes = await blobStore.readBytes(entry.blobSha);
-    if (bytes === undefined) return { status: "ready", resource: undefined };
+    if (bytes === undefined) return { status: "ready", resource: undefined, indexed: undefined };
     const text = decodeText(bytes);
     return {
       status: "ready",
@@ -824,6 +861,7 @@ export class MountReader {
         ...(text === undefined ? { blob: Buffer.from(bytes).toString("base64") } : { text }),
         digest: entry.digest,
       },
+      indexed,
     };
   }
 
@@ -1359,17 +1397,15 @@ export class MountReader {
     // Publication policy may exclude any path, including declarations. Never guess before it
     // has been validated; blob-cache availability is not permission to serve a file.
     if (outcome.status !== "ready") return { kind: "not_ready", outcome };
-    let file: { readonly size: number; readonly hash: string } | undefined;
     let children: readonly DirectoryListing[] = [];
     const scope = scopeOf(outcome.snapshot);
     const entry = below.length === 0 ? undefined : await getEntry(database, scope, path);
     if (entry?.frontMatter?.manifestError === "unsupported_type")
       return { kind: "not_found", path };
-    file = entry === undefined ? undefined : { size: entry.size, hash: entry.blobSha };
-    if (file === undefined) {
+    if (entry === undefined) {
       children = await listDirectory(database, scope, path, MAX_DIRECTORY_ENTRIES + 1);
     }
-    if (file === undefined) {
+    if (entry === undefined) {
       const entries = children.flatMap((child) => {
         const childPath = belowMount(mount, child.path);
         return childPath === undefined
@@ -1396,6 +1432,7 @@ export class MountReader {
         },
       };
     }
+    const file = { size: entry.size, hash: entry.blobSha };
     const license = await this.#licenseAt(scope, outcome.snapshot, path);
     if (!servesInFull(license, mount.verified)) {
       return { kind: "not_served", path: below, license, sourceUrl: this.#sourceUrl(mount, path) };
@@ -1442,7 +1479,7 @@ export class MountReader {
     if (page.nextOffset !== undefined && page.content.length === 0) {
       throw new ReaderInputError("This file page cannot advance. Use a larger page limit.");
     }
-    return { kind: "found", file: page };
+    return { kind: "found", file: page, indexed: indexedOf(entry) };
   }
 
   /** Everything the mount offers, up to `listLimit` skills and as many documents. Never waits. */
@@ -1497,6 +1534,11 @@ export class MountReader {
       },
     };
   }
+}
+
+/** What the index says about an entry that was read. */
+function indexedOf(entry: EntryRecord): IndexedFile {
+  return { path: entry.path, kind: entry.kind, skillDir: entry.skillDir };
 }
 
 /** A path stored by the indexer, relative to the mounted root. */

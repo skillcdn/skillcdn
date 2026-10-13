@@ -272,7 +272,8 @@ export const indexEntries = pgTable(
 
 /**
  * How often something happened to a repository on one day (UTC): a counter per metric and
- * subject, added to and never rewritten. Nothing here identifies a client.
+ * subject, added to and never rewritten. Nothing here identifies a client, and only a public
+ * repository has rows: these numbers are meant to be shown.
  */
 export const usageDaily = pgTable(
   "usage_daily",
@@ -285,8 +286,10 @@ export const usageDaily = pgTable(
       .notNull()
       .references(() => repos.id, { onDelete: "cascade" }),
     day: date({ mode: "string" }).notNull(),
-    metric: text({ enum: ["connection", "tool_call", "skill_load", "client"] }).notNull(),
-    /** What the metric is about: the tool name, the skill directory, or empty. */
+    metric: text({
+      enum: ["connection", "tool_call", "skill_load", "file_read", "client"],
+    }).notNull(),
+    /** What the metric is about: the tool name, the skill directory, the file path, or empty. */
     subject: text().notNull().default(""),
     count: bigint({ mode: "number" }).notNull().default(0),
     createdAt: createdAt(),
@@ -298,7 +301,37 @@ export const usageDaily = pgTable(
     index("usage_daily_account_idx").on(table.accountId),
     check(
       "usage_daily_metric_check",
-      sql`${table.metric} in ('connection', 'tool_call', 'skill_load', 'client')`,
+      sql`${table.metric} in ('connection', 'tool_call', 'skill_load', 'file_read', 'client')`,
+    ),
+  ],
+);
+
+/**
+ * How often something happened anywhere on the deployment on one day (UTC), whatever the
+ * repository: a counter per metric and subject, added to and never rewritten. Nothing here names
+ * a repository or a client, which is why repositories that are not public count here and
+ * nowhere else. `client` is the number of distinct clients, `client_app` the number of distinct
+ * clients per app name, both written when the day is folded.
+ */
+export const usageServiceDaily = pgTable(
+  "usage_service_daily",
+  {
+    id: id(),
+    day: date({ mode: "string" }).notNull(),
+    metric: text({
+      enum: ["connection", "tool_call", "skill_load", "file_read", "client", "client_app"],
+    }).notNull(),
+    /** What the metric is about: the tool name, the name of the client app, or empty. */
+    subject: text().notNull().default(""),
+    count: bigint({ mode: "number" }).notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: instant().notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("usage_service_daily_key").on(table.day, table.metric, table.subject),
+    check(
+      "usage_service_daily_metric_check",
+      sql`${table.metric} in ('connection', 'tool_call', 'skill_load', 'file_read', 'client', 'client_app')`,
     ),
   ],
 );
@@ -328,6 +361,27 @@ export const usageClients = pgTable(
     uniqueIndex("usage_clients_key").on(table.repoId, table.day, table.client),
     index("usage_clients_day_idx").on(table.day),
     index("usage_clients_account_idx").on(table.accountId),
+  ],
+);
+
+/**
+ * The distinct clients seen anywhere on the deployment on the day being counted, whatever the
+ * repository: `client` is the same keyed hash as in `usage_clients`, and `app` the name the
+ * client app gave itself, empty until it is known. Folded into `usage_service_daily` as `client`
+ * and `client_app` when the day is over, and deleted.
+ */
+export const usageServiceClients = pgTable(
+  "usage_service_clients",
+  {
+    id: id(),
+    day: date({ mode: "string" }).notNull(),
+    client: text().notNull(),
+    app: text().notNull().default(""),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex("usage_service_clients_key").on(table.day, table.client),
+    index("usage_service_clients_day_idx").on(table.day),
   ],
 );
 

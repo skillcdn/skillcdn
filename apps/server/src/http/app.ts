@@ -153,6 +153,30 @@ const pageQuery = z.object({
   query: z.string().max(MAX_QUERY_LENGTH).optional(),
 });
 
+/**
+ * The handshake of the earlier protocol revisions, as far as the statistics care: a client
+ * names its app there, on a request of its own that no tool sees, and in stateless serving the
+ * server instance that answers it is not the one that answers the calls. The SDK validates the
+ * message in full; this reads one field of it, and nothing here decides anything.
+ */
+const initializeMessage = z.looseObject({
+  method: z.literal("initialize"),
+  params: z.looseObject({ clientInfo: z.looseObject({ name: z.string().max(400) }) }),
+});
+
+/** The name the client app gave itself in a handshake, when the body is one; else nothing. */
+function clientAppOf(body: string): string | undefined {
+  if (!body.includes("initialize")) {
+    return undefined;
+  }
+  try {
+    const parsed = initializeMessage.safeParse(JSON.parse(body));
+    return parsed.success ? parsed.data.params.clientInfo.name : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 const STATUS_BY_REASON = {
   repo_not_found: 404,
   ref_not_found: 404,
@@ -203,7 +227,10 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
   // map: the route gives the request a key of its own making in a header, which is how the
   // handler's copy of the request still names it. Whatever a client sent under that name is
   // overwritten, so a key is never one a client chose.
-  const resolvedFor = new Map<string, { mount: Mount; requestId: string; origin: string }>();
+  const resolvedFor = new Map<
+    string,
+    { mount: Mount; requestId: string; origin: string; clientAddress: string | undefined }
+  >();
   const mcp = createMcpHandler(
     async (context) => {
       const request = context.requestInfo;
@@ -221,7 +248,10 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
       return await createMountServer(
         mount,
         { ...tools, logger: tools.logger.child({ requestId: resolved?.requestId }) },
-        { origin: resolved?.origin ?? originOf(request.url) },
+        {
+          origin: resolved?.origin ?? originOf(request.url),
+          clientAddress: resolved?.clientAddress,
+        },
       );
     },
     {
@@ -872,9 +902,12 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
             400,
           );
         }
-        // Every MCP message is a POST, whichever protocol revision the client speaks; a client
-        // that sent one used this repository today.
-        tools.stats.client(mount, c.get("clientAddress"));
+        // A client of the earlier revisions used this repository today, through the app its
+        // handshake names; every other message is counted where the tools answer it.
+        const app = clientAppOf(body);
+        if (app !== undefined) {
+          tools.stats.client(mount, c.get("clientAddress"), app);
+        }
       }
       // The handler gets the request under a key of this route's making, and without the access
       // token: who the request is for was settled above, and nothing further on needs the token.
@@ -888,10 +921,13 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
         signal: c.req.raw.signal,
         ...(body === undefined ? {} : { body }),
       });
+      // The client's address goes along for the statistics, which count a client where the
+      // tools know which app it is; the request itself keeps no trace of it.
       resolvedFor.set(key, {
         mount,
         requestId: c.get("requestId"),
         origin: originOf(c.req.url),
+        clientAddress: c.get("clientAddress"),
       });
       try {
         const response = await mcp.fetch(request);
