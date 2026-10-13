@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
+import type { AnalyticsState } from "../analytics.js";
 import { useI18n } from "../i18n/index.js";
 import { useLegalLinks } from "../legal-links.js";
 import { Link } from "../navigation.js";
@@ -20,6 +21,13 @@ export function Layout(props: {
   // The deployment's own pages are written into the head by the server, so they are known only
   // once the page is up: until then, as in prerendered markup, the footer has none.
   const legal = useLegalLinks() ?? {};
+  // So is what the bootstrap left about analytics: the footer offers the choice once the page is
+  // up, to everyone who has one to make (ADR-0051).
+  const [analytics, setAnalytics] = useState<AnalyticsState | undefined>(undefined);
+  const [choices, setChoices] = useState(false);
+  useEffect(() => {
+    setAnalytics(window.skillcdnAnalytics);
+  }, []);
   const links = [
     ...(legal.termsUrl === undefined ? [] : [{ href: legal.termsUrl, label: t.footer.terms }]),
     ...(legal.privacyUrl === undefined
@@ -29,6 +37,7 @@ export function Layout(props: {
       ? []
       : [{ href: `mailto:${legal.contactEmail}`, label: t.footer.report }]),
   ];
+  const offersChoice = analytics !== undefined && !analytics.refused;
   return (
     <div className={cx(styles.page, props.wide === true && styles.wide)}>
       {/* The field and the far light. It is an element and not another background layer on the
@@ -66,20 +75,27 @@ export function Layout(props: {
             <p className={styles.footerBrand}>
               <BrandLogo className={styles.logo} title={t.meta.siteName} />
             </p>
-            {links.length > 0 && (
+            {(links.length > 0 || offersChoice) && (
               <ul className={styles.footerLinks}>
                 {links.map((link) => (
                   <li key={link.href}>
                     <a href={link.href}>{link.label}</a>
                   </li>
                 ))}
+                {offersChoice && (
+                  <li>
+                    <button type="button" onClick={() => setChoices(true)}>
+                      {t.consent.choices}
+                    </button>
+                  </li>
+                )}
               </ul>
             )}
           </div>
           <p className={styles.footerNote}>{t.footer.tagline}</p>
         </div>
       </footer>
-      <ConsentBanner />
+      <ConsentBanner analytics={analytics} choices={choices} onClose={() => setChoices(false)} />
     </div>
   );
 }

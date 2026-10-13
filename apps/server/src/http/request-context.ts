@@ -1,12 +1,15 @@
 import { createMiddleware } from "hono/factory";
 import type { Logger } from "../logger.js";
 import { acceptRequestId, type ClientAddressResolver } from "./client-address.js";
+import { normalizeCountry } from "./consent-regions.js";
 
 export interface AppEnv {
   Variables: {
     /** Taken from a trusted proxy, or made here. Returned as `x-request-id` and logged. */
     requestId: string;
     clientAddress: string | undefined;
+    /** The visitor's region as a trusted proxy named it (`DE`, `US-CA`); unknown otherwise. */
+    clientCountry: string | undefined;
   };
 }
 
@@ -15,6 +18,8 @@ export interface RequestContextOptions {
   readonly addresses: ClientAddressResolver;
   /** Lowercase name of the header in which a trusted proxy passes its request id. */
   readonly requestIdHeader: string;
+  /** Lowercase name of the header in which a trusted proxy names the visitor's country, if any. */
+  readonly clientCountryHeader?: string | undefined;
   readonly accessLog: boolean;
   readonly newRequestId: () => string;
   /** Milliseconds from a clock that never goes backwards. */
@@ -46,17 +51,25 @@ function peerAddressOf(env: unknown): string | undefined {
  * The line is written when the response starts; a streamed body may still be on its way.
  */
 export function requestContext(options: RequestContextOptions) {
-  const { logger, addresses, requestIdHeader, accessLog, newRequestId, now } = options;
+  const { logger, addresses, requestIdHeader, clientCountryHeader, accessLog } = options;
+  const { newRequestId, now } = options;
   return createMiddleware<AppEnv>(async (c, next) => {
     const started = now();
     const peer = peerAddressOf(c.env);
+    const trusted = addresses.isTrusted(peer);
     const requestId =
-      (addresses.isTrusted(peer)
-        ? acceptRequestId(c.req.header(requestIdHeader) ?? null)
-        : undefined) ?? newRequestId();
+      (trusted ? acceptRequestId(c.req.header(requestIdHeader) ?? null) : undefined) ??
+      newRequestId();
     const clientAddress = addresses.resolve(peer, c.req.raw.headers);
+    // Where the visitor is, as the proxy says: anyone can send the header, so from anyone else
+    // it says nothing.
+    const clientCountry =
+      trusted && clientCountryHeader !== undefined
+        ? normalizeCountry(c.req.header(clientCountryHeader))
+        : undefined;
     c.set("requestId", requestId);
     c.set("clientAddress", clientAddress);
+    c.set("clientCountry", clientCountry);
 
     await next();
 

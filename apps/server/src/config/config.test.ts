@@ -1,5 +1,6 @@
 import { generateKeyPairSync } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import { DEFAULT_CONSENT_REGIONS } from "../http/consent-regions.js";
 import { ConfigError, loadConfig, loadIndexLimits } from "./config.js";
 
 const DATABASE_URL = "postgres://user:not-a-real-password@db.internal:5432/skillcdn";
@@ -205,6 +206,39 @@ describe("loadConfig", () => {
     ]) {
       expect(() => loadConfig({ DATABASE_URL, ...bad }, noFiles)).toThrow(ConfigError);
     }
+  });
+
+  it("reads where a proxy names the visitor's region, and where analytics ask first", () => {
+    const plain = loadConfig({ DATABASE_URL }, noFiles);
+    expect(plain.http.clientCountryHeader).toBeUndefined();
+    expect(plain.web.tags.analyticsConsentRegions).toEqual(DEFAULT_CONSENT_REGIONS);
+    const placed = loadConfig(
+      {
+        DATABASE_URL,
+        CLIENT_COUNTRY_HEADER: "X-Country",
+        ANALYTICS_CONSENT_REGIONS: "de, fr, us-ca",
+      },
+      noFiles,
+    );
+    expect(placed.http.clientCountryHeader).toBe("x-country");
+    expect(placed.web.tags.analyticsConsentRegions).toEqual(["DE", "FR", "US-CA"]);
+    expect(
+      loadConfig({ DATABASE_URL, ANALYTICS_CONSENT_REGIONS: "*" }, noFiles).web.tags
+        .analyticsConsentRegions,
+    ).toBe("*");
+    expect(
+      loadConfig({ DATABASE_URL, ANALYTICS_CONSENT_REGIONS: "none" }, noFiles).web.tags
+        .analyticsConsentRegions,
+    ).toEqual([]);
+    expect(
+      problemsOf({
+        DATABASE_URL,
+        CLIENT_COUNTRY_HEADER: "x country",
+        ANALYTICS_CONSENT_REGIONS: "Germany",
+      })
+        .problems.map((problem) => problem.split(":")[0])
+        .sort(),
+    ).toEqual(["ANALYTICS_CONSENT_REGIONS", "CLIENT_COUNTRY_HEADER"]);
   });
 
   it("counts usage unless told not to, and keys client hashes from a secret when given one", () => {

@@ -12,6 +12,7 @@ import {
   type SocialCard,
 } from "@skillcdn/core";
 import * as z from "zod";
+import { asksConsent, type ConsentRegions, DEFAULT_CONSENT_REGIONS } from "./consent-regions.js";
 
 // Serves a build of the web UI (ADR-0009). The server knows nothing about the UI: the build
 // brings a manifest that says which file answers which URL in which language, and everything
@@ -119,6 +120,8 @@ const socialCardSchema = z.object({
 export interface PageTags {
   readonly googleSiteVerification?: string | undefined;
   readonly googleAnalyticsId?: string | undefined;
+  /** Where analytics ask before they run (ADR-0051); the default regions when left out. */
+  readonly analyticsConsentRegions?: ConsentRegions | undefined;
   readonly termsUrl?: string | undefined;
   readonly privacyUrl?: string | undefined;
   readonly contactEmail?: string | undefined;
@@ -135,6 +138,13 @@ export const LEGAL_TAGS = {
   privacy: "privacy-policy",
   contact: "skillcdn-contact",
 } as const;
+
+/**
+ * The meta the server writes into a page per request, before the analytics bootstrap, saying
+ * what the page does about analytics for this visitor: `ask` before running them, or `run`,
+ * with the footer offering to stop them (ADR-0051).
+ */
+export const ANALYTICS_META_NAME = "skillcdn-analytics";
 
 /** Where the analytics script comes from and talks to, as its documentation lists them. */
 const ANALYTICS_SOURCES = {
@@ -199,22 +209,42 @@ function headTags(tags: PageTags): { readonly html: string; readonly inlineScrip
     elements.push(`<meta name="${AUTH_META_NAME}" content="${escapeAttribute(tags.signIn)}">`);
   }
   if (tags.googleAnalyticsId !== undefined) {
-    // Consent first: consent mode starts with everything denied, nothing is loaded and nothing is
-    // stored until the visitor agrees in the banner the pages show, and a browser that signals a
-    // privacy preference (Global Privacy Control, Do Not Track) is never asked and never loads it.
-    // The script sends no page view of its own: the pages send theirs, with only what is public
-    // (ADR-0050), once `active` says they may, which the event announces to a page already open.
-    // One line, so that its hash in the policy is stable; the banner talks to `skillcdnAnalytics`.
+    // Consent mode first (ADR-0051): analytics storage is denied by default in the regions that
+    // ask for consent, which the service applies by where it sees the visitor, and granted
+    // elsewhere; advertising is denied everywhere. Then the meta the server writes per request
+    // says whether this visitor is to be asked: asked, nothing is loaded until they agree in the
+    // banner the pages show; not asked, the script runs at once and the footer offers to stop
+    // it. An answer the visitor gave holds either way, and a browser that signals Global Privacy
+    // Control is never asked and never loads it. The script sends no page view of its own: the
+    // pages send theirs, with only what is public (ADR-0050), once `active` says they may, which
+    // the event announces to a page already open. One line, so that its hash in the policy is
+    // stable; the banner and the footer talk to `skillcdnAnalytics`.
+    const regions = tags.analyticsConsentRegions ?? DEFAULT_CONSENT_REGIONS;
+    const denied = 'ad_storage:"denied",ad_user_data:"denied",ad_personalization:"denied"';
+    const defaults =
+      regions === "*"
+        ? [`gtag("consent","default",{${denied},analytics_storage:"denied"});`]
+        : [
+            ...(regions.length === 0
+              ? []
+              : [
+                  `gtag("consent","default",{${denied},analytics_storage:"denied",region:${JSON.stringify(regions)}});`,
+                ]),
+            `gtag("consent","default",{${denied},analytics_storage:"granted"});`,
+          ];
     const bootstrap = [
       "window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}window.gtag=gtag;",
-      'gtag("consent","default",{ad_storage:"denied",ad_user_data:"denied",ad_personalization:"denied",analytics_storage:"denied"});',
+      ...defaults,
       `(function(){var id=${JSON.stringify(tags.googleAnalyticsId)};var key="skillcdn-consent";`,
-      'var refused=navigator.globalPrivacyControl===true||navigator.doNotTrack==="1";',
+      `var meta=document.querySelector('meta[name="${ANALYTICS_META_NAME}"]');var asks=!(meta&&meta.content==="run");`,
+      "var refused=navigator.globalPrivacyControl===true;",
       "var stored=null;try{stored=localStorage.getItem(key)}catch(e){}",
-      'var state={ask:!refused&&stored===null,active:false,decide:function(granted){try{localStorage.setItem(key,granted?"granted":"denied")}catch(e){}if(granted&&!refused){load()}}};',
-      'function load(){if(state.active){return}state.active=true;gtag("consent","update",{analytics_storage:"granted"});var s=document.createElement("script");s.async=true;s.src="https://www.googletagmanager.com/gtag/js?id="+encodeURIComponent(id);document.head.appendChild(s);gtag("js",new Date());gtag("config",id,{send_page_view:false});window.dispatchEvent(new Event("skillcdn:analytics"))}',
+      "var loaded=false;",
+      "var state={ask:!refused&&asks&&stored===null,active:false,refused:refused,decide:decide};",
+      'function start(){if(!loaded){loaded=true;var s=document.createElement("script");s.async=true;s.src="https://www.googletagmanager.com/gtag/js?id="+encodeURIComponent(id);document.head.appendChild(s);gtag("js",new Date());gtag("config",id,{send_page_view:false})}state.active=true;state.ask=false;window.dispatchEvent(new Event("skillcdn:analytics"))}',
+      'function decide(granted){try{localStorage.setItem(key,granted?"granted":"denied")}catch(e){}if(granted){if(refused){return}gtag("consent","update",{analytics_storage:"granted"});start()}else{gtag("consent","update",{analytics_storage:"denied"});state.active=false;state.ask=false}}',
       "window.skillcdnAnalytics=state;",
-      'if(!refused&&stored==="granted"){load()}})()',
+      'if(refused){return}if(stored==="granted"){gtag("consent","update",{analytics_storage:"granted"});start()}else if(stored===null&&!asks){start()}})()',
     ].join("");
     inlineScripts.push(bootstrap);
     elements.push(`<script>${bootstrap}</script>`);
@@ -223,6 +253,16 @@ function headTags(tags: PageTags): { readonly html: string; readonly inlineScrip
 }
 
 const HEAD_OPEN = /<head(\s[^>]*)?>/i;
+
+/** `elements` at the start of the head, before what is written there; a document without one is returned as it is. */
+function afterHeadOpen(html: string, elements: string): string {
+  const opened = HEAD_OPEN.exec(html);
+  if (opened === null || elements === "") {
+    return html;
+  }
+  const at = opened.index + opened[0].length;
+  return `${html.slice(0, at)}\n${elements}${html.slice(at)}`;
+}
 
 /**
  * The terms and the privacy policy as standard link types, decided per request: a page written
@@ -275,6 +315,8 @@ export interface WebRequest {
    * terms and the privacy policy, on this origin, before the configured URLs. Left out, those stand.
    */
   readonly legal?: readonly LegalDocumentKind[];
+  /** The visitor's region as a trusted proxy named it (`DE`, `US-CA`). Left out: not known. */
+  readonly country?: string | undefined;
 }
 
 /** An answer the page would otherwise ask the REST API for, given to it up front. */
@@ -621,6 +663,8 @@ export async function loadWebBundle(
 ): Promise<WebBundle> {
   const tags = headTags(options.tags ?? {});
   const PAGE_HEADERS = pageHeaders(options.tags ?? {}, tags.inlineScripts);
+  const analytics = options.tags?.googleAnalyticsId !== undefined;
+  const consentRegions = options.tags?.analyticsConsentRegions ?? DEFAULT_CONSENT_REGIONS;
   let manifest: z.infer<typeof manifestSchema>;
   try {
     manifest = manifestSchema.parse(JSON.parse(await readFile(join(root, MANIFEST_FILE), "utf8")));
@@ -774,10 +818,16 @@ export async function loadWebBundle(
       request.legal?.includes(kind) === true
         ? `${originOf(request)}${LEGAL_PAGE_PATHS[kind]}`
         : undefined;
+    // What the page does about analytics for this visitor, written before the bootstrap that
+    // reads it: asks where the visitor's region wants consent first, and where the visitor
+    // could not be placed; runs elsewhere (ADR-0051).
+    const consent = analytics
+      ? `<meta name="${ANALYTICS_META_NAME}" content="${asksConsent(consentRegions, request.country) ? "ask" : "run"}">`
+      : "";
     return text(
       request,
       beforeHeadClose(
-        body,
+        afterHeadOpen(body, consent),
         legalTags(
           written("terms") ?? options.tags?.termsUrl,
           written("privacy") ?? options.tags?.privacyUrl,

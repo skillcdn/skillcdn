@@ -4,6 +4,11 @@ import type { IndexLimits } from "@skillcdn/core";
 import { readIndexLimits } from "@skillcdn/indexer";
 import * as z from "zod";
 import { type Cidr, parseCidr } from "../http/client-address.js";
+import {
+  type ConsentRegions,
+  DEFAULT_CONSENT_REGIONS,
+  parseConsentRegions,
+} from "../http/consent-regions.js";
 
 // The only module that reads the environment. Contract: .env.example and deploy/README.md.
 
@@ -44,6 +49,32 @@ const headerName = (fallback: string) =>
     .default(fallback)
     .transform((value) => value.toLowerCase());
 
+/** A header name a deployment may leave out. */
+const optionalHeaderName = z
+  .string()
+  .regex(/^[A-Za-z0-9-]{1,64}$/, "must be a header name")
+  .optional()
+  .transform((value) => value?.toLowerCase());
+
+/** Where analytics ask before they run: `*`, `none` or regions; left out, the default regions. */
+const consentRegions = z
+  .string()
+  .default("")
+  .transform((value, context): ConsentRegions => {
+    if (value.trim() === "") {
+      return DEFAULT_CONSENT_REGIONS;
+    }
+    const parsed = parseConsentRegions(value);
+    if (parsed === undefined) {
+      context.addIssue({
+        code: "custom",
+        message: "must be *, none, or a list of regions such as DE,FR or US-CA",
+      });
+      return z.NEVER;
+    }
+    return parsed;
+  });
+
 /** A comma-separated list of networks in CIDR notation; a bare address means just that address. */
 const cidrList = z
   .string()
@@ -78,6 +109,7 @@ const environmentSchema = z.object({
   TRUSTED_PROXIES: cidrList,
   CLIENT_IP_HEADER: headerName("x-forwarded-for"),
   REQUEST_ID_HEADER: headerName("x-request-id"),
+  CLIENT_COUNTRY_HEADER: optionalHeaderName,
 
   DATABASE_URL: z.string().regex(/^postgres(ql)?:\/\//, "must be a postgres:// connection string"),
   DATABASE_POOL_MAX: integer(10, 1, 200),
@@ -136,6 +168,7 @@ const environmentSchema = z.object({
     .string()
     .regex(/^G-[A-Z0-9]{4,20}$/, "must be a measurement id such as G-XXXXXXXXXX")
     .optional(),
+  ANALYTICS_CONSENT_REGIONS: consentRegions,
   TERMS_URL: z.url({ protocol: /^https?$/ }).optional(),
   PRIVACY_URL: z.url({ protocol: /^https?$/ }).optional(),
   CONTACT_EMAIL: z
@@ -164,6 +197,11 @@ export interface WebTags {
   readonly googleSiteVerification: string | undefined;
   /** A Google Analytics measurement id (`G-...`). Set, the pages load the analytics script. */
   readonly googleAnalyticsId: string | undefined;
+  /**
+   * Where the pages ask the visitor before analytics run (ADR-0051): `*` for everywhere, else
+   * regions, an empty list for nowhere. Elsewhere analytics run, and the footer offers to stop them.
+   */
+  readonly analyticsConsentRegions: ConsentRegions;
   /** Where the deployment's terms of service are; shown only when set (ADR-0026). */
   readonly termsUrl: string | undefined;
   /** Where the deployment's privacy policy is; shown only when set. */
@@ -218,6 +256,11 @@ export interface Config {
     readonly clientIpHeader: string;
     /** Lowercase name of the header in which a trusted proxy passes its request id. */
     readonly requestIdHeader: string;
+    /**
+     * Lowercase name of the header in which a trusted proxy names the visitor's country (ISO
+     * 3166-1 alpha-2, or a subdivision as `US-CA`). Unset: no visitor's region is known.
+     */
+    readonly clientCountryHeader: string | undefined;
   };
   readonly database: {
     readonly url: string;
@@ -419,6 +462,7 @@ export function loadConfig(
       trustedProxies: env.TRUSTED_PROXIES,
       clientIpHeader: env.CLIENT_IP_HEADER,
       requestIdHeader: env.REQUEST_ID_HEADER,
+      clientCountryHeader: env.CLIENT_COUNTRY_HEADER,
     },
     database: { url: env.DATABASE_URL, poolMax: env.DATABASE_POOL_MAX },
     github: { apiUrl: env.GITHUB_API_URL, token: env.GITHUB_TOKEN },
@@ -431,6 +475,7 @@ export function loadConfig(
       tags: {
         googleSiteVerification: env.GOOGLE_SITE_VERIFICATION,
         googleAnalyticsId: env.GOOGLE_ANALYTICS_ID,
+        analyticsConsentRegions: env.ANALYTICS_CONSENT_REGIONS,
         termsUrl: env.TERMS_URL,
         privacyUrl: env.PRIVACY_URL,
         contactEmail: env.CONTACT_EMAIL,

@@ -6,28 +6,45 @@ import { BrandSymbol } from "./brand.js";
 import styles from "./consent-banner.module.css";
 import { Button } from "./ui.js";
 
+export interface ConsentBannerProps {
+  /** What the bootstrap left on the page; `undefined` until the page is up, or without analytics. */
+  readonly analytics: AnalyticsState | undefined;
+  /** The visitor asked, from the footer, to see their choice and change it. */
+  readonly choices: boolean;
+  readonly onClose: () => void;
+}
+
 /**
- * Asks once whether analytics may run (`src/analytics.ts`): a card in the glass of the site at
- * the foot of the page, which goes away with the answer. Prerendered pages carry no banner; it
- * appears after mount, and only when the bootstrap says the visitor is to be asked.
+ * The visitor's say over analytics (`src/analytics.ts`), as a card in the glass of the site at
+ * the foot of the page. Where the visitor's region asks first, the card asks once and goes away
+ * with the answer; from the footer, the same card says whether analytics run and offers to turn
+ * them off, or on again. Prerendered pages carry no card: it appears after mount, only when the
+ * bootstrap says the visitor is to be asked, or when they ask for it.
  */
-export function ConsentBanner() {
+export function ConsentBanner(props: ConsentBannerProps) {
   const { t } = useI18n();
-  const [consent, setConsent] = useState<AnalyticsState | undefined>(undefined);
+  const { analytics, choices } = props;
+  const [answered, setAnswered] = useState(false);
   const [privacyUrl, setPrivacyUrl] = useState<string | undefined>(undefined);
   useEffect(() => {
-    const found = window.skillcdnAnalytics;
-    if (found?.ask === true) {
-      setConsent(found);
-      setPrivacyUrl(readLegalLinks().privacyUrl);
-    }
+    setPrivacyUrl(readLegalLinks().privacyUrl);
   }, []);
-  if (consent === undefined) {
+  if (analytics === undefined) {
     return null;
   }
+  const asking = analytics.ask && !answered && !choices;
+  if (!asking && !choices) {
+    return null;
+  }
+  const words = asking
+    ? { title: t.consent.title, text: t.consent.text }
+    : analytics.active
+      ? { title: t.consent.onTitle, text: t.consent.onText }
+      : { title: t.consent.offTitle, text: t.consent.offText };
   const decide = (granted: boolean): void => {
-    consent.decide(granted);
-    setConsent(undefined);
+    analytics.decide(granted);
+    setAnswered(true);
+    props.onClose();
   };
   return (
     <section className={styles.banner} aria-label={t.consent.label}>
@@ -35,9 +52,9 @@ export function ConsentBanner() {
         <BrandSymbol className={styles.symbol} />
       </span>
       <div className={styles.words}>
-        <p className={styles.title}>{t.consent.title}</p>
+        <p className={styles.title}>{words.title}</p>
         <p className={styles.text}>
-          {t.consent.text}
+          {words.text}
           {privacyUrl !== undefined && (
             <>
               {" "}
@@ -50,12 +67,25 @@ export function ConsentBanner() {
         </p>
       </div>
       <div className={styles.actions}>
-        <Button variant="primary" size="sm" onClick={() => decide(true)}>
-          {t.consent.accept}
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => decide(false)}>
-          {t.consent.decline}
-        </Button>
+        {asking ? (
+          <>
+            <Button variant="primary" size="sm" onClick={() => decide(true)}>
+              {t.consent.accept}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => decide(false)}>
+              {t.consent.decline}
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button variant="primary" size="sm" onClick={() => decide(!analytics.active)}>
+              {analytics.active ? t.consent.turnOff : t.consent.turnOn}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={props.onClose}>
+              {t.consent.close}
+            </Button>
+          </>
+        )}
       </div>
     </section>
   );

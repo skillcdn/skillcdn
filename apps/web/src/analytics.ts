@@ -18,14 +18,20 @@ import { accountHref, docsHref, type MountView, PATHS, type Route } from "./rout
 
 /**
  * What the server's bootstrap leaves on the page when analytics are configured
- * (`deploy/README.md`): whether the visitor is to be asked, whether they agreed, and where the
- * answer goes. Without analytics there is nothing here.
+ * (`deploy/README.md`, ADR-0051): whether the visitor is to be asked, whether analytics run, and
+ * where their answer goes. Without analytics there is nothing here.
  */
 export interface AnalyticsState {
-  /** The visitor is to be asked: nothing is stored yet, and no privacy signal said no. */
+  /**
+   * The visitor is to be asked: their region asks before analytics run, nothing is stored yet,
+   * and no privacy signal said no.
+   */
   readonly ask: boolean;
-  /** The visitor agreed, and the script is loading or loaded. */
+  /** Analytics run: the script is loading or loaded, and the pages may send. */
   readonly active: boolean;
+  /** The browser signals Global Privacy Control: analytics stay off, and nothing turns them on. */
+  readonly refused: boolean;
+  /** The visitor's answer, kept for their next visit: analytics on, or off. */
   decide(granted: boolean): void;
 }
 

@@ -227,13 +227,24 @@
   font-size: var(--text-sm);
 }
 
-.footerLinks a {
+.footerLinks a,
+.footerLinks button {
   color: var(--color-text-muted);
   text-decoration: none;
   transition: color var(--transition);
 }
 
-.footerLinks a:hover {
+/* A choice that is a button reads as the links beside it. */
+.footerLinks button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.footerLinks a:hover,
+.footerLinks button:hover {
   color: var(--color-text);
   text-decoration: underline;
 }

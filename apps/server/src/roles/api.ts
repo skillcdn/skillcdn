@@ -106,7 +106,7 @@ export type ApiConfig = Pick<Config, "mounts" | "indexing"> & {
   /** Left out, no proxy is trusted and every request is logged. */
   readonly http?: Pick<
     Config["http"],
-    "trustedProxies" | "clientIpHeader" | "requestIdHeader" | "accessLog"
+    "trustedProxies" | "clientIpHeader" | "clientCountryHeader" | "requestIdHeader" | "accessLog"
   >;
 };
 
@@ -297,6 +297,7 @@ export function createApi(
         header: config.http?.clientIpHeader ?? "x-forwarded-for",
       }),
       requestIdHeader: config.http?.requestIdHeader ?? "x-request-id",
+      clientCountryHeader: config.http?.clientCountryHeader,
       accessLog: config.http?.accessLog ?? true,
       newRequestId: randomUUID,
       now: () => performance.now(),

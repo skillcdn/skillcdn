@@ -596,3 +596,44 @@ describe("the pages of a deployment where people sign in", () => {
     }
   });
 });
+
+describe("the analytics of a deployment whose proxy names the visitor's region", () => {
+  /** What the Node adapter hands to the app: the socket the request arrived on. */
+  const from = (remoteAddress: string) => ({ incoming: { socket: { remoteAddress } } });
+  const consentOf = async (page: Response): Promise<string | undefined> =>
+    /<meta name="skillcdn-analytics" content="(\w+)">/.exec(await page.text())?.[1];
+
+  it("asks a visitor from a region that wants consent, runs for the rest, and asks whoever it cannot place", async () => {
+    const tagged = await loadWebBundle(build.root, {
+      publicUrl: "https://skills.example",
+      tags: { googleAnalyticsId: "G-ABC123XYZ" },
+    });
+    const h = createHarness(testDatabase, {
+      web: tagged,
+      trustedProxies: ["10.0.0.0/8"],
+      clientCountryHeader: "x-country",
+    });
+    const ask = (country: string | undefined, peer: string) =>
+      h.app.request(
+        "/",
+        { headers: { ...BROWSER, ...(country === undefined ? {} : { "x-country": country }) } },
+        from(peer),
+      );
+    expect(await consentOf(await ask("kr", "10.1.2.3"))).toBe("run");
+    expect(await consentOf(await ask("DE", "10.1.2.3"))).toBe("ask");
+    expect(await consentOf(await ask("US-CA", "10.1.2.3"))).toBe("run");
+    // A proxy that could not place the visitor, and no header at all.
+    expect(await consentOf(await ask("XX", "10.1.2.3"))).toBe("ask");
+    expect(await consentOf(await ask(undefined, "10.1.2.3"))).toBe("ask");
+    // The header is believed from the proxy only: anyone can send it.
+    expect(await consentOf(await ask("KR", "203.0.113.9"))).toBe("ask");
+    // Without a header configured, nobody is placed.
+    const unplaced = createHarness(testDatabase, { web: tagged, trustedProxies: ["10.0.0.0/8"] });
+    const page = await unplaced.app.request(
+      "/",
+      { headers: { ...BROWSER, "x-country": "KR" } },
+      from("10.1.2.3"),
+    );
+    expect(await consentOf(page)).toBe("ask");
+  });
+});

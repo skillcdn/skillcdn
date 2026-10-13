@@ -376,6 +376,16 @@ export const en = {
     privacy: "Privacy policy",
     accept: "Allow analytics",
     decline: "No thanks",
+    /** The footer's way to the choice, and the card it opens, which says how things stand. */
+    choices: "Analytics choices",
+    onTitle: "Analytics are on",
+    onText:
+      "This site counts which pages help, with analytics cookies. Turn that off here any time.",
+    offTitle: "Analytics are off",
+    offText: "No analytics cookie is set. Allow them here any time.",
+    turnOff: "Turn off",
+    turnOn: "Turn on",
+    close: "Close",
   },
 
   legal: {

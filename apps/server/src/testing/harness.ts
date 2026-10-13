@@ -77,6 +77,8 @@ export interface HarnessOptions {
   readonly host?: FixtureHost;
   readonly trustedProxies?: readonly string[];
   readonly clientIpHeader?: string;
+  /** Where a trusted proxy names the visitor's country; left out, no visitor is placed. */
+  readonly clientCountryHeader?: string;
   /** The admin API's bearer token. Left out, there is no admin API. */
   readonly adminToken?: string;
   /** A loaded web build. Left out, the server has no UI. */
@@ -142,6 +144,7 @@ export function createHarness(testDatabase: TestDatabase, options: HarnessOption
       http: {
         trustedProxies: (options.trustedProxies ?? []).flatMap((text) => parseCidr(text) ?? []),
         clientIpHeader: options.clientIpHeader ?? "x-forwarded-for",
+        clientCountryHeader: options.clientCountryHeader,
         requestIdHeader: "x-request-id",
         accessLog: true,
       },

@@ -1,6 +1,6 @@
 import process from "node:process";
 import react from "@vitejs/plugin-react";
-import { defineConfig, loadEnv, type Plugin } from "vite";
+import { defineConfig, type HtmlTagDescriptor, loadEnv, type Plugin } from "vite";
 import { brandFiles } from "./dev/brand-files.js";
 import { docsPages } from "./dev/docs.js";
 import { handleFixtureRequest } from "./dev/fixture-api.js";
@@ -9,6 +9,43 @@ import { handleFixtureRequest } from "./dev/fixture-api.js";
 const FIXTURE_LATENCY_MS = 350;
 /** More than any request to the fixtures carries. */
 const FIXTURE_BODY_BYTES = 64 * 1024;
+
+/**
+ * Where analytics ask before they run, as the server lists them by default
+ * (`apps/server/src/http/consent-regions.ts`): the European Economic Area, the United Kingdom
+ * and Switzerland.
+ */
+const CONSENT_REGIONS = new Set([
+  ...["AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE"],
+  ...["IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE"],
+  ...["IS", "LI", "NO", "GB", "CH"],
+]);
+
+/**
+ * What the server's bootstrap leaves on a page (`src/analytics.ts`), for a fresh visitor from
+ * the country the URL names (`?country=DE`), and with `?gpc=1` for a browser that signals
+ * Global Privacy Control. A stand-in for the script: what would go to analytics is logged to the
+ * console. Without the parameter the page has no analytics, as a deployment without an id.
+ */
+function analyticsStub(url: string | undefined): HtmlTagDescriptor[] {
+  const query = new URL(url ?? "/", "http://fixtures.invalid").searchParams;
+  const country = query.get("country");
+  if (country === null) {
+    return [];
+  }
+  const asks = CONSENT_REGIONS.has(country.toUpperCase());
+  const refused = query.get("gpc") === "1";
+  const script = [
+    'window.gtag=function(){console.info("gtag",Array.prototype.slice.call(arguments))};',
+    `(function(){var asks=${String(asks)};var refused=${String(refused)};`,
+    "var state={ask:!refused&&asks,active:false,refused:refused,decide:decide};",
+    'function start(){state.active=true;state.ask=false;console.info("analytics: on");window.dispatchEvent(new Event("skillcdn:analytics"))}',
+    'function decide(granted){console.info("analytics decided: "+(granted?"granted":"denied"));if(granted){if(refused){return}start()}else{state.active=false;state.ask=false;console.info("analytics: off")}}',
+    "window.skillcdnAnalytics=state;",
+    "if(!refused&&!asks){start()}})();",
+  ].join("");
+  return [{ tag: "script", children: script, injectTo: "head" }];
+}
 
 /**
  * Answers the REST API from fixtures, and signs the fixture person in and out, so the UI runs
@@ -22,13 +59,15 @@ function fixtureApi(): Plugin {
     // the standard link types the pages read (`LEGAL_TAGS` in src/site.ts): its terms as a page
     // of its own, which the fixtures have written, and its privacy policy as a page kept
     // elsewhere. The footer and the sign-in button show both, and this is where they are seen.
-    transformIndexHtml: () => [
+    // And, when the URL names a country, what its bootstrap leaves about analytics.
+    transformIndexHtml: (_html, context) => [
       { tag: "link", attrs: { rel: "terms-of-service", href: "/terms" }, injectTo: "head" },
       {
         tag: "link",
         attrs: { rel: "privacy-policy", href: "https://example.com/privacy" },
         injectTo: "head",
       },
+      ...analyticsStub(context.originalUrl),
     ],
     configureServer(server) {
       server.middlewares.use(async (request, response, next) => {

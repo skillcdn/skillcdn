@@ -11,11 +11,17 @@ import {
 
 const request = (
   path: string,
-  init: { method?: string; headers?: Record<string, string>; origin?: string } = {},
+  init: {
+    method?: string;
+    headers?: Record<string, string>;
+    origin?: string;
+    country?: string;
+  } = {},
 ): WebRequest => ({
   method: init.method ?? "GET",
   url: new URL(path, init.origin ?? "http://internal.test:8080"),
   headers: new Headers(init.headers),
+  country: init.country,
 });
 
 let build: WebBuildFixture;
@@ -349,7 +355,7 @@ describe("the tags an operator configures", () => {
     const response = tagged.respond(request("/?lang=ko"));
     const html = (await response?.text()) ?? "";
     expect(html).toContain(
-      '<head>\n<meta name="google-site-verification" content="abc&quot;>&lt;script>x&lt;/script>">',
+      '<head>\n<meta name="skillcdn-analytics" content="ask">\n<meta name="google-site-verification" content="abc&quot;>&lt;script>x&lt;/script>">',
     );
     // The deployment's own pages, as standard link types, and its contact for the footer.
     expect(html).toContain('<link rel="terms-of-service" href="https://skills.example/terms">');
@@ -357,14 +363,30 @@ describe("the tags an operator configures", () => {
       '<link rel="privacy-policy" href="https://skills.example/privacy?v=2&amp;x=&quot;">',
     );
     expect(html).toContain('<meta name="skillcdn-contact" content="content@skills.example">');
-    // Analytics are consent-gated: consent mode starts denied, the script is loaded by the page
-    // after the visitor agrees, and a privacy signal keeps it off (deploy/README.md). The script
-    // sends no page view of its own; the pages do, once told that they may (ADR-0050).
+    // Analytics are consent mode first (ADR-0051): denied by default in the regions that ask,
+    // granted elsewhere, advertising denied everywhere; a meta written per request says whether
+    // this visitor is asked, and one whose region is not known is. The page loads the script
+    // only when the visitor is not to be asked or has agreed, and a privacy signal keeps it off
+    // (deploy/README.md). The script sends no page view of its own; the pages do, once told
+    // that they may (ADR-0050).
+    expect(html).toContain('<meta name="skillcdn-analytics" content="ask">');
+    expect(html.indexOf('<meta name="skillcdn-analytics"')).toBeLessThan(
+      html.indexOf("window.dataLayer="),
+    );
     expect(html).toContain('var id="G-ABC123XYZ"');
-    expect(html).toContain('gtag("consent","default",{ad_storage:"denied"');
+    expect(html).toContain(
+      'gtag("consent","default",{ad_storage:"denied",ad_user_data:"denied",ad_personalization:"denied",analytics_storage:"denied",region:["AT","BE",',
+    );
+    expect(html).toContain('"GB","CH"]});');
+    expect(html).toContain(
+      'gtag("consent","default",{ad_storage:"denied",ad_user_data:"denied",ad_personalization:"denied",analytics_storage:"granted"});',
+    );
     expect(html).toContain("navigator.globalPrivacyControl===true");
+    expect(html).not.toContain("doNotTrack");
     expect(html).toContain('"https://www.googletagmanager.com/gtag/js?id="+encodeURIComponent(id)');
-    expect(html).toContain("var state={ask:!refused&&stored===null,active:false,decide:");
+    expect(html).toContain(
+      "var state={ask:!refused&&asks&&stored===null,active:false,refused:refused,decide:decide};",
+    );
     expect(html).toContain("window.skillcdnAnalytics=state;");
     expect(html).toContain('gtag("config",id,{send_page_view:false})');
     expect(html).toContain('window.dispatchEvent(new Event("skillcdn:analytics"))');
@@ -381,13 +403,58 @@ describe("the tags an operator configures", () => {
       .text();
     expect(page).toContain('<meta name="google-site-verification"');
     expect(page).toContain('var id="G-ABC123XYZ"');
+    expect(page).toContain('<meta name="skillcdn-analytics" content="ask">');
     // Not into what is not a page.
     expect(await tagged.respond(request("/llms.txt"))?.text()).not.toContain("gtag");
+  });
+
+  it("say per request whether the visitor is asked before analytics run, by their region", async () => {
+    const consentOf = async (bundle: WebBundle, country?: string): Promise<string | undefined> =>
+      /<meta name="skillcdn-analytics" content="(\w+)">/.exec(
+        (await bundle.respond(request("/", { country }))?.text()) ?? "",
+      )?.[1];
+    const withRegions = (analyticsConsentRegions?: "*" | readonly string[]) =>
+      loadWebBundle(build.root, {
+        publicUrl: "https://skills.example",
+        tags: { googleAnalyticsId: "G-ABC123XYZ", analyticsConsentRegions },
+      });
+    // The default regions: the European Economic Area, the United Kingdom and Switzerland.
+    const tagged = await withRegions();
+    expect(await consentOf(tagged, "DE")).toBe("ask");
+    expect(await consentOf(tagged, "NO")).toBe("ask");
+    expect(await consentOf(tagged, "GB")).toBe("ask");
+    expect(await consentOf(tagged, "KR")).toBe("run");
+    expect(await consentOf(tagged, "US-CA")).toBe("run");
+    // Not knowing where the visitor is, the page asks.
+    expect(await consentOf(tagged)).toBe("ask");
+    // Regions of the operator's own, a subdivision among them; everywhere; nowhere. The
+    // service's own defaults name the same regions, and none when there are none to name.
+    const some = await withRegions(["US-CA", "BR"]);
+    expect(await consentOf(some, "US")).toBe("run");
+    expect(await consentOf(some, "US-CA")).toBe("ask");
+    expect(await consentOf(some, "DE")).toBe("run");
+    expect(await some.respond(request("/"))?.text()).toContain('region:["US-CA","BR"]});');
+    const everywhere = await withRegions("*");
+    expect(await consentOf(everywhere, "KR")).toBe("ask");
+    const granted =
+      'gtag("consent","default",{ad_storage:"denied",ad_user_data:"denied",ad_personalization:"denied",analytics_storage:"granted"});';
+    const everywhereHtml = (await everywhere.respond(request("/"))?.text()) ?? "";
+    expect(everywhereHtml).not.toContain("region:");
+    expect(everywhereHtml).not.toContain(granted);
+    const nowhere = await withRegions([]);
+    expect(await consentOf(nowhere, "DE")).toBe("run");
+    expect(await consentOf(nowhere)).toBe("run");
+    const nowhereHtml = (await nowhere.respond(request("/"))?.text()) ?? "";
+    expect(nowhereHtml).not.toContain("region:");
+    expect(nowhereHtml).toContain(granted);
+    // Without analytics there is nothing to say.
+    expect(await consentOf(web, "DE")).toBeUndefined();
   });
 
   it("are absent, and so is the widening, when nothing is configured", async () => {
     const html = await answer("/").text();
     expect(html).not.toContain("gtag");
+    expect(html).not.toContain("skillcdn-analytics");
     expect(html).not.toContain("google-site-verification");
     expect(html).not.toContain("terms-of-service");
     expect(html).not.toContain("privacy-policy");

@@ -163,7 +163,7 @@ describe("what is sent", () => {
   function analytics(active: boolean, referrer = "") {
     const gtag = vi.fn();
     vi.stubGlobal("window", {
-      skillcdnAnalytics: { ask: false, active, decide: () => undefined },
+      skillcdnAnalytics: { ask: false, active, refused: false, decide: () => undefined },
       gtag,
       location: { origin },
     });

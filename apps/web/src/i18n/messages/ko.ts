@@ -356,6 +356,14 @@ export const ko: Messages = {
     privacy: "개인정보 처리방침",
     accept: "분석 허용",
     decline: "괜찮아요",
+    choices: "분석 설정",
+    onTitle: "분석이 켜져 있어요",
+    onText: "어떤 페이지가 도움이 되는지 분석 쿠키로 세고 있어요. 언제든 여기서 끌 수 있어요.",
+    offTitle: "분석이 꺼져 있어요",
+    offText: "분석 쿠키를 저장하지 않아요. 언제든 여기서 허용할 수 있어요.",
+    turnOff: "끄기",
+    turnOn: "켜기",
+    close: "닫기",
   },
 
   legal: {

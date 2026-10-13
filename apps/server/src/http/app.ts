@@ -134,6 +134,8 @@ export interface AppDependencies {
   readonly requests: {
     readonly addresses: ClientAddressResolver;
     readonly requestIdHeader: string;
+    /** Where a trusted proxy names the visitor's country; left out, no visitor is placed. */
+    readonly clientCountryHeader?: string | undefined;
     readonly accessLog: boolean;
     readonly newRequestId: () => string;
     readonly now: () => number;
@@ -205,6 +207,7 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
     method: c.req.method,
     url: new URL(c.req.url),
     headers: c.req.raw.headers,
+    country: c.get("clientCountry"),
   });
   /** The deployment's own pages that have been written (ADR-0029); none when unreadable. */
   const writtenPages = async (): Promise<readonly LegalDocumentKind[]> => {
