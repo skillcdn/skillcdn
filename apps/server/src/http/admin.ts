@@ -3,19 +3,29 @@ import { MAX_MEDIA_BYTES } from "@skillcdn/core";
 import { OPERATOR_LIST_KINDS, type OperatorListKind, purgeRepository } from "@skillcdn/db";
 import type { Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import * as z from "zod";
 import type { Logger } from "../logger.js";
 import { OperatorImageError, type OperatorImages } from "../operator/images.js";
 import { LegalDocumentError, LegalDocuments } from "../operator/legal.js";
 import { OperatorListError, OperatorLists } from "../operator/lists.js";
 import { type Showcase, ShowcaseError } from "../operator/showcase.js";
+import {
+  DEFAULT_LIMIT,
+  daysInRange,
+  MAX_LIMIT,
+  MAX_RANGE_DAYS,
+  parseUsageDay,
+  type UsageRange,
+  type UsageReads,
+} from "../stats/usage-reads.js";
 import type { AppEnv } from "./request-context.js";
 import { errorBody } from "./rest.js";
 
 /**
  * The admin API (ADR-0026, ADR-0028, ADR-0029, ADR-0031): the operator's lists, the landing
- * showcase with its uploads, the pictures of addresses, the deployment's own pages, and the
- * takedown, behind one bearer token. It exists only when a token is configured; otherwise the
- * paths are nothing, like any other.
+ * showcase with its uploads, the pictures of addresses, the deployment's own pages, the
+ * takedown, and the usage statistics, behind one bearer token. It exists only when a token is
+ * configured; otherwise the paths are nothing, like any other.
  */
 export interface AdminDependencies {
   readonly token: string;
@@ -24,8 +34,13 @@ export interface AdminDependencies {
   readonly images: OperatorImages;
   readonly legal: LegalDocuments;
   readonly purge: (address: string) => Promise<{ snapshots: number; blobs: number } | undefined>;
+  readonly usage: UsageReads;
   readonly logger: Logger;
 }
+
+const usageMetric = z.enum(["connection", "tool_call", "skill_load", "file_read", "client"]);
+const subjectMetric = z.enum(["tool_call", "skill_load", "file_read"]);
+const usageLimit = z.coerce.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT);
 
 export const ADMIN_PREFIX = "/admin/v1";
 
@@ -45,7 +60,7 @@ function kindOf(value: string): OperatorListKind | undefined {
 }
 
 export function registerAdmin(app: Hono<AppEnv>, dependencies: AdminDependencies): void {
-  const { token, lists, showcase, images, legal, logger } = dependencies;
+  const { token, lists, showcase, images, legal, usage, logger } = dependencies;
 
   app.use(`${ADMIN_PREFIX}/*`, async (c, next) => {
     const header = c.req.header("authorization") ?? "";
@@ -309,6 +324,104 @@ export function registerAdmin(app: Hono<AppEnv>, dependencies: AdminDependencies
       return result === undefined
         ? c.json(errorBody("admin.unknown_repository", "The repository was never indexed."), 404)
         : c.json(result);
+    } catch (error) {
+      return refused(c, error);
+    }
+  });
+
+  // The usage statistics (docs/architecture.md): the deployment's totals per day, the rankings
+  // of public repositories and of their skills, files and tools, and one repository. Every
+  // read is bounded in days and in rows, and what is wrong with a request is said.
+
+  /** The days a request asks for, or the default; a response says what is wrong with them. */
+  const rangeOf = (c: Context<AppEnv>): UsageRange | Response => {
+    const fallback = usage.defaultRange();
+    const from = c.req.query("from");
+    const to = c.req.query("to");
+    const range = {
+      from: from === undefined ? fallback.from : parseUsageDay(from),
+      to: to === undefined ? fallback.to : parseUsageDay(to),
+    };
+    if (range.from === undefined || range.to === undefined) {
+      return c.json(
+        errorBody("usage.invalid_range", "from and to are days written as YYYY-MM-DD."),
+        400,
+      );
+    }
+    const days = daysInRange({ from: range.from, to: range.to });
+    if (days < 1 || days > MAX_RANGE_DAYS) {
+      return c.json(
+        errorBody(
+          "usage.invalid_range",
+          `from comes before to, and they are at most ${MAX_RANGE_DAYS} days apart.`,
+        ),
+        400,
+      );
+    }
+    return { from: range.from, to: range.to };
+  };
+  const invalidMetric = (c: Context<AppEnv>, options: readonly string[]): Response =>
+    c.json(errorBody("usage.invalid_metric", `metric is one of ${options.join(", ")}.`), 400);
+  const invalidLimit = (c: Context<AppEnv>): Response =>
+    c.json(errorBody("usage.invalid_limit", `limit is a number from 1 to ${MAX_LIMIT}.`), 400);
+
+  app.get(`${ADMIN_PREFIX}/usage`, async (c) => {
+    const range = rangeOf(c);
+    if (range instanceof Response) {
+      return range;
+    }
+    return c.json({ ...range, items: await usage.service(range) });
+  });
+
+  app.get(`${ADMIN_PREFIX}/usage/repositories`, async (c) => {
+    const metric = usageMetric.safeParse(c.req.query("metric"));
+    if (!metric.success) {
+      return invalidMetric(c, usageMetric.options);
+    }
+    const limit = usageLimit.safeParse(c.req.query("limit"));
+    if (!limit.success) {
+      return invalidLimit(c);
+    }
+    const range = rangeOf(c);
+    if (range instanceof Response) {
+      return range;
+    }
+    const items = await usage.repositories({ metric: metric.data, range, limit: limit.data });
+    return c.json({ ...range, metric: metric.data, items });
+  });
+
+  app.get(`${ADMIN_PREFIX}/usage/subjects`, async (c) => {
+    const metric = subjectMetric.safeParse(c.req.query("metric"));
+    if (!metric.success) {
+      return invalidMetric(c, subjectMetric.options);
+    }
+    const limit = usageLimit.safeParse(c.req.query("limit"));
+    if (!limit.success) {
+      return invalidLimit(c);
+    }
+    const range = rangeOf(c);
+    if (range instanceof Response) {
+      return range;
+    }
+    const items = await usage.subjects({ metric: metric.data, range, limit: limit.data });
+    return c.json({ ...range, metric: metric.data, items });
+  });
+
+  app.get(`${ADMIN_PREFIX}/usage/*`, async (c) => {
+    const written = addressAfter(c.req.url, `${ADMIN_PREFIX}/usage`);
+    const range = rangeOf(c);
+    if (range instanceof Response) {
+      return range;
+    }
+    try {
+      const found = await usage.repository(written, range);
+      // Unknown and not public read the same, as everywhere.
+      return found === undefined
+        ? c.json(
+            errorBody("usage.unknown_repository", "No public repository of that name is counted."),
+            404,
+          )
+        : c.json({ address: found.address, ...range, items: found.items });
     } catch (error) {
       return refused(c, error);
     }

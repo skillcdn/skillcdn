@@ -59,6 +59,7 @@ import type { Showcase } from "../operator/showcase.js";
 import { OwnerNotFoundError, type OwnerService } from "../owners/owner-service.js";
 import type { SocialCards } from "../social/cards.js";
 import { type PictureFetcher, rasterImageType } from "../social/pictures.js";
+import { UsageReads } from "../stats/usage-reads.js";
 import { purgeByAddress, registerAdmin } from "./admin.js";
 import { registerAuth } from "./auth.js";
 import type { ClientAddressResolver } from "./client-address.js";
@@ -502,6 +503,7 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
       images: dependencies.images,
       legal: dependencies.legal,
       purge: purgeByAddress(database),
+      usage: new UsageReads({ database, clock: dependencies.tools.clock }),
       logger,
     });
   }

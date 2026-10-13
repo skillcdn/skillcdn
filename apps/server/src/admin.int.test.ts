@@ -1,11 +1,14 @@
 import { restLegalDocumentSchema, restShowcaseSchema } from "@skillcdn/core";
+import { addUsage, findRepoByAlias, saveRepository } from "@skillcdn/db";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
+import { pino } from "pino";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { UsageRecorder } from "./stats/usage-recorder.js";
 import { createFixtureHost, fixtureCommits } from "./testing/fixture-host.js";
 import { createHarness } from "./testing/harness.js";
 
 // The admin API (ADR-0026, ADR-0028): the operator's lists, the landing showcase with its
-// uploads, and the takedown, behind one token.
+// uploads, the takedown, and the usage statistics, behind one token.
 
 let testDatabase: TestDatabase;
 beforeAll(async () => {
@@ -17,6 +20,140 @@ afterAll(async () => {
 
 const TOKEN = "an-admin-token-that-is-long-enough-to-pass";
 const authorized = { authorization: `Bearer ${TOKEN}` };
+
+describe("the usage statistics over the admin API", () => {
+  it("answer the deployment's totals, the rankings and one repository, naming public repositories only", async () => {
+    const DAY = "2026-08-20";
+    const clock = { now: () => new Date(`${DAY}T12:00:00Z`) };
+    const stats = new UsageRecorder({
+      database: testDatabase.database,
+      clock,
+      logger: pino({ level: "silent" }),
+    });
+    const h = createHarness(testDatabase, {
+      adminToken: TOKEN,
+      host: createFixtureHost("admin-usage"),
+      stats,
+      clock,
+    });
+    const commit = fixtureCommits("admin-usage").main;
+    const client = await h.connect(`/gh/acme/multi-skill@${commit}`, { peer: "203.0.113.20" });
+    await client.callTool({
+      name: "load_skill",
+      arguments: { path: "skills/release-notes/SKILL.md" },
+    });
+    await client.callTool({
+      name: "read_repo_file",
+      arguments: { path: "docs/getting-started.md" },
+    });
+    await client.close();
+    await h.snapshots.idle();
+    // A repository that is not public, counted under the same account: never named.
+    const counted = await findRepoByAlias(testDatabase.database, {
+      host: "gh",
+      owner: "acme",
+      repo: "multi-skill",
+    });
+    if (counted === undefined) {
+      throw new Error("the repository was not saved");
+    }
+    const secret = await saveRepository(
+      testDatabase.database,
+      { host: "gh", owner: "acme", repo: "secret-usage" },
+      {
+        ...counted.repository,
+        hostRepoId: "990001",
+        name: "secret-usage",
+        visibility: "private",
+      },
+      clock.now(),
+    );
+    await addUsage(
+      testDatabase.database,
+      [
+        {
+          scope: { accountId: secret.accountId, repoId: secret.id },
+          day: DAY,
+          metric: "skill_load",
+          subject: "skills/hidden",
+          count: 1000,
+        },
+      ],
+      clock.now(),
+    );
+    await stats.flush();
+
+    const get = (path: string) => h.request(path, { headers: authorized });
+    const range = `from=${DAY}&to=${DAY}`;
+    expect(await (await get(`/admin/v1/usage?${range}`)).json()).toEqual({
+      from: DAY,
+      to: DAY,
+      items: [
+        { day: DAY, metric: "connection", subject: "", count: 1 },
+        { day: DAY, metric: "file_read", subject: "", count: 1 },
+        { day: DAY, metric: "skill_load", subject: "", count: 1 },
+        { day: DAY, metric: "tool_call", subject: "load_skill", count: 1 },
+        { day: DAY, metric: "tool_call", subject: "read_repo_file", count: 1 },
+      ],
+    });
+    const repository = {
+      address: "/gh/acme/multi-skill",
+      host: "gh",
+      owner: "Acme",
+      name: "multi-skill",
+    };
+    expect(
+      await (await get(`/admin/v1/usage/repositories?metric=tool_call&${range}`)).json(),
+    ).toEqual({ from: DAY, to: DAY, metric: "tool_call", items: [{ ...repository, count: 2 }] });
+    expect(
+      await (await get(`/admin/v1/usage/subjects?metric=skill_load&${range}&limit=5`)).json(),
+    ).toEqual({
+      from: DAY,
+      to: DAY,
+      metric: "skill_load",
+      items: [{ ...repository, subject: "skills/release-notes", count: 1 }],
+    });
+    expect(await (await get(`/admin/v1/usage/gh/Acme/Multi-Skill?${range}`)).json()).toEqual({
+      address: "/gh/acme/multi-skill",
+      from: DAY,
+      to: DAY,
+      items: [
+        { metric: "connection", subject: "", count: 1 },
+        { metric: "file_read", subject: "docs/getting-started.md", count: 1 },
+        { metric: "skill_load", subject: "skills/release-notes", count: 1 },
+        { metric: "tool_call", subject: "load_skill", count: 1 },
+        { metric: "tool_call", subject: "read_repo_file", count: 1 },
+      ],
+    });
+    // Without days, the last thirty.
+    expect(await (await get("/admin/v1/usage/repositories?metric=client")).json()).toEqual({
+      from: "2026-07-22",
+      to: DAY,
+      metric: "client",
+      items: [],
+    });
+
+    // What is wrong with a request is said; what is not public, or nothing, is not there.
+    const refused = async (path: string, code: string, status = 400) => {
+      const response = await get(path);
+      expect([path, response.status]).toEqual([path, status]);
+      expect(await response.json()).toMatchObject({ error: { code } });
+    };
+    await refused("/admin/v1/usage?from=2026-08-20&to=2026-08-19", "usage.invalid_range");
+    await refused("/admin/v1/usage?from=2026-02-30", "usage.invalid_range");
+    await refused("/admin/v1/usage?from=20-1-1", "usage.invalid_range");
+    await refused("/admin/v1/usage?from=2020-01-01&to=2026-08-20", "usage.invalid_range");
+    await refused("/admin/v1/usage/repositories", "usage.invalid_metric");
+    await refused("/admin/v1/usage/repositories?metric=nothing", "usage.invalid_metric");
+    await refused("/admin/v1/usage/subjects?metric=client", "usage.invalid_metric");
+    await refused("/admin/v1/usage/subjects?metric=skill_load&limit=0", "usage.invalid_limit");
+    await refused("/admin/v1/usage/subjects?metric=skill_load&limit=x", "usage.invalid_limit");
+    await refused(`/admin/v1/usage/gh/acme/secret-usage?${range}`, "usage.unknown_repository", 404);
+    await refused(`/admin/v1/usage/gh/acme/nothing?${range}`, "usage.unknown_repository", 404);
+    await refused("/admin/v1/usage/not-an-address", "operator.invalid_address");
+    await refused("/admin/v1/usage/gh/acme/multi-skill@main", "operator.invalid_address");
+  });
+});
 
 describe("the admin API", () => {
   it("does not exist without a token, and refuses every other token with one", async () => {
