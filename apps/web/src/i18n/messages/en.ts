@@ -370,21 +370,23 @@ export const en = {
   },
 
   consent: {
-    label: "Analytics consent",
-    title: "Analytics, with your OK",
-    text: "This site can use analytics cookies to learn which pages help. Nothing is set until you say yes.",
+    label: "Cookie consent",
+    title: "We use cookies",
+    text: "For usage statistics: which pages help, and how far visitors get. You can change your choice at any time.",
     privacy: "Privacy policy",
-    accept: "Allow analytics",
+    accept: "Accept",
     decline: "No thanks",
     /** The footer's way to the choice, and the card it opens, which says how things stand. */
-    choices: "Analytics choices",
-    onTitle: "Analytics are on",
+    choices: "Cookie settings",
+    onTitle: "Cookies are on",
     onText:
-      "This site counts which pages help, with analytics cookies. Turn that off here any time.",
-    offTitle: "Analytics are off",
-    offText: "No analytics cookie is set. Allow them here any time.",
+      "A cookie counts which pages help and how far visitors get. Turn it off whenever you like.",
+    offTitle: "Cookies are off",
+    offText: "No usage cookie is set. Turn it on whenever you like.",
+    /** Keeping things as they are is the button; changing them is the quieter choice beside it. */
+    keep: "OK",
     turnOff: "Turn off",
-    turnOn: "Turn on",
+    turnOn: "Allow cookies",
     close: "Close",
   },
 

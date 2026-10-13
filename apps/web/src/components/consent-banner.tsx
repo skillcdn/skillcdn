@@ -76,10 +76,20 @@ export function ConsentBanner(props: ConsentBannerProps) {
               {t.consent.decline}
             </Button>
           </>
+        ) : analytics.active ? (
+          // Keeping cookies on is the button; turning them off is the quieter choice beside it.
+          <>
+            <Button variant="primary" size="sm" onClick={props.onClose}>
+              {t.consent.keep}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => decide(false)}>
+              {t.consent.turnOff}
+            </Button>
+          </>
         ) : (
           <>
-            <Button variant="primary" size="sm" onClick={() => decide(!analytics.active)}>
-              {analytics.active ? t.consent.turnOff : t.consent.turnOn}
+            <Button variant="primary" size="sm" onClick={() => decide(true)}>
+              {t.consent.turnOn}
             </Button>
             <Button variant="ghost" size="sm" onClick={props.onClose}>
               {t.consent.close}
