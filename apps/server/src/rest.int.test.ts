@@ -69,7 +69,7 @@ describe("GET /api/v1/mounts/<address>", () => {
     expect(restMountSchema.parse(await early.json()).index).toEqual({ status: "indexing" });
 
     release();
-    await h.snapshots.idle();
+    await indexed(h, address);
     const mount = restMountSchema.parse(await (await h.request(`/api/v1/mounts${address}`)).json());
     expect(mount).toMatchObject({
       address,
