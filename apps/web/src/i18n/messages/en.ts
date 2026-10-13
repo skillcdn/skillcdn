@@ -372,7 +372,7 @@ export const en = {
   consent: {
     label: "Cookie consent",
     title: "We use cookies",
-    text: "They help us see how the site is used and make it better. You can change your choice at any time.",
+    text: "They help us see how the service is used and make it better. You can change your choice at any time.",
     privacy: "Privacy policy",
     accept: "Accept",
     decline: "No thanks",
@@ -380,7 +380,7 @@ export const en = {
     choices: "Cookie settings",
     onTitle: "Cookies are on",
     onText:
-      "They help us see how the site is used and make it better. Turn them off whenever you like.",
+      "They help us see how the service is used and make it better. Turn them off whenever you like.",
     offTitle: "Cookies are off",
     offText: "Nothing is counted. Turn them on whenever you like.",
     /** Keeping things as they are is the button; changing them is the quieter choice beside it. */
