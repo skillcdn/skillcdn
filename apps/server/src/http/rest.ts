@@ -473,14 +473,16 @@ export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies):
     return c.json(errorBody("internal", "The request could not be served."), 500);
   };
 
-  // The API is public and read-only, so a page on any origin may call it. No credentials are
-  // involved; the request id is exposed so that a report can be matched to the logs.
+  // The API is read-only, so a page on any origin may call it. No cookie travels with such a
+  // request; a token in the `authorization` header may (docs/specs/rest.md#authorization), and
+  // its challenge is readable. The request id is exposed so that a report can be matched to the
+  // logs.
   app.use(
     "/api/*",
     cors({
       origin: "*",
       allowMethods: ["GET", "HEAD", "OPTIONS"],
-      exposeHeaders: ["x-request-id", "retry-after"],
+      exposeHeaders: ["x-request-id", "retry-after", "www-authenticate"],
       maxAge: CORS_MAX_AGE_SECONDS,
     }),
   );

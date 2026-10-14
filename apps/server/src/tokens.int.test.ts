@@ -1,6 +1,7 @@
 import {
   REPO_TOKEN_PREFIX,
   restMeSchema,
+  restMountSchema,
   restNewRepoTokenSchema,
   restRepoTokensSchema,
 } from "@skillcdn/core";
@@ -300,11 +301,7 @@ describe("an agent with a token", () => {
     expect(refusals[0]).toMatchObject({ error: { code: "auth.invalid_token" } });
     // What everyone is served is served with it as without it.
     expect((await mcp(h, "/gh/acme/multi-skill", token)).status).toBe(200);
-    // The pages and the REST API know people by their session, never by a token.
-    const rest = await h.request("/api/v1/mounts/gh/acme/secret-skills", {
-      headers: { authorization: `Bearer ${token}` },
-    });
-    expect(rest.status).toBe(404);
+    // The routes that are a person's know them by their session, never by a token.
     const me = await h.request("/api/v1/me", { headers: { authorization: `Bearer ${token}` } });
     expect(restMeSchema.parse(await me.json()).user).toBeNull();
   });
@@ -425,5 +422,117 @@ describe("an agent with a token", () => {
       await saveRepository(database, alias, original.repository, new Date());
     }
     expect((await mcp(h, SECRET, token)).status).toBe(200);
+  });
+});
+
+describe("a program with a token, over the REST API", () => {
+  const MOUNT = `/api/v1/mounts${SECRET}`;
+  /** A request a program makes to a route that reads an address, with the token it was given. */
+  const rest = (h: Pick<Harness, "request">, path: string, token?: string) =>
+    h.request(path, {
+      headers: token === undefined ? {} : { authorization: `Bearer ${token}` },
+    });
+
+  it("reads the repository the token was made for at every route that reads an address", async () => {
+    const h = harness();
+    const cookie = await h.signIn(newcomer(h.login));
+    const { token } = await tokenFor(h, cookie);
+    // Without a credential the API answers as it always has: to nobody, what is not public
+    // does not exist, and there is no challenge to start a sign-in from.
+    const nobody = await rest(h, MOUNT);
+    expect(nobody.status).toBe(404);
+    expect(nobody.headers.get("www-authenticate")).toBeNull();
+    for (const path of [
+      MOUNT,
+      "/api/v1/mounts/gh/Acme/Secret-Skills@main",
+      `/api/v1/browse${SECRET}`,
+      `/api/v1/find${SECRET}?query=release`,
+      `/api/v1/skills${SECRET}?path=skills/release-notes/SKILL.md`,
+      `/api/v1/files${SECRET}?path=README.md`,
+    ]) {
+      const response = await rest(h, path, token);
+      expect(response.status, path).toBe(200);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+    }
+    const mount = restMountSchema.parse(await (await rest(h, MOUNT, token)).json());
+    expect(mount.repository.visibility).toBe("private");
+    // A session sent along changes nothing: the token's person is who the request is for.
+    const both = await h.request(MOUNT, {
+      headers: { cookie: await h.signIn(newcomer(h.login, [])), authorization: `Bearer ${token}` },
+    });
+    expect(both.status).toBe(200);
+  });
+
+  it("is told that the token is no good at anything that is not public, and is served what everyone is", async () => {
+    const h = harness();
+    const { token } = await tokenFor(h, await h.signIn(newcomer(h.login)));
+    // Another private repository of the same person, and a name that is nothing: one answer,
+    // with the challenge of the address, as at the MCP endpoint.
+    const refusals = [];
+    for (const path of [
+      "/api/v1/mounts/gh/acme/other-secrets",
+      "/api/v1/browse/gh/acme/nothing-by-this-name",
+    ]) {
+      const response = await rest(h, path, token);
+      expect(response.status, path).toBe(401);
+      expect(response.headers.get("www-authenticate")).toContain('error="invalid_token"');
+      expect(response.headers.get("www-authenticate")).toContain(
+        "/.well-known/oauth-protected-resource/gh/acme/",
+      );
+      refusals.push(await response.json());
+    }
+    expect(refusals[0]).toEqual(refusals[1]);
+    expect(refusals[0]).toMatchObject({ error: { code: "auth.invalid_token" } });
+    // Something that only looks like a token, and a header that is no bearer credential at all.
+    for (const header of [`Bearer ${REPO_TOKEN_PREFIX}made-up`, "Basic bm9ib2R5"]) {
+      const refused = await h.request(MOUNT, { headers: { authorization: header } });
+      expect(refused.status, header).toBe(401);
+      expect(await refused.json()).toMatchObject({ error: { code: "auth.invalid_token" } });
+    }
+    // What everyone is served is served with a token that is no good as with one that is.
+    const everyone = "/api/v1/mounts/gh/acme/multi-skill";
+    expect((await rest(h, everyone, `${REPO_TOKEN_PREFIX}made-up`)).status).toBe(200);
+    expect((await rest(h, everyone, token)).status).toBe(200);
+  });
+
+  it("is refused once the token ended, and reads only what the git host still shows its maker", async () => {
+    const clock = movableClock();
+    const login = createFixtureLogin();
+    const h = harness({ clock, login, permissionTtlMs: 0 });
+    const maker = newcomer(login, ["secret-skills"]);
+    const cookie = await h.signIn(maker);
+    const short = await tokenFor(h, cookie, SECRET, 1);
+    const long = await tokenFor(h, cookie, SECRET, 30);
+    expect((await rest(h, MOUNT, short.token)).status).toBe(200);
+
+    clock.advance(DAY_MS + 1000);
+    const expired = await rest(h, MOUNT, short.token);
+    expect(expired.status).toBe(401);
+    expect(await expired.json()).toMatchObject({ error: { code: "auth.invalid_token" } });
+
+    // Taken back by its maker.
+    expect((await rest(h, MOUNT, long.token)).status).toBe(200);
+    const removed = await h.request(`${TOKENS}/${long.item.id}`, {
+      method: "DELETE",
+      headers: { cookie, origin: h.origin },
+    });
+    expect(removed.status).toBe(200);
+    expect((await rest(h, MOUNT, long.token)).status).toBe(401);
+
+    // The host takes the repository away from the maker: a token that is good reads nothing,
+    // in the words of a name that is nothing.
+    const fresh = await tokenFor(h, cookie, SECRET, 30);
+    login.people[maker]?.sees.splice(0);
+    const gone = await rest(h, MOUNT, fresh.token);
+    expect(gone.status).toBe(404);
+    expect(await gone.json()).toMatchObject({ error: { code: "mount.repo_not_found" } });
+    login.people[maker]?.sees.push("secret-skills");
+    expect((await rest(h, MOUNT, fresh.token)).status).toBe(200);
+
+    // And when the git host stops vouching for the maker, the token goes with everything else.
+    login.revoke(maker);
+    const refused = await rest(h, MOUNT, fresh.token);
+    expect(refused.status).toBe(401);
+    expect(await refused.json()).toMatchObject({ error: { code: "auth.invalid_token" } });
   });
 });

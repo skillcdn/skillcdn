@@ -9,7 +9,7 @@ agent (any MCP client)
    |   https://<host>/gh/<owner>/<repo>[@ref][/path]
    |   anonymous for public repos; OAuth for private repos, or a repository token where nobody can sign in
    v
-server, role api        stateless: MCP over HTTP, REST for the web UI, sign-in and OAuth, the git host's events
+server, role api        stateless: MCP over HTTP, REST for the web UI and for programs that serve an agent, sign-in and OAuth, the git host's events
    |          \
    |           \ enqueue
    v            v

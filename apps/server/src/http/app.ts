@@ -332,8 +332,90 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
   };
 
   /**
+   * The credential a request presents in its `authorization` header, read as the MCP endpoint
+   * reads it (docs/specs/permissions.md): a repository token is good at every address of its
+   * repository and of nothing else, an access token at the one address it was issued for, and a
+   * header that is not a bearer credential is one that is no good.
+   */
+  const presentedBearer = async (
+    authorized: AppAuth,
+    address: Address,
+    header: string | undefined,
+  ): Promise<{ bearer: BearerOutcome; onlyRepo: string | undefined }> => {
+    const presented = /^Bearer\s+(\S+)$/i.exec(header?.trim() ?? "")?.[1];
+    if (presented?.startsWith(REPO_TOKEN_PREFIX) === true) {
+      const access = await authorized.tokens.verify(presented, address);
+      return {
+        bearer:
+          access === undefined
+            ? { status: "invalid", description: INVALID_TOKEN_DESCRIPTION }
+            : { status: "valid", user: access.user },
+        onlyRepo: access?.repoId,
+      };
+    }
+    return { bearer: await authorized.authorization.verify(header, address), onlyRepo: undefined };
+  };
+
+  /**
+   * Resolves an address for a program that presents a token of this deployment on the REST API
+   * (docs/specs/rest.md#authorization, ADR-0052): the answers of the MCP endpoint. A request
+   * without any credential never gets here; it is nobody's, as a page's is.
+   */
+  const tokenMountAt = async (
+    c: Context<AppEnv>,
+    authorized: AppAuth,
+    address: Address,
+    header: string,
+  ): Promise<Mount | Response> => {
+    const refuse = (description: string): Response => {
+      c.header(
+        "www-authenticate",
+        authorized.authorization.challenge(formatAddress(address), {
+          code: "invalid_token",
+          description,
+        }),
+      );
+      return c.json(errorBody("auth.invalid_token", description), 401);
+    };
+    const { bearer, onlyRepo } = await presentedBearer(authorized, address, header);
+    const user = bearer.status === "valid" ? bearer.user : undefined;
+    try {
+      const mount = await mounts.resolve(
+        address,
+        user === undefined ? undefined : async () => user,
+      );
+      // The name the token was made under means another repository by now: the token is not
+      // this repository's. What everyone is served is served all the same.
+      if (
+        onlyRepo !== undefined &&
+        onlyRepo !== mount.repo.id &&
+        mount.repo.repository.visibility !== "public"
+      ) {
+        return refuse(INVALID_TOKEN_DESCRIPTION);
+      }
+      startIndexing(mount);
+      return mount;
+    } catch (error) {
+      if (error instanceof CredentialsLostError) {
+        return refuse("Sign in again: the git host no longer accepts this account.");
+      }
+      // A credential that is no good stands for nobody, and to nobody what is not public does
+      // not exist: the answer then says that the credential is no good, and nothing else.
+      if (
+        error instanceof MountError &&
+        error.reason === "repo_not_found" &&
+        bearer.status === "invalid"
+      ) {
+        return refuse(bearer.description);
+      }
+      return resolutionFailure(c, address, error);
+    }
+  };
+
+  /**
    * Resolves the address in the request path after `prefix`, or answers with the error. Asking
    * about an address is enough to start indexing it, so the next question finds it done or underway.
+   * A token presented wins over a session sent with the same request.
    */
   const mountAt = async (c: Context<AppEnv>, prefix: string): Promise<Mount | Response> => {
     // The raw path, percent-escapes included: the address parser decodes exactly once.
@@ -342,6 +424,10 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
       return c.json(errorBody(`address.${parsed.error.code}`, parsed.error.message), 400);
     }
     const address = parsed.value;
+    const header = c.req.header("authorization");
+    if (auth !== undefined && header !== undefined && header.trim() !== "") {
+      return tokenMountAt(c, auth, address, header);
+    }
     try {
       const mount = await resolveFor(address, sessionViewer(c));
       startIndexing(mount);
@@ -382,21 +468,11 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
       };
       // A credential that is no good stands for nobody. What everyone is served needs none and
       // is served all the same; anything else then says that the credential is no good.
-      const header = c.req.header("authorization");
-      const presented = /^Bearer\s+(\S+)$/i.exec(header?.trim() ?? "")?.[1];
-      let bearer: BearerOutcome;
-      // A token made for a repository is good at every address of it, and of nothing else.
-      let onlyRepo: string | undefined;
-      if (presented?.startsWith(REPO_TOKEN_PREFIX) === true) {
-        const access = await auth.tokens.verify(presented, address);
-        bearer =
-          access === undefined
-            ? { status: "invalid", description: INVALID_TOKEN_DESCRIPTION }
-            : { status: "valid", user: access.user };
-        onlyRepo = access?.repoId;
-      } else {
-        bearer = await auth.authorization.verify(header, address);
-      }
+      const { bearer, onlyRepo } = await presentedBearer(
+        auth,
+        address,
+        c.req.header("authorization"),
+      );
       user = bearer.status === "valid" ? bearer.user : undefined;
       try {
         const viewer = user;

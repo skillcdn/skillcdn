@@ -700,6 +700,30 @@ describe("tokens", () => {
     expect(JSON.stringify(h.logs)).not.toContain(tokens.access_token);
   });
 
+  it("opens its one address over the REST API as over MCP, and nothing else there either", async () => {
+    const host = createFixtureHost("oauth-token");
+    const h = harness({ host });
+    const { tokens } = await authorize(h, "alice");
+    const rest = (address: string, token?: string) =>
+      h.request(`/api/v1/mounts${address}`, {
+        headers: token === undefined ? {} : { authorization: `Bearer ${token}` },
+      });
+    const served = await rest(SECRET, tokens.access_token);
+    expect(served.status).toBe(200);
+    expect(served.headers.get("cache-control")).toBe("no-store");
+    // Without the token the API answers as it always has: to nobody, not found.
+    expect((await rest(SECRET)).status).toBe(404);
+    // Another address, a public one, and a credential that is no good: as at the MCP endpoint.
+    for (const address of ["/gh/acme/other-secrets", `${SECRET}/skills`]) {
+      const refused = await rest(address, tokens.access_token);
+      expect(refused.status, address).toBe(401);
+      expect(refused.headers.get("www-authenticate"), address).toContain('error="invalid_token"');
+    }
+    expect((await rest("/gh/acme/multi-skill", tokens.access_token)).status).toBe(200);
+    expect((await rest(SECRET, "scdn_at_made-up")).status).toBe(401);
+    expect(JSON.stringify(h.logs)).not.toContain(tokens.access_token);
+  });
+
   it("stops opening an address when the person no longer can, whatever the token says", async () => {
     const login = createFixtureLogin();
     const h = harness({ login, permissionTtlMs: 0 });

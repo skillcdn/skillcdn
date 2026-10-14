@@ -736,11 +736,17 @@ describe("from a page on another origin", () => {
 
     const preflight = await h.request("/api/v1/featured", {
       method: "OPTIONS",
-      headers: { origin, "access-control-request-method": "GET" },
+      headers: {
+        origin,
+        "access-control-request-method": "GET",
+        "access-control-request-headers": "authorization",
+      },
     });
     expect(preflight.status).toBe(204);
     expect(preflight.headers.get("access-control-allow-origin")).toBe("*");
     expect(preflight.headers.get("access-control-allow-methods")).toContain("GET");
+    // A page elsewhere may present a token (docs/specs/rest.md#authorization), never a cookie.
+    expect(preflight.headers.get("access-control-allow-headers")).toContain("authorization");
     expect(preflight.headers.get("access-control-max-age")).toBe("86400");
 
     const response = await h.request("/api/v1/featured", { headers: { origin } });
@@ -748,6 +754,7 @@ describe("from a page on another origin", () => {
     expect(response.headers.get("access-control-allow-origin")).toBe("*");
     expect(response.headers.get("access-control-allow-credentials")).toBeNull();
     expect(response.headers.get("access-control-expose-headers")).toContain("x-request-id");
+    expect(response.headers.get("access-control-expose-headers")).toContain("www-authenticate");
 
     // Only the API: nothing else on the server answers other origins.
     const probe = await h.request("/healthz", { headers: { origin } });

@@ -3,7 +3,7 @@
 - Status: **Draft.** Version 1 serves the web UI.
 - Response schemas live in `packages/core`; handlers live in `apps/server`. The web UI uses this API.
 
-The API shows a person what an agent gets from an address. Without a session it is anonymous, read-only and limited to public repositories; on a deployment where people sign in, a request that carries the session cookie of the deployment's own pages is answered for that person, private repositories they can see included ([permissions](permissions.md)), and a few routes under [People](#people) belong to whoever is signed in. It shares the index, canonical paths and reading rules of the [tools](tools.md). [ADR-0022](../adr/0022-repository-paths-and-progressive-skill-loading.md) explicitly changed the pre-alpha v1 path and skill contracts, and [ADR-0024](../adr/0024-skills-travel-through-the-mcp-skills-extension.md) records the last such replacement; from its surface on, changes are additive unless an ADR defines a breaking transition.
+The API shows a person what an agent gets from an address, and gives a program the same ([serving an agent from a program](#serving-an-agent-from-a-program)). Without a credential it is anonymous, read-only and limited to public repositories; on a deployment where people sign in, a request that carries the session cookie of the deployment's own pages, or a token of this deployment ([authorization](#authorization)), is answered for that person, private repositories they can see included ([permissions](permissions.md)), and a few routes under [People](#people) belong to whoever is signed in. It shares the index, canonical paths and reading rules of the [tools](tools.md). [ADR-0022](../adr/0022-repository-paths-and-progressive-skill-loading.md) explicitly changed the pre-alpha v1 path and skill contracts, and [ADR-0024](../adr/0024-skills-travel-through-the-mcp-skills-extension.md) records the last such replacement; from its surface on, changes are additive unless an ADR defines a breaking transition.
 
 ## Conventions
 
@@ -12,7 +12,7 @@ The API shows a person what an agent gets from an address. Without a session it 
 - Every content path is an actual repository-root path, including on sub-path connections. A skill's `path` ends in `SKILL.md`; its `directory` is the containing folder. Names do not identify skills.
 - Ordinary reads and listings remain inside the mount. Applicable ancestor rules may arrive through skill-context continuation without permitting arbitrary reads above the mount.
 - Responses use `cache-control: no-store` for now.
-- CORS allows `*` without credentials, answers `OPTIONS`, and exposes `x-request-id` and `retry-after`. Without credentials means another origin's page never sends the session cookie: only the deployment's own pages read what is a person's.
+- CORS allows `*` without credentials, answers `OPTIONS`, allows the `authorization` request header, and exposes `x-request-id`, `retry-after` and `www-authenticate`. Without credentials means another origin's page never sends the session cookie: only the deployment's own pages read what is a person's through it; a page elsewhere presents a token ([authorization](#authorization)).
 - Errors have `{ "error": { "code": "...", "message": "..." } }`.
 
 | Status | `code` | When |
@@ -34,6 +34,7 @@ The API shows a person what an agent gets from an address. Without a session it 
 | 400 | `owner.invalid` | The path after `/owners` is not `/gh/<owner>`. |
 | 404 | `owner.not_found` | The git host shows no account by that name. |
 | 401 | `auth.required` | The route is for whoever is signed in, and nobody is. |
+| 401 | `auth.invalid_token` | The token presented is no good at this address, which is not public ([authorization](#authorization)); `www-authenticate` names the address's protected resource metadata. |
 | 403 | `auth.forbidden_origin` | A request that changes something did not come from the deployment's own pages. |
 | 404 | `grant.not_found` | The person has no such grant. |
 | 400 | `oauth.*` | An authorization request that is malformed or has expired; the code after the dot is the OAuth error. |
@@ -43,6 +44,26 @@ The API shows a person what an agent gets from an address. Without a session it 
 Resolving an address starts indexing. REST never waits: endpoints needing the index answer `200` with `status: "indexing"`, or `status: "failed"` and `errorCode`, instead of their usual `status: "ready"` result. Failed indexing retries after backoff.
 
 Paged results identify their commit and return `nextCursor`, or `null` when the page is last. Cursors bind to the snapshot and reading-rule version, mount, operation and request parameters. They cannot be reused with another path or query. If a moving ref changes, restart from the first page; pin a full commit hash for a stable workflow. An index marked `truncated` is partial independently of pagination.
+
+## Authorization
+
+A public address needs no credential, and what is served does not depend on who asks ([permissions](permissions.md#the-model)). On a deployment where people sign in, the routes that read an address, `mounts`, `browse`, `find`, `skills` and `files`, answer for a person in one of two ways ([ADR-0052](../adr/0052-the-rest-api-takes-the-tokens-the-mcp-endpoint-takes.md)):
+
+- **A session**: the cookie of the deployment's own pages, which a browser sends by itself.
+- **A token of this deployment**, in the `authorization` header with the `Bearer` scheme: an access token a person's app received from the authorization server, good at the one canonical address it was issued for, ref and path included ([tokens](permissions.md#tokens)), or a repository token a person made for an agent with nobody to sign in, good at every address of that one repository ([repository tokens](permissions.md#tokens-for-agents-with-nobody-to-sign-in)). A token presented wins over a session sent with the same request. A header that is not a bearer credential is a credential that is no good.
+
+The answers are those of the MCP endpoint ([permissions](permissions.md#mcp-authorization-is-optional)), with one difference: a request without any credential for anything that is not public is `404` here, never a challenge. The REST API has no discovery step: a program that runs against it is given its token by a person, and the pages read `404` as a repository that may be private, and offer to sign in.
+
+| Request to an address | Answer |
+|---|---|
+| No credential, public repository | Served, as always. |
+| No credential, anything else | `404 mount.repo_not_found`. |
+| A valid token, a repository its person can see | Served, with `visibility: "private"`; the answer is that person's, and nothing between the server and the program may keep it. |
+| A valid token, anything else that is not public | `404 mount.repo_not_found`: a repository the person cannot see and a name that is nothing are the same. |
+| A token that is unknown, expired, revoked, malformed, issued for another address or made for another repository | At a public address: served, as to anyone. Anywhere else: `401 auth.invalid_token`, with the address's [challenge](permissions.md#the-challenge) in `www-authenticate` and `error="invalid_token"`, so that a program is told its credential is no good, and nothing else. |
+| A valid token whose person the git host no longer vouches for | The same `401`: the person signs in again and makes the token again. |
+
+Every request that reads something not public checks the person's access with the git host within the staleness bound, continuations and file reads included ([the permission check](permissions.md#the-permission-check)); a token says who made it, never what they may see. The routes under [People](#people) and the pages know a person by their session only: a token reads its repository and does nothing else as its person. On a deployment where nobody signs in, a token means nothing and anything not public is `404`.
 
 ## Endpoints
 
@@ -134,6 +155,22 @@ Media URLs are paths under `/media/`, named by the SHA-256 of the file: they nev
 
 A page of the deployment's own ([ADR-0029](../adr/0029-terms-and-privacy-pages-can-be-written-into-the-deployment.md)): `terms` or `privacy`, as the operator wrote it through the [admin API](../../deploy/README.md#the-admin-api). The document carries its `kind`, the `revised` date (`YYYY-MM-DD`, or `null`) and `texts` by language tag, each a `title` and a `body` in Markdown. `404` with `legal.not_found` for a page that has not been written, and for any other kind. The pages themselves are served at `/terms` and `/privacy`, rendered with the document.
 
+## Serving an agent from a program
+
+A program that gives an agent what MCP gives it, a console, a command-line tool, a job, reads the same index through these routes, with a token where the repository is not public ([authorization](#authorization)). The API carries data and no prose for a model: there are no connection instructions and no prompt here, and what an MCP client passes to its model ([tools](tools.md)) is for the program to say in its own words.
+
+| Over MCP | Over REST | What to give the agent |
+|---|---|---|
+| Connecting: the server's instructions and info | `GET /api/v1/mounts/<address>` | The pack's name and description (the manifest's, else the README summary, else the host's description), the mounted path and the commit, the counts, the folder overview and the diagnostics. The instructions MCP renders on connect are made from this overview, within 2,000 characters ([connection and prompt](tools.md#connection-and-prompt)). |
+| `browse_repo` | `GET /api/v1/browse/<address>?path=&cursor=&limit=` | The entries with their canonical paths, skill folders marked, counts, and the folder's `overview` to read on demand. |
+| `search_repo` | `GET /api/v1/find/<address>?query=&path=&cursor=&limit=` | The results in relevance order, a skill with its matching files folded under it, and `describedOnly` where a license keeps the content at its source. Words, not meaning, in the pack's language. |
+| `load_skill` | `GET /api/v1/skills/<address>?path=&cursor=` | The `ruleChain` from the repository root to the nearest manifest, then the `body`, then the included files, in that order and each labeled by its source, as [loading a skill](tools.md#loading-a-skill) lays them out. Follow `nextCursor` until `complete` before giving the agent the skill, never a page alone. A skill with `serving.full` false is described only: its name, description, license and `sourceUrl`, and nothing else. |
+| `read_repo_file` | `GET /api/v1/files/<address>?path=&offset=&limit=` | The text, continued at `nextOffset`; a directory listing for a folder; the `sourceUrl` of what cannot be carried. The source `SKILL.md` as written, never a skill load. |
+| The `use_skill` prompt | none | A convenience of MCP clients. A program starts loading a skill by its path. |
+| The skills extension: the listed skills, their digests, the assembled `SKILL.md` | none yet | A program that installs skills into an agent's own folder speaks MCP for it ([open questions](#open-questions)). |
+
+What the program tells the agent is what the tool descriptions tell a model ([inputs](tools.md#inputs), [indexing and trust](tools.md#indexing-and-trust)): content paths start at the repository root and are the only identifiers, a cursor continues one listing and is not reusable, every result names its commit and a moving ref may move between calls, and the content comes from the pack's author, under its license and with its provenance notice until the repository is vouched for. A program that holds a token sends it with every request, keeps it where passwords are kept and prints it nowhere; what it reads from a private repository is that person's for the staleness bound, so it shows it to that person's agent and keeps no copy beyond the request.
+
 ## People
 
 Present only on a deployment where people sign in ([permissions](permissions.md#signing-in)); elsewhere these paths are `404`. Signing in and out are navigations under `/auth/`, described there. Everything here is `no-store`.
@@ -186,3 +223,4 @@ The icon of the MCP server of an address ([tools](tools.md#connection-and-prompt
 
 - Pinned addresses could support immutable caching.
 - Rate limiting is left to the layer in front of the server, as for MCP.
+- The listed skills of the MCP skills extension, with their digests and the assembled `SKILL.md`, have no route here; a program that installs skills into an agent's own folder needs one.
