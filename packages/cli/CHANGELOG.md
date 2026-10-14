@@ -1,5 +1,11 @@
 # @skillcdn/cli
 
+## 0.1.4
+
+### Patch Changes
+
+- [`fb4bc97`](https://github.com/skillcdn/skillcdn/commit/fb4bc975187b502401ff326619ab90291533a6d2) Thanks [@samo-lucid](https://github.com/samo-lucid)! - The README and the package description call what the command checks a pack, as the SkillCDN Format now does: a git repository of skills, documents and rules, served whole. Nothing about the command changed.
+
 ## 0.1.3
 
 ### Patch Changes

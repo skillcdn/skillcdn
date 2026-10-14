@@ -1,6 +1,6 @@
 {
   "name": "@skillcdn/core",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "The contracts of SkillCDN: the address scheme, the skill-repo convention, tool and REST schemas, the types of an index, and the ports.",
   "license": "FSL-1.1-ALv2",
   "homepage": "https://skillcdn.ai",

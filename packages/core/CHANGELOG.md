@@ -1,5 +1,13 @@
 # @skillcdn/core
 
+## 0.2.1
+
+### Patch Changes
+
+- [`eb9e6a8`](https://github.com/skillcdn/skillcdn/commit/eb9e6a80712b417cdb5ce3372cf19e87e87ecaa3) Thanks [@samo-lucid](https://github.com/samo-lucid)! - A license text that quotes a permissive license is no longer read as that license. The Functional Source License and the Business Source License name the license they turn into later, and a permissive text with the Commons Clause added quotes the text it conditions; each is now read as the restrictive license it names itself. The Functional Source License is recognized by its text, as `FSL-1.1-ALv2` or `FSL-1.1-MIT` (and as a declared `license` field), and so is the Elastic License 2.0.
+
+- [`35e4ca0`](https://github.com/skillcdn/skillcdn/commit/35e4ca049b126a2b2e4eae572b8ecd83f0e26037) Thanks [@samo-lucid](https://github.com/samo-lucid)! - `DOCS_PAGE_PATH` names where a deployment's pages render the repository's own documentation (`/docs`), and a `SocialCard` may carry an empty `avatar` for a page that has no owner, where the site's symbol stands in its place.
+
 ## 0.2.0
 
 ### Minor Changes
