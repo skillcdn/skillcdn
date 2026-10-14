@@ -14,7 +14,7 @@ export const ko: Messages = {
       description:
         "ChatGPT, Claude 등 MCP로 연결되는 AI 앱에 스킬을 더하세요. 프롬프트를 몰라도, 내 말로 이야기하면 전문가의 손길이 닿은 결과물이 완성됩니다.",
       about:
-        "SkillCDN은 GitHub 저장소를 MCP 서버로 만들어, ChatGPT나 Claude 같은 AI 앱이 그 안의 스킬을 불러와 대화 속에서 따르게 합니다.",
+        "SkillCDN은 스킬과 문서를 담은 GitHub 저장소, 곧 팩을 MCP 서버로 ChatGPT나 Claude 같은 AI 앱에 제공해, 앱이 그 안의 스킬을 불러와 대화 속에서 따르게 합니다.",
     },
     explore: {
       title: "만들고 싶은 것 찾기 | SkillCDN",
@@ -112,10 +112,10 @@ export const ko: Messages = {
 
   docs: {
     title: "문서",
-    lead: "쓰던 AI에서 스킬 저장소를 쓰는 법, 직접 만드는 법, 그리고 그 둘을 뒷받침하는 규약.",
+    lead: "쓰던 AI에서 팩을 쓰는 법, 직접 만드는 법, 그리고 그 둘을 뒷받침하는 규약.",
     metaTitle: "문서 | SkillCDN",
     metaDescription:
-      "스킬 저장소를 쓰고 만드는 가이드와 SkillCDN이 구현하는 명세: 포맷, 주소, 에이전트가 MCP로 받는 것, REST API, 그리고 직접 운영하는 법.",
+      "팩을 쓰고 만드는 가이드와 SkillCDN이 구현하는 명세: 포맷, 주소, 에이전트가 MCP로 받는 것, REST API, 그리고 직접 운영하는 법.",
     pageTitle: (title: string) => `${title} · 문서 | SkillCDN`,
     sections: { guides: "가이드", reference: "레퍼런스", operate: "운영" },
     navLabel: "문서 목차",

@@ -1,8 +1,8 @@
-# Write a skill repository
+# Write a pack
 
-A skill repository is a git repository with a `SKILL.md` for each skill. Push it to GitHub, and its address serves the skills to any AI app that connects: `https://skillcdn.ai/gh/<owner>/<repo>`, or the same path on a deployment of your own. The layout is the [Agent Skills](https://agentskills.io/specification) layout, so a folder of skills that already works elsewhere works here unchanged; [the SkillCDN Format](../specs/skill-repo.md) is that layout plus a few conventions that make a repository useful to an agent, and it is the reference for every rule this page mentions.
+A pack is a git repository with a `SKILL.md` for each skill, and the documents and rules beside them. Push it to GitHub, and its address serves the pack to any AI app that connects: `https://skillcdn.ai/gh/<owner>/<repo>`, or the same path on a deployment of your own. The layout is the [Agent Skills](https://agentskills.io/specification) layout, so a folder of skills that already works elsewhere works here unchanged; [the SkillCDN Format](../specs/skill-repo.md) is that layout plus a few conventions that make a pack useful to an agent, and it is the reference for every rule this page mentions.
 
-## The smallest repository
+## The smallest pack
 
 ```
 my-skills/
@@ -79,30 +79,30 @@ Everything an agent must read is Markdown or small JSON. Other files are listed 
 
 ## Documents and shared rules
 
-A repository can serve plain documents next to its skills: Markdown files under `docs/` are listed, searched and read without a skill around them, and a skill can link to them. A page that several skills need on every run, what they all know about one tool for instance, lives once under `docs/` and is included by each skill with a root-relative path, `/docs/<tool>/models.md` ([shared pages](../specs/skill-repo.md#shared-pages)).
+A pack can serve plain documents next to its skills: Markdown files under `docs/` are listed, searched and read without a skill around them, and a skill can link to them. A page that several skills need on every run, what they all know about one tool for instance, lives once under `docs/` and is included by each skill with a root-relative path, `/docs/<tool>/models.md` ([shared pages](../specs/skill-repo.md#shared-pages)).
 
-Rules that hold for every skill go in `SKILLCDN.md` at the repository root. Its front-matter names and describes the repository, and its body is delivered to the agent with every skill:
+Rules that hold for every skill go in `SKILLCDN.md` at the repository root. Its front-matter names and describes the pack, and its body is delivered to the agent with every skill:
 
 ```markdown
 ---
-name: Acme skills
-description: Skills for Acme's marketing and product teams. Use to write, review and publish in the house style.
+name: Acme pack
+description: The pack of Acme's marketing and product teams. Use to write, review and publish in the house style.
 documents:
   - docs
 license: MIT
 ---
-# Rules for every skill in this repository
+# Rules for every skill in this pack
 
 **Ask only what cannot be derived.** A skill asks for the inputs it cannot get from the request, in one short message.
 
 **Spend only with consent.** Anything that costs the user money or credits is estimated first and started only after they agree.
 ```
 
-A larger repository puts one folder per area of work, each with a `SKILLCDN.md` that says who its skills are for and adds the area's rules; connect the root for everything, or an area's folder for that area alone ([the repository manifest](../specs/skill-repo.md#the-repository-manifest-skillcdnmd)). A manifest is optional: a repository with nothing to add needs none.
+A larger pack puts one folder per area of work, each with a `SKILLCDN.md` that says who its skills are for and adds the area's rules; connect the root for everything, or an area's folder for that area alone ([the repository manifest](../specs/skill-repo.md#the-repository-manifest-skillcdnmd)). A manifest is optional: a pack with nothing to add needs none.
 
 ## A license
 
-Put a license file at the repository root. What a deployment may pass on follows the license it finds: a permissive license (MIT, Apache-2.0, CC-BY-4.0 and the like) is served whole with its notice; a restrictive one, or a text the reader does not recognize, keeps the content at the source and the skill is only described; a repository without a license is served with a notice and is never featured ([licenses](../specs/skill-repo.md#licenses)). A skill may carry a license of its own, as a file in its directory or a `license` field.
+Put a license file at the repository root. What a deployment may pass on follows the license it finds: a permissive license (MIT, Apache-2.0, CC-BY-4.0 and the like) is served whole with its notice; a restrictive one, or a text the reader does not recognize, keeps the content at the source and the skill is only described; a pack without a license is served with a notice and is never featured ([licenses](../specs/skill-repo.md#licenses)). A skill may carry a license of its own, as a file in its directory or a `license` field.
 
 ## Check it before you push
 
@@ -132,4 +132,4 @@ Push to a public repository on GitHub and open its page: `https://skillcdn.ai/gh
 
 - **Tags for versions.** An address with a tag, `@v1.2.0`, serves exactly what was reviewed; recommend one to people who need their results to stay the same ([addresses](../specs/address.md)).
 
-The reference repository, [skillcdn/skills](https://github.com/skillcdn/skills), is written in the format and kept working; read it for a repository with areas, shared pages and translations in use.
+The reference pack, [skillcdn/skills](https://github.com/skillcdn/skills), is written in the format and kept working; read it for a pack with areas, shared pages and translations in use.

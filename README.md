@@ -19,7 +19,7 @@
 
 > **Status: pre-alpha.** This README describes what we are building. [docs/roadmap.md](docs/roadmap.md) says what exists today. Nothing here is a commitment to a public API yet.
 
-Point an agent at `skillcdn.ai/gh/<owner>/<repo>` and it gets the skills, playbooks and documents in that repo as tools. No hosting, no packaging, no publish step: the repo *is* the skill.
+A git repository that holds skills, playbooks and documents is a **pack**: an organization's, a brand's or a person's. Point an agent at `skillcdn.ai/gh/<owner>/<repo>` and it gets the whole pack as tools. No hosting, no packaging, no publish step: the repo *is* the pack.
 
 ```
 skillcdn.ai/gh/<owner>/<repo>                    default branch, latest
@@ -69,11 +69,11 @@ Every account has a page at `skillcdn.ai/gh/<owner>` with its public repositorie
 | `intake` | *(later)* walk a non-expert through the questions a skill declares |
 | `describe` / `run` | *(later)* composed tools declared in Markdown or YAML |
 
-One `use_skill(path)` prompt starts loading a skill. The server introduces the repository and its folders when an agent connects; browsing and search provide the rest. Names are display metadata, and every content path keeps its actual spelling from the repository root.
+One `use_skill(path)` prompt starts loading a skill. The server introduces the pack and its folders when an agent connects; browsing and search provide the rest. Names are display metadata, and every content path keeps its actual spelling from the repository root.
 
 An agent whose host implements the [MCP skills extension](docs/specs/tools.md#the-skills-extension) receives the same skills as skills: listed with a digest for every file, and each `SKILL.md` served as a plain Agent Skills document with its inherited rules and required files inside it, under `skill://gh/<owner>/<repo>/<path>`.
 
-Connect the repository root by default, so one connection reaches skills for different tasks and their shared Markdown references. Sub-path connections remain available when a narrower scope is wanted. Optional `SKILLCDN.md` files describe folders, add common rules and explicitly exclude files or subtrees; nested rules arrive with each skill in order. Repositories without those manifests still work through their real folder structure and optional README introductions. Discovery stays brief; agents load instructions and references only when needed.
+Connect the pack's root by default, so one connection reaches skills for different tasks and their shared Markdown references. Sub-path connections remain available when a narrower scope is wanted. Optional `SKILLCDN.md` files describe folders, add common rules and explicitly exclude files or subtrees; nested rules arrive with each skill in order. Repositories without those manifests still work through their real folder structure and optional README introductions. Discovery stays brief; agents load instructions and references only when needed.
 
 The repo declares things; it never ships code that we execute. This is a deliberate security boundary: SkillCDN runs no third-party code, on the server or on the user's machine.
 
@@ -81,7 +81,7 @@ The repo declares things; it never ships code that we execute. This is a deliber
 
 SkillCDN reads, indexes and serves what a repository publishes, keeps copies only to serve them, and takes them down on request. The license a skill carries decides whether its content is passed on or only described with a link to its source: permissive licenses are served with their notice, restrictive ones are described unless the repository is verified, and a repository without a license is served with its provenance and never featured ([licenses](docs/specs/skill-repo.md#licenses)). Where to send a takedown request is part of each deployment's own pages.
 
-Specifications: [address scheme](docs/specs/address.md) · [skill-repo convention](docs/specs/skill-repo.md) · [tools](docs/specs/tools.md) · [people and private repositories](docs/specs/permissions.md).
+Specifications: [address scheme](docs/specs/address.md) · [the SkillCDN Format: what a pack is](docs/specs/skill-repo.md) · [tools](docs/specs/tools.md) · [REST API](docs/specs/rest.md) · [people and private repositories](docs/specs/permissions.md).
 
 ## Architecture
 
@@ -106,7 +106,7 @@ apps/
   server/     the single deployable; roles: api | worker | migrate | check     Hono + MCP SDK
   web/        optional web UI: landing page and explorer              Vite + React
 packages/
-  core/       address parser, skill-repo convention, permission rules, tool contracts, ports   pure TS
+  core/       address parser, the SkillCDN Format, permission rules, tool and REST contracts, ports   pure TS
   db/         schema, migrations, query layer                           Drizzle + PostgreSQL
   github/     GitHub App, user-token and contents adapter               implements the git-host port
   indexer/    the reading rules: a commit or a working tree read into an index   Node.js, no database
@@ -126,7 +126,7 @@ On npm, under the `@skillcdn` scope, each with its own version and changelog ([A
 | [`@skillcdn/core`](https://www.npmjs.com/package/@skillcdn/core) | [![npm](https://img.shields.io/npm/v/@skillcdn/core)](https://www.npmjs.com/package/@skillcdn/core) | the contracts: addresses, the convention, tool and REST schemas, the ports |
 | [`@skillcdn/brand`](https://www.npmjs.com/package/@skillcdn/brand) | [![npm](https://img.shields.io/npm/v/@skillcdn/brand)](https://www.npmjs.com/package/@skillcdn/brand) | the pictures of the brand as files, for the places the [trademark policy](TRADEMARKS.md) allows; not open source ([ADR-0048](docs/adr/0048-the-brand-files-are-a-package-of-their-own-under-the-trademark-policy.md)) |
 
-**Related repositories.** [`skillcdn/skills`](https://github.com/skillcdn/skills) is the reference skill repository, the one the explorer offers to try. [`skillcdn/console`](https://github.com/skillcdn/console) is the reference console: where an organization runs its work with AI agents, a board of the work, the agents at it, and the decisions that wait for a person. Like the skills repository, it is an example that follows the standard and is meant for real use, packaged on npm so that anyone can start from it; it builds on the published packages and the REST API like any other consumer, defines nothing of the specification, and nothing here depends on it ([ADR-0047](docs/adr/0047-the-console-is-a-separate-repository-built-on-the-published-packages.md)).
+**Related repositories.** [`skillcdn/skills`](https://github.com/skillcdn/skills) is the reference pack, the one the explorer offers to try. [`skillcdn/console`](https://github.com/skillcdn/console) is the reference console: where an organization runs its work with AI agents, a board of the work, the agents at it, and the decisions that wait for a person. Like the reference pack, it is an example that follows the standard and is meant for real use, packaged on npm so that anyone can start from it; it builds on the published packages and the REST API like any other consumer, defines nothing of the specification, and nothing here depends on it ([ADR-0047](docs/adr/0047-the-console-is-a-separate-repository-built-on-the-published-packages.md)).
 
 
 | | hosted (skillcdn.ai) | self-hosted / air-gapped |

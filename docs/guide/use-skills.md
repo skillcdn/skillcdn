@@ -1,11 +1,11 @@
 # Use skills from your AI
 
-A skill is a set of instructions an AI app follows to do one kind of work well: write release notes in the house style, turn a product picture into a short ad, review a change for the things a linter cannot see. SkillCDN serves the skills of a git repository to the AI you already use, through one address. This page is for the person using the skills; writing them is [its own page](write-a-repository.md).
+A skill is a set of instructions an AI app follows to do one kind of work well: write release notes in the house style, turn a product picture into a short ad, review a change for the things a linter cannot see. A git repository that holds skills is a pack, and SkillCDN serves the pack to the AI you already use, through one address. This page is for the person using the skills; writing them is [its own page](write-a-repository.md).
 
 ## What you need
 
 - An AI app that connects to MCP servers. ChatGPT, Claude, Cursor, VS Code, Claude Code, Codex CLI and Gemini CLI all do, and so does any other MCP client.
-- The address of a skill repository. The explorer of a deployment lists some to start with, and every public GitHub repository that holds skills has one: `https://skillcdn.ai/gh/<owner>/<repo>` on the hosted service, or the same path on a deployment of your own.
+- The address of a pack. The explorer of a deployment lists some to start with, and every public GitHub repository that holds skills has one: `https://skillcdn.ai/gh/<owner>/<repo>` on the hosted service, or the same path on a deployment of your own.
 
 ## Connect a repository
 
@@ -17,7 +17,7 @@ The address is the whole setup. There is nothing to install, and the app reads t
 
 ## What your AI gets
 
-An app that connects to an address receives four read-only tools: one to browse the folders, one to search the skills and documents by their words, one to load a skill, and one to read a file. An app that implements the MCP skills extension receives the skills themselves, each as a complete document with the rules of the repository inside it. Either way the agent finds a skill by its description, loads it, follows its workflow and reads the files it points to when a step needs them. [What an agent gets over MCP](../specs/tools.md) describes the tools, and [the format](../specs/skill-repo.md) what a repository can say.
+An app that connects to an address receives four read-only tools: one to browse the folders, one to search the skills and documents by their words, one to load a skill, and one to read a file. An app that implements the MCP skills extension receives the skills themselves, each as a complete document with the rules of the pack inside it. Either way the agent finds a skill by its description, loads it, follows its workflow and reads the files it points to when a step needs them. [What an agent gets over MCP](../specs/tools.md) describes the tools, and [the format](../specs/skill-repo.md) what a pack can say.
 
 A few things to know as you use them:
 

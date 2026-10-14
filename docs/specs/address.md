@@ -3,7 +3,7 @@
 - Status: **Draft.** The grammar has not changed since milestone 1 and becomes normative with the surface of [ADR-0024](../adr/0024-skills-travel-through-the-mcp-skills-extension.md); the open questions below remain open. What a ref may resolve to is decided in [ADR-0039](../adr/0039-an-address-serves-only-what-is-the-repositorys-own.md).
 - Implemented by: `packages/core` (`parseAddress`, `formatAddress`). Nothing else parses addresses.
 
-An address identifies what an agent mounts. It is the path of the MCP endpoint URL, so the whole onboarding is one URL.
+An address identifies the pack an agent mounts: a repository, or a folder of it, at a ref ([the format](skill-repo.md)). It is the path of the MCP endpoint URL, so the whole onboarding is one URL.
 
 ```
 https://<service-host>/<git-host>/<owner>/<repo>[@<ref>][/<path>]

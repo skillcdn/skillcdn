@@ -2,7 +2,7 @@
   <a href="https://skillcdn.ai"><img alt="SkillCDN" src="https://raw.githubusercontent.com/skillcdn/skillcdn/main/packages/brand/symbol.svg" width="72"></a>
 </p>
 <h1 align="center">@skillcdn/cli</h1>
-<p align="center">The <code>skillcdn</code> command: check a skill repository before pushing, as SkillCDN would index it.</p>
+<p align="center">The <code>skillcdn</code> command: check a pack before pushing, as SkillCDN would index it.</p>
 <p align="center">
   <a href="https://www.npmjs.com/package/@skillcdn/cli"><img alt="npm" src="https://img.shields.io/npm/v/@skillcdn/cli"></a>
   <a href="https://www.npmjs.com/package/@skillcdn/cli"><img alt="node" src="https://img.shields.io/node/v/@skillcdn/cli"></a>
@@ -10,7 +10,7 @@
   <a href="https://github.com/skillcdn/skillcdn/blob/main/LICENSE.md"><img alt="License: FSL-1.1-ALv2" src="https://img.shields.io/badge/license-FSL--1.1--ALv2-3a6dd4"></a>
 </p>
 
-The `skillcdn` command. It does one thing for now: `skillcdn check` reads a directory as [SkillCDN](https://skillcdn.ai) would index it and prints what an agent would get, so that the author of a skill repository sees it before pushing.
+The `skillcdn` command. It does one thing for now: `skillcdn check` reads a directory as [SkillCDN](https://skillcdn.ai) would index it and prints what an agent would get, so that the author of a pack sees it before pushing.
 
 ```sh
 npx @skillcdn/cli check                      # the current directory
@@ -31,6 +31,6 @@ Exit codes: `0` when there are no index diagnostics, `1` when there are, `2` whe
 
 Nothing in the directory is executed. `.git`, `node_modules` and symbolic links are left out. It reads a working directory rather than a commit, so untracked or ignored files can make its report differ from what is pushed.
 
-The limits a deployment applies can be set through the environment (`INDEX_MAX_FILES`, `INDEX_MAX_FILE_BYTES`, `READ_MAX_FILE_BYTES`, and the others listed in [the deployment contract](https://github.com/skillcdn/skillcdn/blob/main/deploy/README.md#environment-contract)). The rules themselves are [`@skillcdn/indexer`](https://www.npmjs.com/package/@skillcdn/indexer), and the repository format is specified in [skill-repo.md](https://github.com/skillcdn/skillcdn/blob/main/docs/specs/skill-repo.md).
+The limits a deployment applies can be set through the environment (`INDEX_MAX_FILES`, `INDEX_MAX_FILE_BYTES`, `READ_MAX_FILE_BYTES`, and the others listed in [the deployment contract](https://github.com/skillcdn/skillcdn/blob/main/deploy/README.md#environment-contract)). The rules themselves are [`@skillcdn/indexer`](https://www.npmjs.com/package/@skillcdn/indexer), and what a pack is, the SkillCDN Format, is specified in [skill-repo.md](https://github.com/skillcdn/skillcdn/blob/main/docs/specs/skill-repo.md).
 
 Node.js 24 or newer.

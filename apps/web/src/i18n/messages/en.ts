@@ -14,7 +14,7 @@ export const en = {
         "Give ChatGPT, Claude or any AI app that connects over MCP a ready-made skill. Say what you want in your own words and get results with a professional finish, no prompt engineering needed.",
       /** What SkillCDN is, in one plain sentence, for readers that are machines. */
       about:
-        "SkillCDN turns a GitHub repository into an MCP server, so that an AI app such as ChatGPT or Claude can load the skills it holds and follow them in a conversation.",
+        "SkillCDN serves a pack, a GitHub repository of skills and documents, to an AI app such as ChatGPT or Claude as an MCP server, so that the app can load the skills it holds and follow them in a conversation.",
     },
     explore: {
       title: "Find your next creation | SkillCDN",
@@ -124,10 +124,10 @@ export const en = {
   /** The documentation (ADR-0049): the frame around pages written in English. */
   docs: {
     title: "Documentation",
-    lead: "How to use a skill repository from the AI you already have, how to write one, and the contracts behind both.",
+    lead: "How to use a pack from the AI you already have, how to write one, and the contracts behind both.",
     metaTitle: "Documentation | SkillCDN",
     metaDescription:
-      "Guides for using and writing skill repositories, and the specifications SkillCDN implements: the format, addresses, what an agent gets over MCP, the REST API, and how to run a deployment of your own.",
+      "Guides for using and writing packs, and the specifications SkillCDN implements: the format, addresses, what an agent gets over MCP, the REST API, and how to run a deployment of your own.",
     pageTitle: (title: string) => `${title} · Docs | SkillCDN`,
     /** The sections of docs/nav.json, by id. A test keeps the two lists equal. */
     sections: { guides: "Guides", reference: "Reference", operate: "Operate" },

@@ -1,18 +1,20 @@
 # Spec: the SkillCDN Format
 
 - Status: **Draft.**
-- Implemented by: `packages/core` (`parseSkillManifest`, `parseRepoManifest`, `classifyRepoFile`, `isServedPath`, `summarizeMarkdown`). Fixtures live in [`apps/server/fixtures/.repositories/`](../../apps/server/fixtures/.repositories/); the reference repository, written in the format and served live, is `skillcdn/skills`.
+- Implemented by: `packages/core` (`parseSkillManifest`, `parseRepoManifest`, `classifyRepoFile`, `isServedPath`, `summarizeMarkdown`). Fixtures live in [`apps/server/fixtures/.repositories/`](../../apps/server/fixtures/.repositories/); the reference pack, written in the format and served live, is `skillcdn/skills`.
 
-How SkillCDN reads a repository, and how a repository is written so that an agent uses it well. The layout is the [Agent Skills](https://agentskills.io/specification) layout: a repository that already works as a skills folder works here unchanged. That layout, together with the conventions that grow around it (what sits next to `SKILL.md`, what the repository root says, how plain documents are written), is the **SkillCDN Format**. This file is its specification; user documentation will be rendered from it.
+A **pack** is what SkillCDN serves as one unit: a git repository, or a folder of one, that holds skills, the documents beside them (a team's playbooks, references and guides) and the rules that hold for all of them. An organization has its pack, and so can a brand or a person; one address serves one pack, and an agent that connects receives the whole of it. The word names the unit, not a file or a field: a pack is written as the files below, and nothing in it is called a pack.
+
+This specification says how SkillCDN reads a pack, and how one is written so that an agent uses it well. The layout is the [Agent Skills](https://agentskills.io/specification) layout: a repository that already works as a skills folder works here unchanged. That layout, together with the conventions that grow around it (what sits next to `SKILL.md`, what the repository root says, how plain documents are written), is the **SkillCDN Format**. User documentation is rendered from this file.
 
 ```
 repo/
-  SKILLCDN.md               the repository manifest: name, description, which directories hold
-                            documents, and the rules that hold for every skill
+  SKILLCDN.md               the repository manifest: the pack's name, description, which directories
+                            hold documents, and the rules that hold for every skill
   README.md                 optional introduction, summarized for discovery and read on demand
-  SKILL.md                  a single-skill repo, or
+  SKILL.md                  a pack of one skill, or
   skills/
-    <name>/SKILL.md         a multi-skill repo; front-matter carries name, description, ...
+    <name>/SKILL.md         a pack of several skills; front-matter carries name, description, ...
     <name>/references/      documents the body points to
     <name>/assets/          small data files the skill reads
     <name>/scripts/         optional helpers; served as text, never run
@@ -28,13 +30,13 @@ repo/
 
 ## Reading rules
 
-What the indexer does with a repository. These hold for every repository, whether or not it follows the rest of the format.
+What the indexer does with a repository. These hold for every pack, whether or not it follows the rest of the format.
 
 - **A skill is a directory that holds a valid file named exactly `SKILL.md`**, at any depth, including under hidden ancestors. The exact file declares the skill; no repository-specific folder names or allowlists are needed. A file belongs to the nearest skill directory above it, so a nested skill owns its own files. A root `SKILL.md` declares a root skill without suppressing nested skills.
 - `SKILL.md` is YAML front-matter followed by a Markdown body. Everything else in the skill directory is a supporting file the body may point to.
 - **Documents are discovered in `docs`**, at the repository root or next to the nearest governing manifest; a manifest can declare different directories ([the repository manifest](#the-repository-manifest-skillcdnmd)). These are bulk discovery roots, not a denylist. Linked Markdown files outside them can also be read ([references](#markdown-references)).
 - **READMEs introduce visible folders.** The repository root and folders already exposed through skills or documents can supply an optional README overview, even without `SKILLCDN.md`. Discovery carries a short summary and canonical path; the full text is read only when needed. Overview eligibility alone does not add a searchable document or increase document counts ([introductions](#readme-introductions)).
-- A repository without any skill still works as a document endpoint through `browse_repo`, `search_repo` and `read_repo_file`.
+- A pack without any skill still works as a document endpoint through `browse_repo`, `search_repo` and `read_repo_file`.
 - **Hidden paths require a declaration.** A valid `SKILL.md` declares its skill even under hidden ancestors. Ordinary supporting descendants are eligible, but additional hidden children require `skillcdn.include`, an explicit document-directory declaration or a Markdown link. A file link exposes that file, never its siblings. Unrelated hidden files remain excluded.
 - **Explicit exclusions take precedence.** A manifest's `exclude` removes the named files or subtrees from every discovery and reading route, including valid skills, README overviews, includes and references. Descendant declarations cannot reopen excluded paths ([exclusions](#excluding-files-and-subtrees)).
 - **Folders retain their real paths.** `browse_repo` shows the same hierarchy whether or not manifests exist. A `SKILLCDN.md` adds metadata and rules to its folder. A skill belongs directly to the nearest manifest folder; ancestor counts include descendants without duplicating their identities.
@@ -87,15 +89,15 @@ The reading rules say what is served. The format says how to make it useful: an 
 
 ### Required
 
-A repository is in the SkillCDN Format when all of these hold. They are what the explorer checks and what the reference repository's own check enforces.
+A pack is in the SkillCDN Format when all of these hold. They are what the explorer checks and what the reference pack's own check enforces.
 
 1. **Every skill directory has a `SKILL.md`** whose front-matter passes the table above, whose `name` follows the naming convention and equals the directory name, and whose body starts with a level-one heading.
 2. **The `description` says what the skill does and when to use it**, in the words a user would say. It is what `search_repo` ranks first. Say when another skill is a better choice when their purposes overlap.
 3. **References make dependencies explicit.** Use Markdown links for repository files needed by the workflow. Shared `.md` references outside the skill work through a repository-root connection. A sub-path connection cannot read references outside its mount; keep a skill self-contained when it must also work alone, and include a shared page every run needs, so that it travels with the skill ([shared pages](#shared-pages)).
 4. **Everything an agent must read is Markdown or small JSON.** Other files are listed and readable, never searched; rendered media and binaries are not part of a skill.
 5. **Nothing has to run.** A skill works from its `SKILL.md` and the documents it points to. Scripts may be shipped as help for agents that run locally, and are served as text.
-6. **Shared rules have a `SKILLCDN.md` at their scope.** A root manifest states repository-wide rules; nested manifests add rules for their descendants. A manifest is optional when the repository needs no extra metadata, rules, document roots or exclusions. README introductions are available separately and do not become shared rules.
-7. **No secrets, no private hostnames, no real people's identity or likeness**, in any file. The repository is served to whoever holds the address.
+6. **Shared rules have a `SKILLCDN.md` at their scope.** A root manifest states the rules of the whole pack; nested manifests add rules for their descendants. A manifest is optional when the repository needs no extra metadata, rules, document roots or exclusions. README introductions are available separately and do not become shared rules.
+7. **No secrets, no private hostnames, no real people's identity or likeness**, in any file. The pack is served to whoever holds the address.
 
 ### Recommended
 
@@ -146,14 +148,14 @@ A file named exactly `SKILLCDN.md` supplies metadata for its folder and a Markdo
 ```markdown
 ---
 name: SkillCDN skills
-description: Skills for everyday work, one folder per area (marketing, product, engineering, and more as they are added), served live through SkillCDN. Use to run a skill that drives a tool for a task in one of these areas, or to see how a skill repository in the SkillCDN Format is written.
+description: Skills for everyday work, one folder per area (marketing, product, engineering, and more as they are added), served live through SkillCDN. Use to run a skill that drives a tool for a task in one of these areas, or to see how a pack in the SkillCDN Format is written.
 documents:
   - docs
 language: en
 translations:
   ko:
     name: SkillCDN 스킬
-    description: 업무 분야별 폴더(마케팅, 기획, 개발, 그리고 앞으로 추가될 분야)로 정리된 일상 업무용 스킬 모음입니다. SkillCDN을 통해 실시간으로 제공됩니다. 각 분야의 도구를 다루는 스킬을 실행하거나, SkillCDN 포맷의 스킬 저장소가 어떻게 쓰이는지 볼 때 쓰세요.
+    description: 업무 분야별 폴더(마케팅, 기획, 개발, 그리고 앞으로 추가될 분야)로 정리된 일상 업무용 스킬 모음입니다. SkillCDN을 통해 실시간으로 제공됩니다. 각 분야의 도구를 다루는 스킬을 실행하거나, SkillCDN 포맷의 팩이 어떻게 쓰이는지 볼 때 쓰세요.
 license: MIT
 metadata:
   author: skillcdn

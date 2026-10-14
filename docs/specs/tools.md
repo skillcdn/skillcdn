@@ -3,7 +3,7 @@
 - Status: **Draft.**
 - Contracts (names, descriptions, input schemas, result shapes and text rendering) live in `packages/core`; handlers live in `apps/server`.
 
-A mounted address exposes four read-only, idempotent tools, and serves its skills through the MCP skills extension ([the skills extension](#the-skills-extension)). The tools are the discovery layer, and the whole surface for a host without the extension; the extension is how a host that understands skills receives them ([ADR-0024](../adr/0024-skills-travel-through-the-mcp-skills-extension.md)). Actual folders organize discovery; names are labels, and exact repository-root paths identify content. The tool names say what they act on, so that they do not collide with a host's own.
+A mounted address serves a pack ([the format](skill-repo.md)) through four read-only, idempotent tools, and its skills through the MCP skills extension ([the skills extension](#the-skills-extension)). The tools are the discovery layer, and the whole surface for a host without the extension; the extension is how a host that understands skills receives them ([ADR-0024](../adr/0024-skills-travel-through-the-mcp-skills-extension.md)). Actual folders organize discovery; names are labels, and exact repository-root paths identify content. The tool names say what they act on, so that they do not collide with a host's own.
 
 ## Inputs
 
@@ -86,7 +86,7 @@ A public address needs no credential, and a client that knows nothing about auth
 
 ## Connection and prompt
 
-Connection instructions introduce the repository and mounted scope, give counts and a bounded overview of the folders that hold something discoverable, explain `browse_repo`, `search_repo`, `load_skill` and `read_repo_file`, and name the prefix under which the skills extension serves the same skills. A brief manifest introduction, README summary or git-host description supplies orientation; an available README is named by path rather than included in full. Instructions stay within 2,000 characters and point to browsing for the rest. They report indexing or manifest diagnostics instead of implying an incomplete catalog is complete. A missing optional manifest is not itself a warning.
+Connection instructions introduce the pack and the mounted scope, give counts and a bounded overview of the folders that hold something discoverable, explain `browse_repo`, `search_repo`, `load_skill` and `read_repo_file`, and name the prefix under which the skills extension serves the same skills. A brief manifest introduction, README summary or git-host description supplies orientation; an available README is named by path rather than included in full. Instructions stay within 2,000 characters and point to browsing for the rest. They report indexing or manifest diagnostics instead of implying an incomplete catalog is complete. A missing optional manifest is not itself a warning.
 
 The server info carries the manifest's name and description when available, otherwise the address with a README or host description, and links to the address page. It names one icon, the owner's picture at 128 pixels square, at `/icon/<address>` on the deployment's own origin ([REST](rest.md#get-iconaddress)): a client fetches a server's icon from that origin and from nowhere else, so the git host's copy is served on rather than named. The description of `browse_repo` also explains discovery for clients that do not show server instructions.
 

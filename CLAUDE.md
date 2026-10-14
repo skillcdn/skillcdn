@@ -6,7 +6,7 @@ Subdirectories carry their own `CLAUDE.md` with rules for that subtree; read the
 
 ## Project
 
-SkillCDN turns any git repository into an MCP server: an agent connects to `skillcdn.ai/gh/<owner>/<repo>[@ref][/path]` and gets the skills and documents in that repo through a small set of meta tools. Git is the source of truth; we index and serve, never host content.
+SkillCDN turns any git repository into an MCP server: a repository that holds skills and documents is a pack, and an agent that connects to `skillcdn.ai/gh/<owner>/<repo>[@ref][/path]` gets that pack through a small set of meta tools. Git is the source of truth; we index and serve, never host content.
 
 - **Status:** pre-alpha. [docs/roadmap.md](docs/roadmap.md) says what exists and what is next.
 - **Shape:** TypeScript monorepo (pnpm + Turborepo), one server image with several roles, PostgreSQL as the only stateful dependency. See [docs/architecture.md](docs/architecture.md).
@@ -45,12 +45,12 @@ packages/
   indexer/    the reading rules: a commit or a working tree read into an index   @skillcdn/indexer on npm
   cli/        the skillcdn command for repository authors: skillcdn check        @skillcdn/cli on npm
   brand/      the pictures of the brand as files, under the trademark policy; no code   @skillcdn/brand on npm
-apps/server/fixtures/.repositories/  test-only repository fixtures; the public reference repository is skillcdn/skills
+apps/server/fixtures/.repositories/  test-only repository fixtures; the public reference pack is skillcdn/skills
 deploy/       Dockerfile, compose files, the contract for whoever operates the image
 docs/         architecture, specs, ADRs, roadmap, user guides; nav.json lists what the pages publish under /docs
 ```
 
-Two reference repositories sit beside this one and are never imported from it: `skillcdn/skills`, the reference skill repository, and `skillcdn/console`, the reference console for an organization that runs its work with agents. Both are examples that follow the standard and are meant for real use; the console consumes the published packages and the REST API like any other consumer and defines nothing of the specification ([ADR-0047](docs/adr/0047-the-console-is-a-separate-repository-built-on-the-published-packages.md)).
+Two reference repositories sit beside this one and are never imported from it: `skillcdn/skills`, the reference pack, and `skillcdn/console`, the reference console for an organization that runs its work with agents. Both are examples that follow the standard and are meant for real use; the console consumes the published packages and the REST API like any other consumer and defines nothing of the specification ([ADR-0047](docs/adr/0047-the-console-is-a-separate-repository-built-on-the-published-packages.md)).
 
 Dependencies point inward only: `server → db, github, indexer → core`, `cli → indexer`, and `web → core, brand`. `core` imports nothing from the workspace and nothing from Node; `brand` is files and imports nothing. `web` may import `core` and `brand` and nothing else. A package can only import what its own `package.json` declares, and only from another package's entry point (never `@skillcdn/x/src/...`). Changing these edges needs an ADR.
 
