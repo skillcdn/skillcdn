@@ -78,7 +78,7 @@ Packages compile to `dist/` and consume each other's compiled output. Going thro
 
 ## Workflow
 
-**Bound to a console?** When `.skillcdn-console.json` is in this checkout, or `console whoami` names a project, the work goes through that SkillCDN console's board: take the task, report, ask there when a person must decide, finish, and push only after the decision on its board (`console help` says how). Otherwise, as below.
+**Bound to a console?** When `.skillcdn-console.json` is in this checkout, or `console whoami` names a project, work the task through that SkillCDN console (`console help` says how).
 
 **Before you start.** Read the nearest `CLAUDE.md` and the package `README.md`. Check [docs/roadmap.md](docs/roadmap.md) for the current milestone, [docs/specs/](docs/specs/) for the contract you are implementing, and [docs/adr/](docs/adr/) before questioning a past decision. If a product decision is missing, do not guess: add it to the spec's open questions or ask.
 
@@ -97,7 +97,7 @@ Packages compile to `dist/` and consume each other's compiled output. Going thro
 
 - [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): summary`, imperative, 72 characters or fewer. Types: `feat fix docs refactor test perf build ci chore revert`. Scopes: `core db github server web deploy docs repo`. The body says why. Breaking changes use `!` and a `BREAKING CHANGE:` footer.
 - One logical change per commit, and every commit passes `pnpm check`.
-- **For now, maintainers commit and push directly to `main`**, in a checkout bound to a console after the decision on its board. There is no pull-request gate and no branch protection yet; a pull-request flow comes later. Do not create branches or open pull requests unless asked. Nothing stands between a push and `main`, so the discipline is yours: run `pnpm check` first, `git pull --rebase` before pushing, keep commits small, and treat a red CI run on `main` as the first thing to fix.
+- **For now, maintainers commit and push directly to `main`.** There is no pull-request gate and no branch protection yet; a pull-request flow comes later. Do not create branches or open pull requests unless asked. Nothing stands between a push and `main`, so the discipline is yours: run `pnpm check` first, `git pull --rebase` before pushing, keep commits small, and treat a red CI run on `main` as the first thing to fix.
 - Dependabot's pull requests are landed one at a time, by a rebase merge or by cherry-picking the commit onto `main` (`git cherry-pick -x`), checked and pushed like any other commit; a cherry-picked one is closed with a comment naming the commit. Two that touch the lockfile conflict; see Dependencies.
 - Never force-push or rewrite `main`, skip hooks with `--no-verify`, or commit build output.
 - Keep the `Co-Authored-By` trailer your agent adds, so AI-authored changes stay traceable.
