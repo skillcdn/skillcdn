@@ -8,11 +8,11 @@ import {
   type CatalogFile,
   type CatalogState,
   contextPage,
-  type DirectoryResult,
   decodeText,
   FIND_DEFAULT_LIMIT,
   FIND_LIST_SKILLS_MAX,
   FIND_MAX_SKILL_FILES,
+  type FileLookup,
   type FileReference,
   type FileResult,
   type FindFile,
@@ -25,12 +25,15 @@ import {
   type GitHost,
   type IncludedFile,
   type IndexDiagnostic,
+  type IndexedFile,
   type IndexLimits,
   isWithinRepoPath,
   joinRepoPath,
   type LicenseFact,
   licenseOfPath,
   type MountCatalog,
+  type MountManifest,
+  type MountOverview,
   type MountSummary,
   NO_LICENSE,
   pageOfText,
@@ -39,12 +42,12 @@ import {
   parseRepoPath,
   parseSkillUri,
   READ_FILE_DEFAULT_LIMIT,
-  type RepoFileKind,
   type RepoPath,
   type RepoTranslation,
   ROOT_PATH,
   rawFileUrl,
   SKILL_PAGE_BYTES,
+  type SkillLookup,
   type SkillResult,
   type SkillRules,
   type SkillServing,
@@ -97,95 +100,16 @@ export interface MountReaderDependencies {
 /** The index of the commit is not there to answer from: still being built, or the build failed. */
 export type NotReady = Exclude<SnapshotOutcome, { status: "ready" }>;
 
-export type SkillLookup =
-  | { readonly kind: "found"; readonly skill: SkillResult }
-  | {
-      readonly kind: "not_found";
-      readonly available: readonly string[];
-      /** What could not be read: the skill asked for may be among them. */
-      readonly diagnostics: readonly IndexDiagnostic[];
-    }
-  | { readonly kind: "ambiguous"; readonly directories: readonly string[] }
-  /** Indexed, but its body is not in the blob store. */
-  | { readonly kind: "unavailable" };
-
-/** What the index says about a file that was read: where it is, what it is, and whose it is. */
-export interface IndexedFile {
-  /** The repository-root path. */
-  readonly path: string;
-  readonly kind: RepoFileKind;
-  /** The directory of the skill the file belongs to, or null outside every skill. */
-  readonly skillDir: string | null;
-}
-
-export type FileLookup =
-  | { readonly kind: "found"; readonly file: FileResult; readonly indexed: IndexedFile }
-  | { readonly kind: "not_ready"; readonly outcome: NotReady }
-  /** The path names a directory: its entries are the answer. */
-  | { readonly kind: "directory"; readonly directory: DirectoryResult }
-  | { readonly kind: "invalid_path"; readonly reason: string }
-  | {
-      readonly kind: "not_found";
-      readonly path: RepoPath;
-      readonly suggestions?: readonly string[];
-    }
-  /** Over the read limit: the bytes are at the host, at `sourceUrl` (ADR-0033). */
-  | {
-      readonly kind: "too_large";
-      readonly path: RepoPath;
-      readonly size: number;
-      readonly limit: number;
-      readonly sourceUrl: string;
-    }
-  /** Not text, so not what this route carries: the bytes are at the host, at `sourceUrl`. */
-  | { readonly kind: "not_text"; readonly path: RepoPath; readonly sourceUrl: string }
-  /** The license allows a description of the file's skill or repository, not a copy (ADR-0026). */
-  | {
-      readonly kind: "not_served";
-      readonly path: RepoPath;
-      readonly license: LicenseFact;
-      readonly sourceUrl: string;
-    };
-
-export interface SkillListing {
-  readonly name: string;
-  readonly directory: RepoPath;
-  readonly description: string;
-  readonly warnings: readonly string[];
-  readonly translations: Readonly<Record<string, SkillTranslation>>;
-}
-
-/** The repository manifest that governs a mount, as read from the index and the blob store. */
-export interface MountManifest {
-  /** Relative to the mounted root; `undefined` when the manifest lies above the mount. */
-  readonly path: RepoPath | undefined;
-  readonly name: string | undefined;
-  readonly description: string;
-  /** The tag of the language the repository says it is written in. */
-  readonly language: string | undefined;
-  /**
-   * The picture the nearest manifest that has one declares (ADR-0031): a repository-root path
-   * of a file the tree has, or an `https` URL.
-   */
-  readonly image: string | undefined;
-  readonly translations: Readonly<Record<string, RepoTranslation>>;
-  /** The Markdown after the front-matter, trimmed: the rules. Empty when there are none. */
-  readonly rules: string;
-}
-
-export interface MountOverview {
-  readonly overview?: FolderOverview;
-  readonly groups?: readonly BrowseEntry[];
-  readonly mount: MountSummary;
-  readonly manifest: MountManifest | undefined;
-  /** The license that governs the mounted directory outside its skills (ADR-0026). */
-  readonly license: LicenseFact;
-  readonly skillCount: number;
-  readonly documentCount: number;
-  readonly skills: readonly SkillListing[];
-  readonly documents: readonly Extract<FindItem, { kind: "document" }>[];
-  readonly diagnostics: readonly IndexDiagnostic[];
-}
+// What a read answers besides a result is core's (its `tools/reads.ts`): the REST bodies are
+// built from these shapes there, and read back from the API as them.
+export type {
+  FileLookup,
+  IndexedFile,
+  MountManifest,
+  MountOverview,
+  SkillListing,
+  SkillLookup,
+} from "@skillcdn/core";
 
 /**
  * What a read is scoped to: the snapshot, and the version of the reading rules its index was

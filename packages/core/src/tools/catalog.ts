@@ -13,7 +13,8 @@ export interface CatalogManifest {
   readonly name: string | undefined;
   readonly description: string;
   readonly path: RepoPath | undefined;
-  readonly hasRules: boolean;
+  /** Whether the manifest has a body of rules; unknown to a catalog made from the REST API. */
+  readonly hasRules?: boolean;
   readonly language: string | undefined;
 }
 export interface MountCatalog {

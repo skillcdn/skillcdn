@@ -104,7 +104,7 @@ The response carries the query, result items, diagnostics, resolved `commit` and
 
 The `load_skill` tool. `path` is required and is an exact canonical `SKILL.md` path. `cursor` continues that skill's context; names and directory aliases are not the canonical API.
 
-The ready response's `skill` contains:
+The ready response names the `commit` the skill was read from, as every result does, and its `skill` contains:
 
 - `path`, `directory`, `name`, `description`, known front-matter fields, warnings and translations.
 - `serving`: the `license` the reader resolved for the skill (`kind`, `name`, `source`), whether the skill is served in `full`, and the `sourceUrl` of its manifest at the host. With `full` false the skill is described only ([licenses](skill-repo.md#licenses)): `body` is empty and the rules, files and references are absent.
@@ -121,10 +121,10 @@ Context text is bounded to 16 KiB of UTF-8 per page: root-to-nearest rules first
 The `read_repo_file` tool. `path` is a canonical file path inside the mount. `offset` and `limit` are character counts (`limit` 1 to 100,000, default 40,000). Reads do not wait for indexing: they return HTTP 503 with `index.indexing` or `index.failed` until the served set, including exclusions, is known. All reading routes enforce ancestor exclusions and failed policy boundaries.
 
 ```json
-{ "kind": "file", "path": "marketing/docs/guide.md", "content": "...", "offset": 0, "nextOffset": null, "totalLength": 1234 }
+{ "kind": "file", "commit": "<the commit read>", "path": "marketing/docs/guide.md", "content": "...", "offset": 0, "nextOffset": null, "totalLength": 1234 }
 ```
 
-A file page never splits a character. Use the browse endpoint for directories. Raw files do not add inherited rules or stand in for loading a skill. A file over the read limit answers `413` with `file.too_large`, and one that is not UTF-8 text `415` with `file.not_text`; both errors carry the `sourceUrl` of the file's bytes at the host, the only place to get what this endpoint cannot carry.
+A file page names the `commit` it was read from and never splits a character. Use the browse endpoint for directories. Raw files do not add inherited rules or stand in for loading a skill. A file over the read limit answers `413` with `file.too_large`, and one that is not UTF-8 text `415` with `file.not_text`; both errors carry the `sourceUrl` of the file's bytes at the host, the only place to get what this endpoint cannot carry.
 
 MCP additionally bounds its complete serialized tool result and can return shorter pages than these REST limits. The byte budget and continuation behavior are defined in [tools](tools.md#results-and-continuations).
 
@@ -157,7 +157,7 @@ A page of the deployment's own ([ADR-0029](../adr/0029-terms-and-privacy-pages-c
 
 ## Serving an agent from a program
 
-A program that gives an agent what MCP gives it, a console, a command-line tool, a job, reads the same index through these routes, with a token where the repository is not public ([authorization](#authorization)). The API carries data and no prose for a model: there are no connection instructions and no prompt here, and what an MCP client passes to its model ([tools](tools.md)) is for the program to say in its own words.
+A program that gives an agent what MCP gives it, a console, a command-line tool, a job, reads the same index through these routes, with a token where the repository is not public ([authorization](#authorization)). The API carries data and no prose for a model: there are no connection instructions and no prompt here, and what an MCP client passes to its model ([tools](tools.md)) is for the program to say in its own words. It need not find them: `packages/core` builds every body of these routes from the reader's results (`mountBody`, `browseBody`, `findBody`, `skillOutcome`, `fileBody`) and reads each back as the result it was made from (`mountSummaryOf`, `catalogStateOf`, `browseResultOf`, `findResultOf`, `skillResultOf`, `fileResultOf`, `directoryResultOf`), and `joinSkillPages` makes one skill of its pages, so that a program renders the text an MCP client's model is given, with the same functions the MCP endpoint renders it with (`renderInstructions`, `renderBrowseResult`, `renderFindResult`, `renderSkillResult`, `renderFileResult`).
 
 | Over MCP | Over REST | What to give the agent |
 |---|---|---|

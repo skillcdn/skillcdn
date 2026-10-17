@@ -245,6 +245,8 @@ export const restFindSchema = z.discriminatedUnion("status", [
 export const restSkillSchema = z.discriminatedUnion("status", [
   z.object({
     status: z.literal("ready"),
+    /** The commit the skill was read from; every result names one. */
+    commit: z.optional(z.string()),
     skill: z.object({
       path: z.optional(z.string()),
       ruleChain: z.optional(
@@ -312,6 +314,8 @@ export const restDirectoryEntrySchema = z.object({
 export const restFileSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("file"),
+    /** The commit the file was read from; every result names one. */
+    commit: z.optional(z.string()),
     references: z.optional(z.array(restReferenceSchema)),
     path: z.string(),
     content: z.string(),
@@ -321,6 +325,7 @@ export const restFileSchema = z.discriminatedUnion("kind", [
   }),
   z.object({
     kind: z.literal("directory"),
+    commit: z.optional(z.string()),
     /** Empty for the mounted root. */
     path: z.string(),
     entries: z.array(restDirectoryEntrySchema),

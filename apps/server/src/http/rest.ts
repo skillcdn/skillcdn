@@ -2,46 +2,41 @@ import {
   type Address,
   accountAvatarUrl,
   BROWSE_MAX_LIMIT,
-  type BrowseResult,
+  browseBody,
   describeLicense,
   FIND_MAX_LIMIT,
-  type FindResult,
+  fileBody,
+  findBody,
   formatAddress,
   GitHostError,
   isLegalDocumentKind,
-  isPinnedAddress,
   type LegalDocumentKind,
-  type LicenseFact,
   MAX_QUERY_LENGTH,
   MAX_REPO_PATH_LENGTH,
+  type MountOverview,
   parseOwnerPath,
   parseRepoPath,
   READ_FILE_MAX_LIMIT,
   REST_FEATURED_SKILL_NAMES,
   REST_MOUNT_LIST_LIMIT,
   REST_ROUTES,
-  type RepoTranslation,
-  type RestBrowse,
+  type RestFailure,
   type RestFeatured,
-  type RestFile,
-  type RestFind,
   type RestLegalDocument,
-  type RestLicense,
   type RestMount,
   type RestRepository,
-  type RestRepoTranslation,
   type RestShowcase,
-  type RestSkill,
-  type RestSkillTranslation,
   rawFileUrl,
-  type SkillTranslation,
+  mountBody as restMountBody,
+  restRepoTranslations,
+  skillOutcome,
 } from "@skillcdn/core";
 import type { Context, Hono } from "hono";
 import { cors } from "hono/cors";
 import * as z from "zod";
 import type { Logger } from "../logger.js";
 import { ReaderInputError } from "../mounts/continuation.js";
-import type { MountOverview, MountReader, NotReady, SkillLookup } from "../mounts/mount-reader.js";
+import type { MountReader, NotReady } from "../mounts/mount-reader.js";
 import type { Mount } from "../mounts/mount-service.js";
 import { OwnerNotFoundError, type OwnerService } from "../owners/owner-service.js";
 import type { AppEnv } from "./request-context.js";
@@ -144,273 +139,25 @@ function imageOf(
     : null;
 }
 
-const notReadyBody = (outcome: NotReady) =>
-  outcome.status === "indexing"
-    ? ({ status: "indexing" } as const)
-    : ({ status: "failed", errorCode: outcome.errorCode } as const);
-
-// Absent values are `null` in the API, never missing keys.
-function skillTranslations(
-  translations: Readonly<Record<string, SkillTranslation>>,
-): Record<string, RestSkillTranslation> {
-  return Object.fromEntries(
-    Object.entries(translations).map(([tag, entry]) => [
-      tag,
-      { title: entry.title ?? null, description: entry.description ?? null },
-    ]),
-  );
-}
-
-function repoTranslations(
-  translations: Readonly<Record<string, RepoTranslation>>,
-): Record<string, RestRepoTranslation> {
-  return Object.fromEntries(
-    Object.entries(translations).map(([tag, entry]) => [
-      tag,
-      { name: entry.name ?? null, description: entry.description ?? null },
-    ]),
-  );
-}
-
-const restLicense = (license: LicenseFact): RestLicense => ({
-  kind: license.kind,
-  name: license.name ?? null,
-  source: license.source ?? null,
-});
-
-/** The license of a skill entry or item, and whether this mount only describes it. */
-function licensing(item: { readonly license?: LicenseFact; readonly describedOnly?: boolean }) {
-  return {
-    ...(item.license === undefined ? {} : { license: restLicense(item.license) }),
-    ...(item.describedOnly === true ? { describedOnly: true } : {}),
-  };
-}
-
-export function browseBody(
-  answer: NotReady | { readonly status: "ready"; readonly result: BrowseResult },
-): RestBrowse {
-  return answer.status !== "ready"
-    ? notReadyBody(answer)
-    : {
-        status: "ready",
-        commit: answer.result.mount.commit,
-        path: answer.result.path,
-        overview:
-          answer.result.overview === undefined
-            ? undefined
-            : {
-                path: answer.result.overview.path,
-                title: answer.result.overview.title ?? null,
-                description: answer.result.overview.description ?? null,
-              },
-        diagnostics: [...(answer.result.diagnostics ?? [])],
-        entries: answer.result.entries.map(({ license, describedOnly, ...entry }) => ({
-          ...entry,
-          ...licensing({ license, describedOnly }),
-        })),
-        nextCursor: answer.result.nextCursor ?? null,
-      };
-}
-
-export function findBody(
-  answer: NotReady | { readonly status: "ready"; readonly result: FindResult },
-): RestFind {
-  if (answer.status !== "ready") return notReadyBody(answer);
-  const result = answer.result;
-  return {
-    status: "ready",
-    commit: result.mount.commit,
-    path: result.path ?? result.mount.path,
-    nextCursor: result.nextCursor ?? null,
-    query: result.query ?? null,
-    totals: result.totals ?? null,
-    diagnostics: [...result.diagnostics],
-    items: result.items.map((item) =>
-      item.kind === "skill"
-        ? {
-            kind: "skill",
-            name: item.name,
-            path: item.directory.length === 0 ? "SKILL.md" : `${item.directory}/SKILL.md`,
-            directory: item.directory,
-            description: item.description,
-            translations: skillTranslations(item.translations),
-            files: item.files.map((file) => ({
-              path: file.path,
-              title: file.title ?? null,
-              summary: file.summary ?? null,
-            })),
-            moreFiles: item.moreFiles,
-            ...licensing(item),
-          }
-        : {
-            kind: "document",
-            path: item.path,
-            title: item.title ?? null,
-            summary: item.summary ?? null,
-            skillDirectory: item.skillDirectory ?? null,
-          },
-    ),
-  };
-}
-
-/** What an address serves, as the API says it: shared with the page rendered for browsers. */
+/**
+ * What an address serves, as the API says it: shared with the page rendered for browsers. The
+ * shape is core's; what only this server knows, the repository as the host shows it and where
+ * its picture is, is added here.
+ */
 export function mountBody(
   mount: Mount,
   answer: NotReady | { readonly status: "ready"; readonly overview: MountOverview },
 ): RestMount {
-  const ref = mount.address.ref;
-  return {
-    address: formatAddress(mount.address),
-    repository: repositoryOf(mount),
-    ref: ref === undefined ? null : ref.kind === "commit" ? ref.hash : ref.name,
-    pinned: isPinnedAddress(mount.address),
-    commit: mount.commit,
-    path: mount.address.path,
-    verified: mount.verified,
-    image: imageOf(mount, answer.status === "ready" ? answer.overview.manifest : undefined),
-    index:
-      answer.status !== "ready"
-        ? notReadyBody(answer)
-        : {
-            status: "ready",
-            truncated: answer.overview.mount.truncated,
-            license: restLicense(answer.overview.license),
-            manifest:
-              answer.overview.manifest === undefined
-                ? null
-                : {
-                    path: answer.overview.manifest.path ?? null,
-                    name: answer.overview.manifest.name ?? null,
-                    description: answer.overview.manifest.description,
-                    language: answer.overview.manifest.language ?? null,
-                    translations: repoTranslations(answer.overview.manifest.translations),
-                  },
-            skillCount: answer.overview.skillCount,
-            documentCount: answer.overview.documentCount,
-            skills: answer.overview.skills.map((skill) => ({
-              name: skill.name,
-              path: skill.directory.length === 0 ? "SKILL.md" : `${skill.directory}/SKILL.md`,
-              directory: skill.directory,
-              description: skill.description,
-              warnings: [...skill.warnings],
-              translations: skillTranslations(skill.translations),
-            })),
-            documents: answer.overview.documents.map((document) => ({
-              path: document.path,
-              title: document.title ?? null,
-              summary: document.summary ?? null,
-            })),
-            diagnostics: answer.overview.diagnostics.map((diagnostic) => ({
-              path: diagnostic.path,
-              code: diagnostic.code,
-              message: diagnostic.message,
-            })),
-            groups: (answer.overview.groups ?? []).map(({ license, describedOnly, ...entry }) => ({
-              ...entry,
-              ...licensing({ license, describedOnly }),
-            })),
-          },
-  };
-}
-
-export interface RestFailure {
-  readonly status: number;
-  readonly code: string;
-  readonly message: string;
-  readonly directories?: readonly string[];
-  readonly retryAfterSeconds?: number;
-}
-
-/** One skill as the API answers it: the body, or the failure with its status. */
-export function skillOutcome(
-  answer: NotReady | { readonly status: "ready"; readonly lookup: SkillLookup },
-): { readonly body: RestSkill } | { readonly failure: RestFailure } {
-  if (answer.status !== "ready") {
-    return { body: notReadyBody(answer) };
-  }
-  const { lookup } = answer;
-  switch (lookup.kind) {
-    case "not_found":
-      return {
-        failure: {
-          status: 404,
-          code: "skill.not_found",
-          message: "No skill at that SKILL.md path in this mount.",
-        },
-      };
-    case "ambiguous":
-      return {
-        failure: {
-          status: 409,
-          code: "skill.ambiguous",
-          message: "Several skills share that name. Ask for a directory.",
-          directories: [...lookup.directories],
-        },
-      };
-    case "unavailable":
-      return {
-        failure: {
-          status: 503,
-          code: "skill.unavailable",
-          message: "The skill is indexed but its content is not available.",
-        },
-      };
-    case "found": {
-      const { skill } = lookup;
-      return {
-        body: {
-          status: "ready",
-          skill: {
-            path: skill.path ?? (skill.directory ? `${skill.directory}/SKILL.md` : "SKILL.md"),
-            ruleChain: (skill.ruleChain ?? []).map((rule) => ({
-              path: rule.path ?? "SKILLCDN.md",
-              body: rule.body,
-              truncated: rule.truncated,
-            })),
-            references: [...(skill.references ?? [])],
-            complete: skill.complete ?? true,
-            nextCursor: skill.nextCursor ?? null,
-            includedContents: skill.included.map((file) => ({
-              path: file.path,
-              content: file.content ?? null,
-              truncated: file.truncated,
-            })),
-            name: skill.name,
-            directory: skill.directory,
-            description: skill.description,
-            license: skill.license ?? null,
-            compatibility: skill.compatibility ?? null,
-            allowedTools: skill.allowedTools ?? null,
-            metadata: { ...skill.metadata },
-            body: skill.body,
-            files: [...skill.files],
-            filesTruncated: skill.filesTruncated,
-            ...(skill.oversized === undefined ? {} : { oversized: [...skill.oversized] }),
-            included: skill.included.map((file) => file.path),
-            warnings: [...skill.warnings],
-            translations: skillTranslations(skill.translations),
-            ...(skill.serving === undefined
-              ? {}
-              : {
-                  serving: {
-                    license: restLicense(skill.serving.license),
-                    full: skill.serving.full,
-                    sourceUrl: skill.serving.sourceUrl,
-                  },
-                }),
-            rules:
-              skill.rules === undefined
-                ? null
-                : {
-                    path: skill.rules.path ?? null,
-                    body: skill.rules.body,
-                    truncated: skill.rules.truncated,
-                  },
-          },
-        },
-      };
-    }
-  }
+  return restMountBody(
+    {
+      address: mount.address,
+      repository: repositoryOf(mount),
+      commit: mount.commit,
+      verified: mount.verified,
+      image: (manifest) => imageOf(mount, manifest),
+    },
+    answer,
+  );
 }
 
 /** A failure of the git host, which is the caller's to retry. Anything else is ours to look at. */
@@ -607,19 +354,8 @@ export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies):
           );
         case "directory":
           return c.json(errorBody("request.invalid", "Use browse for directories."), 400);
-        case "found": {
-          const { file } = lookup;
-          const body: RestFile = {
-            kind: "file",
-            references: [...(file.references ?? [])],
-            path: file.path,
-            content: file.content,
-            offset: file.offset,
-            nextOffset: file.nextOffset ?? null,
-            totalLength: file.totalLength,
-          };
-          return c.json(body);
-        }
+        case "found":
+          return c.json(fileBody(lookup.file));
       }
     } catch (error) {
       return failure(c, error);
@@ -667,7 +403,7 @@ export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies):
                   ? {
                       name: answer.overview.manifest.name ?? null,
                       description: answer.overview.manifest.description,
-                      translations: repoTranslations(answer.overview.manifest.translations),
+                      translations: restRepoTranslations(answer.overview.manifest.translations),
                     }
                   : null,
               verified: mount.verified,

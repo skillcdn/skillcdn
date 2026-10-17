@@ -216,6 +216,20 @@ export {
   signInPath,
 } from "./rest/account.js";
 export {
+  browseBody,
+  directoryBody,
+  fileBody,
+  findBody,
+  type MountFacts,
+  mountBody,
+  notReadyBody,
+  type RestFailure,
+  restLicenseOf,
+  restRepoTranslations,
+  restSkillTranslations,
+  skillOutcome,
+} from "./rest/bodies.js";
+export {
   REST_FEATURED_SKILL_NAMES,
   REST_MOUNT_LIST_LIMIT,
   REST_ROUTES,
@@ -278,6 +292,16 @@ export {
   type RestLegalDocument,
   restLegalDocumentSchema,
 } from "./rest/legal.js";
+export {
+  addressOfMount,
+  browseResultOf,
+  catalogStateOf,
+  directoryResultOf,
+  fileResultOf,
+  findResultOf,
+  mountSummaryOf,
+  skillResultOf,
+} from "./rest/results.js";
 export {
   completeShowcaseTexts,
   IMAGE_CONTENT_TYPES,
@@ -420,6 +444,16 @@ export {
   TOOL_NAMES,
   type ToolContract,
 } from "./tools/contracts.js";
+export { joinSkillPages } from "./tools/pages.js";
+export type {
+  FileLookup,
+  IndexedFile,
+  IndexNotReady,
+  MountManifest,
+  MountOverview,
+  SkillListing,
+  SkillLookup,
+} from "./tools/reads.js";
 export {
   INDEXING_NOTICE,
   PROVENANCE_NOTICE,
