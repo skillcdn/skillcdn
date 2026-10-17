@@ -18,20 +18,21 @@
     "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\""
   },
   "dependencies": {
-    "@hono/node-server": "^2.1.4",
-    "@modelcontextprotocol/server": "^2.3.1",
+    "@hono/node-server": "catalog:",
+    "@modelcontextprotocol/server": "catalog:",
     "@napi-rs/canvas": "^1.0.10",
     "@skillcdn/core": "workspace:*",
     "@skillcdn/db": "workspace:*",
     "@skillcdn/github": "workspace:*",
     "@skillcdn/indexer": "workspace:*",
     "@skillcdn/reader": "workspace:*",
-    "hono": "^4.13.13",
+    "@skillcdn/serve": "workspace:*",
+    "hono": "catalog:",
     "pino": "^10.4.0",
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@modelcontextprotocol/client": "^2.3.1",
+    "@modelcontextprotocol/client": "catalog:",
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

@@ -1,27 +1,15 @@
 import {
   type Address,
   accountAvatarUrl,
-  BROWSE_MAX_LIMIT,
-  browseBody,
-  describeLicense,
-  FIND_MAX_LIMIT,
-  fileBody,
-  findBody,
   formatAddress,
-  GitHostError,
   type IndexNotReady,
   isLegalDocumentKind,
   type LegalDocumentKind,
-  MAX_QUERY_LENGTH,
-  MAX_REPO_PATH_LENGTH,
   type MountOverview,
   parseOwnerPath,
   parseRepoPath,
-  READ_FILE_MAX_LIMIT,
   REST_FEATURED_SKILL_NAMES,
-  REST_MOUNT_LIST_LIMIT,
   REST_ROUTES,
-  type RestFailure,
   type RestFeatured,
   type RestLegalDocument,
   type RestMount,
@@ -30,11 +18,10 @@ import {
   rawFileUrl,
   mountBody as restMountBody,
   restRepoTranslations,
-  skillOutcome,
 } from "@skillcdn/core";
 import { type Reader, ReaderInputError } from "@skillcdn/reader";
+import { errorBody, hostFailure, registerAddressRoutes } from "@skillcdn/serve";
 import type { Context, Hono } from "hono";
-import { cors } from "hono/cors";
 import * as z from "zod";
 import type { Logger } from "../logger.js";
 import type { Mount } from "../mounts/mount-service.js";
@@ -63,36 +50,8 @@ export interface RestDependencies {
 /** The featured list is the same for everyone and costs several queries per address. */
 const FEATURED_CACHE_MS = 30_000;
 
-const findQuery = z.object({
-  path: z.string().max(MAX_REPO_PATH_LENGTH).optional(),
-  cursor: z.string().max(4096).optional(),
-  query: z.string().max(MAX_QUERY_LENGTH).optional(),
-  limit: z.coerce.number().int().min(1).max(FIND_MAX_LIMIT).optional(),
-});
-const browseQuery = z.object({
-  path: z.string().max(MAX_REPO_PATH_LENGTH).optional(),
-  cursor: z.string().max(4096).optional(),
-  limit: z.coerce.number().int().min(1).max(BROWSE_MAX_LIMIT).optional(),
-});
-const skillQuery = z
-  .object({
-    path: z.string().min(1).max(MAX_REPO_PATH_LENGTH).optional(),
-    name: z.string().min(1).max(MAX_REPO_PATH_LENGTH).optional(),
-    cursor: z.string().max(4096).optional(),
-  })
-  .refine((value) => value.path !== undefined || value.name !== undefined);
 /** The git host pages an account's listing; it stops long before this. */
 const ownerQuery = z.object({ page: z.coerce.number().int().min(1).max(100).optional() });
-const fileQuery = z.object({
-  path: z.string().min(1).max(MAX_REPO_PATH_LENGTH),
-  offset: z.coerce.number().int().min(0).optional(),
-  limit: z.coerce.number().int().min(1).max(READ_FILE_MAX_LIMIT).optional(),
-});
-
-export function errorBody(code: string, message: string, extra: Record<string, unknown> = {}) {
-  return { error: { code, message, ...extra } };
-}
-
 /** The size of the owner's picture the pages ask the host for: 80 CSS pixels on a 2x screen. */
 const AVATAR_SIZE = 160;
 
@@ -160,31 +119,7 @@ export function mountBody(
   );
 }
 
-/** A failure of the git host, which is the caller's to retry. Anything else is ours to look at. */
-export function hostFailure(error: unknown): RestFailure | undefined {
-  if (error instanceof GitHostError && error.kind === "rate_limited") {
-    return {
-      status: 503,
-      code: "mount.rate_limited",
-      message: "The git host is rate limiting requests. Try again later.",
-      ...(error.retryAfterSeconds === undefined
-        ? {}
-        : { retryAfterSeconds: error.retryAfterSeconds }),
-    };
-  }
-  if (error instanceof GitHostError) {
-    return {
-      status: 503,
-      code: "mount.unavailable",
-      message: "The git host could not be reached. Try again later.",
-    };
-  }
-  return undefined;
-}
-
-/** How long a browser may remember the answer to a preflight request. */
-/** How long a browser may remember a preflight answer. */
-export const CORS_MAX_AGE_SECONDS = 86_400;
+export { CORS_MAX_AGE_SECONDS, errorBody, hostFailure } from "@skillcdn/serve";
 
 /** Registers the REST API of docs/specs/rest.md on the app. */
 export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies): void {
@@ -220,158 +155,14 @@ export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies):
     return c.json(errorBody("internal", "The request could not be served."), 500);
   };
 
-  // The API is read-only, so a page on any origin may call it. No cookie travels with such a
-  // request; a token in the `authorization` header may (docs/specs/rest.md#authorization), and
-  // its challenge is readable. The request id is exposed so that a report can be matched to the
-  // logs.
-  app.use(
-    "/api/*",
-    cors({
-      origin: "*",
-      allowMethods: ["GET", "HEAD", "OPTIONS"],
-      exposeHeaders: ["x-request-id", "retry-after", "www-authenticate"],
-      maxAge: CORS_MAX_AGE_SECONDS,
-    }),
-  );
-  app.use("/api/*", async (c, next) => {
-    await next();
-    c.header("cache-control", "no-store");
-  });
-
-  app.get(`${REST_ROUTES.mounts}/*`, async (c) => {
-    const mount = await mountAt(c, REST_ROUTES.mounts);
-    if (mount instanceof Response) {
-      return mount;
-    }
-    try {
-      return c.json(mountBody(mount, await reader.overview(mount, REST_MOUNT_LIST_LIMIT)));
-    } catch (error) {
-      return failure(c, error);
-    }
-  });
-
-  app.get(`${REST_ROUTES.find}/*`, async (c) => {
-    const query = queryOf(c, findQuery);
-    if (query instanceof Response) {
-      return query;
-    }
-    const mount = await mountAt(c, REST_ROUTES.find);
-    if (mount instanceof Response) {
-      return mount;
-    }
-    try {
-      return c.json(findBody(await reader.find(mount, query, 0)));
-    } catch (error) {
-      return failure(c, error);
-    }
-  });
-
-  app.get(`${REST_ROUTES.skills}/*`, async (c) => {
-    const query = queryOf(c, skillQuery);
-    if (query instanceof Response) {
-      return query;
-    }
-    const mount = await mountAt(c, REST_ROUTES.skills);
-    if (mount instanceof Response) {
-      return mount;
-    }
-    try {
-      const outcome = skillOutcome(
-        await reader.skill(
-          mount,
-          query.path ?? query.name ?? "",
-          0,
-          query.cursor,
-          query.path !== undefined,
-        ),
-      );
-      if ("body" in outcome) {
-        return c.json(outcome.body);
-      }
-      const { status, code, message, directories } = outcome.failure;
-      return c.json(
-        errorBody(code, message, directories === undefined ? {} : { directories }),
-        status as 404,
-      );
-    } catch (error) {
-      return failure(c, error);
-    }
-  });
-
-  app.get(`${REST_ROUTES.files}/*`, async (c) => {
-    const query = queryOf(c, fileQuery);
-    if (query instanceof Response) {
-      return query;
-    }
-    const mount = await mountAt(c, REST_ROUTES.files);
-    if (mount instanceof Response) {
-      return mount;
-    }
-    try {
-      const lookup = await reader.file(mount, query);
-      switch (lookup.kind) {
-        case "not_ready":
-          return c.json(
-            errorBody(
-              lookup.outcome.status === "indexing" ? "index.indexing" : "index.failed",
-              lookup.outcome.status === "indexing"
-                ? "The repository is being indexed. Try again shortly."
-                : "The repository could not be indexed. Try again later.",
-            ),
-            503,
-            { "retry-after": "2" },
-          );
-        case "invalid_path":
-          return c.json(errorBody("request.invalid", `Not a valid path: ${lookup.reason}.`), 400);
-        case "not_found":
-          return c.json(errorBody("file.not_found", "No file at that path in this mount."), 404);
-        case "too_large":
-          return c.json(
-            errorBody(
-              "file.too_large",
-              `The file is too large to read here (${lookup.size} bytes; the limit is ${lookup.limit}). Fetch it from the source: ${lookup.sourceUrl}`,
-              { sourceUrl: lookup.sourceUrl },
-            ),
-            413,
-          );
-        case "not_text":
-          return c.json(
-            errorBody(
-              "file.not_text",
-              `The file is not UTF-8 text, which is all this endpoint carries. Fetch it from the source: ${lookup.sourceUrl}`,
-              { sourceUrl: lookup.sourceUrl },
-            ),
-            415,
-          );
-        case "not_served":
-          return c.json(
-            errorBody(
-              "file.not_served",
-              `The file is described, not served: its license (${describeLicense(lookup.license)}) allows SkillCDN to say that it exists, not to pass its content on. Read it at its source: ${lookup.sourceUrl}`,
-              { sourceUrl: lookup.sourceUrl },
-            ),
-            403,
-          );
-        case "directory":
-          return c.json(errorBody("request.invalid", "Use browse for directories."), 400);
-        case "found":
-          return c.json(fileBody(lookup.file));
-      }
-    } catch (error) {
-      return failure(c, error);
-    }
-  });
-
-  app.get(`${REST_ROUTES.browse}/*`, async (c) => {
-    const query = queryOf(c, browseQuery);
-    if (query instanceof Response) return query;
-    const mount = await mountAt(c, REST_ROUTES.browse);
-    if (mount instanceof Response) return mount;
-    try {
-      return c.json(browseBody(await reader.browse(mount, query, 0)));
-    } catch (error) {
-      return failure(c, error);
-    }
+  // The routes that read an address are the serve package's, over this deployment's reader,
+  // for whoever mountAt says the request is for.
+  registerAddressRoutes(app, {
+    reader,
+    logger,
+    mountAt,
+    mountBody,
+    requestFields: (c) => ({ requestId: c.get("requestId") }),
   });
 
   let featuredCache: { readonly until: number; readonly body: Promise<RestFeatured> } | undefined;

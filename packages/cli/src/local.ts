@@ -1,3 +1,4 @@
+import { type FSWatcher, watch } from "node:fs";
 import { stat } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -10,25 +11,42 @@ import {
   findBody,
   type IndexLimits,
   LOCAL_HOST_KEY,
-  mountBody,
   parseAddress,
   REST_MOUNT_LIST_LIMIT,
+  type ReadableIndex,
   type RepoPath,
   ROOT_PATH,
   skillOutcome,
 } from "@skillcdn/core";
-import { readDirectory } from "@skillcdn/indexer";
-import { createMemoryIndex, type MountContext, Reader } from "@skillcdn/reader";
+import { readDirectory, WORKING_TREE_COMMIT } from "@skillcdn/indexer";
+import { createMemoryIndex, Reader } from "@skillcdn/reader";
+import { localMountBody, type ServedMount } from "@skillcdn/serve";
 import { type Pack, PackError } from "./pack.js";
 
-// A directory on this machine as a pack (ADR-0053, ADR-0055): read as the indexer reads a
-// commit, kept as an index in memory, read as a deployment reads its own, and answered in the
-// REST API's shapes as a deployment answers them. The person chose the directory, so it is
-// verified: its content is served in full under its license.
+// A directory on this machine as a pack (ADR-0053, ADR-0055, ADR-0057): read as the indexer
+// reads a commit, kept as an index in memory, read as a deployment reads its own, and answered
+// or served as a deployment answers and serves. The person chose the directory, so it is
+// verified: its content is served in full under its license. A working tree changes without a
+// commit, so the index is read again when the files change, and nothing read from it is to be
+// kept by a client.
 
-/** A mount of a directory: the context the reader needs, and where the files are. */
-export interface LocalMount extends MountContext {
+/** A mount of a directory: what the edges need, where the files are, and the index of them now. */
+export interface LocalMount extends ServedMount {
   readonly root: string;
+  /** The index of the directory as its files are now; a reload replaces it. */
+  readonly index: () => ReadableIndex;
+}
+
+export interface MountedDirectory {
+  readonly mount: LocalMount;
+  /** Reads the directory again and serves what it holds now; throws, and keeps the last index, when it cannot be read. */
+  reload(): Promise<void>;
+}
+
+export interface MountFailure {
+  readonly error: string;
+  /** The exit code the failure means: 2 for a directory that cannot be read, 64 for one that cannot be addressed. */
+  readonly exit: number;
 }
 
 /** What `--as` names a directory, else its parent's name and its own: `local/<owner>/<name>`. */
@@ -61,15 +79,12 @@ export function localAddress(
       };
 }
 
-/**
- * Opens a directory as a pack: the index built in memory, and the reads over it. Answers the
- * error text and the exit code when the directory cannot be read or addressed.
- */
-export async function openDirectory(options: {
+/** Mounts a directory: its index built in memory, at its address, ready to be read or served. */
+export async function mountDirectory(options: {
   readonly directory: string;
   readonly as?: string | undefined;
   readonly limits: IndexLimits;
-}): Promise<Pack | { readonly error: string; readonly exit: number }> {
+}): Promise<MountedDirectory | MountFailure> {
   const root = resolve(options.directory);
   const info = await stat(root).catch(() => undefined);
   if (info === undefined || !info.isDirectory()) {
@@ -80,29 +95,124 @@ export async function openDirectory(options: {
     return { error: addressed.error, exit: 64 };
   }
   const { address } = addressed;
-  const read = await readDirectory({
-    directory: root,
-    limits: options.limits,
-    repository: { owner: address.owner, name: address.repo },
-  });
-  const index = createMemoryIndex({ index: read.index, blobs: read.blobs });
+  const read = async (): Promise<ReadableIndex> => {
+    const result = await readDirectory({
+      directory: root,
+      limits: options.limits,
+      repository: { owner: address.owner, name: address.repo },
+    });
+    return createMemoryIndex({ index: result.index, blobs: result.blobs });
+  };
+  let index = await read();
   const fileUrl = (path: RepoPath): string =>
     pathToFileURL(path.length === 0 ? root : join(root, ...path.split("/"))).href;
   const mount: LocalMount = {
     root,
     address: { ...address, path: ROOT_PATH },
-    commit: read.commit,
+    commit: WORKING_TREE_COMMIT,
     verified: true,
     limits: {},
     repository: `${address.owner}/${address.repo}`,
     description: undefined,
     sourceUrl: fileUrl,
     rawUrl: fileUrl,
+    // A working tree may change at any moment, and is one machine's own: a client keeps nothing.
+    trustedUntil: new Date(0),
+    visibility: "private",
+    index: () => index,
   };
-  const reader = new Reader<LocalMount>({
-    limits: options.limits,
-    index: async () => ({ status: "ready", index }),
+  return {
+    mount,
+    async reload() {
+      index = await read();
+    },
+  };
+}
+
+/** The reader of mounted directories: every index is ready, since it is in memory. */
+export const localReader = (limits: IndexLimits): Reader<LocalMount> =>
+  new Reader<LocalMount>({
+    limits,
+    index: async (mount) => ({ status: "ready", index: mount.index() }),
   });
+
+const WATCH_DELAY_MS = 250;
+
+/** The directories the indexer does not read, so a change in them is not a change to the pack. */
+const unread = (filename: string | Buffer | null): boolean => {
+  if (typeof filename !== "string") {
+    return false;
+  }
+  const first = filename.split(/[\\/]/, 1)[0];
+  return first === ".git" || first === "node_modules";
+};
+
+/**
+ * Calls `changed` once per burst of changes to the files under the root, never twice at once:
+ * a change during a call is one more call after it. Where the files cannot be watched, `failed`
+ * is told and nothing is called. The watcher does not keep the process alive.
+ */
+export function watchDirectory(
+  root: string,
+  changed: () => Promise<void>,
+  options: { readonly failed: (error: unknown) => void; readonly delayMs?: number | undefined },
+): { close(): void } {
+  let timer: NodeJS.Timeout | undefined;
+  let running: Promise<void> | undefined;
+  let again = false;
+  const run = (): void => {
+    if (running !== undefined) {
+      again = true;
+      return;
+    }
+    running = changed()
+      .catch(options.failed)
+      .finally(() => {
+        running = undefined;
+        if (again) {
+          again = false;
+          run();
+        }
+      });
+  };
+  let watcher: FSWatcher;
+  try {
+    watcher = watch(root, { recursive: true }, (_event, filename) => {
+      if (unread(filename)) {
+        return;
+      }
+      clearTimeout(timer);
+      timer = setTimeout(run, options.delayMs ?? WATCH_DELAY_MS);
+    });
+  } catch (error) {
+    options.failed(error);
+    return { close() {} };
+  }
+  watcher.on("error", options.failed);
+  watcher.unref();
+  return {
+    close() {
+      clearTimeout(timer);
+      watcher.close();
+    },
+  };
+}
+
+/**
+ * Opens a directory as a pack: the index built in memory, and the reads over it. Answers the
+ * error text and the exit code when the directory cannot be read or addressed.
+ */
+export async function openDirectory(options: {
+  readonly directory: string;
+  readonly as?: string | undefined;
+  readonly limits: IndexLimits;
+}): Promise<Pack | MountFailure> {
+  const mounted = await mountDirectory(options);
+  if ("error" in mounted) {
+    return mounted;
+  }
+  const { mount } = mounted;
+  const reader = localReader(options.limits);
   const ready = <T extends { readonly status: string }>(
     answer: T,
   ): Extract<T, { status: "ready" }> => {
@@ -113,26 +223,9 @@ export async function openDirectory(options: {
   };
   return {
     address: mount.address,
-    source: { kind: "directory", root },
+    source: { kind: "directory", root: mount.root },
     async mount() {
-      return mountBody(
-        {
-          address: mount.address,
-          repository: {
-            host: address.host,
-            owner: address.owner,
-            name: address.repo,
-            defaultBranch: "",
-            description: null,
-            avatar: "",
-            visibility: "public",
-          },
-          commit: mount.commit,
-          verified: mount.verified,
-          image: () => null,
-        },
-        await reader.overview(mount, REST_MOUNT_LIST_LIMIT),
-      );
+      return localMountBody(mount, await reader.overview(mount, REST_MOUNT_LIST_LIMIT));
     },
     async browse(query) {
       return browseBody(ready(await reader.browse(mount, query, 0)));

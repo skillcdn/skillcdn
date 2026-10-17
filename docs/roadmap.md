@@ -36,7 +36,7 @@ Goal: an agent with a shell and no MCP connection reads a pack through the `skil
 - [x] `@skillcdn/reader`: the reads over an index-store port ([ADR-0054](adr/0054-the-reads-are-a-package-over-an-index-store-port.md)); the server composes it with PostgreSQL.
 - [x] A directory read into an index in memory; `skillcdn skills`, `browse`, `find`, `skill` and `file` on a directory, printing what a model is given ([ADR-0055](adr/0055-the-command-reads-a-pack-as-a-deployment-serves-it.md)); an integration test holds the index in memory and the index in PostgreSQL to the same answers.
 - [x] `@skillcdn/client`, the same commands at a deployment's address, `login` and `use` ([ADR-0056](adr/0056-the-rest-api-has-a-client-and-the-command-reads-a-deployment-through-it.md)); the web UI reads through the client.
-- [ ] `@skillcdn/serve`, the MCP and REST edges as a package; `skillcdn mcp` over stdio and `skillcdn serve` over HTTP.
+- [x] `@skillcdn/serve`, the MCP and REST edges as a package; `skillcdn mcp` over stdio and `skillcdn serve` over HTTP ([ADR-0057](adr/0057-a-directory-is-served-by-the-command-over-stdio-and-http.md)).
 - [ ] REST reads counted as MCP tool calls are.
 
 ## After milestone 5

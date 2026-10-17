@@ -39,6 +39,15 @@ function versionOf(): string | undefined {
   }
 }
 
+/** Resolves when the person stops the command, by a signal from the terminal or the system. */
+function hold(): Promise<void> {
+  return new Promise((resolve) => {
+    const stop = (): void => resolve();
+    process.once("SIGINT", stop);
+    process.once("SIGTERM", stop);
+  });
+}
+
 const version = versionOf();
 process.exitCode = await runCli(process.argv.slice(2), {
   environment: process.env,
@@ -54,4 +63,6 @@ process.exitCode = await runCli(process.argv.slice(2), {
   store: createFileStore(defaultConfigDir(process.env, homedir()), process.pid),
   directory: createDirectoryStore(process.cwd()),
   userAgent: `skillcdn-cli/${version ?? "0"} (node ${process.versions.node}; ${process.platform})`,
+  hold,
+  streams: { stdin: process.stdin, stdout: process.stdout },
 });

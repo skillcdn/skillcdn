@@ -164,9 +164,21 @@ settings:
 
 catalogs:
   default:
+    '@hono/node-server':
+      specifier: ^2.1.4
+      version: 2.1.4
+    '@modelcontextprotocol/client':
+      specifier: ^2.3.1
+      version: 2.3.1
+    '@modelcontextprotocol/server':
+      specifier: ^2.3.1
+      version: 2.3.1
     '@types/node':
       specifier: ^24.19.1
       version: 24.19.1
+    hono:
+      specifier: ^4.13.13
+      version: 4.13.13
     typescript:
       specifier: ^7.0.2
       version: 7.0.2
@@ -203,10 +215,10 @@ importers:
   apps/server:
     dependencies:
       '@hono/node-server':
-        specifier: ^2.1.4
+        specifier: 'catalog:'
         version: 2.1.4(hono@4.13.13)
       '@modelcontextprotocol/server':
-        specifier: ^2.3.1
+        specifier: 'catalog:'
         version: 2.3.1
       '@napi-rs/canvas':
         specifier: ^1.0.10
@@ -226,8 +238,11 @@ importers:
       '@skillcdn/reader':
         specifier: workspace:*
         version: link:../../packages/reader
+      '@skillcdn/serve':
+        specifier: workspace:*
+        version: link:../../packages/serve
       hono:
-        specifier: ^4.13.13
+        specifier: 'catalog:'
         version: 4.13.13
       pino:
         specifier: ^10.4.0
@@ -237,7 +252,7 @@ importers:
         version: 4.6.5
     devDependencies:
       '@modelcontextprotocol/client':
-        specifier: ^2.3.1
+        specifier: 'catalog:'
         version: 2.3.1
       '@types/node':
         specifier: 'catalog:'
@@ -336,6 +351,9 @@ importers:
       '@skillcdn/reader':
         specifier: workspace:^
         version: link:../reader
+      '@skillcdn/serve':
+        specifier: workspace:^
+        version: link:../serve
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -448,6 +466,43 @@ importers:
         specifier: workspace:^
         version: link:../core
     devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.19.1
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.3(@types/node@24.19.1)(vite@8.3.4(@types/node@24.19.1)(esbuild@0.28.2)(tsx@4.23.13)(yaml@2.9.1))
+
+  packages/serve:
+    dependencies:
+      '@hono/node-server':
+        specifier: 'catalog:'
+        version: 2.1.4(hono@4.13.13)
+      '@modelcontextprotocol/server':
+        specifier: 'catalog:'
+        version: 2.3.1
+      '@skillcdn/core':
+        specifier: workspace:^
+        version: link:../core
+      '@skillcdn/reader':
+        specifier: workspace:^
+        version: link:../reader
+      hono:
+        specifier: 'catalog:'
+        version: 4.13.13
+      zod:
+        specifier: 'catalog:'
+        version: 4.6.5
+    devDependencies:
+      '@modelcontextprotocol/client':
+        specifier: 'catalog:'
+        version: 2.3.1
+      '@skillcdn/indexer':
+        specifier: workspace:^
+        version: link:../indexer
       '@types/node':
         specifier: 'catalog:'
         version: 24.19.1

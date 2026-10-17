@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import { resolve } from "node:path";
+import type { Readable, Writable } from "node:stream";
 import { parseArgs } from "node:util";
 import type { FetchLike } from "@skillcdn/client";
 import {
@@ -8,6 +9,7 @@ import {
   BROWSE_DEFAULT_LIMIT,
   BROWSE_MAX_LIMIT,
   browseResultOf,
+  type Clock,
   catalogStateOf,
   directoryResultOf,
   FIND_DEFAULT_LIMIT,
@@ -17,6 +19,7 @@ import {
   fileResultOf,
   findResultOf,
   formatAddress,
+  type IndexLimits,
   isGitHostAddress,
   joinSkillPages,
   type MountSummary,
@@ -39,6 +42,7 @@ import {
 } from "@skillcdn/core";
 import { checkDirectory, readIndexLimits } from "@skillcdn/indexer";
 import { ReaderInputError } from "@skillcdn/reader";
+import { createLocalApp, listenOn, type ServeLogger, serveOverStdio } from "@skillcdn/serve";
 import {
   type CredentialStore,
   createMemoryStore,
@@ -49,7 +53,14 @@ import {
   withoutLogin,
 } from "./credentials.js";
 import { createMemoryDirectoryStore, DIRECTORY_FILE, type DirectoryStore } from "./directory.js";
-import { openDirectory } from "./local.js";
+import {
+  type LocalMount,
+  localReader,
+  type MountedDirectory,
+  mountDirectory,
+  openDirectory,
+  watchDirectory,
+} from "./local.js";
 import { type Pack, PackError } from "./pack.js";
 import { openDeployment } from "./remote.js";
 
@@ -72,6 +83,13 @@ export interface CliIo {
   readonly now?: (() => Date) | undefined;
   /** What the command calls itself to a deployment. */
   readonly userAgent?: string | undefined;
+  /**
+   * Keeps a server running until the person stops it, and resolves then. Left out, `serve`
+   * returns as soon as it is serving, and `mcp` when the client closes its end.
+   */
+  readonly hold?: (() => Promise<void>) | undefined;
+  /** The process's standard input and output, which `mcp` speaks the protocol over. */
+  readonly streams?: { readonly stdin: Readable; readonly stdout: Writable } | undefined;
 }
 
 // Exit codes, as the server's roles use them: 64 for a usage error, 78 for configuration that
@@ -85,6 +103,10 @@ export const EXIT_CONFIG = 78;
 
 /** Where a pack is read when nothing says otherwise. */
 export const DEFAULT_ORIGIN = "https://skillcdn.ai";
+
+/** Where `serve` listens when nothing says otherwise: this machine alone. */
+export const DEFAULT_HOST = "127.0.0.1";
+export const DEFAULT_PORT = 11189;
 
 /** How the results name the reads, so that an agent is told the command and not a tool. */
 export const COMMAND_WORDS: ToolWords = {
@@ -101,6 +123,8 @@ const COMMANDS = [
   "find",
   "skill",
   "file",
+  "mcp",
+  "serve",
   "login",
   "logout",
   "logins",
@@ -123,6 +147,8 @@ Commands:
   find [<pack>] <words...>         What the words find, as search_repo does.
   skill [<pack>] <path>            A skill whole, as load_skill assembles it: rules, instructions, included files.
   file [<pack>] <path>             A page of a file, as read_repo_file reads it, or what a folder holds.
+  mcp <directory>                  Serve the directory to the MCP client that started the command.
+  serve <directory>...             Serve directories over HTTP on this machine: MCP and the REST API.
   login --url <origin> --token-stdin   Keep a token a person made at a deployment, for reads there.
   logout --url <origin>            Forget it.
   logins                           The deployments a token is kept for.
@@ -206,6 +232,33 @@ are named with where to read them instead.
 
 ${READ_OPTIONS}
 `,
+  mcp: `usage: skillcdn mcp <directory> [--as <address>]
+
+Serves the directory to the MCP client at the other end of standard input and output: the
+client that started the command, configured with a stdio server whose command is
+skillcdn mcp <directory>. The client gets what it would get from a deployment that served the
+directory as a pack: the four tools, the use_skill prompt and the skills extension, with the
+directory addressed as local/<owner>/<name> after its parent's name and its own, or as --as
+says. The directory is read again when its files change, so the next read serves what they
+hold now. The directory is verified: its content is served in full under its license. Nothing
+in it is executed. Standard output carries the protocol alone; what the command has to say
+goes to standard error.
+
+The INDEX_* and READ_MAX_FILE_BYTES variables set the limits a deployment would apply.
+`,
+  serve: `usage: skillcdn serve <directory>... [--port <port>] [--host <host>] [--as <address>]
+
+Serves directories over HTTP on this machine, each as a deployment serves a pack: an MCP server
+at http://<host>:<port>/local/<owner>/<name>, which any MCP client connects to over HTTP, and
+the REST API of the address under /api/v1/. A directory is addressed after its parent's name
+and its own, or as --as says when one directory is served. The directories are read again when
+their files change. Nothing in them is executed. Listens on ${DEFAULT_HOST} at port ${DEFAULT_PORT} unless
+--host and --port say otherwise; --port 0 takes any free port. Whoever reaches the port reads
+everything served, since nothing signs anyone in: keep it on this machine, or on a network of
+your own. Runs until stopped (Ctrl+C).
+
+The INDEX_* and READ_MAX_FILE_BYTES variables set the limits a deployment would apply.
+`,
   login: `usage: skillcdn login --url <origin> --token-stdin
 
 Keeps a token a person made at a deployment, read from standard input and never from an
@@ -257,6 +310,8 @@ const OPTIONS = {
   limit: { type: "string" },
   offset: { type: "string" },
   path: { type: "string" },
+  port: { type: "string" },
+  host: { type: "string" },
   "token-stdin": { type: "boolean" },
 } as const;
 
@@ -277,6 +332,15 @@ function count(value: string | undefined, name: string, max: number): number | u
 
 const defaultSleep = (ms: number): Promise<void> =>
   new Promise((resolved) => setTimeout(resolved, ms));
+
+/** The limits a deployment would apply, from the environment. */
+function limitsOf(io: CliIo): IndexLimits {
+  const limits = readIndexLimits(io.environment);
+  if (!limits.ok) {
+    throw new ConfigurationError(limits.error);
+  }
+  return limits.value;
+}
 
 /** What the command was given to find the pack by, read into where the pack is. */
 interface PackSpec {
@@ -383,10 +447,7 @@ async function openPack(
   values: Values,
   io: CliIo,
 ): Promise<{ readonly pack: Pack; readonly skillPath: string | undefined }> {
-  const limits = readIndexLimits(io.environment);
-  if (!limits.ok) {
-    throw new ConfigurationError(limits.error);
-  }
+  const limits = limitsOf(io);
   const bound = given === undefined ? await io.directory?.load() : undefined;
   let spec: PackSpec;
   if (given !== undefined) {
@@ -406,7 +467,7 @@ async function openPack(
     const opened = await openDirectory({
       directory: spec.directory,
       as: values.as,
-      limits: limits.value,
+      limits,
     });
     if ("error" in opened) {
       throw new Unreadable(opened.error, opened.exit);
@@ -869,6 +930,10 @@ export async function runCli(args: readonly string[], io: CliIo): Promise<number
         return await loginsCommand(rest, io);
       case "use":
         return await useCommand(rest, io);
+      case "mcp":
+        return await mcpCommand(rest, io);
+      case "serve":
+        return await serveCommand(rest, io);
       default:
         return await readCommand(name, rest, io);
     }
@@ -927,13 +992,205 @@ async function checkCommand(args: readonly string[], io: CliIo): Promise<number>
   if (rest.length > 0) {
     throw new Misuse("check takes one directory at most.");
   }
-  const limits = readIndexLimits(io.environment);
-  if (!limits.ok) {
-    throw new ConfigurationError(limits.error);
-  }
   return await checkDirectory({
     directory: resolve(io.cwd ?? ".", directory ?? "."),
-    limits: limits.value,
+    limits: limitsOf(io),
     write: io.stdout,
   });
+}
+
+// Serving a directory (ADR-0057): the same tools and routes a deployment serves, from the index
+// in memory, read again when the files change. The server is the serve package's; what is here
+// is the arguments, the process and the words.
+
+const clockOf = (io: CliIo): Clock => ({ now: () => io.now?.() ?? new Date() });
+
+const identity = (): { readonly name: string; readonly version: string } => ({
+  name: "skillcdn",
+  version: version(),
+});
+
+/** What the server has to say, on standard error, so that standard output stays the protocol's. */
+function stderrLogger(io: CliIo): ServeLogger {
+  const shown = (value: unknown): string => {
+    if (value instanceof Error) {
+      return JSON.stringify(value.message);
+    }
+    try {
+      return JSON.stringify(value) ?? String(value);
+    } catch {
+      return String(value);
+    }
+  };
+  const line = (level: string, fields: Record<string, unknown>, message: string): void => {
+    const rest = Object.entries(fields)
+      .map(([key, value]) => ` ${key}=${shown(value)}`)
+      .join("");
+    io.stderr(`${level}: ${message}${rest}\n`);
+  };
+  return {
+    warn: (fields, message) => line("warn", fields, message),
+    error: (fields, message) => line("error", fields, message),
+  };
+}
+
+/** Mounts the directories to serve, each at its own address. */
+async function mountAll(
+  directories: readonly string[],
+  as: string | undefined,
+  io: CliIo,
+): Promise<readonly MountedDirectory[]> {
+  if (as !== undefined && directories.length > 1) {
+    throw new Misuse(
+      "--as names one directory; serve the others by their own names, or one at a time.",
+    );
+  }
+  const limits = limitsOf(io);
+  const mounted: MountedDirectory[] = [];
+  for (const directory of directories) {
+    const result = await mountDirectory({
+      directory: resolve(io.cwd ?? ".", directory),
+      as,
+      limits,
+    });
+    if ("error" in result) {
+      throw new Unreadable(result.error, result.exit);
+    }
+    const address = formatAddress(result.mount.address);
+    if (mounted.some((other) => formatAddress(other.mount.address) === address)) {
+      throw new Misuse(
+        `Two directories would be served at ${address}: a directory is addressed after its parent's name and its own.`,
+      );
+    }
+    mounted.push(result);
+  }
+  return mounted;
+}
+
+/** Reads a directory again whenever its files change, for as long as it is served. */
+const watchAll = (mounted: readonly MountedDirectory[], logger: ServeLogger): { close(): void } => {
+  const watchers = mounted.map(({ mount, reload }) =>
+    watchDirectory(mount.root, reload, {
+      failed: (error) =>
+        logger.warn(
+          { err: error, directory: mount.root },
+          "the directory could not be read again; what was read last is served",
+        ),
+    }),
+  );
+  return {
+    close() {
+      for (const watcher of watchers) {
+        watcher.close();
+      }
+    },
+  };
+};
+
+async function mcpCommand(args: readonly string[], io: CliIo): Promise<number> {
+  const parsed = parseArgs({
+    args: [...args],
+    options: OPTIONS,
+    allowPositionals: true,
+    strict: true,
+  });
+  if (parsed.values.help === true) {
+    io.stdout(HELP.mcp);
+    return 0;
+  }
+  const [directory, ...more] = parsed.positionals;
+  if (directory === undefined || more.length > 0) {
+    throw new Misuse("Say which directory to serve, and one only.");
+  }
+  if (io.streams === undefined) {
+    throw new Misuse("Standard input and output are not available here.");
+  }
+  const [mounted] = await mountAll([directory], parsed.values.as, io);
+  if (mounted === undefined) {
+    throw new Error("one directory mounts as one");
+  }
+  const logger = stderrLogger(io);
+  const served = await serveOverStdio(mounted.mount, {
+    reader: localReader(limitsOf(io)),
+    clock: clockOf(io),
+    logger,
+    server: identity(),
+    stdin: io.streams.stdin,
+    stdout: io.streams.stdout,
+  });
+  io.stderr(
+    `Serving ${mounted.mount.root} as ${formatAddress(mounted.mount.address)} over standard input and output.\n`,
+  );
+  const watching = watchAll([mounted], logger);
+  await Promise.race([served.closed, io.hold?.() ?? served.closed]);
+  watching.close();
+  await served.close();
+  return 0;
+}
+
+function portOf(value: string | undefined): number {
+  if (value === undefined) {
+    return DEFAULT_PORT;
+  }
+  const port = /^\d{1,5}$/.test(value) ? Number(value) : Number.NaN;
+  if (Number.isNaN(port) || port > 65_535) {
+    throw new Misuse("--port takes a port number from 0 to 65535.");
+  }
+  return port;
+}
+
+function hostOf(value: string | undefined): string {
+  if (value === undefined) {
+    return DEFAULT_HOST;
+  }
+  if (value.length === 0 || /[\s/]/.test(value)) {
+    throw new Misuse("--host takes a host name or an address to listen on.");
+  }
+  return value;
+}
+
+async function serveCommand(args: readonly string[], io: CliIo): Promise<number> {
+  const parsed = parseArgs({
+    args: [...args],
+    options: OPTIONS,
+    allowPositionals: true,
+    strict: true,
+  });
+  if (parsed.values.help === true) {
+    io.stdout(HELP.serve);
+    return 0;
+  }
+  if (parsed.positionals.length === 0) {
+    throw new Misuse("Say which directories to serve.");
+  }
+  const port = portOf(parsed.values.port);
+  const host = hostOf(parsed.values.host);
+  const mounted = await mountAll(parsed.positionals, parsed.values.as, io);
+  const logger = stderrLogger(io);
+  const mounts: LocalMount[] = mounted.map(({ mount }) => mount);
+  const app = createLocalApp({
+    mounts,
+    reader: localReader(limitsOf(io)),
+    clock: clockOf(io),
+    logger,
+    server: identity(),
+  });
+  const listening = await listenOn(app, { host, port }).catch((error: unknown) => {
+    throw new Error(
+      `Cannot listen on ${host} at port ${port}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  });
+  io.stdout(
+    [
+      `Serving ${mounts.length === 1 ? "one pack" : `${mounts.length} packs`} at ${listening.url}: MCP at each address, the REST API under /api/v1/.`,
+      ...mounts.map((mount) => `  ${listening.url}${formatAddress(mount.address)}  ${mount.root}`),
+      "The directories are read again as their files change. Press Ctrl+C to stop.",
+      "",
+    ].join("\n"),
+  );
+  const watching = watchAll(mounted, logger);
+  await io.hold?.();
+  watching.close();
+  await listening.close();
+  return 0;
 }

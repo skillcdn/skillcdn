@@ -10,6 +10,7 @@
     { "path": "../../packages/db/tsconfig.build.json" },
     { "path": "../../packages/github/tsconfig.build.json" },
     { "path": "../../packages/indexer/tsconfig.build.json" },
-    { "path": "../../packages/reader/tsconfig.build.json" }
+    { "path": "../../packages/reader/tsconfig.build.json" },
+    { "path": "../../packages/serve/tsconfig.build.json" }
   ]
 }

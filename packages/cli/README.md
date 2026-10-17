@@ -2,7 +2,7 @@
   <a href="https://skillcdn.ai"><img alt="SkillCDN" src="https://raw.githubusercontent.com/skillcdn/skillcdn/main/packages/brand/symbol.svg" width="72"></a>
 </p>
 <h1 align="center">@skillcdn/cli</h1>
-<p align="center">The <code>skillcdn</code> command: check a pack before pushing, and read a pack as an agent gets it over MCP.</p>
+<p align="center">The <code>skillcdn</code> command: check a pack before pushing, read a pack as an agent gets it over MCP, and serve a directory to MCP clients.</p>
 <p align="center">
   <a href="https://www.npmjs.com/package/@skillcdn/cli"><img alt="npm" src="https://img.shields.io/npm/v/@skillcdn/cli"></a>
   <a href="https://www.npmjs.com/package/@skillcdn/cli"><img alt="node" src="https://img.shields.io/node/v/@skillcdn/cli"></a>
@@ -10,7 +10,7 @@
   <a href="https://github.com/skillcdn/skillcdn/blob/main/LICENSE.md"><img alt="License: FSL-1.1-ALv2" src="https://img.shields.io/badge/license-FSL--1.1--ALv2-3a6dd4"></a>
 </p>
 
-The `skillcdn` command, for two kinds of people. An author runs `skillcdn check` to see what an agent would get from a pack before pushing it. An agent with a shell runs `skillcdn skills`, `browse`, `find`, `skill` and `file` to read a pack as an MCP client's model reads it, without an MCP connection: the same text, from the same reading rules, from a pack at a deployment or from a directory on the machine ([ADR-0055](https://github.com/skillcdn/skillcdn/blob/main/docs/adr/0055-the-command-reads-a-pack-as-a-deployment-serves-it.md), [ADR-0056](https://github.com/skillcdn/skillcdn/blob/main/docs/adr/0056-the-rest-api-has-a-client-and-the-command-reads-a-deployment-through-it.md)).
+The `skillcdn` command, for two kinds of people. An author runs `skillcdn check` to see what an agent would get from a pack before pushing it. An agent with a shell runs `skillcdn skills`, `browse`, `find`, `skill` and `file` to read a pack as an MCP client's model reads it, without an MCP connection: the same text, from the same reading rules, from a pack at a deployment or from a directory on the machine ([ADR-0055](https://github.com/skillcdn/skillcdn/blob/main/docs/adr/0055-the-command-reads-a-pack-as-a-deployment-serves-it.md), [ADR-0056](https://github.com/skillcdn/skillcdn/blob/main/docs/adr/0056-the-rest-api-has-a-client-and-the-command-reads-a-deployment-through-it.md)). Either runs `skillcdn mcp` or `skillcdn serve` to serve a directory as a deployment would, to the MCP client that started the command or to any client on the machine, where there is no deployment or the pack is not pushed yet ([ADR-0057](https://github.com/skillcdn/skillcdn/blob/main/docs/adr/0057-a-directory-is-served-by-the-command-over-stdio-and-http.md)).
 
 ```sh
 npm install -g @skillcdn/cli                 # or: npx @skillcdn/cli <command> ...
@@ -21,6 +21,8 @@ skillcdn find gh/acme/skills release notes   # what the words find
 skillcdn skill gh/acme/skills marketing/ads/SKILL.md   # one skill whole: rules, instructions, included files
 skillcdn file gh/acme/skills docs/guide.md   # a page of a file
 skillcdn skills ./packs/acme                 # the same from a directory: no server, no network
+skillcdn mcp ./packs/acme                    # serve the directory to the MCP client that started the command
+skillcdn serve ./packs/acme ./packs/other    # serve directories over HTTP: MCP at http://127.0.0.1:11189/local/packs/acme
 ```
 
 ## Reading a pack
@@ -42,6 +44,10 @@ Paths start at the pack's root, as `marketing/ads/SKILL.md`, and never leave it.
 A private repository is read with a token a person made on their account page at the deployment ([permissions](https://github.com/skillcdn/skillcdn/blob/main/docs/specs/permissions.md#tokens-for-agents-with-nobody-to-sign-in)), kept once with `skillcdn login --url <origin> --token-stdin`, read from standard input and never from an argument. One token per deployment, kept in the person's configuration directory (`~/.config/skillcdn/credentials.json`, or under `XDG_CONFIG_HOME`), readable by them alone where the system can say so; it is presented to that deployment and to no other. `skillcdn logins` names the deployments, never the tokens; `skillcdn logout --url <origin>` forgets one. For a job, `SKILLCDN_URL` and `SKILLCDN_TOKEN` together do the same for one run.
 
 `skillcdn use gh/acme/skills [--url <origin>]` binds the working directory to a pack: it writes `.skillcdn.json`, the address and where it is read, nothing secret, meant to be committed, so that a read there or in a directory below needs no pack argument and every agent working in the checkout reads the same pack.
+
+## Serving a directory
+
+A directory is served as a deployment serves a pack, for a machine without a deployment, a network without one, or a pack not pushed yet ([ADR-0057](https://github.com/skillcdn/skillcdn/blob/main/docs/adr/0057-a-directory-is-served-by-the-command-over-stdio-and-http.md)). `skillcdn mcp <directory>` serves it to the MCP client that started the command, over standard input and output: in the client's configuration, a stdio server whose command is `skillcdn` with the arguments `mcp` and the directory. `skillcdn serve <directory>... [--port <port>] [--host <host>]` serves directories over HTTP on this machine, an MCP server at `http://<host>:<port>/local/<owner>/<name>` for each and the REST API of the address under `/api/v1/`, on `127.0.0.1` at port `11189` unless told otherwise, until stopped. Either way the client gets what [the MCP surface](https://github.com/skillcdn/skillcdn/blob/main/docs/specs/tools.md#served-from-a-machine) gives it from a deployment, the tools, the `use_skill` prompt and the skills extension, with the directory read again when its files change and nothing in it executed; a client is told to keep nothing it reads, since a working tree changes without a commit. Whoever reaches the port reads everything served, since nothing signs anyone in: keep it on this machine, or on a network of your own. The server is [`@skillcdn/serve`](https://www.npmjs.com/package/@skillcdn/serve), the package a deployment composes as well.
 
 ## Checking a pack
 

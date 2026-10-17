@@ -1,0 +1,60 @@
+{
+  "name": "@skillcdn/serve",
+  "version": "0.0.0",
+  "description": "The edges of SkillCDN as a library: the MCP tools and the skills extension, and the REST routes of an address, over a reader; served over stdio or HTTP from any index.",
+  "license": "FSL-1.1-ALv2",
+  "homepage": "https://skillcdn.ai",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/skillcdn/skillcdn.git",
+    "directory": "packages/serve"
+  },
+  "bugs": "https://github.com/skillcdn/skillcdn/issues",
+  "keywords": [
+    "skillcdn",
+    "mcp",
+    "agent-skills",
+    "skills"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=24"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.tsbuildinfo"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\"",
+    "prepack": "node ../../scripts/pack-license.mjs copy",
+    "postpack": "node ../../scripts/pack-license.mjs remove"
+  },
+  "dependencies": {
+    "@hono/node-server": "catalog:",
+    "@modelcontextprotocol/server": "catalog:",
+    "@skillcdn/core": "workspace:^",
+    "@skillcdn/reader": "workspace:^",
+    "hono": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "catalog:",
+    "@skillcdn/indexer": "workspace:^",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

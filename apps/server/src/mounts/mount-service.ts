@@ -31,7 +31,7 @@ import {
   saveRepository,
   type UserRecord,
 } from "@skillcdn/db";
-import type { MountContext } from "@skillcdn/reader";
+import type { ServedMount } from "@skillcdn/serve";
 
 /**
  * Who a request is for, for a request that carries a credential; a request without one is
@@ -70,7 +70,7 @@ export interface RepoPermissions {
 }
 
 /** An address resolved to a repository and a commit: what tools answer from. */
-export interface Mount extends MountContext {
+export interface Mount extends ServedMount {
   readonly address: GitHostAddress;
   /** Where the repository is, and with which credential the git host is asked about it. */
   readonly coordinates: RepoCoordinates;
@@ -266,6 +266,7 @@ export class MountService {
         address.ref === undefined && (await this.#options.isVerified(repositoryKey(address))),
       image: await this.#options.imageOf(address),
       trustedUntil: resolved.trustedUntil,
+      visibility: repository.visibility,
       repository: `${repository.owner.login}/${repository.name}`,
       description: repository.description,
       sourceUrl: (path: RepoPath) => sourceFileUrl(atHost, commit, path),

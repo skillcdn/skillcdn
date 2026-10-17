@@ -53,6 +53,22 @@ skillcdn skills ./packs/acme                    # the same from a folder, with n
 
 An address is read at `skillcdn.ai` unless `--url` or `SKILLCDN_URL` names a deployment of your own. For a private repository, make a token on your account page and keep it with `skillcdn login --url <origin> --token-stdin`, once; it goes to that deployment and nowhere else. `skillcdn use gh/acme/skills` in a checkout binds it to the pack, so that every agent working there reads it without naming it. `skillcdn help <command>` says the rest. A folder read this way is yours: it is served in full under its license, with no provenance notice, and it is addressed as `local/<the folder's parent>/<its name>` ([addresses](../specs/address.md#served-from-a-machine)).
 
+## A folder served to an MCP client
+
+The same command serves a folder as a deployment would, with no server and no network: for a machine that has neither, a network of your own, or a pack that is not pushed yet. To the client that starts it, over standard input and output, as a stdio server in the client's configuration:
+
+```json
+{ "mcpServers": { "acme": { "command": "skillcdn", "args": ["mcp", "./packs/acme"] } } }
+```
+
+To any client on the machine, over HTTP:
+
+```sh
+skillcdn serve ./packs/acme ./packs/other       # MCP at http://127.0.0.1:11189/local/packs/acme, the REST API under /api/v1/
+```
+
+What the client gets is what it would get from a deployment that served the folder as a pack ([the MCP surface](../specs/tools.md#served-from-a-machine)): the four tools, the prompt and the skills extension, with the folder read again as its files are saved. Whoever reaches the port reads everything served, since nothing signs anyone in: keep it on the machine, or on a network of your own.
+
 ## Private repositories
 
 On a deployment where people sign in, a private repository is served to exactly the people who can see it on GitHub, where the deployment's GitHub App is installed on it. Your AI app signs in as you, once: it opens a page of the deployment in your browser, you sign in with GitHub and allow the app, and the app receives a token that is good for that one address. The connection guide of a private repository says how each app begins that. An agent that cannot sign in, a scheduled job or a server, uses a token you make on your account page for the repository; it reads as you, and the git host still decides what it may open. [People, private repositories and access](../specs/permissions.md) is the contract.

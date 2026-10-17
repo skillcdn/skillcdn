@@ -116,6 +116,10 @@ Skills that are not listed stay available through the tools, and say why they ar
 
 A skill this mount describes without serving is not listed by the extension, and its URIs name nothing ([licenses](skill-repo.md#licenses)).
 
+## Served from a machine
+
+The same surface is served from a machine by the `skillcdn` command, for a directory in the format ([ADR-0053](../adr/0053-an-address-may-name-a-pack-served-from-a-machine.md), [ADR-0057](../adr/0057-a-directory-is-served-by-the-command-over-stdio-and-http.md)): `skillcdn mcp <directory>` over standard input and output to one client, `skillcdn serve <directory>...` over HTTP at each directory's `local/<owner>/<name>` address, with the REST routes of the address beside it. The tools, the prompt, the extension and their results are the ones above, from the same code; a directory is verified, so no provenance notice follows and its content is served in full under its license; its cache fields say to keep nothing (`ttlMs` zero, `cacheScope` private), since a working tree changes without a commit, and the commit every result names is the working tree's stand-in. Over standard input and output the server names no page and no icon, since it has no origin.
+
 ## Indexing and trust
 
 - Connecting starts indexing an unseen commit. `browse_repo`, `search_repo`, `load_skill` and the extension's methods wait within a configurable budget, then return an indexing result if it is not ready. Indexing continues; failures retry after backoff.

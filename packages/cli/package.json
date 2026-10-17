@@ -1,7 +1,7 @@
 {
   "name": "@skillcdn/cli",
   "version": "0.1.4",
-  "description": "The skillcdn command: check a pack before pushing, and read a pack as an agent would get it over MCP, from a directory on this machine.",
+  "description": "The skillcdn command: check a pack before pushing, read a pack as an agent gets it over MCP, and serve a directory to MCP clients over stdio or HTTP.",
   "license": "FSL-1.1-ALv2",
   "homepage": "https://skillcdn.ai",
   "repository": {
@@ -43,7 +43,8 @@
     "@skillcdn/client": "workspace:^",
     "@skillcdn/core": "workspace:^",
     "@skillcdn/indexer": "workspace:^",
-    "@skillcdn/reader": "workspace:^"
+    "@skillcdn/reader": "workspace:^",
+    "@skillcdn/serve": "workspace:^"
   },
   "devDependencies": {
     "@types/node": "catalog:",
