@@ -31,7 +31,7 @@ Goal: a person signs in with their git host and uses a private repository from t
 Goal: an agent with a shell and no MCP connection reads a pack through the `skillcdn` command, from a deployment or from a directory on its own machine, and a directory is served as MCP and REST from that machine without a server or a database, offline or in a network that reaches no git host. What the command answers is what a deployment would answer ([ADR-0053](adr/0053-an-address-may-name-a-pack-served-from-a-machine.md)).
 
 - [x] `local` addresses: a pack served from a machine, nothing to a deployment ([ADR-0053](adr/0053-an-address-may-name-a-pack-served-from-a-machine.md)).
-- [ ] The word rules of search in `core`, so that an index in memory is searched as PostgreSQL searches one.
+- [x] The word rules of search in `core`, so that an index in memory is searched as PostgreSQL searches one: the same words at the same positions, the same stems and stop words, and the same rank, held against the server by an integration test.
 - [ ] The REST shapes and the results converted both ways in `core`, and `commit` in every REST result.
 - [ ] `@skillcdn/reader`: the reads over an index-store port; the server composes it with PostgreSQL.
 - [ ] A directory read into an index in memory; `skillcdn skills`, `browse`, `find`, `skill` and `file` on a directory.

@@ -1,4 +1,9 @@
-import type { LicenseFact, SnapshotDiagnostic, SnapshotIndex } from "@skillcdn/core";
+import {
+  type LicenseFact,
+  MAX_SEARCHED_BODY_LENGTH,
+  type SnapshotDiagnostic,
+  type SnapshotIndex,
+} from "@skillcdn/core";
 import { and, eq, lt, lte, or, sql } from "drizzle-orm";
 import { type Database, drizzleOf } from "../client.js";
 import { indexEntries, snapshots } from "../schema.js";
@@ -202,10 +207,11 @@ export async function failSnapshot(
     .where(heldBy(scope, owner));
 }
 
-/** The text-search configuration. Index and query must agree, so it is not configurable. */
+/**
+ * The text-search configuration. Index and query must agree, so it is not configurable; the
+ * word rules of @skillcdn/core follow it, so that an index in memory is searched the same way.
+ */
 export const SEARCH_CONFIG = "english";
-/** Characters of a body that go into the search vector: a tsvector is limited to 1 MB. */
-const MAX_SEARCHED_BODY_LENGTH = 200_000;
 const ENTRY_BATCH_SIZE = 200;
 
 /**

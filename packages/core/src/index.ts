@@ -317,6 +317,21 @@ export {
   type SocialCard,
 } from "./rest/social.js";
 export { err, ok, type Result } from "./result.js";
+export { stemEnglish } from "./search/english-stemmer.js";
+export { type Lexeme, queryLexemes, searchLexemes } from "./search/lexemes.js";
+export { ENGLISH_STOP_WORDS } from "./search/stop-words.js";
+export {
+  MAX_SEARCHED_BODY_LENGTH,
+  rankSearchVector,
+  SEARCH_WEIGHTS,
+  type SearchField,
+  type SearchPosition,
+  type SearchVector,
+  type SearchWeight,
+  SKILL_RANK_BOOST,
+  searchFieldsOf,
+  searchVectorOf,
+} from "./search/vector.js";
 export {
   assembleSkillDocument,
   frontMatterObject,
