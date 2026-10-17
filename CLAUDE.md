@@ -44,7 +44,7 @@ packages/
   github/     GitHub implementation of the git-host port
   indexer/    the reading rules: a commit or a working tree read into an index   @skillcdn/indexer on npm
   reader/     the reads of a mount over an index, wherever the index is kept    @skillcdn/reader on npm
-  cli/        the skillcdn command for repository authors: skillcdn check        @skillcdn/cli on npm
+  cli/        the skillcdn command: check a pack, and read one as an agent gets it over MCP   @skillcdn/cli on npm
   brand/      the pictures of the brand as files, under the trademark policy; no code   @skillcdn/brand on npm
 apps/server/fixtures/.repositories/  test-only repository fixtures; the public reference pack is skillcdn/skills
 deploy/       Dockerfile, compose files, the contract for whoever operates the image
@@ -53,7 +53,7 @@ docs/         architecture, specs, ADRs, roadmap, user guides; nav.json lists wh
 
 Two reference repositories sit beside this one and are never imported from it: `skillcdn/skills`, the reference pack, and `skillcdn/console`, the reference console for an organization that runs its work with agents. Both are examples that follow the standard and are meant for real use; the console consumes the published packages and the REST API like any other consumer and defines nothing of the specification ([ADR-0047](docs/adr/0047-the-console-is-a-separate-repository-built-on-the-published-packages.md)).
 
-Dependencies point inward only: `server → db, github, indexer, reader → core`, `cli → indexer`, and `web → core, brand`. `core` imports nothing from the workspace and nothing from Node; `brand` is files and imports nothing. `web` may import `core` and `brand` and nothing else. A package can only import what its own `package.json` declares, and only from another package's entry point (never `@skillcdn/x/src/...`). Changing these edges needs an ADR.
+Dependencies point inward only: `server → db, github, indexer, reader → core`, `cli → core, indexer, reader`, and `web → core, brand`. `core` imports nothing from the workspace and nothing from Node; `brand` is files and imports nothing. `web` may import `core` and `brand` and nothing else. A package can only import what its own `package.json` declares, and only from another package's entry point (never `@skillcdn/x/src/...`). Changing these edges needs an ADR.
 
 ## Commands
 

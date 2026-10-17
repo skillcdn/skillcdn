@@ -5,5 +5,9 @@
     "types": ["node"]
   },
   "include": ["src"],
-  "references": [{ "path": "../indexer/tsconfig.build.json" }]
+  "references": [
+    { "path": "../core/tsconfig.build.json" },
+    { "path": "../indexer/tsconfig.build.json" },
+    { "path": "../reader/tsconfig.build.json" }
+  ]
 }

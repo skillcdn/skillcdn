@@ -81,6 +81,12 @@ export interface BuildIndexOptions {
     readonly owner: string;
     readonly name: string;
   };
+  /**
+   * Where the bytes of a file are at the source, for the files the index names with their
+   * source (ADR-0033); left out, the host's raw file URL of `repository`. A directory read as a
+   * working tree names its files on disk.
+   */
+  readonly rawUrl?: (path: RepoPath) => string;
   readonly commit: string;
   readonly limits: IndexLimits;
   readonly signal: AbortSignal;
@@ -748,6 +754,7 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
     owner: coordinates.owner,
     name: coordinates.repo,
   };
+  const rawUrl = options.rawUrl ?? ((path: RepoPath) => rawFileUrl(repository, commit, path));
   const listings: Listing[] = [];
   for (const [directory, skill] of skills) {
     const owned = candidates.filter(
@@ -760,7 +767,7 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
       .map(({ entry }) => ({
         path: entry.path,
         size: entry.size,
-        sourceUrl: rawFileUrl(repository, commit, entry.path),
+        sourceUrl: rawUrl(entry.path),
       }));
     listings.push({
       directory,

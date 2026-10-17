@@ -10,3 +10,9 @@ export {
   type IndexLimitVariable,
   readIndexLimits,
 } from "./limits.js";
+export {
+  type ReadDirectory,
+  type ReadDirectoryOptions,
+  readDirectory,
+  WORKING_TREE_COMMIT,
+} from "./read-directory.js";

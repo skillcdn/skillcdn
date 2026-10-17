@@ -321,9 +321,15 @@ importers:
 
   packages/cli:
     dependencies:
+      '@skillcdn/core':
+        specifier: workspace:^
+        version: link:../core
       '@skillcdn/indexer':
         specifier: workspace:^
         version: link:../indexer
+      '@skillcdn/reader':
+        specifier: workspace:^
+        version: link:../reader
     devDependencies:
       '@types/node':
         specifier: 'catalog:'

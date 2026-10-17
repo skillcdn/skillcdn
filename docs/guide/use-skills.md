@@ -39,6 +39,19 @@ An address names a repository, and may name more ([addresses](../specs/address.m
 
 A tag or a full commit hash gives you exactly what was reviewed, every time. A folder gives an app only that area of a large repository; connect the repository root when the skills share references across folders, which the page of the repository suggests where it matters.
 
+## From a shell, without MCP
+
+An agent that runs commands can read a pack with the `skillcdn` command instead of an MCP connection: nothing to configure, no tools in its context until it asks, and the same words an MCP client's model is given. For now the command reads a pack that is on the machine, a git checkout or any folder in the format; install it once where the agent runs (`npm install -g @skillcdn/cli`), then:
+
+```sh
+skillcdn skills ./packs/acme                    # what a client is told on connect, then every skill and document
+skillcdn find ./packs/acme release notes        # search by words
+skillcdn skill ./packs/acme marketing/ads/SKILL.md   # one skill whole: its rules, instructions and included files
+skillcdn file ./packs/acme docs/guide.md        # a file, by pages
+```
+
+`skillcdn help <command>` says the rest. A folder read this way is yours: it is served in full under its license, with no provenance notice, and it is addressed as `local/<the folder's parent>/<its name>` ([addresses](../specs/address.md#served-from-a-machine)).
+
 ## Private repositories
 
 On a deployment where people sign in, a private repository is served to exactly the people who can see it on GitHub, where the deployment's GitHub App is installed on it. Your AI app signs in as you, once: it opens a page of the deployment in your browser, you sign in with GitHub and allow the app, and the app receives a token that is good for that one address. The connection guide of a private repository says how each app begins that. An agent that cannot sign in, a scheduled job or a server, uses a token you make on your account page for the repository; it reads as you, and the git host still decides what it may open. [People, private repositories and access](../specs/permissions.md) is the contract.

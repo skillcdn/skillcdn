@@ -457,6 +457,7 @@ export type {
 } from "./tools/reads.js";
 export {
   INDEXING_NOTICE,
+  MCP_TOOL_WORDS,
   PROVENANCE_NOTICE,
   renderBrowseResult,
   renderDiagnostics,
@@ -464,6 +465,7 @@ export {
   renderFileResult,
   renderFindResult,
   renderSkillResult,
+  type ToolWords,
 } from "./tools/render.js";
 export {
   BROWSE_DESCRIPTION_MAX_LENGTH,

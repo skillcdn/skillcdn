@@ -1,7 +1,7 @@
 {
   "name": "@skillcdn/cli",
   "version": "0.1.4",
-  "description": "The skillcdn command: check a pack before pushing, as SkillCDN would index it.",
+  "description": "The skillcdn command: check a pack before pushing, and read a pack as an agent would get it over MCP, from a directory on this machine.",
   "license": "FSL-1.1-ALv2",
   "homepage": "https://skillcdn.ai",
   "repository": {
@@ -40,7 +40,9 @@
     "postpack": "node ../../scripts/pack-license.mjs remove"
   },
   "dependencies": {
-    "@skillcdn/indexer": "workspace:^"
+    "@skillcdn/core": "workspace:^",
+    "@skillcdn/indexer": "workspace:^",
+    "@skillcdn/reader": "workspace:^"
   },
   "devDependencies": {
     "@types/node": "catalog:",

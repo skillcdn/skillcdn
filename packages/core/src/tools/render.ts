@@ -17,13 +17,32 @@ import type {
   SkillResult,
 } from "./results.js";
 
+/** The names a result calls the four reads by: the MCP tools, or whatever a program names them. */
+export interface ToolWords {
+  readonly browse: string;
+  readonly search: string;
+  readonly load: string;
+  readonly read: string;
+}
+
+/** The tools as the MCP endpoint names them (docs/specs/tools.md). */
+export const MCP_TOOL_WORDS: ToolWords = {
+  browse: "browse_repo",
+  search: "search_repo",
+  load: "load_skill",
+  read: "read_repo_file",
+};
+
 function renderReferences(references: readonly FileReference[] | undefined): string | undefined {
   return references === undefined || references.length === 0
     ? undefined
     : `Resolved references:\n${references.map((reference) => `- ${reference.source === undefined ? "" : `${reference.source}: `}${reference.href} -> ${reference.path} (${reference.status})`).join("\n")}`;
 }
 
-export function renderBrowseResult(result: BrowseResult): string {
+export function renderBrowseResult(
+  result: BrowseResult,
+  words: ToolWords = MCP_TOOL_WORDS,
+): string {
   return joinSections([
     `Folder: ${result.path || "repository root"}\nSource: ${describeMount(result.mount)}`,
     result.overview === undefined
@@ -35,7 +54,7 @@ export function renderBrowseResult(result: BrowseResult): string {
           result.overview.description === undefined
             ? undefined
             : compactSummary(result.overview.description, BROWSE_DESCRIPTION_MAX_LENGTH),
-          `Optional overview: read_repo_file ${result.overview.path}.`,
+          `Optional overview: ${words.read} ${result.overview.path}.`,
         ]),
     result.entries
       .map(
@@ -43,7 +62,7 @@ export function renderBrowseResult(result: BrowseResult): string {
           `- ${entry.kind}: ${entry.path}${entry.name === null ? "" : ` (${compactSummary(entry.name, 120)})`}${entry.kind === "file" ? "" : `; ${plural(entry.skillCount, "skill")}${entry.documentCount === 0 ? "" : `, ${plural(entry.documentCount, "document")}`}`}${entry.overviewPath === undefined ? "" : `; overview: ${entry.overviewPath}`}${describedOnlyNote(entry)}${entry.description === null ? "" : `\n  ${compactSummary(entry.description, BROWSE_DESCRIPTION_MAX_LENGTH)}`}`,
       )
       .join("\n"),
-    renderDiagnostics(result.diagnostics ?? [], true, result.diagnosticsTotal),
+    renderDiagnostics(result.diagnostics ?? [], true, result.diagnosticsTotal, words),
     result.nextCursor === undefined
       ? undefined
       : `nextCursor: ${JSON.stringify(result.nextCursor)}`,
@@ -114,13 +133,14 @@ export function renderDiagnostics(
   diagnostics: readonly IndexDiagnostic[],
   detailed: boolean,
   total = diagnostics.length,
+  words: ToolWords = MCP_TOOL_WORDS,
 ): string | undefined {
   const count = diagnostics.length;
   if (total === 0) {
     return undefined;
   }
   if (!detailed) {
-    return `Note: ${plural(total, "index issue")} reported; browse_repo provides details.`;
+    return `Note: ${plural(total, "index issue")} reported; ${words.browse} provides details.`;
   }
   const lines = diagnostics
     .slice(0, MAX_LISTED_DIAGNOSTICS)
@@ -163,7 +183,7 @@ function renderFindItem(item: FindItem, number: number): string {
   return `${number}. document: ${item.path}${title}${summary}${owner}`;
 }
 
-export function renderFindResult(result: FindResult): string {
+export function renderFindResult(result: FindResult, words: ToolWords = MCP_TOOL_WORDS): string {
   const where = describeMount(result.mount);
   const count = result.items.length;
   const skillsListed = result.items.filter((item) => item.kind === "skill").length;
@@ -190,7 +210,7 @@ export function renderFindResult(result: FindResult): string {
     heading =
       `No results for ${JSON.stringify(result.query)} in ${where}. ` +
       "Try fewer or different keywords, in the language the repository is written in, or call " +
-      "browse_repo to list what is available.";
+      `${words.browse} to list what is available.`;
   } else {
     heading = `${count} result${count === 1 ? "" : "s"} for ${JSON.stringify(result.query)} in ${where}:`;
   }
@@ -202,6 +222,7 @@ export function renderFindResult(result: FindResult): string {
     result.diagnostics,
     result.query === undefined || count === 0,
     result.diagnosticsTotal,
+    words,
   );
   return joinSections([
     heading,
@@ -215,7 +236,7 @@ export function renderFindResult(result: FindResult): string {
   ]);
 }
 
-export function renderSkillResult(result: SkillResult): string {
+export function renderSkillResult(result: SkillResult, words: ToolWords = MCP_TOOL_WORDS): string {
   const directory = result.directory.length === 0 ? "the mounted root" : `${result.directory}/`;
   const header = [
     `Skill: ${result.name}`,
@@ -250,12 +271,12 @@ export function renderSkillResult(result: SkillResult): string {
   let files: string | undefined;
   if (result.files.length > 0) {
     const more = result.filesTruncated
-      ? `\n- ... (browse_repo ${JSON.stringify({ path: result.directory })} for all supporting files)`
+      ? `\n- ... (${words.browse} ${JSON.stringify({ path: result.directory })} for all supporting files)`
       : "";
     const listed = result.files.map(
       (file) => `- ${file}${includedPaths.has(file) ? " (included below)" : ""}`,
     );
-    files = `Supporting files, readable with read_repo_file:\n${listed.join("\n")}${more}`;
+    files = `Supporting files, readable with ${words.read}:\n${listed.join("\n")}${more}`;
   }
   // A file the read limit keeps out is still part of the skill: the host has the bytes.
   const oversized =
@@ -281,25 +302,25 @@ export function renderSkillResult(result: SkillResult): string {
       body: result.body,
       included: result.included,
     },
-    { tool: "load_skill", reader: "read_repo_file" },
+    { tool: words.load, reader: words.read },
   );
 
   return joinSections([
     header.join("\n"),
     result.complete === false
-      ? `Skill context is incomplete.${result.nextCursor === undefined ? " Resolve the warnings before using this skill." : ` Continue load_skill with path ${JSON.stringify(result.path)} and cursor ${JSON.stringify(result.nextCursor)} before using it.`}`
+      ? `Skill context is incomplete.${result.nextCursor === undefined ? " Resolve the warnings before using this skill." : ` Continue ${words.load} with path ${JSON.stringify(result.path)} and cursor ${JSON.stringify(result.nextCursor)} before using it.`}`
       : undefined,
     files,
     oversized,
     warnings,
     result.detailsTruncated
-      ? `Optional details abbreviated; read_repo_file ${result.path ?? `${result.directory.length === 0 ? "" : `${result.directory}/`}SKILL.md`} has the source.`
+      ? `Optional details abbreviated; ${words.read} ${result.path ?? `${result.directory.length === 0 ? "" : `${result.directory}/`}SKILL.md`} has the source.`
       : undefined,
     notices(result.mount).join("\n"),
     document,
     renderReferences(result.references),
     result.referencesTruncated
-      ? "Reference list abbreviated; consult source links or browse_repo the skill folder."
+      ? `Reference list abbreviated; consult source links or ${words.browse} the skill folder.`
       : undefined,
   ]);
 }
@@ -319,7 +340,7 @@ export function renderDirectoryResult(result: DirectoryResult): string {
   return joinSections([header.join("\n"), entries.join("\n"), notices(result.mount).join("\n")]);
 }
 
-export function renderFileResult(result: FileResult): string {
+export function renderFileResult(result: FileResult, words: ToolWords = MCP_TOOL_WORDS): string {
   const end = result.offset + result.content.length;
   const range =
     result.offset === 0 && result.nextOffset === undefined
@@ -330,7 +351,7 @@ export function renderFileResult(result: FileResult): string {
     `Source: ${describeMount(result.mount)}`,
     result.nextOffset === undefined
       ? undefined
-      : `More follows: call read_repo_file with offset ${result.nextOffset}.`,
+      : `More follows: call ${words.read} with offset ${result.nextOffset}.`,
   ].filter((line) => line !== undefined);
 
   return joinSections([

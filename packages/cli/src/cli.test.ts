@@ -93,20 +93,26 @@ describe("the skillcdn command", () => {
     expect(err).not.toContain("many");
   });
 
-  it("prints the usage for anything that is not the check command", async () => {
-    for (const args of [[], ["--bogus"], ["lint", "."], ["check", "a", "b"]]) {
+  it("prints the usage for anything that is not a command, and a command's help for its misuse", async () => {
+    for (const args of [[], ["--bogus"], ["lint", "."]]) {
       const { code, out, err } = await run(args);
       expect(code).toBe(EXIT_USAGE);
       expect(out).toBe("");
-      expect(err).toContain("usage: skillcdn check [directory]");
+      expect(err).toContain("usage: skillcdn <command> [arguments]");
     }
+    const misuse = await run(["check", "a", "b"]);
+    expect(misuse.code).toBe(EXIT_USAGE);
+    expect(misuse.err).toContain("check takes one directory at most.");
+    expect(misuse.err).toContain("usage: skillcdn check [<directory>]");
   });
 
   it("prints its help and its version", async () => {
     const help = await run(["--help"]);
     expect(help.code).toBe(0);
-    expect(help.out).toContain("usage: skillcdn check [directory]");
+    expect(help.out).toContain("usage: skillcdn <command> [arguments]");
     expect(help.out).toContain("Exit codes:");
+    const one = await run(["check", "--help"]);
+    expect(one.out).toContain("usage: skillcdn check [<directory>]");
     const version = await run(["-v"]);
     expect(version.code).toBe(0);
     expect(version.out).toMatch(/^\d+\.\d+\.\d+\S*\n$/);
