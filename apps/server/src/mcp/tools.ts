@@ -12,6 +12,8 @@ import {
   ICON_ROUTE,
   ICON_SIZE,
   INDEXING_NOTICE,
+  type IndexedFile,
+  type IndexNotReady,
   MCP_BROWSE_DEFAULT_LIMIT,
   MCP_SEARCH_DEFAULT_LIMIT,
   readFileTool,
@@ -20,10 +22,9 @@ import {
   searchTool,
   type UsageSink,
 } from "@skillcdn/core";
+import { type Reader, ReaderInputError } from "@skillcdn/reader";
 import * as z from "zod";
 import type { Logger } from "../logger.js";
-import { ReaderInputError } from "../mounts/continuation.js";
-import type { IndexedFile, MountReader, NotReady } from "../mounts/mount-reader.js";
 import type { Mount } from "../mounts/mount-service.js";
 import type { UsageStats } from "../stats/usage-recorder.js";
 import { SERVER_NAME, SERVER_VERSION } from "../version.js";
@@ -39,7 +40,7 @@ import {
 } from "./replies.js";
 
 export interface ToolDependencies {
-  readonly reader: MountReader;
+  readonly reader: Reader<Mount>;
   readonly usage: UsageSink;
   readonly stats: UsageStats;
   readonly clock: Clock;
@@ -56,7 +57,7 @@ const PINNED_TTL_MS = 86_400_000;
 /** How long a client may keep an answer given while the commit is still being indexed. */
 const INDEXING_TTL_MS = 5_000;
 
-function notReady(outcome: NotReady): ToolReply {
+function notReady(outcome: IndexNotReady): ToolReply {
   return outcome.status === "indexing"
     ? reply(INDEXING_NOTICE)
     : problem(`This commit could not be indexed (${outcome.errorCode}). Try again later.`);
@@ -295,7 +296,7 @@ export async function createMountServer(
   // the listing is empty and short-lived, and a read is a transient failure.
   const invalid = (message: string): ProtocolError =>
     new ProtocolError(ProtocolErrorCode.InvalidParams, message);
-  const notIndexed = (outcome: NotReady): ProtocolError =>
+  const notIndexed = (outcome: IndexNotReady): ProtocolError =>
     new ProtocolError(
       ProtocolErrorCode.InternalError,
       outcome.status === "indexing"

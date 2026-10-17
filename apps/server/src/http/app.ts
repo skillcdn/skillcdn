@@ -34,6 +34,7 @@ import {
   skillOutcome,
 } from "@skillcdn/core";
 import { type Database, getSchemaStatus, type UserRecord } from "@skillcdn/db";
+import { type Reader, ReaderInputError } from "@skillcdn/reader";
 import { type Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
@@ -52,8 +53,6 @@ import type { HostEvents } from "../events/host-events.js";
 import type { SnapshotService } from "../indexer/snapshot-service.js";
 import type { Logger } from "../logger.js";
 import { createMountServer, type ToolDependencies } from "../mcp/tools.js";
-import { ReaderInputError } from "../mounts/continuation.js";
-import type { MountReader } from "../mounts/mount-reader.js";
 import { type Mount, MountError, type MountService, type Viewer } from "../mounts/mount-service.js";
 import type { OperatorImages } from "../operator/images.js";
 import type { LegalDocuments } from "../operator/legal.js";
@@ -107,7 +106,7 @@ export interface AppDependencies {
   readonly owners: OwnerService | undefined;
   readonly mounts: MountService;
   readonly snapshots: SnapshotService;
-  readonly reader: MountReader;
+  readonly reader: Reader<Mount>;
   readonly tools: ToolDependencies;
   /** The operator's lists: what is featured, vouched for and blocked (ADR-0026). */
   readonly lists: OperatorLists;

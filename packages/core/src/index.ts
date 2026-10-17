@@ -126,6 +126,7 @@ export type {
   HostInstalledRepository,
   HostUser,
 } from "./ports/git-host-login.js";
+export type { IndexOutcome, IndexStore, ReadableIndex } from "./ports/index-store.js";
 export { discardUsage, type UsageEvent, type UsageSink } from "./ports/usage-sink.js";
 export {
   baseName,

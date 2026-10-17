@@ -5,6 +5,7 @@
     { "path": "packages/db/tsconfig.build.json" },
     { "path": "packages/github/tsconfig.build.json" },
     { "path": "packages/indexer/tsconfig.build.json" },
+    { "path": "packages/reader/tsconfig.build.json" },
     { "path": "packages/cli/tsconfig.build.json" },
     { "path": "apps/server/tsconfig.build.json" }
   ]

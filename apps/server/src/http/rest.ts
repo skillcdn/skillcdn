@@ -9,6 +9,7 @@ import {
   findBody,
   formatAddress,
   GitHostError,
+  type IndexNotReady,
   isLegalDocumentKind,
   type LegalDocumentKind,
   MAX_QUERY_LENGTH,
@@ -31,18 +32,17 @@ import {
   restRepoTranslations,
   skillOutcome,
 } from "@skillcdn/core";
+import { type Reader, ReaderInputError } from "@skillcdn/reader";
 import type { Context, Hono } from "hono";
 import { cors } from "hono/cors";
 import * as z from "zod";
 import type { Logger } from "../logger.js";
-import { ReaderInputError } from "../mounts/continuation.js";
-import type { MountReader, NotReady } from "../mounts/mount-reader.js";
 import type { Mount } from "../mounts/mount-service.js";
 import { OwnerNotFoundError, type OwnerService } from "../owners/owner-service.js";
 import type { AppEnv } from "./request-context.js";
 
 export interface RestDependencies {
-  readonly reader: MountReader;
+  readonly reader: Reader<Mount>;
   readonly logger: Logger;
   /** Resolves the address after `prefix` in the request path, or answers with the error. */
   readonly mountAt: (c: Context<AppEnv>, prefix: string) => Promise<Mount | Response>;
@@ -146,7 +146,7 @@ function imageOf(
  */
 export function mountBody(
   mount: Mount,
-  answer: NotReady | { readonly status: "ready"; readonly overview: MountOverview },
+  answer: IndexNotReady | { readonly status: "ready"; readonly overview: MountOverview },
 ): RestMount {
   return restMountBody(
     {

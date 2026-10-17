@@ -252,6 +252,10 @@ describe("usage statistics", () => {
       verified: false,
       image: undefined,
       trustedUntil: undefined,
+      repository: "acme/single-skill",
+      description: undefined,
+      sourceUrl: (path) => `https://github.com/acme/single-skill/blob/main/${path}`,
+      rawUrl: (path) => `https://raw.githubusercontent.com/acme/single-skill/main/${path}`,
     };
     lost.count(mount, "connection");
     await expect(lost.close()).resolves.toBeUndefined();
@@ -305,6 +309,10 @@ describe("usage statistics", () => {
       verified: false,
       image: undefined,
       trustedUntil: undefined,
+      repository: "acme/single-skill",
+      description: undefined,
+      sourceUrl: (path) => `https://github.com/acme/single-skill/blob/main/${path}`,
+      rawUrl: (path) => `https://raw.githubusercontent.com/acme/single-skill/main/${path}`,
     };
     // 203 clients at addresses of their own: 201 apps with names of their own, of which the
     // last is past the bound; one that names nothing; one that names the first app again.

@@ -81,7 +81,7 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm turbo run build --filter=@skillcdn/core --filter=@skillcdn/indexer --filter=@skillcdn/cli
+      - run: pnpm turbo run build --filter=@skillcdn/core --filter=@skillcdn/indexer --filter=@skillcdn/reader --filter=@skillcdn/cli
       # Packs what the publish plan names; the tarballs travel to the publish job as an artifact,
       # so the job that holds the publishing identity builds nothing.
       - id: pack

@@ -27,6 +27,7 @@ export {
   putOperatorImage,
   removeOperatorImage,
 } from "./queries/images.js";
+export { createIndexStore } from "./queries/index-store.js";
 export {
   getLegalDocument,
   type LegalDocumentInput,

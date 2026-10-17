@@ -36,15 +36,16 @@ Four properties shape everything else:
 | `packages/db` | PostgreSQL schema, migrations, query layer. | `core` |
 | `packages/github` | GitHub implementation of the git-host ports: contents, the app's installation tokens, signing in and what a person can see, the public listing of an account, and the deliveries of the app's webhook. | `core` |
 | `packages/indexer` | The reading rules ([ADR-0045](adr/0045-the-indexer-is-a-package-and-check-is-a-command.md)): a commit read into an index through the git-host port, a working tree read the same way for `check`, `INDEX_VERSION`, and the limits with the variables they are read from. Node.js only: no database, no environment. | `core` |
+| `packages/reader` | The reads ([ADR-0054](adr/0054-the-reads-are-a-package-over-an-index-store-port.md)): a folder browsed, a search, a skill assembled and paged, a file read, and what the skills extension lists, over the `IndexStore` port of `core`, wherever the index is kept. Node.js only: the index and a missing body come from the caller. | `core` |
 | `packages/cli` | The `skillcdn` command for repository authors: `skillcdn check [directory]`. Arguments, environment and exit codes; the rules are the indexer's. | `indexer` |
 | `packages/brand` | The pictures of the brand as files ([ADR-0048](adr/0048-the-brand-files-are-a-package-of-their-own-under-the-trademark-policy.md)): the symbol, the wordmark, the lockup and the icons made from them, each an export by its path, under the trademark policy rather than the code's license. No code; its script draws the raster files from the path data in `core`. | nothing |
-| `apps/server` | Composition root: configuration, HTTP and MCP surface, jobs, adapter wiring. | `core`, `db`, `github`, `indexer` |
+| `apps/server` | Composition root: configuration, HTTP and MCP surface, jobs, adapter wiring. | `core`, `db`, `github`, `indexer`, `reader` |
 | `apps/web` | Optional web UI: landing page, explorer and the documentation, in several languages. Talks to `api` over REST only; builds to static files, prerendered per language ([ADR-0009](adr/0009-web-ui-prerendered-per-language.md)), the documentation among them, rendered at build time from the repository's own Markdown ([ADR-0049](adr/0049-the-documentation-is-rendered-into-the-pages-from-the-repositorys-own-files.md)), plus a render module the server calls for the page of an address ([ADR-0011](adr/0011-address-pages-rendered-on-the-server.md)) and for the front page with the operator's showcase ([ADR-0028](adr/0028-the-front-page-and-the-explorer-are-operator-content.md)). | `core` (types, schemas, address parsing), `brand` (the files it serves) |
 
 Where new things go:
 
 - A new git host is a new package that implements the git-host port from `core`.
-- MCP handlers, job definitions and the S3 blob-store adapter start as modules inside `apps/server`. They move into a package when a second consumer appears, not before: the indexing pipeline moved to `packages/indexer` when the `check` command became one ([ADR-0045](adr/0045-the-indexer-is-a-package-and-check-is-a-command.md)).
+- MCP handlers, job definitions and the S3 blob-store adapter start as modules inside `apps/server`. They move into a package when a second consumer appears, not before: the indexing pipeline moved to `packages/indexer` when the `check` command became one ([ADR-0045](adr/0045-the-indexer-is-a-package-and-check-is-a-command.md)), and the reads to `packages/reader` when the command was to answer them from a directory ([ADR-0054](adr/0054-the-reads-are-a-package-over-an-index-store-port.md)).
 - Anything that needs the network, the clock, randomness or the environment is a port in `core` with an adapter elsewhere.
 
 ## Related repositories

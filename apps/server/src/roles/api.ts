@@ -41,8 +41,8 @@ import { loadWebBundle, type WebBundle, WebBundleError } from "../http/web.js";
 import { SnapshotService } from "../indexer/snapshot-service.js";
 import { Janitor } from "../janitor.js";
 import type { Logger } from "../logger.js";
-import { MountReader } from "../mounts/mount-reader.js";
 import { MountService } from "../mounts/mount-service.js";
+import { createMountReader } from "../mounts/reader.js";
 import { createOperatorEntitlements } from "../operator/entitlements.js";
 import { OperatorImages } from "../operator/images.js";
 import { LegalDocuments } from "../operator/legal.js";
@@ -248,7 +248,7 @@ export function createApi(
     newLeaseOwner: randomUUID,
   });
 
-  const reader = new MountReader({ database, blobStore, gitHost, snapshots, limits });
+  const reader = createMountReader({ database, blobStore, gitHost, snapshots, limits });
   // The owner's picture, fetched once for the icon of an address's server and for its social
   // preview alike.
   const pictures = new PictureFetcher({

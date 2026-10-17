@@ -33,7 +33,7 @@ Goal: an agent with a shell and no MCP connection reads a pack through the `skil
 - [x] `local` addresses: a pack served from a machine, nothing to a deployment ([ADR-0053](adr/0053-an-address-may-name-a-pack-served-from-a-machine.md)).
 - [x] The word rules of search in `core`, so that an index in memory is searched as PostgreSQL searches one: the same words at the same positions, the same stems and stop words, and the same rank, held against the server by an integration test.
 - [x] The REST shapes and the results converted both ways in `core`, and `commit` in every REST result: a program on the REST API renders what a model is given, with the same renderers.
-- [ ] `@skillcdn/reader`: the reads over an index-store port; the server composes it with PostgreSQL.
+- [x] `@skillcdn/reader`: the reads over an index-store port ([ADR-0054](adr/0054-the-reads-are-a-package-over-an-index-store-port.md)); the server composes it with PostgreSQL.
 - [ ] A directory read into an index in memory; `skillcdn skills`, `browse`, `find`, `skill` and `file` on a directory.
 - [ ] `@skillcdn/client`, the same commands at a deployment's address, `login` and `use`.
 - [ ] `@skillcdn/serve`, the MCP and REST edges as a package; `skillcdn mcp` over stdio and `skillcdn serve` over HTTP.

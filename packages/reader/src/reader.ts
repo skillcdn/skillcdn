@@ -1,6 +1,5 @@
 import {
   assembleSkillDocument,
-  type BlobStore,
   BROWSE_DEFAULT_LIMIT,
   type BrowseEntry,
   type BrowseResult,
@@ -22,11 +21,13 @@ import {
   folderOverview,
   formatSkillUri,
   frontMatterObject,
-  type GitHost,
   type IncludedFile,
   type IndexDiagnostic,
+  type IndexEntry,
   type IndexedFile,
   type IndexLimits,
+  type IndexNotReady,
+  type IndexOutcome,
   isWithinRepoPath,
   joinRepoPath,
   type LicenseFact,
@@ -42,10 +43,10 @@ import {
   parseRepoPath,
   parseSkillUri,
   READ_FILE_DEFAULT_LIMIT,
+  type ReadableIndex,
   type RepoPath,
   type RepoTranslation,
   ROOT_PATH,
-  rawFileUrl,
   SKILL_PAGE_BYTES,
   type SkillLookup,
   type SkillResult,
@@ -56,73 +57,61 @@ import {
   servesInFull,
   skillDocumentInput,
   skillUriPrefix,
-  sourceFileUrl,
   splitFrontMatter,
 } from "@skillcdn/core";
-import {
-  countEntries,
-  type Database,
-  type DirectoryListing,
-  type EntryRecord,
-  findSkills,
-  getEntry,
-  getManifest,
-  getSkillsAt,
-  getSnapshotDiagnostics,
-  listDirectory,
-  listEntries,
-  listListedSkills,
-  listSkillFiles,
-  listSkillResources,
-  type SnapshotRecord,
-  type SnapshotScope,
-  searchEntries,
-  servedEntries,
-} from "@skillcdn/db";
-import type { SnapshotOutcome, SnapshotService } from "../indexer/snapshot-service.js";
-
 import {
   continuationKey,
   continuationOffset,
   nextContinuation,
   ReaderInputError,
 } from "./continuation.js";
-import type { Mount } from "./mount-service.js";
+import type { MountContext } from "./mount.js";
+import {
+  countEntries,
+  type DirectoryListing,
+  findSkills,
+  getEntry,
+  getManifest,
+  getSkillsAt,
+  listDirectory,
+  listEntries,
+  listListedSkills,
+  listSkillFiles,
+  listSkillResources,
+} from "./queries.js";
 
-export interface MountReaderDependencies {
-  readonly database: Database;
-  readonly blobStore: BlobStore;
-  readonly gitHost: GitHost;
-  readonly snapshots: SnapshotService;
+// The reads of a mount (ADR-0054): what the MCP tools, the REST API and the command answer
+// from, over an index wherever it is kept. The index comes from the caller, who knows where it
+// is and whether it is ready; the reader knows the reading rules of a result and nothing of
+// databases, git hosts or files.
+
+export interface ReaderDependencies<M extends MountContext> {
   readonly limits: IndexLimits;
+  /**
+   * The index of the mount's commit, waiting up to `waitMs` for one that is being built, or why
+   * there is none to read yet.
+   */
+  readonly index: (mount: M, waitMs: number) => Promise<IndexOutcome>;
+  /**
+   * The bytes of a body the index names but its store does not hold, when something can fetch
+   * them (a deployment asks the git host); left out, such a body is unavailable.
+   */
+  readonly fetchBody?: (
+    mount: M,
+    hash: string,
+    maxBytes: number,
+  ) => Promise<Uint8Array | undefined>;
 }
 
-/** The index of the commit is not there to answer from: still being built, or the build failed. */
-export type NotReady = Exclude<SnapshotOutcome, { status: "ready" }>;
+/** A body the index names is at hand nowhere: not stored, and nothing can fetch it. */
+export class BodyUnavailableError extends Error {
+  readonly code = "body.unavailable";
 
-// What a read answers besides a result is core's (its `tools/reads.ts`): the REST bodies are
-// built from these shapes there, and read back from the API as them.
-export type {
-  FileLookup,
-  IndexedFile,
-  MountManifest,
-  MountOverview,
-  SkillListing,
-  SkillLookup,
-} from "@skillcdn/core";
-
-/**
- * What a read is scoped to: the snapshot, and the version of the reading rules its index was
- * written with. A rebuilt index keeps its snapshot id, so everything cached keys on both.
- */
-interface ReadScope extends SnapshotScope {
-  readonly indexVersion: number;
+  constructor(path: string) {
+    super(`The body of ${path} is not available.`);
+    this.name = "BodyUnavailableError";
+  }
 }
-const scopeOf = (snapshot: SnapshotRecord): ReadScope => ({
-  accountId: snapshot.accountId,
-  snapshotId: snapshot.id,
-  indexVersion: snapshot.indexVersion,
-});
 
 /** One entry of `skills/list`, as the MCP skills extension defines it. */
 export interface SkillEntry {
@@ -262,25 +251,85 @@ function repoTranslationsOf(
   return translations;
 }
 
+/** What the index says about an entry that was read. */
+function indexedOf(entry: IndexEntry): IndexedFile {
+  return { path: entry.path, kind: entry.kind, skillDir: entry.skillDir ?? null };
+}
+
+/** A path stored by the indexer, relative to the mounted root. */
+function belowMount(mount: MountContext, stored: string | undefined): RepoPath | undefined {
+  const parsed = stored === undefined ? undefined : parseRepoPath(stored);
+  return parsed?.ok === true && isWithinRepoPath(mount.address.path, parsed.value)
+    ? parsed.value
+    : undefined;
+}
+
+function toFindItem(mount: MountContext, row: IndexEntry): FindItem | undefined {
+  if (row.kind === "skill") {
+    const directory = belowMount(mount, row.skillDir);
+    return directory === undefined || row.name === undefined
+      ? undefined
+      : {
+          kind: "skill",
+          path: row.path as RepoPath,
+          name: row.name,
+          directory,
+          description: row.description ?? "",
+          files: [],
+          moreFiles: 0,
+          translations: skillTranslationsOf(row.frontMatter?.translations),
+          ...(row.frontMatter?.licenseFact === undefined
+            ? {}
+            : {
+                license: row.frontMatter.licenseFact,
+                ...(servesInFull(row.frontMatter.licenseFact, mount.verified)
+                  ? {}
+                  : { describedOnly: true }),
+              }),
+        };
+  }
+  const path = belowMount(mount, row.path);
+  return path === undefined
+    ? undefined
+    : {
+        kind: "document",
+        path,
+        title: row.title ?? undefined,
+        summary: row.description ?? undefined,
+        skillDirectory: belowMount(mount, row.skillDir),
+      };
+}
+
 /**
  * Answers questions about one resolved mount as data. The MCP tools render these answers as text
  * for a model and the REST API returns them as JSON, so both always say the same thing.
  */
-export class MountReader {
-  readonly #dependencies: MountReaderDependencies;
-  readonly #entries = new Map<string, Promise<readonly EntryRecord[]>>();
+export class Reader<M extends MountContext = MountContext> {
+  readonly #dependencies: ReaderDependencies<M>;
+  readonly #entries = new Map<string, Promise<readonly IndexEntry[]>>();
+  /**
+   * What each mount holds, by index and mounted path, for every connection to read. An index
+   * never changes, so neither does this; the map is small and only saves reads.
+   */
+  readonly #catalogs = new Map<string, Promise<Omit<MountCatalog, "mount">>>();
+  /** The manifest of each mount, by index and mounted path. Read once, kept while wanted. */
+  readonly #manifests = new Map<string, Promise<MountManifest | undefined>>();
 
-  #entriesOf(scope: ReadScope): Promise<readonly EntryRecord[]> {
-    const key = `${scope.accountId} ${scope.snapshotId} ${scope.indexVersion}`;
+  constructor(dependencies: ReaderDependencies<M>) {
+    this.#dependencies = dependencies;
+  }
+
+  #entriesOf(index: ReadableIndex): Promise<readonly IndexEntry[]> {
+    const key = `${index.id} ${index.version}`;
     let loading = this.#entries.get(key);
     if (loading === undefined) {
-      loading = servedEntries(this.#dependencies.database, scope);
+      loading = index.store.entries();
       remember(this.#entries, key, MAX_CACHED_TREES, loading);
     }
     return loading;
   }
 
-  #scopePath(mount: Mount, wanted: string | undefined): RepoPath {
+  #scopePath(mount: M, wanted: string | undefined): RepoPath {
     const parsed = parseRepoPath(wanted ?? mount.address.path);
     if (!parsed.ok || !isWithinRepoPath(mount.address.path, parsed.value)) {
       throw new ReaderInputError("Use a repository-root path inside the mounted folder.");
@@ -288,29 +337,16 @@ export class MountReader {
     return parsed.value;
   }
 
-  #pageKey(
-    mount: Mount,
-    snapshot: SnapshotRecord,
-    operation: string,
-    path: string,
-    query = "",
-  ): string {
-    return continuationKey([
-      snapshot.id,
-      snapshot.indexVersion,
-      mount.address.path,
-      operation,
-      path,
-      query,
-    ]);
+  #pageKey(mount: M, index: ReadableIndex, operation: string, path: string, query = ""): string {
+    return continuationKey([index.id, index.version, mount.address.path, operation, path, query]);
   }
 
   async #references(
-    mount: Mount,
-    scope: ReadScope,
+    mount: M,
+    index: ReadableIndex,
     references: readonly { href: string; path: string }[],
   ): Promise<FileReference[]> {
-    const entries = await this.#entriesOf(scope);
+    const entries = await this.#entriesOf(index);
     const available = new Set(entries.map((entry) => entry.path));
     return references.map((reference) => {
       const path = parseRepoPath(reference.path);
@@ -327,15 +363,15 @@ export class MountReader {
     });
   }
 
-  async #catalogFiles(scope: ReadScope): Promise<CatalogFile[]> {
-    const rows = await this.#entriesOf(scope);
+  async #catalogFiles(index: ReadableIndex): Promise<CatalogFile[]> {
+    const rows = await this.#entriesOf(index);
     return rows.map((row) => ({
       path: row.path as RepoPath,
       kind: row.kind,
-      name: row.name ?? undefined,
-      title: row.title ?? undefined,
-      description: row.description ?? undefined,
-      skillDir: row.skillDir === null ? undefined : (row.skillDir as RepoPath),
+      name: row.name,
+      title: row.title,
+      description: row.description,
+      skillDir: row.skillDir === undefined ? undefined : (row.skillDir as RepoPath),
       searchable: row.searchable,
       size: row.size,
       linkedOnly: row.frontMatter?.linkedOnly,
@@ -345,17 +381,17 @@ export class MountReader {
     }));
   }
 
-  async #browseEntries(scope: ReadScope, path: RepoPath): Promise<BrowseEntry[]> {
-    return browseCatalogFiles(await this.#catalogFiles(scope), path);
+  async #browseEntries(index: ReadableIndex, path: RepoPath): Promise<BrowseEntry[]> {
+    return browseCatalogFiles(await this.#catalogFiles(index), path);
   }
 
   /** The license of the skill that owns a path, when one does. */
-  async #skillLicenseAt(scope: ReadScope, path: RepoPath): Promise<LicenseFact | undefined> {
-    const owner = (await this.#entriesOf(scope))
+  async #skillLicenseAt(index: ReadableIndex, path: RepoPath): Promise<LicenseFact | undefined> {
+    const owner = (await this.#entriesOf(index))
       .filter(
         (row) =>
           row.kind === "skill" &&
-          row.skillDir !== null &&
+          row.skillDir !== undefined &&
           isWithinRepoPath(row.skillDir as RepoPath, path),
       )
       .sort((a, b) => (b.skillDir?.length ?? 0) - (a.skillDir?.length ?? 0))[0];
@@ -363,43 +399,19 @@ export class MountReader {
   }
 
   /** The license that governs a path: its skill's own, else the repository's (ADR-0026). */
-  async #licenseAt(
-    scope: ReadScope,
-    snapshot: SnapshotRecord,
-    path: RepoPath,
-  ): Promise<LicenseFact> {
-    const owned = await this.#skillLicenseAt(scope, path);
+  async #licenseAt(index: ReadableIndex, path: RepoPath): Promise<LicenseFact> {
+    const owned = await this.#skillLicenseAt(index, path);
     if (owned !== undefined) return owned;
-    const entries = (await this.#entriesOf(scope)).map((row) => ({
+    const entries = (await this.#entriesOf(index)).map((row) => ({
       path: row.path,
       kind: row.kind,
       license: row.frontMatter?.license,
     }));
-    return licenseOfPath(entries, path, snapshot.license ?? NO_LICENSE);
+    return licenseOfPath(entries, path, index.license ?? NO_LICENSE);
   }
 
-  /** Where a file can be read at the host, for a reader sent to the source. */
-  #sourceUrl(mount: Mount, path: RepoPath): string {
-    const { repository } = mount.repo;
-    return sourceFileUrl(
-      { host: mount.coordinates.host, owner: repository.owner.login, name: repository.name },
-      mount.commit,
-      path,
-    );
-  }
-
-  /** Where the bytes of a file are at the host, for a reader that has to fetch them itself. */
-  #rawUrl(mount: Mount, path: RepoPath): string {
-    const { repository } = mount.repo;
-    return rawFileUrl(
-      { host: mount.coordinates.host, owner: repository.owner.login, name: repository.name },
-      mount.commit,
-      path,
-    );
-  }
-
-  async #overviewOf(scope: ReadScope, path: RepoPath): Promise<FolderOverview | undefined> {
-    const files = await this.#catalogFiles(scope);
+  async #overviewOf(index: ReadableIndex, path: RepoPath): Promise<FolderOverview | undefined> {
+    const files = await this.#catalogFiles(index);
     const overview = folderOverview(files, path);
     if (overview === undefined) return undefined;
     const manifest = files.find(
@@ -413,7 +425,7 @@ export class MountReader {
   }
 
   async browse(
-    mount: Mount,
+    mount: M,
     input: {
       readonly path?: string | undefined;
       readonly cursor?: string | undefined;
@@ -421,23 +433,23 @@ export class MountReader {
     },
     waitMs: number,
     fits?: (result: BrowseResult) => boolean,
-  ): Promise<NotReady | { readonly status: "ready"; readonly result: BrowseResult }> {
+  ): Promise<IndexNotReady | { readonly status: "ready"; readonly result: BrowseResult }> {
     const path = this.#scopePath(mount, input.path);
-    const outcome = await this.#dependencies.snapshots.ready(mount, waitMs);
+    const outcome = await this.#dependencies.index(mount, waitMs);
     if (outcome.status !== "ready") return outcome;
-    const scope = scopeOf(outcome.snapshot);
-    const key = this.#pageKey(mount, outcome.snapshot, "browse", path);
+    const { index } = outcome;
+    const key = this.#pageKey(mount, index, "browse", path);
     const offset = continuationOffset(input.cursor, key);
-    const entries = (await this.#browseEntries(scope, path)).map((entry) =>
+    const entries = (await this.#browseEntries(index, path)).map((entry) =>
       entry.license !== undefined && !servesInFull(entry.license, mount.verified)
         ? { ...entry, describedOnly: true }
         : entry,
     );
     const limit = input.limit ?? BROWSE_DEFAULT_LIMIT;
-    const overview = await this.#overviewOf(scope, path);
-    const diagnostics = await this.#diagnosticsOf(mount, scope);
+    const overview = await this.#overviewOf(index, path);
+    const diagnostics = await this.#diagnosticsOf(mount, index);
     const make = (count: number): BrowseResult => ({
-      mount: this.summary(mount, outcome.snapshot),
+      mount: this.summary(mount, index),
       path,
       overview,
       entries: entries.slice(offset, offset + count),
@@ -450,36 +462,25 @@ export class MountReader {
       result: boundedPage(Math.min(limit, Math.max(0, entries.length - offset)), make, fits),
     };
   }
-  /**
-   * What each mount holds, by snapshot and mounted path, for every connection to read. A
-   * snapshot never changes, so neither does this; the map is small and only saves queries.
-   */
-  readonly #catalogs = new Map<string, Promise<Omit<MountCatalog, "mount">>>();
-  /** The manifest of each mount, by snapshot and mounted path. Read once, kept while wanted. */
-  readonly #manifests = new Map<string, Promise<MountManifest | undefined>>();
-
-  constructor(dependencies: MountReaderDependencies) {
-    this.#dependencies = dependencies;
-  }
 
   /**
    * The repository manifest that governs a mount: the one in the mounted directory, else the
-   * nearest above it. Its rules come from the blob store, so that `get` can hand them over.
+   * nearest above it. Its rules come from the bodies, so that `get` can hand them over.
    */
-  #manifestOf(mount: Mount, scope: ReadScope): Promise<MountManifest | undefined> {
-    const key = `${scope.snapshotId} ${scope.indexVersion} ${mount.address.path}`;
+  #manifestOf(mount: M, index: ReadableIndex): Promise<MountManifest | undefined> {
+    const key = `${index.id} ${index.version} ${mount.address.path}`;
     const cached = this.#manifests.get(key);
     if (cached !== undefined) {
       return cached;
     }
-    const { database, blobStore } = this.#dependencies;
-    const loading = getManifest(database, scope, mount.address.path).then(async (row) => {
-      if (row === undefined || row.description === null) {
+    const loading = this.#entriesOf(index).then(async (entries) => {
+      const row = getManifest(entries, mount.address.path);
+      if (row === undefined || row.description === undefined) {
         return undefined;
       }
-      const text = await blobStore.read(row.blobSha);
+      const text = await index.blobs.read(row.blobSha);
       const split = text === undefined ? undefined : splitFrontMatter(text);
-      const ancestors = (await this.#entriesOf(scope))
+      const ancestors = entries
         .filter(
           (entry) =>
             entry.kind === "manifest" &&
@@ -488,7 +489,7 @@ export class MountReader {
         .sort((a, b) => b.path.length - a.path.length);
       return {
         path: parseRepoPath(row.path).ok ? (row.path as RepoPath) : undefined,
-        name: row.name ?? undefined,
+        name: row.name,
         description: row.description,
         language: ancestors.find((entry) => entry.frontMatter?.language !== undefined)?.frontMatter
           ?.language,
@@ -503,8 +504,8 @@ export class MountReader {
   }
 
   /** The manifests inside the mount that could not be read. Findings above the mount are not ours. */
-  async #diagnosticsOf(mount: Mount, scope: ReadScope): Promise<IndexDiagnostic[]> {
-    const all = await getSnapshotDiagnostics(this.#dependencies.database, scope);
+  async #diagnosticsOf(mount: M, index: ReadableIndex): Promise<IndexDiagnostic[]> {
+    const all = await index.store.diagnostics();
     return all.flatMap((diagnostic) => {
       const below = belowMount(mount, diagnostic.path);
       return below === undefined
@@ -517,61 +518,63 @@ export class MountReader {
    * What a client is told when it connects: the skills of the mount and how much else there is.
    * Never waits for the index; a commit that is not indexed yet says so instead.
    */
-  async catalog(mount: Mount): Promise<CatalogState> {
-    const { database, snapshots } = this.#dependencies;
-    const outcome = await snapshots.ready(mount, 0);
+  async catalog(mount: M): Promise<CatalogState> {
+    const outcome = await this.#dependencies.index(mount, 0);
     if (outcome.status !== "ready") {
       return {
         status: outcome.status,
         mount: this.summary(mount, undefined),
-        description: mount.repo.repository.description,
+        description: mount.description,
       };
     }
-    const scope = scopeOf(outcome.snapshot);
+    const { index } = outcome;
     const path = mount.address.path;
-    const key = `${scope.snapshotId} ${scope.indexVersion} ${path}`;
+    const key = `${index.id} ${index.version} ${path}`;
     let loading = this.#catalogs.get(key);
     if (loading === undefined) {
-      loading = Promise.all([
-        listEntries(database, scope, path, FIND_LIST_SKILLS_MAX, "skills"),
-        countEntries(database, scope, path),
-        this.#manifestOf(mount, scope),
-        this.#diagnosticsOf(mount, scope),
-      ]).then(async ([skills, counts, manifest, diagnostics]) => ({
-        overview: await this.#overviewOf(scope, path),
-        description: mount.repo.repository.description,
-        groups: (await this.#browseEntries(scope, path)).slice(0, BROWSE_DEFAULT_LIMIT),
-        manifest:
-          manifest === undefined
-            ? undefined
-            : {
-                name: manifest.name,
-                description: manifest.description,
-                path: manifest.path,
-                hasRules: manifest.rules.length > 0,
-                language: manifest.language,
-              },
-        skills: skills.flatMap((row) => {
-          const directory = belowMount(mount, row.skillDir);
-          return directory === undefined || row.name === null
-            ? []
-            : [{ name: row.name, directory, description: row.description ?? "" }];
-        }),
-        skillCount: counts.skills,
-        documentCount: counts.documents,
-        diagnostics,
-      }));
+      loading = this.#entriesOf(index).then(async (entries) => {
+        const [manifest, diagnostics] = await Promise.all([
+          this.#manifestOf(mount, index),
+          this.#diagnosticsOf(mount, index),
+        ]);
+        const skills = listEntries(entries, path, FIND_LIST_SKILLS_MAX, "skills");
+        const counts = countEntries(entries, path);
+        return {
+          overview: await this.#overviewOf(index, path),
+          description: mount.description,
+          groups: (await this.#browseEntries(index, path)).slice(0, BROWSE_DEFAULT_LIMIT),
+          manifest:
+            manifest === undefined
+              ? undefined
+              : {
+                  name: manifest.name,
+                  description: manifest.description,
+                  path: manifest.path,
+                  hasRules: manifest.rules.length > 0,
+                  language: manifest.language,
+                },
+          skills: skills.flatMap((row) => {
+            const directory = belowMount(mount, row.skillDir);
+            return directory === undefined || row.name === undefined
+              ? []
+              : [{ name: row.name, directory, description: row.description ?? "" }];
+          }),
+          skillCount: counts.skills,
+          documentCount: counts.documents,
+          diagnostics,
+        };
+      });
       remember(this.#catalogs, key, MAX_CACHED_CATALOGS, loading);
     }
     return {
       status: "ready",
-      catalog: { mount: this.summary(mount, outcome.snapshot), ...(await loading) },
+      catalog: { mount: this.summary(mount, index), ...(await loading) },
     };
   }
 
-  summary(mount: Mount, snapshot: SnapshotRecord | undefined): MountSummary {
+  summary(mount: M, index: ReadableIndex | undefined): MountSummary {
     return {
-      repository: `${mount.repo.repository.owner.login}/${mount.repo.repository.name}`,
+      repository: mount.repository,
       ref:
         mount.address.ref === undefined
           ? undefined
@@ -581,7 +584,7 @@ export class MountReader {
       commit: mount.commit,
       path: mount.address.path,
       verified: mount.verified,
-      truncated: snapshot?.truncated ?? false,
+      truncated: index?.truncated ?? false,
       skillUri: skillUriPrefix(mount.address),
     };
   }
@@ -593,7 +596,7 @@ export class MountReader {
    * is not one of this repository's. A root skill's files carry its name as a directory segment
    * the repository does not have; a real path of that spelling comes first.
    */
-  async #pathOfUri(mount: Mount, scope: ReadScope, uri: string): Promise<RepoPath | undefined> {
+  async #pathOfUri(mount: M, index: ReadableIndex, uri: string): Promise<RepoPath | undefined> {
     const parsed = parseSkillUri(uri);
     if (
       parsed === undefined ||
@@ -603,9 +606,9 @@ export class MountReader {
     ) {
       return undefined;
     }
-    const root = await this.#rootSkill(scope);
+    const root = await this.#rootSkill(index);
     if (root !== undefined && (parsed.path === root || parsed.path.startsWith(`${root}/`))) {
-      const real = await getEntry(this.#dependencies.database, scope, parsed.path);
+      const real = getEntry(await this.#entriesOf(index), parsed.path);
       if (real === undefined) {
         const below = parsed.path === root ? ROOT_PATH : parsed.path.slice(root.length + 1);
         const path = parseRepoPath(below);
@@ -616,35 +619,34 @@ export class MountReader {
   }
 
   /** The name of the skill at the repository root, when there is one. */
-  async #rootSkill(scope: ReadScope): Promise<string | undefined> {
-    const root = await getEntry(this.#dependencies.database, scope, "SKILL.md");
-    return root?.kind === "skill" && root.name !== null ? root.name : undefined;
+  async #rootSkill(index: ReadableIndex): Promise<string | undefined> {
+    const root = getEntry(await this.#entriesOf(index), "SKILL.md");
+    return root?.kind === "skill" && root.name !== undefined ? root.name : undefined;
   }
 
   /** The URI of a repository-root path, with a root skill's name segment in front. */
-  #uriOf(mount: Mount, root: string | undefined, path: RepoPath): string {
+  #uriOf(mount: M, root: string | undefined, path: RepoPath): string {
     const named = root === undefined ? path : joinRepoPath(root as RepoPath, path);
     return formatSkillUri(mount.address, named);
   }
 
   /** What the listing says about one listed skill: its URI, its front matter and its files. */
   async #skillEntry(
-    mount: Mount,
-    scope: ReadScope,
+    mount: M,
+    index: ReadableIndex,
     root: string | undefined,
-    skill: EntryRecord,
+    skill: IndexEntry,
   ): Promise<SkillEntry | undefined> {
-    const { database, blobStore } = this.#dependencies;
-    const text = await blobStore.read(skill.blobSha);
+    const text = await index.blobs.read(skill.blobSha);
     const split = text === undefined ? undefined : splitFrontMatter(text);
     const fields = split?.kind === "found" ? parseFrontMatter(split.source) : undefined;
     if (fields === undefined || !fields.ok) return undefined;
-    const files = await listSkillResources(database, scope, skill.skillDir ?? "");
+    const files = listSkillResources(await this.#entriesOf(index), skill.skillDir ?? "");
     return {
       uri: this.#uriOf(mount, root, skill.path as RepoPath),
       frontmatter: frontMatterObject(fields.value),
       resources: files.flatMap((file) =>
-        file.digest === null || file.servedSize === null
+        file.digest === undefined || file.servedSize === undefined
           ? []
           : [
               {
@@ -659,25 +661,23 @@ export class MountReader {
 
   /** A page of the skills the extension lists inside the mount. */
   async listSkills(
-    mount: Mount,
+    mount: M,
     input: { readonly cursor?: string | undefined; readonly limit?: number | undefined },
     waitMs: number,
-  ): Promise<NotReady | { readonly status: "ready"; readonly result: SkillsPage }> {
-    const { database, snapshots } = this.#dependencies;
-    const outcome = await snapshots.ready(mount, waitMs);
+  ): Promise<IndexNotReady | { readonly status: "ready"; readonly result: SkillsPage }> {
+    const outcome = await this.#dependencies.index(mount, waitMs);
     if (outcome.status !== "ready") return outcome;
-    const scope = scopeOf(outcome.snapshot);
-    const key = this.#pageKey(mount, outcome.snapshot, "skills/list", mount.address.path);
+    const { index } = outcome;
+    const key = this.#pageKey(mount, index, "skills/list", mount.address.path);
     const offset = continuationOffset(input.cursor, key);
     const limit = input.limit ?? SKILLS_PAGE_SIZE;
-    const [root, page] = await Promise.all([
-      this.#rootSkill(scope),
-      listListedSkills(database, scope, mount.address.path, offset, limit, {
-        includeRestricted: mount.verified,
-      }),
-    ]);
+    const entries = await this.#entriesOf(index);
+    const root = await this.#rootSkill(index);
+    const page = listListedSkills(entries, mount.address.path, offset, limit, {
+      includeRestricted: mount.verified,
+    });
     const skills = (
-      await Promise.all(page.skills.map((skill) => this.#skillEntry(mount, scope, root, skill)))
+      await Promise.all(page.skills.map((skill) => this.#skillEntry(mount, index, root, skill)))
     ).filter((entry) => entry !== undefined);
     return {
       status: "ready",
@@ -697,27 +697,26 @@ export class MountReader {
    * listed skill of this mount.
    */
   async getSkill(
-    mount: Mount,
+    mount: M,
     uri: string,
     waitMs: number,
   ): Promise<
-    | NotReady
+    | IndexNotReady
     | {
         readonly status: "ready";
         readonly skill: SkillEntry | undefined;
         readonly directory: string | undefined;
       }
   > {
-    const { database, snapshots } = this.#dependencies;
-    const outcome = await snapshots.ready(mount, waitMs);
+    const outcome = await this.#dependencies.index(mount, waitMs);
     if (outcome.status !== "ready") return outcome;
-    const scope = scopeOf(outcome.snapshot);
-    const path = await this.#pathOfUri(mount, scope, uri);
+    const { index } = outcome;
+    const path = await this.#pathOfUri(mount, index, uri);
     const entry =
       path === undefined || !isWithinRepoPath(mount.address.path, path)
         ? undefined
-        : await getEntry(database, scope, path);
-    if (entry?.kind !== "skill" || !entry.listed) {
+        : getEntry(await this.#entriesOf(index), path);
+    if (entry?.kind !== "skill" || entry.listed !== true) {
       return { status: "ready", skill: undefined, directory: undefined };
     }
     // A described skill is not listed here, so its URI names nothing (ADR-0026).
@@ -726,7 +725,7 @@ export class MountReader {
     }
     return {
       status: "ready",
-      skill: await this.#skillEntry(mount, scope, await this.#rootSkill(scope), entry),
+      skill: await this.#skillEntry(mount, index, await this.#rootSkill(index), entry),
       directory: entry.skillDir ?? ROOT_PATH,
     };
   }
@@ -736,35 +735,34 @@ export class MountReader {
    * file; `undefined` when the URI names nothing served.
    */
   async readResource(
-    mount: Mount,
+    mount: M,
     uri: string,
     waitMs: number,
   ): Promise<
-    | NotReady
+    | IndexNotReady
     | {
         readonly status: "ready";
         readonly resource: Resource | undefined;
         readonly indexed: IndexedFile | undefined;
       }
   > {
-    const { database, blobStore, snapshots } = this.#dependencies;
-    const outcome = await snapshots.ready(mount, waitMs);
+    const outcome = await this.#dependencies.index(mount, waitMs);
     if (outcome.status !== "ready") return outcome;
-    const scope = scopeOf(outcome.snapshot);
-    const path = await this.#pathOfUri(mount, scope, uri);
+    const { index } = outcome;
+    const path = await this.#pathOfUri(mount, index, uri);
     const entry =
       path === undefined || !isWithinRepoPath(mount.address.path, path)
         ? undefined
-        : await getEntry(database, scope, path);
-    if (entry === undefined || entry.digest === null)
+        : getEntry(await this.#entriesOf(index), path);
+    if (entry === undefined || entry.digest === undefined)
       return { status: "ready", resource: undefined, indexed: undefined };
-    const license = await this.#licenseAt(scope, outcome.snapshot, entry.path as RepoPath);
+    const license = await this.#licenseAt(index, entry.path as RepoPath);
     if (!servesInFull(license, mount.verified)) {
       return { status: "ready", resource: undefined, indexed: undefined };
     }
     const indexed = indexedOf(entry);
     if (entry.kind === "skill") {
-      const document = await this.#assembledDocument(mount, scope, entry);
+      const document = await this.#assembledDocument(mount, index, entry);
       return {
         status: "ready",
         resource:
@@ -774,7 +772,7 @@ export class MountReader {
         indexed: document === undefined ? undefined : indexed,
       };
     }
-    const bytes = await blobStore.readBytes(entry.blobSha);
+    const bytes = await index.blobs.readBytes(entry.blobSha);
     if (bytes === undefined) return { status: "ready", resource: undefined, indexed: undefined };
     const text = decodeText(bytes);
     return {
@@ -791,28 +789,28 @@ export class MountReader {
 
   /** The direct children of a directory URI, or `undefined` when it names no directory served here. */
   async readDirectory(
-    mount: Mount,
+    mount: M,
     uri: string,
     waitMs: number,
   ): Promise<
-    NotReady | { readonly status: "ready"; readonly entries: readonly ResourceEntry[] | undefined }
+    | IndexNotReady
+    | { readonly status: "ready"; readonly entries: readonly ResourceEntry[] | undefined }
   > {
-    const { database, snapshots } = this.#dependencies;
-    const outcome = await snapshots.ready(mount, waitMs);
+    const outcome = await this.#dependencies.index(mount, waitMs);
     if (outcome.status !== "ready") return outcome;
-    const scope = scopeOf(outcome.snapshot);
-    const root = await this.#rootSkill(scope);
-    const path = await this.#pathOfUri(mount, scope, uri);
+    const { index } = outcome;
+    const root = await this.#rootSkill(index);
+    const path = await this.#pathOfUri(mount, index, uri);
     if (path === undefined || !isWithinRepoPath(mount.address.path, path)) {
       return { status: "ready", entries: undefined };
     }
-    const owned = await this.#skillLicenseAt(scope, path);
+    const owned = await this.#skillLicenseAt(index, path);
     if (owned !== undefined && !servesInFull(owned, mount.verified)) {
       return { status: "ready", entries: undefined };
     }
     // What a directory holds here is what the extension serves: a file over the read limit is
     // named in the skill's document instead (ADR-0033).
-    const children = await listDirectory(database, scope, path, MAX_DIRECTORY_ENTRIES, {
+    const children = listDirectory(await this.#entriesOf(index), path, MAX_DIRECTORY_ENTRIES, {
       servedOnly: true,
     });
     if (children.length === 0) return { status: "ready", entries: undefined };
@@ -829,15 +827,15 @@ export class MountReader {
 
   /** The document a listed skill's `SKILL.md` is served as, assembled as it was digested. */
   async #assembledDocument(
-    mount: Mount,
-    scope: ReadScope,
-    skill: EntryRecord,
+    mount: M,
+    index: ReadableIndex,
+    skill: IndexEntry,
   ): Promise<string | undefined> {
-    const { database, blobStore } = this.#dependencies;
-    const text = await blobStore.read(skill.blobSha);
-    if (text === undefined || skill.skillDir === null) return undefined;
+    const text = await index.blobs.read(skill.blobSha);
+    if (text === undefined || skill.skillDir === undefined) return undefined;
     const directory = skill.skillDir as RepoPath;
-    const manifests = (await this.#entriesOf(scope))
+    const entries = await this.#entriesOf(index);
+    const manifests = entries
       .filter(
         (row) =>
           row.kind === "manifest" &&
@@ -848,7 +846,7 @@ export class MountReader {
     const rules = await Promise.all(
       manifests.map(async (row) => ({
         path: row.path as RepoPath,
-        text: await blobStore.read(row.blobSha),
+        text: await index.blobs.read(row.blobSha),
       })),
     );
     // Included paths are repository-root paths: a file of the skill, or a shared page outside
@@ -856,10 +854,10 @@ export class MountReader {
     const included = await Promise.all(
       (skill.frontMatter?.include ?? []).map(async (include) => {
         const parsed = parseRepoPath(include);
-        const entry = parsed.ok ? await getEntry(database, scope, parsed.value) : undefined;
+        const entry = parsed.ok ? getEntry(entries, parsed.value) : undefined;
         return {
           path: parsed.ok ? parsed.value : directory,
-          text: entry === undefined ? undefined : await blobStore.read(entry.blobSha),
+          text: entry === undefined ? undefined : await index.blobs.read(entry.blobSha),
         };
       }),
     );
@@ -881,7 +879,7 @@ export class MountReader {
   }
 
   async find(
-    mount: Mount,
+    mount: M,
     input: {
       readonly query?: string | undefined;
       readonly limit?: number | undefined;
@@ -890,40 +888,42 @@ export class MountReader {
     },
     waitMs: number,
     fits?: (result: FindResult) => boolean,
-  ): Promise<NotReady | { readonly status: "ready"; readonly result: FindResult }> {
-    const { database, snapshots } = this.#dependencies;
-    const outcome = await snapshots.ready(mount, waitMs);
+  ): Promise<IndexNotReady | { readonly status: "ready"; readonly result: FindResult }> {
+    const outcome = await this.#dependencies.index(mount, waitMs);
     if (outcome.status !== "ready") {
       return outcome;
     }
-    const scope = scopeOf(outcome.snapshot);
+    const { index } = outcome;
     const trimmed = input.query?.trim();
     const query = trimmed === undefined || trimmed.length === 0 ? undefined : trimmed;
     const limit = input.limit ?? FIND_DEFAULT_LIMIT;
     const path = this.#scopePath(mount, input.path);
-    const key = this.#pageKey(mount, outcome.snapshot, "search", path, query ?? "");
+    const key = this.#pageKey(mount, index, "search", path, query ?? "");
     const offset = continuationOffset(input.cursor, key);
+    const entries = await this.#entriesOf(index);
     let items: FindItem[];
     let totals: FindResult["totals"];
     if (query === undefined) {
       // A listing names every skill: a skill's own files are reached through the skill.
-      const [skills, documents, counts] = await Promise.all([
-        listEntries(database, scope, path, Number.MAX_SAFE_INTEGER, "skills"),
-        listEntries(database, scope, path, Number.MAX_SAFE_INTEGER, "documents_outside_skills"),
-        countEntries(database, scope, path),
-      ]);
+      const skills = listEntries(entries, path, Number.MAX_SAFE_INTEGER, "skills");
+      const documents = listEntries(
+        entries,
+        path,
+        Number.MAX_SAFE_INTEGER,
+        "documents_outside_skills",
+      );
       items = [...skills, ...documents]
         .map((row) => toFindItem(mount, row))
         .filter((item) => item !== undefined);
-      totals = counts;
+      totals = countEntries(entries, path);
     } else {
-      const rows = await searchEntries(database, scope, path, query);
-      items = await this.#fold({ ...mount, address: { ...mount.address, path } }, scope, rows);
+      const rows = await index.store.search(path, query);
+      items = this.#fold({ ...mount, address: { ...mount.address, path } }, entries, rows);
       totals = undefined;
     }
-    const diagnostics = await this.#diagnosticsOf(mount, scope);
+    const diagnostics = await this.#diagnosticsOf(mount, index);
     const make = (count: number): FindResult => ({
-      mount: this.summary(mount, outcome.snapshot),
+      mount: this.summary(mount, index),
       query,
       items: items.slice(offset, offset + count),
       path,
@@ -942,16 +942,20 @@ export class MountReader {
    * takes the place of its best-ranked member, so that a model loads the skill rather than a
    * fragment of it. A skill whose files matched, but that did not match itself, is looked up.
    */
-  async #fold(mount: Mount, scope: ReadScope, rows: readonly EntryRecord[]): Promise<FindItem[]> {
+  #fold(
+    mount: MountContext,
+    entries: readonly IndexEntry[],
+    rows: readonly IndexEntry[],
+  ): FindItem[] {
     interface Group {
-      skill: EntryRecord | undefined;
-      readonly files: EntryRecord[];
+      skill: IndexEntry | undefined;
+      readonly files: IndexEntry[];
     }
     const groups = new Map<string, Group>();
-    const order: ({ readonly group: string } | { readonly row: EntryRecord })[] = [];
+    const order: ({ readonly group: string } | { readonly row: IndexEntry })[] = [];
     for (const row of rows) {
       const owner = row.skillDir;
-      if (owner === null || belowMount(mount, owner) === undefined) {
+      if (owner === undefined || belowMount(mount, owner) === undefined) {
         order.push({ row });
         continue;
       }
@@ -970,15 +974,15 @@ export class MountReader {
     const unmatched = [...groups]
       .filter(([, group]) => group.skill === undefined)
       .map(([directory]) => directory);
-    for (const row of await getSkillsAt(this.#dependencies.database, scope, unmatched)) {
-      const group = row.skillDir === null ? undefined : groups.get(row.skillDir);
+    for (const row of getSkillsAt(entries, unmatched)) {
+      const group = row.skillDir === undefined ? undefined : groups.get(row.skillDir);
       if (group !== undefined) {
         group.skill = row;
       }
     }
 
     const items: FindItem[] = [];
-    const push = (row: EntryRecord): void => {
+    const push = (row: IndexEntry): void => {
       const item = toFindItem(mount, row);
       if (item !== undefined) {
         items.push(item);
@@ -1014,41 +1018,39 @@ export class MountReader {
   }
 
   async skill(
-    mount: Mount,
+    mount: M,
     wanted: string,
     waitMs: number,
     cursor?: string,
     exactPath = false,
     fits?: (result: SkillResult) => boolean,
-  ): Promise<NotReady | { readonly status: "ready"; readonly lookup: SkillLookup }> {
-    const { database, blobStore, snapshots } = this.#dependencies;
-    const outcome = await snapshots.ready(mount, waitMs);
+  ): Promise<IndexNotReady | { readonly status: "ready"; readonly lookup: SkillLookup }> {
+    const outcome = await this.#dependencies.index(mount, waitMs);
     if (outcome.status !== "ready") {
       return outcome;
     }
-    const scope = scopeOf(outcome.snapshot);
+    const { index } = outcome;
+    const entries = await this.#entriesOf(index);
     const name = exactPath ? wanted : wanted.trim();
     const asDirectory = parseRepoPath(name);
     const directory =
       asDirectory.ok && isWithinRepoPath(mount.address.path, asDirectory.value)
         ? asDirectory.value
         : undefined;
-    const byPath = directory === undefined ? undefined : await getEntry(database, scope, directory);
+    const byPath = directory === undefined ? undefined : getEntry(entries, directory);
     const found =
       byPath?.kind === "skill"
         ? [byPath]
         : exactPath
           ? []
-          : await findSkills(database, scope, mount.address.path, { name, directory }, 10);
+          : findSkills(entries, mount.address.path, { name, directory }, 10);
     const exact = found.filter((row) => row.name === name || row.skillDir === directory);
     const matches = exact.length > 0 ? exact : found;
 
     if (matches.length === 0) {
-      const [listed, diagnostics] = await Promise.all([
-        listEntries(database, scope, mount.address.path, MAX_SUGGESTED_SKILLS, "skills"),
-        this.#diagnosticsOf(mount, scope),
-      ]);
-      const available = listed.flatMap((row) => (row.name === null ? [] : [row.path]));
+      const listed = listEntries(entries, mount.address.path, MAX_SUGGESTED_SKILLS, "skills");
+      const diagnostics = await this.#diagnosticsOf(mount, index);
+      const available = listed.flatMap((row) => (row.name === undefined ? [] : [row.path]));
       return { status: "ready", lookup: { kind: "not_found", available, diagnostics } };
     }
     const [skill, ...others] = matches;
@@ -1063,7 +1065,7 @@ export class MountReader {
     }
 
     const skillDirectory = belowMount(mount, skill.skillDir);
-    if (skillDirectory === undefined || skill.name === null) {
+    if (skillDirectory === undefined || skill.name === undefined) {
       return { status: "ready", lookup: { kind: "unavailable" } };
     }
     const skillName = skill.name;
@@ -1071,7 +1073,7 @@ export class MountReader {
     const serving: SkillServing = {
       license,
       full: servesInFull(license, mount.verified),
-      sourceUrl: this.#sourceUrl(mount, skill.path as RepoPath),
+      sourceUrl: mount.sourceUrl(skill.path as RepoPath),
     };
     if (!serving.full) {
       // The license lets the reader know that the skill exists and where; the rest stays at the
@@ -1081,7 +1083,7 @@ export class MountReader {
         lookup: {
           kind: "found",
           skill: {
-            mount: this.summary(mount, outcome.snapshot),
+            mount: this.summary(mount, index),
             path: skill.path as RepoPath,
             ruleChain: [],
             references: [],
@@ -1106,16 +1108,13 @@ export class MountReader {
         },
       };
     }
-    const text = await blobStore.read(skill.blobSha);
+    const text = await index.blobs.read(skill.blobSha);
     if (text === undefined) {
       return { status: "ready", lookup: { kind: "unavailable" } };
     }
     const split = splitFrontMatter(text);
-    const [files, entries, included] = await Promise.all([
-      listSkillFiles(database, scope, skill.skillDir ?? "", MAX_LISTED_SKILL_FILES + 1),
-      this.#entriesOf(scope),
-      this.#includedFiles(scope, skill.frontMatter?.include ?? []),
-    ]);
+    const files = listSkillFiles(entries, skill.skillDir ?? "", MAX_LISTED_SKILL_FILES + 1);
+    const included = await this.#includedFiles(index, skill.frontMatter?.include ?? []);
     const ancestors = entries
       .filter(
         (row) =>
@@ -1129,7 +1128,7 @@ export class MountReader {
     for (const ancestor of ancestors) {
       const body =
         ancestor.frontMatter?.manifestError === undefined
-          ? await blobStore.read(ancestor.blobSha)
+          ? await index.blobs.read(ancestor.blobSha)
           : undefined;
       if (body === undefined) {
         rulesComplete = false;
@@ -1154,7 +1153,7 @@ export class MountReader {
         );
       }
     }
-    const key = this.#pageKey(mount, outcome.snapshot, "get_skill", skill.path);
+    const key = this.#pageKey(mount, index, "get_skill", skill.path);
     const start = continuationOffset(cursor, key);
     const referenceSources = [
       skill,
@@ -1163,7 +1162,7 @@ export class MountReader {
     ];
     const references = await this.#references(
       mount,
-      scope,
+      index,
       referenceSources.flatMap((entry) =>
         (entry.frontMatter?.references ?? []).map((reference) => ({
           ...reference,
@@ -1211,7 +1210,7 @@ export class MountReader {
           ? nextContinuation(key, start + consumed)
           : undefined;
       return {
-        mount: this.summary(mount, outcome.snapshot),
+        mount: this.summary(mount, index),
         path: skill.path as RepoPath,
         ruleChain: pagedRules,
         references,
@@ -1254,18 +1253,18 @@ export class MountReader {
    * the skill even on a mount that does not contain it, as the ancestor rules do (ADR-0044),
    * though `read_repo_file` still cannot read it there by its path.
    */
-  async #includedFiles(scope: ReadScope, include: readonly string[]): Promise<IncludedFile[]> {
-    const { database, blobStore } = this.#dependencies;
+  async #includedFiles(index: ReadableIndex, include: readonly string[]): Promise<IncludedFile[]> {
+    const entries = await this.#entriesOf(index);
     const read = await Promise.all(
       include.map(async (include) => {
         const parsed = parseRepoPath(include);
         if (!parsed.ok) {
           return undefined;
         }
-        const entry = await getEntry(database, scope, parsed.value);
+        const entry = getEntry(entries, parsed.value);
         const text =
           entry?.kind === "markdown" || entry?.kind === "json"
-            ? await blobStore.read(entry.blobSha)
+            ? await index.blobs.read(entry.blobSha)
             : undefined;
         return { path: parsed.value, text };
       }),
@@ -1289,7 +1288,7 @@ export class MountReader {
    * tree answers meanwhile.
    */
   async file(
-    mount: Mount,
+    mount: M,
     input: {
       readonly path: string;
       readonly offset?: number | undefined;
@@ -1297,7 +1296,6 @@ export class MountReader {
     },
     fits?: (result: FileResult) => boolean,
   ): Promise<FileLookup> {
-    const { database, blobStore, gitHost, snapshots } = this.#dependencies;
     const limits = { ...this.#dependencies.limits, ...mount.limits };
     const wanted = input.path;
     let below: RepoPath;
@@ -1317,27 +1315,28 @@ export class MountReader {
     const path = below;
     if (!isWithinRepoPath(mount.address.path, path)) return { kind: "not_found", path };
 
-    const outcome = await snapshots.ready(mount, 0);
+    const outcome = await this.#dependencies.index(mount, 0);
     // Publication policy may exclude any path, including declarations. Never guess before it
-    // has been validated; blob-cache availability is not permission to serve a file.
+    // has been validated; a body at hand is not permission to serve a file.
     if (outcome.status !== "ready") return { kind: "not_ready", outcome };
+    const { index } = outcome;
+    const entries = await this.#entriesOf(index);
     let children: readonly DirectoryListing[] = [];
-    const scope = scopeOf(outcome.snapshot);
-    const entry = below.length === 0 ? undefined : await getEntry(database, scope, path);
+    const entry = below.length === 0 ? undefined : getEntry(entries, path);
     if (entry?.frontMatter?.manifestError === "unsupported_type")
       return { kind: "not_found", path };
     if (entry === undefined) {
-      children = await listDirectory(database, scope, path, MAX_DIRECTORY_ENTRIES + 1);
+      children = listDirectory(entries, path, MAX_DIRECTORY_ENTRIES + 1);
     }
     if (entry === undefined) {
-      const entries = children.flatMap((child) => {
+      const listed = children.flatMap((child) => {
         const childPath = belowMount(mount, child.path);
         return childPath === undefined
           ? []
-          : [{ path: childPath, kind: child.kind, size: child.size ?? undefined }];
+          : [{ path: childPath, kind: child.kind, size: child.size }];
       });
-      if (entries.length === 0) {
-        const suggestions = (await this.#entriesOf(scopeOf(outcome.snapshot)))
+      if (listed.length === 0) {
+        const suggestions = entries
           .filter(
             (entry) =>
               belowMount(mount, entry.path) !== undefined && entry.path.endsWith(`/${below}`),
@@ -1349,17 +1348,17 @@ export class MountReader {
       return {
         kind: "directory",
         directory: {
-          mount: this.summary(mount, outcome.status === "ready" ? outcome.snapshot : undefined),
+          mount: this.summary(mount, index),
           path: below,
-          entries: entries.slice(0, MAX_DIRECTORY_ENTRIES),
-          truncated: entries.length > MAX_DIRECTORY_ENTRIES,
+          entries: listed.slice(0, MAX_DIRECTORY_ENTRIES),
+          truncated: listed.length > MAX_DIRECTORY_ENTRIES,
         },
       };
     }
     const file = { size: entry.size, hash: entry.blobSha };
-    const license = await this.#licenseAt(scope, outcome.snapshot, path);
+    const license = await this.#licenseAt(index, path);
     if (!servesInFull(license, mount.verified)) {
-      return { kind: "not_served", path: below, license, sourceUrl: this.#sourceUrl(mount, path) };
+      return { kind: "not_served", path: below, license, sourceUrl: mount.sourceUrl(path) };
     }
     if (file.size > limits.maxReadableFileBytes) {
       return {
@@ -1367,35 +1366,29 @@ export class MountReader {
         path: below,
         size: file.size,
         limit: limits.maxReadableFileBytes,
-        sourceUrl: this.#rawUrl(mount, path),
+        sourceUrl: mount.rawUrl(path),
       };
     }
 
-    let text = await blobStore.read(file.hash);
+    let text = await index.blobs.read(file.hash);
     if (text === undefined) {
-      const bytes = await gitHost.readBlob(
-        mount.coordinates,
+      const bytes = await this.#dependencies.fetchBody?.(
+        mount,
         file.hash,
         limits.maxReadableFileBytes,
       );
-      await blobStore.write(file.hash, bytes);
+      if (bytes === undefined) {
+        throw new BodyUnavailableError(path);
+      }
       text = decodeText(bytes);
       if (text === undefined) {
-        return { kind: "not_text", path: below, sourceUrl: this.#rawUrl(mount, path) };
+        return { kind: "not_text", path: below, sourceUrl: mount.rawUrl(path) };
       }
     }
-    const refsOutcome =
-      outcome.status === "ready"
-        ? await this.#references(
-            mount,
-            scopeOf(outcome.snapshot),
-            (await getEntry(database, scopeOf(outcome.snapshot), path))?.frontMatter?.references ??
-              [],
-          )
-        : [];
+    const references = await this.#references(mount, index, entry.frontMatter?.references ?? []);
     const make = (length: number): FileResult => ({
-      references: refsOutcome,
-      mount: this.summary(mount, outcome.status === "ready" ? outcome.snapshot : undefined),
+      references,
+      mount: this.summary(mount, index),
       path: below,
       ...pageOfText(text, input.offset ?? 0, length),
     });
@@ -1408,37 +1401,37 @@ export class MountReader {
 
   /** Everything the mount offers, up to `listLimit` skills and as many documents. Never waits. */
   async overview(
-    mount: Mount,
+    mount: M,
     listLimit: number,
-  ): Promise<NotReady | { readonly status: "ready"; readonly overview: MountOverview }> {
-    const { database, snapshots } = this.#dependencies;
-    const outcome = await snapshots.ready(mount, 0);
+  ): Promise<IndexNotReady | { readonly status: "ready"; readonly overview: MountOverview }> {
+    const outcome = await this.#dependencies.index(mount, 0);
     if (outcome.status !== "ready") {
       return outcome;
     }
-    const scope = scopeOf(outcome.snapshot);
+    const { index } = outcome;
     const path = mount.address.path;
-    const [counts, skills, documents, diagnostics, manifest, groups] = await Promise.all([
-      countEntries(database, scope, path),
-      listEntries(database, scope, path, listLimit, "skills"),
-      listEntries(database, scope, path, listLimit, "documents_outside_skills"),
-      this.#diagnosticsOf(mount, scope),
-      this.#manifestOf(mount, scope),
-      this.#browseEntries(scope, path),
+    const entries = await this.#entriesOf(index);
+    const [diagnostics, manifest, groups] = await Promise.all([
+      this.#diagnosticsOf(mount, index),
+      this.#manifestOf(mount, index),
+      this.#browseEntries(index, path),
     ]);
+    const counts = countEntries(entries, path);
+    const skills = listEntries(entries, path, listLimit, "skills");
+    const documents = listEntries(entries, path, listLimit, "documents_outside_skills");
     return {
       status: "ready",
       overview: {
-        overview: await this.#overviewOf(scope, path),
-        mount: this.summary(mount, outcome.snapshot),
+        overview: await this.#overviewOf(index, path),
+        mount: this.summary(mount, index),
         groups: groups.filter((entry) => entry.kind === "directory").slice(0, BROWSE_DEFAULT_LIMIT),
         manifest,
-        license: await this.#licenseAt(scope, outcome.snapshot, path),
+        license: await this.#licenseAt(index, path),
         skillCount: counts.skills,
         documentCount: counts.documents,
         skills: skills.flatMap((row) => {
           const directory = belowMount(mount, row.skillDir);
-          return directory === undefined || row.name === null
+          return directory === undefined || row.name === undefined
             ? []
             : [
                 {
@@ -1458,53 +1451,4 @@ export class MountReader {
       },
     };
   }
-}
-
-/** What the index says about an entry that was read. */
-function indexedOf(entry: EntryRecord): IndexedFile {
-  return { path: entry.path, kind: entry.kind, skillDir: entry.skillDir };
-}
-
-/** A path stored by the indexer, relative to the mounted root. */
-function belowMount(mount: Mount, stored: string | null): RepoPath | undefined {
-  const parsed = stored === null ? undefined : parseRepoPath(stored);
-  return parsed?.ok === true && isWithinRepoPath(mount.address.path, parsed.value)
-    ? parsed.value
-    : undefined;
-}
-
-function toFindItem(mount: Mount, row: EntryRecord): FindItem | undefined {
-  if (row.kind === "skill") {
-    const directory = belowMount(mount, row.skillDir);
-    return directory === undefined || row.name === null
-      ? undefined
-      : {
-          kind: "skill",
-          path: row.path as RepoPath,
-          name: row.name,
-          directory,
-          description: row.description ?? "",
-          files: [],
-          moreFiles: 0,
-          translations: skillTranslationsOf(row.frontMatter?.translations),
-          ...(row.frontMatter?.licenseFact === undefined
-            ? {}
-            : {
-                license: row.frontMatter.licenseFact,
-                ...(servesInFull(row.frontMatter.licenseFact, mount.verified)
-                  ? {}
-                  : { describedOnly: true }),
-              }),
-        };
-  }
-  const path = belowMount(mount, row.path);
-  return path === undefined
-    ? undefined
-    : {
-        kind: "document",
-        path,
-        title: row.title ?? undefined,
-        summary: row.description ?? undefined,
-        skillDirectory: belowMount(mount, row.skillDir),
-      };
 }

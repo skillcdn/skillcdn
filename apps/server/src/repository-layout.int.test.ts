@@ -14,8 +14,8 @@ import { createBlobStore } from "@skillcdn/db";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
 import { gitBlobHash, INDEX_LIMIT_DEFAULTS } from "@skillcdn/indexer";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { MountReader } from "./mounts/mount-reader.js";
 import { MountService } from "./mounts/mount-service.js";
+import { createMountReader } from "./mounts/reader.js";
 import { createFixtureHost, fixtureCommits } from "./testing/fixture-host.js";
 import { createHarness, type Harness } from "./testing/harness.js";
 import { continuationOf, listedPaths, skillSectionsOf, textOf } from "./testing/tool-text.js";
@@ -375,7 +375,7 @@ describe("repository-root publication and progressive loading", () => {
     const stored = createBlobStore(database.database);
     const missingHash = gitBlobHash(new TextEncoder().encode(required));
     let unavailable = true;
-    const reader = new MountReader({
+    const reader = createMountReader({
       database: database.database,
       gitHost: h.host,
       snapshots: h.snapshots,
