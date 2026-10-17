@@ -254,6 +254,9 @@ importers:
       '@skillcdn/brand':
         specifier: workspace:*
         version: link:../../packages/brand
+      '@skillcdn/client':
+        specifier: workspace:*
+        version: link:../../packages/client
       '@skillcdn/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -321,6 +324,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@skillcdn/client':
+        specifier: workspace:^
+        version: link:../client
       '@skillcdn/core':
         specifier: workspace:^
         version: link:../core
@@ -330,6 +336,22 @@ importers:
       '@skillcdn/reader':
         specifier: workspace:^
         version: link:../reader
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.19.1
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.3(@types/node@24.19.1)(vite@8.3.4(@types/node@24.19.1)(esbuild@0.28.2)(tsx@4.23.13)(yaml@2.9.1))
+
+  packages/client:
+    dependencies:
+      '@skillcdn/core':
+        specifier: workspace:^
+        version: link:../core
     devDependencies:
       '@types/node':
         specifier: 'catalog:'

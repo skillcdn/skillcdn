@@ -3,18 +3,28 @@ import { basename, dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   type Address,
+  browseBody,
+  describeLicense,
+  directoryBody,
+  fileBody,
+  findBody,
   type IndexLimits,
   LOCAL_HOST_KEY,
+  mountBody,
   parseAddress,
+  REST_MOUNT_LIST_LIMIT,
   type RepoPath,
   ROOT_PATH,
+  skillOutcome,
 } from "@skillcdn/core";
 import { readDirectory } from "@skillcdn/indexer";
 import { createMemoryIndex, type MountContext, Reader } from "@skillcdn/reader";
+import { type Pack, PackError } from "./pack.js";
 
-// A directory on this machine as a mount (ADR-0053): read as the indexer reads a commit, kept
-// as an index in memory, and read as a deployment reads its own. The person chose the
-// directory, so it is verified: its content is served in full under its license.
+// A directory on this machine as a pack (ADR-0053, ADR-0055): read as the indexer reads a
+// commit, kept as an index in memory, read as a deployment reads its own, and answered in the
+// REST API's shapes as a deployment answers them. The person chose the directory, so it is
+// verified: its content is served in full under its license.
 
 /** A mount of a directory: the context the reader needs, and where the files are. */
 export interface LocalMount extends MountContext {
@@ -51,20 +61,15 @@ export function localAddress(
       };
 }
 
-export interface LocalPack {
-  readonly mount: LocalMount;
-  readonly reader: Reader<LocalMount>;
-}
-
 /**
- * Opens a directory as a pack: the index built in memory, and a reader over it. Rejects with
- * the error text when the directory cannot be read or addressed.
+ * Opens a directory as a pack: the index built in memory, and the reads over it. Answers the
+ * error text and the exit code when the directory cannot be read or addressed.
  */
 export async function openDirectory(options: {
   readonly directory: string;
   readonly as?: string | undefined;
   readonly limits: IndexLimits;
-}): Promise<LocalPack | { readonly error: string; readonly exit: number }> {
+}): Promise<Pack | { readonly error: string; readonly exit: number }> {
   const root = resolve(options.directory);
   const info = await stat(root).catch(() => undefined);
   if (info === undefined || !info.isDirectory()) {
@@ -98,5 +103,90 @@ export async function openDirectory(options: {
     limits: options.limits,
     index: async () => ({ status: "ready", index }),
   });
-  return { mount, reader };
+  const ready = <T extends { readonly status: string }>(
+    answer: T,
+  ): Extract<T, { status: "ready" }> => {
+    if (answer.status !== "ready") {
+      throw new Error("the index of a directory is always ready");
+    }
+    return answer as Extract<T, { status: "ready" }>;
+  };
+  return {
+    address: mount.address,
+    source: { kind: "directory", root },
+    async mount() {
+      return mountBody(
+        {
+          address: mount.address,
+          repository: {
+            host: address.host,
+            owner: address.owner,
+            name: address.repo,
+            defaultBranch: "",
+            description: null,
+            avatar: "",
+            visibility: "public",
+          },
+          commit: mount.commit,
+          verified: mount.verified,
+          image: () => null,
+        },
+        await reader.overview(mount, REST_MOUNT_LIST_LIMIT),
+      );
+    },
+    async browse(query) {
+      return browseBody(ready(await reader.browse(mount, query, 0)));
+    },
+    async find(query) {
+      return findBody(ready(await reader.find(mount, query, 0)));
+    },
+    async skill(path, cursor) {
+      const outcome = skillOutcome(ready(await reader.skill(mount, path, 0, cursor, true)));
+      if ("failure" in outcome) {
+        const { status, code, message, directories } = outcome.failure;
+        throw new PackError(status, code, message, { directories });
+      }
+      return outcome.body;
+    },
+    async file(query) {
+      const lookup = await reader.file(mount, query);
+      switch (lookup.kind) {
+        case "not_ready":
+          throw new Error("the index of a directory is always ready");
+        case "found":
+          return fileBody(lookup.file);
+        case "directory":
+          return directoryBody(lookup.directory);
+        case "invalid_path":
+          throw new PackError(400, "request.invalid", `Not a valid path: ${lookup.reason}.`);
+        case "not_found":
+          throw new PackError(
+            404,
+            "file.not_found",
+            `No file at that path in this pack.${lookup.suggestions?.length ? ` Candidates: ${lookup.suggestions.join(", ")}.` : ""}`,
+          );
+        case "too_large":
+          throw new PackError(
+            413,
+            "file.too_large",
+            `The file is too large to read here (${lookup.size} bytes; the limit is ${lookup.limit}). Read it at its source: ${lookup.sourceUrl}`,
+            { sourceUrl: lookup.sourceUrl },
+          );
+        case "not_text":
+          throw new PackError(
+            415,
+            "file.not_text",
+            `The file is not UTF-8 text, which is all this command carries. Read it at its source: ${lookup.sourceUrl}`,
+            { sourceUrl: lookup.sourceUrl },
+          );
+        case "not_served":
+          throw new PackError(
+            403,
+            "file.not_served",
+            `The file is described, not served: its license (${describeLicense(lookup.license)}) allows SkillCDN to say that it exists, not to pass its content on. Read it at its source: ${lookup.sourceUrl}`,
+            { sourceUrl: lookup.sourceUrl },
+          );
+      }
+    },
+  };
 }

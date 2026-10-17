@@ -16,7 +16,7 @@ const MAX_POLLS = 40;
 function fromInitial<T>(initial: InitialResource): Resource<T> {
   if (initial.error !== undefined) {
     const { status, code, message, directories } = initial.error;
-    return { state: "error", error: new ApiError(status, code, message, directories) };
+    return { state: "error", error: new ApiError(status, code, message, { directories }) };
   }
   return { state: "ready", value: initial.ready as T, stalled: false };
 }

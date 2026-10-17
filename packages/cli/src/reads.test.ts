@@ -169,7 +169,7 @@ describe("the reads of a directory", () => {
     expect(elsewhere.err).toContain("names another pack");
     const file = await run(["file", root, "docs/missing.md"]);
     expect(file.code).toBe(EXIT_MISSING);
-    expect(file.err).toContain("No readable file at docs/missing.md");
+    expect(file.err).toContain("file.not_found: No file at that path in this pack.");
   });
 
   it("reads a file by pages, lists a folder, and refuses a path that leaves the pack", async () => {
@@ -188,7 +188,7 @@ describe("the reads of a directory", () => {
     expect(folder.out).toContain("- marketing/ads/references/");
     const outside = await run(["file", root, "../secret.md"]);
     expect(outside.code).toBe(EXIT_USAGE);
-    expect(outside.err).toContain("Not a path from the pack's root");
+    expect(outside.err).toContain("request.invalid: Not a valid path");
   });
 
   it("refuses what cannot be read or is not asked right", async () => {
@@ -206,6 +206,6 @@ describe("the reads of a directory", () => {
     expect(unknown.code).toBe(EXIT_USAGE);
     const help = await run(["help", "skill"]);
     expect(help.code).toBe(0);
-    expect(help.out).toContain("usage: skillcdn skill <directory> <path>");
+    expect(help.out).toContain("usage: skillcdn skill [<pack>] <path>");
   });
 });

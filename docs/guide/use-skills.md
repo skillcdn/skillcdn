@@ -41,16 +41,17 @@ A tag or a full commit hash gives you exactly what was reviewed, every time. A f
 
 ## From a shell, without MCP
 
-An agent that runs commands can read a pack with the `skillcdn` command instead of an MCP connection: nothing to configure, no tools in its context until it asks, and the same words an MCP client's model is given. For now the command reads a pack that is on the machine, a git checkout or any folder in the format; install it once where the agent runs (`npm install -g @skillcdn/cli`), then:
+An agent that runs commands can read a pack with the `skillcdn` command instead of an MCP connection: nothing to configure, no tools in its context until it asks, and the same words an MCP client's model is given. Install it once where the agent runs (`npm install -g @skillcdn/cli`), then name the pack by its address, or by a folder on the machine, a git checkout or any folder in the format:
 
 ```sh
-skillcdn skills ./packs/acme                    # what a client is told on connect, then every skill and document
-skillcdn find ./packs/acme release notes        # search by words
-skillcdn skill ./packs/acme marketing/ads/SKILL.md   # one skill whole: its rules, instructions and included files
-skillcdn file ./packs/acme docs/guide.md        # a file, by pages
+skillcdn skills gh/acme/skills                  # what a client is told on connect, then every skill and document
+skillcdn find gh/acme/skills release notes      # search by words
+skillcdn skill gh/acme/skills marketing/ads/SKILL.md   # one skill whole: its rules, instructions and included files
+skillcdn file gh/acme/skills docs/guide.md      # a file, by pages
+skillcdn skills ./packs/acme                    # the same from a folder, with no server and no network
 ```
 
-`skillcdn help <command>` says the rest. A folder read this way is yours: it is served in full under its license, with no provenance notice, and it is addressed as `local/<the folder's parent>/<its name>` ([addresses](../specs/address.md#served-from-a-machine)).
+An address is read at `skillcdn.ai` unless `--url` or `SKILLCDN_URL` names a deployment of your own. For a private repository, make a token on your account page and keep it with `skillcdn login --url <origin> --token-stdin`, once; it goes to that deployment and nowhere else. `skillcdn use gh/acme/skills` in a checkout binds it to the pack, so that every agent working there reads it without naming it. `skillcdn help <command>` says the rest. A folder read this way is yours: it is served in full under its license, with no provenance notice, and it is addressed as `local/<the folder's parent>/<its name>` ([addresses](../specs/address.md#served-from-a-machine)).
 
 ## Private repositories
 

@@ -6,6 +6,7 @@
   },
   "include": ["src"],
   "references": [
+    { "path": "../client/tsconfig.build.json" },
     { "path": "../core/tsconfig.build.json" },
     { "path": "../indexer/tsconfig.build.json" },
     { "path": "../reader/tsconfig.build.json" }

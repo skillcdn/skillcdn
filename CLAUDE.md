@@ -44,6 +44,7 @@ packages/
   github/     GitHub implementation of the git-host port
   indexer/    the reading rules: a commit or a working tree read into an index   @skillcdn/indexer on npm
   reader/     the reads of a mount over an index, wherever the index is kept    @skillcdn/reader on npm
+  client/     the REST API as typed functions, for Node.js and the browser      @skillcdn/client on npm
   cli/        the skillcdn command: check a pack, and read one as an agent gets it over MCP   @skillcdn/cli on npm
   brand/      the pictures of the brand as files, under the trademark policy; no code   @skillcdn/brand on npm
 apps/server/fixtures/.repositories/  test-only repository fixtures; the public reference pack is skillcdn/skills
@@ -53,7 +54,7 @@ docs/         architecture, specs, ADRs, roadmap, user guides; nav.json lists wh
 
 Two reference repositories sit beside this one and are never imported from it: `skillcdn/skills`, the reference pack, and `skillcdn/console`, the reference console for an organization that runs its work with agents. Both are examples that follow the standard and are meant for real use; the console consumes the published packages and the REST API like any other consumer and defines nothing of the specification ([ADR-0047](docs/adr/0047-the-console-is-a-separate-repository-built-on-the-published-packages.md)).
 
-Dependencies point inward only: `server → db, github, indexer, reader → core`, `cli → core, indexer, reader`, and `web → core, brand`. `core` imports nothing from the workspace and nothing from Node; `brand` is files and imports nothing. `web` may import `core` and `brand` and nothing else. A package can only import what its own `package.json` declares, and only from another package's entry point (never `@skillcdn/x/src/...`). Changing these edges needs an ADR.
+Dependencies point inward only: `server → db, github, indexer, reader → core`, `client → core`, `cli → core, indexer, reader, client`, and `web → core, brand, client`. `core` imports nothing from the workspace and nothing from Node; `brand` is files and imports nothing. `web` may import `core`, `brand` and `client` and nothing else. A package can only import what its own `package.json` declares, and only from another package's entry point (never `@skillcdn/x/src/...`). Changing these edges needs an ADR.
 
 ## Commands
 
@@ -89,7 +90,7 @@ Packages compile to `dist/` and consume each other's compiled output. Going thro
 
 - `pnpm check` passes.
 - New behavior has tests; a bug fix starts with a failing regression test.
-- A change to a published package (`core`, `indexer`, `cli`, `brand`) carries a changeset, written for whoever installs it ([ADR-0046](docs/adr/0046-packages-are-published-to-npm-through-trusted-publishing.md)).
+- A change to a published package (`core`, `indexer`, `reader`, `client`, `cli`, `brand`) carries a changeset, written for whoever installs it ([ADR-0046](docs/adr/0046-packages-are-published-to-npm-through-trusted-publishing.md)).
 - Docs are updated per the table below, in the same change.
 - No secrets, no operations details, no business logic (rules 1, 6, 7).
 - The change is safe to deploy on its own: `main` is always releasable and every push may ship.

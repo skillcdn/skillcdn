@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@skillcdn/brand": "workspace:*",
+    "@skillcdn/client": "workspace:*",
     "@skillcdn/core": "workspace:*",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

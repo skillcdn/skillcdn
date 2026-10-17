@@ -9,5 +9,8 @@
     "types": ["vite/client"]
   },
   "include": ["src"],
-  "references": [{ "path": "../../packages/core/tsconfig.build.json" }]
+  "references": [
+    { "path": "../../packages/core/tsconfig.build.json" },
+    { "path": "../../packages/client/tsconfig.build.json" }
+  ]
 }

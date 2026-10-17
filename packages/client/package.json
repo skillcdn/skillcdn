@@ -1,0 +1,54 @@
+{
+  "name": "@skillcdn/client",
+  "version": "0.0.0",
+  "description": "The REST API of a SkillCDN deployment as typed functions: what a program reads a pack with, in Node.js and in a browser.",
+  "license": "FSL-1.1-ALv2",
+  "homepage": "https://skillcdn.ai",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/skillcdn/skillcdn.git",
+    "directory": "packages/client"
+  },
+  "bugs": "https://github.com/skillcdn/skillcdn/issues",
+  "keywords": [
+    "skillcdn",
+    "mcp",
+    "agent-skills",
+    "skills",
+    "client"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=24"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.tsbuildinfo"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\"",
+    "prepack": "node ../../scripts/pack-license.mjs copy",
+    "postpack": "node ../../scripts/pack-license.mjs remove"
+  },
+  "dependencies": {
+    "@skillcdn/core": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

@@ -1,25 +1,30 @@
 import { readFileSync } from "node:fs";
+import { stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
+import type { FetchLike } from "@skillcdn/client";
 import {
+  type Address,
   BROWSE_DEFAULT_LIMIT,
   BROWSE_MAX_LIMIT,
-  browseBody,
-  type CatalogState,
-  directoryBody,
+  browseResultOf,
+  catalogStateOf,
+  directoryResultOf,
   FIND_DEFAULT_LIMIT,
   FIND_MAX_LIMIT,
   type FindItem,
   type FindResult,
-  fileBody,
-  findBody,
+  fileResultOf,
+  findResultOf,
+  formatAddress,
+  isGitHostAddress,
   joinSkillPages,
-  type MountFacts,
-  mountBody,
+  type MountSummary,
+  mountSummaryOf,
+  parseAddress,
   parseSkillUri,
   READ_FILE_DEFAULT_LIMIT,
   READ_FILE_MAX_LIMIT,
-  REST_MOUNT_LIST_LIMIT,
   renderBrowseResult,
   renderDiagnostics,
   renderDirectoryResult,
@@ -29,11 +34,24 @@ import {
   renderSkillResult,
   type SkillResult,
   skillOutcome,
+  skillResultOf,
   type ToolWords,
 } from "@skillcdn/core";
 import { checkDirectory, readIndexLimits } from "@skillcdn/indexer";
 import { ReaderInputError } from "@skillcdn/reader";
-import { type LocalPack, openDirectory } from "./local.js";
+import {
+  type CredentialStore,
+  createMemoryStore,
+  EMPTY_CREDENTIALS,
+  loginAt,
+  originOf,
+  withLogin,
+  withoutLogin,
+} from "./credentials.js";
+import { createMemoryDirectoryStore, DIRECTORY_FILE, type DirectoryStore } from "./directory.js";
+import { openDirectory } from "./local.js";
+import { type Pack, PackError } from "./pack.js";
+import { openDeployment } from "./remote.js";
 
 /** What the command reads and writes, handed in so that a test runs it without a process. */
 export interface CliIo {
@@ -42,16 +60,31 @@ export interface CliIo {
   readonly stderr: (text: string) => void;
   /** Where a relative directory is resolved from; the process's directory when left out. */
   readonly cwd?: string | undefined;
+  /** How a deployment is reached; the platform's `fetch` when left out. */
+  readonly fetch?: FetchLike | undefined;
+  /** All of standard input, for a token given to `login`. */
+  readonly readStdin?: (() => Promise<string>) | undefined;
+  /** Where the logins are kept; nowhere, for this run only, when left out. */
+  readonly store?: CredentialStore | undefined;
+  /** What the working directory says of the pack it reads; nothing, when left out. */
+  readonly directory?: DirectoryStore | undefined;
+  readonly sleep?: ((ms: number) => Promise<void>) | undefined;
+  readonly now?: (() => Date) | undefined;
+  /** What the command calls itself to a deployment. */
+  readonly userAgent?: string | undefined;
 }
 
 // Exit codes, as the server's roles use them: 64 for a usage error, 78 for configuration that
 // cannot be read, 70 for an internal failure. `check` itself answers 0, 1 or 2; a read answers
-// 1 for what the pack does not have and 2 for a directory that cannot be read.
+// 1 for what the pack does not have or refuses, and 2 for a pack that cannot be read at all.
 export const EXIT_MISSING = 1;
 export const EXIT_UNREADABLE = 2;
 export const EXIT_USAGE = 64;
 export const EXIT_FAILURE = 70;
 export const EXIT_CONFIG = 78;
+
+/** Where a pack is read when nothing says otherwise. */
+export const DEFAULT_ORIGIN = "https://skillcdn.ai";
 
 /** How the results name the reads, so that an agent is told the command and not a tool. */
 export const COMMAND_WORDS: ToolWords = {
@@ -61,39 +94,58 @@ export const COMMAND_WORDS: ToolWords = {
   read: "skillcdn file",
 };
 
-const COMMANDS = ["check", "skills", "browse", "find", "skill", "file"] as const;
+const COMMANDS = [
+  "check",
+  "skills",
+  "browse",
+  "find",
+  "skill",
+  "file",
+  "login",
+  "logout",
+  "logins",
+  "use",
+] as const;
 type Command = (typeof COMMANDS)[number];
 
 const isCommand = (name: string): name is Command => (COMMANDS as readonly string[]).includes(name);
 
 export const USAGE = `usage: skillcdn <command> [arguments]
 
-Reads a pack as SkillCDN serves one: a directory on this machine in the SkillCDN Format, a git
-checkout or any folder of skills, documents and rules. Nothing in the directory is executed.
+Reads a pack as SkillCDN serves one: a directory on this machine in the SkillCDN Format (a git
+checkout or any folder of skills, documents and rules), or a pack at a deployment, by its
+address. Nothing in a directory is executed.
 
 Commands:
   check [<directory>]              Report what an agent would get from the directory, before pushing.
-  skills <directory>               What a client is told on connect, then every skill and document.
-  browse <directory> [<folder>]    What a folder holds, as browse_repo lists it.
-  find <directory> <words...>      What the words find, as search_repo does.
-  skill <directory> <path>         A skill whole, as load_skill assembles it: rules, instructions, included files.
-  file <directory> <path>          A page of a file, as read_repo_file reads it, or what a folder holds.
+  skills [<pack>]                  What a client is told on connect, then every skill and document.
+  browse [<pack>] [<folder>]       What a folder holds, as browse_repo lists it.
+  find [<pack>] <words...>         What the words find, as search_repo does.
+  skill [<pack>] <path>            A skill whole, as load_skill assembles it: rules, instructions, included files.
+  file [<pack>] <path>             A page of a file, as read_repo_file reads it, or what a folder holds.
+  login --url <origin> --token-stdin   Keep a token a person made at a deployment, for reads there.
+  logout --url <origin>            Forget it.
+  logins                           The deployments a token is kept for.
+  use <address> [--url <origin>]   Bind this directory to a pack: reads here need no <pack>.
   help [<command>]                 This, or one command in full.
 
-Paths start at the pack's root, as marketing/ads/SKILL.md. Every read answers the words an MCP
-client's model is given, or the JSON of the REST API with --json. A directory is addressed as
-local/<its parent>/<its name>; --as local/<owner>/<name> names it otherwise. The INDEX_* and
-READ_MAX_FILE_BYTES variables set the limits a deployment would apply.
+A <pack> is a directory, or an address: gh/<owner>/<repo>[@<ref>][/<path>], the URL of a pack
+at a deployment, or a skill:// URI. Left out, the pack this directory is bound to (${DIRECTORY_FILE}).
+An address is read at --url, else SKILLCDN_URL, else the deployment the directory is bound to,
+else ${DEFAULT_ORIGIN}, with the token kept for that deployment, or SKILLCDN_TOKEN beside
+SKILLCDN_URL. Paths start at the pack's root, as marketing/ads/SKILL.md. Every read answers the
+words an MCP client's model is given, or the JSON of the REST API with --json.
 
-Exit codes: 0 done; 1 the pack does not have it (no such skill, file or folder); 2 the directory
-cannot be read; 64 a usage error; 78 a limit variable that cannot be read; 70 a failure.
+Exit codes: 0 done; 1 the pack does not have it, or refuses it; 2 the pack cannot be read, the
+directory or the deployment; 64 a usage error; 78 a limit variable that cannot be read; 70 a failure.
 
 Options:
   -h, --help     Print this help.
   -v, --version  Print the version.
 `;
 
-const READ_OPTIONS = `  --as <address>  Address the directory as local/<owner>/<name> instead of its parent's and its own name.
+const READ_OPTIONS = `  --url <origin>  The deployment an address is read at.
+  --as <address>  Address a directory as local/<owner>/<name> instead of its parent's and its own name.
   --json          Print the JSON the REST API answers instead of the words a model is given.`;
 
 const HELP: Readonly<Record<Command, string>> = {
@@ -106,7 +158,7 @@ index diagnostics, and what a client is told on connect. Nothing in the director
 Exit codes: 0 when there are no index diagnostics, 1 when there are, 2 when the directory cannot
 be read. The INDEX_* and READ_MAX_FILE_BYTES variables set the limits a deployment would apply.
 `,
-  skills: `usage: skillcdn skills <directory> [--as <address>] [--json]
+  skills: `usage: skillcdn skills [<pack>] [--url <origin>] [--as <address>] [--json]
 
 What a client is told when it connects to the pack, within its 2,000 characters, then every
 skill and every document outside the skills, as a search without words lists them: each skill
@@ -114,7 +166,7 @@ with its SKILL.md path, which skillcdn skill takes.
 
 ${READ_OPTIONS}
 `,
-  browse: `usage: skillcdn browse <directory> [<folder>] [--cursor <cursor>] [--limit <n>] [--as <address>] [--json]
+  browse: `usage: skillcdn browse [<pack>] [<folder>] [--cursor <cursor>] [--limit <n>] [--url <origin>] [--as <address>] [--json]
 
 What a folder holds, as browse_repo lists it: its skills, its folders with what each holds and
 the README that introduces it, and its files, with the canonical path of each. The pack's root
@@ -123,7 +175,7 @@ ${BROWSE_MAX_LIMIT}); a page that ends before the folder does names its nextCurs
 
 ${READ_OPTIONS}
 `,
-  find: `usage: skillcdn find <directory> <words...> [--path <folder>] [--cursor <cursor>] [--limit <n>] [--as <address>] [--json]
+  find: `usage: skillcdn find [<pack>] <words...> [--path <folder>] [--cursor <cursor>] [--limit <n>] [--url <origin>] [--as <address>] [--json]
 
 What the words find, as search_repo does: words are matched, not meaning, in the language the
 pack is written in, usually English; a skill comes with the files of it that matched, in order of
@@ -133,18 +185,18 @@ names its nextCursor, which --cursor continues.
 
 ${READ_OPTIONS}
 `,
-  skill: `usage: skillcdn skill <directory> <path> [--as <address>] [--json]
+  skill: `usage: skillcdn skill [<pack>] <path> [--url <origin>] [--as <address>] [--json]
 
 One skill whole, as load_skill assembles it: the rules of every SKILLCDN.md from the pack's root
 to the skill's own folder, then its instructions, then the files it includes on every run, each
 under a line that names its path; then the files it has and what it refers to. <path> is the
 path of its SKILL.md from the pack's root, as skills and browse print it, or the skill://
-URI the pack names it by. The pages the skill is read in are joined: what is printed is complete
-unless it says otherwise.
+URI the pack names it by, which then names the pack as well. The pages the skill is read in are
+joined: what is printed is complete unless it says otherwise.
 
 ${READ_OPTIONS}
 `,
-  file: `usage: skillcdn file <directory> <path> [--offset <n>] [--limit <n>] [--as <address>] [--json]
+  file: `usage: skillcdn file [<pack>] <path> [--offset <n>] [--limit <n>] [--url <origin>] [--as <address>] [--json]
 
 A page of a file, as read_repo_file reads it: the text as written, from character --offset,
 ${READ_FILE_DEFAULT_LIMIT} characters unless --limit says otherwise (up to ${READ_FILE_MAX_LIMIT}); a page that ends before
@@ -153,6 +205,31 @@ holds. A file over the read limit, one that is not text, and one a license keeps
 are named with where to read them instead.
 
 ${READ_OPTIONS}
+`,
+  login: `usage: skillcdn login --url <origin> --token-stdin
+
+Keeps a token a person made at a deployment, read from standard input and never from an
+argument, so that reads at that deployment present it: a repository token from their account
+page, which reads one repository as its maker, or an access token an app received. One token
+per deployment; a second login there replaces the first. The token is kept in the person's
+configuration directory, readable by them alone where the system can say so, and goes to the
+deployment it was kept for and nowhere else. For a job, SKILLCDN_URL and SKILLCDN_TOKEN together
+do the same for one run.
+`,
+  logout: `usage: skillcdn logout --url <origin>
+
+Forgets the token kept for a deployment. The token itself is ended on the person's account page.
+`,
+  logins: `usage: skillcdn logins
+
+The deployments a token is kept for, and since when; never the tokens.
+`,
+  use: `usage: skillcdn use <address> [--url <origin>]
+
+Binds the working directory to a pack: writes ${DIRECTORY_FILE} with the pack's address and, with
+--url, the deployment it is read at, so that a read here or in a directory below needs no <pack>.
+Meant to be committed: everyone who works in the checkout, and every agent they run in it, reads
+the same pack. It names no token and nothing secret.
 `,
 };
 
@@ -171,18 +248,19 @@ function version(): string {
 /** A usage error: what was wrong, and the command's help after it. */
 class Misuse extends Error {}
 
-/** The pack does not have what was asked for; the words say so as a tool result would. */
-class Missing extends Error {}
-
 const OPTIONS = {
   help: { type: "boolean", short: "h" },
   as: { type: "string" },
+  url: { type: "string" },
   json: { type: "boolean" },
   cursor: { type: "string" },
   limit: { type: "string" },
   offset: { type: "string" },
   path: { type: "string" },
+  "token-stdin": { type: "boolean" },
 } as const;
+
+type Values = ReturnType<typeof parseArgs<{ options: typeof OPTIONS }>>["values"];
 
 function count(value: string | undefined, name: string, max: number): number | undefined {
   if (value === undefined) {
@@ -197,106 +275,285 @@ function count(value: string | undefined, name: string, max: number): number | u
   return number;
 }
 
-/** The REST body of the `mounts` route for a directory: what names it, and no picture. */
-function factsOf(pack: LocalPack): MountFacts {
-  const { address } = pack.mount;
-  return {
-    address,
-    repository: {
-      host: address.host,
-      owner: address.owner,
-      name: address.repo,
-      defaultBranch: "",
-      description: null,
-      avatar: "",
-      visibility: "public",
-    },
-    commit: pack.mount.commit,
-    verified: pack.mount.verified,
-    image: () => null,
-  };
+const defaultSleep = (ms: number): Promise<void> =>
+  new Promise((resolved) => setTimeout(resolved, ms));
+
+/** What the command was given to find the pack by, read into where the pack is. */
+interface PackSpec {
+  readonly kind: "directory" | "address";
+  readonly directory?: string;
+  readonly address?: Address;
+  /** A deployment the spec names itself: the origin of a URL. */
+  readonly url?: string;
+  /** A skill the spec names itself: the path a `skill://` URI carries. */
+  readonly skillPath?: string;
+}
+
+/**
+ * Reads what was given for the pack: a directory that exists, else a `skill://` URI, a URL at a
+ * deployment, or an address.
+ */
+/** Whether what was given is written as a place on this machine rather than an address. */
+const looksLikePath = (given: string): boolean =>
+  given.startsWith(".") ||
+  given.startsWith("~") ||
+  given.includes("\\") ||
+  /^[a-z]:[\\/]/i.test(given) ||
+  (given.startsWith("/") && !parseAddress(given).ok);
+
+async function packSpecOf(given: string, io: CliIo): Promise<PackSpec> {
+  const directory = resolve(io.cwd ?? ".", given);
+  const info = await stat(directory).catch(() => undefined);
+  if (info?.isDirectory()) {
+    return { kind: "directory", directory };
+  }
+  if (looksLikePath(given)) {
+    throw new Unreadable(`${given}: not a directory that can be read`, EXIT_UNREADABLE);
+  }
+  if (given.startsWith("skill://")) {
+    const uri = parseSkillUri(given);
+    if (uri === undefined) {
+      throw new Misuse(`Not a skill URI: ${given}.`);
+    }
+    return {
+      kind: "address",
+      address: { ...uri.address, ref: undefined, path: "" as Address["path"] },
+      skillPath: uri.path,
+    };
+  }
+  if (/^https?:\/\//i.test(given)) {
+    const url = originOf(given);
+    let pathname: string;
+    try {
+      pathname = new URL(given).pathname;
+    } catch {
+      pathname = "";
+    }
+    const parsed = parseAddress(pathname);
+    if (url === undefined || !parsed.ok) {
+      throw new Misuse(
+        `Not the URL of a pack at a deployment: ${given}${parsed.ok ? "" : ` (${parsed.error.message})`}.`,
+      );
+    }
+    return { kind: "address", address: parsed.value, url };
+  }
+  const parsed = parseAddress(given.startsWith("/") ? given : `/${given}`);
+  if (!parsed.ok) {
+    if (/^[a-z0-9]/i.test(given) && !given.includes("/")) {
+      throw new Misuse(
+        `${given} is neither a directory here nor an address: an address is written gh/<owner>/<repo>.`,
+      );
+    }
+    throw new Misuse(`Not a directory here, and not an address: ${parsed.error.message}.`);
+  }
+  return { kind: "address", address: parsed.value };
+}
+
+/** Where an address is read, and with what: the origin first, then the token for that origin alone. */
+async function deploymentOf(
+  io: CliIo,
+  flagUrl: string | undefined,
+  specUrl: string | undefined,
+  boundUrl: string | undefined,
+): Promise<{ readonly url: string; readonly token: string | undefined }> {
+  const envUrl = io.environment.SKILLCDN_URL;
+  const envToken = io.environment.SKILLCDN_TOKEN;
+  if ((envUrl === undefined) !== (envToken === undefined)) {
+    throw new Misuse(
+      "SKILLCDN_URL and SKILLCDN_TOKEN are taken together or not at all: set both, or neither.",
+    );
+  }
+  const written = flagUrl ?? specUrl ?? envUrl ?? boundUrl ?? DEFAULT_ORIGIN;
+  const url = originOf(written);
+  if (url === undefined) {
+    throw new Misuse(
+      `Not the origin of a deployment: ${written}. An origin is https://<host>, or http://localhost for this machine.`,
+    );
+  }
+  if (envUrl !== undefined && envToken !== undefined && originOf(envUrl) === url) {
+    return { url, token: envToken.trim() };
+  }
+  const credentials = (await io.store?.load()) ?? EMPTY_CREDENTIALS;
+  return { url, token: loginAt(credentials, url)?.token };
+}
+
+/** The pack a read command was given, opened. */
+async function openPack(
+  given: string | undefined,
+  values: Values,
+  io: CliIo,
+): Promise<{ readonly pack: Pack; readonly skillPath: string | undefined }> {
+  const limits = readIndexLimits(io.environment);
+  if (!limits.ok) {
+    throw new ConfigurationError(limits.error);
+  }
+  const bound = given === undefined ? await io.directory?.load() : undefined;
+  let spec: PackSpec;
+  if (given !== undefined) {
+    spec = await packSpecOf(given, io);
+  } else if (bound !== undefined) {
+    const parsed = parseAddress(bound.pack);
+    if (!parsed.ok) {
+      throw new Misuse(`${DIRECTORY_FILE} names a pack that is not an address.`);
+    }
+    spec = { kind: "address", address: parsed.value };
+  } else {
+    throw new Misuse(
+      `Say which pack: a directory, or an address such as gh/<owner>/<repo>; or bind this directory to one with skillcdn use <address>.`,
+    );
+  }
+  if (spec.kind === "directory" && spec.directory !== undefined) {
+    const opened = await openDirectory({
+      directory: spec.directory,
+      as: values.as,
+      limits: limits.value,
+    });
+    if ("error" in opened) {
+      throw new Unreadable(opened.error, opened.exit);
+    }
+    return { pack: opened, skillPath: undefined };
+  }
+  if (spec.address === undefined) {
+    throw new Error("an address spec has an address");
+  }
+  if (values.as !== undefined) {
+    throw new Misuse("--as names a directory; a pack at a deployment has its address.");
+  }
+  const deployment = await deploymentOf(io, values.url, spec.url, bound?.url);
+  const pack = openDeployment({
+    url: deployment.url,
+    address: spec.address,
+    token: deployment.token,
+    fetch: io.fetch ?? ((input, init) => fetch(input, init)),
+    userAgent: io.userAgent,
+    sleep: io.sleep ?? defaultSleep,
+  });
+  return { pack, skillPath: spec.skillPath };
+}
+
+class ConfigurationError extends Error {
+  readonly problems: readonly { readonly variable: string; readonly rule: string }[];
+  constructor(problems: readonly { readonly variable: string; readonly rule: string }[]) {
+    super("invalid configuration");
+    this.problems = problems;
+  }
+}
+
+class Unreadable extends Error {
+  readonly exit: number;
+  constructor(message: string, exit: number) {
+    super(message);
+    this.exit = exit;
+  }
 }
 
 /** Every skill and document the pack lists, page after page, as one listing. */
-async function listing(pack: LocalPack): Promise<FindResult> {
+async function listing(pack: Pack, summary: MountSummary): Promise<FindResult> {
   const items: FindItem[] = [];
   let first: FindResult | undefined;
   let cursor: string | undefined;
   for (;;) {
-    const answer = await pack.reader.find(pack.mount, { cursor, limit: FIND_MAX_LIMIT }, 0);
-    if (answer.status !== "ready") {
-      throw new Error("the index of a directory is always ready");
+    const body = await pack.find({ cursor, limit: FIND_MAX_LIMIT });
+    if (body.status !== "ready") {
+      throw new PackError(503, `index.${body.status}`, "The pack is not ready to read.");
     }
-    first ??= answer.result;
-    items.push(...answer.result.items);
-    cursor = answer.result.nextCursor;
+    const result = findResultOf(body, summary);
+    first ??= result;
+    items.push(...result.items);
+    cursor = result.nextCursor;
     if (cursor === undefined) {
       return { ...first, items, nextCursor: undefined };
     }
   }
 }
 
+/**
+ * What the tool says when a skill is not at a path: the exact paths that are, and the
+ * manifests that could not be read, since the skill asked for may be among them.
+ */
+async function notFound(pack: Pack, summary: MountSummary, path: string): Promise<PackError> {
+  let available: string[] = [];
+  let diagnostics = "";
+  try {
+    const listed = await listing(pack, summary);
+    available = listed.items.flatMap((item) =>
+      item.kind === "skill" && item.path !== undefined ? [item.path] : [],
+    );
+    diagnostics = renderDiagnostics(listed.diagnostics, true, undefined, COMMAND_WORDS) ?? "";
+  } catch {
+    // The list is a courtesy: the refusal stands without it.
+  }
+  return new PackError(
+    404,
+    "skill.not_found",
+    `No skill at ${JSON.stringify(path)}. Use ${COMMAND_WORDS.browse} or ${COMMAND_WORDS.search} for its exact SKILL.md path.${available.length === 0 ? "" : ` Available: ${available.slice(0, 20).join(", ")}.`}${diagnostics.length === 0 ? "" : `\n${diagnostics}`}`,
+  );
+}
+
 /** One skill whole: every page of its context, joined. */
-async function wholeSkill(pack: LocalPack, path: string): Promise<SkillResult> {
+async function wholeSkill(pack: Pack, summary: MountSummary, path: string): Promise<SkillResult> {
   const pages: SkillResult[] = [];
   let cursor: string | undefined;
   for (;;) {
-    const answer = await pack.reader.skill(pack.mount, path, 0, cursor, true);
-    if (answer.status !== "ready") {
-      throw new Error("the index of a directory is always ready");
+    const body = await pack.skill(path, cursor).catch(async (error: unknown) => {
+      if (error instanceof PackError && error.code === "skill.not_found") {
+        throw await notFound(pack, summary, path);
+      }
+      throw error;
+    });
+    if (body.status !== "ready") {
+      throw new PackError(503, `index.${body.status}`, "The pack is not ready to read.");
     }
-    const { lookup } = answer;
-    switch (lookup.kind) {
-      case "not_found":
-        throw new Missing(
-          `No skill at ${JSON.stringify(path)}. Use ${COMMAND_WORDS.browse} or ${COMMAND_WORDS.search} for its exact SKILL.md path.${lookup.available.length === 0 ? "" : ` Available: ${lookup.available.join(", ")}.`}${renderDiagnostics(lookup.diagnostics, true, undefined, COMMAND_WORDS) === undefined ? "" : `\n${renderDiagnostics(lookup.diagnostics, true, undefined, COMMAND_WORDS)}`}`,
-        );
-      case "ambiguous":
-        throw new Missing(
-          `Use the exact SKILL.md path ${COMMAND_WORDS.browse} or ${COMMAND_WORDS.search} prints.`,
-        );
-      case "unavailable":
-        throw new Missing("The skill's content is unavailable.");
-      case "found":
-        pages.push(lookup.skill);
-        cursor = lookup.skill.nextCursor;
-        if (lookup.skill.complete || cursor === undefined) {
-          const whole = joinSkillPages(pages);
-          if (whole === undefined) {
-            throw new Error("a skill has at least one page");
-          }
-          return whole;
-        }
+    const page = skillResultOf(body, summary);
+    if (page === undefined) {
+      throw new PackError(
+        0,
+        "invalid_response",
+        "The pack answered a skill in an unexpected shape.",
+      );
+    }
+    pages.push(page);
+    cursor = page.nextCursor;
+    if (page.complete || cursor === undefined) {
+      const whole = joinSkillPages(pages);
+      if (whole === undefined) {
+        throw new Error("a skill has at least one page");
+      }
+      return whole;
     }
   }
 }
 
 /** The path a skill is asked for by: its SKILL.md path, or the URI the pack names it by. */
-function skillPathOf(pack: LocalPack, given: string): string {
+function skillPathOf(pack: Pack, given: string): string {
   const uri = parseSkillUri(given);
   if (uri === undefined) {
     if (given.startsWith("skill://")) {
-      throw new Missing(
+      throw new Misuse(
         `Not a skill URI: ${given}. Say the path of its SKILL.md from the pack's root.`,
       );
     }
     return given;
   }
-  const { address } = pack.mount;
+  const { address } = pack;
   if (
     uri.address.host !== address.host ||
     uri.address.owner !== address.owner ||
     uri.address.repo !== address.repo
   ) {
-    throw new Missing(
+    throw new PackError(
+      404,
+      "skill.not_found",
       `That URI names another pack, ${uri.address.host}/${uri.address.owner}/${uri.address.repo}; this one is ${address.host}/${address.owner}/${address.repo}.`,
     );
   }
   return uri.path;
 }
 
+type ReadCommand = "skills" | "browse" | "find" | "skill" | "file";
+
 async function readCommand(
-  command: Exclude<Command, "check">,
+  command: ReadCommand,
   args: readonly string[],
   io: CliIo,
 ): Promise<number> {
@@ -310,107 +567,104 @@ async function readCommand(
     io.stdout(HELP[command]);
     return 0;
   }
-  const [directory, ...rest] = parsed.positionals;
-  if (directory === undefined) {
-    throw new Misuse("Say which directory.");
-  }
-  const limits = readIndexLimits(io.environment);
-  if (!limits.ok) {
-    io.stderr(
-      `invalid configuration:\n${limits.error.map((problem) => `  - ${problem.variable}: ${problem.rule}\n`).join("")}`,
-    );
-    return EXIT_CONFIG;
-  }
+  const positionals = [...parsed.positionals];
+  // The pack comes first when one is given: a directory, a URI, a URL or an address, or
+  // anything at all for skills, which takes nothing else. What else is given is the command's
+  // own argument; without a pack, the directory's binding is the pack.
+  const first = positionals[0];
+  const firstIsPack =
+    first !== undefined &&
+    (command === "skills" ||
+      first.startsWith("skill://") ||
+      /^https?:\/\//i.test(first) ||
+      looksLikePath(first) ||
+      parseAddress(first.startsWith("/") ? first : `/${first}`).ok ||
+      ((await stat(resolve(io.cwd ?? ".", first)).catch(() => undefined))?.isDirectory() ?? false));
+  const given = firstIsPack ? positionals.shift() : undefined;
+  const { pack, skillPath } = await openPack(given, parsed.values, io);
   const json = parsed.values.json === true;
-  const opened = await openDirectory({
-    directory: resolve(io.cwd ?? ".", directory),
-    as: parsed.values.as,
-    limits: limits.value,
-  });
-  if ("error" in opened) {
-    io.stderr(`${opened.error}\n`);
-    return opened.exit;
-  }
-  const pack = opened;
   const print = (text: string): void => {
     io.stdout(`${text}\n`);
   };
   const printJson = (value: unknown): void => {
     io.stdout(`${JSON.stringify(value, null, 2)}\n`);
   };
+  const mount = await pack.mount();
+  const summary = mountSummaryOf(mount);
 
   switch (command) {
     case "skills": {
-      if (rest.length > 0) {
-        throw new Misuse("skills takes the directory and nothing else.");
+      if (positionals.length > 0) {
+        throw new Misuse("skills takes the pack and nothing else.");
       }
       if (json) {
-        printJson(
-          mountBody(factsOf(pack), await pack.reader.overview(pack.mount, REST_MOUNT_LIST_LIMIT)),
-        );
+        printJson(mount);
         return 0;
       }
-      const catalog: CatalogState = await pack.reader.catalog(pack.mount);
       print(
-        `${renderInstructions(catalog, COMMAND_WORDS)}\n\n${renderFindResult(await listing(pack), COMMAND_WORDS)}`,
+        `${renderInstructions(catalogStateOf(mount), COMMAND_WORDS)}\n\n${renderFindResult(await listing(pack, summary), COMMAND_WORDS)}`,
       );
       return 0;
     }
     case "browse": {
-      const [folder, ...more] = rest;
+      const [folder, ...more] = positionals;
       if (more.length > 0) {
-        throw new Misuse("browse takes the directory and at most one folder.");
+        throw new Misuse("browse takes the pack and at most one folder.");
       }
-      const answer = await pack.reader.browse(
-        pack.mount,
-        {
-          path: folder,
-          cursor: parsed.values.cursor,
-          limit: count(parsed.values.limit, "limit", BROWSE_MAX_LIMIT),
-        },
-        0,
-      );
-      if (answer.status !== "ready") {
-        throw new Error("the index of a directory is always ready");
+      const body = await pack.browse({
+        path: folder,
+        cursor: parsed.values.cursor,
+        limit: count(parsed.values.limit, "limit", BROWSE_MAX_LIMIT),
+      });
+      if (body.status !== "ready") {
+        throw new PackError(503, `index.${body.status}`, "The pack is not ready to read.");
       }
       if (json) {
-        printJson(browseBody(answer));
-      } else {
-        print(renderBrowseResult(answer.result, COMMAND_WORDS));
+        printJson(body);
+        return 0;
       }
+      const result = browseResultOf(body, summary);
+      if (result === undefined) {
+        throw new PackError(
+          0,
+          "invalid_response",
+          "The pack answered a folder in an unexpected shape.",
+        );
+      }
+      print(renderBrowseResult(result, COMMAND_WORDS));
       return 0;
     }
     case "find": {
-      const query = rest.join(" ").trim();
+      const query = positionals.join(" ").trim();
       if (query.length === 0) {
         throw new Misuse("Say the words to find.");
       }
-      const answer = await pack.reader.find(
-        pack.mount,
-        {
-          query,
-          path: parsed.values.path,
-          cursor: parsed.values.cursor,
-          limit: count(parsed.values.limit, "limit", FIND_MAX_LIMIT),
-        },
-        0,
-      );
-      if (answer.status !== "ready") {
-        throw new Error("the index of a directory is always ready");
+      const body = await pack.find({
+        query,
+        path: parsed.values.path,
+        cursor: parsed.values.cursor,
+        limit: count(parsed.values.limit, "limit", FIND_MAX_LIMIT),
+      });
+      if (body.status !== "ready") {
+        throw new PackError(503, `index.${body.status}`, "The pack is not ready to read.");
       }
       if (json) {
-        printJson(findBody(answer));
-      } else {
-        print(renderFindResult(answer.result, COMMAND_WORDS));
+        printJson(body);
+        return 0;
       }
+      print(renderFindResult(findResultOf(body, summary), COMMAND_WORDS));
       return 0;
     }
     case "skill": {
-      const [given, ...more] = rest;
-      if (given === undefined || more.length > 0) {
+      const [given, ...more] = positionals;
+      if (more.length > 0 || (given === undefined && skillPath === undefined)) {
         throw new Misuse("Say which skill: the path of its SKILL.md from the pack's root.");
       }
-      const whole = await wholeSkill(pack, skillPathOf(pack, given));
+      if (given !== undefined && skillPath !== undefined) {
+        throw new Misuse("The URI names the skill already; say one or the other.");
+      }
+      const path = skillPath ?? skillPathOf(pack, given ?? "");
+      const whole = await wholeSkill(pack, summary, path);
       if (json) {
         const outcome = skillOutcome({ status: "ready", lookup: { kind: "found", skill: whole } });
         printJson("body" in outcome ? outcome.body : outcome.failure);
@@ -420,47 +674,163 @@ async function readCommand(
       return 0;
     }
     case "file": {
-      const [path, ...more] = rest;
+      const [path, ...more] = positionals;
       if (path === undefined || more.length > 0) {
         throw new Misuse("Say which file: its path from the pack's root.");
       }
-      const lookup = await pack.reader.file(pack.mount, {
+      const body = await pack.file({
         path,
         offset: count(parsed.values.offset, "offset", Number.MAX_SAFE_INTEGER),
         limit: count(parsed.values.limit, "limit", READ_FILE_MAX_LIMIT),
       });
-      switch (lookup.kind) {
-        case "not_ready":
-          throw new Error("the index of a directory is always ready");
-        case "found":
-          if (json) printJson(fileBody(lookup.file));
-          else print(renderFileResult(lookup.file, COMMAND_WORDS));
-          return 0;
-        case "directory":
-          if (json) printJson(directoryBody(lookup.directory));
-          else print(renderDirectoryResult(lookup.directory));
-          return 0;
-        case "invalid_path":
-          throw new Misuse(`Not a path from the pack's root: ${lookup.reason}.`);
-        case "not_found":
-          throw new Missing(
-            `No readable file at ${lookup.path} in this pack. Use ${COMMAND_WORDS.browse}, or ${COMMAND_WORDS.load} for resolved references.${lookup.suggestions?.length ? ` Candidates: ${lookup.suggestions.join(", ")}.` : ""}`,
-          );
-        case "too_large":
-          throw new Missing(
-            `${lookup.path} is too large to read here (${lookup.size} bytes; the limit is ${lookup.limit}). Read it at its source: ${lookup.sourceUrl}`,
-          );
-        case "not_text":
-          throw new Missing(
-            `${lookup.path} is not a UTF-8 text file, which is all this command carries. Read it at its source: ${lookup.sourceUrl}`,
-          );
-        case "not_served":
-          throw new Missing(
-            `${lookup.path} is described, not served: its license allows SkillCDN to say that it exists, not to pass its content on. Read it at its source: ${lookup.sourceUrl}`,
-          );
+      if (json) {
+        printJson(body);
+        return 0;
       }
+      if (body.kind === "directory") {
+        const result = directoryResultOf(body, summary);
+        if (result === undefined) {
+          throw new PackError(
+            0,
+            "invalid_response",
+            "The pack answered a folder in an unexpected shape.",
+          );
+        }
+        print(renderDirectoryResult(result));
+        return 0;
+      }
+      const result = fileResultOf(body, summary);
+      if (result === undefined) {
+        throw new PackError(
+          0,
+          "invalid_response",
+          "The pack answered a file in an unexpected shape.",
+        );
+      }
+      print(renderFileResult(result, COMMAND_WORDS));
+      return 0;
     }
   }
+}
+
+async function loginCommand(args: readonly string[], io: CliIo): Promise<number> {
+  const parsed = parseArgs({
+    args: [...args],
+    options: OPTIONS,
+    allowPositionals: false,
+    strict: true,
+  });
+  if (parsed.values.help === true) {
+    io.stdout(HELP.login);
+    return 0;
+  }
+  const url = parsed.values.url === undefined ? undefined : originOf(parsed.values.url);
+  if (url === undefined) {
+    throw new Misuse("Say which deployment: --url https://<host>.");
+  }
+  if (parsed.values["token-stdin"] !== true) {
+    throw new Misuse(
+      "The token is read from standard input: --token-stdin. Never from an argument.",
+    );
+  }
+  if (io.readStdin === undefined) {
+    throw new Misuse("Standard input is not available here.");
+  }
+  const token = (await io.readStdin()).trim();
+  if (token.length === 0 || token.length > 1024 || /\s/.test(token)) {
+    throw new Misuse("A token is one line of up to 1024 characters, with no whitespace.");
+  }
+  const store = io.store ?? createMemoryStore();
+  const credentials = (await store.load()) ?? EMPTY_CREDENTIALS;
+  const path = await store.save(
+    withLogin(credentials, { url, token, since: (io.now?.() ?? new Date()).toISOString() }),
+  );
+  io.stdout(`A token is kept for ${url}, in ${path}. Reads there present it.\n`);
+  return 0;
+}
+
+async function logoutCommand(args: readonly string[], io: CliIo): Promise<number> {
+  const parsed = parseArgs({
+    args: [...args],
+    options: OPTIONS,
+    allowPositionals: false,
+    strict: true,
+  });
+  if (parsed.values.help === true) {
+    io.stdout(HELP.logout);
+    return 0;
+  }
+  const url = parsed.values.url === undefined ? undefined : originOf(parsed.values.url);
+  if (url === undefined) {
+    throw new Misuse("Say which deployment: --url https://<host>.");
+  }
+  const store = io.store ?? createMemoryStore();
+  const credentials = (await store.load()) ?? EMPTY_CREDENTIALS;
+  if (loginAt(credentials, url) === undefined) {
+    io.stdout(`No token is kept for ${url}.\n`);
+    return 0;
+  }
+  await store.save(withoutLogin(credentials, url));
+  io.stdout(`The token kept for ${url} is forgotten here; end it on the account page as well.\n`);
+  return 0;
+}
+
+async function loginsCommand(args: readonly string[], io: CliIo): Promise<number> {
+  const parsed = parseArgs({
+    args: [...args],
+    options: OPTIONS,
+    allowPositionals: false,
+    strict: true,
+  });
+  if (parsed.values.help === true) {
+    io.stdout(HELP.logins);
+    return 0;
+  }
+  const credentials = (await (io.store ?? createMemoryStore()).load()) ?? EMPTY_CREDENTIALS;
+  if (credentials.logins.length === 0) {
+    io.stdout("No token is kept for any deployment.\n");
+    return 0;
+  }
+  for (const login of credentials.logins) {
+    io.stdout(`${login.url}${login.since === undefined ? "" : `  since ${login.since}`}\n`);
+  }
+  return 0;
+}
+
+async function useCommand(args: readonly string[], io: CliIo): Promise<number> {
+  const parsed = parseArgs({
+    args: [...args],
+    options: OPTIONS,
+    allowPositionals: true,
+    strict: true,
+  });
+  if (parsed.values.help === true) {
+    io.stdout(HELP.use);
+    return 0;
+  }
+  const [given, ...more] = parsed.positionals;
+  if (given === undefined || more.length > 0) {
+    throw new Misuse("Say which pack: its address, as gh/<owner>/<repo>.");
+  }
+  const address = parseAddress(given.startsWith("/") ? given : `/${given}`);
+  if (!address.ok) {
+    throw new Misuse(`Not an address: ${address.error.message}.`);
+  }
+  if (!isGitHostAddress(address.value)) {
+    throw new Misuse(
+      "A directory is bound to a pack at a deployment: an address such as gh/<owner>/<repo>.",
+    );
+  }
+  const url = parsed.values.url === undefined ? undefined : originOf(parsed.values.url);
+  if (parsed.values.url !== undefined && url === undefined) {
+    throw new Misuse(`Not the origin of a deployment: ${parsed.values.url}.`);
+  }
+  const directory = io.directory ?? createMemoryDirectoryStore();
+  const path = await directory.save({ pack: formatAddress(address.value), url });
+  io.stdout(
+    `This directory reads ${formatAddress(address.value)}${url === undefined ? "" : ` at ${url}`}: ${path}.\n`,
+  );
+  return 0;
 }
 
 /** Runs the command with `args` (without the program name) and returns its exit code. */
@@ -488,22 +858,46 @@ export async function runCli(args: readonly string[], io: CliIo): Promise<number
     return EXIT_USAGE;
   }
   try {
-    if (name === "check") {
-      return await checkCommand(rest, io);
+    switch (name) {
+      case "check":
+        return await checkCommand(rest, io);
+      case "login":
+        return await loginCommand(rest, io);
+      case "logout":
+        return await logoutCommand(rest, io);
+      case "logins":
+        return await loginsCommand(rest, io);
+      case "use":
+        return await useCommand(rest, io);
+      default:
+        return await readCommand(name, rest, io);
     }
-    return await readCommand(name, rest, io);
   } catch (error) {
     if (error instanceof Misuse) {
       io.stderr(`${error.message}\n\n${HELP[name]}`);
       return EXIT_USAGE;
     }
+    if (error instanceof ConfigurationError) {
+      io.stderr(
+        `invalid configuration:\n${error.problems.map((problem) => `  - ${problem.variable}: ${problem.rule}\n`).join("")}`,
+      );
+      return EXIT_CONFIG;
+    }
+    if (error instanceof Unreadable) {
+      io.stderr(`${error.message}\n`);
+      return error.exit;
+    }
     if (error instanceof ReaderInputError) {
       io.stderr(`${error.message}\n`);
       return EXIT_USAGE;
     }
-    if (error instanceof Missing) {
-      io.stderr(`${error.message}\n`);
-      return EXIT_MISSING;
+    if (error instanceof PackError) {
+      io.stderr(`${error.code}: ${error.message}\n`);
+      return error.status === 400
+        ? EXIT_USAGE
+        : error.status === 0 || error.status >= 500
+          ? EXIT_UNREADABLE
+          : EXIT_MISSING;
     }
     if (
       error instanceof Error &&
@@ -535,10 +929,7 @@ async function checkCommand(args: readonly string[], io: CliIo): Promise<number>
   }
   const limits = readIndexLimits(io.environment);
   if (!limits.ok) {
-    io.stderr(
-      `invalid configuration:\n${limits.error.map((problem) => `  - ${problem.variable}: ${problem.rule}\n`).join("")}`,
-    );
-    return EXIT_CONFIG;
+    throw new ConfigurationError(limits.error);
   }
   return await checkDirectory({
     directory: resolve(io.cwd ?? ".", directory ?? "."),
