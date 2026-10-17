@@ -1,7 +1,7 @@
 // The mini build of zod: these schemas also run in the browser, where the full build would be most
 // of what a visitor downloads.
 import * as z from "zod/mini";
-import { type Address, formatAddress, GIT_HOST_KEYS } from "../address.js";
+import { ADDRESS_HOST_KEYS, type Address, formatAddress } from "../address.js";
 
 // Contract: docs/specs/rest.md. The server builds these shapes; clients parse with these schemas.
 // Absent values are `null`, never missing keys. Changes within a version are additive.
@@ -106,7 +106,7 @@ export type RestReference = z.infer<typeof restReferenceSchema>;
 export type RestFolderOverview = z.infer<typeof restFolderOverviewSchema>;
 
 export const restRepositorySchema = z.object({
-  host: z.enum(GIT_HOST_KEYS),
+  host: z.enum(ADDRESS_HOST_KEYS),
   /** As the host spells them, for display. The address has the canonical lowercase form. */
   owner: z.string(),
   name: z.string(),

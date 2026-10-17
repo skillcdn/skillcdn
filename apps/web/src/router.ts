@@ -1,5 +1,6 @@
 import {
   ACCOUNT_PAGE_PATH,
+  ADDRESS_HOST_KEYS,
   type Address,
   type AddressError,
   CONSENT_PAGE_PATH,
@@ -192,7 +193,8 @@ export function addressFromInput(input: string): ReturnType<typeof parseAddress>
     // Nothing typed yet: "a repository is missing" says more than "an empty segment".
     return parseAddress("/gh");
   }
-  return parseAddress(`/${/^gh\//.test(bare) ? bare : `gh/${bare}`}`);
+  const hosted = ADDRESS_HOST_KEYS.some((host) => bare.startsWith(`${host}/`));
+  return parseAddress(`/${hosted ? bare : `gh/${bare}`}`);
 }
 
 /** The page of an account, when what a person typed is an account's name and nothing more. */

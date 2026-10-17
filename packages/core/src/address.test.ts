@@ -3,6 +3,7 @@ import {
   type AddressErrorCode,
   formatAddress,
   formatOwnerPath,
+  isGitHostAddress,
   isPinnedAddress,
   MAX_ADDRESS_LENGTH,
   parseAddress,
@@ -100,6 +101,28 @@ describe("parseAddress", () => {
       repo: "my.repo_name-1",
     });
     expect(parsed("/gh/a/b")).toMatchObject({ owner: "a", repo: "b" });
+  });
+
+  it("names a pack served from a machine under local, as the command was told to call it", () => {
+    expect(parsed("/local/packs/Acme_skills")).toEqual({
+      host: "local",
+      owner: "packs",
+      repo: "Acme_skills",
+      ref: undefined,
+      path: "",
+    });
+    expect(parsed("/local/packs/acme/marketing/ads")).toMatchObject({
+      host: "local",
+      path: "marketing/ads",
+    });
+    // Nothing is a git host here, and the name is kept as written: file systems differ on case.
+    expect(isGitHostAddress(parsed("/local/packs/acme"))).toBe(false);
+    expect(isGitHostAddress(parsed("/gh/acme/skills"))).toBe(true);
+    expect(formatAddress(parsed("/local/Packs/Acme"))).toBe("/local/Packs/Acme");
+    expect(errorCode("/local/acme")).toBe("missing_repo");
+    expect(errorCode("/local/.packs/acme")).toBe("invalid_owner");
+    expect(errorCode("/local/packs/ac me")).toBe("invalid_repo");
+    expect(errorCode("/LOCAL/packs/acme")).toBe("unknown_host");
   });
 
   it("accepts non-ASCII refs and paths, encoded or not", () => {
@@ -256,6 +279,7 @@ describe("parseOwnerPath", () => {
     "/gh/",
     "gh/acme",
     "/gl/acme",
+    "/local/acme",
     "/gh/acme/",
     "/gh/acme/skills",
     "/gh/-acme",

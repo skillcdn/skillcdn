@@ -6,9 +6,11 @@ import {
   type Entitlements,
   formatAddress,
   type GitHost,
+  type GitHostAddress,
   GitHostError,
   type IndexLimits,
   isAnonymouslyReadable,
+  isGitHostAddress,
   type RepoCoordinates,
   ROOT_PATH,
 } from "@skillcdn/core";
@@ -65,7 +67,7 @@ export interface RepoPermissions {
 
 /** An address resolved to a repository and a commit: what tools answer from. */
 export interface Mount {
-  readonly address: Address;
+  readonly address: GitHostAddress;
   /** Where the repository is, and with which credential the git host is asked about it. */
   readonly coordinates: RepoCoordinates;
   readonly repo: RepoRecord;
@@ -207,6 +209,11 @@ export class MountService {
    * not.
    */
   async resolve(address: Address, viewer?: Viewer): Promise<Mount> {
+    // A pack served from a machine (ADR-0053) is no repository of any git host: to a
+    // deployment its address is a name that is nothing, in the same words as any other.
+    if (!isGitHostAddress(address)) {
+      throw new MountError("repo_not_found", "The repository was not found.");
+    }
     const name: RepoCoordinates = { host: address.host, owner: address.owner, repo: address.repo };
     const repo = await this.#repositoryFor(name, viewer);
     // What is not public is read through the app's installation on it, never as the deployment.
@@ -278,6 +285,10 @@ export class MountService {
    * nothing indexed. Rejects with a `MountError` when the git host could not be asked.
    */
   async asksForPermission(address: Address): Promise<boolean> {
+    // Nothing by that name, as for any name that is nothing (ADR-0053).
+    if (!isGitHostAddress(address)) {
+      return true;
+    }
     const name: RepoCoordinates = { host: address.host, owner: address.owner, repo: address.repo };
     try {
       const decision = await this.#decide(address, await this.#publicly(name, true));

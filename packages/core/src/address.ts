@@ -11,6 +11,16 @@ export const MAX_ADDRESS_LENGTH = 2048;
 export const GIT_HOST_KEYS = ["gh"] as const;
 export type GitHostKey = (typeof GIT_HOST_KEYS)[number];
 
+/**
+ * The host of a pack served from a machine by the `skillcdn` command, with no git host behind it
+ * (ADR-0053): `/local/<owner>/<name>` names a directory, as the command was told to call it. A
+ * deployment serves no such address.
+ */
+export const LOCAL_HOST_KEY = "local";
+/** Everything the first segment of an address can be: the git hosts, and `local`. */
+export const ADDRESS_HOST_KEYS = [...GIT_HOST_KEYS, LOCAL_HOST_KEY] as const;
+export type AddressHost = (typeof ADDRESS_HOST_KEYS)[number];
+
 export type AddressRef =
   /** A full commit hash, lowercase. The address is pinned: its content never changes. */
   | { readonly kind: "commit"; readonly hash: string }
@@ -18,7 +28,7 @@ export type AddressRef =
   | { readonly kind: "name"; readonly name: string };
 
 export interface Address {
-  readonly host: GitHostKey;
+  readonly host: AddressHost;
   /** Canonical spelling: lowercase on hosts that match names case-insensitively. */
   readonly owner: string;
   readonly repo: string;
@@ -26,6 +36,18 @@ export interface Address {
   readonly ref: AddressRef | undefined;
   /** Directory the address mounts; the root path mounts the whole repository. */
   readonly path: RepoPath;
+}
+
+/** An address on a git host: what a deployment resolves, indexes and serves. */
+export type GitHostAddress = Address & { readonly host: GitHostKey };
+
+export function isGitHostKey(value: string): value is GitHostKey {
+  return (GIT_HOST_KEYS as readonly string[]).includes(value);
+}
+
+/** Whether an address names a repository on a git host, rather than a pack served from a machine. */
+export function isGitHostAddress(address: Address): address is GitHostAddress {
+  return isGitHostKey(address.host);
 }
 
 export type AddressErrorCode =
@@ -54,12 +76,19 @@ interface HostNamingRules {
   readonly caseInsensitive: boolean;
 }
 
-const HOST_NAMING_RULES: Record<GitHostKey, HostNamingRules> = {
+const HOST_NAMING_RULES: Record<AddressHost, HostNamingRules> = {
   gh: {
     // Managed-user accounts carry an underscore suffix, so "_" is allowed after the first character.
     owner: /^[a-z0-9][a-z0-9_-]{0,38}$/i,
     repo: /^[a-z0-9._-]{1,100}$/i,
     caseInsensitive: true,
+  },
+  // What a directory is called, as far as a URL path and a file system agree: no leading dot,
+  // since a hidden directory is never served, and the case as written, since file systems differ.
+  local: {
+    owner: /^[a-z0-9_][a-z0-9._-]{0,99}$/i,
+    repo: /^[a-z0-9_][a-z0-9._-]{0,99}$/i,
+    caseInsensitive: false,
   },
 };
 
@@ -67,8 +96,8 @@ function fail(code: AddressErrorCode, message: string): Result<Address, AddressE
   return err({ code, message });
 }
 
-function isGitHostKey(value: string): value is GitHostKey {
-  return (GIT_HOST_KEYS as readonly string[]).includes(value);
+function isAddressHost(value: string): value is AddressHost {
+  return (ADDRESS_HOST_KEYS as readonly string[]).includes(value);
 }
 
 function decodeSegment(raw: string): string | undefined {
@@ -114,8 +143,8 @@ export function parseAddress(input: string): Result<Address, AddressError> {
   }
 
   const [host, owner, repoSegment, ...rest] = segments;
-  if (host === undefined || !isGitHostKey(host)) {
-    return fail("unknown_host", `unknown git host; expected one of: ${GIT_HOST_KEYS.join(", ")}`);
+  if (host === undefined || !isAddressHost(host)) {
+    return fail("unknown_host", `unknown host; expected one of: ${ADDRESS_HOST_KEYS.join(", ")}`);
   }
   if (owner === undefined || repoSegment === undefined) {
     return fail("missing_repo", "an address names an owner and a repository");
@@ -201,7 +230,8 @@ export interface OwnerPath {
 /**
  * Parses `/gh/<owner>`: the path of the page of an account. It is one segment short of an
  * address, serves people and never MCP. `undefined` for anything else; an owner is written with
- * unreserved characters only, so nothing is percent-decoded.
+ * unreserved characters only, so nothing is percent-decoded. Only a git host has accounts: a
+ * `local` owner is a name the command was given, and has no page.
  */
 export function parseOwnerPath(input: string): OwnerPath | undefined {
   if (input.length > MAX_ADDRESS_LENGTH) {

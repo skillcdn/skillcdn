@@ -147,7 +147,7 @@ export class OwnerService {
     // shown.
     if (
       !listed.has(row.hostRepoId) &&
-      !(await isPublic({ host: address.host, owner: address.owner, repo: address.repo }))
+      !(await isPublic({ host: owner.host, owner: address.owner, repo: address.repo }))
     ) {
       return undefined;
     }

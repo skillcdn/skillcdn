@@ -2,15 +2,21 @@
 
 export { isAnonymouslyReadable } from "./access.js";
 export {
+  ADDRESS_HOST_KEYS,
   type Address,
   type AddressError,
   type AddressErrorCode,
+  type AddressHost,
   type AddressRef,
   formatAddress,
   formatOwnerPath,
   GIT_HOST_KEYS,
+  type GitHostAddress,
   type GitHostKey,
+  isGitHostAddress,
+  isGitHostKey,
   isPinnedAddress,
+  LOCAL_HOST_KEY,
   MAX_ADDRESS_LENGTH,
   type OwnerPath,
   parseAddress,

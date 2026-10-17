@@ -14,14 +14,15 @@ https://<service-host>/<git-host>/<owner>/<repo>[@<ref>][/<path>]
 /gh/<owner>/<repo>/skills/ads            the same sub-path on the default branch
 /gh/<owner>/<repo>@release/1.2:          a ref that contains "/"
 /gh/<owner>/<repo>@release/1.2:skills    ... with a sub-path
+/local/<owner>/<name>[/<path>]           a pack served from a machine by the skillcdn command
 ```
 
 ## Components
 
 | Part | Meaning | Rules |
 |---|---|---|
-| `<git-host>` | Which host adapter serves the repo. | `gh` is GitHub, the only value in v0. Other values are reserved for further adapters. Lowercase only. |
-| `<owner>`, `<repo>` | Repository coordinates on the host. | Validated against the host's naming rules before any network call. GitHub matches names case-insensitively, so the canonical form is lowercase. A trailing `.git` is rejected. |
+| `<host>` | Which host adapter serves the repo. | `gh` is GitHub, the only git host in v0; other values are reserved for further adapters. `local` is no git host: a pack served from a machine by the `skillcdn` command ([served from a machine](#served-from-a-machine)). Lowercase only. |
+| `<owner>`, `<repo>` | Repository coordinates on the host. | Validated against the host's naming rules before any network call. GitHub matches names case-insensitively, so the canonical form is lowercase. A trailing `.git` is rejected. On `local`, letters, digits, `.`, `_` and `-`, with no leading dot, kept as written. |
 | `@<ref>` | Branch, tag or commit. Optional. | Omitted means the default branch. Must be a valid git ref name. A full 40-digit commit hash is *pinned*; everything else is *moving*. |
 | `/<path>` | Directory inside the repo to mount. Optional. | Relative, never escapes the repo root. `.` and `..` segments, backslashes, empty segments (including a trailing slash) and control or invisible characters are rejected, not repaired. |
 
@@ -62,9 +63,15 @@ Parsing never consults the repository. An address means the same thing whatever 
 - **Repository identity.** After the first resolution a repository is identified by the host's immutable numeric id. The `owner/repo` spelling is a lookup alias that is re-pointed after a rename or a transfer, so an index survives both and a recycled name never inherits another repository's index.
 - The parser is pure and total: every input yields either a parsed address or a typed error. It never throws on hostile input and never touches the network.
 
+## Served from a machine
+
+`/local/<owner>/<name>` names a directory the `skillcdn` command serves from the machine it runs on, read as a working tree by the reading rules and served as a deployment would serve the repository, with no git host, no database and no network behind it ([ADR-0053](../adr/0053-an-address-may-name-a-pack-served-from-a-machine.md)). The `<owner>/<name>` are what the command was told to call the directory, else the name of the directory's parent and its own; a directory whose names the grammar does not allow is served under a name given to the command. A ref is not served: a working tree is what it is, and `@<ref>` parses and is not found. A local mount is verified: the person chose the directory, and its content is served in full under its license, with no provenance notice.
+
+A deployment serves no `local` address: to MCP, the REST API and the pages it is a name that is nothing, in the same words as any other, and the operator's lists refuse it. In `packages/core`, `GIT_HOST_KEYS` names the git hosts and `ADDRESS_HOST_KEYS` every host an address can name; `Address.host` is any of them, and what needs a git host narrows with `isGitHostAddress`.
+
 ## As a skill URI
 
-Over the MCP skills extension, a file of a skill is named by the address without its ref: `skill://gh/<owner>/<repo>/<path>`, with the file's repository-root path, and `skill://gh/<owner>/<repo>/<name>/SKILL.md` for a root-level skill ([ADR-0024](../adr/0024-skills-travel-through-the-mcp-skills-extension.md)). The ref stays with the connection, so the same URI names the same file at whatever commit the address serves. The part after the scheme is an address without a ref, so this grammar decides what is a valid URI; `parseSkillUri` and `formatSkillUri` in `packages/core` implement it ([tools](tools.md#the-skills-extension)).
+Over the MCP skills extension, a file of a skill is named by the address without its ref: `skill://gh/<owner>/<repo>/<path>`, with the file's repository-root path, and `skill://gh/<owner>/<repo>/<name>/SKILL.md` for a root-level skill ([ADR-0024](../adr/0024-skills-travel-through-the-mcp-skills-extension.md)). The ref stays with the connection, so the same URI names the same file at whatever commit the address serves. The part after the scheme is an address without a ref, so this grammar decides what is a valid URI; `parseSkillUri` and `formatSkillUri` in `packages/core` implement it ([tools](tools.md#the-skills-extension)). A pack served from a machine names its files the same way, `skill://local/<owner>/<name>/<path>`, which means something on that machine and nowhere else.
 
 ## In a browser
 
@@ -72,7 +79,7 @@ The same URL answers people. When the deployment serves the web UI, a `GET` or `
 
 ## One segment short: the page of an account
 
-`/gh/<owner>`, without a repository, is not an address: nothing can be mounted there, and MCP answers `400`. To a browser it is the page of that account ([ADR-0037](../adr/0037-an-account-has-a-page-made-from-what-the-git-host-shows-everyone.md), [REST](rest.md#get-apiv1ownersghownerpage)). `parseOwnerPath` and `formatOwnerPath` in `packages/core` implement it with the owner rules of this grammar: the host key, then one owner segment that is valid for the host, lowercased where the host matches names case-insensitively, and nothing after it, not even a slash. The page is rendered on the server with what the host lists for everyone. Search engines may index it once the account has something public to show, at its lowercased path, and the sitemap lists the pages of the accounts whose repositories it lists.
+`/gh/<owner>`, without a repository, is not an address: nothing can be mounted there, and MCP answers `400`. To a browser it is the page of that account ([ADR-0037](../adr/0037-an-account-has-a-page-made-from-what-the-git-host-shows-everyone.md), [REST](rest.md#get-apiv1ownersghownerpage)). `parseOwnerPath` and `formatOwnerPath` in `packages/core` implement it with the owner rules of this grammar: a git host's key, then one owner segment that is valid for the host, lowercased where the host matches names case-insensitively, and nothing after it, not even a slash. Only a git host has accounts: `/local/<owner>` is nothing. The page is rendered on the server with what the host lists for everyone. Search engines may index it once the account has something public to show, at its lowercased path, and the sitemap lists the pages of the accounts whose repositories it lists.
 
 ## Open questions
 

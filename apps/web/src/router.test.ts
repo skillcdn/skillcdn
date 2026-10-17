@@ -170,6 +170,8 @@ describe("addressFromInput", () => {
     expect(canonical("/gh/acme/skills")).toBe("/gh/acme/skills");
     expect(canonical("gh/acme/skills")).toBe("/gh/acme/skills");
     expect(canonical("https://skillcdn.example/gh/acme/skills@main")).toBe("/gh/acme/skills@main");
+    // A pack served from a machine is written with its host, never taken for a GitHub account.
+    expect(canonical("local/packs/acme")).toBe("/local/packs/acme");
   });
 
   it("accepts the URL of a repository page on GitHub", () => {

@@ -137,14 +137,16 @@ function MountHeader(props: {
               </Fact>
             )}
           </ul>
-          <a
-            className={styles.hostLink}
-            href={hostTreeUrl(mount)}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {t.mount.viewOnHost}
-          </a>
+          {hostTreeUrl(mount) !== undefined && (
+            <a
+              className={styles.hostLink}
+              href={hostTreeUrl(mount)}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {t.mount.viewOnHost}
+            </a>
+          )}
         </div>
       )}
     </header>

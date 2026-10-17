@@ -1,7 +1,8 @@
 import {
-  type Address,
   type Clock,
   formatAddress,
+  type GitHostAddress,
+  isGitHostAddress,
   parseAddress,
   REFERENCE_REPOSITORY_ADDRESS,
 } from "@skillcdn/core";
@@ -22,10 +23,16 @@ const LISTS_TTL_MS = 30_000;
  * What a fresh deployment features until the operator features something: the reference
  * repository of this project (ADR-0028). It leaves the list the moment the operator adds an entry.
  */
-const DEFAULT_FEATURED: readonly Address[] = (() => {
+const DEFAULT_FEATURED: readonly GitHostAddress[] = (() => {
   const parsed = parseAddress(REFERENCE_REPOSITORY_ADDRESS);
-  return parsed.ok ? [parsed.value] : [];
+  return parsed.ok && isGitHostAddress(parsed.value) ? [parsed.value] : [];
 })();
+
+/** An entry of a list as an address of a git host, which is all the lists hold; nothing for anything else. */
+function listedAddress(text: string): GitHostAddress | undefined {
+  const parsed = parseAddress(text);
+  return parsed.ok && isGitHostAddress(parsed.value) ? parsed.value : undefined;
+}
 
 export class OperatorListError extends Error {
   readonly code = "operator.invalid_address";
@@ -49,10 +56,14 @@ export class OperatorLists {
   }
 
   /** The address an entry of `kind` is stored under, or why the text is not one. */
-  static addressOf(kind: OperatorListKind, text: string): Address {
+  static addressOf(kind: OperatorListKind, text: string): GitHostAddress {
     const parsed = parseAddress(text.startsWith("/") ? text : `/${text}`);
     if (!parsed.ok) {
       throw new OperatorListError(`not an address such as /gh/owner/repo: ${parsed.error.message}`);
+    }
+    // The lists name repositories of a git host; a pack served from a machine is none (ADR-0053).
+    if (!isGitHostAddress(parsed.value)) {
+      throw new OperatorListError("not an address such as /gh/owner/repo: not a git host");
     }
     if (kind !== "featured" && (parsed.value.ref !== undefined || parsed.value.path.length > 0)) {
       throw new OperatorListError(
@@ -76,10 +87,10 @@ export class OperatorLists {
   }
 
   /** The featured addresses, in the order they were added; the default while there are none. */
-  async featured(): Promise<readonly Address[]> {
+  async featured(): Promise<readonly GitHostAddress[]> {
     const listed = (await this.all("featured")).flatMap((entry) => {
-      const parsed = parseAddress(entry.address);
-      return parsed.ok ? [parsed.value] : [];
+      const address = listedAddress(entry.address);
+      return address === undefined ? [] : [address];
     });
     return listed.length > 0 ? listed : DEFAULT_FEATURED;
   }
@@ -89,20 +100,20 @@ export class OperatorLists {
    * none) and the vouched-for repositories, without duplicates and without anything blocked. A
    * blocked repository does not exist for callers, so no list may name it.
    */
-  async listed(): Promise<readonly Address[]> {
+  async listed(): Promise<readonly GitHostAddress[]> {
     const blocked = await this.#keys("blocked");
     const entries = await this.#entries();
-    const candidates: Address[] = entries.some((entry) => entry.kind === "featured")
+    const candidates: GitHostAddress[] = entries.some((entry) => entry.kind === "featured")
       ? []
       : [...DEFAULT_FEATURED];
     for (const entry of entries) {
-      const parsed = entry.kind === "blocked" ? undefined : parseAddress(entry.address);
-      if (parsed?.ok) {
-        candidates.push(parsed.value);
+      const address = entry.kind === "blocked" ? undefined : listedAddress(entry.address);
+      if (address !== undefined) {
+        candidates.push(address);
       }
     }
     const seen = new Set<string>();
-    const addresses: Address[] = [];
+    const addresses: GitHostAddress[] = [];
     for (const address of candidates) {
       const written = formatAddress(address);
       if (blocked.has(repositoryKey(address)) || seen.has(written)) {
