@@ -24,12 +24,14 @@ export {
 export {
   type AddressRouteDependencies,
   CORS_MAX_AGE_SECONDS,
+  clientAppOf,
   errorBody,
   hostFailure,
   registerAddressRoutes,
 } from "./rest.js";
 export {
   createMountServer,
+  recordRead,
   type ServeLogger,
   SKILLS_EXTENSION,
   type ToolDependencies,

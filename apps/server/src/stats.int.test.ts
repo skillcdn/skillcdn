@@ -89,7 +89,7 @@ describe("usage statistics", () => {
     const again = await h.connect("/gh/acme/multi-skill");
     await again.close();
 
-    // Browsing through the REST API is a person looking, not an agent working: not counted.
+    // A read through the REST API is counted as a tool call is, by its route.
     await h.request(`/api/v1/mounts/gh/acme/multi-skill@${commit}`);
     await h.snapshots.idle();
     await stats.flush();
@@ -108,6 +108,7 @@ describe("usage statistics", () => {
       { metric: "tool_call", subject: "load_skill", count: 2 },
       { metric: "tool_call", subject: "read_repo_file", count: 3 },
       { metric: "tool_call", subject: "resources/read", count: 2 },
+      { metric: "tool_call", subject: "rest/mounts", count: 1 },
       { metric: "tool_call", subject: "search_repo", count: 1 },
       { metric: "tool_call", subject: "skills/get", count: 1 },
     ];
@@ -138,6 +139,80 @@ describe("usage statistics", () => {
         limit: 5,
       }),
     ).toEqual([{ host: "gh", owner: "Acme", name: "multi-skill", count: 3 }]);
+  });
+
+  it("count reads through the REST API as tool calls, by route, with the app the user agent names", async () => {
+    let day = "2026-09-14";
+    const movingClock = { now: () => new Date(`${day}T12:00:00Z`) };
+    const stats = new UsageRecorder({
+      database: testDatabase.database,
+      clock: movingClock,
+      logger: pino({ level: "silent" }),
+    });
+    const commit = fixtureCommits("stats-rest").main;
+    const h = createHarness(testDatabase, { host: createFixtureHost("stats-rest"), stats });
+    const read = (path: string, agent: string, peer = "203.0.113.9") =>
+      h.app.fetch(new Request(`${h.origin}${path}`, { headers: { "user-agent": agent } }), {
+        incoming: { socket: { remoteAddress: peer } },
+      });
+    const at = `/gh/acme/multi-skill@${commit}`;
+    const cli = "skillcdn-cli/0.2.0 (node 24.0.0; linux)";
+    await read(`/api/v1/mounts${at}`, cli);
+    await h.snapshots.idle();
+    await read(`/api/v1/browse${at}`, cli);
+    await read(`/api/v1/find${at}?query=release`, cli);
+    await read(`/api/v1/skills${at}?path=skills/release-notes/SKILL.md`, cli);
+    // A skill that is not there is a call and no load.
+    await read(`/api/v1/skills${at}?path=skills/no-such-skill/SKILL.md`, cli);
+    await read(`/api/v1/files${at}?path=skills/release-notes/references/style.md`, cli);
+    // The next page of a file is the same read; a skill's document read as a file is a load of
+    // the skill, as over MCP.
+    await read(
+      `/api/v1/files${at}?path=skills/release-notes/references/style.md&offset=10&limit=20`,
+      cli,
+    );
+    await read(`/api/v1/files${at}?path=skills/release-notes/SKILL.md`, cli);
+    // A person looking from a browser, and another program.
+    const browser =
+      "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
+    await read(`/api/v1/mounts${at}`, browser, "203.0.113.10");
+    await read(`/api/v1/mounts${at}`, "curl/8.5.0", "203.0.113.11");
+    await stats.flush();
+
+    const repo = await findRepoByAlias(testDatabase.database, {
+      host: "gh",
+      owner: "acme",
+      repo: "multi-skill",
+    });
+    if (repo === undefined) {
+      throw new Error("the repository was not saved");
+    }
+    const scope = { accountId: repo.accountId, repoId: repo.id };
+    expect(await getRepoUsage(testDatabase.database, scope, { from: day, to: day })).toEqual([
+      { metric: "file_read", subject: "skills/release-notes/references/style.md", count: 1 },
+      { metric: "skill_load", subject: "skills/release-notes", count: 2 },
+      { metric: "tool_call", subject: "rest/browse", count: 1 },
+      { metric: "tool_call", subject: "rest/files", count: 3 },
+      { metric: "tool_call", subject: "rest/find", count: 1 },
+      { metric: "tool_call", subject: "rest/mounts", count: 3 },
+      { metric: "tool_call", subject: "rest/skills", count: 2 },
+    ]);
+
+    // The next day, the clients of the first are a count, by the app each named.
+    const firstDay = day;
+    day = "2026-09-15";
+    await read(`/api/v1/mounts${at}`, cli);
+    await stats.close();
+    expect(
+      (await getServiceUsage(testDatabase.database, { from: firstDay, to: firstDay })).filter(
+        (total) => total.metric === "client" || total.metric === "client_app",
+      ),
+    ).toEqual([
+      { day: firstDay, metric: "client", subject: "", count: 3 },
+      { day: firstDay, metric: "client_app", subject: "browser", count: 1 },
+      { day: firstDay, metric: "client_app", subject: "curl", count: 1 },
+      { day: firstDay, metric: "client_app", subject: "skillcdn-cli", count: 1 },
+    ]);
   });
 
   it("count distinct clients by a keyed hash of their address, folded when the day is over", async () => {

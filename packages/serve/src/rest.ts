@@ -22,7 +22,7 @@ import type { Context, Env, Hono } from "hono";
 import { cors } from "hono/cors";
 import * as z from "zod";
 import type { ServedMount } from "./mount.js";
-import type { ServeLogger } from "./tools.js";
+import { recordRead, type ServeLogger, type UsageHooks } from "./tools.js";
 
 // The routes of the REST API that read an address (docs/specs/rest.md): `mounts`, `browse`,
 // `find`, `skills` and `files`, over the reader, on any Hono app. Who may read the address is
@@ -79,6 +79,19 @@ export function hostFailure(error: unknown): RestFailure | undefined {
   return undefined;
 }
 
+/**
+ * The app a request names in its user agent, as a statistic counts it: the product token the
+ * header begins with (`skillcdn-cli`, `curl`), and `browser` for a browser, whose header begins
+ * with a token every browser shares; nothing when the header says nothing.
+ */
+export function clientAppOf(userAgent: string | undefined): string | undefined {
+  const token = userAgent?.trim().split(/[\s/]/, 1)[0];
+  if (token === undefined || token.length === 0) {
+    return undefined;
+  }
+  return token.toLowerCase() === "mozilla" ? "browser" : token;
+}
+
 /** How long a browser may remember a preflight answer. */
 export const CORS_MAX_AGE_SECONDS = 86_400;
 
@@ -94,6 +107,13 @@ export interface AddressRouteDependencies<E extends Env, M extends ServedMount> 
   ) => RestMount;
   /** What of a request goes into the log of a failure, such as its id. */
   readonly requestFields?: ((c: Context<E>) => Record<string, unknown>) | undefined;
+  /** What the app counts of the reads, as the tools count theirs; left out, nothing is counted. */
+  readonly hooks?: UsageHooks<M> | undefined;
+  /**
+   * The client's network address, as the app resolves it behind its trusted proxies, for the
+   * count of distinct clients; counted, never kept. Left out, no client is counted.
+   */
+  readonly clientAddress?: ((c: Context<E>) => string | undefined) | undefined;
 }
 
 /** Registers the routes that read an address on the app, with CORS for any origin and no caching. */
@@ -101,7 +121,16 @@ export function registerAddressRoutes<E extends Env, M extends ServedMount>(
   app: Hono<E>,
   dependencies: AddressRouteDependencies<E, M>,
 ): void {
-  const { reader, logger, mountAt, mountBody } = dependencies;
+  const { reader, logger, mountAt, mountBody, hooks = {} } = dependencies;
+
+  /**
+   * A read was asked for: a call of the route, counted as a tool call is, by the client at the
+   * request's address through the app its user agent names.
+   */
+  const record = (c: Context<E>, mount: M, route: string): void => {
+    hooks.call?.(mount, `rest/${route}`);
+    hooks.client?.(mount, dependencies.clientAddress?.(c), clientAppOf(c.req.header("user-agent")));
+  };
 
   /** Parses the query string, or answers 400 without repeating what was sent. */
   const queryOf = <Schema extends z.ZodType>(
@@ -156,6 +185,7 @@ export function registerAddressRoutes<E extends Env, M extends ServedMount>(
     if (mount instanceof Response) {
       return mount;
     }
+    record(c, mount, "mounts");
     try {
       return c.json(mountBody(mount, await reader.overview(mount, REST_MOUNT_LIST_LIMIT)));
     } catch (error) {
@@ -172,6 +202,7 @@ export function registerAddressRoutes<E extends Env, M extends ServedMount>(
     if (mount instanceof Response) {
       return mount;
     }
+    record(c, mount, "find");
     try {
       return c.json(findBody(await reader.find(mount, query, 0)));
     } catch (error) {
@@ -188,17 +219,25 @@ export function registerAddressRoutes<E extends Env, M extends ServedMount>(
     if (mount instanceof Response) {
       return mount;
     }
+    record(c, mount, "skills");
     try {
-      const outcome = skillOutcome(
-        await reader.skill(
-          mount,
-          query.path ?? query.name ?? "",
-          0,
-          query.cursor,
-          query.path !== undefined,
-        ),
+      const answer = await reader.skill(
+        mount,
+        query.path ?? query.name ?? "",
+        0,
+        query.cursor,
+        query.path !== undefined,
       );
+      const outcome = skillOutcome(answer);
       if ("body" in outcome) {
+        // The first page is the load; the pages after it are the same load.
+        if (
+          query.cursor === undefined &&
+          answer.status === "ready" &&
+          answer.lookup.kind === "found"
+        ) {
+          hooks.skillLoad?.(mount, answer.lookup.skill.directory);
+        }
         return c.json(outcome.body);
       }
       const { status, code, message, directories } = outcome.failure;
@@ -220,6 +259,7 @@ export function registerAddressRoutes<E extends Env, M extends ServedMount>(
     if (mount instanceof Response) {
       return mount;
     }
+    record(c, mount, "files");
     try {
       const lookup = await reader.file(mount, query);
       switch (lookup.kind) {
@@ -268,6 +308,10 @@ export function registerAddressRoutes<E extends Env, M extends ServedMount>(
         case "directory":
           return c.json(errorBody("request.invalid", "Use browse for directories."), 400);
         case "found":
+          // The first page is the read; the pages after it are the same read.
+          if (query.offset === undefined || query.offset === 0) {
+            recordRead(hooks, mount, lookup.indexed);
+          }
           return c.json(fileBody(lookup.file));
       }
     } catch (error) {
@@ -280,6 +324,7 @@ export function registerAddressRoutes<E extends Env, M extends ServedMount>(
     if (query instanceof Response) return query;
     const mount = await mountAt(c, REST_ROUTES.browse);
     if (mount instanceof Response) return mount;
+    record(c, mount, "browse");
     try {
       return c.json(browseBody(await reader.browse(mount, query, 0)));
     } catch (error) {

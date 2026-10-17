@@ -110,6 +110,22 @@ function cacheHint(
   return { ttlMs, cacheScope: mount.visibility === "public" ? "public" : "private" };
 }
 
+/**
+ * What was read, for the statistics: a skill's document counts as a load of the skill
+ * whichever way it was asked for, and any other file as a read of its path.
+ */
+export function recordRead<M extends ServedMount>(
+  hooks: UsageHooks<M>,
+  mount: M,
+  indexed: IndexedFile,
+): void {
+  if (indexed.kind === "skill") {
+    hooks.skillLoad?.(mount, indexed.skillDir ?? "");
+  } else {
+    hooks.fileRead?.(mount, indexed.path);
+  }
+}
+
 /** One fixed, stateless tool surface for every mount, independent of its skill count. */
 export async function createMountServer<M extends ServedMount>(
   mount: M,
@@ -174,15 +190,7 @@ export async function createMountServer<M extends ServedMount>(
     hooks.call?.(mount, subject);
     noteClient();
   };
-  // What was read, for the statistics: a skill's document counts as a load of the skill
-  // whichever way it was asked for, and any other file as a read of its path.
-  const countRead = (indexed: IndexedFile): void => {
-    if (indexed.kind === "skill") {
-      hooks.skillLoad?.(mount, indexed.skillDir ?? "");
-    } else {
-      hooks.fileRead?.(mount, indexed.path);
-    }
-  };
+  const countRead = (indexed: IndexedFile): void => recordRead(hooks, mount, indexed);
   const guarded =
     <Input>(tool: string, handler: (input: Input) => Promise<ToolReply>) =>
     async (input: Input): Promise<ToolReply> => {

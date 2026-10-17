@@ -52,7 +52,7 @@ import type { Sessions } from "../auth/sessions.js";
 import type { HostEvents } from "../events/host-events.js";
 import type { SnapshotService } from "../indexer/snapshot-service.js";
 import type { Logger } from "../logger.js";
-import { createMountServer, type ToolDependencies } from "../mcp/tools.js";
+import { createMountServer, type ToolDependencies, usageHooksOf } from "../mcp/tools.js";
 import { type Mount, MountError, type MountService, type Viewer } from "../mounts/mount-service.js";
 import type { OperatorImages } from "../operator/images.js";
 import type { LegalDocuments } from "../operator/legal.js";
@@ -522,6 +522,7 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
     reader,
     logger,
     mountAt,
+    hooks: usageHooksOf(tools),
     mountOf: async (address) => {
       try {
         const mount = await mounts.resolve(address);

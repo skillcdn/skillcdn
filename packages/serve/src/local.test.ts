@@ -15,10 +15,12 @@ import {
 } from "@skillcdn/core";
 import { INDEX_LIMIT_DEFAULTS, readDirectory } from "@skillcdn/indexer";
 import { createMemoryIndex, Reader } from "@skillcdn/reader";
+import { Hono } from "hono";
 import { describe, expect, it } from "vitest";
 import * as z from "zod";
-import { createLocalApp, serveOverStdio } from "./local.js";
+import { createLocalApp, localMountBody, serveOverStdio } from "./local.js";
 import type { ServedMount } from "./mount.js";
+import { clientAppOf, registerAddressRoutes } from "./rest.js";
 
 // A directory served from a machine, as an MCP client and a REST client meet it: the tools,
 // the prompt, the skills extension and the address routes, over an index in memory.
@@ -240,5 +242,75 @@ describe("a directory served from a machine", () => {
     // The client closes its end: the transport closes, and the command may return.
     stdin.end();
     await served.closed;
+  });
+  it("counts the reads through the routes as the tools count theirs, with the app the user agent names", async () => {
+    const { mount } = await pack();
+    const calls: string[] = [];
+    const loads: string[] = [];
+    const reads: string[] = [];
+    const clients: string[] = [];
+    const app = new Hono();
+    registerAddressRoutes(app, {
+      reader: options().reader,
+      logger: options().logger,
+      mountAt: async () => mount,
+      mountBody: localMountBody,
+      clientAddress: (c) => c.req.header("x-test-peer"),
+      hooks: {
+        call: (_mount, subject) => calls.push(subject),
+        skillLoad: (_mount, directory) => loads.push(directory),
+        fileRead: (_mount, path) => reads.push(path),
+        client: (_mount, address, named) => clients.push(`${address ?? "-"} ${named ?? "-"}`),
+      },
+    });
+    const read = (path: string, agent?: string, peer = "203.0.113.7") =>
+      app.request(path, {
+        headers: { ...(agent === undefined ? {} : { "user-agent": agent }), "x-test-peer": peer },
+      });
+    const cli = "skillcdn-cli/0.2.0 (node 24.0.0; linux)";
+    const at = "/local/packs/acme";
+    expect((await read(`/api/v1/mounts${at}`, cli)).status).toBe(200);
+    expect((await read(`/api/v1/browse${at}?path=marketing`, cli)).status).toBe(200);
+    expect((await read(`/api/v1/find${at}?query=ad`, cli)).status).toBe(200);
+    expect((await read(`/api/v1/skills${at}?path=marketing%2Fads%2FSKILL.md`, cli)).status).toBe(
+      200,
+    );
+    // A skill that is not there is a call and no load.
+    expect((await read(`/api/v1/skills${at}?path=marketing%2Fseo%2FSKILL.md`, cli)).status).toBe(
+      404,
+    );
+    expect((await read(`/api/v1/files${at}?path=docs%2Fguide.md`, cli)).status).toBe(200);
+    // The next page of a file is the same read; a skill's document read as a file is a load of
+    // the skill.
+    expect(
+      (await read(`/api/v1/files${at}?path=docs%2Fguide.md&offset=5&limit=5`, cli)).status,
+    ).toBe(200);
+    expect((await read(`/api/v1/files${at}?path=marketing%2Fads%2FSKILL.md`, cli)).status).toBe(
+      200,
+    );
+    // A browser, whichever it is, and a program that says nothing of itself.
+    const browser =
+      "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
+    await read(`/api/v1/mounts${at}`, browser, "203.0.113.8");
+    await read(`/api/v1/mounts${at}`, undefined, "203.0.113.9");
+    expect(calls).toEqual([
+      "rest/mounts",
+      "rest/browse",
+      "rest/find",
+      "rest/skills",
+      "rest/skills",
+      "rest/files",
+      "rest/files",
+      "rest/files",
+      "rest/mounts",
+      "rest/mounts",
+    ]);
+    expect(loads).toEqual(["marketing/ads", "marketing/ads"]);
+    expect(reads).toEqual(["docs/guide.md"]);
+    expect(clients.slice(0, 2)).toEqual(["203.0.113.7 skillcdn-cli", "203.0.113.7 skillcdn-cli"]);
+    expect(clients.slice(-2)).toEqual(["203.0.113.8 browser", "203.0.113.9 -"]);
+    expect(clientAppOf("curl/8.5.0")).toBe("curl");
+    expect(clientAppOf("node")).toBe("node");
+    expect(clientAppOf("  ")).toBeUndefined();
   });
 });

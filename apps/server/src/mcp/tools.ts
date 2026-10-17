@@ -23,8 +23,10 @@ export interface ToolDependencies {
 
 export { SKILLS_EXTENSION } from "@skillcdn/serve";
 
-/** What the deployment counts of what an agent does with a mount. */
-function hooksOf(dependencies: ToolDependencies): UsageHooks<Mount> {
+/** What the deployment counts of what an agent does with a mount, over MCP and over the REST API alike. */
+export function usageHooksOf(
+  dependencies: Pick<ToolDependencies, "usage" | "stats" | "clock">,
+): UsageHooks<Mount> {
   const { usage, stats, clock } = dependencies;
   return {
     connection: (mount) => stats.count(mount, "connection"),
@@ -68,7 +70,7 @@ export async function createMountServer(
       clock: dependencies.clock,
       logger: log,
       indexWaitMs: dependencies.indexWaitMs,
-      hooks: hooksOf(dependencies),
+      hooks: usageHooksOf(dependencies),
       server: { name: SERVER_NAME, version: SERVER_VERSION },
     },
     request,

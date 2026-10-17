@@ -16,7 +16,7 @@ What a [SkillCDN](https://skillcdn.ai) address serves, as code that serves it an
 | Export | What it does |
 |---|---|
 | `createMountServer(mount, dependencies, request)` | The MCP server of one mount: `browse_repo`, `search_repo`, `load_skill`, `read_repo_file`, the `use_skill` prompt, and `skills/list`, `skills/get`, `resources/read`, `resources/directory/read` and `resources/list` of the skills extension, over `dependencies.reader`. `hooks` receive what a deployment counts; `request.origin` names where the server's page and icon are. One instance per connection or request. |
-| `registerAddressRoutes(app, dependencies)` | The `mounts`, `browse`, `find`, `skills` and `files` routes on a Hono app, with CORS for any origin and no caching; `mountAt` says who a request is for and `mountBody` what names the address. |
+| `registerAddressRoutes(app, dependencies)` | The `mounts`, `browse`, `find`, `skills` and `files` routes on a Hono app, with CORS for any origin and no caching; `mountAt` says who a request is for and `mountBody` what names the address; `hooks` and `clientAddress` count the reads as the tools count theirs, with the app from the user agent (`clientAppOf`). |
 | `createLocalApp(options)`, `listenOn(app, { host, port })` | The HTTP app of a machine's own: MCP at each mount's address, the address routes, and a listing at `/`; and a listener on a host and a port. |
 | `serveOverStdio(mount, options)` | One mount served to the client at the other end of standard input and output. |
 | `ServedMount` | A `MountContext` with what the edges need besides the reads: `trustedUntil` and `visibility`. |

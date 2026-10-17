@@ -20,7 +20,7 @@ import {
   restRepoTranslations,
 } from "@skillcdn/core";
 import { type Reader, ReaderInputError } from "@skillcdn/reader";
-import { errorBody, hostFailure, registerAddressRoutes } from "@skillcdn/serve";
+import { errorBody, hostFailure, registerAddressRoutes, type UsageHooks } from "@skillcdn/serve";
 import type { Context, Hono } from "hono";
 import * as z from "zod";
 import type { Logger } from "../logger.js";
@@ -45,6 +45,8 @@ export interface RestDependencies {
   readonly owners: OwnerService | undefined;
   /** Milliseconds from a clock that never goes backwards. */
   readonly now: () => number;
+  /** What the deployment counts of the reads, as it counts the tools' (ADR-0050). */
+  readonly hooks?: UsageHooks<Mount> | undefined;
 }
 
 /** The featured list is the same for everyone and costs several queries per address. */
@@ -158,6 +160,8 @@ export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies):
   // The routes that read an address are the serve package's, over this deployment's reader,
   // for whoever mountAt says the request is for.
   registerAddressRoutes(app, {
+    hooks: dependencies.hooks,
+    clientAddress: (c) => c.get("clientAddress"),
     reader,
     logger,
     mountAt,
