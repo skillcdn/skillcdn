@@ -2,7 +2,7 @@
 // bidirectional override, byte order mark). Such characters make source read differently from
 // what it does, and tools that write files sometimes decode an escape sequence into one.
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 // Every binary type the repository tracks is listed here; anything else is read as text.
 const BINARY = /\.(png|jpe?g|gif|ico|webp|avif|mp4|webm|pdf|woff2?|ttf|zip|gz|tgz)$/i;
@@ -18,9 +18,10 @@ function isForbidden(codePoint) {
   );
 }
 
+// A tracked file deleted in the working tree but not yet staged has nothing to check.
 const files = execFileSync("git", ["ls-files", "-z"], { encoding: "utf8" })
   .split("\0")
-  .filter((file) => file.length > 0 && !BINARY.test(file));
+  .filter((file) => file.length > 0 && !BINARY.test(file) && existsSync(file));
 
 const findings = [];
 for (const file of files) {
