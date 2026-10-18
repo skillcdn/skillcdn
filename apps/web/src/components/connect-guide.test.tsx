@@ -11,6 +11,7 @@ import {
   tokenSetup,
 } from "./connect-clients.js";
 import {
+  ClientGuide,
   ConnectGuide,
   claudeInstallLink,
   cursorInstallLink,
@@ -115,6 +116,43 @@ describe("connection onboarding", () => {
     );
     expect(scene).not.toContain("inert=");
   });
+
+  it.each(["en", "ko"] as const)(
+    "offers the shell path under the clients that have a shell in %s, said as what to tell the agent",
+    (language) => {
+      const t = messagesFor(language);
+      const guideOf = (client: (typeof CONNECT_CLIENTS)[number], signIn: boolean) =>
+        renderToStaticMarkup(
+          <I18nContext value={{ language, t }}>
+            <ClientGuide
+              client={client}
+              origin="https://skills.example"
+              address={address}
+              name="skills"
+              url="https://skills.example/gh/acme/skills"
+              description="Skills for tests"
+              signIn={signIn}
+            />
+          </I18nContext>,
+        );
+      for (const client of ["claudeCode", "codex", "gemini", "other"] as const) {
+        const html = guideOf(client, false);
+        expect(html, client).toContain(t.connect.shell.lead);
+        // The pack as the command takes it, and no sign-in for a public repository.
+        expect(html, client).toContain("skillcdn use gh/acme/skills");
+        expect(html, client).not.toContain("skillcdn login");
+        expect(html, client).toContain('href="/docs/use-skills#from-a-shell-without-mcp"');
+      }
+      // A private repository: the command signs in too, at this deployment.
+      const withSignIn = guideOf("claudeCode", true);
+      expect(withSignIn).toContain("skillcdn login --url https://skills.example");
+      expect(withSignIn).toContain(t.connect.shell.privateRest);
+      // The apps without a shell say nothing of it.
+      for (const client of ["chatgpt", "claude", "cursor", "vscode"] as const) {
+        expect(guideOf(client, false), client).not.toContain(t.connect.shell.lead);
+      }
+    },
+  );
 
   it.each(["claudeCode", "codex", "gemini"] as const)(
     "keeps %s shell and in-app commands in separate copy targets",

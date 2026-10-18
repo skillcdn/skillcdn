@@ -3,7 +3,7 @@ import { useState } from "react";
 import { track } from "../analytics.js";
 import { useI18n } from "../i18n/index.js";
 import { Link } from "../navigation.js";
-import { tokensHref } from "../router.js";
+import { docsHref, tokensHref } from "../router.js";
 import { ClientIcon } from "./client-icon.js";
 import { CodeBlock, CopyButton } from "./code-block.js";
 import {
@@ -61,8 +61,10 @@ export function claudeInstallLink(name: string, url: string): string {
   return `https://claude.ai/customize/connectors?${query}`;
 }
 
-function ClientGuide({
+/** The guide of one client: its three steps and what stands around them. Exported for its tests. */
+export function ClientGuide({
   client,
+  origin,
   address,
   name,
   url,
@@ -70,6 +72,8 @@ function ClientGuide({
   signIn,
 }: {
   readonly client: ConnectClient;
+  /** The origin of the deployment, which the command is told where the repository is private. */
+  readonly origin: string;
   readonly address: Address;
   readonly name: string;
   readonly url: string;
@@ -81,6 +85,12 @@ function ClientGuide({
   const c = t.connect.clients[client];
   const details = CLIENT_DETAILS[client];
   const terminal = isTerminalClient(client);
+  /** The pack as the command takes it: the address without its leading slash. */
+  const packName = formatAddress(address).slice(1);
+  /** What to tell an agent with a shell, so that it sets the command up itself. */
+  const shellMessage = signIn
+    ? t.connect.shell.privateMessage(packName, origin)
+    : t.connect.shell.message(packName);
   const install =
     client === "cursor"
       ? cursorInstallLink(name, url)
@@ -235,6 +245,30 @@ function ClientGuide({
           )}
         </details>
       </div>
+      {/* An agent with a shell has a way without an MCP server: the skillcdn command, which the
+          agent sets up itself when told to. Said as what to tell it, as the first message is. */}
+      {(terminal || client === "other") && (
+        <div className={styles.shell}>
+          <h4>{t.connect.shell.title}</h4>
+          <p>{t.connect.shell.lead}</p>
+          <div className={styles.messageBubble}>
+            <p>{shellMessage}</p>
+            <CopyButton
+              text={shellMessage}
+              label={t.connect.shell.copy}
+              variant="secondary"
+              size="md"
+              onCopied={() => track("connect_start", { client, method: "copy_shell" })}
+            />
+          </div>
+          <p>{signIn ? t.connect.shell.privateRest : t.connect.shell.rest}</p>
+          <p>
+            <Link href={`${docsHref("use-skills")}#from-a-shell-without-mcp`}>
+              {t.connect.shell.link}
+            </Link>
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -276,6 +310,7 @@ export function ConnectGuide({
       <ClientGuide
         key={client}
         client={client}
+        origin={origin}
         address={address}
         name={name}
         url={url}

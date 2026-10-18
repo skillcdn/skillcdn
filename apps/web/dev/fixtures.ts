@@ -711,3 +711,32 @@ export function summaryOf(detail: SkillDetail): RestSkillSummary {
     translations: detail.translations,
   };
 }
+
+/**
+ * Commands that asked to connect, under codes the connect page can be opened with (ADR-0059):
+ * one for a private repository the fixture person can open, one for a repository they cannot,
+ * one while the git host cannot be asked, one for a public repository, and one approved already.
+ */
+export const FIXTURE_CONNECTIONS: Readonly<
+  Record<
+    string,
+    {
+      readonly agent: string;
+      readonly address: string;
+      /** A person approved it already, and the command has not claimed yet. */
+      readonly approved?: true;
+      /** The git host could not be asked whether the person can open the repository. */
+      readonly unknown?: true;
+    }
+  >
+> = {
+  "ABCD-EFGH": { agent: "Claude Code on a laptop", address: "/gh/acme/private-skills" },
+  "WXYZ-2345": { agent: "Codex on ci-7", address: "/gh/acme/no-such-repository" },
+  "HJKL-6789": { agent: "An agent on a server", address: "/gh/acme/private-skills", unknown: true },
+  "MNPQ-2345": { agent: "Gemini CLI on a desk", address: "/gh/acme/skills" },
+  "RSTU-6789": {
+    agent: "Claude Code on a laptop",
+    address: "/gh/acme/private-skills",
+    approved: true,
+  },
+};

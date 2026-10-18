@@ -27,6 +27,23 @@ export const connectEn = {
     "Menus move between app versions and workspace settings. Check the official guide, or ask your workspace administrator to allow custom connections.",
   official: "Official setup guide",
   /**
+   * Under the terminal clients and the generic guide: the way without an MCP server, said as
+   * what to tell the agent. `address` is the pack as the command takes it (`gh/acme/skills`).
+   */
+  shell: {
+    title: "Or let the agent set it up itself",
+    lead: "No MCP server needed: an agent that runs commands can read these skills with the skillcdn command. Tell your agent, in its own chat:",
+    message: (address: string) =>
+      `Run npm install -g @skillcdn/cli and skillcdn use ${address} in this project, and add the sentence it prints to CLAUDE.md or AGENTS.md.`,
+    privateMessage: (address: string, origin: string) =>
+      `Run npm install -g @skillcdn/cli, skillcdn use ${address} and skillcdn login --url ${origin} in this project. Add the sentence use prints to CLAUDE.md or AGENTS.md, and tell me the address and the code login shows.`,
+    rest: "The agent installs the command and connects this project to the skills. From then on it reads them with the command whenever a task calls for one.",
+    privateRest:
+      "The agent installs the command and connects this project to the skills. Because the repository is private, it shows you an address and a code: open the address signed in, check that it shows the same code, and approve.",
+    copy: "Copy this message",
+    link: "How it works, in the guide",
+  },
+  /**
    * On the page of a private repository: the app has to sign in, once, before it can read it.
    * One sentence per app says how that app starts it; the steps that differ are given whole.
    */

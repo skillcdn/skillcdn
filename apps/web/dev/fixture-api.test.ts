@@ -4,6 +4,9 @@ import {
   restAuthorizationDecisionSchema,
   restAuthorizationSchema,
   restBrowseSchema,
+  restConnectClaimedSchema,
+  restConnectStartedSchema,
+  restConnectViewSchema,
   restErrorSchema,
   restFeaturedSchema,
   restFileSchema,
@@ -425,6 +428,56 @@ describe("the fixture API", () => {
     expect(
       restAuthorizationDecisionSchema.parse(send("POST", "/api/v1/oauth/decision").body),
     ).toEqual({ redirect: "/dev/states" });
+    resetFixtureState();
+  });
+
+  it("connects a command with a code the fixture person approves, and knows the codes of the states page", () => {
+    resetFixtureState();
+    const begun = send("POST", "/api/v1/connect", 0, {
+      address: "/gh/acme/private-skills",
+      agent: "Claude Code on a laptop",
+    });
+    expect(begun.status).toBe(201);
+    const started = restConnectStartedSchema.parse(begun.body);
+    expect(started.url).toBe(`http://fixtures.invalid/connect/${started.code}`);
+    // Nobody sees what asks until they sign in; the command waits meanwhile.
+    expect(ask(`/api/v1/connect/${started.code}`).status).toBe(401);
+    expect(send("POST", "/api/v1/connect/claim", 0, { secret: started.secret }).body).toMatchObject(
+      { status: "pending" },
+    );
+    ask("/auth/gh/login");
+    expect(restConnectViewSchema.parse(ask(`/api/v1/connect/${started.code}`).body)).toMatchObject({
+      agent: "Claude Code on a laptop",
+      address: "/gh/acme/private-skills",
+      approved: false,
+      visible: true,
+    });
+    expect(
+      send("POST", `/api/v1/connect/${started.code}/decision`, 0, {
+        approve: true,
+        label: "Laptop",
+      }).body,
+    ).toEqual({ status: "approved" });
+    const claimed = restConnectClaimedSchema.parse(
+      send("POST", "/api/v1/connect/claim", 0, { secret: started.secret }).body,
+    );
+    expect(claimed.status).toBe("connected");
+    // Handed over once, and listed with the tokens the person made.
+    expect(send("POST", "/api/v1/connect/claim", 0, { secret: started.secret }).status).toBe(404);
+    expect(restRepoTokensSchema.parse(ask("/api/v1/me/tokens").body).items[0]?.label).toBe(
+      "Claude Code on a laptop",
+    );
+    // The codes the states page opens: a repository the person cannot open, the host not
+    // answering, one approved already, a public repository, and one that is nothing.
+    expect(restConnectViewSchema.parse(ask("/api/v1/connect/WXYZ-2345").body).visible).toBe(false);
+    expect(restConnectViewSchema.parse(ask("/api/v1/connect/hjkl6789").body).visible).toBeNull();
+    expect(restConnectViewSchema.parse(ask("/api/v1/connect/RSTU-6789").body).approved).toBe(true);
+    expect(send("POST", "/api/v1/connect/MNPQ-2345/decision", 0, { approve: true }).status).toBe(
+      400,
+    );
+    const nothing = ask("/api/v1/connect/ZZZZ-ZZZZ");
+    expect(nothing.status).toBe(404);
+    expect(restErrorSchema.parse(nothing.body).error.code).toBe("connect.not_found");
     resetFixtureState();
   });
 

@@ -109,6 +109,16 @@ const PAGES: readonly (readonly [string, string])[] = [
   ["/oauth/consent", "The consent page opened without a request"],
   ["/oauth/consent?error=invalid_redirect_uri", "A request the authorization endpoint refused"],
   ["/oauth/consent?error=invalid_target", "A request that broke a rule, said to whoever built it"],
+  ["/connect", "A command asked to connect: enter the code it showed"],
+  [
+    "/connect/ABCD-EFGH",
+    "A command asks to connect for a private repository; signed out, the page offers to sign in first",
+  ],
+  ["/connect/WXYZ-2345", "A command asks for a repository you cannot open"],
+  ["/connect/HJKL-6789", "A command asks while the git host cannot be asked"],
+  ["/connect/MNPQ-2345", "A command asks for a public repository, which needs no connection"],
+  ["/connect/RSTU-6789", "A code that was approved already"],
+  ["/connect/ZZZZ-ZZZZ", "A code that is not known"],
   ["/no/such/page", "Page not found"],
   ["/dev/og", "The picture behind the social-preview images (1200 x 630)"],
 ];

@@ -24,6 +24,7 @@ import {
   withLanguage,
 } from "./i18n/languages.js";
 import { AccountPage } from "./pages/account.js";
+import { ConnectPage } from "./pages/connect.js";
 import { ConsentPage } from "./pages/consent.js";
 import { DocsPage } from "./pages/docs.js";
 import { LegalPage } from "./pages/legal.js";
@@ -102,6 +103,7 @@ const SERVER_PAGES = {
   owner: OwnerPage,
   account: AccountPage,
   consent: ConsentPage,
+  connect: ConnectPage,
 };
 
 /** The markers in index.html that a rendered page fills. */

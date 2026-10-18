@@ -231,6 +231,23 @@
 .support :where(details p) {
   margin-block: var(--space-2);
 }
+/* The way for an agent with a shell: a block of its own after the notes, said as a message to send. */
+.shell {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-subtle);
+}
+.shell h4 {
+  font-size: var(--text-md);
+}
+.shell p {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  text-wrap: pretty;
+}
 .firstMessage {
   display: grid;
   gap: var(--space-4);

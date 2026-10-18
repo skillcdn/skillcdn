@@ -19,6 +19,7 @@ import { LANGUAGE_PENDING_ATTRIBUTE, type Language, resolveLanguage } from "./i1
 import { LegalLinksProvider } from "./legal-links.js";
 import { type AppLocation, LocationProvider, useLocation } from "./navigation.js";
 import type { AccountPageProps } from "./pages/account.js";
+import type { ConnectPageProps } from "./pages/connect.js";
 import type { ConsentPageProps } from "./pages/consent.js";
 import type { DocsPageProps } from "./pages/docs.js";
 import { ExplorePage } from "./pages/explore.js";
@@ -44,6 +45,7 @@ export interface PageComponents {
   readonly owner: ComponentType<OwnerPageProps>;
   readonly account: ComponentType<AccountPageProps>;
   readonly consent: ComponentType<ConsentPageProps>;
+  readonly connect: ComponentType<ConnectPageProps>;
 }
 
 const LAZY_PAGES: PageComponents = {
@@ -56,6 +58,9 @@ const LAZY_PAGES: PageComponents = {
   ),
   consent: lazy(() =>
     import("./pages/consent.js").then((module) => ({ default: module.ConsentPage })),
+  ),
+  connect: lazy(() =>
+    import("./pages/connect.js").then((module) => ({ default: module.ConnectPage })),
   ),
 };
 
@@ -103,6 +108,8 @@ function pageOf(route: Route, origin: string, pages: PageComponents): ReactNode 
       return <pages.account origin={origin} section={route.section} />;
     case "consent":
       return <pages.consent origin={origin} />;
+    case "connect":
+      return <pages.connect origin={origin} code={route.code} />;
     case "legal":
       return <pages.legal origin={origin} kind={route.kind} />;
     case "docs":
@@ -126,6 +133,7 @@ const OWN_HEAD: ReadonlySet<Route["name"]> = new Set([
   "owner",
   "account",
   "consent",
+  "connect",
 ]);
 
 function Routed(props: {

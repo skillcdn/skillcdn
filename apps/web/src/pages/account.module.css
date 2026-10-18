@@ -287,6 +287,30 @@
   gap: var(--space-3);
 }
 
+/* A message to paste into an agent's chat: in the text face, its commands on lines of their own. */
+.message {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-subtle);
+}
+
+.message p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.messageCommands {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.messageCommands code {
+  font-size: var(--text-sm);
+}
+
 @media (max-width: 52rem) {
   .layout {
     grid-template-columns: minmax(0, 1fr);

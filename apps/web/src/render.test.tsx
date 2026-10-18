@@ -800,6 +800,8 @@ describe("the page of an address", () => {
         ["/account", "account"],
         ["/account/repositories", "account"],
         ["/oauth/consent", "consent"],
+        ["/connect", "connect"],
+        ["/connect/ABCD-EFGH", "connect"],
       ] as const) {
         const { html, indexable } = renderAddressPage(TEMPLATE, {
           language,
@@ -812,8 +814,11 @@ describe("the page of an address", () => {
         expect(html, pathname).toContain(`data-prerendered="${routeName}"`);
         expect(html, pathname).toContain('<meta name="robots" content="noindex,follow"');
         // The server does not know who asks: nothing of a person's is in the document, and the
-        // header has no way to sign in until the browser has asked whether there is one.
-        expect(html, pathname).toContain(t.common.loading);
+        // header has no way to sign in until the browser has asked whether there is one. The
+        // page that asks for a code asks everyone, so it stands complete.
+        expect(html, pathname).toContain(
+          pathname === "/connect" ? t.connectCommand.enter.title : t.common.loading,
+        );
         expect(html, pathname).not.toContain(t.auth.signIn);
         expect(html, pathname).toContain('id="skillcdn-data">{}</script>');
       }

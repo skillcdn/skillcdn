@@ -176,6 +176,9 @@ export function pageOfRoute(route: Route): AnalyticsPage | undefined {
     // Without its query, which carries a sealed request.
     case "consent":
       return { path: PATHS.consent, title: "consent" };
+    // Without the code, which is good for approving a command and for nothing else.
+    case "connect":
+      return { path: PATHS.connect, title: "connect" };
     // Without the path, which is whatever was typed.
     case "bad-address":
       return { path: "/bad-address", title: "bad-address" };

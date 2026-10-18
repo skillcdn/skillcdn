@@ -3,6 +3,7 @@ import {
   ADDRESS_HOST_KEYS,
   type Address,
   type AddressError,
+  CONNECT_PAGE_PATH,
   CONSENT_PAGE_PATH,
   DOCS_PAGE_PATH,
   formatAddress,
@@ -41,6 +42,8 @@ export type Route =
   | { readonly name: "account"; readonly section: AccountSection }
   /** Where a person is asked whether an app may read an address for them. */
   | { readonly name: "consent" }
+  /** Where a person approves a command that asked to connect: for one code, or asking for one. */
+  | { readonly name: "connect"; readonly code: string | undefined }
   /** A page of the deployment's own: its terms or its privacy policy (ADR-0029). */
   | { readonly name: "legal"; readonly kind: LegalDocumentKind }
   /** The documentation (ADR-0049): its index without a slug, else one of its pages. */
@@ -60,6 +63,7 @@ export const PATHS = {
   privacy: LEGAL_PAGE_PATHS.privacy,
   account: ACCOUNT_PAGE_PATH,
   consent: CONSENT_PAGE_PATH,
+  connect: CONNECT_PAGE_PATH,
   states: "/dev/states",
   ogCard: "/dev/og",
 } as const;
@@ -90,6 +94,11 @@ export function docsHref(slug?: string): string {
   return slug === undefined ? PATHS.docs : `${PATHS.docs}/${slug}`;
 }
 
+/** The page where a command's code is approved, or the page that asks for a code. */
+export function connectHref(code?: string): string {
+  return code === undefined ? PATHS.connect : `${PATHS.connect}/${code}`;
+}
+
 export function matchRoute(pathname: string, search: string, development = false): Route {
   if (pathname === PATHS.landing) {
     return { name: "landing" };
@@ -112,6 +121,16 @@ export function matchRoute(pathname: string, search: string, development = false
   }
   if (pathname === PATHS.consent) {
     return { name: "consent" };
+  }
+  if (pathname === PATHS.connect) {
+    return { name: "connect", code: undefined };
+  }
+  if (pathname.startsWith(`${PATHS.connect}/`)) {
+    // One segment, as a person typed or pasted it; the page reads it as a code or says it is none.
+    const code = pathname.slice(PATHS.connect.length + 1);
+    return code.length === 0 || code.includes("/") || code.length > 16
+      ? { name: "not-found" }
+      : { name: "connect", code };
   }
   if (pathname === PATHS.account || pathname.startsWith(`${PATHS.account}/`)) {
     const wanted =

@@ -7,7 +7,9 @@ import {
   isLegalDocumentKind,
   isPinnedAddress,
   parseAddress,
+  parseConnectCode,
   parseOwnerPath,
+  REPO_TOKEN_DEFAULT_DAYS,
   REPO_TOKEN_MAX_DAYS,
   REPO_TOKEN_MAX_LABEL_LENGTH,
   REPO_TOKEN_PREFIX,
@@ -18,6 +20,10 @@ import {
   type RestAuthorization,
   type RestBrowse,
   type RestBrowseEntry,
+  type RestConnectClaimed,
+  type RestConnectDecided,
+  type RestConnectStarted,
+  type RestConnectView,
   type RestFeatured,
   type RestFile,
   type RestFind,
@@ -32,11 +38,15 @@ import {
   type RestRepoTokens,
   type RestShowcase,
   type RestSkill,
+  restConnectClaimSchema,
+  restConnectDecisionSchema,
+  restConnectRequestSchema,
   restRepoTokenRequestSchema,
 } from "@skillcdn/core";
 import {
   FIXTURE_AUTHORIZATIONS,
   FIXTURE_AVATAR,
+  FIXTURE_CONNECTIONS,
   FIXTURE_FAILURES,
   FIXTURE_FEATURED,
   FIXTURE_GRANTS,
@@ -82,6 +92,18 @@ const madeTokens: RestRepoTokens["items"][number][] = [];
 const removedTokens = new Set<string>();
 /** How many tokens the fixture says a person may hold, as the server does. */
 const TOKEN_LIMIT = 50;
+/** The commands that asked to connect since the server started, by code, and what was decided. */
+const startedConnections = new Map<
+  string,
+  {
+    readonly secret: string;
+    readonly address: string;
+    readonly agent: string;
+    readonly expiresAt: number;
+  }
+>();
+const decidedConnections = new Map<string, "approved" | "denied">();
+let connectionsStarted = 0;
 
 /**
  * Forgets when `demo/slow` was first asked for, so that it starts indexing again, and who signed
@@ -93,6 +115,9 @@ export function resetFixtureState(): void {
   removedGrants.clear();
   madeTokens.length = 0;
   removedTokens.clear();
+  startedConnections.clear();
+  decidedConnections.clear();
+  connectionsStarted = 0;
 }
 
 const problem = (status: number, code: string, message: string, extra = {}): FixtureAnswer => ({
@@ -816,6 +841,188 @@ function tokensAnswer(
   return undefined;
 }
 
+/** How long a fixture connection waits for the person, as the server's does. */
+const CONNECT_TTL_MS = 10 * 60_000;
+/** The letters a fixture code is spelled from, as the server spells one. */
+const CODE_LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+/** What asks under a code the fixture knows, or one a command began here; nothing once declined or expired. */
+function connectionOf(code: string, now: number) {
+  if (decidedConnections.get(code) === "denied") {
+    return undefined;
+  }
+  const started = startedConnections.get(code);
+  if (started !== undefined) {
+    return started.expiresAt > now
+      ? { ...started, unknown: false, approved: decidedConnections.get(code) === "approved" }
+      : undefined;
+  }
+  const fixture = FIXTURE_CONNECTIONS[code];
+  return fixture === undefined
+    ? undefined
+    : {
+        agent: fixture.agent,
+        address: fixture.address,
+        expiresAt: now + CONNECT_TTL_MS,
+        unknown: fixture.unknown === true,
+        approved: fixture.approved === true || decidedConnections.get(code) === "approved",
+      };
+}
+
+/** A command connecting with a code the fixture person approves (ADR-0059). */
+function connectAnswer(
+  url: URL,
+  method: string,
+  now: number,
+  body: unknown,
+): FixtureAnswer | undefined {
+  const base = REST_ROUTES.connect;
+  const notFound = () =>
+    problem(404, "connect.not_found", "No command is waiting under this code, or its time is up.");
+  if (url.pathname === base && method === "POST") {
+    const request = restConnectRequestSchema.safeParse(body);
+    const address = request.success ? parseAddress(request.data.address) : undefined;
+    const agent = request.success ? request.data.agent.trim() : "";
+    if (!request.success || address === undefined || !address.ok || agent.length === 0) {
+      return problem(
+        400,
+        "connect.invalid",
+        "A connection names a repository and what the command calls itself.",
+      );
+    }
+    connectionsStarted += 1;
+    // Spelled from the alphabet, so that the page reads it back as a code.
+    const letters = String(connectionsStarted)
+      .padStart(4, "0")
+      .split("")
+      .map((digit) => CODE_LETTERS[Number(digit)] ?? "A")
+      .join("");
+    const code = `FXTR-${letters}`;
+    const secret = `scdn_cx_fixture-${connectionsStarted}`;
+    const expiresAt = now + CONNECT_TTL_MS;
+    startedConnections.set(code, {
+      secret,
+      address: formatAddress(address.value),
+      agent,
+      expiresAt,
+    });
+    const started: RestConnectStarted = {
+      code,
+      url: `${url.origin}/connect/${code}`,
+      secret,
+      expiresAt: new Date(expiresAt).toISOString(),
+      intervalSeconds: 5,
+    };
+    return { status: 201, body: started };
+  }
+  if (url.pathname === `${base}/claim` && method === "POST") {
+    const claim = restConnectClaimSchema.safeParse(body);
+    if (!claim.success) {
+      return problem(400, "connect.invalid", "A claim carries the secret the command was given.");
+    }
+    const entry = [...startedConnections.entries()].find(
+      ([, started]) => started.secret === claim.data.secret,
+    );
+    const live = entry === undefined ? undefined : connectionOf(entry[0], now);
+    if (entry === undefined || live === undefined) {
+      return notFound();
+    }
+    const [code, started] = entry;
+    if (!live.approved) {
+      const pending: RestConnectClaimed = {
+        status: "pending",
+        expiresAt: new Date(started.expiresAt).toISOString(),
+      };
+      return { status: 200, body: pending };
+    }
+    startedConnections.delete(code);
+    decidedConnections.delete(code);
+    const number = String(madeTokens.length + 1).padStart(12, "0");
+    const item = {
+      id: `66666666-6666-4666-8666-${number}`,
+      address: started.address,
+      label: started.agent,
+      createdAt: new Date(now).toISOString(),
+      expiresAt: new Date(now + REPO_TOKEN_DEFAULT_DAYS * 86_400_000).toISOString(),
+      lastUsedAt: null,
+    };
+    madeTokens.unshift(item);
+    // Not a secret: the fixture server reads nothing with it.
+    const connected: RestConnectClaimed = {
+      status: "connected",
+      token: `${REPO_TOKEN_PREFIX}fixture-connected-${number}`,
+      item,
+    };
+    return { status: 200, body: connected };
+  }
+  if (!url.pathname.startsWith(`${base}/`)) {
+    return undefined;
+  }
+  const segments = url.pathname.slice(base.length + 1).split("/");
+  const code = parseConnectCode(decodeURIComponent(segments[0] ?? ""));
+  const asked = code === undefined ? undefined : connectionOf(code, now);
+  if (segments.length === 1 && method === "GET") {
+    if (!signedIn) {
+      return signInRequired();
+    }
+    if (code === undefined || asked === undefined) {
+      return notFound();
+    }
+    const address = parseAddress(asked.address);
+    const key = address.ok ? `${address.value.owner}/${address.value.repo}` : "";
+    const view: RestConnectView = {
+      code,
+      agent: asked.agent,
+      address: asked.address,
+      expiresAt: new Date(asked.expiresAt).toISOString(),
+      approved: asked.approved,
+      user: FIXTURE_USER,
+      visible: asked.unknown ? null : FIXTURE_REPOSITORIES[key] !== undefined,
+      installUrl: FIXTURE_INSTALL_URL,
+    };
+    return { status: 200, body: view };
+  }
+  if (segments.length === 2 && segments[1] === "decision" && method === "POST") {
+    if (!signedIn) {
+      return signInRequired();
+    }
+    const decision = restConnectDecisionSchema.safeParse(body);
+    if (!decision.success) {
+      return problem(400, "connect.invalid", "The answer is not readable.");
+    }
+    if (code === undefined || asked === undefined || asked.approved) {
+      return notFound();
+    }
+    if (!decision.data.approve) {
+      decidedConnections.set(code, "denied");
+      const denied: RestConnectDecided = { status: "denied" };
+      return { status: 200, body: denied };
+    }
+    if (asked.unknown) {
+      return problem(
+        503,
+        "mount.unavailable",
+        "The git host could not be asked. Try again in a moment.",
+      );
+    }
+    const address = parseAddress(asked.address);
+    const repository = address.ok
+      ? FIXTURE_REPOSITORIES[`${address.value.owner}/${address.value.repo}`]
+      : undefined;
+    if (repository === undefined) {
+      return problem(404, "mount.repo_not_found", "The repository was not found.");
+    }
+    if (repository.private !== true) {
+      decidedConnections.set(code, "denied");
+      return problem(400, "token.public_repository", "A public repository needs no token.");
+    }
+    decidedConnections.set(code, "approved");
+    const approved: RestConnectDecided = { status: "approved" };
+    return { status: 200, body: approved };
+  }
+  return undefined;
+}
+
 function accountAnswer(
   url: URL,
   method: string,
@@ -869,7 +1076,7 @@ function accountAnswer(
     // There is no app to go back to, so either answer comes back to the list of states.
     return signedIn ? { status: 200, body: { redirect: STATES_PAGE } } : signInRequired();
   }
-  return undefined;
+  return connectAnswer(url, method, now, body);
 }
 
 /**

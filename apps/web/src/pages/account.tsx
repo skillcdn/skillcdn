@@ -14,7 +14,7 @@ import { ApiError, api } from "../api/client.js";
 import { resourceKeys } from "../api/keys.js";
 import { useResource } from "../api/use-resource.js";
 import { useSession } from "../auth/session.js";
-import { CodeBlock } from "../components/code-block.js";
+import { CodeBlock, CopyButton } from "../components/code-block.js";
 import { tokenSetup } from "../components/connect-clients.js";
 import { serverNameOf } from "../components/connect-guide.js";
 import { ErrorCallout } from "../components/error-callout.js";
@@ -36,6 +36,7 @@ import {
   ACCOUNT_SECTIONS,
   type AccountSection,
   accountHref,
+  connectHref,
   ownerHref,
   PATHS,
   TOKEN_REPOSITORY_PARAM,
@@ -310,6 +311,33 @@ function repositoryOf(text: string | null): string | undefined {
 /** How a repository is written where it is read, not typed: without the host's key. */
 const shortName = (address: string): string => address.replace(/^\/gh\//, "");
 
+/**
+ * A message for an agent's own chat, as the connection guide shows its first message: the
+ * sentence in the text face, the commands under it on lines of their own, and the whole to copy.
+ */
+function ConnectMessage({
+  message,
+  copyLabel,
+}: {
+  readonly message: string;
+  readonly copyLabel: string;
+}) {
+  const [sentence, ...commands] = message.split("\n");
+  return (
+    <div className={styles.message}>
+      <p>{sentence}</p>
+      <p className={styles.messageCommands}>
+        {commands.map((line) => (
+          <code key={line}>{line}</code>
+        ))}
+      </p>
+      <div>
+        <CopyButton text={message} label={copyLabel} variant="secondary" size="md" />
+      </div>
+    </div>
+  );
+}
+
 const failureOf = (error: unknown): ApiError =>
   error instanceof ApiError ? error : new ApiError(0, "unknown", "Unexpected failure.");
 
@@ -409,6 +437,24 @@ function Tokens({ user, origin }: SectionProps) {
       </p>
       {failure !== undefined && <ErrorCallout error={failure} />}
 
+      {/* The skillcdn command needs none of this: it connects with a code a person approves. */}
+      <div className={styles.tokenForm}>
+        <h3 className={styles.subheading}>{k.connect.title}</h3>
+        <p className={styles.rowText}>{k.connect.body}</p>
+        <ConnectMessage
+          message={k.connect.quote(
+            origin,
+            address === undefined ? "gh/<owner>/<repo>" : address.replace(/^\//, ""),
+          )}
+          copyLabel={k.connect.copy}
+        />
+        <p className={styles.rowText}>{k.connect.rest}</p>
+        <p className={styles.rowText}>{k.connect.yourself}</p>
+        <p className={styles.rowText}>
+          {k.connect.byHand} <Link href={connectHref()}>{k.connect.enter}</Link>
+        </p>
+      </div>
+
       {made !== undefined && agent !== undefined && (
         <div className={styles.made}>
           <Callout tone="warning" title={k.made.title}>
@@ -427,6 +473,12 @@ function Tokens({ user, origin }: SectionProps) {
             label={k.made.codex}
             copy
           />
+          <CodeBlock
+            code={`skillcdn login --url ${origin} ${made.item.address.replace(/^\//, "")} --token-stdin`}
+            label={k.made.command}
+            copy
+          />
+          <p className={styles.rowText}>{k.made.commandHint}</p>
           <p className={styles.rowText}>{k.made.otherHint}</p>
           <CodeBlock code={agent.url} label={k.made.address} copy />
           <CodeBlock

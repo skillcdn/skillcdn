@@ -30,4 +30,7 @@ export const resourceKeys = {
   /** What a client asked to be allowed, as whoever is looking sees it. */
   authorization: (request: string, login: string | undefined): string =>
     `authorization ${login ?? ""} ${request}`,
+  /** What a command asked under a code, as the person signed in sees it. */
+  connection: (code: string, login: string | undefined): string =>
+    `connection ${login ?? ""} ${code}`,
 } as const;

@@ -165,10 +165,25 @@ export const accountKo: typeof accountEn = {
           `에이전트는 저장소 주소에 연결하고 요청마다 토큰을 보내요. ${repository}의 모든 브랜치, 태그, 폴더를 읽을 수 있고 다른 것은 읽지 못해요.`,
         claudeCode: "Claude Code",
         codex: "Codex",
+        command: "skillcdn 명령",
+        commandHint:
+          "명령이 토큰을 물어보고 화면에는 표시하지 않아요. 잡에서는 파이프로 넘기면 돼요.",
         other: "헤더",
         otherHint: "그 밖의 클라이언트는 이 주소에 연결하고, 요청마다 이 헤더를 보내면 돼요.",
         address: "주소",
         done: "복사했어요",
+      },
+      connect: {
+        title: "에이전트가 직접 연결하게 하기",
+        body: "skillcdn 명령은 이 페이지에서 토큰을 만들 필요가 없어요. 에이전트의 대화창에서 이렇게 말하세요:",
+        quote: (origin: string, repository: string) =>
+          `이 두 명령을 실행하고, 두 번째 명령이 보여 주는 주소와 코드를 알려 줘:\nnpm install -g @skillcdn/cli\nskillcdn login --url ${origin} ${repository}`,
+        rest: "에이전트가 명령을 설치하고 연결을 요청해요. 그러면 주소와 코드를 보여 주는데, 그 주소를 열어 같은 코드인지 확인하고 승인하면 끝이에요.",
+        copy: "이 메시지 복사하기",
+        yourself:
+          "에이전트가 없다면 두 명령을 직접 실행하세요. 두 번째 명령이 주소와 코드를 보여 줘요.",
+        byHand: "명령이 보여 준 코드가 있나요?",
+        enter: "코드 입력하기",
       },
       list: "내 토큰",
       none: {
@@ -239,5 +254,72 @@ export const accountKo: typeof accountEn = {
         body: "이 페이지는 AI 앱이 비공개 저장소에 연결할 때 열려요.",
       },
     },
+  },
+
+  connectCommand: {
+    metaTitle: "명령 연결 | SkillCDN",
+    enter: {
+      title: "명령 연결하기",
+      lead: "연결을 요청한 명령이 주소와 코드를 보여 줬을 거예요. 그 주소를 열거나, 여기에 코드를 입력하세요.",
+      label: "코드",
+      submit: "계속",
+      invalid: "코드는 ABCD-EFGH처럼 영문자와 숫자 여덟 자예요.",
+    },
+    signIn: {
+      title: "명령이 내 이름으로 연결하려고 해요",
+      body: "무엇이 요청하는지 보려면 GitHub로 로그인하세요. 승인하기 전에는 아무것도 연결되지 않아요.",
+    },
+    // The command names itself in its own words, usually English, so the titles carry no particle.
+    title: () => "이 명령을 내 이름으로 연결할까요?",
+    labels: { agent: "명령", address: "읽는 저장소", code: "코드", account: "내 계정" },
+    compare:
+      "명령이 보여 준 코드와 같을 때만 승인하세요. 누구나 연결을 요청할 수 있고, 이 페이지와 내 명령을 이어 주는 것은 코드뿐이에요.",
+    what: "이 저장소의 스킬과 문서를 모든 브랜치, 태그, 폴더에서 내 이름으로 읽는 토큰을 받아요. 아무것도 바꿀 수 없고, 내 다른 저장소는 읽지 못해요.",
+    selfNamed: "이름은 명령이 스스로 밝힌 것이에요.",
+    form: {
+      name: "이름",
+      nameHint: "토큰 페이지에 이 이름으로 올라가요. 비워 두면 명령의 이름을 써요.",
+      expires: "만료",
+    },
+    approve: "승인",
+    deny: "내 명령이 아니에요",
+    working: "답을 보내는 중…",
+    refused: {
+      title: () => "이 명령을 아직 연결할 수 없어요",
+      recheck: "다시 확인",
+    },
+    notVisible: {
+      title: "이 계정으로는 저장소를 열 수 없어요",
+      body: "그런 저장소가 없거나, 이 계정으로는 GitHub에서 볼 수 없거나, SkillCDN GitHub 앱이 저장소에 설치되어 있지 않아요. 명령에는 아무것도 넘기지 않았어요.",
+      fix: "명령에 넣은 주소를 확인하거나, 저장소를 볼 수 있는 계정으로 로그인하거나, GitHub에서 저장소에 SkillCDN 앱을 추가하세요. 방금 추가했다면 잠시 뒤에 다시 확인해 보세요.",
+      install: "GitHub에서 저장소 추가하기",
+    },
+    unknown: {
+      title: "지금은 GitHub에 확인할 수 없어요",
+      body: "이 계정이 저장소를 열 수 있는지 확인하지 못해서 아직 승인할 것이 없어요. 잠시 뒤에 다시 확인해 주세요.",
+    },
+    approved: {
+      title: () => "명령이 내 이름으로 연결됐어요",
+      body: "명령이 토큰을 스스로 받아 가요. 복사할 것은 없어요. 이 페이지는 닫아도 돼요. 토큰은 다른 토큰과 함께 목록에 있고, 거기서 삭제할 수 있어요.",
+      tokens: "내 토큰",
+    },
+    denied: {
+      title: "아무것도 연결하지 않았어요",
+      body: "이 코드는 더 쓸 수 없어요. 연결해야 할 명령이라면 다시 요청하게 하면 새 코드를 보여 줘요.",
+    },
+    public: {
+      title: "공개 저장소예요",
+      body: "누구나 토큰 없이 읽을 수 있고 명령도 마찬가지예요. 승인할 것이 없었고, 이 코드는 더 쓸 수 없어요.",
+    },
+    already: {
+      title: "이미 승인했어요",
+      body: "명령이 토큰을 받아 가는 중이에요. 받아 가지 않는다면 다시 연결을 요청하게 해서 새 코드를 받으세요.",
+    },
+    notFound: {
+      title: "알 수 없는 코드예요",
+      body: "거절했거나, 이미 썼거나, 10분이 지났거나, 잘못 입력했을 수 있어요. 명령에 다시 연결을 요청하게 해서 새 코드를 받거나, 코드를 다시 입력하세요.",
+      again: "코드 입력하기",
+    },
+    notYou: "내 계정이 아닌가요? 로그아웃",
   },
 };

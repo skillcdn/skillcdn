@@ -26,6 +26,11 @@ export const api = {
   authorization: (request: string, signal: AbortSignal) => client.authorization(request, signal),
   /** The person's answer; the reply says where their browser goes with it. */
   decide: (request: string, approve: boolean) => client.decide(request, approve),
+  /** What a command asked under a code, for the connect page, as the person signed in. */
+  connection: (code: string, signal: AbortSignal) => client.connection(code, signal),
+  /** The person's answer to a command that asked to connect. */
+  decideConnection: (code: string, decision: Parameters<typeof client.decideConnection>[1]) =>
+    client.decideConnection(code, decision),
   mount: (address: Address, signal: AbortSignal) => client.mount(address, signal),
   browse: (address: Address, path: string, signal: AbortSignal, cursor?: string) =>
     client.browse(address, { path, cursor, limit: 40 }, signal),

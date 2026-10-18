@@ -176,11 +176,26 @@ export const accountEn = {
           `The agent connects to the address of the repository and sends the token with every request. It can read ${repository} at any branch, tag and folder, and nothing else.`,
         claudeCode: "Claude Code",
         codex: "Codex",
+        command: "skillcdn command",
+        commandHint: "The command asks for the token and does not echo it; a job pipes it in.",
         other: "Header",
         otherHint:
           "Anything else connects to this address and sends this header with every request.",
         address: "Address",
         done: "Done, I copied it",
+      },
+      /** The way that needs no token made here: the skillcdn command connects with a code. */
+      connect: {
+        title: "Let your agent connect by itself",
+        body: "The skillcdn command needs no token from this page. Tell your agent, in its own chat:",
+        quote: (origin: string, repository: string) =>
+          `Run these two commands, and tell me the address and the code the second shows:\nnpm install -g @skillcdn/cli\nskillcdn login --url ${origin} ${repository}`,
+        rest: "The agent installs the command and asks to connect. It shows you an address and a code: open the address, check that it shows the same code, and approve. That is all.",
+        copy: "Copy this message",
+        yourself:
+          "No agent at hand? Run the two commands yourself: the second prints the address and the code.",
+        byHand: "Got a code from a command?",
+        enter: "Enter the code",
       },
       list: "Your tokens",
       none: {
@@ -254,5 +269,73 @@ export const accountEn = {
         body: "This page opens from an AI app that is connecting to a private repository.",
       },
     },
+  },
+
+  /** The page where a person approves a command that asked to connect (ADR-0059). */
+  connectCommand: {
+    metaTitle: "Connect a command | SkillCDN",
+    enter: {
+      title: "Connect a command",
+      lead: "A command that asked to connect showed you an address and a code. Open the address, or enter the code here.",
+      label: "Code",
+      submit: "Continue",
+      invalid: "A code is eight letters and digits, as ABCD-EFGH.",
+    },
+    signIn: {
+      title: "A command wants to connect as you",
+      body: "Sign in with GitHub to see what asks. Nothing is connected until you approve.",
+    },
+    title: (agent: string) => `Connect ${agent}?`,
+    labels: { agent: "Command", address: "Reads", code: "Code", account: "As" },
+    compare:
+      "Approve only if this is the code your command showed. Anyone can ask to connect; the code is what ties this page to your command.",
+    what: "It gets a token that reads the skills and documents of this repository as you, at any branch, tag and folder. It cannot change anything, and it cannot read your other repositories.",
+    selfNamed: "The name is what the command calls itself.",
+    form: {
+      name: "Name",
+      nameHint:
+        "How the token is listed on your Tokens page. Left empty, it is called after the command.",
+      expires: "Expires",
+    },
+    approve: "Approve",
+    deny: "Not mine",
+    working: "Sending your answer…",
+    refused: {
+      title: (agent: string) => `${agent} cannot be connected yet`,
+      recheck: "Look again",
+    },
+    notVisible: {
+      title: "This account cannot open the repository",
+      body: "There is no such repository, or GitHub does not show it to this account, or the SkillCDN GitHub app is not installed on it. The command was given nothing.",
+      fix: "Check the address the command was given, sign in as someone who can see the repository, or add the SkillCDN app to it on GitHub. If you have just added it, look again in a moment.",
+      install: "Add repositories on GitHub",
+    },
+    unknown: {
+      title: "GitHub could not be asked right now",
+      body: "Whether this account can open the repository could not be checked, so there is nothing to approve yet. Look again in a moment.",
+    },
+    approved: {
+      title: (agent: string) => `${agent} is connected as you`,
+      body: "The command picks up its token on its own; there is nothing to copy. You can close this page. The token is listed with your others, where you can remove it.",
+      tokens: "Your tokens",
+    },
+    denied: {
+      title: "Nothing was connected",
+      body: "The code is spent. A command that should connect shows a new one when told again.",
+    },
+    public: {
+      title: "This repository is public",
+      body: "Anyone reads it without a token, and so does the command: there was nothing to approve, and the code is spent.",
+    },
+    already: {
+      title: "Already approved",
+      body: "The command is picking up its token. If it does not, tell it to connect again for a new code.",
+    },
+    notFound: {
+      title: "This code is not known",
+      body: "It was declined, used already, more than ten minutes old, or mistyped. Tell your command to connect again for a new code, or enter the code again.",
+      again: "Enter a code",
+    },
+    notYou: "Not you? Sign out",
   },
 };

@@ -67,7 +67,7 @@ export function SignIn(props: {
   /** Called as the browser leaves, by a page that keeps something until the person is back. */
   readonly onLeave?: () => void;
   /** Where the way out stands, for the statistics: in the dialog unless said. */
-  readonly from?: "dialog" | "consent";
+  readonly from?: "dialog" | "consent" | "connect";
 }) {
   const { t } = useI18n();
   const legal = useLegalLinks();
