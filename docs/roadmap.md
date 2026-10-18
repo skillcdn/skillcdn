@@ -38,6 +38,7 @@ Goal: an agent with a shell and no MCP connection reads a pack through the `skil
 - [x] `@skillcdn/client`, the same commands at a deployment's address, `login` and `use` ([ADR-0056](adr/0056-the-rest-api-has-a-client-and-the-command-reads-a-deployment-through-it.md)); the web UI reads through the client.
 - [x] `@skillcdn/serve`, the MCP and REST edges as a package; `skillcdn mcp` over stdio and `skillcdn serve` over HTTP ([ADR-0057](adr/0057-a-directory-is-served-by-the-command-over-stdio-and-http.md)).
 - [x] REST reads counted as MCP tool calls are, by route, with the client app from the user agent.
+- [x] The command connects to a deployment with a code a person approves on the deployment's own pages, and keeps the repository token it is handed, per deployment and repository, never showing it ([ADR-0059](adr/0059-the-command-connects-with-a-code-a-person-approves.md)); a checkout is bound to a directory on the machine as well as to an address, `use` prints the sentence for the checkout's agreement, and `status` says what a directory reads, so that an agent meeting a checkout knows to read the pack.
 
 ## After milestone 5
 

@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import { stat } from "node:fs/promises";
-import { resolve } from "node:path";
+import { relative, resolve } from "node:path";
 import type { Readable, Writable } from "node:stream";
 import { parseArgs } from "node:util";
-import type { FetchLike } from "@skillcdn/client";
+import { ApiError, createClient, type FetchLike } from "@skillcdn/client";
 import {
   type Address,
   BROWSE_DEFAULT_LIMIT,
@@ -28,6 +28,8 @@ import {
   parseSkillUri,
   READ_FILE_DEFAULT_LIMIT,
   READ_FILE_MAX_LIMIT,
+  type RestConnectClaimed,
+  type RestConnectStarted,
   renderBrowseResult,
   renderDiagnostics,
   renderDirectoryResult,
@@ -49,12 +51,14 @@ import {
   EMPTY_CREDENTIALS,
   loginAt,
   originOf,
+  repositoryOf,
   withLogin,
   withoutLogin,
 } from "./credentials.js";
 import { createMemoryDirectoryStore, DIRECTORY_FILE, type DirectoryStore } from "./directory.js";
 import {
   type LocalMount,
+  localAddress,
   localReader,
   type MountedDirectory,
   mountDirectory,
@@ -83,6 +87,11 @@ export interface CliIo {
   readonly now?: (() => Date) | undefined;
   /** What the command calls itself to a deployment. */
   readonly userAgent?: string | undefined;
+  /**
+   * What the command calls itself to a person, when it asks to connect: the agent it runs
+   * under and the machine, as `Claude Code on a laptop`. "An agent" when left out.
+   */
+  readonly agentName?: string | undefined;
   /**
    * Keeps a server running until the person stops it, and resolves then. Left out, `serve`
    * returns as soon as it is serving, and `mcp` when the client closes its end.
@@ -129,8 +138,22 @@ const COMMANDS = [
   "logout",
   "logins",
   "use",
+  "status",
 ] as const;
 type Command = (typeof COMMANDS)[number];
+
+/**
+ * The sentence a checkout's agreement carries (CLAUDE.md, AGENTS.md), so that the agents working
+ * in it read the pack it is bound to before they start: what `use` prints, and what the guide says.
+ */
+export const AGREEMENT_SENTENCE =
+  "**Bound to a pack?** When .skillcdn.json is in this checkout, or `skillcdn status` names a pack, read its skills with `skillcdn skills` before you start, and load the one a task calls for (`skillcdn help` says how).";
+
+/** What `use` says after binding: how the agents that work here learn of it. */
+const HAND_OVER = `Tell the agents that work here, in the checkout's agreement (CLAUDE.md or AGENTS.md), in one sentence:
+
+  ${AGREEMENT_SENTENCE}
+`;
 
 const isCommand = (name: string): name is Command => (COMMANDS as readonly string[]).includes(name);
 
@@ -149,18 +172,19 @@ Commands:
   file [<pack>] <path>             A page of a file, as read_repo_file reads it, or what a folder holds.
   mcp <directory>                  Serve the directory to the MCP client that started the command.
   serve <directory>...             Serve directories over HTTP on this machine: MCP and the REST API.
-  login --url <origin> --token-stdin   Keep a token a person made at a deployment, for reads there.
-  logout --url <origin>            Forget it.
-  logins                           The deployments a token is kept for.
-  use <address> [--url <origin>]   Bind this directory to a pack: reads here need no <pack>.
+  login --url <origin> [<address>] Connect to a deployment with a code a person approves; the token is kept, never shown.
+  logout --url <origin> [<address>] Forget the tokens kept for a deployment, or the one for a repository.
+  logins                           The deployments and repositories a token is kept for.
+  use <address>|<directory>        Bind this directory to a pack, at a deployment or on this machine: reads here need no <pack>.
+  status                           What this directory reads, and whether a token is kept for it.
   help [<command>]                 This, or one command in full.
 
 A <pack> is a directory, or an address: gh/<owner>/<repo>[@<ref>][/<path>], the URL of a pack
 at a deployment, or a skill:// URI. Left out, the pack this directory is bound to (${DIRECTORY_FILE}).
 An address is read at --url, else SKILLCDN_URL, else the deployment the directory is bound to,
-else ${DEFAULT_ORIGIN}, with the token kept for that deployment, or SKILLCDN_TOKEN beside
-SKILLCDN_URL. Paths start at the pack's root, as marketing/ads/SKILL.md. Every read answers the
-words an MCP client's model is given, or the JSON of the REST API with --json.
+else ${DEFAULT_ORIGIN}, with the token kept for that deployment and the repository read, or
+SKILLCDN_TOKEN beside SKILLCDN_URL. Paths start at the pack's root, as marketing/ads/SKILL.md.
+Every read answers the words an MCP client's model is given, or the JSON of the REST API with --json.
 
 Exit codes: 0 done; 1 the pack does not have it, or refuses it; 2 the pack cannot be read, the
 directory or the deployment; 64 a usage error; 78 a limit variable that cannot be read; 70 a failure.
@@ -259,30 +283,54 @@ your own. Runs until stopped (Ctrl+C).
 
 The INDEX_* and READ_MAX_FILE_BYTES variables set the limits a deployment would apply.
 `,
-  login: `usage: skillcdn login --url <origin> --token-stdin
+  login: `usage: skillcdn login --url <origin> [<address>] [--agent <name>]
+       skillcdn login --url <origin> [<address>] --token-stdin
 
-Keeps a token a person made at a deployment, read from standard input and never from an
-argument, so that reads at that deployment present it: a repository token from their account
-page, which reads one repository as its maker, or an access token an app received. One token
-per deployment; a second login there replaces the first. The token is kept in the person's
-configuration directory, readable by them alone where the system can say so, and goes to the
-deployment it was kept for and nowhere else. For a job, SKILLCDN_URL and SKILLCDN_TOKEN together
-do the same for one run.
+Connects this command to a deployment for one repository, the address given or the pack this
+directory is bound to, with a code a person approves: the command prints the deployment's page
+for the code and the code; a person opens the page signed in, checks that it shows the same
+code, names the token and says how long it is good for, and approves; the command then receives
+a repository token of its own and keeps it, never showing it. An agent running the command
+relays the page and the code to its person and waits. The code is good for ten minutes.
+--agent says what the command calls itself on that page; left out, the agent it runs under
+where its environment says so (Claude Code, Codex, Gemini CLI), else An agent, and the
+machine's name.
+
+--token-stdin keeps a token made by hand instead, read from standard input and never from an
+argument: a repository token from an account page, for the repository given, or an access token
+an app received, for every repository there when none is given. At a terminal the token is
+asked for and not echoed; a job pipes it in. For one run, SKILLCDN_URL and SKILLCDN_TOKEN
+together do the same.
+
+A token is kept in the person's configuration directory, readable by them alone where the
+system can say so, one per deployment and repository; a second login for the same replaces the
+first. It goes to the deployment it was kept for and nowhere else.
 `,
-  logout: `usage: skillcdn logout --url <origin>
+  logout: `usage: skillcdn logout --url <origin> [<address>]
 
-Forgets the token kept for a deployment. The token itself is ended on the person's account page.
+Forgets the tokens kept for a deployment, or the one kept there for the repository given. The
+token itself is ended on the person's account page.
 `,
   logins: `usage: skillcdn logins
 
-The deployments a token is kept for, and since when; never the tokens.
+The deployments and repositories a token is kept for, and since when; never the tokens.
 `,
   use: `usage: skillcdn use <address> [--url <origin>]
+       skillcdn use <directory> [--as local/<owner>/<name>]
 
 Binds the working directory to a pack: writes ${DIRECTORY_FILE} with the pack's address and, with
---url, the deployment it is read at, so that a read here or in a directory below needs no <pack>.
-Meant to be committed: everyone who works in the checkout, and every agent they run in it, reads
-the same pack. It names no token and nothing secret.
+--url, the deployment it is read at; or, for a directory on this machine, the directory as a
+path relative to the file, read with no deployment and no token. A read here or in a directory
+below then needs no <pack>. Meant to be committed: everyone who works in the checkout, and every
+agent they run in it, reads the same pack. It names no token and nothing secret. Afterwards the
+command prints the sentence to put in the checkout's agreement (CLAUDE.md or AGENTS.md), so
+that the agents working here read the pack before they start.
+`,
+  status: `usage: skillcdn status
+
+What this directory reads, without reading anything: the pack it is bound to and where it is
+read, a directory on this machine or a deployment; whether a token is kept for that; and this
+command's version. For an agent that meets a checkout: run this first, then skillcdn skills.
 `,
 };
 
@@ -313,6 +361,7 @@ const OPTIONS = {
   port: { type: "string" },
   host: { type: "string" },
   "token-stdin": { type: "boolean" },
+  agent: { type: "string" },
 } as const;
 
 type Values = ReturnType<typeof parseArgs<{ options: typeof OPTIONS }>>["values"];
@@ -346,6 +395,8 @@ function limitsOf(io: CliIo): IndexLimits {
 interface PackSpec {
   readonly kind: "directory" | "address";
   readonly directory?: string;
+  /** The address a bound directory is read as, which the binding wrote. */
+  readonly as?: string;
   readonly address?: Address;
   /** A deployment the spec names itself: the origin of a URL. */
   readonly url?: string;
@@ -413,12 +464,16 @@ async function packSpecOf(given: string, io: CliIo): Promise<PackSpec> {
   return { kind: "address", address: parsed.value };
 }
 
-/** Where an address is read, and with what: the origin first, then the token for that origin alone. */
+/**
+ * Where an address is read, and with what: the origin first, then the token kept for that origin
+ * and the repository read, else for that origin alone, never anything kept for another.
+ */
 async function deploymentOf(
   io: CliIo,
   flagUrl: string | undefined,
   specUrl: string | undefined,
   boundUrl: string | undefined,
+  address: Address,
 ): Promise<{ readonly url: string; readonly token: string | undefined }> {
   const envUrl = io.environment.SKILLCDN_URL;
   const envToken = io.environment.SKILLCDN_TOKEN;
@@ -438,7 +493,11 @@ async function deploymentOf(
     return { url, token: envToken.trim() };
   }
   const credentials = (await io.store?.load()) ?? EMPTY_CREDENTIALS;
-  return { url, token: loginAt(credentials, url)?.token };
+  return {
+    url,
+    token: loginAt(credentials, url, isGitHostAddress(address) ? repositoryOf(address) : undefined)
+      ?.token,
+  };
 }
 
 /** The pack a read command was given, opened. */
@@ -452,6 +511,13 @@ async function openPack(
   let spec: PackSpec;
   if (given !== undefined) {
     spec = await packSpecOf(given, io);
+  } else if (bound?.directory !== undefined) {
+    // Bound to a directory on this machine: read as the binding named it, with no deployment.
+    spec = {
+      kind: "directory",
+      directory: resolve(io.cwd ?? ".", bound.directory),
+      as: bound.pack,
+    };
   } else if (bound !== undefined) {
     const parsed = parseAddress(bound.pack);
     if (!parsed.ok) {
@@ -466,7 +532,7 @@ async function openPack(
   if (spec.kind === "directory" && spec.directory !== undefined) {
     const opened = await openDirectory({
       directory: spec.directory,
-      as: values.as,
+      as: values.as ?? spec.as,
       limits,
     });
     if ("error" in opened) {
@@ -480,7 +546,7 @@ async function openPack(
   if (values.as !== undefined) {
     throw new Misuse("--as names a directory; a pack at a deployment has its address.");
   }
-  const deployment = await deploymentOf(io, values.url, spec.url, bound?.url);
+  const deployment = await deploymentOf(io, values.url, spec.url, bound?.url, spec.address);
   const pack = openDeployment({
     url: deployment.url,
     address: spec.address,
@@ -774,11 +840,44 @@ async function readCommand(
   }
 }
 
+/** How many claims a login makes before it gives up, whatever the clock says: a code's lifetime and some. */
+const MAX_CLAIMS = 240;
+
+/**
+ * The repository a `login` is about: the address given, else the pack this directory is bound
+ * to at a deployment; nothing for a directory bound to a pack on this machine, or to none.
+ */
+async function repositoryFor(given: string | undefined, io: CliIo): Promise<string | undefined> {
+  if (given !== undefined) {
+    const address = parseAddress(given.startsWith("/") ? given : `/${given}`);
+    if (!address.ok || !isGitHostAddress(address.value)) {
+      throw new Misuse(
+        `Not the address of a repository at a deployment: ${given}. Say gh/<owner>/<repo>.`,
+      );
+    }
+    return repositoryOf(address.value);
+  }
+  const bound = await io.directory?.load();
+  if (bound === undefined || bound.directory !== undefined) {
+    return undefined;
+  }
+  const address = parseAddress(bound.pack);
+  return address.ok && isGitHostAddress(address.value) ? repositoryOf(address.value) : undefined;
+}
+
+/** What the deployment refused, in the words the command says such things in. */
+const refused = (error: unknown): never => {
+  if (error instanceof ApiError) {
+    throw new PackError(error.status, error.code, error.message);
+  }
+  throw error;
+};
+
 async function loginCommand(args: readonly string[], io: CliIo): Promise<number> {
   const parsed = parseArgs({
     args: [...args],
     options: OPTIONS,
-    allowPositionals: false,
+    allowPositionals: true,
     strict: true,
   });
   if (parsed.values.help === true) {
@@ -789,32 +888,107 @@ async function loginCommand(args: readonly string[], io: CliIo): Promise<number>
   if (url === undefined) {
     throw new Misuse("Say which deployment: --url https://<host>.");
   }
-  if (parsed.values["token-stdin"] !== true) {
+  const [given, ...more] = parsed.positionals;
+  if (more.length > 0) {
+    throw new Misuse("login takes one repository at most.");
+  }
+  const repository = await repositoryFor(given, io);
+  const store = io.store ?? createMemoryStore();
+  const now = (): Date => io.now?.() ?? new Date();
+  const keep = async (token: string): Promise<string> => {
+    const credentials = (await store.load()) ?? EMPTY_CREDENTIALS;
+    return store.save(
+      withLogin(credentials, { url, repository, token, since: now().toISOString() }),
+    );
+  };
+
+  if (parsed.values["token-stdin"] === true) {
+    if (io.readStdin === undefined) {
+      throw new Misuse("Standard input is not available here.");
+    }
+    const token = (await io.readStdin()).trim();
+    if (token.length === 0 || token.length > 1024 || /\s/.test(token)) {
+      throw new Misuse("A token is one line of up to 1024 characters, with no whitespace.");
+    }
+    const path = await keep(token);
+    io.stdout(
+      `A token is kept for ${repository ?? "every repository"} at ${url}, in ${path}. Reads there present it.\n`,
+    );
+    return 0;
+  }
+
+  if (repository === undefined) {
     throw new Misuse(
-      "The token is read from standard input: --token-stdin. Never from an argument.",
+      "Say which repository to connect to: skillcdn login --url <origin> gh/<owner>/<repo>, or bind this directory to one with skillcdn use first. A token made by hand is read with --token-stdin.",
     );
   }
-  if (io.readStdin === undefined) {
-    throw new Misuse("Standard input is not available here.");
+  const client = createClient({
+    baseUrl: url,
+    fetch: io.fetch ?? ((input, init) => fetch(input, init)),
+    userAgent: io.userAgent,
+  });
+  let started: RestConnectStarted;
+  try {
+    started = await client.connect({
+      address: repository,
+      agent: parsed.values.agent ?? io.agentName ?? "An agent",
+    });
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      throw new PackError(
+        404,
+        "connect.unavailable",
+        `${url} connects no command: nobody signs in there, so every pack it serves is public and needs no token; or it runs a version without this. A token made on an account page is read with --token-stdin.`,
+      );
+    }
+    return refused(error);
   }
-  const token = (await io.readStdin()).trim();
-  if (token.length === 0 || token.length > 1024 || /\s/.test(token)) {
-    throw new Misuse("A token is one line of up to 1024 characters, with no whitespace.");
-  }
-  const store = io.store ?? createMemoryStore();
-  const credentials = (await store.load()) ?? EMPTY_CREDENTIALS;
-  const path = await store.save(
-    withLogin(credentials, { url, token, since: (io.now?.() ?? new Date()).toISOString() }),
+  io.stdout(
+    `To connect, open ${started.url} signed in, check that the page shows the code ${started.code}, and approve. An agent running this command relays the page and the code to its person.\nWaiting for the approval, until ${started.expiresAt}.\n`,
   );
-  io.stdout(`A token is kept for ${url}, in ${path}. Reads there present it.\n`);
-  return 0;
+  const sleep = io.sleep ?? defaultSleep;
+  const notApproved = (): PackError =>
+    new PackError(
+      404,
+      "connect.not_found",
+      "The connection was not approved in time, or the person said it was not theirs. Run skillcdn login again for a new code.",
+    );
+  for (let claims = 0; claims < MAX_CLAIMS; claims += 1) {
+    await sleep(started.intervalSeconds * 1000);
+    let claimed: RestConnectClaimed;
+    try {
+      claimed = await client.claimConnection(started.secret);
+    } catch (error) {
+      if (
+        error instanceof ApiError &&
+        (error.status === 0 || error.status >= 500) &&
+        now().getTime() < Date.parse(started.expiresAt)
+      ) {
+        // The deployment, or the git host behind it, will answer later; the approval waits.
+        continue;
+      }
+      if (error instanceof ApiError && error.code === "connect.not_found") {
+        throw notApproved();
+      }
+      return refused(error);
+    }
+    if (claimed.status === "pending") {
+      continue;
+    }
+    const path = await keep(claimed.token);
+    io.stdout(
+      `Connected: a token for ${repository} at ${url} is kept in ${path}, listed on the account page as ${JSON.stringify(claimed.item.label)} until ${claimed.item.expiresAt.slice(0, 10)}. Reads of ${repository} there present it; the person ends it on their account page.\n`,
+    );
+    return 0;
+  }
+  throw notApproved();
 }
 
 async function logoutCommand(args: readonly string[], io: CliIo): Promise<number> {
   const parsed = parseArgs({
     args: [...args],
     options: OPTIONS,
-    allowPositionals: false,
+    allowPositionals: true,
     strict: true,
   });
   if (parsed.values.help === true) {
@@ -825,14 +999,25 @@ async function logoutCommand(args: readonly string[], io: CliIo): Promise<number
   if (url === undefined) {
     throw new Misuse("Say which deployment: --url https://<host>.");
   }
+  const [given, ...more] = parsed.positionals;
+  if (more.length > 0) {
+    throw new Misuse("logout takes one repository at most.");
+  }
+  const repository = given === undefined ? undefined : await repositoryFor(given, io);
   const store = io.store ?? createMemoryStore();
   const credentials = (await store.load()) ?? EMPTY_CREDENTIALS;
-  if (loginAt(credentials, url) === undefined) {
-    io.stdout(`No token is kept for ${url}.\n`);
+  const where = repository === undefined ? url : `${repository} at ${url}`;
+  const kept = credentials.logins.filter(
+    (login) => login.url === url && (repository === undefined || login.repository === repository),
+  );
+  if (kept.length === 0) {
+    io.stdout(`No token is kept for ${where}.\n`);
     return 0;
   }
-  await store.save(withoutLogin(credentials, url));
-  io.stdout(`The token kept for ${url} is forgotten here; end it on the account page as well.\n`);
+  await store.save(withoutLogin(credentials, url, repository));
+  io.stdout(
+    `${kept.length === 1 ? "The token" : `The ${kept.length} tokens`} kept for ${where} ${kept.length === 1 ? "is" : "are"} forgotten here; end ${kept.length === 1 ? "it" : "them"} on the account page as well.\n`,
+  );
   return 0;
 }
 
@@ -853,7 +1038,9 @@ async function loginsCommand(args: readonly string[], io: CliIo): Promise<number
     return 0;
   }
   for (const login of credentials.logins) {
-    io.stdout(`${login.url}${login.since === undefined ? "" : `  since ${login.since}`}\n`);
+    io.stdout(
+      `${login.url}  ${login.repository ?? "every repository"}${login.since === undefined ? "" : `  since ${login.since}`}\n`,
+    );
   }
   return 0;
 }
@@ -871,7 +1058,37 @@ async function useCommand(args: readonly string[], io: CliIo): Promise<number> {
   }
   const [given, ...more] = parsed.positionals;
   if (given === undefined || more.length > 0) {
-    throw new Misuse("Say which pack: its address, as gh/<owner>/<repo>.");
+    throw new Misuse(
+      "Say which pack: its address, as gh/<owner>/<repo>, or a directory on this machine.",
+    );
+  }
+  const store = io.directory ?? createMemoryDirectoryStore();
+  const cwd = resolve(io.cwd ?? ".");
+  const root = resolve(cwd, given);
+  const info = await stat(root).catch(() => undefined);
+  if (info?.isDirectory() === true || looksLikePath(given)) {
+    if (info?.isDirectory() !== true) {
+      throw new Unreadable(`${given}: not a directory that can be read`, EXIT_UNREADABLE);
+    }
+    if (parsed.values.url !== undefined) {
+      throw new Misuse(
+        "A directory on this machine is read with no deployment; --url names where an address is read.",
+      );
+    }
+    const local = localAddress(root, parsed.values.as);
+    if ("error" in local) {
+      throw new Misuse(local.error);
+    }
+    // Relative to the file and with forward slashes, so that the checkout carries it anywhere.
+    const written = relative(cwd, root).split("\\").join("/") || ".";
+    const path = await store.save({ pack: formatAddress(local.address), directory: written });
+    io.stdout(
+      `This directory reads ${formatAddress(local.address)} from ${written === "." ? "itself" : written}, on this machine: ${path}.\n\n${HAND_OVER}`,
+    );
+    return 0;
+  }
+  if (parsed.values.as !== undefined) {
+    throw new Misuse("--as names a directory; a pack at a deployment has its address.");
   }
   const address = parseAddress(given.startsWith("/") ? given : `/${given}`);
   if (!address.ok) {
@@ -879,18 +1096,71 @@ async function useCommand(args: readonly string[], io: CliIo): Promise<number> {
   }
   if (!isGitHostAddress(address.value)) {
     throw new Misuse(
-      "A directory is bound to a pack at a deployment: an address such as gh/<owner>/<repo>.",
+      "A directory is bound to a pack at a deployment by an address such as gh/<owner>/<repo>, or to a directory on this machine by its path.",
     );
   }
   const url = parsed.values.url === undefined ? undefined : originOf(parsed.values.url);
   if (parsed.values.url !== undefined && url === undefined) {
     throw new Misuse(`Not the origin of a deployment: ${parsed.values.url}.`);
   }
-  const directory = io.directory ?? createMemoryDirectoryStore();
-  const path = await directory.save({ pack: formatAddress(address.value), url });
+  const path = await store.save({ pack: formatAddress(address.value), url });
   io.stdout(
-    `This directory reads ${formatAddress(address.value)}${url === undefined ? "" : ` at ${url}`}: ${path}.\n`,
+    `This directory reads ${formatAddress(address.value)}${url === undefined ? "" : ` at ${url}`}: ${path}.\n\n${HAND_OVER}`,
   );
+  return 0;
+}
+
+async function statusCommand(args: readonly string[], io: CliIo): Promise<number> {
+  const parsed = parseArgs({
+    args: [...args],
+    options: OPTIONS,
+    allowPositionals: false,
+    strict: true,
+  });
+  if (parsed.values.help === true) {
+    io.stdout(HELP.status);
+    return 0;
+  }
+  const bound = await io.directory?.load();
+  const credentials = (await (io.store ?? createMemoryStore()).load()) ?? EMPTY_CREDENTIALS;
+  const lines: string[] = [];
+  if (bound === undefined) {
+    lines.push(
+      `This directory is bound to no pack: no ${DIRECTORY_FILE} here or above. skillcdn use gh/<owner>/<repo> binds it to a pack at a deployment, skillcdn use <directory> to a directory on this machine; a read here then needs no pack argument.`,
+    );
+  } else if (bound.directory !== undefined) {
+    lines.push(
+      `This directory reads ${bound.pack} from ${bound.directory}, a directory on this machine: no deployment and no token (${DIRECTORY_FILE}).`,
+    );
+  } else {
+    const envUrl = io.environment.SKILLCDN_URL;
+    const url = originOf(envUrl ?? bound.url ?? DEFAULT_ORIGIN) ?? DEFAULT_ORIGIN;
+    const address = parseAddress(bound.pack);
+    const repository =
+      address.ok && isGitHostAddress(address.value) ? repositoryOf(address.value) : undefined;
+    const fromEnvironment =
+      envUrl !== undefined &&
+      originOf(envUrl) === url &&
+      io.environment.SKILLCDN_TOKEN !== undefined;
+    const login = loginAt(credentials, url, repository);
+    lines.push(`This directory reads ${bound.pack} at ${url} (${DIRECTORY_FILE}).`);
+    lines.push(
+      fromEnvironment
+        ? "SKILLCDN_TOKEN is set for it, with SKILLCDN_URL."
+        : login === undefined
+          ? `No token is kept for it. A public pack needs none; for a private one, skillcdn login --url ${url} connects with a code a person approves.`
+          : `A token is kept for it${login.repository === undefined ? ", for every repository there" : ""}${login.since === undefined ? "" : `, since ${login.since}`}.`,
+    );
+  }
+  lines.push(
+    credentials.logins.length === 0
+      ? "No token is kept for any deployment."
+      : `Tokens are kept for ${credentials.logins.length === 1 ? "one place" : `${credentials.logins.length} places`}; skillcdn logins names them.`,
+  );
+  lines.push(
+    `This is skillcdn ${version()}. Next: skillcdn skills${bound === undefined ? " <pack>" : ""}.`,
+  );
+  io.stdout(`${lines.join("\n")}\n`);
   return 0;
 }
 
@@ -930,6 +1200,8 @@ export async function runCli(args: readonly string[], io: CliIo): Promise<number
         return await loginsCommand(rest, io);
       case "use":
         return await useCommand(rest, io);
+      case "status":
+        return await statusCommand(rest, io);
       case "mcp":
         return await mcpCommand(rest, io);
       case "serve":

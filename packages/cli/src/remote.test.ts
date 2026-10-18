@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { FetchLike } from "@skillcdn/client";
 import { restMountSchema } from "@skillcdn/core";
 import { INDEX_LIMIT_DEFAULTS } from "@skillcdn/indexer";
@@ -143,6 +143,7 @@ async function run(
     readonly store?: ReturnType<typeof createMemoryStore>;
     readonly directory?: ReturnType<typeof createMemoryDirectoryStore>;
     readonly stdin?: string;
+    readonly cwd?: string;
   } = {},
 ) {
   let out = "";
@@ -158,6 +159,7 @@ async function run(
     fetch: deployment.fetch,
     store: options.store,
     directory: options.directory,
+    cwd: options.cwd,
     sleep: async () => undefined,
     readStdin: async () => options.stdin ?? "",
     now: () => new Date("2026-10-18T00:00:00Z"),
@@ -284,6 +286,9 @@ describe("a pack at a deployment", () => {
     );
     expect(bound.code).toBe(0);
     expect(bound.out).toContain("This directory reads /gh/acme/skills at https://skillcdn.example");
+    // And how the agents that work here learn of it: the sentence for the checkout's agreement.
+    expect(bound.out).toContain("CLAUDE.md or AGENTS.md");
+    expect(bound.out).toContain("**Bound to a pack?** When .skillcdn.json is in this checkout");
     const { code, out } = await run(["skill", "marketing/ads/SKILL.md"], deployment, { directory });
     expect(code).toBe(0);
     expect(out).toContain("Skill: ads");
@@ -308,14 +313,41 @@ describe("a pack at a deployment", () => {
       },
     );
     expect(kept.code).toBe(0);
-    expect(kept.out).toContain("A token is kept for https://skillcdn.example");
+    expect(kept.out).toContain("A token is kept for every repository at https://skillcdn.example");
     expect(kept.out).not.toContain("scdn_repo_secret");
     const listed = await run(["logins"], deployment, { store });
-    expect(listed.out).toBe("https://skillcdn.example  since 2026-10-18T00:00:00.000Z\n");
+    expect(listed.out).toBe(
+      "https://skillcdn.example  every repository  since 2026-10-18T00:00:00.000Z\n",
+    );
+    // Without a repository to connect to, and without a token to read, there is nothing to do.
     const fromArgument = await run(["login", "--url", "https://skillcdn.example"], deployment, {
       store,
     });
     expect(fromArgument.code).toBe(EXIT_USAGE);
+    expect(fromArgument.err).toContain("Say which repository to connect to");
+    // A token given for one repository is kept beside the one for every repository.
+    const forOne = await run(
+      ["login", "--url", "https://skillcdn.example", "gh/acme/skills", "--token-stdin"],
+      deployment,
+      { store, stdin: "scdn_repo_one" },
+    );
+    expect(forOne.out).toContain("A token is kept for /gh/acme/skills at https://skillcdn.example");
+    expect((await run(["logins"], deployment, { store })).out.split("\n")).toEqual([
+      "https://skillcdn.example  every repository  since 2026-10-18T00:00:00.000Z",
+      "https://skillcdn.example  /gh/acme/skills  since 2026-10-18T00:00:00.000Z",
+      "",
+    ]);
+    const forgotOne = await run(
+      ["logout", "--url", "https://skillcdn.example", "gh/acme/skills"],
+      deployment,
+      { store },
+    );
+    expect(forgotOne.out).toContain(
+      "The token kept for /gh/acme/skills at https://skillcdn.example is forgotten",
+    );
+    expect((await run(["logins"], deployment, { store })).out).toBe(
+      "https://skillcdn.example  every repository  since 2026-10-18T00:00:00.000Z\n",
+    );
     const insecure = await run(
       ["login", "--url", "http://skillcdn.example", "--token-stdin"],
       deployment,
@@ -332,6 +364,207 @@ describe("a pack at a deployment", () => {
     expect((await run(["logins"], deployment, { store })).out).toBe(
       "No token is kept for any deployment.\n",
     );
+  });
+
+  it("connects with a code a person approves, and keeps the token for that repository", async () => {
+    const root = await repository(PACK);
+    const deployment = await deploymentOf(root);
+    const json = (body: unknown, status = 200) =>
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { "content-type": "application/json" },
+      });
+    const item = {
+      id: "11111111-1111-4111-8111-111111111111",
+      address: "/gh/acme/skills",
+      label: "Claude Code on a laptop",
+      createdAt: "2026-10-18T00:00:00.000Z",
+      expiresAt: "2027-01-16T00:00:00.000Z",
+      lastUsedAt: null,
+    };
+    let claims = 0;
+    let approved = true;
+    /** The deployment, connecting commands as well: pending twice, then the token. */
+    const connecting: Deployment = {
+      ...deployment,
+      fetch: async (url, init) => {
+        const { pathname } = new URL(url);
+        if (pathname === "/api/v1/connect") {
+          expect(init.method).toBe("POST");
+          expect(JSON.parse(String(init.body))).toEqual({
+            address: "/gh/acme/skills",
+            agent: "Claude Code on a laptop",
+          });
+          return json(
+            {
+              code: "ABCD-EFGH",
+              url: "https://skillcdn.example/connect/ABCD-EFGH",
+              secret: "scdn_cx_secret",
+              expiresAt: "2026-10-18T00:10:00.000Z",
+              intervalSeconds: 5,
+            },
+            201,
+          );
+        }
+        if (pathname === "/api/v1/connect/claim") {
+          claims += 1;
+          expect(JSON.parse(String(init.body))).toEqual({ secret: "scdn_cx_secret" });
+          if (!approved) {
+            return json({ error: { code: "connect.not_found", message: "Nothing waits." } }, 404);
+          }
+          return claims < 3
+            ? json({ status: "pending", expiresAt: "2026-10-18T00:10:00.000Z" })
+            : json({ status: "connected", token: "scdn_repo_connected", item });
+        }
+        return deployment.fetch(url, init);
+      },
+    };
+    const store = createMemoryStore();
+    const connected = await run(
+      [
+        "login",
+        "--url",
+        "https://skillcdn.example",
+        "gh/acme/skills",
+        "--agent",
+        "Claude Code on a laptop",
+      ],
+      connecting,
+      { store },
+    );
+    expect(connected.code).toBe(0);
+    expect(connected.out).toContain("open https://skillcdn.example/connect/ABCD-EFGH signed in");
+    expect(connected.out).toContain("the code ABCD-EFGH");
+    expect(connected.out).toContain(
+      "Connected: a token for /gh/acme/skills at https://skillcdn.example is kept",
+    );
+    expect(connected.out).toContain('"Claude Code on a laptop" until 2027-01-16');
+    expect(connected.out).not.toContain("scdn_");
+    expect(claims).toBe(3);
+
+    // Kept for the repository: presented there, and nowhere else at the deployment.
+    deployment.requests.length = 0;
+    await run(["skills", "gh/acme/skills", "--url", "https://skillcdn.example"], deployment, {
+      store,
+    });
+    expect(deployment.requests.length).toBeGreaterThan(0);
+    expect(
+      deployment.requests.every(
+        (request) => request.authorization === "Bearer scdn_repo_connected",
+      ),
+    ).toBe(true);
+    deployment.requests.length = 0;
+    await run(["skills", "gh/acme/other", "--url", "https://skillcdn.example"], deployment, {
+      store,
+    });
+    expect(deployment.requests.every((request) => request.authorization === undefined)).toBe(true);
+    expect((await run(["logins"], deployment, { store })).out).toBe(
+      "https://skillcdn.example  /gh/acme/skills  since 2026-10-18T00:00:00.000Z\n",
+    );
+
+    // The pack the directory is bound to is the repository, when none is said.
+    const directory = createMemoryDirectoryStore({
+      pack: "/gh/acme/skills",
+      url: "https://skillcdn.example",
+    });
+    claims = 0;
+    const again = await run(
+      ["login", "--url", "https://skillcdn.example", "--agent", "Claude Code on a laptop"],
+      connecting,
+      { store, directory },
+    );
+    expect(again.code).toBe(0);
+
+    // Declined, or not approved in time: the command says so and keeps nothing.
+    approved = false;
+    const declined = await run(
+      [
+        "login",
+        "--url",
+        "https://skillcdn.example",
+        "gh/acme/skills",
+        "--agent",
+        "Claude Code on a laptop",
+      ],
+      connecting,
+      { store: createMemoryStore() },
+    );
+    expect(declined.code).toBe(EXIT_MISSING);
+    expect(declined.err).toContain("not approved in time, or the person said it was not theirs");
+
+    // A deployment where nobody signs in connects no command, and says what to do instead.
+    const nobody = await run(
+      ["login", "--url", "https://skillcdn.example", "gh/acme/skills"],
+      deployment,
+      { store: createMemoryStore() },
+    );
+    expect(nobody.code).toBe(EXIT_MISSING);
+    expect(nobody.err).toContain("connects no command");
+    expect(nobody.err).toContain("--token-stdin");
+  });
+
+  it("binds a directory on this machine, and reads it with no deployment and no token", async () => {
+    const root = await repository(PACK, "acme");
+    const deployment = await deploymentOf(root);
+    const directory = createMemoryDirectoryStore();
+    const cwd = dirname(root);
+    const bound = await run(["use", "acme"], deployment, { directory, cwd });
+    expect(bound.code).toBe(0);
+    expect(bound.out).toMatch(
+      /This directory reads \/local\/[^/]+\/acme from acme, on this machine/,
+    );
+    expect(bound.out).toContain("**Bound to a pack?**");
+    const read = await run(["skills"], deployment, { directory, cwd });
+    expect(read.code).toBe(0);
+    expect(read.out).toContain("marketing/ads/SKILL.md");
+    expect(deployment.requests).toEqual([]);
+    const status = await run(["status"], deployment, { directory, cwd });
+    expect(status.code).toBe(0);
+    expect(status.out).toContain("a directory on this machine: no deployment and no token");
+    expect(status.out).toContain("Next: skillcdn skills.");
+    // A directory that is not there, and a deployment named for one.
+    expect((await run(["use", "./nowhere"], deployment, { directory, cwd })).code).toBe(
+      EXIT_UNREADABLE,
+    );
+    expect(
+      (
+        await run(["use", "acme", "--url", "https://skillcdn.example"], deployment, {
+          directory,
+          cwd,
+        })
+      ).code,
+    ).toBe(EXIT_USAGE);
+  });
+
+  it("says what this directory reads, and whether a token is kept for it", async () => {
+    const root = await repository(PACK);
+    const deployment = await deploymentOf(root);
+    const unbound = await run(["status"], deployment);
+    expect(unbound.code).toBe(0);
+    expect(unbound.out).toContain("bound to no pack");
+    expect(unbound.out).toContain("Next: skillcdn skills <pack>.");
+    const directory = createMemoryDirectoryStore({
+      pack: "/gh/acme/skills",
+      url: "https://skillcdn.example",
+    });
+    const none = await run(["status"], deployment, { directory });
+    expect(none.out).toContain("This directory reads /gh/acme/skills at https://skillcdn.example");
+    expect(none.out).toContain("No token is kept for it");
+    expect(none.out).toContain("skillcdn login --url https://skillcdn.example");
+    const store = createMemoryStore({
+      logins: [
+        {
+          url: "https://skillcdn.example",
+          repository: "/gh/acme/skills",
+          token: "scdn_repo_kept",
+          since: "2026-10-18T00:00:00.000Z",
+        },
+      ],
+    });
+    const kept = await run(["status"], deployment, { directory, store });
+    expect(kept.out).toContain("A token is kept for it, since 2026-10-18T00:00:00.000Z");
+    expect(kept.out).not.toContain("scdn_repo_kept");
+    expect(deployment.requests).toEqual([]);
   });
 
   it("says what the deployment refuses, and when it cannot be reached", async () => {

@@ -21,6 +21,9 @@ skillcdn find gh/acme/skills release notes   # what the words find
 skillcdn skill gh/acme/skills marketing/ads/SKILL.md   # one skill whole: rules, instructions, included files
 skillcdn file gh/acme/skills docs/guide.md   # a page of a file
 skillcdn skills ./packs/acme                 # the same from a directory: no server, no network
+skillcdn use gh/acme/skills                  # bind this checkout to the pack, so that reads here name no pack (or: use ./packs/acme)
+skillcdn status                              # what this checkout reads, and whether a token is kept for it
+skillcdn login --url https://skillcdn.ai gh/acme/private   # connect to a private pack with a code a person approves
 skillcdn mcp ./packs/acme                    # serve the directory to the MCP client that started the command
 skillcdn serve ./packs/acme ./packs/other    # serve directories over HTTP: MCP at http://127.0.0.1:11189/local/packs/acme
 ```
@@ -41,9 +44,13 @@ Paths start at the pack's root, as `marketing/ads/SKILL.md`, and never leave it.
 
 ## A private pack, and a bound directory
 
-A private repository is read with a token a person made on their account page at the deployment ([permissions](https://github.com/skillcdn/skillcdn/blob/main/docs/specs/permissions.md#tokens-for-agents-with-nobody-to-sign-in)), kept once with `skillcdn login --url <origin> --token-stdin`, read from standard input and never from an argument. One token per deployment, kept in the person's configuration directory (`~/.config/skillcdn/credentials.json`, or under `XDG_CONFIG_HOME`), readable by them alone where the system can say so; it is presented to that deployment and to no other. `skillcdn logins` names the deployments, never the tokens; `skillcdn logout --url <origin>` forgets one. For a job, `SKILLCDN_URL` and `SKILLCDN_TOKEN` together do the same for one run.
+A private repository is connected with a code a person approves ([ADR-0059](https://github.com/skillcdn/skillcdn/blob/main/docs/adr/0059-the-command-connects-with-a-code-a-person-approves.md)): `skillcdn login --url <origin> gh/<owner>/<repo>` prints the deployment's page for a code and the code; the person opens the page signed in, checks that it shows the same code, names the token and says how long it is good for, and approves; the command receives a repository token ([permissions](https://github.com/skillcdn/skillcdn/blob/main/docs/specs/permissions.md#a-command-connects-with-a-code)) and keeps it, never showing it. An agent running the command relays the page and the code to its person and waits; the code is good for ten minutes. In a directory bound to the pack the address is left out. A token made by hand, on an account page or received by an app, is read from standard input with `--token-stdin` instead, asked for without echo at a terminal and piped in by a job; for one run, `SKILLCDN_URL` and `SKILLCDN_TOKEN` together do the same. Tokens are kept in the person's configuration directory (`~/.config/skillcdn/credentials.json`, or under `XDG_CONFIG_HOME`), readable by them alone where the system can say so, one per deployment and repository, and each is presented to the deployment it was kept for, at the repository it reads, and nowhere else. `skillcdn logins` names the deployments and repositories, never the tokens; `skillcdn logout --url <origin> [<address>]` forgets them.
 
-`skillcdn use gh/acme/skills [--url <origin>]` binds the working directory to a pack: it writes `.skillcdn.json`, the address and where it is read, nothing secret, meant to be committed, so that a read there or in a directory below needs no pack argument and every agent working in the checkout reads the same pack.
+`skillcdn use gh/acme/skills [--url <origin>]` binds the working directory to a pack at a deployment, and `skillcdn use ./packs/acme` to a directory on this machine, read with no deployment and no token: it writes `.skillcdn.json`, the address and where it is read, nothing secret, meant to be committed, so that a read there or in a directory below needs no pack argument and every agent working in the checkout reads the same pack. Nothing tells an agent to look until the checkout says so, which is why `use` prints the sentence for the checkout's agreement (`CLAUDE.md` or `AGENTS.md`), to be copied as it is:
+
+> **Bound to a pack?** When `.skillcdn.json` is in this checkout, or `skillcdn status` names a pack, read its skills with `skillcdn skills` before you start, and load the one a task calls for (`skillcdn help` says how).
+
+`skillcdn status` says what the directory reads and where, whether a token is kept for it, and the command's version, without reading anything: an agent that meets a checkout runs it first.
 
 ## Serving a directory
 

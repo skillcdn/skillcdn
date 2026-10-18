@@ -41,17 +41,26 @@ A tag or a full commit hash gives you exactly what was reviewed, every time. A f
 
 ## From a shell, without MCP
 
-An agent that runs commands can read a pack with the `skillcdn` command instead of an MCP connection: nothing to configure, no tools in its context until it asks, and the same words an MCP client's model is given. Install it once where the agent runs (`npm install -g @skillcdn/cli`), then name the pack by its address, or by a folder on the machine, a git checkout or any folder in the format:
+An agent that runs commands can read a pack with the `skillcdn` command instead of an MCP connection: nothing to configure, no tools in its context until it asks, and the same words an MCP client's model is given. Three steps set it up, once per checkout, for every agent that works there:
+
+1. **Install the command** where the agent runs: `npm install -g @skillcdn/cli` (Node.js 24 or newer), or `npx @skillcdn/cli <command>` for a run without installing.
+2. **Bind the checkout to the pack**: `skillcdn use gh/acme/skills` for a pack at a deployment, or `skillcdn use ../packs/acme` for a folder on the machine, read with no server and no network. It writes `.skillcdn.json`, which names the pack and nothing secret and is meant to be committed.
+3. **Tell the agents.** Nothing tells an agent to look until the checkout says so: put the sentence the command prints into the checkout's agreement (`CLAUDE.md` or `AGENTS.md`, whichever your agents read), as it is:
+
+   > **Bound to a pack?** When `.skillcdn.json` is in this checkout, or `skillcdn status` names a pack, read its skills with `skillcdn skills` before you start, and load the one a task calls for (`skillcdn help` says how).
+
+From then on an agent in the checkout reads the pack without naming it, and any pack by its address:
 
 ```sh
-skillcdn skills gh/acme/skills                  # what a client is told on connect, then every skill and document
-skillcdn find gh/acme/skills release notes      # search by words
-skillcdn skill gh/acme/skills marketing/ads/SKILL.md   # one skill whole: its rules, instructions and included files
-skillcdn file gh/acme/skills docs/guide.md      # a file, by pages
-skillcdn skills ./packs/acme                    # the same from a folder, with no server and no network
+skillcdn status                                 # what this checkout reads, and whether a token is kept for it
+skillcdn skills                                 # what a client is told on connect, then every skill and document
+skillcdn find release notes                     # search by words
+skillcdn skill marketing/ads/SKILL.md           # one skill whole: its rules, instructions and included files
+skillcdn file docs/guide.md                     # a file, by pages
+skillcdn skills gh/acme/skills                  # any pack, by its address, bound or not
 ```
 
-An address is read at `skillcdn.ai` unless `--url` or `SKILLCDN_URL` names a deployment of your own. For a private repository, make a token on your account page and keep it with `skillcdn login --url <origin> --token-stdin`, once; it goes to that deployment and nowhere else. `skillcdn use gh/acme/skills` in a checkout binds it to the pack, so that every agent working there reads it without naming it. `skillcdn help <command>` says the rest. A folder read this way is yours: it is served in full under its license, with no provenance notice, and it is addressed as `local/<the folder's parent>/<its name>` ([addresses](../specs/address.md#served-from-a-machine)).
+An address is read at `skillcdn.ai` unless `--url` or `SKILLCDN_URL` names a deployment of your own. **A private repository** is connected with a code: `skillcdn login --url <origin> gh/acme/private` prints a page of the deployment and a code; open the page signed in, check that it shows the same code, and approve. The command receives a token for that repository and keeps it in your configuration directory, showing it to nobody; the token is listed on your account page under the name you gave it, and removed there. An agent that runs the command relays the page and the code to you in its chat. For a job with nobody to approve, a token made on your account page is piped in with `skillcdn login --url <origin> gh/acme/private --token-stdin`. `skillcdn help <command>` says the rest. A folder read from the machine is yours: it is served in full under its license, with no provenance notice, and it is addressed as `local/<the folder's parent>/<its name>` ([addresses](../specs/address.md#served-from-a-machine)).
 
 ## A folder served to an MCP client
 

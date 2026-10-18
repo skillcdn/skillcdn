@@ -1,20 +1,44 @@
 import { chmod, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { formatAddress, isGitHostAddress, parseAddress, ROOT_PATH } from "@skillcdn/core";
 
-// Where the command keeps what `login` was given (ADR-0056): for every deployment a person gave
-// it a token for, the deployment's origin and the token, in the person's own configuration
-// directory, readable by them alone where the system can say so. A token is a secret the person
-// made at the deployment; this file is the one place it rests, and a token goes only to the
-// origin it was kept for: the command resolves which deployment a read goes to first, and then
-// looks for the login there, never the other way round.
+// Where the command keeps what `login` was given (ADR-0056, ADR-0059): for every deployment a
+// person connected it to or gave it a token for, the deployment's origin, the repository the
+// token reads where that is known, and the token, in the person's own configuration directory,
+// readable by them alone where the system can say so. A token is a secret the deployment
+// issued; this file is the one place it rests, and a token goes only to the origin it was kept
+// for: the command resolves which deployment a read goes to first, and then looks for the
+// login there, for the repository it reads, never the other way round.
 
-/** One login: a deployment, and the token the person made there. */
+/** One login: a deployment, the repository the token reads when it reads one, and the token. */
 export interface Login {
   /** The origin of the deployment, without a path. */
   readonly url: string;
+  /**
+   * The repository the token is good at, canonical (`/gh/owner/repo`), as a repository token
+   * is; `undefined` for a token given through standard input without saying, which is tried at
+   * every repository of the deployment.
+   */
+  readonly repository?: string | undefined;
   readonly token: string;
   /** When the login was kept, when known. */
   readonly since: string | undefined;
+}
+
+/** A repository as a login names one: the address without its ref and path, canonical. */
+export function repositoryOf(address: Parameters<typeof formatAddress>[0]): string {
+  return formatAddress({ ...address, ref: undefined, path: ROOT_PATH });
+}
+
+/** `text` as a repository a login may name, or nothing. */
+function repositoryIn(text: string): string | undefined {
+  const parsed = parseAddress(text);
+  return parsed.ok &&
+    isGitHostAddress(parsed.value) &&
+    parsed.value.ref === undefined &&
+    parsed.value.path === ROOT_PATH
+    ? formatAddress(parsed.value)
+    : undefined;
 }
 
 export interface Credentials {
@@ -89,8 +113,9 @@ export function parseCredentials(json: unknown): Credentials | undefined {
     if (typeof login !== "object" || login === null) {
       return undefined;
     }
-    const { url, token, since } = login as {
+    const { url, repository, token, since } = login as {
       readonly url?: unknown;
+      readonly repository?: unknown;
       readonly token?: unknown;
       readonly since?: unknown;
     };
@@ -100,30 +125,61 @@ export function parseCredentials(json: unknown): Credentials | undefined {
       typeof token !== "string" ||
       token.length === 0 ||
       token.length > MAX_TOKEN_LENGTH ||
-      (since !== undefined && typeof since !== "string")
+      (since !== undefined && typeof since !== "string") ||
+      (repository !== undefined &&
+        (typeof repository !== "string" || repositoryIn(repository) !== repository))
     ) {
       return undefined;
     }
-    read.push({ url, token, since: since === undefined ? undefined : since.slice(0, 40) });
+    read.push({
+      url,
+      ...(repository === undefined ? {} : { repository }),
+      token,
+      since: since === undefined ? undefined : since.slice(0, 40),
+    });
   }
   return { logins: read };
 }
 
-/** The login at one deployment, when there is one. */
-export function loginAt(credentials: Credentials, url: string): Login | undefined {
-  return credentials.logins.find((login) => login.url === url);
+/** Whether two logins are for the same place: the same deployment, and the same repository or none. */
+const samePlace = (a: Login, b: Pick<Login, "url" | "repository">): boolean =>
+  a.url === b.url && (a.repository ?? undefined) === (b.repository ?? undefined);
+
+/**
+ * The login a read at a deployment presents: the one kept for the repository it reads, else the
+ * one kept for the deployment without a repository, else none.
+ */
+export function loginAt(
+  credentials: Credentials,
+  url: string,
+  repository?: string | undefined,
+): Login | undefined {
+  return (
+    (repository === undefined
+      ? undefined
+      : credentials.logins.find((login) => samePlace(login, { url, repository }))) ??
+    credentials.logins.find((login) => samePlace(login, { url, repository: undefined }))
+  );
 }
 
-/** With a login kept, in place of the one at the same deployment. */
+/** With a login kept, in place of the one at the same deployment for the same repository. */
 export function withLogin(credentials: Credentials, login: Login): Credentials {
   return {
-    logins: [...credentials.logins.filter((kept) => kept.url !== login.url), login],
+    logins: [...credentials.logins.filter((kept) => !samePlace(kept, login)), login],
   };
 }
 
-/** Without the login at a deployment. */
-export function withoutLogin(credentials: Credentials, url: string): Credentials {
-  return { logins: credentials.logins.filter((kept) => kept.url !== url) };
+/** Without the logins at a deployment: the one for a repository when one is named, else all of them. */
+export function withoutLogin(
+  credentials: Credentials,
+  url: string,
+  repository?: string | undefined,
+): Credentials {
+  return {
+    logins: credentials.logins.filter((kept) =>
+      repository === undefined ? kept.url !== url : !samePlace(kept, { url, repository }),
+    ),
+  };
 }
 
 const FILE_NAME = "credentials.json";
@@ -168,6 +224,7 @@ export function createFileStore(directory: string, pid: number): CredentialStore
         version: 1,
         logins: credentials.logins.map((login) => ({
           url: login.url,
+          ...(login.repository === undefined ? {} : { repository: login.repository }),
           token: login.token,
           since: login.since,
         })),
