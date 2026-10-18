@@ -1,6 +1,6 @@
 # Spec: people, private repositories and access
 
-- Status: **Draft.** Signing in, private repositories on the pages, over REST and over MCP, the authorization server, the git host's events that end an answer early, and tokens for agents with nobody to sign in are implemented.
+- Status: **Draft.** Signing in, private repositories on the pages, over REST and over MCP, the authorization server, the git host's events that end an answer early, tokens for agents with nobody to sign in, and a command connecting with a code a person approves are implemented.
 - Implemented by: `apps/server/src/auth/`, `apps/server/src/mounts/` and `apps/server/src/events/`, the GitHub App, login and webhook adapters in `packages/github`, the queries in `packages/db`, and the page contracts in `packages/core/src/rest/account.ts`. Decisions: [ADR-0035](../adr/0035-people-sign-in-through-the-git-hosts-app.md), [ADR-0036](../adr/0036-the-deployment-is-the-authorization-server-of-its-addresses.md), [ADR-0038](../adr/0038-the-git-hosts-events-end-what-is-remembered.md), [ADR-0040](../adr/0040-a-token-for-an-agent-reads-one-repository-as-its-maker.md), [ADR-0052](../adr/0052-the-rest-api-takes-the-tokens-the-mcp-endpoint-takes.md).
 
 Everything here exists only on a deployment that is configured for signing in ([deploy](../../deploy/README.md#signing-in-and-private-repositories)). Without that configuration there are no people, no private repositories and none of these routes: the deployment serves public repositories to everyone, as before.
@@ -191,6 +191,21 @@ A scheduled job or a server has no browser and no person to agree to anything. A
 - **What it is.** A random string that begins `scdn_repo_`, stored as its SHA-256, like every other secret handed out here. A person holds at most fifty that have not expired; one more is refused with `409`, and none is ended to make room.
 
 The requests behind the account pages are in the [REST API](rest.md#people): listing, making and removing.
+
+## A command connects with a code
+
+The `skillcdn` command, and any program a person starts, gets such a repository token without anyone seeing it ([ADR-0059](../adr/0059-the-command-connects-with-a-code-a-person-approves.md)): it asks to connect, a person approves on the deployment's own pages, and the token is handed to the command once.
+
+| Route | Who | What it does |
+|---|---|---|
+| `POST /api/v1/connect` | Anyone | Takes `{ "address": "/gh/<owner>/<repo>", "agent": "<what the command calls itself>" }` and answers `201` with a `code` for the person (`ABCD-EFGH`, from an alphabet without `0`, `O`, `1` and `I`), the `url` of the code's page at this deployment, a `secret` for the command alone, `expiresAt` (ten minutes) and `intervalSeconds`. Nothing is asked about the repository: a request is anyone's. `400 connect.invalid` for anything else, `400 token.not_a_repository` for an address with a ref or a path, `503 connect.busy` with `retry-after` when the deployment holds as many requests as it will. |
+| `GET /api/v1/connect/<code>` | The person, signed in | What asks: the `agent`, the `address`, `expiresAt`, whether it is `approved` already, who is signed in, whether they can see the repository (`visible`, `null` when the host could not be asked) and where the app is added to repositories. The code is read however it was typed. `401 auth.required` for nobody; `404 connect.not_found` for a code that is not one, unknown, spent or past its time. |
+| `POST /api/v1/connect/<code>/decision` | The person, from the deployment's own pages | `{ "approve": true, "label": "...", "expiresInDays": 1..366 }` approves, under the name and for the lifetime given, else the command's own name and the pages' default; `{ "approve": false }` declines and ends the request. Approving is answered as making a token is: `404 mount.repo_not_found` for a repository the person cannot open and for a name that is nothing alike, `503` when the host cannot be asked, and `400 token.public_repository` for a repository everyone reads, which also ends the request. `404 connect.not_found` once a request is approved, declined or past its time. |
+| `POST /api/v1/connect/claim` | The command, with its secret | `{ "secret": "..." }`. Answers `{ "status": "pending", "expiresAt" }` while the person has not answered, and once: `{ "status": "connected", "token": "scdn_repo_...", "item": ... }`, the token and what the person's list says about it. The repository is resolved for the approver once more at the claim: `503` leaves the approval for the next claim when the host cannot be asked, `404 mount.repo_not_found` ends it when they can no longer open it, `409 token.limit` when they hold as many tokens as one may. `404 connect.not_found` for a secret that names no live request: expired, declined, or claimed already. |
+
+- **The token is made at the claim**, as the account page makes one, for the person who approved, and the request goes with it; until then the database holds the hash of the secret, never a token.
+- **A code is good for one answer.** Declined, claimed or expired, it is not found, whatever is asked of it, so that a refusal says nothing a stranger could use.
+- **The page says what is at stake**: what asks to connect, in its own words, the repository, and that the token reads it as the person; the person compares the code with the one their command showed before approving.
 
 ## Not yet
 

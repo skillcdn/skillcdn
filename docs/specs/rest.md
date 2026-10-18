@@ -38,6 +38,9 @@ The API shows a person what an agent gets from an address, and gives a program t
 | 403 | `auth.forbidden_origin` | A request that changes something did not come from the deployment's own pages. |
 | 404 | `grant.not_found` | The person has no such grant. |
 | 400 | `oauth.*` | An authorization request that is malformed or has expired; the code after the dot is the OAuth error. |
+| 400 | `connect.invalid` | A command asking to connect named no repository or nothing it calls itself, or an answer to one is not readable ([connecting](permissions.md#a-command-connects-with-a-code)). |
+| 404 | `connect.not_found` | No command waits under the code or the secret: it was declined, claimed or is past its time. |
+| 503 | `connect.busy` | The deployment holds as many connection requests as it will; `retry-after` is set. |
 
 ## Index state and paging
 
@@ -196,6 +199,10 @@ Making one takes `{ "address": "/gh/<owner>/<repo>", "label": "...", "expiresInD
 ### `GET /api/v1/oauth/request?request=` and `POST /api/v1/oauth/decision`
 
 What the consent page asks and answers ([permissions](permissions.md#the-flow)). The first describes a sealed authorization request: the `client` (`name`, `uri`, the `redirectHost` its answer goes to, which is the host of a web address or the scheme of an app's own link, and whether that is `loopback`, an app on the person's own computer), the `address`, the `scope`, the `user` who would be agreeing (or `null`), whether that person can see the repository right now (`visible`: `true`, `false`, or `null` when nobody is signed in or the host could not be asked; a repository that does not exist is the same `false`), and `installUrl`. The second takes `{ "request": "...", "approve": true | false }` from the signed-in person, from the deployment's own pages, and answers `{ "redirect": "..." }`: where the browser goes with the answer. `400` with `oauth.invalid_request` for a request that has expired. An approval is taken only for an address its person can open: `403` with `oauth.not_visible` otherwise, the same for a repository that is not theirs and for a name that is nothing, and `503` with `mount.unavailable` when the git host could not be asked. A refusal is always taken.
+
+### `POST /api/v1/connect`, `GET /api/v1/connect/<code>`, `POST /api/v1/connect/<code>/decision` and `POST /api/v1/connect/claim`
+
+How a command gets a repository token without anyone seeing it ([permissions](permissions.md#a-command-connects-with-a-code), [ADR-0059](../adr/0059-the-command-connects-with-a-code-a-person-approves.md)). The command begins with `{ "address": "/gh/<owner>/<repo>", "agent": "..." }`, as nobody, and is answered `201` with the `code` to show a person, the `url` of the code's page, the `secret` it claims with, `expiresAt` and `intervalSeconds`. The person, signed in, reads the request under its code (`agent`, `address`, `expiresAt`, `approved`, `user`, `visible`, `installUrl`) and answers it from the deployment's own pages with `{ "approve": true, "label": "...", "expiresInDays": n }` or `{ "approve": false }`, answered `{ "status": "approved" | "denied" }`. The command claims with `{ "secret": "..." }` and is answered `{ "status": "pending", "expiresAt": "..." }` until the person approved, then once `{ "status": "connected", "token": "scdn_repo_...", "item": ... }`, the item being what the person's token list shows. The refusals are the token form's (`token.not_a_repository`, `token.public_repository`, `mount.repo_not_found`, `token.limit`) and the connection's own (`connect.invalid`, `connect.not_found`, `connect.busy`). Everything here is `no-store`.
 
 ### `GET /social/<address>?lang=&skill=`
 

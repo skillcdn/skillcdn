@@ -23,6 +23,7 @@ import {
 } from "@skillcdn/github";
 import type { Hono } from "hono";
 import { systemClock } from "../adapters/system-clock.js";
+import { Connections } from "../auth/connections.js";
 import { UserCredentials } from "../auth/credentials.js";
 import { LOGIN_HOST, Login } from "../auth/login.js";
 import { AuthorizationServer } from "../auth/oauth/authorization-server.js";
@@ -179,12 +180,14 @@ export function createApi(
       clock,
       ttlMs: config.auth.permissionTtlMs,
     });
+    const tokens = new RepoTokens({ database, clock, logger });
     auth = {
       origin,
       sessions,
       credentials,
       clients,
-      tokens: new RepoTokens({ database, clock, logger }),
+      tokens,
+      connections: new Connections({ database, clock, logger, tokens, origin }),
       hostLogin: ports.login,
       clock,
       login: new Login({

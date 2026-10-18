@@ -266,3 +266,119 @@ export type RestAuthorization = z.infer<typeof restAuthorizationSchema>;
 /** The answer to `POST /api/v1/oauth/decision`: where the browser goes with the person's answer. */
 export const restAuthorizationDecisionSchema = z.object({ redirect: z.string() });
 export type RestAuthorizationDecision = z.infer<typeof restAuthorizationDecisionSchema>;
+
+// A command connects with a code a person approves (docs/specs/permissions.md, ADR-0059): the
+// command asks as nobody and is given a code for the person and a secret for itself; the person
+// approves on the deployment's own pages, signed in; the command claims a repository token with
+// its secret, made then and handed over once. Nobody sees the token.
+
+/** The page where a person approves a command: `/connect`, and `/connect/<code>` for one code. */
+export const CONNECT_PAGE_PATH = "/connect";
+/**
+ * The letters a code is spelled from: no `0`, `O`, `1` or `I`, so that a code read aloud, typed
+ * or relayed through a chat is the code. Eight of them, shown as two groups of four.
+ */
+export const CONNECT_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+export const CONNECT_CODE_LENGTH = 8;
+/** How long what a command calls itself may be. */
+export const CONNECT_AGENT_MAX_LENGTH = 80;
+/** What the secret a command holds while it waits begins with. */
+export const CONNECT_SECRET_PREFIX = "scdn_cx_";
+
+/**
+ * A code as a person may have typed it, read back as the code: letters of the alphabet in either
+ * case, with or without the hyphen or a space between the groups. `undefined` for anything else.
+ */
+export function parseConnectCode(text: string): string | undefined {
+  const letters = text.trim().toUpperCase().replace(/[-\s]/g, "");
+  if (letters.length !== CONNECT_CODE_LENGTH) {
+    return undefined;
+  }
+  for (const letter of letters) {
+    if (!CONNECT_CODE_ALPHABET.includes(letter)) {
+      return undefined;
+    }
+  }
+  return `${letters.slice(0, CONNECT_CODE_LENGTH / 2)}-${letters.slice(CONNECT_CODE_LENGTH / 2)}`;
+}
+
+/** The page of one code. */
+export function connectPagePath(code: string): string {
+  return `${CONNECT_PAGE_PATH}/${code}`;
+}
+
+/** What `POST /api/v1/connect` is sent: the repository the command wants to read, and what it calls itself. */
+export const restConnectRequestSchema = z.object({
+  /** An address without a ref or a path: `/gh/owner/repo`. */
+  address: z.string(),
+  /** What the command calls itself and where it runs, for the person to recognize: `Claude Code on a laptop`. */
+  agent: z.string(),
+});
+export type RestConnectRequest = z.infer<typeof restConnectRequestSchema>;
+
+/** The answer to `POST /api/v1/connect`: what the command shows the person, and what it keeps. */
+export const restConnectStartedSchema = z.object({
+  /** For the person: `ABCD-EFGH`. */
+  code: z.string(),
+  /** The page of the code at this deployment, for the person to open signed in. */
+  url: z.string(),
+  /** For the command alone: what it claims the token with. Shown to nobody. */
+  secret: z.string(),
+  /** An ISO 8601 instant: until when the person may approve. */
+  expiresAt: z.string(),
+  /** How many seconds the command waits between claims. */
+  intervalSeconds: z.int(),
+});
+export type RestConnectStarted = z.infer<typeof restConnectStartedSchema>;
+
+/** `GET /api/v1/connect/<code>`: what asks to connect, for the person who is signed in. */
+export const restConnectViewSchema = z.object({
+  code: z.string(),
+  /** What the command calls itself. It is the command's word: shown as text, vouched for by nobody. */
+  agent: z.string(),
+  /** The repository it asks to read: canonical, an address without a ref or a path. */
+  address: z.string(),
+  expiresAt: z.string(),
+  /** True once a person approved and the command has not claimed its token yet. */
+  approved: z.boolean(),
+  /** Who is signed in and would be approving. */
+  user: restUserSchema,
+  /**
+   * Whether that person can see the repository right now, `null` when the git host could not be
+   * asked. A repository that does not exist and one they may not see are the same `false`.
+   */
+  visible: z.nullable(z.boolean()),
+  /** Where the app is added to repositories at the host, for when `visible` is false. */
+  installUrl: z.nullable(z.string()),
+});
+export type RestConnectView = z.infer<typeof restConnectViewSchema>;
+
+/**
+ * What `POST /api/v1/connect/<code>/decision` is sent: yes, with what to call the token and how
+ * long it is good for, or no.
+ */
+export const restConnectDecisionSchema = z.object({
+  approve: z.boolean(),
+  /** The name the token is listed under; what the command calls itself when left out. */
+  label: z.optional(z.string()),
+  /** From a day to a year; the pages' default when left out. */
+  expiresInDays: z.optional(z.int()),
+});
+export type RestConnectDecision = z.infer<typeof restConnectDecisionSchema>;
+
+export const restConnectDecidedSchema = z.object({ status: z.enum(["approved", "denied"]) });
+export type RestConnectDecided = z.infer<typeof restConnectDecidedSchema>;
+
+/** What `POST /api/v1/connect/claim` is sent: the secret the command was given. */
+export const restConnectClaimSchema = z.object({ secret: z.string() });
+export type RestConnectClaim = z.infer<typeof restConnectClaimSchema>;
+
+/**
+ * The answer to a claim: wait, until the person approved; or the token, this once, with what the
+ * person's token list says about it.
+ */
+export const restConnectClaimedSchema = z.union([
+  z.object({ status: z.literal("pending"), expiresAt: z.string() }),
+  z.object({ status: z.literal("connected"), token: z.string(), item: restRepoTokenSchema }),
+]);
+export type RestConnectClaimed = z.infer<typeof restConnectClaimedSchema>;

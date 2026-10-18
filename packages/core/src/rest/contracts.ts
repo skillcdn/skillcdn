@@ -23,6 +23,8 @@ export const REST_ROUTES = {
   /** What a client asked to be authorized for, and the person's answer (account.ts). */
   authorization: "/api/v1/oauth/request",
   decision: "/api/v1/oauth/decision",
+  /** A command that asks to connect with a code a person approves (account.ts). */
+  connect: "/api/v1/connect",
 } as const;
 
 /** How many skills and how many documents a mount overview lists. The counts are complete. */

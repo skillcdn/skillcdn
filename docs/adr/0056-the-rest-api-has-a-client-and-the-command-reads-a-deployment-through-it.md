@@ -1,6 +1,6 @@
 # ADR-0056: The REST API has a published client, and the command reads a deployment through it
 
-- Status: Accepted
+- Status: Accepted; the rejection of a sign-in of the command's own, and the one token per deployment of point 4, are superseded by [ADR-0059](0059-the-command-connects-with-a-code-a-person-approves.md)
 - Date: 2026-10-18
 - Builds on [ADR-0052](0052-the-rest-api-takes-the-tokens-the-mcp-endpoint-takes.md) and [ADR-0055](0055-the-command-reads-a-pack-as-a-deployment-serves-it.md).
 

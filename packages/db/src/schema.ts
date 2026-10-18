@@ -786,3 +786,36 @@ export const repoTokens = pgTable(
     index("repo_tokens_expires_idx").on(table.expiresAt),
   ],
 );
+
+/**
+ * A command asking to connect (ADR-0059): the code a person reads, the hash of the secret the
+ * command claims with, the repository it asks to read and what it calls itself; once a person
+ * approved, who, under what name and for how long. The token is made when the command claims
+ * it, so no secret rests here meanwhile. Rows end with their time, or with the claim.
+ */
+export const connectRequests = pgTable(
+  "connect_requests",
+  {
+    id: id(),
+    /** As the person reads it: `ABCD-EFGH`. */
+    code: text().notNull(),
+    secretHash: text().notNull(),
+    /** Canonical, as the address grammar prints a repository: what the token will be good at. */
+    address: text().notNull(),
+    /** What the command calls itself and where it runs: its own word. */
+    agent: text().notNull(),
+    expiresAt: instant().notNull(),
+    /** The person who approved, once one did; the token is made as them when the command claims. */
+    approvedBy: uuid().references(() => users.id, { onDelete: "cascade" }),
+    approvedAt: instant(),
+    /** What the token is to be called, and how many days it is to be good for. */
+    label: text(),
+    expiresInDays: integer(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex("connect_requests_code_key").on(table.code),
+    uniqueIndex("connect_requests_secret_hash_key").on(table.secretHash),
+    index("connect_requests_expires_idx").on(table.expiresAt),
+  ],
+);

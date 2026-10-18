@@ -9,6 +9,12 @@ import {
   REST_ROUTES,
   type RestAuthorization,
   type RestBrowse,
+  type RestConnectClaimed,
+  type RestConnectDecided,
+  type RestConnectDecision,
+  type RestConnectRequest,
+  type RestConnectStarted,
+  type RestConnectView,
   type RestFeatured,
   type RestFile,
   type RestFind,
@@ -26,6 +32,10 @@ import {
   restAuthorizationDecisionSchema,
   restAuthorizationSchema,
   restBrowseSchema,
+  restConnectClaimedSchema,
+  restConnectDecidedSchema,
+  restConnectStartedSchema,
+  restConnectViewSchema,
   restErrorSchema,
   restFeaturedSchema,
   restFileSchema,
@@ -183,6 +193,16 @@ export interface SkillCdnClient {
   authorization(request: string, signal?: AbortSignal): Promise<RestAuthorization>;
   /** The person's answer; the reply says where their browser goes with it. */
   decide(request: string, approve: boolean): Promise<string>;
+  // A command connecting with a code a person approves (ADR-0059): the command begins and
+  // claims, as nobody; the person looks and decides, by their session on the deployment's pages.
+  /** Begins a connection: the code to show the person, the page to open, and the secret to claim with. */
+  connect(request: RestConnectRequest, signal?: AbortSignal): Promise<RestConnectStarted>;
+  /** What the command was approved, this once, or that the person has not answered yet. */
+  claimConnection(secret: string, signal?: AbortSignal): Promise<RestConnectClaimed>;
+  /** What asks to connect under a code, for the person who would approve it. */
+  connection(code: string, signal?: AbortSignal): Promise<RestConnectView>;
+  /** The person's answer to a command that asks to connect. */
+  decideConnection(code: string, decision: RestConnectDecision): Promise<RestConnectDecided>;
 }
 
 export function createClient(options: ClientOptions): SkillCdnClient {
@@ -385,6 +405,49 @@ export function createClient(options: ClientOptions): SkillCdnClient {
         throw new ApiError(200, "invalid_response", "The server answered unexpectedly.");
       }
       return answer.redirect;
+    },
+    connect: async (request, signal) => {
+      const { response, json } = await exchange("POST", REST_ROUTES.connect, request, signal);
+      const parsed = restConnectStartedSchema.safeParse(json);
+      if (!parsed.success) {
+        throw new ApiError(
+          response.status,
+          "invalid_response",
+          "The server answered unexpectedly.",
+        );
+      }
+      return parsed.data;
+    },
+    claimConnection: async (secret, signal) => {
+      const { response, json } = await exchange(
+        "POST",
+        `${REST_ROUTES.connect}/claim`,
+        { secret },
+        signal,
+      );
+      const parsed = restConnectClaimedSchema.safeParse(json);
+      if (!parsed.success) {
+        throw new ApiError(
+          response.status,
+          "invalid_response",
+          "The server answered unexpectedly.",
+        );
+      }
+      return parsed.data;
+    },
+    connection: (code, signal) =>
+      read(`${REST_ROUTES.connect}/${encodeURIComponent(code)}`, restConnectViewSchema, signal),
+    decideConnection: async (code, decision) => {
+      const answer = await write(
+        "POST",
+        `${REST_ROUTES.connect}/${encodeURIComponent(code)}/decision`,
+        decision,
+        restConnectDecidedSchema,
+      );
+      if (answer === undefined) {
+        throw new ApiError(200, "invalid_response", "The server answered unexpectedly.");
+      }
+      return answer;
     },
   };
 }

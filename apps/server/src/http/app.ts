@@ -39,6 +39,7 @@ import { type Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import * as z from "zod";
+import type { Connections } from "../auth/connections.js";
 import { CredentialsLostError, type UserCredentials } from "../auth/credentials.js";
 import type { Login } from "../auth/login.js";
 import {
@@ -86,6 +87,8 @@ export interface AppAuth {
   readonly clients: OAuthClients;
   /** The tokens people make for agents that have nobody to sign in. */
   readonly tokens: RepoTokens;
+  /** Commands connecting with a code a person approves, which end in such a token. */
+  readonly connections: Connections;
   readonly credentials: UserCredentials;
   readonly hostLogin: GitHostLogin;
   readonly clock: Clock;

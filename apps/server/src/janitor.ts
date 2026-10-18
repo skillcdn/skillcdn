@@ -1,6 +1,7 @@
 import type { Clock } from "@skillcdn/core";
 import {
   type Database,
+  deleteExpiredConnectRequests,
   deleteExpiredOAuth,
   deleteExpiredRepoTokens,
   deleteExpiredSessions,
@@ -50,13 +51,22 @@ export class Janitor {
         const sessions = await deleteExpiredSessions(this.#database, now);
         const oauth = await deleteExpiredOAuth(this.#database, now);
         const repoTokens = await deleteExpiredRepoTokens(this.#database, now);
+        const connects = await deleteExpiredConnectRequests(this.#database, now);
         const permissions = await deleteStaleRepoPermissions(this.#database, stale);
         const missing = await deleteStaleMissingRepos(this.#database, stale);
         const clients = await deleteUnusedOAuthClients(
           this.#database,
           new Date(now.getTime() - UNUSED_CLIENT_MS),
         );
-        const removed = { sessions, ...oauth, repoTokens, permissions, missing, clients };
+        const removed = {
+          sessions,
+          ...oauth,
+          repoTokens,
+          connects,
+          permissions,
+          missing,
+          clients,
+        };
         if (Object.values(removed).some((count) => count > 0)) {
           this.#logger.info(removed, "what time has ended was removed");
         }

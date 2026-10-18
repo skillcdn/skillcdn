@@ -1,12 +1,16 @@
 import { type HostRepository, type IndexEntry, NO_LICENSE } from "@skillcdn/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
+  approveConnectRequest,
   claimSnapshot,
   countUnusedOAuthClients,
+  createConnectRequest,
   createOAuthGrant,
   createRepoToken,
   createSession,
   type Database,
+  deleteConnectRequest,
+  deleteExpiredConnectRequests,
   deleteExpiredOAuth,
   deleteExpiredRepoTokens,
   deleteExpiredSessions,
@@ -18,6 +22,8 @@ import {
   deleteUnusedOAuthClients,
   deleteUserCredentials,
   ensureSnapshot,
+  findConnectRequestByCode,
+  findConnectRequestBySecret,
   findOAuthAccess,
   findOAuthClient,
   findRepoByAlias,
@@ -42,6 +48,7 @@ import {
   saveRepoPermission,
   saveRepository,
   saveUserCredentials,
+  takeApprovedConnectRequest,
   takeOAuthCode,
   touchOAuthGrant,
   touchRepoToken,
@@ -1007,4 +1014,97 @@ describe("the indexed repositories of an account", () => {
     const alias = await findRepoByAlias(database, { host: "gh", owner: "keeper", repo: "gone" });
     expect(alias?.repository.visibility).toBe("private");
   });
+});
+
+describe("connect requests", () => {
+  const request = (patch: { expiresAt?: Date; now?: Date } = {}) => {
+    const id = unique();
+    return {
+      code: `CODE-${String(id).padStart(4, "0")}`,
+      secretHash: `secret-${id}`,
+      address: "/gh/acme/secret",
+      agent: "Claude Code on a laptop",
+      expiresAt: patch.expiresAt ?? minutes(10),
+      now: patch.now ?? T0,
+    };
+  };
+
+  it("are found by their code and by their secret while they last, and approved once", async () => {
+    const user = await signedIn();
+    const made = request();
+    const record = await createConnectRequest(database, made, 100);
+    expect(record).toEqual({
+      id: expect.any(String),
+      code: made.code,
+      address: "/gh/acme/secret",
+      agent: "Claude Code on a laptop",
+      createdAt: T0,
+      expiresAt: minutes(10),
+      approval: undefined,
+    });
+    expect(await findConnectRequestByCode(database, made.code, minutes(9))).toEqual(record);
+    expect(await findConnectRequestBySecret(database, made.secretHash, minutes(9))).toEqual(record);
+    expect(await findConnectRequestByCode(database, made.code, minutes(10))).toBeUndefined();
+    expect(await findConnectRequestBySecret(database, "another", T0)).toBeUndefined();
+    // Nothing approved is taken, and nothing expired is approved.
+    expect(await takeApprovedConnectRequest(database, made.secretHash, minutes(1))).toBeUndefined();
+    const approval = { code: made.code, userId: user.id, label: "The laptop", expiresInDays: 30 };
+    expect(await approveConnectRequest(database, { ...approval, now: minutes(10) })).toBe(false);
+    expect(await approveConnectRequest(database, { ...approval, now: minutes(1) })).toBe(true);
+    expect(await approveConnectRequest(database, { ...approval, now: minutes(2) })).toBe(false);
+    expect(
+      (await findConnectRequestBySecret(database, made.secretHash, minutes(2)))?.approval,
+    ).toEqual({
+      userId: user.id,
+      label: "The laptop",
+      expiresInDays: 30,
+      at: minutes(1),
+    });
+    // Taken once, by its secret: the second taker finds nothing.
+    expect(
+      (await takeApprovedConnectRequest(database, made.secretHash, minutes(3)))?.approval?.userId,
+    ).toBe(user.id);
+    expect(await takeApprovedConnectRequest(database, made.secretHash, minutes(3))).toBeUndefined();
+    expect(await findConnectRequestByCode(database, made.code, minutes(3))).toBeUndefined();
+  });
+
+  it("repeat no code and no secret, are bounded in number, and end with their time", async () => {
+    const first = request();
+    expect(await createConnectRequest(database, first, 100)).toBeDefined();
+    await expect(
+      createConnectRequest(database, { ...request(), code: first.code }, 100),
+    ).rejects.toThrow();
+    await expect(
+      createConnectRequest(database, { ...request(), secretHash: first.secretHash }, 100),
+    ).rejects.toThrow();
+    // The bound counts what has not expired, across everyone: this file made one above already.
+    const waiting = await waitingCount();
+    expect(waiting).toBeGreaterThanOrEqual(1);
+    expect(await createConnectRequest(database, request(), waiting)).toBeUndefined();
+    const short = request({ expiresAt: minutes(1) });
+    expect(await createConnectRequest(database, short, waiting + 1)).toBeDefined();
+    expect(
+      await createConnectRequest(database, request({ now: minutes(2) }), waiting + 1),
+    ).toBeDefined();
+    expect(await deleteExpiredConnectRequests(database, minutes(1))).toBeGreaterThanOrEqual(1);
+    expect(await findConnectRequestByCode(database, short.code, T0)).toBeUndefined();
+    const record = await findConnectRequestByCode(database, first.code, T0);
+    expect(await deleteConnectRequest(database, record?.id ?? "")).toBe(true);
+    expect(await deleteConnectRequest(database, record?.id ?? "")).toBe(false);
+  });
+
+  /**
+   * How many requests have not expired at T0, which the bound is measured against: the smallest
+   * bound an insert passes, less the one inserted, which is taken out again.
+   */
+  async function waitingCount(): Promise<number> {
+    for (let probe = 0; probe < 1000; probe += 1) {
+      const made = await createConnectRequest(database, request({ now: T0 }), probe + 1);
+      if (made !== undefined) {
+        await deleteConnectRequest(database, made.id);
+        return probe;
+      }
+    }
+    throw new Error("more than a thousand requests wait");
+  }
 });

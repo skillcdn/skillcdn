@@ -3,17 +3,25 @@ import {
   AUTH_ROUTES,
   accountAvatarUrl,
   type Clock,
+  CONNECT_AGENT_MAX_LENGTH,
   CONSENT_REQUEST_PARAM,
   formatAddress,
   GitHostError,
   type GitHostLogin,
   hasForbiddenCodePoint,
+  isGitHostAddress,
   parseAddress,
+  parseConnectCode,
+  REPO_TOKEN_DEFAULT_DAYS,
   REPO_TOKEN_MAX_DAYS,
   REPO_TOKEN_MAX_LABEL_LENGTH,
   REST_ROUTES,
   RETURN_TO_PARAM,
   type RestAuthorization,
+  type RestConnectClaimed,
+  type RestConnectDecided,
+  type RestConnectStarted,
+  type RestConnectView,
   type RestGrants,
   type RestMe,
   type RestMyRepositories,
@@ -34,6 +42,7 @@ import type { Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import * as z from "zod";
+import { type Connections, ConnectLimitError } from "../auth/connections.js";
 import { CredentialsLostError, type UserCredentials } from "../auth/credentials.js";
 import { type Login, type LoginStep, safeReturnTo } from "../auth/login.js";
 import {
@@ -63,6 +72,7 @@ export interface AuthDependencies {
   readonly authorization: AuthorizationServer;
   readonly clients: OAuthClients;
   readonly tokens: RepoTokens;
+  readonly connections: Connections;
   readonly credentials: UserCredentials;
   readonly hostLogin: GitHostLogin;
   readonly clock: Clock;
@@ -118,6 +128,27 @@ const decisionSchema = z.object({
   request: z.string().min(1).max(MAX_SEALED_LENGTH),
   approve: z.boolean(),
 });
+
+const plainText = (max: number) =>
+  z
+    .string()
+    .transform((value) => value.trim())
+    .pipe(z.string().min(1).max(max))
+    .refine((value) => !hasForbiddenCodePoint(value));
+
+const connectRequestSchema = z.object({
+  address: z.string().min(1).max(2048),
+  agent: plainText(CONNECT_AGENT_MAX_LENGTH),
+});
+
+const connectDecisionSchema = z.object({
+  approve: z.boolean(),
+  label: plainText(REPO_TOKEN_MAX_LABEL_LENGTH).optional(),
+  expiresInDays: z.number().int().min(1).max(REPO_TOKEN_MAX_DAYS).optional(),
+});
+
+/** A secret is a prefix and a few dozen characters; this is far more than any is. */
+const connectClaimSchema = z.object({ secret: z.string().min(1).max(256) });
 
 export function restUser(user: UserRecord): RestUser {
   return {
@@ -419,6 +450,245 @@ export function registerAuth(app: Hono<AppEnv>, dependencies: AuthDependencies):
     return removed
       ? c.json({ id, removed: true })
       : c.json(errorBody("token.not_found", "No such token."), 404);
+  });
+
+  // A command connecting with a code a person approves (ADR-0059). Beginning and claiming are
+  // the command's, as nobody; looking and deciding are the person's, signed in on these pages.
+  const { connections } = dependencies;
+  const smallJson = bodyLimit({
+    maxSize: MAX_FORM_BYTES,
+    onError: (c) => c.json(errorBody("request.too_large", "The request body is too large."), 413),
+  });
+  const noSuchConnection = (c: Context<AppEnv>): Response =>
+    c.json(
+      errorBody("connect.not_found", "No command is waiting under this code, or its time is up."),
+      404,
+    );
+  /** What a repository the person cannot open answers: the same for every reason it cannot. */
+  const mountRefusal = (c: Context<AppEnv>, error: MountError): Response => {
+    if (error.retryAfterSeconds !== undefined) {
+      c.header("retry-after", String(error.retryAfterSeconds));
+    }
+    const status =
+      error.reason === "rate_limited" || error.reason === "unavailable"
+        ? 503
+        : error.reason === "not_allowed"
+          ? 403
+          : 404;
+    return c.json(errorBody(error.code, error.detail), status);
+  };
+  const storedAddress = (text: string): Address => {
+    const parsed = parseAddress(text);
+    if (!parsed.ok) {
+      throw new Error("a stored address parses");
+    }
+    return parsed.value;
+  };
+
+  app.post(REST_ROUTES.connect, smallJson, async (c) => {
+    c.header("cache-control", "no-store");
+    const parsed = connectRequestSchema.safeParse(await c.req.json().catch(() => undefined));
+    const address = parsed.success ? parseAddress(parsed.data.address) : undefined;
+    if (
+      !parsed.success ||
+      address === undefined ||
+      !address.ok ||
+      !isGitHostAddress(address.value)
+    ) {
+      return c.json(
+        errorBody(
+          "connect.invalid",
+          `A connection names a repository, as /gh/<owner>/<repo>, and what the command calls itself, in at most ${CONNECT_AGENT_MAX_LENGTH} characters.`,
+        ),
+        400,
+      );
+    }
+    if (address.value.ref !== undefined || address.value.path !== ROOT_PATH) {
+      return c.json(
+        errorBody(
+          "token.not_a_repository",
+          "A command connects to a repository, and reads every ref and path of it: name the repository alone.",
+        ),
+        400,
+      );
+    }
+    try {
+      // Nothing is asked about the repository here: a request is anyone's, and whether the
+      // name is a private repository or nothing is for the person who approves to learn.
+      const started = await connections.begin(address.value, parsed.data.agent);
+      const body: RestConnectStarted = {
+        code: started.code,
+        url: started.url,
+        secret: started.secret,
+        expiresAt: started.expiresAt.toISOString(),
+        intervalSeconds: started.intervalSeconds,
+      };
+      return c.json(body, 201);
+    } catch (error) {
+      if (error instanceof ConnectLimitError) {
+        c.header("retry-after", String(error.retryAfterSeconds));
+        return c.json(errorBody(error.code, error.message), 503);
+      }
+      throw error;
+    }
+  });
+
+  app.get(`${REST_ROUTES.connect}/:code`, async (c) => {
+    c.header("cache-control", "no-store");
+    const user = await sessionUser(c);
+    if (user === undefined) {
+      return signInRequired(c);
+    }
+    const code = parseConnectCode(c.req.param("code"));
+    const request = code === undefined ? undefined : await connections.look(code);
+    if (request === undefined) {
+      return noSuchConnection(c);
+    }
+    const body: RestConnectView = {
+      code: request.code,
+      agent: request.agent,
+      address: request.address,
+      expiresAt: request.expiresAt.toISOString(),
+      approved: request.approval !== undefined,
+      user: restUser(user),
+      visible: (await dependencies.canSee(storedAddress(request.address), user)) ?? null,
+      installUrl: (await hostLogin.installUrl().catch(() => undefined)) ?? null,
+    };
+    return c.json(body);
+  });
+
+  app.post(`${REST_ROUTES.connect}/:code/decision`, smallJson, async (c) => {
+    c.header("cache-control", "no-store");
+    if (!fromOwnPages(c)) {
+      return foreignOrigin(c);
+    }
+    const user = await sessionUser(c);
+    if (user === undefined) {
+      return signInRequired(c);
+    }
+    const parsed = connectDecisionSchema.safeParse(await c.req.json().catch(() => undefined));
+    if (!parsed.success) {
+      return c.json(
+        errorBody(
+          "connect.invalid",
+          `The answer is yes or no, with a name of at most ${REPO_TOKEN_MAX_LABEL_LENGTH} characters and a lifetime of 1 to ${REPO_TOKEN_MAX_DAYS} days for a yes.`,
+        ),
+        400,
+      );
+    }
+    const code = parseConnectCode(c.req.param("code"));
+    const request = code === undefined ? undefined : await connections.look(code);
+    if (request === undefined || request.approval !== undefined) {
+      return noSuchConnection(c);
+    }
+    if (!parsed.data.approve) {
+      await connections.end(request.id);
+      logger.info({ user: user.id, requestId: c.get("requestId") }, "connection declined");
+      const body: RestConnectDecided = { status: "denied" };
+      return c.json(body);
+    }
+    // Nothing is approved for a repository the person cannot open, and a connection that
+    // cannot work fails here, where the person is. The refusal is one for a repository that is
+    // somebody else's and for a name that is nothing, and without an answer from the git host
+    // nothing is approved either.
+    let mount: Mount;
+    try {
+      mount = await dependencies.open(storedAddress(request.address), user);
+    } catch (error) {
+      if (!(error instanceof MountError)) {
+        throw error;
+      }
+      return mountRefusal(c, error);
+    }
+    if (mount.repo.repository.visibility === "public") {
+      await connections.end(request.id);
+      return c.json(
+        errorBody(
+          "token.public_repository",
+          "A public repository is read without a token, by anyone: the command needs no connection to it.",
+        ),
+        400,
+      );
+    }
+    const approved = await connections.approve(request.code, user, {
+      label: parsed.data.label ?? request.agent.slice(0, REPO_TOKEN_MAX_LABEL_LENGTH).trim(),
+      expiresInDays: parsed.data.expiresInDays ?? REPO_TOKEN_DEFAULT_DAYS,
+    });
+    if (!approved) {
+      return noSuchConnection(c);
+    }
+    logger.info({ user: user.id, requestId: c.get("requestId") }, "connection approved");
+    const body: RestConnectDecided = { status: "approved" };
+    return c.json(body);
+  });
+
+  app.post(`${REST_ROUTES.connect}/claim`, smallJson, async (c) => {
+    c.header("cache-control", "no-store");
+    const parsed = connectClaimSchema.safeParse(await c.req.json().catch(() => undefined));
+    if (!parsed.success) {
+      return c.json(
+        errorBody("connect.invalid", "A claim carries the secret the command was given."),
+        400,
+      );
+    }
+    const claim = await connections.claim(parsed.data.secret);
+    if (claim.status === "none") {
+      return noSuchConnection(c);
+    }
+    if (claim.status === "pending") {
+      const body: RestConnectClaimed = {
+        status: "pending",
+        expiresAt: claim.expiresAt.toISOString(),
+      };
+      return c.json(body);
+    }
+    // As the person who approved would be answered now: they may have lost the repository
+    // since, and the git host may not answer, which leaves the approval for the next claim.
+    const { request, user } = claim;
+    const address = storedAddress(request.address);
+    let mount: Mount;
+    try {
+      mount = await dependencies.open(address, user);
+    } catch (error) {
+      if (!(error instanceof MountError)) {
+        throw error;
+      }
+      if (error.reason !== "rate_limited" && error.reason !== "unavailable") {
+        await connections.end(request.id);
+      }
+      return mountRefusal(c, error);
+    }
+    if (mount.repo.repository.visibility === "public") {
+      await connections.end(request.id);
+      return c.json(
+        errorBody(
+          "token.public_repository",
+          "A public repository is read without a token, by anyone: the command needs no connection to it.",
+        ),
+        400,
+      );
+    }
+    // Taken here, so that the token is made once however many claims arrive at once.
+    const taken = await connections.take(parsed.data.secret);
+    if (taken === undefined) {
+      return noSuchConnection(c);
+    }
+    const made = await connections.issue(taken, user, mount.repo, address);
+    if (made === undefined) {
+      return c.json(
+        errorBody(
+          "token.limit",
+          `An account holds at most ${MAX_REPO_TOKENS_PER_USER} tokens. Remove one that is no longer used.`,
+        ),
+        409,
+      );
+    }
+    const body: RestConnectClaimed = {
+      status: "connected",
+      token: made.token,
+      item: restRepoToken(made.record),
+    };
+    return c.json(body);
   });
 
   // The consent page's two questions: what is being asked, and what the person answers.

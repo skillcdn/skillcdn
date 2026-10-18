@@ -3,6 +3,18 @@ export { createDatabase, type Database, type DatabaseOptions } from "./client.js
 export { getSchemaStatus, migrateDatabase, type SchemaStatus } from "./migrate.js";
 export { createBlobStore } from "./queries/blobs.js";
 export {
+  approveConnectRequest,
+  type ConnectApproval,
+  type ConnectRequestInput,
+  type ConnectRequestRecord,
+  createConnectRequest,
+  deleteConnectRequest,
+  deleteExpiredConnectRequests,
+  findConnectRequestByCode,
+  findConnectRequestBySecret,
+  takeApprovedConnectRequest,
+} from "./queries/connect.js";
+export {
   countEntries,
   type DirectoryListing,
   type EntryListing,

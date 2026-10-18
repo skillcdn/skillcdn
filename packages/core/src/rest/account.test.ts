@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { loginPath, signInPath } from "./account.js";
+import {
+  CONNECT_CODE_ALPHABET,
+  connectPagePath,
+  loginPath,
+  parseConnectCode,
+  signInPath,
+} from "./account.js";
 
 describe("the paths of signing in", () => {
   it("carries the page to come back to through the login route", () => {
@@ -19,5 +25,32 @@ describe("the paths of signing in", () => {
     expect(signInPath("/gh/acme/skills?skill=a%20b&lang=ko", "expired")).toBe(
       "/gh/acme/skills?skill=a%20b&lang=ko&sign_in=expired",
     );
+  });
+});
+
+describe("the code a command connects with", () => {
+  it("is read back as the code however a person typed it", () => {
+    for (const typed of ["ABCD-EFGH", "abcd-efgh", "abcdefgh", " ABCD EFGH ", "abcd-EFGH"]) {
+      expect(parseConnectCode(typed), typed).toBe("ABCD-EFGH");
+    }
+    expect(connectPagePath("ABCD-EFGH")).toBe("/connect/ABCD-EFGH");
+  });
+
+  it("is nothing else: the wrong length, or a letter the alphabet leaves out", () => {
+    for (const typed of [
+      "",
+      "ABCD-EFG",
+      "ABCD-EFGHJ",
+      "ABCD-EF0H",
+      "ABCD-EFOH",
+      "ABCD-EF1H",
+      "ABCD_EFGH",
+      "ABCD-EFG!",
+    ]) {
+      expect(parseConnectCode(typed), typed).toBeUndefined();
+    }
+    // The alphabet has no look-alikes, and a code is spelled from it alone.
+    expect(CONNECT_CODE_ALPHABET).not.toMatch(/[01OI]/);
+    expect(CONNECT_CODE_ALPHABET.length).toBe(32);
   });
 });

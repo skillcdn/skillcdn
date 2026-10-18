@@ -270,3 +270,100 @@ describe("whenIndexed and skillPages", () => {
     expect(calls[1]?.url).toContain("cursor=c2");
   });
 });
+
+describe("a command connecting with a code", () => {
+  const item = {
+    id: "11111111-1111-4111-8111-111111111111",
+    address: "/gh/acme/skills",
+    label: "Claude Code on a laptop",
+    createdAt: "2026-10-18T00:00:00.000Z",
+    expiresAt: "2027-01-16T00:00:00.000Z",
+    lastUsedAt: null,
+  };
+
+  it("begins, claims, looks and decides at the routes of the API, with their bodies", async () => {
+    const { fetch, calls } = fakeFetch((url, init) => {
+      if (url.endsWith("/api/v1/connect")) {
+        return json(
+          {
+            code: "ABCD-EFGH",
+            url: "https://skillcdn.example/connect/ABCD-EFGH",
+            secret: "scdn_cx_secret",
+            expiresAt: "2026-10-18T00:10:00.000Z",
+            intervalSeconds: 5,
+          },
+          201,
+        );
+      }
+      if (url.endsWith("/connect/claim")) {
+        const body = JSON.parse(String(init.body)) as { secret: string };
+        return json(
+          body.secret === "scdn_cx_secret"
+            ? { status: "connected", token: "scdn_repo_token", item }
+            : { status: "pending", expiresAt: "2026-10-18T00:10:00.000Z" },
+        );
+      }
+      if (url.endsWith("/decision")) {
+        return json({ status: "approved" });
+      }
+      return json({
+        code: "ABCD-EFGH",
+        agent: "Claude Code on a laptop",
+        address: "/gh/acme/skills",
+        expiresAt: "2026-10-18T00:10:00.000Z",
+        approved: false,
+        user: { host: "gh", login: "alice", name: null, avatar: "https://avatars.example/a" },
+        visible: true,
+        installUrl: null,
+      });
+    });
+    const client = createClient({ baseUrl: "https://skillcdn.example", fetch });
+    const begun = await client.connect({
+      address: "/gh/acme/skills",
+      agent: "Claude Code on a laptop",
+    });
+    expect(begun.code).toBe("ABCD-EFGH");
+    expect(await client.claimConnection("scdn_cx_other")).toEqual({
+      status: "pending",
+      expiresAt: "2026-10-18T00:10:00.000Z",
+    });
+    expect(await client.claimConnection(begun.secret)).toEqual({
+      status: "connected",
+      token: "scdn_repo_token",
+      item,
+    });
+    expect((await client.connection("ABCD-EFGH")).agent).toBe("Claude Code on a laptop");
+    expect(await client.decideConnection("ABCD-EFGH", { approve: true, label: "Laptop" })).toEqual({
+      status: "approved",
+    });
+    expect(
+      calls.map((call) => [
+        call.init.method,
+        call.url.slice("https://skillcdn.example".length),
+        call.init.body === undefined ? undefined : JSON.parse(String(call.init.body)),
+      ]),
+    ).toEqual([
+      ["POST", "/api/v1/connect", { address: "/gh/acme/skills", agent: "Claude Code on a laptop" }],
+      ["POST", "/api/v1/connect/claim", { secret: "scdn_cx_other" }],
+      ["POST", "/api/v1/connect/claim", { secret: "scdn_cx_secret" }],
+      ["GET", "/api/v1/connect/ABCD-EFGH", undefined],
+      ["POST", "/api/v1/connect/ABCD-EFGH/decision", { approve: true, label: "Laptop" }],
+    ]);
+  });
+
+  it("says what the server refused a claim with, and when it answered unexpectedly", async () => {
+    const { fetch } = fakeFetch((url) =>
+      url.endsWith("/claim")
+        ? json({ error: { code: "connect.not_found", message: "Nothing waits." } }, 404)
+        : json({ status: "something else" }),
+    );
+    const client = createClient({ baseUrl: "https://skillcdn.example", fetch });
+    await expect(client.claimConnection("scdn_cx_spent")).rejects.toMatchObject({
+      status: 404,
+      code: "connect.not_found",
+    });
+    await expect(client.connect({ address: "/gh/acme/skills", agent: "x" })).rejects.toMatchObject({
+      code: "invalid_response",
+    });
+  });
+});
