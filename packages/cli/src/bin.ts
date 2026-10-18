@@ -70,7 +70,9 @@ const readStdin = (): Promise<string> =>
 
 /**
  * What the command calls itself to a person when it asks to connect: the agent it runs under,
- * where the environment says so, and the machine.
+ * where the environment says so, and the machine. Claude Code sets `CLAUDECODE` for the
+ * commands it runs, Codex its `CODEX_*` variables, and Gemini CLI `GEMINI_CLI=1` (its shell tool
+ * documentation: "it sets the GEMINI_CLI=1 environment variable in the subprocess's environment").
  */
 function agentName(): string {
   const env = process.env;
