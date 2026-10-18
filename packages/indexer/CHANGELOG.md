@@ -1,5 +1,12 @@
 # @skillcdn/indexer
 
+## 0.3.1
+
+### Patch Changes
+
+- Updated dependencies [[`73c80b1`](https://github.com/skillcdn/skillcdn/commit/73c80b1c83894a33f9f35405a687eeb708f605c2)]:
+  - @skillcdn/core@0.3.1
+
 ## 0.3.0
 
 ### Minor Changes
