@@ -1,6 +1,6 @@
 {
   "name": "@skillcdn/client",
-  "version": "0.0.0",
+  "version": "0.3.0",
   "description": "The REST API of a SkillCDN deployment as typed functions: what a program reads a pack with, in Node.js and in a browser.",
   "license": "FSL-1.1-ALv2",
   "homepage": "https://skillcdn.ai",
