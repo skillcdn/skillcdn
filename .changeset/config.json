@@ -2,7 +2,17 @@
   "$schema": "https://unpkg.com/@changesets/config@4.0.1/schema.json",
   "changelog": ["@changesets/changelog-github", { "repo": "skillcdn/skillcdn" }],
   "commit": false,
-  "fixed": [],
+  "fixed": [
+    [
+      "@skillcdn/core",
+      "@skillcdn/indexer",
+      "@skillcdn/reader",
+      "@skillcdn/client",
+      "@skillcdn/serve",
+      "@skillcdn/cli",
+      "@skillcdn/brand"
+    ]
+  ],
   "linked": [],
   "access": "public",
   "baseBranch": "main",

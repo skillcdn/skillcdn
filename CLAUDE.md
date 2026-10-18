@@ -91,7 +91,7 @@ Packages compile to `dist/` and consume each other's compiled output. Going thro
 
 - `pnpm check` passes.
 - New behavior has tests; a bug fix starts with a failing regression test.
-- A change to a published package (`core`, `indexer`, `reader`, `client`, `serve`, `cli`, `brand`) carries a changeset, written for whoever installs it ([ADR-0046](docs/adr/0046-packages-are-published-to-npm-through-trusted-publishing.md)).
+- A change to a published package (`core`, `indexer`, `reader`, `client`, `serve`, `cli`, `brand`) carries a changeset, written for whoever installs it ([ADR-0046](docs/adr/0046-packages-are-published-to-npm-through-trusted-publishing.md)): `patch` for a fix or an addition that changes nothing that exists, `minor` for a change of a public surface, whose entry starts with `Breaking:`; never `major` while the major is 0 ([ADR-0058](docs/adr/0058-the-published-packages-share-one-version.md)).
 - Docs are updated per the table below, in the same change.
 - No secrets, no operations details, no business logic (rules 1, 6, 7).
 - The change is safe to deploy on its own: `main` is always releasable and every push may ship.
@@ -104,7 +104,7 @@ Packages compile to `dist/` and consume each other's compiled output. Going thro
 - Dependabot's pull requests are landed one at a time, by a rebase merge or by cherry-picking the commit onto `main` (`git cherry-pick -x`), checked and pushed like any other commit; a cherry-picked one is closed with a comment naming the commit. Two that touch the lockfile conflict; see Dependencies.
 - Never force-push or rewrite `main`, skip hooks with `--no-verify`, or commit build output.
 - Keep the `Co-Authored-By` trailer your agent adds, so AI-authored changes stay traceable.
-- **Releases.** The release workflow opens one pull request that bumps the versions and changelogs of the packages with pending changesets; merging it publishes them to npm, with provenance. Nobody runs `pnpm publish` by hand, except a maintainer for the first version of a new package (ADR-0046).
+- **Releases.** The published packages share one version (ADR-0058). The release workflow opens one pull request that bumps every published package to the next version, with the changelogs of the ones that changed; merging it publishes them all to npm, with provenance. Nobody runs `pnpm publish` by hand, except a maintainer for the first version of a new package (ADR-0046).
 
 ## Documentation protocol
 
