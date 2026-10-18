@@ -611,6 +611,15 @@ export const FIXTURE_TOKENS: RestRepoTokens["items"] = [
     expiresAt: "2026-10-08T10:30:00.000Z",
     lastUsedAt: null,
   },
+  // Made without an end: it lasts until its maker removes it.
+  {
+    id: "45454545-4545-4545-8545-454545454545",
+    address: "/gh/acme/private-skills",
+    label: "Build server",
+    createdAt: "2026-10-10T09:00:00.000Z",
+    expiresAt: null,
+    lastUsedAt: "2026-10-17T22:10:00.000Z",
+  },
 ];
 
 /**

@@ -331,7 +331,7 @@ describe("claiming", () => {
       label: "Codex on ci-7",
       lastUsedAt: null,
     });
-    expect(Date.parse(claimed.item.expiresAt) - Date.parse(claimed.item.createdAt)).toBe(
+    expect(Date.parse(claimed.item.expiresAt ?? "") - Date.parse(claimed.item.createdAt)).toBe(
       REPO_TOKEN_DEFAULT_DAYS * DAY_MS,
     );
     expect(Date.parse(claimed.item.createdAt)).toBeGreaterThanOrEqual(before - 1000);
@@ -357,7 +357,7 @@ describe("claiming", () => {
     const claimed = restConnectClaimedSchema.parse(await (await claim(h, secret)).json());
     expect(claimed).toMatchObject({ status: "connected", item: { label: "The laptop" } });
     if (claimed.status === "connected") {
-      expect(Date.parse(claimed.item.expiresAt) - Date.parse(claimed.item.createdAt)).toBe(
+      expect(Date.parse(claimed.item.expiresAt ?? "") - Date.parse(claimed.item.createdAt)).toBe(
         7 * DAY_MS,
       );
     }

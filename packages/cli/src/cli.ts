@@ -977,7 +977,7 @@ async function loginCommand(args: readonly string[], io: CliIo): Promise<number>
     }
     const path = await keep(claimed.token);
     io.stdout(
-      `Connected: a token for ${repository} at ${url} is kept in ${path}, listed on the account page as ${JSON.stringify(claimed.item.label)} until ${claimed.item.expiresAt.slice(0, 10)}. Reads of ${repository} there present it; the person ends it on their account page.\n`,
+      `Connected: a token for ${repository} at ${url} is kept in ${path}, listed on the account page as ${JSON.stringify(claimed.item.label)} ${claimed.item.expiresAt === null ? "with no end" : `until ${claimed.item.expiresAt.slice(0, 10)}`}. Reads of ${repository} there present it; the person ends it on their account page.\n`,
     );
     return 0;
   }

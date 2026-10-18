@@ -776,7 +776,8 @@ export const repoTokens = pgTable(
     /** What its maker calls it. */
     label: text().notNull(),
     tokenHash: text().notNull(),
-    expiresAt: instant().notNull(),
+    /** When it ends; null for a token made without an end (ADR-0060). */
+    expiresAt: instant(),
     lastUsedAt: instant(),
     createdAt: createdAt(),
   },

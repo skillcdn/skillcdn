@@ -11,7 +11,8 @@ import { connectRequests } from "../schema.js";
 export interface ConnectApproval {
   readonly userId: string;
   readonly label: string;
-  readonly expiresInDays: number;
+  /** How many days the token is to be good for; `null` for a token without an end. */
+  readonly expiresInDays: number | null;
   readonly at: Date;
 }
 
@@ -72,10 +73,7 @@ const toRecord = (row: RecordRow): ConnectRequestRecord => ({
   createdAt: row.createdAt,
   expiresAt: row.expiresAt,
   approval:
-    row.approvedBy === null ||
-    row.approvedAt === null ||
-    row.label === null ||
-    row.expiresInDays === null
+    row.approvedBy === null || row.approvedAt === null || row.label === null
       ? undefined
       : {
           userId: row.approvedBy,
@@ -159,7 +157,7 @@ export async function approveConnectRequest(
     readonly code: string;
     readonly userId: string;
     readonly label: string;
-    readonly expiresInDays: number;
+    readonly expiresInDays: number | null;
     readonly now: Date;
   },
 ): Promise<boolean> {

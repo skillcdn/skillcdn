@@ -750,6 +750,27 @@ describe("repository tokens", () => {
     ]);
   });
 
+  it("may have no end: good whenever, never swept, and counted like any other", async () => {
+    const user = await signedIn();
+    const repo = await privateRepo();
+    const later = minutes(60 * 24 * 400);
+    const made = { ...input(user.id, repo.id), expiresAt: undefined };
+    const record = await createRepoToken(database, made, 10);
+    expect(record?.expiresAt).toBeUndefined();
+    expect(await findRepoTokenAccess(database, made.tokenHash, later)).toBeDefined();
+    expect((await listRepoTokens(database, user.id, later)).map((token) => token.id)).toEqual([
+      record?.id,
+    ]);
+    await deleteExpiredRepoTokens(database, later);
+    expect(await findRepoTokenAccess(database, made.tokenHash, later)).toBeDefined();
+    // It counts against its maker like any other, and ends when they end it.
+    expect(await createRepoToken(database, input(user.id, repo.id), 1)).toBeUndefined();
+    expect(await deleteRepoToken(database, { userId: user.id, tokenId: record?.id ?? "" })).toBe(
+      true,
+    );
+    expect(await findRepoTokenAccess(database, made.tokenHash, later)).toBeUndefined();
+  });
+
   it("are bounded per user: one more than the limit is not stored, and none is ended for it", async () => {
     const user = await signedIn();
     const repo = await privateRepo();

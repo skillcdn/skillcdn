@@ -1,4 +1,4 @@
-import { and, count, eq, gt, lte, sql } from "drizzle-orm";
+import { and, count, eq, gt, isNull, lte, or, sql } from "drizzle-orm";
 import { type Database, drizzleOf } from "../client.js";
 import { accounts, repoTokens, users } from "../schema.js";
 import { toUser, type UserRecord, userColumns } from "./users.js";
@@ -17,7 +17,8 @@ export interface RepoTokenRecord {
   /** What its maker calls it. */
   readonly label: string;
   readonly createdAt: Date;
-  readonly expiresAt: Date;
+  /** When it ends; `undefined` for a token made without an end (ADR-0060). */
+  readonly expiresAt: Date | undefined;
   /** When it was last noted as used; `undefined` when never. */
   readonly lastUsedAt: Date | undefined;
 }
@@ -29,9 +30,13 @@ export interface RepoTokenInput {
   readonly label: string;
   /** The hash of the secret; the secret itself never reaches this package. */
   readonly tokenHash: string;
-  readonly expiresAt: Date;
+  /** When it ends; `undefined` for no end. */
+  readonly expiresAt: Date | undefined;
   readonly now: Date;
 }
+
+/** A token that is still good at `now`: one without an end, or one whose end has not come. */
+const live = (now: Date) => or(isNull(repoTokens.expiresAt), gt(repoTokens.expiresAt, now));
 
 const recordColumns = {
   id: repoTokens.id,
@@ -43,10 +48,14 @@ const recordColumns = {
   lastUsedAt: repoTokens.lastUsedAt,
 };
 
-type RecordRow = Omit<RepoTokenRecord, "lastUsedAt"> & { readonly lastUsedAt: Date | null };
+type RecordRow = Omit<RepoTokenRecord, "expiresAt" | "lastUsedAt"> & {
+  readonly expiresAt: Date | null;
+  readonly lastUsedAt: Date | null;
+};
 
 const toRecord = (row: RecordRow): RepoTokenRecord => ({
   ...row,
+  expiresAt: row.expiresAt ?? undefined,
   lastUsedAt: row.lastUsedAt ?? undefined,
 });
 
@@ -64,7 +73,7 @@ export async function createRepoToken(
     const [held] = await tx
       .select({ count: count() })
       .from(repoTokens)
-      .where(and(eq(repoTokens.userId, input.userId), gt(repoTokens.expiresAt, input.now)));
+      .where(and(eq(repoTokens.userId, input.userId), live(input.now)));
     if ((held?.count ?? 0) >= limit) {
       return undefined;
     }
@@ -76,7 +85,7 @@ export async function createRepoToken(
         address: input.address,
         label: input.label,
         tokenHash: input.tokenHash,
-        expiresAt: input.expiresAt,
+        expiresAt: input.expiresAt ?? null,
         createdAt: input.now,
       })
       .returning(recordColumns);
@@ -96,7 +105,7 @@ export async function listRepoTokens(
   const rows = await drizzleOf(database)
     .select(recordColumns)
     .from(repoTokens)
-    .where(and(eq(repoTokens.userId, userId), gt(repoTokens.expiresAt, now)))
+    .where(and(eq(repoTokens.userId, userId), live(now)))
     .orderBy(sql`${repoTokens.createdAt} desc`, sql`${repoTokens.id} desc`);
   return rows.map(toRecord);
 }
@@ -140,7 +149,7 @@ export async function findRepoTokenAccess(
     .from(repoTokens)
     .innerJoin(users, eq(users.id, repoTokens.userId))
     .innerJoin(accounts, eq(accounts.id, users.accountId))
-    .where(and(eq(repoTokens.tokenHash, tokenHash), gt(repoTokens.expiresAt, now)))
+    .where(and(eq(repoTokens.tokenHash, tokenHash), live(now)))
     .limit(1);
   return row === undefined
     ? undefined
@@ -165,6 +174,7 @@ export async function touchRepoToken(
     .where(eq(repoTokens.id, tokenId));
 }
 
+/** Removes the tokens whose end has come; one made without an end stays until its maker removes it. */
 export async function deleteExpiredRepoTokens(database: Database, now: Date): Promise<number> {
   const rows = await drizzleOf(database)
     .delete(repoTokens)

@@ -1,6 +1,6 @@
 # ADR-0040: A token for an agent with nobody to sign in reads one repository, as its maker
 
-- Status: Accepted; point 3, over MCP only, is amended by [ADR-0052](0052-the-rest-api-takes-the-tokens-the-mcp-endpoint-takes.md)
+- Status: Accepted; point 3, over MCP only, is amended by [ADR-0052](0052-the-rest-api-takes-the-tokens-the-mcp-endpoint-takes.md); a token without an end is allowed by [ADR-0060](0060-a-repository-token-may-have-no-end.md)
 - Date: 2026-10-04
 - Builds on [ADR-0035](0035-people-sign-in-through-the-git-hosts-app.md) and [ADR-0036](0036-the-deployment-is-the-authorization-server-of-its-addresses.md). The contract is in [specs/permissions.md](../specs/permissions.md#tokens-for-agents-with-nobody-to-sign-in). Replaces the plan this project started with, a "project token" issued by a repository's administrator as a permission layer of the deployment's own.
 

@@ -796,8 +796,8 @@ function tokensAnswer(
       !request.success ||
       label.length === 0 ||
       label.length > REPO_TOKEN_MAX_LABEL_LENGTH ||
-      request.data.expiresInDays < 1 ||
-      request.data.expiresInDays > REPO_TOKEN_MAX_DAYS
+      (request.data.expiresInDays !== null &&
+        (request.data.expiresInDays < 1 || request.data.expiresInDays > REPO_TOKEN_MAX_DAYS))
     ) {
       return problem(400, "token.invalid", "A token needs a repository, a name and a lifetime.");
     }
@@ -819,7 +819,10 @@ function tokensAnswer(
       address: repository.address,
       label,
       createdAt: new Date(now).toISOString(),
-      expiresAt: new Date(now + request.data.expiresInDays * 86_400_000).toISOString(),
+      expiresAt:
+        request.data.expiresInDays === null
+          ? null
+          : new Date(now + request.data.expiresInDays * 86_400_000).toISOString(),
       lastUsedAt: null,
     };
     madeTokens.unshift(item);

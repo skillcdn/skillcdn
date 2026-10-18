@@ -153,7 +153,7 @@ describe("making a token", () => {
       label: "The nightly job",
       lastUsedAt: null,
     });
-    const lifetime = Date.parse(made.item.expiresAt) - Date.parse(made.item.createdAt);
+    const lifetime = Date.parse(made.item.expiresAt ?? "") - Date.parse(made.item.createdAt);
     expect(lifetime).toBe(90 * DAY_MS);
     expect(Date.parse(made.item.createdAt)).toBeGreaterThanOrEqual(before);
 
@@ -196,6 +196,34 @@ describe("making a token", () => {
       });
     }
     expect((await listOf(h, bob)).items).toHaveLength(1);
+  });
+
+  it("is made without an end when no lifetime is chosen, and reads for as long as its maker keeps it", async () => {
+    const clock = movableClock();
+    const h = harness({ clock });
+    const person = newcomer(h.login);
+    const cookie = await h.signIn(person);
+    const response = await make(h, cookie, {
+      address: SECRET,
+      label: "Build server",
+      expiresInDays: null,
+    });
+    expect(response.status).toBe(201);
+    const made = restNewRepoTokenSchema.parse(await response.json());
+    expect(made.item.expiresAt).toBeNull();
+    expect((await listOf(h, cookie)).items).toEqual([made.item]);
+    // Years later it still reads, and is still listed to its maker, whose browser session has
+    // long ended by then; removed, it is gone at once.
+    clock.advance(3 * 366 * DAY_MS);
+    expect((await mcp(h, SECRET, made.token)).status).toBe(200);
+    const later = await h.signIn(person);
+    expect((await listOf(h, later)).items.map((item) => item.id)).toEqual([made.item.id]);
+    const removal = await h.request(`${TOKENS}/${made.item.id}`, {
+      method: "DELETE",
+      headers: { cookie: later, origin: h.origin },
+    });
+    expect(removal.status).toBe(200);
+    expect((await mcp(h, SECRET, made.token)).status).toBe(401);
   });
 
   it("refuses what is not a repository, a name and a lifetime", async () => {

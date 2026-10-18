@@ -150,7 +150,7 @@ export class Connections {
   approve(
     code: string,
     user: UserRecord,
-    choice: { readonly label: string; readonly expiresInDays: number },
+    choice: { readonly label: string; readonly expiresInDays: number | null },
   ): Promise<boolean> {
     const { database, clock } = this.#options;
     return approveConnectRequest(database, {

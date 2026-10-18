@@ -49,7 +49,7 @@ export class RepoTokens {
     user: UserRecord,
     repo: RepoRecord,
     address: Address,
-    input: { readonly label: string; readonly expiresInDays: number },
+    input: { readonly label: string; readonly expiresInDays: number | null },
   ): Promise<{ readonly token: string; readonly record: RepoTokenRecord } | undefined> {
     const { database, clock } = this.#options;
     const now = clock.now();
@@ -62,7 +62,11 @@ export class RepoTokens {
         address: repositoryKey(address),
         label: input.label,
         tokenHash: hashToken(token),
-        expiresAt: new Date(now.getTime() + input.expiresInDays * DAY_MS),
+        // Without a lifetime the token has no end: its maker removes it (ADR-0060).
+        expiresAt:
+          input.expiresInDays === null
+            ? undefined
+            : new Date(now.getTime() + input.expiresInDays * DAY_MS),
         now,
       },
       MAX_REPO_TOKENS_PER_USER,

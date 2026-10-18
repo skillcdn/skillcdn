@@ -143,7 +143,11 @@ export type RestGrants = z.infer<typeof restGrantsSchema>;
 
 /** What a repository token begins with, so that whoever finds one knows what it found. */
 export const REPO_TOKEN_PREFIX = "scdn_repo_";
-/** The longest a repository token may last, in days, and the lifetimes the pages offer. */
+/**
+ * The longest lifetime a repository token may be given, in days, and the lifetimes the pages
+ * offer. A token may also be made without an end (`expiresInDays: null`, ADR-0060): it then
+ * lasts until its maker removes it or the git host stops vouching for them.
+ */
 export const REPO_TOKEN_MAX_DAYS = 366;
 export const REPO_TOKEN_LIFETIMES_DAYS = [7, 30, 90, 365] as const;
 export const REPO_TOKEN_DEFAULT_DAYS = 90;
@@ -159,7 +163,8 @@ const restRepoTokenSchema = z.object({
   label: z.string(),
   /** ISO 8601 instants. */
   createdAt: z.string(),
-  expiresAt: z.string(),
+  /** `null` for a token without an end. */
+  expiresAt: z.nullable(z.string()),
   lastUsedAt: z.nullable(z.string()),
 });
 
@@ -178,7 +183,8 @@ export const restRepoTokenRequestSchema = z.object({
   /** An address without a ref or a path: `/gh/owner/repo`. */
   address: z.string(),
   label: z.string(),
-  expiresInDays: z.int(),
+  /** From a day to a year, or `null` for a token without an end. */
+  expiresInDays: z.nullable(z.int()),
 });
 export type RestRepoTokenRequest = z.infer<typeof restRepoTokenRequestSchema>;
 
@@ -361,8 +367,8 @@ export const restConnectDecisionSchema = z.object({
   approve: z.boolean(),
   /** The name the token is listed under; what the command calls itself when left out. */
   label: z.optional(z.string()),
-  /** From a day to a year; the pages' default when left out. */
-  expiresInDays: z.optional(z.int()),
+  /** From a day to a year, or `null` for no end; the pages' default when left out. */
+  expiresInDays: z.optional(z.nullable(z.int())),
 });
 export type RestConnectDecision = z.infer<typeof restConnectDecisionSchema>;
 

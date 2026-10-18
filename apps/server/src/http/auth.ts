@@ -109,7 +109,8 @@ const newTokenSchema = z.object({
     .transform((value) => value.trim())
     .pipe(z.string().min(1).max(REPO_TOKEN_MAX_LABEL_LENGTH))
     .refine((value) => !hasForbiddenCodePoint(value)),
-  expiresInDays: z.number().int().min(1).max(REPO_TOKEN_MAX_DAYS),
+  // A lifetime in days, or null for a token without an end (ADR-0060).
+  expiresInDays: z.number().int().min(1).max(REPO_TOKEN_MAX_DAYS).nullable(),
 });
 
 /** What a token is to the person who made it: everything but the secret. */
@@ -119,7 +120,7 @@ function restRepoToken(record: RepoTokenRecord): RestRepoTokens["items"][number]
     address: record.address,
     label: record.label,
     createdAt: record.createdAt.toISOString(),
-    expiresAt: record.expiresAt.toISOString(),
+    expiresAt: record.expiresAt?.toISOString() ?? null,
     lastUsedAt: record.lastUsedAt?.toISOString() ?? null,
   };
 }
@@ -144,7 +145,7 @@ const connectRequestSchema = z.object({
 const connectDecisionSchema = z.object({
   approve: z.boolean(),
   label: plainText(REPO_TOKEN_MAX_LABEL_LENGTH).optional(),
-  expiresInDays: z.number().int().min(1).max(REPO_TOKEN_MAX_DAYS).optional(),
+  expiresInDays: z.number().int().min(1).max(REPO_TOKEN_MAX_DAYS).nullable().optional(),
 });
 
 /** A secret is a prefix and a few dozen characters; this is far more than any is. */
@@ -374,7 +375,7 @@ export function registerAuth(app: Hono<AppEnv>, dependencies: AuthDependencies):
         return c.json(
           errorBody(
             "token.invalid",
-            `A token needs a repository, a name of at most ${REPO_TOKEN_MAX_LABEL_LENGTH} characters, and a lifetime of 1 to ${REPO_TOKEN_MAX_DAYS} days.`,
+            `A token needs a repository, a name of at most ${REPO_TOKEN_MAX_LABEL_LENGTH} characters, and a lifetime of 1 to ${REPO_TOKEN_MAX_DAYS} days, or null for none.`,
           ),
           400,
         );
@@ -571,7 +572,7 @@ export function registerAuth(app: Hono<AppEnv>, dependencies: AuthDependencies):
       return c.json(
         errorBody(
           "connect.invalid",
-          `The answer is yes or no, with a name of at most ${REPO_TOKEN_MAX_LABEL_LENGTH} characters and a lifetime of 1 to ${REPO_TOKEN_MAX_DAYS} days for a yes.`,
+          `The answer is yes or no, with a name of at most ${REPO_TOKEN_MAX_LABEL_LENGTH} characters and a lifetime of 1 to ${REPO_TOKEN_MAX_DAYS} days, or null for none, for a yes.`,
         ),
         400,
       );
@@ -612,7 +613,11 @@ export function registerAuth(app: Hono<AppEnv>, dependencies: AuthDependencies):
     }
     const approved = await connections.approve(request.code, user, {
       label: parsed.data.label ?? request.agent.slice(0, REPO_TOKEN_MAX_LABEL_LENGTH).trim(),
-      expiresInDays: parsed.data.expiresInDays ?? REPO_TOKEN_DEFAULT_DAYS,
+      // Left out, the pages' default lifetime; null, a token without an end (ADR-0060).
+      expiresInDays:
+        parsed.data.expiresInDays === undefined
+          ? REPO_TOKEN_DEFAULT_DAYS
+          : parsed.data.expiresInDays,
     });
     if (!approved) {
       return noSuchConnection(c);

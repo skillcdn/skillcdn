@@ -132,7 +132,8 @@ export function ConnectPage(props: ConnectPageProps) {
   const [failure, setFailure] = useState<ApiError>();
   const [outcome, setOutcome] = useState<RestConnectDecided["status"] | "public">();
   const [label, setLabel] = useState("");
-  const [days, setDays] = useState<number>(REPO_TOKEN_DEFAULT_DAYS);
+  /** The lifetime chosen, in days; `null` for a token without an end. */
+  const [days, setDays] = useState<number | null>(REPO_TOKEN_DEFAULT_DAYS);
 
   useEffect(() => {
     applyHead(buildHead({ name: "connect", code: props.code }, language, props.origin));
@@ -305,15 +306,18 @@ export function ConnectPage(props: ConnectPageProps) {
                 <select
                   id="connect-expires"
                   className={styles.control}
-                  value={days}
+                  value={days ?? "never"}
                   disabled={answering}
-                  onChange={(event) => setDays(Number(event.target.value))}
+                  onChange={(event) =>
+                    setDays(event.target.value === "never" ? null : Number(event.target.value))
+                  }
                 >
                   {REPO_TOKEN_LIFETIMES_DAYS.map((lifetime) => (
                     <option key={lifetime} value={lifetime}>
                       {t.account.tokens.form.lifetime(lifetime)}
                     </option>
                   ))}
+                  <option value="never">{t.account.tokens.form.never}</option>
                 </select>
               </div>
             </div>

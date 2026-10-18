@@ -355,7 +355,8 @@ function Tokens({ user, origin }: SectionProps) {
   );
   const [chosen, setChosen] = useState<string>();
   const [label, setLabel] = useState("");
-  const [days, setDays] = useState<number>(REPO_TOKEN_DEFAULT_DAYS);
+  /** The lifetime chosen, in days; `null` for a token without an end. */
+  const [days, setDays] = useState<number | null>(REPO_TOKEN_DEFAULT_DAYS);
   const [making, setMaking] = useState(false);
   const [made, setMade] = useState<RestNewRepoToken>();
   const [removing, setRemoving] = useState<string>();
@@ -549,15 +550,18 @@ function Tokens({ user, origin }: SectionProps) {
                 <select
                   id="token-expires"
                   className={styles.control}
-                  value={days}
+                  value={days ?? "never"}
                   disabled={making}
-                  onChange={(event) => setDays(Number(event.target.value))}
+                  onChange={(event) =>
+                    setDays(event.target.value === "never" ? null : Number(event.target.value))
+                  }
                 >
                   {REPO_TOKEN_LIFETIMES_DAYS.map((lifetime) => (
                     <option key={lifetime} value={lifetime}>
                       {k.form.lifetime(lifetime)}
                     </option>
                   ))}
+                  <option value="never">{k.form.never}</option>
                 </select>
               </div>
             </div>
@@ -591,7 +595,7 @@ function Tokens({ user, origin }: SectionProps) {
                   </p>
                   <p className={styles.rowMeta}>
                     <span>{k.madeAt(token.createdAt)}</span>
-                    <span>{k.expiresAt(token.expiresAt)}</span>
+                    <span>{token.expiresAt === null ? k.noEnd : k.expiresAt(token.expiresAt)}</span>
                     <span>
                       {token.lastUsedAt === null ? k.neverUsed : k.lastUsed(token.lastUsedAt)}
                     </span>
