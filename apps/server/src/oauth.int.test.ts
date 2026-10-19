@@ -9,7 +9,7 @@ import {
   StreamableHTTPClientTransport,
   UnauthorizedError,
 } from "@modelcontextprotocol/client";
-import { restAuthorizationSchema, restGrantsSchema } from "@skillcdn/core";
+import { PROVENANCE_NOTICE, restAuthorizationSchema, restGrantsSchema } from "@skillcdn/core";
 import { countUnusedOAuthClients } from "@skillcdn/db";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -1273,6 +1273,8 @@ describe("an MCP client that signs in", () => {
       arguments: { path: "skills/release-notes/SKILL.md" },
     });
     expect(textOf(loaded)).toContain("release-notes");
+    // The repository is private, and nobody vouched for it: no provenance notice (ADR-0061).
+    expect(textOf(loaded)).not.toContain(PROVENANCE_NOTICE);
     await client.close();
   });
 });

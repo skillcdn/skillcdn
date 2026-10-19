@@ -137,7 +137,7 @@ describe("the mounts body", () => {
   it("parses with the schema and reads back as the summary and the catalog of the address", () => {
     expect(restMountSchema.parse(restMount)).toEqual(restMount);
     expect(restMount.image).toBe("https://pictures.example/acme");
-    expect(mountSummaryOf(restMount)).toEqual(mount);
+    expect(mountSummaryOf(restMount)).toEqual({ ...mount, visibility: "public" });
     const state = catalogStateOf(restMount);
     expect(state.status).toBe("ready");
     if (state.status !== "ready") return;

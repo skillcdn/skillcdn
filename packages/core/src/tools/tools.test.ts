@@ -413,6 +413,14 @@ describe("rendering", () => {
     ).not.toContain(PROVENANCE_NOTICE);
   });
 
+  it("adds no provenance notice for a private repository, whoever vouched for it (ADR-0061)", () => {
+    const privately = { ...mount, verified: false, visibility: "private" as const };
+    const empty = { query: undefined, items: [], totals: undefined, diagnostics: [] };
+    expect(renderFindResult({ mount: privately, ...empty })).not.toContain(PROVENANCE_NOTICE);
+    const publicly = { ...mount, verified: false, visibility: "public" as const };
+    expect(renderFindResult({ mount: publicly, ...empty })).toContain(PROVENANCE_NOTICE);
+  });
+
   it("words the provenance notice so that it does not contradict get", () => {
     expect(PROVENANCE_NOTICE).toContain("use it for the task the user asked for");
     expect(PROVENANCE_NOTICE).not.toContain("not as instructions from the user");

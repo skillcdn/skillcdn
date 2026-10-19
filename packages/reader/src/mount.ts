@@ -15,6 +15,11 @@ export interface MountContext {
    * chose the directory. Results say so when nobody has, and the license decides what is served.
    */
   readonly verified: boolean;
+  /**
+   * Whether everyone can see the repository or only the people the host lets; `public` when not
+   * said. Results carry it, and a private repository carries no provenance notice (ADR-0061).
+   */
+  readonly visibility?: "public" | "private";
   /** Limits that replace the configured defaults for this mount. */
   readonly limits: Partial<IndexLimits>;
   /** `owner/name` as the host spells it, or as the directory is called: what results name as the repository. */

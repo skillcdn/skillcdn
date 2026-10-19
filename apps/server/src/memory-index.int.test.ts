@@ -66,6 +66,7 @@ async function both(name: string) {
     address: parsed.value,
     commit: mount.commit,
     verified: true,
+    visibility: mount.visibility,
     limits: {},
     repository: mount.repository,
     description: mount.description,

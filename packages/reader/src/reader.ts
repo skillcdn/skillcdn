@@ -584,6 +584,7 @@ export class Reader<M extends MountContext = MountContext> {
       commit: mount.commit,
       path: mount.address.path,
       verified: mount.verified,
+      ...(mount.visibility === undefined ? {} : { visibility: mount.visibility }),
       truncated: index?.truncated ?? false,
       skillUri: skillUriPrefix(mount.address),
     };

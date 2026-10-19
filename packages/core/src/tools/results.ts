@@ -52,6 +52,11 @@ export interface MountSummary {
   readonly path: RepoPath;
   /** False until the repository owner, or the operator, has vouched for the repository. */
   readonly verified: boolean;
+  /**
+   * Whether everyone can see the repository or only the people the host lets; `public` when not
+   * said. A private repository carries no provenance notice (ADR-0061).
+   */
+  readonly visibility?: "public" | "private";
   /** True when the repository was too large to index completely. */
   readonly truncated: boolean;
   /** What every skill URI of the repository starts with: `skill://gh/<owner>/<repo>`. */

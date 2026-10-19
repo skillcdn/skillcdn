@@ -112,7 +112,9 @@ function notices(mount: MountSummary): string[] {
   if (mount.truncated) {
     lines.push(TRUNCATED_NOTICE);
   }
-  if (!mount.verified) {
+  // A private repository is served only to people the host lets see it, who connected it
+  // themselves: the notice is for a public repository nobody vouched for (ADR-0061).
+  if (!mount.verified && mount.visibility !== "private") {
     lines.push(PROVENANCE_NOTICE);
   }
   return lines;

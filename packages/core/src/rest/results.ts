@@ -102,6 +102,9 @@ export function mountSummaryOf(mount: RestMount): MountSummary {
     commit: mount.commit,
     path: address.path,
     verified: mount.verified,
+    ...(mount.repository.visibility === undefined
+      ? {}
+      : { visibility: mount.repository.visibility }),
     truncated: mount.index.status === "ready" ? mount.index.truncated : false,
     skillUri: skillUriPrefix(address),
   };
