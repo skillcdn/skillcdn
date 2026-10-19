@@ -36,7 +36,7 @@ Agent skills are already distributed as folders of Markdown in git repos. The mi
 - **Address, not install.** A URL is the whole onboarding. It works with any client that can add a remote MCP server.
 - **Git is the source of truth.** We never host content. We read, index and serve. Pin a ref and the skill you reviewed yesterday is the skill you run today.
 - **Your git-host permissions are our permissions.** Public repo: no auth, no signup. Private repo: a GitHub App installed on the org plus standard MCP OAuth. There is no separate user or team table for you to manage.
-- **Same image everywhere.** One container image, one PostgreSQL. It runs on our cloud, on your own box, or inside an air-gapped network against GitLab or Gitea.
+- **Same image everywhere.** One container image, one PostgreSQL. It runs on our cloud, on your own box, or inside your own network against GitHub Enterprise Server; other git hosts are planned behind the same port.
 
 ## How it works
 
@@ -54,7 +54,7 @@ Agent skills are already distributed as folders of Markdown in git repos. The mi
 3. On every request we ask GitHub whether this user can see this repo and cache the yes/no for a short time. Teams, outside collaborators, internal repos, SSO enforcement: GitHub decides, we relay. A repository someone may not see answers exactly like one that does not exist.
 4. Indexing uses the App installation token, never a user token. GitHub's webhooks end a cached answer at once: a repository made private, the App removed, a person who revoked it, and, where the App may read an organization's members, a change of collaborators, teams or members.
 
-Authorization is optional: a public repository never asks for it. An agent that has nobody to sign in, such as a scheduled job or a server, is given a **repository token**: made on their account pages by anyone who can read the repository, good for that one repository, read-only, expiring and revocable. It reads as the person who made it, so GitHub still decides what it opens: there is no permission layer of our own. Both tokens are taken over MCP and by the REST API, so a program built on the API, a console or a job, reads a private repository as an agent does.
+Authorization is optional: a public repository never asks for it. An agent that has nobody to sign in, such as a scheduled job or a server, is given a **repository token**: made on their account pages by anyone who can read the repository, good for that one repository, read-only and revocable, with an end or without one. It reads as the person who made it, so GitHub still decides what it opens: there is no permission layer of our own. Both tokens are taken over MCP and by the REST API, so a program built on the API, a console or a job, reads a private repository as an agent does.
 
 Every account has a page at `skillcdn.ai/gh/<owner>` with its public repositories as GitHub lists them, the ones already indexed with skills first.
 
@@ -88,14 +88,13 @@ Specifications: [address scheme](docs/specs/address.md) · [the SkillCDN Format:
 ```
 [agent]      any MCP client
      |   skillcdn.ai/gh/<owner>/<repo>[@ref][/path]   OAuth, or anonymous for public read
-[api]        stateless MCP over HTTP · sign-in and OAuth · permission check · meta tools · REST for the web app · webhook receiver
-[worker]     index and re-index on webhook or schedule   (same image as api, different role)
+[api]        stateless MCP over HTTP · sign-in and OAuth · permission check · meta tools · REST for the web app · webhook receiver · indexes a commit on first request
 [check]      read a working tree with the same indexer, for authors before they push: the image's role, or the skillcdn command   (no database)
-[postgres]   content index (full-text) · permission cache · job queue · later: vectors
-[git host]   GitHub (App) · GitLab / Gitea (self-hosted, air-gapped)
+[postgres]   content index (full-text) · permission cache · file bodies by content hash
+[git host]   GitHub (App), GitHub Enterprise Server
 ```
 
-One image with several roles, one database, caches keyed per repo and never per user, an optional web UI, and git hosts behind one adapter interface. The full picture is in [docs/architecture.md](docs/architecture.md); the decisions behind it are in [docs/adr/](docs/adr/).
+One image with several roles, one database, caches keyed per repo and never per user, an optional web UI, and git hosts behind one adapter interface. A `worker` role that indexes ahead of requests, other git hosts behind that interface and search by meaning are planned ([docs/roadmap.md](docs/roadmap.md)). The full picture is in [docs/architecture.md](docs/architecture.md); the decisions behind it are in [docs/adr/](docs/adr/).
 
 ## Repository layout
 
@@ -103,14 +102,17 @@ TypeScript monorepo: pnpm workspaces, Turborepo, Node.js 24, PostgreSQL 18.
 
 ```
 apps/
-  server/     the single deployable; roles: api | worker | migrate | check     Hono + MCP SDK
+  server/     the single deployable; roles: api | migrate | check | purge (worker: not yet)     Hono + MCP SDK
   web/        optional web UI: landing page and explorer              Vite + React
 packages/
-  core/       address parser, the SkillCDN Format, permission rules, tool and REST contracts, ports   pure TS
+  core/       address parser, the SkillCDN Format, permission rules, tool and REST contracts, search word rules, ports   pure TS
   db/         schema, migrations, query layer                           Drizzle + PostgreSQL
   github/     GitHub App, user-token and contents adapter               implements the git-host port
   indexer/    the reading rules: a commit or a working tree read into an index   Node.js, no database
-  cli/        the skillcdn command for repository authors: skillcdn check        bin
+  reader/     the reads of a mount over an index, wherever the index is kept
+  client/     the REST API as typed functions, for Node.js and the browser
+  serve/      the MCP surface and the REST address routes as a library over a reader
+  cli/        the skillcdn command: check a pack, read one as an agent gets it, serve a directory   bin
   brand/      the pictures of the brand as files, under the trademark policy    no code
 apps/server/fixtures/.repositories/  test-only repository fixtures
 deploy/       Dockerfile, compose files, the contract for whoever operates the image
@@ -131,13 +133,7 @@ On npm, under the `@skillcdn` scope, released together at one version, each with
 
 **Related repositories.** [`skillcdn/skills`](https://github.com/skillcdn/skills) is the reference pack, the one the explorer offers to try. [`skillcdn/console`](https://github.com/skillcdn/console) is the reference console: where an organization runs its work with AI agents, a board of the work, the agents at it, and the decisions that wait for a person. Like the reference pack, it is an example that follows the standard and is meant for real use, packaged on npm so that anyone can start from it; it builds on the published packages and the REST API like any other consumer, defines nothing of the specification, and nothing here depends on it ([ADR-0047](docs/adr/0047-the-console-is-a-separate-repository-built-on-the-published-packages.md)).
 
-
-| | hosted (skillcdn.ai) | self-hosted / air-gapped |
-|---|---|---|
-| runtime | the container image, on AWS | the same image with compose |
-| database | managed PostgreSQL | bundled PostgreSQL container |
-| file cache | S3 | MinIO or local disk (S3-compatible) |
-| git signal | GitHub App webhooks | GitLab / Gitea webhooks, or periodic pull |
+Hosted and self-hosted run the same image against any PostgreSQL 18, with file bodies in the database; a compose bundle for self-hosting, a published image and a blob store on S3-compatible storage are planned ([docs/roadmap.md](docs/roadmap.md), [ADR-0004](docs/adr/0004-postgresql-only-state.md)).
 
 ## Development
 

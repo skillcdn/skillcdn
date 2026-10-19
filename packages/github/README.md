@@ -14,7 +14,7 @@ The GitHub implementation of the git-host ports defined in `@skillcdn/core`. It 
 | An account's profile and public repositories (`GitHostDirectory`) | The page of an account | None or the optional token |
 | The app's webhook deliveries (`GitHostEventSource`) | Verifying the signature of a delivery over its raw body, then reading what it ends: refs after a push, what is known about a repository that changed or closed, the answers about who sees what after a change of collaborators, teams or members, an installation that was removed, a person who revoked the app ([ADR-0038](../../docs/adr/0038-the-git-hosts-events-end-what-is-remembered.md)) | The webhook secret |
 
-Other hosts (GitLab, Gitea) are separate packages that implement the same port.
+Another host would be a package of its own that implements the same ports; GitLab and Gitea adapters are planned ([roadmap](../../docs/roadmap.md)).
 
 ## Usage
 

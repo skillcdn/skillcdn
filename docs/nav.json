@@ -18,6 +18,12 @@
           "file": "docs/specs/permissions.md",
           "slug": "permissions",
           "title": "People, private repositories and access"
+        },
+        {
+          "file": "packages/cli/README.md",
+          "slug": "cli",
+          "title": "The skillcdn command",
+          "description": "Read a pack from a directory or a deployment as an agent gets it, serve one over MCP and HTTP, and check a pack before pushing."
         }
       ]
     },

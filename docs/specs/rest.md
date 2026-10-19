@@ -1,7 +1,7 @@
 # Spec: REST API
 
-- Status: **Draft.** Version 1 serves the web UI.
-- Response schemas live in `packages/core`; handlers live in `apps/server`. The web UI uses this API.
+- Status: **Draft.** Version 1 serves the web UI, the `skillcdn` command and any program that reads a pack.
+- Response schemas live in `packages/core`, the routes of an address in `packages/serve` and the client in `packages/client` ([ADR-0056](../adr/0056-the-rest-api-has-a-client-and-the-command-reads-a-deployment-through-it.md), [ADR-0057](../adr/0057-a-directory-is-served-by-the-command-over-stdio-and-http.md)); `apps/server` composes them with the deployment's own routes.
 
 The API shows a person what an agent gets from an address, and gives a program the same ([serving an agent from a program](#serving-an-agent-from-a-program)). Without a credential it is anonymous, read-only and limited to public repositories; on a deployment where people sign in, a request that carries the session cookie of the deployment's own pages, or a token of this deployment ([authorization](#authorization)), is answered for that person, private repositories they can see included ([permissions](permissions.md)), and a few routes under [People](#people) belong to whoever is signed in. It shares the index, canonical paths and reading rules of the [tools](tools.md). [ADR-0022](../adr/0022-repository-paths-and-progressive-skill-loading.md) explicitly changed the pre-alpha v1 path and skill contracts, and [ADR-0024](../adr/0024-skills-travel-through-the-mcp-skills-extension.md) records the last such replacement; from its surface on, changes are additive unless an ADR defines a breaking transition.
 
@@ -11,7 +11,8 @@ The API shows a person what an agent gets from an address, and gives a program t
 - `<address>` follows the [address spec](address.md), for example `/api/v1/mounts/gh/acme/library@v2/marketing`. Address percent-escapes are parsed from the raw path.
 - Every content path is an actual repository-root path, including on sub-path connections. A skill's `path` ends in `SKILL.md`; its `directory` is the containing folder. Names do not identify skills.
 - Ordinary reads and listings remain inside the mount. Applicable ancestor rules may arrive through skill-context continuation without permitting arbitrary reads above the mount.
-- Responses use `cache-control: no-store` for now.
+- Responses use `cache-control: no-store` for now. A read of a public address pinned to a full commit hash never changes and is to be answered as immutable; a private read stays `no-store`, since a shared cache would answer it without the permission check.
+- Limiting requests per client is the job of whatever sits in front of the server, as for MCP.
 - CORS allows `*` without credentials, answers `OPTIONS`, allows the `authorization` request header, and exposes `x-request-id`, `retry-after` and `www-authenticate`. Without credentials means another origin's page never sends the session cookie: only the deployment's own pages read what is a person's through it; a page elsewhere presents a token ([authorization](#authorization)).
 - Errors have `{ "error": { "code": "...", "message": "..." } }`.
 
@@ -170,7 +171,7 @@ A program that gives an agent what MCP gives it, a console, a command-line tool,
 | `load_skill` | `GET /api/v1/skills/<address>?path=&cursor=` | The `ruleChain` from the repository root to the nearest manifest, then the `body`, then the included files, in that order and each labeled by its source, as [loading a skill](tools.md#loading-a-skill) lays them out. Follow `nextCursor` until `complete` before giving the agent the skill, never a page alone. A skill with `serving.full` false is described only: its name, description, license and `sourceUrl`, and nothing else. |
 | `read_repo_file` | `GET /api/v1/files/<address>?path=&offset=&limit=` | The text, continued at `nextOffset`; a directory listing for a folder; the `sourceUrl` of what cannot be carried. The source `SKILL.md` as written, never a skill load. |
 | The `use_skill` prompt | none | A convenience of MCP clients. A program starts loading a skill by its path. |
-| The skills extension: the listed skills, their digests, the assembled `SKILL.md` | none yet | A program that installs skills into an agent's own folder speaks MCP for it ([open questions](#open-questions)). |
+| The skills extension: the listed skills, their digests, the assembled `SKILL.md` | none yet | Routes for the listed skills, their digests and the assembled document are planned ([roadmap](../roadmap.md)); until then a program that installs skills into an agent's own folder speaks MCP for it. |
 
 What the program tells the agent is what the tool descriptions tell a model ([inputs](tools.md#inputs), [indexing and trust](tools.md#indexing-and-trust)): content paths start at the repository root and are the only identifiers, a cursor continues one listing and is not reusable, every result names its commit and a moving ref may move between calls, and the content comes from the pack's author, under its license and with its provenance notice until the repository is vouched for. A program that holds a token sends it with every request, keeps it where passwords are kept and prints it nowhere; what it reads from a private repository is that person's for the staleness bound, so it shows it to that person's agent and keeps no copy beyond the request.
 
@@ -226,8 +227,3 @@ The badge carries the symbol; the [trademark policy](../../TRADEMARKS.md) allows
 
 The icon of the MCP server of an address ([tools](tools.md#connection-and-prompt)): the owner's picture as the git host serves it, 128 pixels square, fetched without credentials and served on from this origin, because a client fetches a server's icon from the server's own origin and from nowhere else. Served only when the bytes are a PNG, JPEG, GIF or WebP by their own first bytes, whatever the host said; `404` otherwise, and for an address that is nothing or not public. Answered with the image's type, `cache-control: public, max-age=86400` (an account's picture rarely changes), an ETag that names the account and the size, and byte ranges.
 
-## Open questions
-
-- Pinned addresses could support immutable caching.
-- Rate limiting is left to the layer in front of the server, as for MCP.
-- The listed skills of the MCP skills extension, with their digests and the assembled `SKILL.md`, have no route here; a program that installs skills into an agent's own folder needs one.

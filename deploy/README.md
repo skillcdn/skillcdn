@@ -4,7 +4,7 @@ Everything needed to build the image and hand it to whatever runs it. This repos
 
 | File | Purpose |
 |---|---|
-| [`Dockerfile`](Dockerfile) | The one multi-stage image. Roles `api`, `worker`, `migrate` and `check` are selected by the container command. |
+| [`Dockerfile`](Dockerfile) | The one multi-stage image. Roles `api`, `migrate`, `check` and `purge` are selected by the container command; `worker` is a name the dispatcher knows and not yet implemented. |
 | [`compose.dev.yaml`](compose.dev.yaml) | Local development dependencies (PostgreSQL 18). Not a production topology. |
 | [`../.github/workflows/ci.yml`](../.github/workflows/ci.yml) | Lint, build, typecheck, tests (integration tests run against a PostgreSQL service container), secret scan, and an image build that is then exercised: exit codes, `migrate`, readiness, non-root user, clean shutdown. It needs no secrets. |
 | [`../.github/workflows/release.yml`](../.github/workflows/release.yml) | Versions and publishes the npm packages from the pending changesets: a pull request that bumps versions and changelogs, and, once it is merged, a publish through the registry's trusted publishing, with provenance and no stored secret ([ADR-0046](../docs/adr/0046-packages-are-published-to-npm-through-trusted-publishing.md)). |
@@ -39,8 +39,8 @@ The server is configured only through environment variables. [`.env.example`](..
 | `CLIENT_COUNTRY_HEADER` | `api` | no | no | The header in which a trusted proxy or CDN names the visitor's country (ISO 3166-1 alpha-2, or a subdivision as `US-CA`), which decides whether a page asks before analytics run ([ADR-0051](../docs/adr/0051-analytics-ask-first-only-where-the-visitors-region-asks-and-run-elsewhere.md)). Default: none, and every visitor is asked. Read only from trusted proxies. |
 | `DATABASE_URL` | all | yes | **yes** | PostgreSQL connection string. |
 | `DATABASE_POOL_MAX` | `api` | no | no | Default `10` connections per process. |
-| `GITHUB_API_URL` | `api`, `worker` | no | no | Default `https://api.github.com`. GitHub Enterprise Server: `https://<host>/api/v3`. |
-| `GITHUB_TOKEN` | `api`, `worker` | no | **yes** | Optional, no scopes needed. Raises the GitHub rate limit for public-repo reads; without it the anonymous limit applies to the whole deployment. |
+| `GITHUB_API_URL` | `api` | no | no | Default `https://api.github.com`. GitHub Enterprise Server: `https://<host>/api/v3`. |
+| `GITHUB_TOKEN` | `api` | no | **yes** | Optional, no scopes needed. Raises the GitHub rate limit for public-repo reads; without it the anonymous limit applies to the whole deployment. |
 | `GITHUB_WEB_URL` | `api` | no | no | Where people sign in at the git host. Default: derived from `GITHUB_API_URL` (`https://github.com`, or the origin of a GitHub Enterprise Server). |
 | `GITHUB_APP_ID`, `GITHUB_APP_CLIENT_ID` | `api` | no | no | The id and the client id of the GitHub App people sign in through. See [Signing in and private repositories](#signing-in-and-private-repositories). |
 | `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_CLIENT_SECRET` | `api` | no | **yes** | The app's private key in PEM format (a value with `\n` for line breaks is accepted; `GITHUB_APP_PRIVATE_KEY_FILE` is the natural way to mount one) and its client secret. |
@@ -61,8 +61,8 @@ The server is configured only through environment variables. [`.env.example`](..
 | `USAGE_HASH_SECRET` | `api` | no | **yes** | What client hashes are keyed from ([ADR-0027](../docs/adr/0027-client-hashes-are-keyed-from-a-configured-secret-and-the-day.md)); at least 32 characters. Unset, each process makes its own at start, and replicas or restarts within a day count a client more than once. Set it for more than one replica, or for exact counts. |
 | `REPO_TTL_SECONDS`, `REF_TTL_SECONDS` | `api` | no | no | How long repository facts and moving refs are trusted before revalidation. Default `60` each. |
 | `INDEX_WAIT_MS` | `api` | no | no | How long a tool call waits for a new commit's index. Default `20000`. |
-| `INDEX_CONCURRENCY`, `INDEX_LEASE_SECONDS` | `api`, `worker` | no | no | Commits indexed at once per process, and the lifetime of an indexing claim. `INDEX_CONCURRENCY=0` makes a process index nothing and serve only what another process, on any version, has indexed. |
-| `INDEX_MAX_*`, `READ_MAX_FILE_BYTES` | `api`, `worker`, `check` | no | no | Limits on the work one repository may cause, including the unpacked size of a commit archive; see [`.env.example`](../.env.example). A file over `READ_MAX_FILE_BYTES` is not served: the skill is listed without it and names it with where to fetch it ([ADR-0033](../docs/adr/0033-a-file-over-the-read-limit-is-named-with-its-source.md)). The decision is made when a commit is indexed, so a changed limit shows after re-indexing. `check` and the `skillcdn check` command read these and nothing else. |
+| `INDEX_CONCURRENCY`, `INDEX_LEASE_SECONDS` | `api` | no | no | Commits indexed at once per process, and the lifetime of an indexing claim. `INDEX_CONCURRENCY=0` makes a process index nothing and serve only what another process, on any version, has indexed. |
+| `INDEX_MAX_*`, `READ_MAX_FILE_BYTES` | `api`, `check` | no | no | Limits on the work one repository may cause, including the unpacked size of a commit archive; see [`.env.example`](../.env.example). A file over `READ_MAX_FILE_BYTES` is not served: the skill is listed without it and names it with where to fetch it ([ADR-0033](../docs/adr/0033-a-file-over-the-read-limit-is-named-with-its-source.md)). The decision is made when a commit is indexed, so a changed limit shows after re-indexing. `check` and the `skillcdn check` command read these and nothing else. |
 
 Invalid configuration stops the process with exit code `78` and a message that names the variable and the rule, never the value.
 
@@ -252,11 +252,11 @@ The image carries what it is distributed under at `/app`: `LICENSE.md`, `THIRD-P
 Whatever rolls the image out must do this, in this order:
 
 1. Run the new image with the `migrate` command to completion. A non-zero exit aborts the rollout.
-2. Roll `api` and `worker` to the new image. Old and new versions overlap, which is why migrations are backward compatible (see [`packages/db/CLAUDE.md`](../packages/db/CLAUDE.md)).
+2. Roll `api` to the new image. Old and new versions overlap, which is why migrations are backward compatible (see [`packages/db/CLAUDE.md`](../packages/db/CLAUDE.md)).
 3. Gate traffic on `GET /readyz`, restart on `GET /healthz` failures, and send `SIGTERM` with a grace period before killing.
 4. Roll back by redeploying the previous digest. Because migrations only expand, the previous version keeps working.
 
-`worker` tolerates interruption at any time, so it can run on interruptible capacity. `api` is stateless and scales horizontally behind any load balancer without session affinity.
+`api` is stateless and scales horizontally behind any load balancer without session affinity; indexing in flight is handed back to the database on shutdown, so a replica may be stopped at any moment.
 
 ## Repository settings checklist
 

@@ -1,6 +1,6 @@
 # apps/server: rules
 
-Read the root [`CLAUDE.md`](../../CLAUDE.md) first. This workspace is the composition root: it wires ports to adapters and exposes the product over HTTP and the job queue.
+Read the root [`CLAUDE.md`](../../CLAUDE.md) first. This workspace is the composition root: it wires ports to adapters and exposes the product over HTTP.
 
 - **Wiring here, logic elsewhere.** Domain rules belong in `@skillcdn/core`, SQL in `@skillcdn/db`, GitHub calls in `@skillcdn/github`. If a handler grows domain logic, move it down.
 - **`src/config/` is the only reader of `process.env`** (lint enforces it). A new variable means: schema in the config module, an entry in `.env.example`, and a row in the table in `deploy/README.md`, all in the same change. Every tunable has a safe generic default; production values are never committed.
@@ -10,10 +10,10 @@ Read the root [`CLAUDE.md`](../../CLAUDE.md) first. This workspace is the compos
 - **An event of the git host ends what is remembered and establishes nothing** (ADR-0038). Never write down what a delivery says as a fact: make the fact due, forget the answer, and let the next request ask the host. Closing is the one exception: a repository said to be private or gone, a person said to have revoked the app. Whatever an event ends must end in the database, where every replica reads it.
 - **A request that changes something for a person** checks that it comes from the deployment's own pages (`origin`), in addition to the session.
 - **Errors are mapped at the edge.** Never forward an upstream error body, a stack trace or a token-bearing URL to a client.
-- **Jobs are idempotent and interruptible.** Deduplicate by `(repo, commit)`. Payloads are versioned and stay readable by the previous release. A job never assumes it runs exactly once.
-- **Roles load their own weight.** Import role-specific heavy dependencies inside the role module so `api` does not pay for `worker`.
+- **Indexing is idempotent and interruptible.** A commit is claimed through its snapshot row and indexed once (ADR-0007); a claim that is interrupted is handed back, and the next request claims it again. Nothing assumes it runs exactly once.
+- **Roles load their own weight.** Import role-specific heavy dependencies inside the role module so `migrate` does not pay for the HTTP stack.
 - **Shutdown is part of the feature.** Anything long-running registers with the shutdown path, and tests cover it.
-- **Logging:** structured logger only. Include request id, account and repo. Never log tokens, authorization headers or file content.
+- **Logging:** structured logger only. Include the request id where there is a request, and the repository, commit and account id where the work is about a mount. Never log tokens, authorization headers or file content.
 - **No business logic.** Limits and capabilities come from the `Entitlements` port and usage goes to `UsageSink`; never branch on plan names.
 
 ## Gotchas

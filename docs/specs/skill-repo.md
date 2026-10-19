@@ -89,7 +89,7 @@ The reading rules say what is served. The format says how to make it useful: an 
 
 ### Required
 
-A pack is in the SkillCDN Format when all of these hold. They are what the explorer checks and what the reference pack's own check enforces.
+A pack is in the SkillCDN Format when all of these hold. The explorer and `check` verify points 1 and 2 from the files; a dead local link, or a reference to a file that is not text, is to be reported as a warning as well; the rest is what a reviewer of the pack reads for.
 
 1. **Every skill directory has a `SKILL.md`** whose front-matter passes the table above, whose `name` follows the naming convention and equals the directory name, and whose body starts with a level-one heading.
 2. **The `description` says what the skill does and when to use it**, in the words a user would say. It is what `search_repo` ranks first. Say when another skill is a better choice when their purposes overlap.
@@ -111,13 +111,13 @@ skills/<name>/
   scripts/              optional helpers for agents that run locally
 ```
 
-The body of a `SKILL.md`, in this order, so that an agent that has read one knows where to look in the next: a title and a one-paragraph summary of what comes out from what; the requirements, that is the tools the skill calls and what to do when one is missing; the inputs, what the user must supply and the questions to ask for gaps; the workflow, as numbered phases that name what each consumes and produces and where the user is consulted; the hard rules an agent must never break; and the terms the skill uses with a fixed meaning.
+The body of a `SKILL.md`, in this order, so that an agent that has read one knows where to look in the next: a title and a one-paragraph summary of what comes out from what; the requirements, that is the tools the skill calls and what to do when one is missing; the inputs, what the user must supply and the questions to ask for gaps; the workflow, as numbered phases that name what each consumes and produces and where the user is consulted; the hard rules an agent must never break; and the terms the skill uses with a fixed meaning. A skill that needs a file of the user's says so among its inputs; the agent reads the file from its own environment, since SkillCDN never receives files.
 
 A file that every run needs is declared in `skillcdn.include`, so that it arrives through the skill's context pages; a file that only some phase needs is linked from that phase and read when the phase comes. A page the skills of one tool family share is declared the same way, from a document set above the skill ([shared pages](#shared-pages)).
 
 Keep the skill body and always-required includes modest: about 16 KiB of UTF-8 text combined is a useful authoring target before inherited rules. This is guidance, not an admission limit. Larger context is paged; inherited rules and response metadata also take space. Link optional material from the phase that needs it so agents can read it on demand ([loading a skill](tools.md#loading-a-skill)).
 
-Write the canonical `name`, `description`, body and shared rules in English by default, so agents use the same original across UI languages. Other original languages are supported; declare the language in the nearest applicable manifest. SkillCDN preserves the author's original and never chooses an agent's skill language from the visitor's UI language.
+Write the canonical `name`, `description`, body and shared rules in English by default, so agents use the same original across UI languages. Other original languages are supported; declare the language in the nearest applicable manifest. SkillCDN preserves the author's original and never chooses an agent's skill language from the visitor's UI language. Search matches words as written today; matching across inflections and by meaning is the next item of the [roadmap](../roadmap.md).
 
 Use `skillcdn.translations` (a title and description) and the manifest's `translations` for people reading the page in another language. Translations are display-only: the explorer marks translated skill summaries, and search uses original metadata and body text rather than translation fields. The original name remains visible beside a translated skill title. MCP discovery and skill context use the original fields and body; reading an exact source file can still show its translation declarations as written.
 
@@ -288,6 +288,3 @@ Everything in a repo is untrusted input:
 
 - The exact rules for *verified* once owners can verify a repository themselves; the operator's list is a stand-in.
 - How `intake` questions are declared.
-- How skills that need user files describe an upload step, given that remote MCP servers cannot receive chat attachments.
-- Whether the explorer reports the format's required points 3 to 6 as diagnostics, next to the manifest diagnostics it already reports.
-- Search matches words as written. A repository in a language whose words carry particles or inflections (Korean, for one) is found by its exact words; whether `language` should pick a text-search configuration, or a morphological or embedding search should take over, is open.

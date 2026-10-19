@@ -39,21 +39,21 @@ Access to the list of changes: the user pastes it, or the agent reads it from th
 - Keep the whole text under 300 words.
 ```
 
-That is a complete, servable skill. The `name` is the directory's name, in lowercase letters, digits and hyphens. The `description` says what the skill does and when to use it, in the words a user would say: it is what search ranks first, and what an agent reads to decide whether to load the skill at all. The body is what the agent follows ([front-matter](../specs/skill-repo.md#front-matter)).
+That is a complete, servable skill. The `name` repeats the directory's name, the `description` is what an agent reads to decide whether to load the skill, so it says what the skill does and when to use it in the words a user would say, and the body is what the agent follows; the rules for every field are in [the front-matter table](../specs/skill-repo.md#front-matter).
 
-Two things about YAML catch most authors: a colon followed by a space inside a plain value, and a space followed by a hash. Quote such a value, or write it as a block scalar ([writing the values](../specs/skill-repo.md#writing-the-values)):
+Two things about YAML catch most authors: a colon followed by a space inside a plain value, and a space followed by a hash. Quote such a value, or write it as a block scalar, which takes any text ([writing the values](../specs/skill-repo.md#writing-the-values)):
 
 ```yaml
 description: >
-  Makes a video: fast and cheap. Use when the user wants a promo
-  short for their product.
+  Writes release notes from a list of merged changes: new, improved, fixed.
+  Use when a release is about to go out.
 ```
 
 ## The body of a skill
 
-An agent that has read one skill should know where to look in the next, so the recommended order is: a title and a one-paragraph summary of what comes out from what; the requirements, that is the tools the skill calls and what to do when one is missing; the inputs, what the user must supply and the questions to ask for gaps; the workflow, as numbered phases that name what each consumes and produces and where the user is consulted; the hard rules an agent must never break; and the terms the skill uses with a fixed meaning ([recommended](../specs/skill-repo.md#recommended)).
+An agent that has read one skill should know where to look in the next, so the format recommends one order for the body, from a summary through requirements, inputs and the workflow to the hard rules and the terms the skill uses ([recommended](../specs/skill-repo.md#recommended)); the skill above follows it in miniature.
 
-Keep the body to a few hundred lines. About 16 KiB of text for the body and everything it requires on every run is a useful target: an agent receives a skill in pages, and the rules of the repository and the response metadata take room of their own.
+Keep the body to a few hundred lines: an agent receives a skill in pages, with the pack's rules in front of it, and the format says what size is a useful target ([recommended](../specs/skill-repo.md#recommended)).
 
 ## Files beside the skill
 
@@ -75,11 +75,11 @@ skillcdn:
     - references/style.md
 ```
 
-Everything an agent must read is Markdown or small JSON. Other files are listed and can be read, but they are not searched, and nothing in the repository is ever executed by SkillCDN ([references](../specs/skill-repo.md#markdown-references)).
+Only Markdown and small JSON are searched, and nothing in the repository is ever run, so a script is help for an agent that works locally, not something SkillCDN executes ([required](../specs/skill-repo.md#required)).
 
 ## Documents and shared rules
 
-A pack can serve plain documents next to its skills: Markdown files under `docs/` are listed, searched and read without a skill around them, and a skill can link to them. A page that several skills need on every run, what they all know about one tool for instance, lives once under `docs/` and is included by each skill with a root-relative path, `/docs/<tool>/models.md` ([shared pages](../specs/skill-repo.md#shared-pages)).
+A pack can serve plain documents next to its skills: Markdown files under `docs/` are served as documents in their own right, and a skill can link to them. A page that several skills need on every run, what they all know about one tool for instance, lives once under `docs/` and is included by each skill with a root-relative path, `/docs/<tool>/models.md` ([shared pages](../specs/skill-repo.md#shared-pages)).
 
 Rules that hold for every skill go in `SKILLCDN.md` at the repository root. Its front-matter names and describes the pack, and its body is delivered to the agent with every skill:
 
@@ -93,20 +93,20 @@ license: MIT
 ---
 # Rules for every skill in this pack
 
-**Ask only what cannot be derived.** A skill asks for the inputs it cannot get from the request, in one short message.
+**One question at a time.** When a skill needs something it cannot derive, it asks for it in one short message, then goes on.
 
-**Spend only with consent.** Anything that costs the user money or credits is estimated first and started only after they agree.
+**Show before you publish.** Nothing leaves the conversation until the user has seen the draft.
 ```
 
 A larger pack puts one folder per area of work, each with a `SKILLCDN.md` that says who its skills are for and adds the area's rules; connect the root for everything, or an area's folder for that area alone ([the repository manifest](../specs/skill-repo.md#the-repository-manifest-skillcdnmd)). A manifest is optional: a pack with nothing to add needs none.
 
 ## A license
 
-Put a license file at the repository root. What a deployment may pass on follows the license it finds: a permissive license (MIT, Apache-2.0, CC-BY-4.0 and the like) is served whole with its notice; a restrictive one, or a text the reader does not recognize, keeps the content at the source and the skill is only described; a pack without a license is served with a notice and is never featured ([licenses](../specs/skill-repo.md#licenses)). A skill may carry a license of its own, as a file in its directory or a `license` field.
+Put a license file at the repository root, and choose a permissive one if the skills are to be served whole: a license that does not allow copies keeps the content at the source and the skill is only described, and a pack without one is served with a notice and never featured ([licenses](../specs/skill-repo.md#licenses)). A skill may carry a license of its own, as a file in its directory or a `license` field.
 
 ## Check it before you push
 
-`skillcdn check` reads a directory as a deployment would index it, with the same code and the same limits, and prints what an agent would get: every skill with its files and warnings, the documents, what is not served, and the instructions a client is told on connect. It needs no account and no server ([checking a repository](../specs/skill-repo.md#checking-a-repository-before-pushing)):
+`skillcdn check` reads the directory as a deployment would index it and prints what an agent would get, with a warning for everything that will not be served as you meant it. It needs no account and no server ([checking a repository](../specs/skill-repo.md#checking-a-repository-before-pushing)):
 
 ```sh
 npx @skillcdn/cli check
@@ -120,11 +120,11 @@ It exits with `1` when something could not be read as intended, so it can gate a
 
 ## Publish
 
-Push to a public repository on GitHub and open its page: `https://skillcdn.ai/gh/<owner>/<repo>`. The first look indexes the commit; from then on every push is picked up on the next request. The page shows what an agent gets, with the connection guide first, and the explorer's card for the repository. A few things that make the page, and the agent's view, better:
+Push to a public repository on GitHub and open its page: `https://skillcdn.ai/gh/<owner>/<repo>`. The first look indexes the commit. A branch is looked up again after a short while, and where the deployment's GitHub App is installed on the repository, a push is served by the very next request. The page shows what an agent gets, with the connection guide first, and the explorer's card for the repository. A few things that make the page, and the agent's view, better:
 
-- **Translations for people.** `translations` in the manifest and `skillcdn.translations` in a skill give a title and a description for people reading the page in another language. Agents keep reading the original, so write the original in English unless your users do not.
+- **Translations for people.** `translations` in the manifest and `skillcdn.translations` in a skill give the page a title and a description in another language; agents keep reading the original ([recommended](../specs/skill-repo.md#recommended)).
 - **A picture.** `image` in the manifest names a file of the repository or an `https` URL; the explorer's card and the page show it.
-- **A badge in your README**, so that readers see where the skills are served and how many there are:
+- **A badge in your README**, so that readers see where the skills are served and how many there are ([the badge](../specs/rest.md#get-badgeaddress)):
 
   ```md
   [![SkillCDN](https://skillcdn.ai/badge/gh/<owner>/<repo>)](https://skillcdn.ai/gh/<owner>/<repo>)

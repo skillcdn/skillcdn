@@ -1,6 +1,6 @@
 # Spec: address scheme
 
-- Status: **Draft.** The grammar has not changed since milestone 1 and becomes normative with the surface of [ADR-0024](../adr/0024-skills-travel-through-the-mcp-skills-extension.md); the open questions below remain open. What a ref may resolve to is decided in [ADR-0039](../adr/0039-an-address-serves-only-what-is-the-repositorys-own.md).
+- Status: **Draft.** The grammar gained `local` addresses since milestone 1 ([ADR-0053](../adr/0053-an-address-may-name-a-pack-served-from-a-machine.md)) and otherwise stands; it becomes normative when the specifications are declared stable ([ADR-0058](../adr/0058-the-published-packages-share-one-version.md)). What a ref may resolve to is decided in [ADR-0039](../adr/0039-an-address-serves-only-what-is-the-repositorys-own.md).
 - Implemented by: `packages/core` (`parseAddress`, `formatAddress`). Nothing else parses addresses.
 
 An address identifies the pack an agent mounts: a repository, or a folder of it, at a ref ([the format](skill-repo.md)). It is the path of the MCP endpoint URL, so the whole onboarding is one URL.
@@ -50,10 +50,12 @@ Parsing never consults the repository. An address means the same thing whatever 
 
 `formatAddress(parseAddress(x))` is the canonical form of `x`, and it parses back to the same address. It lowercases the owner, the repo and a full commit hash, percent-encodes what a URL path requires, and uses the `:` terminator only when it is needed (a `/` in the ref, or a `:` in the path).
 
+A fully qualified ref (`refs/tags/v1`, `heads/main`) is a valid ref name, read as the branch or tag it says it is, and the canonical form keeps it as written: folded into the short name, it would lose which of the two it named.
+
 ## Semantics
 
 - **Connect the repository root by default.** One connection can browse different areas of work and read shared references. A sub-path remains a supported access boundary, not a different path notation.
-- **Content paths are repository-root paths.** On `/gh/acme/library/marketing`, `get_skill` still takes `marketing/skills/ad-copy/SKILL.md`, and file reads retain that same prefix. Names and shortened directory aliases are not content identifiers. Paths outside the mount are rejected. Applicable ancestor rules are delivered only through skill-context pages, without allowing arbitrary file reads above the mount ([tools](tools.md)).
+- **Content paths are repository-root paths.** On `/gh/acme/library/marketing`, `load_skill` still takes `marketing/skills/ad-copy/SKILL.md`, and file reads retain that same prefix. Names and shortened directory aliases are not content identifiers. Paths outside the mount are rejected. Applicable ancestor rules are delivered only through skill-context pages, without allowing arbitrary file reads above the mount ([tools](tools.md)).
 - **Pagination identifies one indexed view.** Cursors bind to the commit's snapshot and reading-rule version, mount and request. A changed snapshot or request requires restarting the page sequence.
 - **Only what is the repository's own.** A ref name is a branch of the repository or, when it has no branch of that name, a tag of it. A commit hash is served only for a commit in the history of the default branch. A git host answers for more under a repository's name, such as the commits of its forks and the heads of pull requests made to it, and an address serves none of that: it is not found, like a ref that does not exist ([ADR-0039](../adr/0039-an-address-serves-only-what-is-the-repositorys-own.md)). A commit elsewhere in the repository is addressed by the name of its branch or tag.
 - **Pinned** addresses (full commit hash) always serve the same content and may be cached indefinitely.
@@ -83,5 +85,4 @@ The same URL answers people. When the deployment serves the web UI, a `GET` or `
 
 ## Open questions
 
-- Fully qualified refs (`refs/tags/v1`, `heads/main`) are valid ref names, read as the branch or tag they say they are. Whether the canonical form should fold them into the short name is undecided.
 - Commit hashes longer than 40 digits (SHA-256 repositories) are treated as ref names until a host adapter supports them.

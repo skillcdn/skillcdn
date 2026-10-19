@@ -22,6 +22,7 @@ Node.js only. No network, no database, no environment of its own: the index come
 | `MountContext` | What the reader needs to know of a mount: its address and commit, whether it is verified, its limits, how results name its repository, and where its files are at their source. A caller's own mount type extends it and travels through the reader untouched. |
 | `ReaderInputError` | An input the caller can correct, with the code `request.invalid`: a path outside the mount, a cursor of another request, a page that cannot advance. |
 | `BodyUnavailableError` | A body the index names is at hand nowhere. |
+| `createMemoryIndex` | A `ReadableIndex` kept in memory over what the indexer produced of a commit or a directory (`MemoryIndexOptions`: the index, its bodies, and an id that is a digest of the entries unless one is given): the served entries in path order, and a search weighed and ranked with the word rules of `@skillcdn/core`. What the `skillcdn` command reads a directory with ([ADR-0053](https://github.com/skillcdn/skillcdn/blob/main/docs/adr/0053-an-address-may-name-a-pack-served-from-a-machine.md)). |
 | `compareByteOrder` | The order the index keeps paths in. |
 
 ## Tests

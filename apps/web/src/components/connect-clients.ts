@@ -59,7 +59,7 @@ export function isTerminalClient(client: ConnectClient): boolean {
 /**
  * What a person types to make a terminal client sign in to a server that asks for it, where
  * the client has a command for that: a private repository is read as its person
- * (docs/specs/connect-guide.md). `undefined` where the client asks by itself. Codex CLI signs in
+ * (apps/web/connect-guide.md). `undefined` where the client asks by itself. Codex CLI signs in
  * from its add command already; its own command is for when that did not happen.
  */
 export function clientSignInCommand(client: ConnectClient, name: string): string | undefined {
@@ -78,7 +78,7 @@ export const TOKEN_VARIABLE = "SKILLCDN_TOKEN";
 
 /**
  * How an agent that has nobody to sign in is given a token it sends with every request
- * (docs/specs/connect-guide.md): the command of the two terminal clients that take one, and the
+ * (apps/web/connect-guide.md): the command of the two terminal clients that take one, and the
  * header itself for everything else.
  */
 export function tokenSetup(

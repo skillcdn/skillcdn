@@ -22,22 +22,13 @@ An app that connects to an address receives four read-only tools: one to browse 
 A few things to know as you use them:
 
 - **The content is the repository's.** It is served as its author pushed it, at the commit the address resolves to. A repository nobody has vouched for carries a notice that says so; read a skill before you trust it with something that matters, as you would a script from the web.
-- **The license decides what is served.** A skill under a permissive license is served whole. One under a restrictive license, or one the reader cannot recognize, is only described, with a link to its source; your agent can tell you it exists and where to read it ([licenses](../specs/skill-repo.md#licenses)).
-- **Search matches words, not meaning**, in the language the repository is written in, which is usually English. Ask for what you want in plain words; the description of a skill is written to be found that way.
+- **The license decides what is served.** A skill whose license does not allow copies is only described, with a link to its source, and your agent can tell you where to read it ([licenses](../specs/skill-repo.md#licenses)).
+- **Search matches words**, in the language the pack is written in, so ask for what you want in the plain words a description would use ([browse and search](../specs/tools.md#browse-and-search)).
 - **Many skills call tools.** A skill that makes a video or an image says which tool it needs and what to do when the app does not have it. The skill carries the know-how; the app brings the tools.
 
 ## Choose a version or a folder
 
-An address names a repository, and may name more ([addresses](../specs/address.md)):
-
-```
-/gh/<owner>/<repo>                 the default branch, as it is now
-/gh/<owner>/<repo>@v1.2.0          a tag, a branch or a commit
-/gh/<owner>/<repo>/marketing       one folder of it
-/gh/<owner>/<repo>@main/marketing  both
-```
-
-A tag or a full commit hash gives you exactly what was reviewed, every time. A folder gives an app only that area of a large repository; connect the repository root when the skills share references across folders, which the page of the repository suggests where it matters.
+An address names a repository and may add a ref, a folder or both, as `/gh/<owner>/<repo>@v1.2.0/marketing` does ([addresses](../specs/address.md)). A tag or a full commit hash gives you exactly what was reviewed, every time. A folder gives an app only that area of a large repository; connect the repository root when the skills share references across folders, which the page of the repository suggests where it matters.
 
 ## From a shell, without MCP
 
@@ -49,22 +40,17 @@ An agent that can run commands does the rest. By hand, it is the same three step
 
 1. **Install the command** where the agent runs: `npm install -g @skillcdn/cli` (Node.js 24 or newer), or `npx @skillcdn/cli <command>` for a run without installing.
 2. **Connect the project to the pack**: `skillcdn use gh/acme/skills` for a pack at a deployment, or `skillcdn use ../packs/acme` for a folder on the machine, read with no server and no network. It writes `.skillcdn.json`, which names the pack and nothing secret and is meant to be committed.
-3. **Tell the agents.** Nothing tells an agent to look until the project says so: put the sentence the command prints into the project's agreement (`CLAUDE.md` or `AGENTS.md`, whichever your agents read), as it is:
-
-   > **Bound to a pack?** When `.skillcdn.json` is in this checkout, or `skillcdn status` names a pack, read its skills with `skillcdn skills` before you start, and load the one a task calls for (`skillcdn help` says how).
+3. **Tell the agents.** Nothing tells an agent to look until the project says so: put the sentence the command prints into the project's agreement (`CLAUDE.md` or `AGENTS.md`, whichever your agents read), as it is; [the command's reference](../../packages/cli/README.md#a-private-pack-and-a-bound-directory) shows it.
 
 From then on an agent in the project reads the pack without naming it, and any pack by its address:
 
 ```sh
-skillcdn status                                 # what this checkout reads, and whether a token is kept for it
-skillcdn skills                                 # what a client is told on connect, then every skill and document
-skillcdn find release notes                     # search by words
-skillcdn skill marketing/ads/SKILL.md           # one skill whole: its rules, instructions and included files
-skillcdn file docs/guide.md                     # a file, by pages
-skillcdn skills gh/acme/skills                  # any pack, by its address, bound or not
+skillcdn skills                                 # every skill and document of the pack
+skillcdn skill marketing/ads/SKILL.md           # one skill whole
+skillcdn skills gh/acme/skills                  # any pack, by its address
 ```
 
-An address is read at `skillcdn.ai` unless `--url` or `SKILLCDN_URL` names a deployment of your own. **A private repository** takes one more step, and no token to copy: tell the agent to run `skillcdn login --url <origin>` in the project as well and to tell you the address and the code it shows; open the address signed in, check that it shows the same code, and approve. The command receives a token for that repository and keeps it in your configuration directory, showing it to nobody; the token is listed on your account page under the name you gave it, and removed there. For a job with nobody to approve, a token made on your account page is piped in with `skillcdn login --url <origin> gh/acme/private --token-stdin`. `skillcdn help <command>` says the rest. A folder read from the machine is yours: it is served in full under its license, with no provenance notice, and it is addressed as `local/<the folder's parent>/<its name>` ([addresses](../specs/address.md#served-from-a-machine)).
+[The command's reference](../../packages/cli/README.md) lists every command with what it prints. An address is read at `skillcdn.ai` unless `--url` or `SKILLCDN_URL` names a deployment of your own. **A private repository** takes one more step, and no token to copy: tell the agent to run `skillcdn login --url <origin>` in the project as well and to tell you the page and the code it shows; open the page signed in, check that it shows the same code, and approve. The command keeps the token it receives and shows it to nobody; your account page lists it under the name you gave it, and removes it. How a job with nobody to approve gets its token, where tokens are kept and what a folder read from the machine is called are in [the reference](../../packages/cli/README.md#a-private-pack-and-a-bound-directory) as well.
 
 ## A folder served to an MCP client
 
@@ -77,10 +63,10 @@ The same command serves a folder as a deployment would, with no server and no ne
 To any client on the machine, over HTTP:
 
 ```sh
-skillcdn serve ./packs/acme ./packs/other       # MCP at http://127.0.0.1:11189/local/packs/acme, the REST API under /api/v1/
+skillcdn serve ./packs/acme                     # an MCP server and the REST API on this machine
 ```
 
-What the client gets is what it would get from a deployment that served the folder as a pack ([the MCP surface](../specs/tools.md#served-from-a-machine)): the four tools, the prompt and the skills extension, with the folder read again as its files are saved. Whoever reaches the port reads everything served, since nothing signs anyone in: keep it on the machine, or on a network of your own.
+The client gets what a deployment would serve from the folder ([served from a machine](../specs/tools.md#served-from-a-machine)), read again as its files are saved; the address and the port are in [the command's reference](../../packages/cli/README.md#serving-a-directory). Nothing signs anyone in, so whoever reaches the port reads everything served: keep it on the machine, or on a network of your own.
 
 ## Private repositories
 

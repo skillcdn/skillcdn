@@ -14,6 +14,10 @@ How the docs are organized, and what each one is for. The rules for *when* to up
 | [`../deploy/README.md`](../deploy/README.md) | Building, configuring and releasing the image; the contract with the infrastructure that runs it. | Living. |
 | `<workspace>/README.md` | What a package is for, its public surface, how to work on it. | Living. |
 | `CLAUDE.md` (root and per directory) | Rules for changing the code, for agents and humans. | Living. Short. |
+| [`../apps/web/connect-guide.md`](../apps/web/connect-guide.md) | What the connection guide on the page of a repository shows for each client, and the sources it was checked against. | Living. The clients' menus change on their own; recheck the sources when the steps change. |
+| [`../CONTRIBUTING.md`](../CONTRIBUTING.md), [`../SECURITY.md`](../SECURITY.md) | How to contribute, and how to report a vulnerability. | Living. |
+| [`../AGENTS.md`](../AGENTS.md) | Points an agent at `CLAUDE.md`, and nothing else. | Fixed. |
+| `packages/<name>/CHANGELOG.md` | What each release of a published package changed, from the changesets, for whoever installs it. | Written by the release workflow, never by hand. |
 
 ## Principles
 

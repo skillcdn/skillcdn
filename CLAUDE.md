@@ -23,7 +23,7 @@ Security
 
 Product shape
 
-5. **Self-host parity.** The whole product runs from one image plus PostgreSQL plus S3-compatible storage. Cloud-specific code lives only behind a port that also has a self-hostable implementation.
+5. **Self-host parity.** The whole product runs from one image plus PostgreSQL; a blob store on S3-compatible storage is planned behind the same port. Cloud-specific code lives only behind a port that also has a self-hostable implementation.
 6. **No business model in code.** No plan names, prices, billing providers or `if (paid)` branches. Gate behavior through the `Entitlements` port and emit neutral usage events through `UsageSink`; the defaults in this repo allow everything. Commercial implementations live outside this repo.
 
 Public repository hygiene
@@ -36,7 +36,7 @@ Public repository hygiene
 
 ```
 apps/
-  server/     the single deployable; roles: api | worker | migrate | check (Node 24)
+  server/     the single deployable; roles: api | migrate | check | purge, and worker, not yet implemented (Node 24)
   web/        optional web UI: landing and explorer; REST only, prerendered per language
 packages/
   core/       pure domain logic and ports; no I/O, no Node APIs                 @skillcdn/core on npm
@@ -98,7 +98,7 @@ Packages compile to `dist/` and consume each other's compiled output. Going thro
 
 **Commits and pushes.**
 
-- [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): summary`, imperative, 72 characters or fewer. Types: `feat fix docs refactor test perf build ci chore revert`. Scopes: `core db github server web deploy docs repo`. The body says why. Breaking changes use `!` and a `BREAKING CHANGE:` footer.
+- [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): summary`, imperative, 72 characters or fewer. Types: `feat fix docs refactor test perf build ci chore revert`. Scopes: `core db github indexer reader client serve cli brand server web deploy docs specs repo`; Dependabot's commits carry `deps` and `deps-dev`. The body says why. Breaking changes use `!` and a `BREAKING CHANGE:` footer.
 - One logical change per commit, and every commit passes `pnpm check`.
 - **For now, maintainers commit and push directly to `main`.** There is no pull-request gate and no branch protection yet; a pull-request flow comes later. Do not create branches or open pull requests unless asked. Nothing stands between a push and `main`, so the discipline is yours: run `pnpm check` first, `git pull --rebase` before pushing, keep commits small, and treat a red CI run on `main` as the first thing to fix.
 - Dependabot's pull requests are landed one at a time, by a rebase merge or by cherry-picking the commit onto `main` (`git cherry-pick -x`), checked and pushed like any other commit; a cherry-picked one is closed with a comment naming the commit. Two that touch the lockfile conflict; see Dependencies.
@@ -132,8 +132,8 @@ Keep docs lean: current facts and decisions, not history or essays. Git history 
 
 - **TypeScript:** strict, ESM, `.js` extensions in relative imports, erasable syntax only (no `enum`, `namespace` or parameter properties). Named exports only. No `any`; take `unknown` and narrow.
 - **Boundaries validate, interiors trust.** Parse every external input once at the edge (HTTP, MCP arguments, env, repo files, webhook payloads, JSON columns) with a schema; pass typed values inward.
-- **Configuration:** `process.env` is read only in `apps/server/src/config/` (lint enforces it). Everything else receives typed config as an argument. Every tunable has a safe default.
-- **Ports and adapters:** `core` defines interfaces (git host, blob store, entitlements, usage sink, clock); adapters implement them; `apps/server` wires them together. Do not import an SDK outside its adapter.
+- **Configuration:** `process.env` is read only in `apps/server/src/config/` and in `packages/cli/src/bin.ts` (lint enforces it; integration tests and build scripts are exempt). Everything else receives typed config as an argument. Every tunable has a safe default.
+- **Ports and adapters:** `core` defines interfaces (git host, blob store, index store, entitlements, usage sink, clock); adapters implement them; `apps/server` wires them together. Do not import an SDK outside its adapter.
 - **Errors:** throw `Error` subclasses with a stable `code`. Translate to HTTP or MCP errors only at the edge, and never leak internals or the existence of private resources.
 - **Logging:** structured logger only, no `console` (lint enforces it). Never log tokens, authorization headers or private file content.
 - **Determinism:** inject time, randomness and ids so `core` stays pure and tests stay stable.
