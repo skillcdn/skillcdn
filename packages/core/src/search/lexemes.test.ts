@@ -65,8 +65,18 @@ describe("searchLexemes", () => {
     expect(searchLexemes("the and of")).toEqual([]);
   });
 
-  it("ignores a word longer than the parser indexes, position and all", () => {
-    expect(searchLexemes(`${"a".repeat(2048)} short`)).toEqual([{ lexeme: "short", position: 1 }]);
+  it("ignores a word of 2047 bytes or more, as the parser does, position and all", () => {
+    // The parser's notice says "longer than 2047 characters", but its check is at 2047 bytes, as
+    // is the limit of the tsvector parser, which rejects a longer lexeme instead of ignoring it.
+    expect(searchLexemes(`${"a".repeat(2047)} short`)).toEqual([{ lexeme: "short", position: 1 }]);
+    expect(searchLexemes(`${"a".repeat(2046)} short`)).toEqual([
+      { lexeme: "a".repeat(2046), position: 1 },
+      { lexeme: "short", position: 2 },
+    ]);
+    // Bytes, not characters: a two-byte letter counts twice.
+    const letter = String.fromCodePoint(0xe9);
+    expect(searchLexemes(letter.repeat(1024))).toEqual([]);
+    expect(searchLexemes(letter.repeat(1023))).toHaveLength(1);
   });
 
   it("reads a URL without a host as the parser does: no word at all, or its path alone", () => {

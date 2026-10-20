@@ -47,8 +47,12 @@ export function wordRulesOf(language: string | undefined): WordRules {
   return (primary === undefined ? undefined : RULES.get(primary)) ?? ENGLISH;
 }
 
-/** A lexeme longer than this, in UTF-8 bytes, is not a word to the index. */
-export const MAX_LEXEME_BYTES = 2047;
+/**
+ * A lexeme longer than this, in UTF-8 bytes, is not a word to the index: PostgreSQL's parser
+ * ignores a word of 2047 bytes or more, and its tsvector parser rejects one, which would fail the
+ * storing of the whole vector.
+ */
+export const MAX_LEXEME_BYTES = 2046;
 /** A token this long in characters may be over the byte limit; shorter ones never are. */
 const SHORT_ENOUGH = Math.floor(MAX_LEXEME_BYTES / 3);
 

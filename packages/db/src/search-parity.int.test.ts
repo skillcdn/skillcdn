@@ -49,6 +49,8 @@ const TEXTS = [
   "IPv6 addresses like 2001:db8::1 and ports like 127.0.0.1:11188 or localhost:5432 appear in logs.",
   // A placeholder URL, as documentation writes one: no host, so no word, and never an empty lexeme.
   '"value":"https://...","is_secret":false; see https://.../path and http://. too',
+  // The longest word the server takes, 2046 bytes, and one it ignores.
+  `A number of 2046 digits is a word ${"7".repeat(2046)} and one of 2047 is none ${"7".repeat(2047)}`,
   // Long enough to hold more than 256 positions of one word, and to reach the last position.
   `release ${"word ".repeat(300)} release`,
   `${"word ".repeat(16_400)} release release notes`,
