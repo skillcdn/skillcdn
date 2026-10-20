@@ -1,4 +1,4 @@
-import { type Lexeme, searchLexemes } from "./lexemes.js";
+import { searchLexemes, utf8Length } from "./lexemes.js";
 
 // How a document is weighed, kept and ranked for a search: four fields, each a weight, into one
 // vector of lexemes with their positions, written in the text form of a PostgreSQL `tsvector` so
@@ -20,8 +20,15 @@ export const SEARCH_WEIGHTS: Readonly<Record<SearchWeight, number>> = {
 /** How the weights rank when one position is kept of several: A above D. */
 const WEIGHT_RANK: Readonly<Record<SearchWeight, number>> = { A: 3, B: 2, C: 1, D: 0 };
 
-/** Characters of a body that go into the search vector: a tsvector is limited to 1 MB. */
+/** Characters of a body that go into the search vector, before the vector's own bound in bytes. */
 export const MAX_SEARCHED_BODY_LENGTH = 200_000;
+
+/**
+ * The bytes a tsvector has for its lexemes and positions, which no stored vector may exceed: a
+ * document's words past where they would fill it are left out of its vector, as its characters
+ * past {@link MAX_SEARCHED_BODY_LENGTH} are.
+ */
+export const MAX_VECTOR_BYTES = 1_048_575;
 
 /** Skills outrank plain documents by this much. */
 export const SKILL_RANK_BOOST = 1.5;
@@ -68,58 +75,79 @@ export function searchFieldsOf(
 }
 
 /**
- * The positions of one lexeme as a tsvector keeps them: ascending, each position once with the
- * highest weight it was seen with, at most 256 of them, and none after the last position, which
- * every later word shares.
+ * Whether a tsvector keeps one more position of a lexeme, given those kept so far: positions
+ * arrive ascending and are kept each once, at most 256 of them, and none after the last position,
+ * which every later word shares.
  */
-function keptPositions(positions: readonly SearchPosition[]): SearchPosition[] {
-  const sorted = [...positions].sort((a, b) => a.position - b.position);
-  const kept: SearchPosition[] = [];
-  for (const candidate of sorted) {
-    const last = kept[kept.length - 1];
-    if (last !== undefined && last.position === candidate.position) {
-      if (WEIGHT_RANK[candidate.weight] > WEIGHT_RANK[last.weight]) {
-        kept[kept.length - 1] = candidate;
-      }
-      continue;
-    }
-    if (last !== undefined && last.position === MAX_POSITION) {
-      break;
-    }
-    kept.push(candidate);
-    if (kept.length >= MAX_POSITIONS_PER_LEXEME) {
-      break;
-    }
-  }
-  return kept;
+function keeps(positions: readonly SearchPosition[], at: number): boolean {
+  const last = positions[positions.length - 1];
+  return (
+    last === undefined ||
+    (positions.length < MAX_POSITIONS_PER_LEXEME &&
+      last.position !== MAX_POSITION &&
+      last.position !== at)
+  );
 }
+
+/** Adds a position as a tsvector keeps them; a repeated position keeps the highest weight it was seen with. */
+function addPosition(positions: SearchPosition[], candidate: SearchPosition): void {
+  if (keeps(positions, candidate.position)) {
+    positions.push(candidate);
+    return;
+  }
+  const last = positions[positions.length - 1];
+  if (
+    last !== undefined &&
+    last.position === candidate.position &&
+    positions.length < MAX_POSITIONS_PER_LEXEME &&
+    last.position !== MAX_POSITION &&
+    WEIGHT_RANK[candidate.weight] > WEIGHT_RANK[last.weight]
+  ) {
+    positions[positions.length - 1] = candidate;
+  }
+}
+
+/** What a lexeme takes in a tsvector besides its positions: its bytes, rounded up to an even number, and the count of its positions. */
+function lexemeBytes(lexeme: string): number {
+  const length = utf8Length(lexeme);
+  return length + (length % 2) + 2;
+}
+
+/** What one position takes in a tsvector. */
+const POSITION_BYTES = 2;
 
 /**
  * The vector of a document: the lexemes of every field, weighted, with the positions of a later
- * field continuing after the last position of the one before, as `||` joins vectors. `language`
- * is the pack's, and chooses the word rules the fields are read with.
+ * field continuing after the last position of the one before, as `||` joins vectors, up to the
+ * bytes a tsvector holds. `language` is the pack's, and chooses the word rules the fields are
+ * read with.
  */
 export function searchVectorOf(fields: readonly SearchField[], language?: string): SearchVector {
-  const collected = new Map<string, SearchPosition[]>();
+  const vector = new Map<string, SearchPosition[]>();
+  let bytes = 0;
   let offset = 0;
   for (const field of fields) {
-    const lexemes: Lexeme[] = searchLexemes(field.text, language);
     let last = 0;
-    for (const { lexeme, position } of lexemes) {
+    for (const { lexeme, position } of searchLexemes(field.text, language)) {
       const at = Math.min(offset + position, MAX_POSITION);
       last = Math.max(last, position);
-      let positions = collected.get(lexeme);
+      let positions = vector.get(lexeme);
+      // What this word adds to the tsvector, as the server lays it out. Past the bytes a tsvector
+      // has, the rest of the document is not searched: the server would reject the whole vector.
+      const cost =
+        (positions === undefined ? lexemeBytes(lexeme) : 0) +
+        (positions === undefined || keeps(positions, at) ? POSITION_BYTES : 0);
+      if (bytes + cost > MAX_VECTOR_BYTES) {
+        return vector;
+      }
+      bytes += cost;
       if (positions === undefined) {
         positions = [];
-        collected.set(lexeme, positions);
+        vector.set(lexeme, positions);
       }
-      positions.push({ position: at, weight: field.weight });
+      addPosition(positions, { position: at, weight: field.weight });
     }
     offset = Math.min(offset + last, MAX_POSITION);
-  }
-  const vector = new Map<string, SearchPosition[]>();
-  for (const [lexeme, positions] of collected) {
-    vector.set(lexeme, keptPositions(positions));
   }
   return vector;
 }

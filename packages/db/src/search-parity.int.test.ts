@@ -1,5 +1,6 @@
 import {
   ENGLISH_STOP_WORDS,
+  MAX_VECTOR_BYTES,
   parseSearchVector,
   queryLexemes,
   rankSearchVector,
@@ -91,6 +92,25 @@ const DOCUMENTS: readonly (readonly SearchField[])[] = [
 
 const QUERIES = ["release notes", "notes", "copy pictures", "guide", "한국어 안내", "self-hosted"];
 
+/** A text whose every pair of characters is new: two alphabets of Han characters, interleaved. */
+function distinctPairs(characters: number): string {
+  let text = "";
+  for (let index = 0; index < characters / 2; index += 1) {
+    text += String.fromCodePoint(0x4e00 + Math.floor(index / 450), 0x5e00 + (index % 450));
+  }
+  return text;
+}
+
+/** Words of five bytes, each new: `a0000` to `l9999`. */
+function distinctWords(count: number): string {
+  const words: string[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const letter = String.fromCodePoint(97 + Math.floor(index / 10_000));
+    words.push(`${letter}${String(index % 10_000).padStart(4, "0")}`);
+  }
+  return words.join(" ");
+}
+
 /** What the server reads back of a vector written in its text form. */
 async function storedVector(text: string): Promise<string> {
   const result = await drizzleOf(database).execute<{ vector: string }>(
@@ -114,6 +134,16 @@ describe("the search vectors of core against the server", () => {
     expect(parseSearchVector(await storedVector(serializeSearchVector(weighted)))).toEqual(
       weighted,
     );
+  });
+
+  it("stores a vector that fills what a tsvector holds, in either script", async () => {
+    // Ten bytes a word, as the server lays them out: the vector stops at the last word that fits,
+    // and the server takes it whole. One byte more a word, and it would reject the vector.
+    for (const text of [distinctPairs(200_000), distinctWords(120_000)]) {
+      const vector = searchVectorOf([{ weight: "D", text }]);
+      expect(vector.size).toBe(Math.floor(MAX_VECTOR_BYTES / 10));
+      expect(parseSearchVector(await storedVector(serializeSearchVector(vector)))).toEqual(vector);
+    }
   });
 
   it.each(QUERIES)("writes the query %s as a tsquery the server reads", async (query) => {

@@ -2,10 +2,30 @@ import { describe, expect, it } from "vitest";
 import { queryLexemes } from "./lexemes.js";
 import {
   MAX_SEARCHED_BODY_LENGTH,
+  MAX_VECTOR_BYTES,
   rankSearchVector,
   searchFieldsOf,
   searchVectorOf,
 } from "./vector.js";
+
+/** A text whose every pair of characters is new: two alphabets of Han characters, interleaved. */
+function distinctPairs(characters: number): string {
+  let text = "";
+  for (let index = 0; index < characters / 2; index += 1) {
+    text += String.fromCodePoint(0x4e00 + Math.floor(index / 450), 0x5e00 + (index % 450));
+  }
+  return text;
+}
+
+/** Words of five bytes, each new: `a0000` to `l9999`. */
+function distinctWords(count: number): string {
+  const words: string[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const letter = String.fromCodePoint(97 + Math.floor(index / 10_000));
+    words.push(`${letter}${String(index % 10_000).padStart(4, "0")}`);
+  }
+  return words.join(" ");
+}
 
 describe("searchFieldsOf", () => {
   it("weighs the name and title first, then the description, the words of the path, and the body", () => {
@@ -79,5 +99,27 @@ describe("searchVectorOf and rankSearchVector", () => {
     const long = searchVectorOf([{ weight: "D", text: `ads ${"word ".repeat(200)}` }]);
     const query = queryLexemes("ads");
     expect(rankSearchVector(short, query)).toBeGreaterThan(rankSearchVector(long, query));
+  });
+});
+
+describe("the bytes of a vector", () => {
+  it("stops where a tsvector would be full, laid out as the server lays it out", () => {
+    // Each new word costs its bytes rounded up to an even number, two for the count of its
+    // positions and two for its one position: ten for a pair of characters or a word of five bytes.
+    const full = Math.floor(MAX_VECTOR_BYTES / 10);
+    expect(searchVectorOf([{ weight: "D", text: distinctPairs(200_000) }]).size).toBe(full);
+    expect(searchVectorOf([{ weight: "D", text: distinctWords(120_000) }]).size).toBe(full);
+    // A document that fits is whole.
+    expect(searchVectorOf([{ weight: "D", text: distinctPairs(2_000) }]).size).toBe(1_999);
+  });
+
+  it("counts every position kept, two bytes each", () => {
+    // A word repeated 300 times at the start keeps 256 positions, 520 bytes with its own six; the
+    // words after it fit while 520 + 10n stays within the bytes, so 104,805 of them.
+    const vector = searchVectorOf([
+      { weight: "D", text: `${"banana ".repeat(300)} ${distinctWords(105_000)}` },
+    ]);
+    expect(vector.get("banana")).toHaveLength(256);
+    expect(vector.size).toBe(104_806);
   });
 });

@@ -395,6 +395,7 @@ export {
 export { ENGLISH_STOP_WORDS } from "./search/stop-words.js";
 export {
   MAX_SEARCHED_BODY_LENGTH,
+  MAX_VECTOR_BYTES,
   parseSearchVector,
   rankSearchVector,
   SEARCH_WEIGHTS,

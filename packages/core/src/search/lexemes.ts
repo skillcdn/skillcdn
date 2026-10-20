@@ -159,7 +159,7 @@ function tokensOfScripts(run: string): Token[] {
 }
 
 /** The UTF-8 length of a string, counted from its code points: this package loads no platform API. */
-function utf8Length(text: string): number {
+export function utf8Length(text: string): number {
   let bytes = 0;
   for (const character of text) {
     const point = character.codePointAt(0) ?? 0;
