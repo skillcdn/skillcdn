@@ -35,10 +35,19 @@ describe("the page of an account", () => {
       avatar: "https://avatars.githubusercontent.com/u/42?s=320&v=4",
       bio: "Skills for everything Acme makes.",
       url: "https://github.com/Acme",
-      publicRepositories: 5,
+      publicRepositories: 6,
     });
     expect(first.indexed).toEqual([]);
     expect(first.repositories).toEqual([
+      {
+        address: "/gh/acme/document-pack",
+        name: "document-pack",
+        description: "A handbook with no skill, in English and in Korean.",
+        fork: false,
+        archived: false,
+        stars: 13,
+        pushedAt: "2026-09-01T00:00:00.000Z",
+      },
       {
         address: "/gh/acme/hostile",
         name: "hostile",
@@ -48,20 +57,14 @@ describe("the page of an account", () => {
         stars: 7,
         pushedAt: "2026-09-01T00:00:00.000Z",
       },
-      {
-        address: "/gh/acme/licensed",
-        name: "licensed",
-        description: "Skills under different licenses.",
-        fork: false,
-        archived: false,
-        stars: 8,
-        pushedAt: "2026-09-01T00:00:00.000Z",
-      },
     ]);
     expect(first.nextPage).toBe(2);
 
     const last = restOwnerSchema.parse(await (await h.request(`${OWNER}?page=3`)).json());
-    expect(last.repositories.map((repository) => repository.name)).toEqual(["with-manifest"]);
+    expect(last.repositories.map((repository) => repository.name)).toEqual([
+      "single-skill",
+      "with-manifest",
+    ]);
     expect(last.nextPage).toBeNull();
 
     // The listing came from the host's own list: no repository was resolved, none indexed.
@@ -112,7 +115,7 @@ describe("the page of an account", () => {
     expect(named?.manifest).toMatchObject({ description: expect.any(String) });
     // What leads the page is not repeated in the host's list, on any page of it.
     const listed = pages.flatMap((page) => page.repositories.map((repository) => repository.name));
-    expect(listed.sort()).toEqual(["hostile", "licensed", "single-skill"]);
+    expect(listed.sort()).toEqual(["document-pack", "hostile", "licensed", "single-skill"]);
     // Only the first page leads with it.
     expect(pages[1]?.indexed).toEqual([]);
   });

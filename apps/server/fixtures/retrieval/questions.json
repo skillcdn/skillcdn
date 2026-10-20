@@ -1,0 +1,455 @@
+{
+  "pack": "apps/server/fixtures/.repositories/document-pack",
+  "questions": [
+    {
+      "id": "en-01",
+      "language": "en",
+      "query": "how long is the trial",
+      "answers": [
+        { "path": "docs/getting-started.md", "heading": ["Getting started", "Create a workspace"] }
+      ]
+    },
+    {
+      "id": "en-02",
+      "language": "en",
+      "query": "invitation link expired",
+      "answers": [
+        { "path": "docs/getting-started.md", "heading": ["Getting started", "Invite the team"] },
+        { "path": "docs/troubleshooting.md", "heading": ["Troubleshooting", "Cannot sign in"] }
+      ]
+    },
+    {
+      "id": "en-03",
+      "language": "en",
+      "query": "does the app work without internet",
+      "answers": [
+        {
+          "path": "docs/getting-started.md",
+          "heading": ["Getting started", "Install the mobile app"]
+        },
+        {
+          "path": "docs/troubleshooting.md",
+          "heading": ["Troubleshooting", "The mobile app is offline"]
+        }
+      ]
+    },
+    {
+      "id": "en-04",
+      "language": "en",
+      "query": "what can a bookkeeper change",
+      "answers": [
+        {
+          "path": "docs/accounts-and-roles.md",
+          "heading": ["Accounts and roles", "The four roles"]
+        }
+      ]
+    },
+    {
+      "id": "en-05",
+      "language": "en",
+      "query": "can the last owner be removed",
+      "answers": [
+        {
+          "path": "docs/accounts-and-roles.md",
+          "heading": ["Accounts and roles", "The four roles"]
+        }
+      ]
+    },
+    {
+      "id": "en-06",
+      "language": "en",
+      "query": "deactivate a technician who left the company",
+      "answers": [
+        {
+          "path": "docs/accounts-and-roles.md",
+          "heading": ["Accounts and roles", "Deactivating a person"]
+        }
+      ]
+    },
+    {
+      "id": "en-07",
+      "language": "en",
+      "query": "lost my phone, two-step backup codes",
+      "answers": [
+        {
+          "path": "docs/accounts-and-roles.md",
+          "heading": ["Accounts and roles", "Two-step sign-in"]
+        }
+      ]
+    },
+    {
+      "id": "en-08",
+      "language": "en",
+      "query": "how long does a web session last",
+      "answers": [
+        {
+          "path": "docs/accounts-and-roles.md",
+          "heading": ["Accounts and roles", "Session length"]
+        }
+      ]
+    },
+    {
+      "id": "en-09",
+      "language": "en",
+      "query": "what do the card colors on the board mean",
+      "answers": [{ "path": "docs/scheduling.md", "heading": ["Scheduling", "The board"] }]
+    },
+    {
+      "id": "en-10",
+      "language": "en",
+      "query": "how far ahead are recurring jobs created",
+      "answers": [
+        { "path": "docs/scheduling.md", "heading": ["Scheduling", "Recurring jobs"] },
+        {
+          "path": "docs/troubleshooting.md",
+          "heading": ["Troubleshooting", "A job is missing from the board"]
+        }
+      ]
+    },
+    {
+      "id": "en-11",
+      "language": "en",
+      "query": "travel time between jobs",
+      "answers": [
+        { "path": "docs/scheduling.md", "heading": ["Scheduling", "Travel time and buffers"] }
+      ]
+    },
+    {
+      "id": "en-12",
+      "language": "en",
+      "query": "double booking a technician",
+      "answers": [
+        { "path": "docs/scheduling.md", "heading": ["Scheduling", "Conflicts and double booking"] }
+      ]
+    },
+    {
+      "id": "en-13",
+      "language": "en",
+      "query": "restore a cancelled job",
+      "answers": [
+        { "path": "docs/scheduling.md", "heading": ["Scheduling", "Rescheduling"] },
+        { "path": "docs/api/jobs.md", "heading": ["Jobs API", "Cancelling a job"] },
+        {
+          "path": "docs/troubleshooting.md",
+          "heading": ["Troubleshooting", "A job is missing from the board"]
+        }
+      ]
+    },
+    {
+      "id": "en-14",
+      "language": "en",
+      "query": "when is the invoice number assigned",
+      "answers": [
+        { "path": "docs/invoicing.md", "heading": ["Invoicing", "Invoices from a job"] },
+        {
+          "path": "docs/troubleshooting.md",
+          "heading": ["Troubleshooting", "Invoice numbers skip"]
+        }
+      ]
+    },
+    {
+      "id": "en-15",
+      "language": "en",
+      "query": "default payment term",
+      "answers": [{ "path": "docs/invoicing.md", "heading": ["Invoicing", "Payment terms"] }]
+    },
+    {
+      "id": "en-16",
+      "language": "en",
+      "query": "ask for a deposit on a quote",
+      "answers": [{ "path": "docs/invoicing.md", "heading": ["Invoicing", "Deposits"] }]
+    },
+    {
+      "id": "en-17",
+      "language": "en",
+      "query": "waive a late fee",
+      "answers": [{ "path": "docs/invoicing.md", "heading": ["Invoicing", "Late fees"] }]
+    },
+    {
+      "id": "en-18",
+      "language": "en",
+      "query": "how long does a refund take to reach the customer",
+      "answers": [
+        { "path": "docs/invoicing.md", "heading": ["Invoicing", "Refunds and credit notes"] }
+      ]
+    },
+    {
+      "id": "en-19",
+      "language": "en",
+      "query": "tax exempt customer",
+      "answers": [{ "path": "docs/invoicing.md", "heading": ["Invoicing", "Sales tax"] }]
+    },
+    {
+      "id": "en-20",
+      "language": "en",
+      "query": "customer replied STOP to text messages",
+      "answers": [
+        { "path": "docs/notifications.md", "heading": ["Notifications", "Customer reminders"] },
+        {
+          "path": "docs/troubleshooting.md",
+          "heading": ["Troubleshooting", "Notifications arrive late or not at all"]
+        }
+      ]
+    },
+    {
+      "id": "en-21",
+      "language": "en",
+      "query": "quiet hours default",
+      "answers": [{ "path": "docs/notifications.md", "heading": ["Notifications", "Quiet hours"] }]
+    },
+    {
+      "id": "en-22",
+      "language": "en",
+      "query": "edit the placeholders of a reminder template",
+      "answers": [{ "path": "docs/notifications.md", "heading": ["Notifications", "Templates"] }]
+    },
+    {
+      "id": "en-23",
+      "language": "en",
+      "query": "subscribe to my jobs in my calendar app",
+      "answers": [{ "path": "docs/integrations.md", "heading": ["Integrations", "Calendar sync"] }]
+    },
+    {
+      "id": "en-24",
+      "language": "en",
+      "query": "webhook delivery failed, is it retried",
+      "answers": [{ "path": "docs/integrations.md", "heading": ["Integrations", "Webhooks"] }]
+    },
+    {
+      "id": "en-25",
+      "language": "en",
+      "query": "rotate an API key",
+      "answers": [
+        { "path": "docs/integrations.md", "heading": ["Integrations", "API keys"] },
+        { "path": "docs/api/auth.md", "heading": ["API authentication", "Rotating a key"] }
+      ]
+    },
+    {
+      "id": "en-26",
+      "language": "en",
+      "query": "export all my data",
+      "answers": [
+        { "path": "docs/data-and-privacy.md", "heading": ["Data and privacy", "Export your data"] }
+      ]
+    },
+    {
+      "id": "en-27",
+      "language": "en",
+      "query": "how long is the audit log kept",
+      "answers": [
+        { "path": "docs/data-and-privacy.md", "heading": ["Data and privacy", "Retention"] }
+      ]
+    },
+    {
+      "id": "en-28",
+      "language": "en",
+      "query": "delete the workspace permanently",
+      "answers": [
+        {
+          "path": "docs/data-and-privacy.md",
+          "heading": ["Data and privacy", "Delete a workspace"]
+        }
+      ]
+    },
+    {
+      "id": "en-29",
+      "language": "en",
+      "query": "rate limit 429 requests per minute",
+      "answers": [{ "path": "docs/api/auth.md", "heading": ["API authentication", "Rate limits"] }]
+    },
+    {
+      "id": "en-30",
+      "language": "en",
+      "query": "idempotency key when creating a job twice",
+      "answers": [{ "path": "docs/api/jobs.md", "heading": ["Jobs API", "Creating a job"] }]
+    },
+    {
+      "id": "en-31",
+      "language": "en",
+      "query": "find a customer by phone number",
+      "answers": [
+        {
+          "path": "docs/api/customers.md",
+          "heading": ["Customers API", "Listing and finding customers"]
+        }
+      ]
+    },
+    {
+      "id": "en-32",
+      "language": "en",
+      "query": "merge duplicate customers",
+      "answers": [
+        { "path": "docs/api/customers.md", "heading": ["Customers API", "Merging duplicates"] }
+      ]
+    },
+    {
+      "id": "en-33",
+      "language": "en",
+      "query": "what changed in release 2026.2",
+      "answers": [{ "path": "docs/release-notes.md", "heading": ["Release notes", "2026.2"] }]
+    },
+    {
+      "id": "en-34",
+      "language": "en",
+      "query": "pagination cursor expired",
+      "answers": [{ "path": "docs/api/jobs.md", "heading": ["Jobs API", "Listing jobs"] }]
+    },
+    {
+      "id": "ko-01",
+      "language": "ko",
+      "query": "수습 기간은 얼마나 되나요",
+      "answers": [{ "path": "ko/docs/onboarding.md", "heading": ["온보딩 안내", "수습 기간"] }]
+    },
+    {
+      "id": "ko-02",
+      "language": "ko",
+      "query": "첫 출근 시간",
+      "answers": [{ "path": "ko/docs/onboarding.md", "heading": ["온보딩 안내", "첫 출근 준비"] }]
+    },
+    {
+      "id": "ko-03",
+      "language": "ko",
+      "query": "노트북을 다른 모델로 받을 수 있나요",
+      "answers": [
+        { "path": "ko/docs/onboarding.md", "heading": ["온보딩 안내", "계정과 장비 지급"] },
+        { "path": "ko/docs/equipment.md", "heading": ["장비 규정", "지급 기준"] }
+      ]
+    },
+    {
+      "id": "ko-04",
+      "language": "ko",
+      "query": "보안 교육은 언제 듣나요",
+      "answers": [{ "path": "ko/docs/onboarding.md", "heading": ["온보딩 안내", "첫 주 일정"] }]
+    },
+    {
+      "id": "ko-05",
+      "language": "ko",
+      "query": "연차가 며칠 생기나요",
+      "answers": [{ "path": "ko/docs/leave.md", "heading": ["휴가 규정", "연차 발생"] }]
+    },
+    {
+      "id": "ko-06",
+      "language": "ko",
+      "query": "남은 연차는 언제까지 쓸 수 있나요",
+      "answers": [{ "path": "ko/docs/leave.md", "heading": ["휴가 규정", "연차 발생"] }]
+    },
+    {
+      "id": "ko-07",
+      "language": "ko",
+      "query": "병가에 진단서가 필요한가요",
+      "answers": [{ "path": "ko/docs/leave.md", "heading": ["휴가 규정", "병가"] }]
+    },
+    {
+      "id": "ko-08",
+      "language": "ko",
+      "query": "결혼하면 휴가가 며칠인가요",
+      "answers": [{ "path": "ko/docs/leave.md", "heading": ["휴가 규정", "경조사 휴가"] }]
+    },
+    {
+      "id": "ko-09",
+      "language": "ko",
+      "query": "휴가 신청은 어디서 하나요",
+      "answers": [{ "path": "ko/docs/leave.md", "heading": ["휴가 규정", "신청 절차"] }]
+    },
+    {
+      "id": "ko-10",
+      "language": "ko",
+      "query": "출장 식비 한도",
+      "answers": [{ "path": "ko/docs/expenses.md", "heading": ["경비 처리", "식비 한도"] }]
+    },
+    {
+      "id": "ko-11",
+      "language": "ko",
+      "query": "개인 차량으로 출장 가면 교통비는 어떻게 되나요",
+      "answers": [{ "path": "ko/docs/expenses.md", "heading": ["경비 처리", "교통비"] }]
+    },
+    {
+      "id": "ko-12",
+      "language": "ko",
+      "query": "영수증 제출 기한",
+      "answers": [{ "path": "ko/docs/expenses.md", "heading": ["경비 처리", "영수증 제출"] }]
+    },
+    {
+      "id": "ko-13",
+      "language": "ko",
+      "query": "법인카드를 잃어버렸어요",
+      "answers": [{ "path": "ko/docs/expenses.md", "heading": ["경비 처리", "법인카드"] }]
+    },
+    {
+      "id": "ko-14",
+      "language": "ko",
+      "query": "노트북 교체 주기",
+      "answers": [{ "path": "ko/docs/equipment.md", "heading": ["장비 규정", "지급 기준"] }]
+    },
+    {
+      "id": "ko-15",
+      "language": "ko",
+      "query": "장비가 고장 났을 때",
+      "answers": [{ "path": "ko/docs/equipment.md", "heading": ["장비 규정", "고장 신고"] }]
+    },
+    {
+      "id": "ko-16",
+      "language": "ko",
+      "query": "장비를 분실하면 비용은 누가 부담하나요",
+      "answers": [{ "path": "ko/docs/equipment.md", "heading": ["장비 규정", "분실과 파손"] }]
+    },
+    {
+      "id": "ko-17",
+      "language": "ko",
+      "query": "퇴사할 때 반납해야 하는 것",
+      "answers": [{ "path": "ko/docs/equipment.md", "heading": ["장비 규정", "퇴사 시 반납"] }]
+    },
+    {
+      "id": "ko-18",
+      "language": "ko",
+      "query": "비밀번호 길이 규칙",
+      "answers": [
+        { "path": "ko/docs/security.md", "heading": ["보안 수칙", "비밀번호와 이중 인증"] }
+      ]
+    },
+    {
+      "id": "ko-19",
+      "language": "ko",
+      "query": "방문자 출입 등록",
+      "answers": [{ "path": "ko/docs/security.md", "heading": ["보안 수칙", "사무실 출입"] }]
+    },
+    {
+      "id": "ko-20",
+      "language": "ko",
+      "query": "기밀 문서를 인쇄해도 되나요",
+      "answers": [{ "path": "ko/docs/security.md", "heading": ["보안 수칙", "문서 보안 등급"] }]
+    },
+    {
+      "id": "ko-21",
+      "language": "ko",
+      "query": "의심스러운 이메일 링크를 눌렀어요",
+      "answers": [{ "path": "ko/docs/security.md", "heading": ["보안 수칙", "사고 신고"] }]
+    },
+    {
+      "id": "ko-22",
+      "language": "ko",
+      "query": "원격 근무 신청 방법",
+      "answers": [{ "path": "ko/docs/remote-work.md", "heading": ["원격 근무", "신청과 승인"] }]
+    },
+    {
+      "id": "ko-23",
+      "language": "ko",
+      "query": "메시지에 얼마나 빨리 답해야 하나요",
+      "answers": [
+        { "path": "ko/docs/remote-work.md", "heading": ["원격 근무", "근무 시간과 응답 시간"] }
+      ]
+    },
+    {
+      "id": "ko-24",
+      "language": "ko",
+      "query": "공용 와이파이에서 VPN",
+      "answers": [{ "path": "ko/docs/remote-work.md", "heading": ["원격 근무", "장비와 네트워크"] }]
+    },
+    {
+      "id": "ko-25",
+      "language": "ko",
+      "query": "회의 중 카메라를 켜야 하나요",
+      "answers": [{ "path": "ko/docs/remote-work.md", "heading": ["원격 근무", "화상 회의 예절"] }]
+    }
+  ]
+}

@@ -25,6 +25,7 @@ const FIXTURE_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "single-skill": "One skill at the root of the repository.",
   "with-manifest": "What the host says, which the manifest replaces.",
   licensed: "Skills under different licenses.",
+  "document-pack": "A handbook with no skill, in English and in Korean.",
 };
 
 /**
