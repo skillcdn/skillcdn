@@ -47,6 +47,8 @@ const TEXTS = [
   "Les skills en français: déploiement, configuration, référence; und auf Deutsch: Übersetzung, Veröffentlichung.",
   "Version 2.0.1-beta.3 of the 3D-viewer (x86_64, arm64) renders 1,024 frames at 60fps; 50% faster than v1.",
   "IPv6 addresses like 2001:db8::1 and ports like 127.0.0.1:11188 or localhost:5432 appear in logs.",
+  // A placeholder URL, as documentation writes one: no host, so no word, and never an empty lexeme.
+  '"value":"https://...","is_secret":false; see https://.../path and http://. too',
   // Long enough to hold more than 256 positions of one word, and to reach the last position.
   `release ${"word ".repeat(300)} release`,
   `${"word ".repeat(16_400)} release release notes`,

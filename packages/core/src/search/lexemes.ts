@@ -166,14 +166,19 @@ function tokensOf(text: string): Token[] {
   for (const match of text.toLowerCase().matchAll(TOKENS)) {
     const [whole, host, path] = match;
     if (host !== undefined) {
-      // A URL: the host with its path, the host, and the path, when there is one.
+      // A URL: the host with its path, the host, and the path, when there is one. A host of dots
+      // alone, as a placeholder is written (`https://...`), is no word: the parser reads the
+      // scheme and a blank there, and the path after it as a file on its own.
       const site = host.replace(/\.+$/u, "");
-      if (path !== undefined && path.length > 1) {
-        tokens.push({ text: `${site}${path}`, stem: false });
+      const file = path !== undefined && path.length > 1 ? path : undefined;
+      if (site.length > 0) {
+        if (file !== undefined) {
+          tokens.push({ text: `${site}${file}`, stem: false });
+        }
+        tokens.push({ text: site, stem: false });
       }
-      tokens.push({ text: site, stem: false });
-      if (path !== undefined && path.length > 1) {
-        tokens.push({ text: path, stem: false });
+      if (file !== undefined) {
+        tokens.push({ text: file, stem: false });
       }
       continue;
     }
@@ -199,14 +204,15 @@ export function searchLexemes(text: string, language?: string): Lexeme[] {
   let position = 0;
   for (const token of tokensOf(text)) {
     position += 1;
-    if (!token.stem) {
-      lexemes.push({ lexeme: token.text, position });
+    if (token.stem && rules.stopWords.has(token.text)) {
       continue;
     }
-    if (rules.stopWords.has(token.text)) {
+    const lexeme = token.stem ? rules.stem(token.text) : token.text;
+    // An empty lexeme is no word, whatever rule left it: a tsvector that holds one is rejected.
+    if (lexeme.length === 0) {
       continue;
     }
-    lexemes.push({ lexeme: rules.stem(token.text), position });
+    lexemes.push({ lexeme, position });
   }
   return lexemes;
 }

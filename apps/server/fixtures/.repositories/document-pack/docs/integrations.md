@@ -21,7 +21,7 @@ Card payments run through a payment processor the owner connects under Settings.
 
 ## Webhooks
 
-A webhook posts a JSON message to an address of yours whenever a job or an invoice changes: created, scheduled, started, done, cancelled, sent, paid, refunded. Each message is signed with the webhook's secret so the receiver can verify it, and a message that is not acknowledged with a success status is retried with increasing delays for twenty-four hours, then dropped and listed under the webhook as failed.
+A webhook posts a JSON message to an address of yours whenever a job or an invoice changes: created, scheduled, started, done, cancelled, sent, paid, refunded. Each message is signed with the webhook's secret so the receiver can verify it, and a message that is not acknowledged with a success status is retried with increasing delays for twenty-four hours, then dropped and listed under the webhook as failed. The API creates a webhook from its address and its secret, sent as `{"url":"https://...","secret":"..."}` with the real values in place.
 
 ## API keys
 

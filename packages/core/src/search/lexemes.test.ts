@@ -69,6 +69,21 @@ describe("searchLexemes", () => {
     expect(searchLexemes(`${"a".repeat(2048)} short`)).toEqual([{ lexeme: "short", position: 1 }]);
   });
 
+  it("reads a URL without a host as the parser does: no word at all, or its path alone", () => {
+    // A placeholder written as `https://...` is common in documentation. The parser emits the
+    // scheme and a blank, and the deployment rejected a vector with an empty lexeme.
+    expect(searchLexemes("https://...")).toEqual([]);
+    expect(searchLexemes("http://.")).toEqual([]);
+    expect(vectorText("see https://.../path and http://. too")).toBe("'/path':2 'see':1");
+    expect(vectorText('"value":"https://...","is_secret":false')).toBe(
+      "'fals':4 'secret':3 'valu':1",
+    );
+    expect(queryLexemes("https://...")).toEqual([]);
+    for (const { lexeme } of searchLexemes('"value":"https://...","is_secret":false')) {
+      expect(lexeme.length).toBeGreaterThan(0);
+    }
+  });
+
   it("reads a sign before digits wherever it stands, and a version up to its hyphen", () => {
     expect(vectorText("-5 -foo --10 foo--10 - -")).toBe("'-10':3,5 '-5':1 'foo':2,4");
     expect(vectorText("Version 2.0.1-beta.3 of the 3D-viewer (x86_64, arm64)")).toBe(
