@@ -5,9 +5,12 @@ on:
   push:
     branches: [main]
 
+# Every push to main may ship, so every commit on main gets its own verdict: a newer push does
+# not cancel the run of the one before it, which a deployment pinned to that commit waits for.
+# On any other ref the newest push is the only one that matters.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 # Least privilege. CI never needs secrets, so pull requests from forks are safe to run.
 permissions:

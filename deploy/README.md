@@ -6,7 +6,7 @@ Everything needed to build the image and hand it to whatever runs it. This repos
 |---|---|
 | [`Dockerfile`](Dockerfile) | The one multi-stage image. Roles `api`, `migrate`, `check` and `purge` are selected by the container command; `worker` is a name the dispatcher knows and not yet implemented. |
 | [`compose.dev.yaml`](compose.dev.yaml) | Local development dependencies (PostgreSQL 18). Not a production topology. |
-| [`../.github/workflows/ci.yml`](../.github/workflows/ci.yml) | Lint, build, typecheck, tests (integration tests run against a PostgreSQL service container), secret scan, and an image build that is then exercised: exit codes, `migrate`, readiness, non-root user, clean shutdown. It needs no secrets. |
+| [`../.github/workflows/ci.yml`](../.github/workflows/ci.yml) | Lint, build, typecheck, tests (integration tests run against a PostgreSQL service container), secret scan, and an image build that is then exercised: exit codes, `migrate`, readiness, non-root user, clean shutdown. It needs no secrets. Every commit on `main` keeps its own run, since any of them may be deployed and a deployment pinned to a commit waits for its verdict; on other refs a newer push cancels the run before it. |
 | [`../.github/workflows/release.yml`](../.github/workflows/release.yml) | Versions and publishes the npm packages from the pending changesets: a pull request that bumps versions and changelogs, and, once it is merged, a publish through the registry's trusted publishing, with provenance and no stored secret ([ADR-0046](../docs/adr/0046-packages-are-published-to-npm-through-trusted-publishing.md)). |
 
 A compose bundle and install script for self-hosting are planned ([roadmap](../docs/roadmap.md)).
