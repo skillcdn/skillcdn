@@ -28,7 +28,8 @@
         "../../docs/nav.json",
         "../../docs/guide/*.md",
         "../../docs/specs/*.md",
-        "../../deploy/README.md"
+        "../../deploy/README.md",
+        "../../packages/cli/README.md"
       ],
       "outputs": ["dist/**"]
     },
@@ -39,7 +40,8 @@
         "../../docs/nav.json",
         "../../docs/guide/*.md",
         "../../docs/specs/*.md",
-        "../../deploy/README.md"
+        "../../deploy/README.md",
+        "../../packages/cli/README.md"
       ],
       "outputs": []
     },

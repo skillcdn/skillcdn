@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -303,6 +303,101 @@ describe("loadDocs", () => {
       expect(docs.content[page.slug]?.body, page.file).toBeTruthy();
       // Nothing of the repository's own structure leaks into the site's links.
       expect(docs.content[page.slug]?.body, page.file).not.toMatch(/\]\(\.\.?\//);
+    }
+  });
+});
+
+/** A glob over a path with `/` separators: `**` crosses directories, `*` and `?` do not. */
+function globRegex(pattern: string): RegExp {
+  let source = "";
+  for (let i = 0; i < pattern.length; i += 1) {
+    const char = pattern.charAt(i);
+    if (char === "*" && pattern.charAt(i + 1) === "*") {
+      i += pattern.charAt(i + 2) === "/" ? 2 : 1;
+      source += i + 1 >= pattern.length ? ".*" : "(.*/)?";
+    } else if (char === "*") source += "[^/]*";
+    else if (char === "?") source += "[^/]";
+    else source += char.replace(/[.+()|{}^$\\]/, "\\$&");
+  }
+  return new RegExp(`^${source}$`);
+}
+
+// The rules of the repository's .dockerignore, read as the image's build reads them: a rule
+// matches a path or one of its parent directories, and the rules apply in order, a `!` rule
+// only to a path the rules before it left out.
+interface IgnoreRule {
+  readonly leavesOut: boolean;
+  readonly matches: (path: string) => boolean;
+}
+
+function ignoreRules(text: string): readonly IgnoreRule[] {
+  const rules: IgnoreRule[] = [];
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    if (line === "" || line.startsWith("#")) continue;
+    const leavesOut = !line.startsWith("!");
+    const pattern = (leavesOut ? line : line.slice(1).trim()).replace(/^\/+|\/+$/g, "");
+    const regex = globRegex(pattern);
+    const matches = (path: string) => {
+      const parts = path.split("/");
+      return parts.some((_, index) => regex.test(parts.slice(0, index + 1).join("/")));
+    };
+    rules.push({ leavesOut, matches });
+  }
+  return rules;
+}
+
+function leftOutOfTheImage(rules: readonly IgnoreRule[], path: string): boolean {
+  let out = false;
+  for (const rule of rules) {
+    if (rule.leavesOut === out) continue;
+    if (rule.matches(path)) out = rule.leavesOut;
+  }
+  return out;
+}
+
+/** The files of the repository a task of turbo.json hashes, as globs from the repository root. */
+function turboInputs(task: string): readonly RegExp[] {
+  const turbo = JSON.parse(readFileSync(join(REPOSITORY_ROOT, "turbo.json"), "utf8")) as {
+    readonly tasks: Readonly<Record<string, { readonly inputs?: readonly string[] }>>;
+  };
+  return (turbo.tasks[task]?.inputs ?? [])
+    .filter((input) => input.startsWith("../../"))
+    .map((input) => globRegex(input.slice("../../".length)));
+}
+
+describe("the files the navigation publishes", () => {
+  const published = () => [
+    NAV_FILE,
+    ...loadDocs(REPOSITORY_ROOT).catalog.sections.flatMap((section) =>
+      section.pages.map((page) => page.file),
+    ),
+  ];
+
+  it("survive .dockerignore, so that the image builds the pages", () => {
+    // The pages are built inside the image, from a build context that .dockerignore trims down
+    // to what the image needs. A file docs/nav.json names has to survive the trimming, or the
+    // image fails to build, in CI alone: pnpm check never builds it.
+    const rules = ignoreRules(readFileSync(join(REPOSITORY_ROOT, ".dockerignore"), "utf8"));
+    // The rules are read as the build reads them.
+    expect(leftOutOfTheImage(rules, "README.md")).toBe(false);
+    expect(leftOutOfTheImage(rules, "apps/web/package.json")).toBe(false);
+    expect(leftOutOfTheImage(rules, "packages/core/README.md")).toBe(true);
+    expect(leftOutOfTheImage(rules, "docs/adr/README.md")).toBe(true);
+    expect(leftOutOfTheImage(rules, "apps/server/.env")).toBe(true);
+    const files = published();
+    expect(files.length).toBeGreaterThan(5);
+    expect(files.filter((file) => leftOutOfTheImage(rules, file))).toEqual([]);
+  });
+
+  it("are inputs of the web build and its tests in turbo.json, so that a change rebuilds the pages", () => {
+    for (const task of ["@skillcdn/web#build", "@skillcdn/web#test"]) {
+      const inputs = turboInputs(task);
+      expect(inputs.length).toBeGreaterThan(0);
+      expect(
+        published().filter((file) => !inputs.some((input) => input.test(file))),
+        task,
+      ).toEqual([]);
     }
   });
 });

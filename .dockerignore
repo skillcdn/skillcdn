@@ -35,8 +35,10 @@ docs
 !LICENSE.md
 !THIRD-PARTY-NOTICES.md
 !TRADEMARKS.md
-# The documentation the web UI renders into its pages at build time (docs/nav.json names the files).
+# The documentation the web UI renders into its pages at build time: docs/nav.json and every file
+# it names, wherever it lives. A test of the web app (apps/web/dev/docs.test.ts) keeps this in step.
 !docs/nav.json
 !docs/guide/*.md
 !docs/specs/*.md
 !deploy/README.md
+!packages/cli/README.md
