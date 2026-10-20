@@ -866,7 +866,7 @@ describe("the indexed repositories of an account", () => {
     description: undefined,
     frontMatter: undefined,
     searchable: true,
-    searchBody: "words",
+    search: "'word':1",
     visible: true,
     ...patch,
   });

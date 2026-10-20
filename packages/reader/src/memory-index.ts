@@ -3,22 +3,20 @@ import {
   type BlobStore,
   type IndexEntry,
   type IndexStore,
-  queryLexemes,
+  parseSearchVector,
   type ReadableIndex,
   type RepoPath,
   rankSearchVector,
   type SearchVector,
   SKILL_RANK_BOOST,
   type SnapshotIndex,
-  searchFieldsOf,
-  searchVectorOf,
 } from "@skillcdn/core";
 import { compareByteOrder, sortedByPath } from "./order.js";
 
 // An index kept in memory (ADR-0054): what the indexer produced of a commit or a directory,
-// read as the deployment reads one it keeps in PostgreSQL. A search weighs and ranks every
-// searchable entry with the word rules of @skillcdn/core, which hold the same words to the same
-// positions as the deployment's text search; which of two matches comes first may differ
+// read as the deployment reads one it keeps in PostgreSQL. A search ranks the vectors the
+// indexer built, the same vectors the deployment stores, with the rank `ts_rank` computes
+// (ADR-0063); which of two matches comes first may still differ where their ranks are close
 // (ADR-0053).
 
 export interface MemoryIndexOptions {
@@ -54,22 +52,18 @@ export function createMemoryIndex(options: MemoryIndexOptions): ReadableIndex {
     index.entries.filter((entry) => entry.visible),
     (entry) => entry.path,
   );
-  /** The vector of every searchable entry, built on the first search and kept. */
-  let vectors: Promise<ReadonlyMap<string, SearchVector>> | undefined;
-  const vectorsOf = (): Promise<ReadonlyMap<string, SearchVector>> => {
-    vectors ??= (async () => {
+  /** The vector of every searchable entry, read from its text form on the first search and kept. */
+  let vectors: ReadonlyMap<string, SearchVector> | undefined;
+  const vectorsOf = (): ReadonlyMap<string, SearchVector> => {
+    if (vectors === undefined) {
       const built = new Map<string, SearchVector>();
       for (const entry of served) {
-        if (!entry.searchable) {
-          continue;
+        if (entry.searchable && entry.search !== undefined) {
+          built.set(entry.path, parseSearchVector(entry.search));
         }
-        // The body is searched where no parsed search body was kept, as the database searches
-        // the stored text; a body that is not at hand is searched by its words of name and path.
-        const body = entry.searchBody === undefined ? await blobs.read(entry.blobSha) : undefined;
-        built.set(entry.path, searchVectorOf(searchFieldsOf(entry, body)));
       }
-      return built;
-    })();
+      vectors = built;
+    }
     return vectors;
   };
 
@@ -77,12 +71,11 @@ export function createMemoryIndex(options: MemoryIndexOptions): ReadableIndex {
     async entries(): Promise<readonly IndexEntry[]> {
       return served;
     },
-    async search(mountPath: RepoPath, query: string): Promise<readonly IndexEntry[]> {
-      const lexemes = queryLexemes(query);
+    async search(mountPath: RepoPath, lexemes: readonly string[]): Promise<readonly IndexEntry[]> {
       if (lexemes.length === 0) {
         return [];
       }
-      const built = await vectorsOf();
+      const built = vectorsOf();
       const ranked: { entry: IndexEntry; rank: number }[] = [];
       for (const entry of served) {
         if (!underPath(entry.path, mountPath)) {

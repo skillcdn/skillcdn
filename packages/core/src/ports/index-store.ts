@@ -14,11 +14,12 @@ export interface IndexStore {
   /** Every served entry of the commit (`visible`), in byte order of path. */
   entries(): Promise<readonly IndexEntry[]>;
   /**
-   * The findable entries under `mountPath` that the words of `query` match, best first, as the
-   * deployment searches them (`searchLexemes` and `rankSearchVector` say how): a skill outranks
-   * a document, and ties keep path order. Empty for a query without a usable word.
+   * The findable entries under `mountPath` whose search vector holds any of `lexemes`, best
+   * first, as `rankSearchVector` ranks them: a skill outranks a document, and ties keep path
+   * order. The lexemes are a query's, read with the pack's word rules (`queryLexemes`); empty
+   * for none.
    */
-  search(mountPath: RepoPath, query: string): Promise<readonly IndexEntry[]>;
+  search(mountPath: RepoPath, lexemes: readonly string[]): Promise<readonly IndexEntry[]>;
   /** What the reading rules could not read as intended. */
   diagnostics(): Promise<readonly SnapshotDiagnostic[]>;
 }

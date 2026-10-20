@@ -1,23 +1,56 @@
 import { stemEnglish } from "./english-stemmer.js";
 import { ENGLISH_STOP_WORDS } from "./stop-words.js";
 
-// The words of a text as PostgreSQL's `english` configuration reads them: its default parser
-// cut into tokens, the stop words dropped, the rest stemmed or kept as written by what the
-// token is. An index searched in memory matches the same words as one the deployment searches
-// with `to_tsvector` and `plainto_tsquery` (ADR-0053); the integration test of @skillcdn/db holds
-// this file against the database. The parser is a state machine with many token kinds; what is
-// here is the part of it that text in a pack meets: words, numbers, hyphenated words, hosts,
-// versions, paths, URLs and addresses.
+// The words of a text, as every index of a pack reads them: the deployment's index in PostgreSQL
+// and the command's index in memory are both built from these lexemes, so that a pack is found by
+// the same words wherever it is served (ADR-0053, ADR-0063). The text is cut into tokens as
+// PostgreSQL's default parser cuts text in the Latin script: words, numbers, hyphenated words,
+// hosts, versions, paths, URLs and addresses; the words of a language with a stemmer are stemmed
+// and its stop words dropped, and the scripts without word stems (Han, Hangul, Hiragana and
+// Katakana) are matched by pairs of characters, so that an inflected word is found by its stem.
+// The integration test of @skillcdn/db holds the stemmer against PostgreSQL's dictionary.
 
-/** One word of a text, at the position the text-search configuration would give it. */
+/** One word of a text, at the position the index gives it. */
 export interface Lexeme {
   readonly lexeme: string;
-  /** Counted from 1 over every token the parser cut, the dropped stop words included. */
+  /** Counted from 1 over every token cut, the dropped stop words included. */
   readonly position: number;
 }
 
-/** A token longer than this is not a word to the parser. */
-const MAX_TOKEN_LENGTH = 2047;
+/** How the words of one language are read: its stemmer and its stop words. */
+export interface WordRules {
+  /** The primary language subtag the rules are for. */
+  readonly language: string;
+  /** The stem of one lowercase word of letters. */
+  readonly stem: (word: string) => string;
+  /** Words dropped on both sides, so that a search for one finds nothing. */
+  readonly stopWords: ReadonlySet<string>;
+}
+
+/** The English rules: the Snowball stemmer and the stop words of PostgreSQL's `english` configuration. */
+const ENGLISH: WordRules = { language: "en", stem: stemEnglish, stopWords: ENGLISH_STOP_WORDS };
+
+/** The languages with word rules of their own, by primary subtag. */
+const RULES: ReadonlyMap<string, WordRules> = new Map([["en", ENGLISH]]);
+
+/** The languages whose words are stemmed; every other language is read with English's rules. */
+export const STEMMED_LANGUAGES: readonly string[] = [...RULES.keys()];
+
+/**
+ * The word rules a pack's `language` names, by its primary subtag (`en` for `en-GB`). English is
+ * the authoring default and the rules of every language without rules of its own, so that a
+ * pack written in another language is read as it was before its stemmer existed: its words as
+ * written, the English words among them stemmed, and its scripts without word stems by pairs.
+ */
+export function wordRulesOf(language: string | undefined): WordRules {
+  const primary = language?.split("-", 1)[0]?.toLowerCase();
+  return (primary === undefined ? undefined : RULES.get(primary)) ?? ENGLISH;
+}
+
+/** A lexeme longer than this, in UTF-8 bytes, is not a word to the index. */
+export const MAX_LEXEME_BYTES = 2047;
+/** A token this long in characters may be over the byte limit; shorter ones never are. */
+const SHORT_ENOUGH = Math.floor(MAX_LEXEME_BYTES / 3);
 
 /** A run of what can be in a word: letters, digits, and the dots, hyphens and slashes that join them; a hyphen before digits is their sign. */
 const RUN = /(?:\/|-(?=\p{N}))?[\p{L}\p{N}][\p{L}\p{N}./-]*/u;
@@ -26,6 +59,16 @@ const URL = /[a-z][a-z0-9+.-]*:\/\/([^\s/"'<>()[\]{}]+)(\/[^\s"'<>()[\]{}]*)?/u;
 /** `user@host`, one word to the parser. */
 const EMAIL = /[\p{L}\p{N}._-]+@[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)+/u;
 const TOKENS = new RegExp(`${URL.source}|${EMAIL.source}|${RUN.source}`, "gu");
+
+/**
+ * The scripts without word stems, matched by pairs of characters: Han, Hangul, Hiragana and
+ * Katakana, with the marks that extend their words (the prolonged sound mark among them). A run
+ * of such characters and a run of any others are cut apart, so that a particle written onto a
+ * Latin word or a number (`MCP를`, `2026년`) leaves the word and the number findable.
+ */
+const CJK_CLASS = String.raw`\p{scx=Han}\p{scx=Hangul}\p{scx=Hiragana}\p{scx=Katakana}`;
+const CJK = new RegExp(`^[${CJK_CLASS}]`, "u");
+const SCRIPT_RUNS = new RegExp(`[${CJK_CLASS}]+|[^${CJK_CLASS}]+`, "gu");
 
 const LETTERS = /^\p{L}+$/u;
 const DIGITS = /^\p{N}+$/u;
@@ -41,7 +84,20 @@ function wordToken(text: string): Token {
   return { text, stem: LETTERS.test(text) };
 }
 
-/** The tokens of one run of word characters, in the order the parser emits them. */
+/** The pairs of characters of a run in a script without word stems; a run of one character is itself. */
+function bigramTokens(run: string): Token[] {
+  const characters = Array.from(run);
+  if (characters.length < 2) {
+    return characters.map((text) => ({ text, stem: false }));
+  }
+  const tokens: Token[] = [];
+  for (let index = 0; index + 1 < characters.length; index += 1) {
+    tokens.push({ text: `${characters[index]}${characters[index + 1]}`, stem: false });
+  }
+  return tokens;
+}
+
+/** The tokens of one run of word characters in the Latin script, in the order the parser emits them. */
 function tokensOfRun(run: string): Token[] {
   // A leading slash stays only on a path; dots, slashes and hyphens at the ends are blanks.
   let text = run.replace(/[./-]+$/u, "");
@@ -86,6 +142,25 @@ function tokensOfRun(run: string): Token[] {
   return [whole, ...parts.filter((part) => WORDY.test(part)).map(wordToken)];
 }
 
+/** The tokens of a run, its scripts cut apart: pairs for the scripts without stems, words for the rest. */
+function tokensOfScripts(run: string): Token[] {
+  const tokens: Token[] = [];
+  for (const piece of run.match(SCRIPT_RUNS) ?? []) {
+    tokens.push(...(CJK.test(piece) ? bigramTokens(piece) : tokensOfRun(piece)));
+  }
+  return tokens;
+}
+
+/** The UTF-8 length of a string, counted from its code points: this package loads no platform API. */
+function utf8Length(text: string): number {
+  let bytes = 0;
+  for (const character of text) {
+    const point = character.codePointAt(0) ?? 0;
+    bytes += point <= 0x7f ? 1 : point <= 0x7ff ? 2 : point <= 0xffff ? 3 : 4;
+  }
+  return bytes;
+}
+
 function tokensOf(text: string): Token[] {
   const tokens: Token[] = [];
   for (const match of text.toLowerCase().matchAll(TOKENS)) {
@@ -106,16 +181,20 @@ function tokensOf(text: string): Token[] {
       tokens.push({ text: whole, stem: false });
       continue;
     }
-    tokens.push(...tokensOfRun(whole));
+    tokens.push(...tokensOfScripts(whole));
   }
-  return tokens.filter((token) => token.text.length <= MAX_TOKEN_LENGTH);
+  return tokens.filter(
+    (token) => token.text.length <= SHORT_ENOUGH || utf8Length(token.text) <= MAX_LEXEME_BYTES,
+  );
 }
 
 /**
- * The lexemes of a text, as `to_tsvector('english', text)` would list them: every token at its
- * position, the stop words dropped, words stemmed and everything else kept as written.
+ * The lexemes of a text, as an index holds them: every token at its position, the stop words of
+ * the language dropped, its words stemmed, everything else kept as written, and the scripts
+ * without word stems as pairs of characters. `language` is the pack's; English when not said.
  */
-export function searchLexemes(text: string): Lexeme[] {
+export function searchLexemes(text: string, language?: string): Lexeme[] {
+  const rules = wordRulesOf(language);
   const lexemes: Lexeme[] = [];
   let position = 0;
   for (const token of tokensOf(text)) {
@@ -124,19 +203,19 @@ export function searchLexemes(text: string): Lexeme[] {
       lexemes.push({ lexeme: token.text, position });
       continue;
     }
-    if (ENGLISH_STOP_WORDS.has(token.text)) {
+    if (rules.stopWords.has(token.text)) {
       continue;
     }
-    lexemes.push({ lexeme: stemEnglish(token.text), position });
+    lexemes.push({ lexeme: rules.stem(token.text), position });
   }
   return lexemes;
 }
 
 /**
- * The lexemes a query is made of, as `plainto_tsquery('english', query)` would read them, each
- * once: a search matches a document that has any of them. Empty for a query of stop words and
+ * The lexemes a query is made of, read with the same rules as the text it searches, each once: a
+ * search matches a document that has any of them. Empty for a query of stop words and
  * punctuation alone, which matches nothing.
  */
-export function queryLexemes(query: string): string[] {
-  return [...new Set(searchLexemes(query).map((lexeme) => lexeme.lexeme))];
+export function queryLexemes(query: string, language?: string): string[] {
+  return [...new Set(searchLexemes(query, language).map((lexeme) => lexeme.lexeme))];
 }

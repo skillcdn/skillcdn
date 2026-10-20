@@ -54,7 +54,9 @@ describe("the reads of a directory", () => {
       /Skills and documents from skillcdn-packs-[^/]+\/acme-skills \(commit 0000000\)/,
     );
     expect(out).toContain("Acme skills: The skills of Acme.");
-    expect(out).toContain("skillcdn browse explores folders; skillcdn find matches original words");
+    expect(out).toContain(
+      "skillcdn browse explores folders and outlines a file by its headings; skillcdn find matches original words",
+    );
     expect(out).not.toContain("browse_repo");
     expect(out).toContain("2 skills and 1 document in");
     expect(out).toContain("skill: ads (marketing/ads/SKILL.md)");

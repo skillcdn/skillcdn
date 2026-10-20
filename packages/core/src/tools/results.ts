@@ -1,5 +1,7 @@
 import type { LicenseFact } from "../license.js";
 import type { RepoPath } from "../repo-path.js";
+import type { OutlineHeading } from "../search/outline.js";
+import type { MatchedSection } from "../search/sections.js";
 import type { OmittedFile } from "../skill-document.js";
 import type { SkillTranslation } from "../skill-manifest.js";
 
@@ -32,10 +34,37 @@ export interface FolderOverview {
   readonly title: string | undefined;
   readonly description: string | undefined;
 }
+/** Why a file browsed for its outline has no headings to list. */
+export type FileOutlineUnavailable = "not_markdown" | "not_text" | "too_large" | "described_only";
+
+/**
+ * The outline of a file `browse_repo` was given the path of (ADR-0063): its headings, each with
+ * the offset and the length that read its section with `read_repo_file`.
+ */
+export interface FileOutline {
+  readonly path: RepoPath;
+  /** Bytes of the file, as the tree has it. */
+  readonly size: number;
+  /** Characters of the file as it is read; `undefined` when its text is not at hand. */
+  readonly totalLength: number | undefined;
+  /** The headings on this page, in document order. */
+  readonly headings: readonly OutlineHeading[];
+  /** True when the file has more headings than an outline keeps. */
+  readonly truncated: boolean;
+  /** Why there are no headings to list, when there are none for a reason other than the file's own. */
+  readonly unavailable?: FileOutlineUnavailable;
+  /** With `described_only`: the license that keeps the content at its source (ADR-0026). */
+  readonly license?: LicenseFact;
+  /** With `too_large`, `not_text` and `described_only`: where the file is at its source. */
+  readonly sourceUrl?: string;
+}
+
 export interface BrowseResult {
   readonly diagnostics?: readonly IndexDiagnostic[];
   readonly diagnosticsTotal?: number;
   readonly overview?: FolderOverview;
+  /** When `path` names a file: its outline, and `entries` is empty. */
+  readonly outline?: FileOutline;
   readonly mount: MountSummary;
   readonly path: RepoPath;
   readonly entries: readonly BrowseEntry[];
@@ -80,6 +109,12 @@ export interface FindFile {
   readonly summary: string | undefined;
 }
 
+/**
+ * A section of a document that a search matched (ADR-0063): its heading path, the offset and
+ * the length that read it with `read_repo_file`, and a glimpse of the passage.
+ */
+export type FindSection = MatchedSection;
+
 export type FindItem =
   | {
       readonly kind: "skill";
@@ -105,6 +140,11 @@ export type FindItem =
       readonly summary: string | undefined;
       /** The directory of the skill the document belongs to, when it belongs to one in the mount. */
       readonly skillDirectory: RepoPath | undefined;
+      /**
+       * With a query: the sections of the document that matched, best first. Absent for a
+       * document this mount describes without serving, whose text cannot be read here.
+       */
+      readonly sections?: readonly FindSection[];
     };
 
 export interface FindResult {

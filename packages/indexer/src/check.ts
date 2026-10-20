@@ -14,6 +14,7 @@ import {
   type IndexLimits,
   isWithinRepoPath,
   type MountCatalog,
+  outlineMarkdown,
   parseRepoPath,
   type RepoPath,
   ROOT_PATH,
@@ -190,9 +191,15 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
   }
   write("\n");
 
+  // A document's sections are what a search names and what `browse_repo` outlines (ADR-0063):
+  // the author sees how many a document has.
   write(`Documents outside the skills: ${documents.length}\n`);
   for (const document of documents) {
-    write(`- ${document.path}${document.title === undefined ? "" : ` - ${document.title}`}\n`);
+    const text = document.kind === "markdown" ? await blobs.read(document.blobSha) : undefined;
+    const sections = text === undefined ? 0 : outlineMarkdown(text).headings.length;
+    write(
+      `- ${document.path}${document.title === undefined ? "" : ` - ${document.title}`}${sections === 0 ? "" : ` (${sections} ${sections === 1 ? "section" : "sections"})`}\n`,
+    );
   }
   write("\n");
 

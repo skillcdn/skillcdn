@@ -89,12 +89,37 @@ export const restFolderOverviewSchema = z.object({
   title: z.nullable(z.string()),
   description: z.nullable(z.string()),
 });
+/** One heading of a file's outline, with the `offset` and `length` that read its section. */
+export const restOutlineHeadingSchema = z.object({
+  level: z.int().check(z.gte(1), z.lte(6)),
+  /** Plain text; empty for a heading without usable text. */
+  text: z.string(),
+  offset: count,
+  length: count,
+});
+/** The outline of a file the browse route was given the path of (ADR-0063). */
+export const restFileOutlineSchema = z.object({
+  path: z.string(),
+  /** Bytes, as the tree has the file. */
+  size: count,
+  /** Characters of the file as it is read, or `null` when its text is not at hand. */
+  totalLength: z.nullable(count),
+  headings: z.array(restOutlineHeadingSchema),
+  /** True when the file has more headings than an outline keeps. */
+  truncated: z.boolean(),
+  /** Why there are no headings to list, when there are none for a reason other than the file's own. */
+  unavailable: z.optional(z.enum(["not_markdown", "not_text", "too_large", "described_only"])),
+  license: z.optional(restLicenseSchema),
+  sourceUrl: z.optional(z.string()),
+});
 export const restBrowseSchema = z.discriminatedUnion("status", [
   z.object({
     status: z.literal("ready"),
     commit: z.string(),
     path: z.string(),
     overview: z.optional(restFolderOverviewSchema),
+    /** When `path` names a file: its outline, and `entries` is empty. */
+    outline: z.optional(restFileOutlineSchema),
     entries: z.array(restBrowseEntrySchema),
     diagnostics: z.optional(z.array(restDiagnosticSchema)),
     nextCursor: z.nullable(z.string()),
@@ -106,6 +131,8 @@ export type RestBrowse = z.infer<typeof restBrowseSchema>;
 export type RestBrowseEntry = z.infer<typeof restBrowseEntrySchema>;
 export type RestReference = z.infer<typeof restReferenceSchema>;
 export type RestFolderOverview = z.infer<typeof restFolderOverviewSchema>;
+export type RestOutlineHeading = z.infer<typeof restOutlineHeadingSchema>;
+export type RestFileOutline = z.infer<typeof restFileOutlineSchema>;
 
 export const restRepositorySchema = z.object({
   host: z.enum(ADDRESS_HOST_KEYS),
@@ -202,6 +229,18 @@ export const restMountSchema = z.object({
   ]),
 });
 
+/** A section of a document that a search matched (ADR-0063). */
+export const restFindSectionSchema = z.object({
+  /** The heading path, outermost first; empty for the text before the first heading. */
+  heading: z.array(z.string()),
+  /** What reads the section through the files route: `offset` and `limit`. */
+  offset: count,
+  length: count,
+  /** A glimpse of the passage as plain text, or `null` when the section has no prose. */
+  excerpt: z.nullable(z.string()),
+});
+export type RestFindSection = z.infer<typeof restFindSectionSchema>;
+
 export const restFindItemSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("skill"),
@@ -225,6 +264,8 @@ export const restFindItemSchema = z.discriminatedUnion("kind", [
     summary: z.nullable(z.string()),
     /** The directory of the skill the document belongs to, or `null`. */
     skillDirectory: z.nullable(z.string()),
+    /** With a query: the sections that matched, best first; absent for a document described only. */
+    sections: z.optional(z.array(restFindSectionSchema)),
   }),
 ]);
 

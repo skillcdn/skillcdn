@@ -71,7 +71,9 @@ describe("checking a working tree", () => {
     expect(report).toContain(
       '- "skillcdn.include" entry ignored: media/docs/cast.md is outside the skill directory',
     );
-    expect(report).toContain("Documents outside the skills: 2\n- docs/tool/models.md - Models\n");
+    expect(report).toContain(
+      "Documents outside the skills: 2\n- docs/tool/models.md - Models (1 section)\n",
+    );
   });
 
   it("says when the directory cannot be read", async () => {

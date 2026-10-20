@@ -8,6 +8,7 @@ import type {
   BrowseEntry,
   BrowseResult,
   DirectoryResult,
+  FileOutline,
   FileResult,
   FindItem,
   FindResult,
@@ -23,6 +24,7 @@ import type {
   RestBrowseEntry,
   RestDiagnostic,
   RestFile,
+  RestFileOutline,
   RestFind,
   RestFolderOverview,
   RestLicense,
@@ -182,6 +184,29 @@ function entriesOf(entries: readonly RestBrowseEntry[]): BrowseEntry[] {
   });
 }
 
+/** The outline a `browse` answer carries for a file, as the result it was made from. */
+function outlineOf(outline: RestFileOutline | undefined): FileOutline | undefined {
+  const path = outline === undefined ? undefined : pathOf(outline.path);
+  if (outline === undefined || path === undefined) {
+    return undefined;
+  }
+  return {
+    path,
+    size: outline.size,
+    totalLength: orUndefined(outline.totalLength),
+    headings: outline.headings.map((heading) => ({
+      level: heading.level,
+      text: heading.text,
+      offset: heading.offset,
+      length: heading.length,
+    })),
+    truncated: outline.truncated,
+    ...(outline.unavailable === undefined ? {} : { unavailable: outline.unavailable }),
+    ...(outline.license === undefined ? {} : { license: licenseOf(outline.license) }),
+    ...(outline.sourceUrl === undefined ? {} : { sourceUrl: outline.sourceUrl }),
+  };
+}
+
 /** A `browse` answer as the result it was made from; `undefined` when its path is not one. */
 export function browseResultOf(
   body: Ready<RestBrowse>,
@@ -191,10 +216,12 @@ export function browseResultOf(
   if (path === undefined) {
     return undefined;
   }
+  const outline = outlineOf(body.outline);
   return {
     mount: summaryAt(mount, body.commit),
     path,
     overview: overviewOf(body.overview),
+    ...(outline === undefined ? {} : { outline }),
     entries: entriesOf(body.entries),
     nextCursor: orUndefined(body.nextCursor),
     diagnostics: diagnosticsOf(body.diagnostics),
@@ -247,6 +274,16 @@ export function findResultOf(body: Ready<RestFind>, mount: MountSummary): FindRe
             title: orUndefined(item.title),
             summary: orUndefined(item.summary),
             skillDirectory,
+            ...(item.sections === undefined
+              ? {}
+              : {
+                  sections: item.sections.map((section) => ({
+                    heading: [...section.heading],
+                    offset: section.offset,
+                    length: section.length,
+                    excerpt: orUndefined(section.excerpt),
+                  })),
+                }),
           },
         ];
   });

@@ -100,6 +100,29 @@ license: MIT
 
 A larger pack puts one folder per area of work, each with a `SKILLCDN.md` that says who its skills are for and adds the area's rules; connect the root for everything, or an area's folder for that area alone ([the repository manifest](../specs/skill-repo.md#the-repository-manifest-skillcdnmd)). A manifest is optional: a pack with nothing to add needs none.
 
+## A pack of documents
+
+A pack needs no skill at all: a handbook, a product manual or a body of reports is served as a pack of documents, and an agent that connects browses it, searches it and reads what it needs ([document packs](../specs/skill-repo.md#document-packs)). What makes such a pack workable at hundreds or thousands of pages:
+
+```
+handbook/
+  SKILLCDN.md               name, description, documents: [docs], language: en
+  docs/
+    README.md               the map: one line per document, what each holds
+    getting-started.md      one file per document or chapter, with a title and a description
+    billing.md              headings that name the parts, since sections are what search finds
+    api/
+      README.md             a map for the folder
+      jobs.md
+```
+
+- **One file per document or chapter**, with a front-matter `title` and `description`, or a first heading and a summary paragraph. Not one file per page, which carries no summary, and not one file per book, which is too large to read by sections.
+- **Headings that name the parts.** A search result names the sections that matched, with the offset and the limit that read each one with `read_repo_file`, and `browse_repo` given the file answers its outline, so an agent walks a long document by its headings instead of reading it whole.
+- **A map in every document set**: the `README.md` of the folder, one line per document. An agent reads the map before it searches.
+- **The language in the manifest.** `language` tells the agent what language to search in and chooses how the words are matched: an English pack is matched by word stems, a Korean, Japanese or Chinese one by pairs of characters, so that an inflected word is found by its stem. A folder written in another language gets a manifest of its own.
+
+Converting documents into this shape is the agent's work, with the tools it has: the reference pack carries a skill that turns files into a pack of documents and one that works a large pack, searching, reading sections and keeping what it learned as notes in the repository. SkillCDN never receives a file; it indexes what the repository holds. `skillcdn check` prints how many sections each document has, and names a document too large to be searched.
+
 ## A license
 
 Put a license file at the repository root, and choose a permissive one if the skills are to be served whole: a license that does not allow copies keeps the content at the source and the skill is only described, and a pack without one is served with a notice and never featured ([licenses](../specs/skill-repo.md#licenses)). A skill may carry a license of its own, as a file in its directory or a `license` field.

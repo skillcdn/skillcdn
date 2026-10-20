@@ -2,7 +2,11 @@ import {
   type HostRepository,
   type IndexEntry,
   NO_LICENSE,
+  queryLexemes,
   type ShowcaseTexts,
+  searchFieldsOf,
+  searchVectorOf,
+  serializeSearchVector,
 } from "@skillcdn/core";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -109,13 +113,23 @@ async function readySnapshot(entries: IndexEntry[], bodies: Record<string, strin
     await store.write(sha, new TextEncoder().encode(content));
   }
   expect(await claimSnapshot(database, scope, "builder", T0, 60_000)).toBeDefined();
+  // The indexer builds the search vector of every searchable entry from its body (ADR-0063);
+  // these tests hand the store entries written by hand, so the vector is built here the same way.
+  const vectorized = entries.map((item) =>
+    item.searchable && item.search === undefined
+      ? {
+          ...item,
+          search: serializeSearchVector(searchVectorOf(searchFieldsOf(item, bodies[item.blobSha]))),
+        }
+      : item,
+  );
   expect(
     await writeSnapshotIndex(
       database,
       scope,
       "builder",
       {
-        entries,
+        entries: vectorized,
         truncated: false,
         indexedBytes: 0,
         diagnostics: [],
@@ -127,6 +141,10 @@ async function readySnapshot(entries: IndexEntry[], bodies: Record<string, strin
   ).toBe(true);
   return scope;
 }
+
+/** A search as the reader asks it: the words of the query, read with the English rules. */
+const search = (scope: SnapshotScope, mountPath: string, query: string, limit?: number) =>
+  searchEntries(database, scope, mountPath, queryLexemes(query), limit);
 
 function entry(patch: Partial<IndexEntry> & Pick<IndexEntry, "path">): IndexEntry {
   return {
@@ -531,7 +549,7 @@ describe("search", () => {
   });
 
   it("matches on any word, ranks skills first and stems words", async () => {
-    const results = await searchEntries(database, scope, "", "how do I write release notes", 10);
+    const results = await search(scope, "", "how do I write release notes", 10);
     expect(results.map((result) => result.path)).toEqual([
       "skills/release-notes/SKILL.md",
       "docs/releasing.md",
@@ -547,11 +565,11 @@ describe("search", () => {
   });
 
   it("searches bodies, not only metadata", async () => {
-    const results = await searchEntries(database, scope, "", "timeline", 10);
+    const results = await search(scope, "", "timeline", 10);
     expect(results.map((result) => result.path)).toEqual(["skills/incident-review/SKILL.md"]);
   });
 
-  it("indexes a supplied search body instead of raw presentation metadata", async () => {
+  it("stores the vector it is given, and searches nothing of the body beyond it", async () => {
     const canonical = await readySnapshot(
       [
         entry({
@@ -560,12 +578,12 @@ describe("search", () => {
           blobSha: "body-search-override",
           name: "compose",
           description: "Practical copper guidance.",
-          searchBody: "Plan a storyboard.",
+          search: "'compos':1A 'copper':3B 'practic':2B 'storyboard':5",
         }),
         entry({
           path: "docs/empty.md",
           blobSha: "body-empty-override",
-          searchBody: "",
+          search: "",
         }),
       ],
       {
@@ -574,22 +592,22 @@ describe("search", () => {
       },
     );
     for (const query of ["compose", "copper", "storyboard"])
-      expect((await searchEntries(database, canonical, "", query)).map((row) => row.path)).toEqual([
+      expect((await search(canonical, "", query)).map((row) => row.path)).toEqual([
         "skills/compose/SKILL.md",
       ]);
-    expect(await searchEntries(database, canonical, "", "presentationonlyquartz")).toEqual([]);
+    expect(await search(canonical, "", "presentationonlyquartz")).toEqual([]);
     expect(await createBlobStore(database).read("body-search-override")).toContain(
       "Presentationonlyquartz",
     );
   });
 
   it("finds files by the words in their path", async () => {
-    const results = await searchEntries(database, scope, "", "style", 10);
+    const results = await search(scope, "", "style", 10);
     expect(results[0]?.path).toBe("skills/release-notes/references/style.md");
   });
 
   it("stays inside the mounted path and takes the path literally", async () => {
-    const inSkills = await searchEntries(database, scope, "skills", "release", 10);
+    const inSkills = await search(scope, "skills", "release", 10);
     expect(inSkills.every((result) => result.path.startsWith("skills/"))).toBe(true);
     expect(inSkills.length).toBeGreaterThan(0);
 
@@ -602,15 +620,15 @@ describe("search", () => {
 
   it("returns nothing for queries without usable words, and survives hostile ones", async () => {
     for (const query of ["the and of", "", "   ", "!!! ((( &&& |||", "'; drop table blobs; --"]) {
-      expect(await searchEntries(database, scope, "", query, 10)).toEqual([]);
+      expect(await search(scope, "", query, 10)).toEqual([]);
     }
-    const noisy = await searchEntries(database, scope, "", "release & | ! ( ) : * <-> '", 10);
+    const noisy = await search(scope, "", "release & | ! ( ) : * <-> '", 10);
     expect(noisy.length).toBeGreaterThan(0);
     expect(await createBlobStore(database).read("body-doc")).toContain("Releasing");
   });
 
   it("honors the limit", async () => {
-    expect(await searchEntries(database, scope, "", "release", 1)).toHaveLength(1);
+    expect(await search(scope, "", "release", 1)).toHaveLength(1);
   });
 
   it("lists skills before documents and leaves unsearchable files out", async () => {
@@ -713,7 +731,7 @@ describe("search", () => {
 
   it("does not show another account the entries", async () => {
     const stranger = { ...scope, accountId: "00000000-0000-7000-8000-000000000000" };
-    expect(await searchEntries(database, stranger, "", "release", 10)).toEqual([]);
+    expect(await search(stranger, "", "release", 10)).toEqual([]);
     expect(await listEntries(database, stranger, "", 10)).toEqual([]);
     expect(await getEntry(database, stranger, "docs/releasing.md")).toBeUndefined();
   });
@@ -778,7 +796,7 @@ describe("a repository manifest", () => {
 
   it("keeps what it leaves out away from every query", async () => {
     // README.md says "releasing" too, and is left out.
-    expect((await searchEntries(database, scope, "", "releasing", 10)).map((r) => r.path)).toEqual([
+    expect((await search(scope, "", "releasing", 10)).map((r) => r.path)).toEqual([
       "skills/release-notes/SKILL.md",
       "docs/releasing.md",
     ]);

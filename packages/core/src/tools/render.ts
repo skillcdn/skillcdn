@@ -8,6 +8,7 @@ import {
 import type {
   BrowseResult,
   DirectoryResult,
+  FileOutline,
   FileReference,
   FileResult,
   FindItem,
@@ -39,10 +40,74 @@ function renderReferences(references: readonly FileReference[] | undefined): str
     : `Resolved references:\n${references.map((reference) => `- ${reference.source === undefined ? "" : `${reference.source}: `}${reference.href} -> ${reference.path} (${reference.status})`).join("\n")}`;
 }
 
+/** A heading's text as an outline shows it; a heading without text is still a place in the file. */
+const headingLabel = (text: string): string =>
+  text.length === 0 ? "(untitled)" : compactSummary(text, 120);
+
+/** `offset` and `limit` as `read_repo_file` takes them, so that a model reads a section in one call. */
+const sectionRange = (section: { readonly offset: number; readonly length: number }): string =>
+  `offset ${section.offset}, limit ${section.length}`;
+
+/** The outline of a file (ADR-0063): its headings, each with what reads its section. */
+function renderOutline(result: BrowseResult, outline: FileOutline, words: ToolWords): string {
+  const source = `Source: ${describeMount(result.mount)}`;
+  const unavailable = (reason: string): string =>
+    joinSections([
+      `File: ${outline.path} (${outline.size} bytes)\n${source}`,
+      reason,
+      notices(result.mount).join("\n"),
+    ]);
+  switch (outline.unavailable) {
+    case "not_markdown":
+      return unavailable(
+        `Not a Markdown document, so it has no outline. ${words.read} reads it from the start.`,
+      );
+    case "not_text":
+      return unavailable(
+        `Not a UTF-8 text file, which is all this server carries. Fetch it from the source: ${outline.sourceUrl ?? "the host"}`,
+      );
+    case "too_large":
+      return unavailable(
+        `Too large to read here. Fetch it from the source: ${outline.sourceUrl ?? "the host"}`,
+      );
+    case "described_only":
+      return unavailable(
+        `Described only: the license (${outline.license === undefined ? "unrecognized" : describeLicense(outline.license)}) allows SkillCDN to say that this file exists, not to pass its content on. Read it at its source: ${outline.sourceUrl ?? "the host"}`,
+      );
+    default:
+      break;
+  }
+  const count =
+    outline.headings.length === 0 && result.nextCursor === undefined
+      ? "no headings"
+      : plural(outline.headings.length, "heading");
+  const header = `File: ${outline.path} (${outline.totalLength ?? outline.size} characters; ${count}${outline.truncated ? ", the first of more" : ""})\n${source}`;
+  const headings =
+    outline.headings.length === 0
+      ? `${words.read} reads it from the start.`
+      : `Outline; a section is read with ${words.read}: the path, its offset and its limit.\n${outline.headings
+          .map(
+            (heading) =>
+              `${"  ".repeat(Math.max(0, heading.level - 1))}- ${"#".repeat(heading.level)} ${headingLabel(heading.text)} (${sectionRange(heading)})`,
+          )
+          .join("\n")}`;
+  return joinSections([
+    header,
+    headings,
+    result.nextCursor === undefined
+      ? undefined
+      : `nextCursor: ${JSON.stringify(result.nextCursor)}`,
+    notices(result.mount).join("\n"),
+  ]);
+}
+
 export function renderBrowseResult(
   result: BrowseResult,
   words: ToolWords = MCP_TOOL_WORDS,
 ): string {
+  if (result.outline !== undefined) {
+    return renderOutline(result, result.outline, words);
+  }
   return joinSections([
     `Folder: ${result.path || "repository root"}\nSource: ${describeMount(result.mount)}`,
     result.overview === undefined
@@ -182,7 +247,17 @@ function renderFindItem(item: FindItem, number: number): string {
     item.skillDirectory === undefined
       ? ""
       : `\n   Skill: ${item.skillDirectory.length === 0 ? "SKILL.md" : `${item.skillDirectory}/SKILL.md`}`;
-  return `${number}. document: ${item.path}${title}${summary}${owner}`;
+  // The sections that matched, each as one line with what reads it (ADR-0063).
+  const sections =
+    item.sections === undefined || item.sections.length === 0
+      ? ""
+      : `\n   Sections:\n${item.sections
+          .map(
+            (section) =>
+              `   - ${section.heading.length === 0 ? "(before the first heading)" : section.heading.map((text) => compactSummary(text, 80)).join(" > ")} (${sectionRange(section)})${section.excerpt === undefined ? "" : `: ${compactSummary(section.excerpt, 200)}`}`,
+          )
+          .join("\n")}`;
+  return `${number}. document: ${item.path}${title}${summary}${owner}${sections}`;
 }
 
 export function renderFindResult(result: FindResult, words: ToolWords = MCP_TOOL_WORDS): string {
@@ -218,6 +293,9 @@ export function renderFindResult(result: FindResult, words: ToolWords = MCP_TOOL
   }
 
   const items = result.items.map((item, index) => renderFindItem(item, index + 1));
+  const hasSections = result.items.some(
+    (item) => item.kind === "document" && item.sections !== undefined && item.sections.length > 0,
+  );
   // A listing, and a search that found nothing, say in full what could not be read: it may be
   // the very skill that is missing. Among results, one line is enough.
   const diagnostics = renderDiagnostics(
@@ -229,6 +307,9 @@ export function renderFindResult(result: FindResult, words: ToolWords = MCP_TOOL
   return joinSections([
     heading,
     items.join("\n"),
+    hasSections
+      ? `A section is read with ${words.read}: the path, its offset and its limit.`
+      : undefined,
     more.join("\n"),
     diagnostics,
     result.nextCursor === undefined

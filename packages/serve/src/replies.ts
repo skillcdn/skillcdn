@@ -61,6 +61,17 @@ export function browseReply(result: BrowseResult): ToolReply {
             title: compactSummary(result.overview.title ?? "", 100),
             description: compactSummary(result.overview.description ?? "", 240),
           },
+    ...(result.outline === undefined
+      ? {}
+      : {
+          outline: {
+            ...result.outline,
+            headings: result.outline.headings.map((heading) => ({
+              ...heading,
+              text: compactSummary(heading.text, 100),
+            })),
+          },
+        }),
     entries: result.entries.map((entry) => ({
       ...entry,
       name: entry.name === null ? null : compactSummary(entry.name, 100),
@@ -69,6 +80,10 @@ export function browseReply(result: BrowseResult): ToolReply {
   };
   return reply(renderBrowseResult(data));
 }
+
+/** How many sections of one document a search page names, and how long an excerpt may be. */
+const SEARCH_SECTIONS = 2;
+const SEARCH_EXCERPT_LENGTH = 200;
 
 export function searchReply(result: FindResult): ToolReply {
   const data: FindResult = {
@@ -90,6 +105,18 @@ export function searchReply(result: FindResult): ToolReply {
             ...item,
             title: item.title === undefined ? undefined : compactSummary(item.title, 100),
             summary: item.summary === undefined ? undefined : compactSummary(item.summary, 240),
+            ...(item.sections === undefined
+              ? {}
+              : {
+                  sections: item.sections.slice(0, SEARCH_SECTIONS).map((section) => ({
+                    ...section,
+                    heading: section.heading.map((text) => compactSummary(text, 80)),
+                    excerpt:
+                      section.excerpt === undefined
+                        ? undefined
+                        : compactSummary(section.excerpt, SEARCH_EXCERPT_LENGTH),
+                  })),
+                }),
           },
     ),
   };

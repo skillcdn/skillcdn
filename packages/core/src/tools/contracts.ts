@@ -29,7 +29,13 @@ const scopePath = z
   .optional()
   .describe("Folder path from the repository root. Omit to use the mounted folder.");
 export const browseInputSchema = z.object({
-  path: scopePath,
+  path: z
+    .string()
+    .max(MAX_REPO_PATH_LENGTH)
+    .optional()
+    .describe(
+      "Folder path from the repository root, or a file path for the file's outline. Omit to use the mounted folder.",
+    ),
   cursor,
   limit: z.number().int().min(1).max(BROWSE_MAX_LIMIT).optional(),
 });
@@ -85,7 +91,7 @@ export const readFileTool: ToolContract<typeof readFileInputSchema> = {
   name: "read_repo_file",
   title: "Read a repository file",
   description:
-    "Read a reference or optional README by repository-root path. Continue long files with nextOffset. Use load_skill for a skill and its required rules.",
+    "Read a reference or optional README by repository-root path, or one section of it with the offset and limit a search result or an outline gives. Continue long files with nextOffset. Use load_skill for a skill and its required rules.",
   inputSchema: readFileInputSchema,
 };
 
@@ -93,14 +99,14 @@ export const browseTool: ToolContract<typeof browseInputSchema> = {
   name: "browse_repo",
   title: "Browse the repository",
   description:
-    "List a folder's children, skill counts and optional README path. Load exact SKILL.md paths with load_skill. Follow nextCursor for more entries. Paths start at the repository root.",
+    "List a folder's children, skill counts and optional README path; given a file path, list the file's headings with the offset and limit that read each section. Load exact SKILL.md paths with load_skill. Follow nextCursor for more entries. Paths start at the repository root.",
   inputSchema: browseInputSchema,
 };
 export const searchTool: ToolContract<typeof searchInputSchema> = {
   name: "search_repo",
   title: "Search the repository",
   description:
-    "Search words in original content, usually English; display translations are excluded. Optional path scopes results. Matching files appear under their skill. Follow nextCursor for more; load the returned SKILL.md path with load_skill.",
+    "Search words in original content, usually English; display translations are excluded. Optional path scopes results. Matching files appear under their skill; a document names the sections that matched, each with the offset and limit that read it. Follow nextCursor for more; load the returned SKILL.md path with load_skill.",
   inputSchema: searchInputSchema,
 };
 export const getSkillTool: ToolContract<typeof getSkillInputSchema> = {

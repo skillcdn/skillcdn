@@ -1,8 +1,13 @@
-import type { LicenseKind, RepoFileKind, SkillFrontMatter } from "@skillcdn/core";
+import {
+  type LicenseKind,
+  type RepoFileKind,
+  type SkillFrontMatter,
+  serializeSearchQuery,
+} from "@skillcdn/core";
 import { and, eq, inArray, isNull, ne, not, or, type SQL, sql } from "drizzle-orm";
 import { type Database, drizzleOf } from "../client.js";
 import { indexEntries } from "../schema.js";
-import { SEARCH_CONFIG, type SnapshotScope } from "./snapshots.js";
+import type { SnapshotScope } from "./snapshots.js";
 
 export interface EntryRecord {
   readonly searchable: boolean;
@@ -63,21 +68,24 @@ const VISIBLE = eq(indexEntries.visible, true);
 const FINDABLE = and(VISIBLE, sql`${indexEntries.search} is not null`);
 
 /**
- * Full-text search inside a mount. A query matches when any of its words match; rank decides
- * the order, and skills outrank plain documents. Returns nothing for a query without usable
- * words (only stop words, only punctuation): the caller decides what to show instead.
+ * Full-text search inside a mount, by the lexemes of a query as `queryLexemes` of @skillcdn/core
+ * read it with the pack's word rules (ADR-0063). An entry matches when its stored vector holds
+ * any of them; `ts_rank` decides the order, as `rankSearchVector` computes it in memory, and
+ * skills outrank plain documents. Returns nothing for no lexemes (a query of stop words or
+ * punctuation alone): the caller decides what to show instead.
  */
 export async function searchEntries(
   database: Database,
   scope: SnapshotScope,
   mountPath: string,
-  query: string,
+  lexemes: readonly string[],
   limit?: number,
 ): Promise<EntryRecord[]> {
-  // plainto_tsquery normalizes the words and joins them with "&"; any-word matching wants "|".
-  // Lexemes never contain spaces, so replacing " & " only ever touches operators.
-  // A scalar subquery without table references is evaluated once per statement, not per row.
-  const tsquery = sql`(select replace(plainto_tsquery(${SEARCH_CONFIG}::regconfig, ${query})::text, ' & ', ' | ')::tsquery)`;
+  if (lexemes.length === 0) {
+    return [];
+  }
+  // The query in the text form of a tsquery, every lexeme quoted: the server parses it once.
+  const tsquery = sql`${serializeSearchQuery(lexemes)}::tsquery`;
   const rank = sql<number>`ts_rank('{0.05, 0.2, 0.6, 1.0}', ${indexEntries.search}, ${tsquery}, 1) * case when ${indexEntries.kind} = 'skill' then 1.5 else 1 end`;
   const queryRows = drizzleOf(database)
     .select(entryColumns)
@@ -87,7 +95,6 @@ export async function searchEntries(
         inSnapshot(scope),
         underPath(indexEntries.path, mountPath),
         VISIBLE,
-        sql`numnode(${tsquery}) > 0`,
         sql`${indexEntries.search} @@ ${tsquery}`,
       ),
     )

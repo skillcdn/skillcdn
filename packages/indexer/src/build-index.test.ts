@@ -113,20 +113,40 @@ describe("repository publication and link indexing", () => {
       "skills/example/unterminated.md": "---\ntranslations: Presentationonlyquartz",
       "skills/example/values.json": '{"value":"Searchable JSON"}',
     });
+    // The vector is built here, from the parsed body: the translation enters no search.
+    const skillVector = result.byPath.get("skills/example/SKILL.md")?.search ?? "";
+    expect(skillVector).toContain("'storyboard'");
+    expect(skillVector).not.toContain("presentationonlyquartz");
     expect(result.byPath.get("skills/example/SKILL.md")).toMatchObject({
-      searchBody: "Plan a storyboard.",
       frontMatter: { translations: { ko: { title: "Presentationonlyquartz" } } },
     });
-    expect(result.byPath.get("skills/example/reference.md")).toMatchObject({
-      title: "Canonical reference",
-      searchBody: "Reference instructions.",
+    const reference = result.byPath.get("skills/example/reference.md");
+    expect(reference?.title).toBe("Canonical reference");
+    expect(reference?.search).toContain("'instruct'");
+    expect(reference?.search).not.toContain("presentationonlyquartz");
+    const broken = result.byPath.get("skills/example/broken/SKILL.md");
+    expect(broken?.kind).toBe("markdown");
+    expect(broken?.search).toContain("'repair'");
+    expect(broken?.search).not.toContain("presentationonlyquartz");
+    expect(result.byPath.get("skills/example/unterminated.md")?.search).not.toContain(
+      "presentationonlyquartz",
+    );
+    // A JSON file is searched as its text.
+    expect(result.byPath.get("skills/example/values.json")?.search).toContain("'searchabl'");
+  });
+
+  it("reads the vector of an entry with the word rules of the language its manifest declares", async () => {
+    const particle = String.fromCodePoint(0xb97c);
+    const result = await index({
+      "SKILLCDN.md": manifest("", "documents: [docs]\nlanguage: ko\n"),
+      "docs/guide.md": `# Guide\n\nMCP${particle} campaigns\n`,
     });
-    expect(result.byPath.get("skills/example/broken/SKILL.md")).toMatchObject({
-      kind: "markdown",
-      searchBody: "Repair these instructions.",
-    });
-    expect(result.byPath.get("skills/example/unterminated.md")?.searchBody).toBe("");
-    expect(result.byPath.get("skills/example/values.json")?.searchBody).toBeUndefined();
+    const vector = result.byPath.get("docs/guide.md")?.search ?? "";
+    // The particle is cut off the Latin word, and the English word is stemmed.
+    expect(vector).toContain("'mcp'");
+    expect(vector).toContain(`'${particle}'`);
+    expect(vector).toContain("'campaign'");
+    expect(result.byPath.get("SKILLCDN.md")?.search).toBeUndefined();
   });
 
   it("keeps the picture a manifest declares as the page loads it, and reports one the tree lacks", async () => {

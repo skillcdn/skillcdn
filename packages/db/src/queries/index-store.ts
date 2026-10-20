@@ -33,8 +33,8 @@ export function createIndexStore(database: Database, scope: SnapshotScope): Inde
     async entries(): Promise<readonly IndexEntry[]> {
       return (await servedEntries(database, scope)).map(entryOf);
     },
-    async search(mountPath: RepoPath, query: string): Promise<readonly IndexEntry[]> {
-      return (await searchEntries(database, scope, mountPath, query)).map(entryOf);
+    async search(mountPath: RepoPath, lexemes: readonly string[]): Promise<readonly IndexEntry[]> {
+      return (await searchEntries(database, scope, mountPath, lexemes)).map(entryOf);
     },
     diagnostics(): Promise<readonly SnapshotDiagnostic[]> {
       return getSnapshotDiagnostics(database, scope);

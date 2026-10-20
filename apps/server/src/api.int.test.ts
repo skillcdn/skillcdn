@@ -979,7 +979,7 @@ describe("an index rebuilt under newer reading rules", () => {
       description: "Rebuilt under newer rules.",
       frontMatter: { metadata: {}, warnings: [] },
       searchable: true,
-      searchBody: "Rebuilt.",
+      search: "'rebuilt':1",
       visible: true,
     };
     expect(

@@ -1,9 +1,4 @@
-import {
-  type LicenseFact,
-  MAX_SEARCHED_BODY_LENGTH,
-  type SnapshotDiagnostic,
-  type SnapshotIndex,
-} from "@skillcdn/core";
+import type { LicenseFact, SnapshotDiagnostic, SnapshotIndex } from "@skillcdn/core";
 import { and, eq, lt, lte, or, sql } from "drizzle-orm";
 import { type Database, drizzleOf } from "../client.js";
 import { indexEntries, snapshots } from "../schema.js";
@@ -207,11 +202,6 @@ export async function failSnapshot(
     .where(heldBy(scope, owner));
 }
 
-/**
- * The text-search configuration. Index and query must agree, so it is not configurable; the
- * word rules of @skillcdn/core follow it, so that an index in memory is searched the same way.
- */
-export const SEARCH_CONFIG = "english";
 const ENTRY_BATCH_SIZE = 200;
 
 /**
@@ -241,32 +231,26 @@ export async function writeSnapshotIndex(
 
     for (let start = 0; start < index.entries.length; start += ENTRY_BATCH_SIZE) {
       const batch = index.entries.slice(start, start + ENTRY_BATCH_SIZE);
+      // The search vector arrives built, in the text form of a tsvector (ADR-0063): the indexer
+      // read the words with the pack's language, and the same vector is kept in memory by the
+      // command. A searchable entry without one is an empty vector, so that it stays findable
+      // by listing; an entry that is not searched has none.
       const rows = sql.join(
         batch.map(
           (entry) =>
-            sql`(${entry.path}, ${entry.kind}, ${entry.size}::integer, ${entry.blobSha}, ${entry.skillDir ?? null}, ${entry.name ?? null}, ${entry.title ?? null}, ${entry.description ?? null}, ${entry.frontMatter === undefined ? null : JSON.stringify(entry.frontMatter)}::jsonb, ${entry.searchable}::boolean, ${entry.visible}::boolean, ${entry.searchBody?.slice(0, MAX_SEARCHED_BODY_LENGTH) ?? null}::text, ${entry.digest ?? null}::text, ${entry.servedSize ?? null}::integer, ${entry.listed ?? false}::boolean, ${entry.licenseKind ?? null}::text)`,
+            sql`(${entry.path}, ${entry.kind}, ${entry.size}::integer, ${entry.blobSha}, ${entry.skillDir ?? null}, ${entry.name ?? null}, ${entry.title ?? null}, ${entry.description ?? null}, ${entry.frontMatter === undefined ? null : JSON.stringify(entry.frontMatter)}::jsonb, ${entry.searchable ? (entry.search ?? "") : null}::tsvector, ${entry.visible}::boolean, ${entry.digest ?? null}::text, ${entry.servedSize ?? null}::integer, ${entry.listed ?? false}::boolean, ${entry.licenseKind ?? null}::text)`,
         ),
         sql`, `,
       );
-      // Name and title weigh most, then the description, then the path, then the body. A body
-      // that is searched without a parsed search body is text by construction: bytes that did
-      // not decode are never searchable, and rows from before bytes were stored hold text.
       await tx.execute(sql`
         insert into index_entries
           (account_id, snapshot_id, path, kind, size, blob_sha, skill_dir, name, title, description, front_matter, search, visible, digest, served_size, listed, license_kind)
         select
           ${scope.accountId}::uuid, ${scope.snapshotId}::uuid,
           v.path, v.kind, v.size, v.blob_sha, v.skill_dir, v.name, v.title, v.description, v.front_matter,
-          case when v.searchable then
-            setweight(to_tsvector(${SEARCH_CONFIG}::regconfig, coalesce(v.name, '') || ' ' || coalesce(v.title, '')), 'A') ||
-            setweight(to_tsvector(${SEARCH_CONFIG}::regconfig, coalesce(v.description, '')), 'B') ||
-            setweight(to_tsvector(${SEARCH_CONFIG}::regconfig, translate(v.path, '/._-', '    ')), 'C') ||
-            setweight(to_tsvector(${SEARCH_CONFIG}::regconfig, coalesce(v.search_body, left(coalesce(b.content, convert_from(b.bytes, 'UTF8')), ${MAX_SEARCHED_BODY_LENGTH}::integer), '')), 'D')
-          end,
-          v.visible, v.digest, v.served_size, v.listed, v.license_kind
+          v.search, v.visible, v.digest, v.served_size, v.listed, v.license_kind
         from (values ${rows})
-          as v (path, kind, size, blob_sha, skill_dir, name, title, description, front_matter, searchable, visible, search_body, digest, served_size, listed, license_kind)
-        left join blobs b on b.sha = v.blob_sha and v.searchable
+          as v (path, kind, size, blob_sha, skill_dir, name, title, description, front_matter, search, visible, digest, served_size, listed, license_kind)
       `);
     }
 

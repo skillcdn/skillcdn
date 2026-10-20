@@ -9,7 +9,7 @@ A mounted address serves a pack ([the format](skill-repo.md)) through four read-
 
 | Tool | Argument | Rule |
 |---|---|---|
-| `browse_repo` | `path` | Optional directory path. Omitted: the mounted directory. Lists immediate entries, not the entire subtree. |
+| `browse_repo` | `path` | Optional directory path. Omitted: the mounted directory. Lists immediate entries, not the entire subtree. A file path answers the file's outline instead ([the outline of a file](#the-outline-of-a-file)). |
 | | `cursor` | Optional opaque continuation from the preceding page of this request. |
 | | `limit` | Optional integer, 1 to 200. Default 20 over MCP, where a page also has to fit the response budget below; the [REST API](rest.md) defaults to 50. |
 | `search_repo` | `query` | Required nonblank text, at most 500 characters. Use words in the original content's language, usually English. Display translations are not search aliases. |
@@ -19,7 +19,7 @@ A mounted address serves a pack ([the format](skill-repo.md)) through four read-
 | `load_skill` | `path` | Required exact path of a `SKILL.md`, such as `marketing/skills/ad-copy/SKILL.md`. A name or directory is not a skill identifier. |
 | | `cursor` | Optional continuation of the same skill's context. |
 | `read_repo_file` | `path` | Required exact file path. Directories are browsed with `browse_repo`. |
-| | `offset` | Optional character offset. Default 0. |
+| | `offset` | Optional character offset. Default 0. A section named by a search result or an outline is read with the `offset` and `limit` it gives. |
 | | `limit` | Optional number of characters, 1 to 100,000. Default 40,000. |
 
 Paths always start at the repository root, including on a sub-path connection. No leading `/`, `.` or `..` segments, backslashes, control or invisible characters; no current-directory state. The empty directory path names the repository root and is valid only when it is inside the mount. For `/gh/acme/library/marketing`, the skill path remains `marketing/skills/ad-copy/SKILL.md`.
@@ -35,6 +35,18 @@ A skill entry's `path` names its `SKILL.md`; its `browsePath` names the containi
 `search_repo` matches words, not meaning. Any query word may match; relevance determines the order, with skill names and descriptions weighted above body text. Results retain relevance order across folders. The optional `path` is a scope filter, not a search term.
 
 Search indexes original metadata and body text, excluding front-matter translation fields. All MCP discovery and skill context use the original name, description and instructions. The UI language never selects a skill translation for the agent. English is the recommended authoring default, while other original languages remain supported; a manifest's `language` helps the agent choose query words. `read_repo_file` preserves exact source text, including translation declarations when present.
+
+### The words that match
+
+The words of a text and of a query are read by the same rules on every index, the deployment's and the command's ([ADR-0063](../adr/0063-packs-of-documents-are-served-to-agents-through-structure-words-and-meaning.md)): a text is cut into words, numbers, hyphenated words, hosts, versions, paths, addresses and URLs; the words of a language with a stemmer are reduced to their stem and its stop words are dropped, so that `releases` finds `release`; and the scripts without word stems, Han, Hangul, Hiragana and Katakana, are matched by pairs of characters, so that an inflected word is found by its stem and a particle written onto a Latin word or a number leaves the word findable. The `language` of the nearest manifest chooses the stemmer, for the text when the commit is indexed and for the query when it is searched; English is the only stemmer at present and the one every language is read with, so a pack in another language is matched by its words as written and by pairs where its script has no stems ([the repository manifest](skill-repo.md#the-repository-manifest-skillcdnmd)).
+
+### Sections in a search result
+
+A document result names the sections of the document that matched, best first and at most two over MCP: the heading path from the document's first heading down to the section's own, the character `offset` and `limit` that read the section with `read_repo_file`, and a short excerpt of the passage that matched, as plain text. A section is the text from its heading line to the next heading of any level, or to the end of the file; the text before the first heading, and a document without headings, are sections too. A document this mount describes without serving names no sections, since the passage could not be read here ([licenses](skill-repo.md#licenses)); a skill result and the files folded under it name none, since a skill is loaded whole.
+
+### The outline of a file
+
+`browse_repo` given the path of a Markdown file answers the file's outline instead of a folder listing: its headings in document order, each with its level, its text and the `offset` and `limit` that read its section, in pages of the browse limit with `nextCursor`. Offsets count the characters of the file as `read_repo_file` returns it, front-matter included. A file that is not Markdown, a file over the read limit, a file that is not text and a file this mount describes without serving are answered with the reason and, where one exists, the file's source. An outline keeps at most 1,000 headings and says when a file has more.
 
 A skill's supporting files are folded under their owning skill before pagination. The skill occupies its best-ranked member's position, with up to five matching files and a count of the rest. This avoids duplicate skills on later pages or short pages caused by folding after the limit. Independently discoverable documents appear with their title and summary; linked-only references do not become independent search results ([format](skill-repo.md)).
 
@@ -64,7 +76,7 @@ The first page names the skill's supporting files in path order, up to 3 KiB of 
 
 ## Raw files
 
-`read_repo_file` returns UTF-8 text from an eligible file within the mount, with the path, character offset, total length and next offset. A page never splits a character. One call reads one file: a passage is read by its offset and length, and a result that names several files is followed by one call each. It does not prepend shared rules or turn a raw `SKILL.md` read into a skill load: it returns the source as written, `skillcdn` key included. Binary, oversized, unavailable and unknown files produce safe tool errors with a hint. For a file over the read limit, and for one that is not UTF-8 text, the error says so and gives the URL of the file's bytes at the host, the only place to get what this tool cannot carry ([ADR-0033](../adr/0033-a-file-over-the-read-limit-is-named-with-its-source.md)). So does a file whose license keeps it at the source, a described skill's directory or a restrictive repository license outside the skills: the error names the license and links to the file at its host ([licenses](skill-repo.md#licenses)).
+`read_repo_file` returns UTF-8 text from an eligible file within the mount, with the path, character offset, total length and next offset. A page never splits a character. One call reads one file: a passage is read by its offset and length, which a search result and an outline give for each section ([sections](#sections-in-a-search-result), [outlines](#the-outline-of-a-file)), and a result that names several files is followed by one call each. It does not prepend shared rules or turn a raw `SKILL.md` read into a skill load: it returns the source as written, `skillcdn` key included. Binary, oversized, unavailable and unknown files produce safe tool errors with a hint. For a file over the read limit, and for one that is not UTF-8 text, the error says so and gives the URL of the file's bytes at the host, the only place to get what this tool cannot carry ([ADR-0033](../adr/0033-a-file-over-the-read-limit-is-named-with-its-source.md)). So does a file whose license keeps it at the source, a described skill's directory or a restrictive repository license outside the skills: the error names the license and links to the file at its host ([licenses](skill-repo.md#licenses)).
 
 The requested character limit is an upper bound. The MCP response byte budget can shorten the page, including for JSON escaping and multibyte text; continue at `nextOffset` to retrieve the remaining text. READMEs are optional reads and never automatically join a skill's context. Excluded files return the same unavailable-content result as other ineligible paths.
 

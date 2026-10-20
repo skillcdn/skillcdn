@@ -6,12 +6,14 @@ import {
   browseCatalogFiles,
   type CatalogFile,
   type CatalogState,
+  classifyRepoFile,
   contextPage,
   decodeText,
   FIND_DEFAULT_LIMIT,
   FIND_LIST_SKILLS_MAX,
   FIND_MAX_SKILL_FILES,
   type FileLookup,
+  type FileOutline,
   type FileReference,
   type FileResult,
   type FindFile,
@@ -36,17 +38,22 @@ import {
   type MountManifest,
   type MountOverview,
   type MountSummary,
+  matchSections,
   NO_LICENSE,
+  type OutlineHeading,
+  outlineMarkdown,
   pageOfText,
   parentDirectory,
   parseFrontMatter,
   parseRepoPath,
   parseSkillUri,
+  queryLexemes,
   READ_FILE_DEFAULT_LIMIT,
   type ReadableIndex,
   type RepoPath,
   type RepoTranslation,
   ROOT_PATH,
+  repoManifestPath,
   SKILL_PAGE_BYTES,
   type SkillLookup,
   type SkillResult,
@@ -438,6 +445,11 @@ export class Reader<M extends MountContext = MountContext> {
     const outcome = await this.#dependencies.index(mount, waitMs);
     if (outcome.status !== "ready") return outcome;
     const { index } = outcome;
+    // A path that names a file is answered with the file's outline (ADR-0063).
+    const file = path.length === 0 ? undefined : getEntry(await this.#entriesOf(index), path);
+    if (file !== undefined && file.frontMatter?.manifestError !== "unsupported_type") {
+      return this.#outline(mount, index, file, input, fits);
+    }
     const key = this.#pageKey(mount, index, "browse", path);
     const offset = continuationOffset(input.cursor, key);
     const entries = (await this.#browseEntries(index, path)).map((entry) =>
@@ -461,6 +473,147 @@ export class Reader<M extends MountContext = MountContext> {
       status: "ready",
       result: boundedPage(Math.min(limit, Math.max(0, entries.length - offset)), make, fits),
     };
+  }
+
+  /**
+   * The text of a file the index names: from the store, else fetched from the source and kept,
+   * when something can fetch it. `undefined` for bytes that are not UTF-8 text.
+   */
+  async #textOf(
+    mount: M,
+    index: ReadableIndex,
+    entry: IndexEntry,
+    limits: IndexLimits,
+  ): Promise<string | undefined> {
+    const text = await index.blobs.read(entry.blobSha);
+    if (text !== undefined) {
+      return text;
+    }
+    const bytes = await this.#dependencies.fetchBody?.(
+      mount,
+      entry.blobSha,
+      limits.maxReadableFileBytes,
+    );
+    if (bytes === undefined) {
+      throw new BodyUnavailableError(entry.path);
+    }
+    return decodeText(bytes);
+  }
+
+  /**
+   * The outline of a file `browse_repo` was given the path of (ADR-0063): its headings with the
+   * offset and the length that read each section, in pages; or why there are none to list. What
+   * a license keeps at the source is not outlined: its headings are its content.
+   */
+  async #outline(
+    mount: M,
+    index: ReadableIndex,
+    entry: IndexEntry,
+    input: { readonly cursor?: string | undefined; readonly limit?: number | undefined },
+    fits?: (result: BrowseResult) => boolean,
+  ): Promise<{ readonly status: "ready"; readonly result: BrowseResult }> {
+    const path = entry.path as RepoPath;
+    const limits = { ...this.#dependencies.limits, ...mount.limits };
+    const key = this.#pageKey(mount, index, "outline", path);
+    const offset = continuationOffset(input.cursor, key);
+    const limit = input.limit ?? BROWSE_DEFAULT_LIMIT;
+    const none: FileOutline = {
+      path,
+      size: entry.size,
+      totalLength: undefined,
+      headings: [],
+      truncated: false,
+    };
+    let outline = none;
+    let headings: readonly OutlineHeading[] = [];
+    const license = await this.#licenseAt(index, path);
+    if (!servesInFull(license, mount.verified)) {
+      outline = {
+        ...none,
+        unavailable: "described_only",
+        license,
+        sourceUrl: mount.sourceUrl(path),
+      };
+    } else if (
+      entry.kind !== "skill" &&
+      entry.kind !== "manifest" &&
+      classifyRepoFile(path) !== "markdown"
+    ) {
+      outline = { ...none, unavailable: "not_markdown" };
+    } else if (entry.size > limits.maxReadableFileBytes) {
+      outline = { ...none, unavailable: "too_large", sourceUrl: mount.rawUrl(path) };
+    } else {
+      const text = await this.#textOf(mount, index, entry, limits);
+      if (text === undefined) {
+        outline = { ...none, unavailable: "not_text", sourceUrl: mount.rawUrl(path) };
+      } else {
+        const whole = outlineMarkdown(text);
+        headings = whole.headings;
+        outline = { ...none, totalLength: whole.totalLength, truncated: whole.truncated };
+      }
+    }
+    const make = (count: number): BrowseResult => ({
+      mount: this.summary(mount, index),
+      path,
+      outline: { ...outline, headings: headings.slice(offset, offset + count) },
+      entries: [],
+      nextCursor:
+        offset + count < headings.length ? nextContinuation(key, offset + count) : undefined,
+    });
+    return {
+      status: "ready",
+      result: boundedPage(Math.min(limit, Math.max(0, headings.length - offset)), make, fits),
+    };
+  }
+
+  /**
+   * The language that governs a path, as `language` inherits: the nearest manifest at or above
+   * it that declares one. It chooses the word rules a query is read with, as it chose the rules
+   * the vectors were built with.
+   */
+  #languageAt(entries: readonly IndexEntry[], path: RepoPath): string | undefined {
+    let directory = path;
+    while (true) {
+      const manifest = getEntry(entries, repoManifestPath(directory));
+      const language = manifest?.kind === "manifest" ? manifest.frontMatter?.language : undefined;
+      if (language !== undefined) {
+        return language;
+      }
+      if (directory.length === 0) {
+        return undefined;
+      }
+      directory = parentDirectory(directory);
+    }
+  }
+
+  /**
+   * A document result with the sections of the document that matched (ADR-0063), from its text:
+   * none for a file that is not Markdown, none for one this mount describes without serving,
+   * since its offsets could not be read here, and none for a body that is not at hand.
+   */
+  async #withSections(
+    mount: M,
+    index: ReadableIndex,
+    entries: readonly IndexEntry[],
+    item: FindItem,
+    lexemes: readonly string[],
+    language: string | undefined,
+  ): Promise<FindItem> {
+    if (item.kind !== "document") {
+      return item;
+    }
+    const entry = getEntry(entries, item.path);
+    if (entry?.kind !== "markdown") {
+      return item;
+    }
+    if (!servesInFull(await this.#licenseAt(index, item.path), mount.verified)) {
+      return item;
+    }
+    const text = await index.blobs.read(entry.blobSha);
+    if (text === undefined) {
+      return item;
+    }
+    return { ...item, sections: matchSections(text, lexemes, { language }) };
   }
 
   /**
@@ -918,9 +1071,28 @@ export class Reader<M extends MountContext = MountContext> {
         .filter((item) => item !== undefined);
       totals = countEntries(entries, path);
     } else {
-      const rows = await index.store.search(path, query);
+      // The words of the query, read with the rules of the language that governs the searched
+      // folder, as the vectors were built (ADR-0063).
+      const lexemes = queryLexemes(query, this.#languageAt(entries, path));
+      const rows = await index.store.search(path, lexemes);
       items = this.#fold({ ...mount, address: { ...mount.address, path } }, entries, rows);
       totals = undefined;
+      // The sections that matched, for the documents of this page: their texts are read for it.
+      const page = await Promise.all(
+        items
+          .slice(offset, offset + limit)
+          .map((item) =>
+            this.#withSections(
+              mount,
+              index,
+              entries,
+              item,
+              lexemes,
+              this.#languageAt(entries, path),
+            ),
+          ),
+      );
+      items = [...items.slice(0, offset), ...page, ...items.slice(offset + limit)];
     }
     const diagnostics = await this.#diagnosticsOf(mount, index);
     const make = (count: number): FindResult => ({
@@ -1371,20 +1543,9 @@ export class Reader<M extends MountContext = MountContext> {
       };
     }
 
-    let text = await index.blobs.read(file.hash);
+    const text = await this.#textOf(mount, index, entry, limits);
     if (text === undefined) {
-      const bytes = await this.#dependencies.fetchBody?.(
-        mount,
-        file.hash,
-        limits.maxReadableFileBytes,
-      );
-      if (bytes === undefined) {
-        throw new BodyUnavailableError(path);
-      }
-      text = decodeText(bytes);
-      if (text === undefined) {
-        return { kind: "not_text", path: below, sourceUrl: mount.rawUrl(path) };
-      }
+      return { kind: "not_text", path: below, sourceUrl: mount.rawUrl(path) };
     }
     const references = await this.#references(mount, index, entry.frontMatter?.references ?? []);
     const make = (length: number): FileResult => ({

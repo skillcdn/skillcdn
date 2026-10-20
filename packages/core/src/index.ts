@@ -263,12 +263,15 @@ export {
   type RestError,
   type RestFeatured,
   type RestFile,
+  type RestFileOutline,
   type RestFind,
   type RestFindItem,
+  type RestFindSection,
   type RestFolderOverview,
   type RestLicense,
   type RestManifest,
   type RestMount,
+  type RestOutlineHeading,
   type RestReference,
   type RestRepository,
   type RestRepositoryCard,
@@ -283,12 +286,15 @@ export {
   restDocumentSummarySchema,
   restErrorSchema,
   restFeaturedSchema,
+  restFileOutlineSchema,
   restFileSchema,
   restFindItemSchema,
   restFindSchema,
+  restFindSectionSchema,
   restFolderOverviewSchema,
   restLicenseSchema,
   restMountSchema,
+  restOutlineHeadingSchema,
   restPath,
   restReferenceSchema,
   restRepositoryCardSchema,
@@ -364,10 +370,32 @@ export {
 } from "./rest/social.js";
 export { err, ok, type Result } from "./result.js";
 export { stemEnglish } from "./search/english-stemmer.js";
-export { type Lexeme, queryLexemes, searchLexemes } from "./search/lexemes.js";
+export {
+  type Lexeme,
+  MAX_LEXEME_BYTES,
+  queryLexemes,
+  STEMMED_LANGUAGES,
+  searchLexemes,
+  type WordRules,
+  wordRulesOf,
+} from "./search/lexemes.js";
+export {
+  headingPaths,
+  MAX_OUTLINE_HEADINGS,
+  type MarkdownOutline,
+  type OutlineHeading,
+  outlineMarkdown,
+} from "./search/outline.js";
+export {
+  MAX_EXCERPT_LENGTH,
+  MAX_MATCHED_SECTIONS,
+  type MatchedSection,
+  matchSections,
+} from "./search/sections.js";
 export { ENGLISH_STOP_WORDS } from "./search/stop-words.js";
 export {
   MAX_SEARCHED_BODY_LENGTH,
+  parseSearchVector,
   rankSearchVector,
   SEARCH_WEIGHTS,
   type SearchField,
@@ -377,6 +405,8 @@ export {
   SKILL_RANK_BOOST,
   searchFieldsOf,
   searchVectorOf,
+  serializeSearchQuery,
+  serializeSearchVector,
 } from "./search/vector.js";
 export {
   assembleSkillDocument,
@@ -495,7 +525,14 @@ export {
   SEARCH_DESCRIPTION_MAX_LENGTH,
   serializedResultBytes,
 } from "./tools/response-budget.js";
-export type { BrowseEntry, BrowseResult, FileReference, FolderOverview } from "./tools/results.js";
+export type {
+  BrowseEntry,
+  BrowseResult,
+  FileOutline,
+  FileOutlineUnavailable,
+  FileReference,
+  FolderOverview,
+} from "./tools/results.js";
 export {
   type DirectoryEntry,
   type DirectoryResult,
@@ -503,6 +540,7 @@ export {
   type FindFile,
   type FindItem,
   type FindResult,
+  type FindSection,
   type IncludedFile,
   type IndexDiagnostic,
   MAX_SKILL_INCLUDED_LENGTH,

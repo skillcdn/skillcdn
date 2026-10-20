@@ -94,6 +94,31 @@ export function browseBody(
                 description: answer.result.overview.description ?? null,
               },
         diagnostics: restDiagnostics(answer.result.diagnostics ?? []),
+        ...(answer.result.outline === undefined
+          ? {}
+          : {
+              outline: {
+                path: answer.result.outline.path,
+                size: answer.result.outline.size,
+                totalLength: answer.result.outline.totalLength ?? null,
+                headings: answer.result.outline.headings.map((heading) => ({
+                  level: heading.level,
+                  text: heading.text,
+                  offset: heading.offset,
+                  length: heading.length,
+                })),
+                truncated: answer.result.outline.truncated,
+                ...(answer.result.outline.unavailable === undefined
+                  ? {}
+                  : { unavailable: answer.result.outline.unavailable }),
+                ...(answer.result.outline.license === undefined
+                  ? {}
+                  : { license: restLicenseOf(answer.result.outline.license) }),
+                ...(answer.result.outline.sourceUrl === undefined
+                  ? {}
+                  : { sourceUrl: answer.result.outline.sourceUrl }),
+              },
+            }),
         entries: answer.result.entries.map(({ license, describedOnly, ...entry }) => ({
           ...entry,
           ...licensing({ license, describedOnly }),
@@ -138,6 +163,16 @@ export function findBody(
             title: item.title ?? null,
             summary: item.summary ?? null,
             skillDirectory: item.skillDirectory ?? null,
+            ...(item.sections === undefined
+              ? {}
+              : {
+                  sections: item.sections.map((section) => ({
+                    heading: [...section.heading],
+                    offset: section.offset,
+                    length: section.length,
+                    excerpt: section.excerpt ?? null,
+                  })),
+                }),
           },
     ),
   };

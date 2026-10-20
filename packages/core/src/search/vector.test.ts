@@ -15,7 +15,6 @@ describe("searchFieldsOf", () => {
         name: "ads",
         title: undefined,
         description: "Writes ad copy.",
-        searchBody: undefined,
       },
       "# Ads\n\nThe body.",
     );
@@ -27,11 +26,8 @@ describe("searchFieldsOf", () => {
     ]);
   });
 
-  it("prefers the parsed search body and bounds what is searched of it", () => {
-    const fields = searchFieldsOf(
-      { path: "docs/a.md", searchBody: "x".repeat(MAX_SEARCHED_BODY_LENGTH + 10) },
-      "raw",
-    );
+  it("bounds what is searched of the body", () => {
+    const fields = searchFieldsOf({ path: "docs/a.md" }, "x".repeat(MAX_SEARCHED_BODY_LENGTH + 10));
     expect(fields[3]?.text.length).toBe(MAX_SEARCHED_BODY_LENGTH);
     expect(searchFieldsOf({ path: "docs/a.md" }, undefined)[3]?.text).toBe("");
   });

@@ -13,7 +13,8 @@ function vectorText(text: string): string {
     .join(" ");
 }
 
-// Every expectation here is what `to_tsvector('english', ...)` printed on PostgreSQL 18.
+// Every expectation here is what `to_tsvector('english', ...)` printed on PostgreSQL 18 for text
+// in the Latin script, which this parser follows; the scripts matched by pairs have their own test.
 describe("searchLexemes", () => {
   it("cuts words, hyphenated words, hosts, versions, paths and addresses as the parser does", () => {
     expect(
@@ -28,10 +29,10 @@ describe("searchLexemes", () => {
   it("reads signs, double hyphens, trailing punctuation and other scripts as the parser does", () => {
     expect(
       vectorText(
-        "10-top a1-b2 -foo foo--bar docs/ wait... e.g. /usr/local user@example.com https://example.com x_y-z 3.14 1e10 한국어 테스트 AI-driven self-hosted C++ R&D foo'bar self-hosted-thing top-10-list beta-1 -5 5- a-",
+        "10-top a1-b2 -foo foo--bar docs/ wait... e.g. /usr/local user@example.com https://example.com x_y-z 3.14 1e10 AI-driven self-hosted C++ R&D foo'bar self-hosted-thing top-10-list beta-1 -5 5- a-",
       ),
     ).toBe(
-      "'-1':42 '-10':39 '-5':43 '/usr/local':12 '10':1 '1e10':20 '3.14':19 '5':44 'a1':4 'a1-b2':3 'ai':24 'ai-driven':23 'b2':5 'bar':8,33 'beta':41 'c':29 'd':31 'doc':9 'driven':25 'e.g':11 'example.com':14 'foo':6,7,32 'host':28,36 'list':40 'r':30 'self':27,35 'self-host':26 'self-hosted-th':34 'thing':37 'top':2,38 'user@example.com':13 'wait':10 'x':15 'y':17 'y-z':16 'z':18 '테스트':22 '한국어':21",
+      "'-1':40 '-10':37 '-5':41 '/usr/local':12 '10':1 '1e10':20 '3.14':19 '5':42 'a1':4 'a1-b2':3 'ai':22 'ai-driven':21 'b2':5 'bar':8,31 'beta':39 'c':27 'd':29 'doc':9 'driven':23 'e.g':11 'example.com':14 'foo':6,7,30 'host':26,34 'list':38 'r':28 'self':25,33 'self-host':24 'self-hosted-th':32 'thing':35 'top':2,36 'user@example.com':13 'wait':10 'x':15 'y':17 'y-z':16 'z':18",
     );
   });
 

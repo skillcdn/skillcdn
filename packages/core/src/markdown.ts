@@ -1,4 +1,12 @@
 import { parseFrontMatter, splitFrontMatter } from "./front-matter.js";
+import {
+  BLANK,
+  consumeBlockLine,
+  HEADING,
+  MAX_HEADING_LINE_LENGTH,
+  openBlocks,
+  plainText,
+} from "./markdown-blocks.js";
 import { hasForbiddenCodePoint } from "./text-safety.js";
 
 const MAX_TITLE_LENGTH = 200;
@@ -13,8 +21,6 @@ const MAX_SNIPPET_LENGTH = 200;
 const MAX_SNIPPET_SOURCE_LENGTH = 4096;
 /** A title and an introduction are near the top or they are not that; this also bounds the scan. */
 const MAX_LINES_SCANNED = 200;
-/** Longer lines are not headings, and short lines keep the patterns below cheap on hostile input. */
-const MAX_HEADING_LINE_LENGTH = 1000;
 
 export interface MarkdownSummary {
   /** Front-matter `title`, else the first level-one heading. */
@@ -39,26 +45,13 @@ function shortText(value: unknown, maxLength: number): string | undefined {
   return text.slice(0, maxLength);
 }
 
-const HEADING = /^ {0,3}(#{1,6})[ \t]+(.*)$/;
-const FENCE = /^ {0,3}(`{3,}|~{3,})/;
 /** Lines that are markup rather than prose: they end a paragraph and never start one. */
 const NOT_PROSE =
   /^ {0,3}(?:[>|!]|[-*+][ \t]|\d{1,9}[.)][ \t]|\[!\[|\[[^\]]+\]:|(?:[-*_][ \t]*){3,}$)/;
-/**
- * A line that opens an HTML block, with the kind that says where the block ends, as the Markdown
- * grammar has it: a comment at `-->`, a raw-text element at its closing tag, and any other at the
- * next blank line. The lines in between are markup, however they are indented and whatever they
- * look like: a picture or a paragraph inside a centred `<div>` is not the introduction.
- */
-const HTML_OPEN = /^ {0,3}<(?:(!--)|(pre|script|style|textarea)(?=[\s/>]|$))?/i;
-const BLANK = /^\s*$/;
-const COMMENT_END = /-->/;
 
 /** What the top of a document says about itself: its title and its first paragraph of prose. */
 function scanTop(body: string): { readonly title?: string; readonly paragraph?: string } {
-  let fence: string | undefined;
-  /** What ends the HTML block the scan is in, while it is in one. */
-  let htmlEnd: RegExp | undefined;
+  const blocks = openBlocks();
   let title: string | undefined;
   let beforeTitle: string | undefined;
   let afterTitle: string | undefined;
@@ -86,36 +79,10 @@ function scanTop(body: string): { readonly title?: string; readonly paragraph?: 
     // Patterns only ever see the head of a line; the rest of a long line is prose or nothing.
     const head = line.slice(0, MAX_HEADING_LINE_LENGTH);
 
-    if (htmlEnd !== undefined) {
-      if (htmlEnd.test(head)) {
-        htmlEnd = undefined;
-      }
-      continue;
-    }
-    const marker = FENCE.exec(head)?.[1];
-    if (fence !== undefined) {
-      // A fence closes with the same character, at least as long as the one that opened it.
-      if (marker !== undefined && marker[0] === fence[0] && marker.length >= fence.length) {
-        fence = undefined;
-      }
-      continue;
-    }
-    if (marker !== undefined) {
+    // A fence, an HTML block and what is inside them are markup: a paragraph ends there, and a
+    // picture or a paragraph inside a centred `<div>` is not the introduction.
+    if (consumeBlockLine(blocks, head)) {
       endParagraph();
-      fence = marker;
-      continue;
-    }
-    const opened = HTML_OPEN.exec(head);
-    if (opened !== null) {
-      endParagraph();
-      const closer =
-        opened[1] !== undefined
-          ? COMMENT_END
-          : opened[2] !== undefined
-            ? new RegExp(`</${opened[2].toLowerCase()}>`, "i")
-            : BLANK;
-      // A comment or a raw-text element that closes on the line it opened is over already.
-      htmlEnd = closer !== BLANK && closer.test(head.slice(opened[0].length)) ? undefined : closer;
       continue;
     }
     const heading = line.length <= MAX_HEADING_LINE_LENGTH ? HEADING.exec(line) : null;
@@ -130,7 +97,7 @@ function scanTop(body: string): { readonly title?: string; readonly paragraph?: 
       }
       continue;
     }
-    if (head.trim().length === 0 || NOT_PROSE.test(head)) {
+    if (BLANK.test(head) || NOT_PROSE.test(head)) {
       endParagraph();
       continue;
     }
@@ -143,15 +110,6 @@ function scanTop(body: string): { readonly title?: string; readonly paragraph?: 
       ? {}
       : { paragraph: title === undefined ? beforeTitle : afterTitle }),
   };
-}
-
-/** Inline markup that gets in the way of a one-line glimpse: links become their text. */
-function plainText(markdown: string): string {
-  return markdown
-    .replaceAll(/!\[([^\]]*)\]\([^)]*\)/g, "")
-    .replaceAll(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-    .replaceAll(/[`*]+/g, "")
-    .replaceAll(/(?<!\w)_+|_+(?!\w)/g, "");
 }
 
 function snippet(paragraph: string | undefined): string | undefined {

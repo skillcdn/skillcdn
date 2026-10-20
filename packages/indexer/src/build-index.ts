@@ -39,10 +39,14 @@ import {
   ROOT_PATH,
   rawFileUrl,
   relativeRepoPath,
+  repoManifestPath,
   resolveLicense,
   type ServedScope,
   type SkillListingProblem,
+  searchFieldsOf,
+  searchVectorOf,
   selectReadmePaths,
+  serializeSearchVector,
   skillDocumentInput,
   skillListingProblem,
   splitFrontMatter,
@@ -57,8 +61,10 @@ import { gitBlobHash, sha256Hex } from "./git-hash.js";
  * snapshot row keeps the version it was written with, and a commit indexed under an older one
  * is rebuilt when it is next asked for (`ensureSnapshot` in @skillcdn/db); without the bump, a
  * deployment keeps serving what the old rules produced until the repository moves on.
+ *
+ * 11: the search vector is built here, with the word rules of the pack's language (ADR-0063).
  */
-export const INDEX_VERSION = 10;
+export const INDEX_VERSION = 11;
 
 const MAX_DIAGNOSTICS = 50;
 const FETCH_CONCURRENCY = 8;
@@ -340,6 +346,34 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
   const manifests = new Map<RepoPath, IndexEntry>();
   const skills = new Map<RepoPath, IndexEntry>();
   const documents = new Map<RepoPath, IndexEntry>();
+  /** The language the nearest manifest at or above a directory declares, as `language` inherits. */
+  const languageOf = (directory: RepoPath): string | undefined => {
+    let current = directory;
+    while (true) {
+      const language = manifests.get(repoManifestPath(current))?.frontMatter?.language;
+      if (language !== undefined) return language;
+      if (current.length === 0) return undefined;
+      current = parentDirectory(current);
+    }
+  };
+  /**
+   * The search vector of an entry, built here once for every store (ADR-0063): the name and the
+   * title, the description, the words of the path and the body, read with the word rules of
+   * the language that governs the entry's directory. Every manifest is read before any skill or
+   * document, so the language is known when a vector is built.
+   */
+  const searchOf = (
+    entry: {
+      readonly path: RepoPath;
+      readonly name?: string | undefined;
+      readonly title?: string | undefined;
+      readonly description?: string | undefined;
+    },
+    body: string | undefined,
+  ): string =>
+    serializeSearchVector(
+      searchVectorOf(searchFieldsOf(entry, body), languageOf(parentDirectory(entry.path))),
+    );
   /** Skill manifests that could not be read as skills. */
   const unreadSkills = new Set<RepoPath>();
   /** Per manifest directory, the document directories it declares. A broken one declares none. */
@@ -522,7 +556,10 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
               : { translations: storedTranslations(manifest.translations) }),
           },
           searchable: true,
-          searchBody: manifest.body,
+          search: searchOf(
+            { path: entry.path, name: manifest.name, description: manifest.description },
+            manifest.body,
+          ),
         });
         continue;
       }
@@ -539,7 +576,10 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
         description: summary.description,
         frontMatter: undefined,
         searchable: true,
-        searchBody: summary.body,
+        search: searchOf(
+          { path: entry.path, title: summary.title, description: summary.description },
+          summary.body,
+        ),
       });
     }
   }
@@ -618,6 +658,7 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
     }
     const summary = kind === "json" ? undefined : summarizeSearchableMarkdown(text);
     const overviewOnly = overviewFiles.has(entry.path) && !isServedPath(entry.path, scope);
+    const searchable = !linkedOnly && !overviewOnly;
     documents.set(entry.path, {
       path: entry.path,
       size: entry.size,
@@ -634,8 +675,17 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
         ...(linkedOnly ? { linkedOnly: true } : {}),
         ...(overviewOnly ? { overviewOnly: true } : {}),
       },
-      searchable: !linkedOnly && !overviewOnly,
-      ...(summary === undefined ? {} : { searchBody: summary.body }),
+      searchable,
+      // A JSON file is searched as its text; a Markdown document as its body, without the
+      // front-matter, so that display translations do not become search aliases.
+      ...(searchable
+        ? {
+            search: searchOf(
+              { path: entry.path, title: summary?.title, description: summary?.description },
+              summary === undefined ? text : summary.body,
+            ),
+          }
+        : {}),
       visible: true,
     });
   };
@@ -944,9 +994,18 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
       // The files of a skill that left search leave it too: a hidden copy of a visible skill
       // would otherwise come back through its reference files (ADR-0024).
       const audible = skillDir === undefined || !silenced.has(skillDir);
-      return unreadSkills.has(entry.path)
-        ? { ...known, skillDir, visible: true, searchable: visible && audible }
-        : { ...known, skillDir, visible, searchable: known.searchable && audible };
+      const searchable = unreadSkills.has(entry.path)
+        ? visible && audible
+        : known.searchable && audible;
+      // An entry that is not searched carries no vector.
+      const { search, ...rest } = known;
+      return {
+        ...rest,
+        ...(searchable && search !== undefined ? { search } : {}),
+        skillDir,
+        visible: unreadSkills.has(entry.path) ? true : visible,
+        searchable,
+      };
     }
     return {
       path: entry.path,

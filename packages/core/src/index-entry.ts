@@ -89,8 +89,13 @@ export interface IndexEntry {
   readonly frontMatter: SkillFrontMatter | undefined;
   /** Make the entry searchable: canonical metadata plus its search body. */
   readonly searchable: boolean;
-  /** Parsed body without presentation-only front-matter; omitted to search the raw blob. */
-  readonly searchBody?: string;
+  /**
+   * The search vector of a searchable entry, in the text form of a PostgreSQL `tsvector`
+   * (`serializeSearchVector`): the name and the title, the description, the words of the path and
+   * the parsed body, weighed and read with the word rules of the pack's language. The store keeps
+   * it as it is, so that every index of a commit is searched by the same words.
+   */
+  readonly search?: string;
   /** False for a file outside the skills and the document directories: known, never served. */
   readonly visible: boolean;
   /** SHA-256 of the served bytes, in hex, when they are stored (ADR-0025). */

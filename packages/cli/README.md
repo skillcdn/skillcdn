@@ -35,8 +35,8 @@ A pack is named by its address at a deployment, `gh/<owner>/<repo>[@<ref>][/<pat
 | Command | Over MCP | What it prints |
 |---|---|---|
 | `skills [<pack>]` | the connection, and `search_repo` without words | What a client is told on connect, then every skill with the path of its `SKILL.md` and every document outside the skills |
-| `browse [<pack>] [<folder>]` | `browse_repo` | What a folder holds: skills, folders with what each holds, files; a page, with `--cursor` to continue and `--limit` |
-| `find [<pack>] <words...>` | `search_repo` | What the words find, skills first with their matching files, `--path` to a folder; a page |
+| `browse [<pack>] [<folder or file>]` | `browse_repo` | What a folder holds: skills, folders with what each holds, files; given a file, its outline, every heading with the offset and limit that read its section; a page, with `--cursor` to continue and `--limit` |
+| `find [<pack>] <words...>` | `search_repo` | What the words find, skills first with their matching files, a document with the sections that matched and what reads each, `--path` to a folder; a page |
 | `skill [<pack>] <path>` | `load_skill` | The skill whole: the rules from the root down, the instructions, the included files, then its files and references. The path of its `SKILL.md`, or its `skill://` URI, which names the pack as well |
 | `file [<pack>] <path>` | `read_repo_file` | A page of the file as written (`--offset`, `--limit`), or what a folder holds |
 
