@@ -77,6 +77,42 @@ describe("search results with sections", () => {
     );
   });
 
+  it("leaves out an excerpt that only repeats the summary", () => {
+    const text = renderFindResult({
+      mount,
+      query: "api",
+      items: [
+        {
+          kind: "document",
+          path: path("docs/api/README.md"),
+          title: "The API",
+          summary: "A REST API over the same data the app shows: jobs, customers, invoices.",
+          skillDirectory: undefined,
+          sections: [
+            {
+              heading: ["The API"],
+              offset: 0,
+              length: 90,
+              excerpt: "A REST API over the same data the app shows:\njobs, customers, invoices.",
+            },
+            {
+              heading: ["The API", "Keys"],
+              offset: 90,
+              length: 200,
+              excerpt: "A key has one or more scopes.",
+            },
+          ],
+        },
+      ],
+      totals: undefined,
+      diagnostics: [],
+    });
+    expect(text).toContain("   - The API (offset 0, limit 90)\n");
+    expect(text).toContain(
+      "   - The API > Keys (offset 90, limit 200): A key has one or more scopes.",
+    );
+  });
+
   it("says nothing of sections when a result has none", () => {
     const text = renderFindResult({
       mount,

@@ -42,7 +42,7 @@ The words of a text and of a query are read by the same rules on every index, th
 
 ### Sections in a search result
 
-A document result names the sections of the document that matched, best first and at most two over MCP: the heading path from the document's first heading down to the section's own, the character `offset` and `limit` that read the section with `read_repo_file`, and a short excerpt of the passage that matched, as plain text. A section is the text from its heading line to the next heading of any level, or to the end of the file; the text before the first heading, and a document without headings, are sections too. A document this mount describes without serving names no sections, since the passage could not be read here ([licenses](skill-repo.md#licenses)); a skill result and the files folded under it name none, since a skill is loaded whole.
+A document result names the sections of the document that matched, best first and at most two over MCP: the heading path from the document's first heading down to the section's own, the character `offset` and `limit` that read the section with `read_repo_file`, and a short excerpt of the passage that matched, as plain text; an excerpt that only repeats the document's summary is left out. A section is the text from its heading line to the next heading of any level, or to the end of the file; the text before the first heading, and a document without headings, are sections too. A document this mount describes without serving names no sections, since the passage could not be read here ([licenses](skill-repo.md#licenses)); a skill result and the files folded under it name none, since a skill is loaded whole.
 
 ### The outline of a file
 

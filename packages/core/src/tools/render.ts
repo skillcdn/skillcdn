@@ -247,17 +247,33 @@ function renderFindItem(item: FindItem, number: number): string {
     item.skillDirectory === undefined
       ? ""
       : `\n   Skill: ${item.skillDirectory.length === 0 ? "SKILL.md" : `${item.skillDirectory}/SKILL.md`}`;
-  // The sections that matched, each as one line with what reads it (ADR-0063).
+  // The sections that matched, each as one line with what reads it (ADR-0063). An excerpt that
+  // repeats the summary above it is left out: a document without front matter is summarized by
+  // its first paragraph, which is often the very passage that matched.
   const sections =
     item.sections === undefined || item.sections.length === 0
       ? ""
       : `\n   Sections:\n${item.sections
-          .map(
-            (section) =>
-              `   - ${section.heading.length === 0 ? "(before the first heading)" : section.heading.map((text) => compactSummary(text, 80)).join(" > ")} (${sectionRange(section)})${section.excerpt === undefined ? "" : `: ${compactSummary(section.excerpt, 200)}`}`,
-          )
+          .map((section) => {
+            const heading =
+              section.heading.length === 0
+                ? "(before the first heading)"
+                : section.heading.map((text) => compactSummary(text, 80)).join(" > ");
+            const excerpt =
+              section.excerpt === undefined || repeatsSummary(section.excerpt, item.summary)
+                ? ""
+                : `: ${compactSummary(section.excerpt, 200)}`;
+            return `   - ${heading} (${sectionRange(section)})${excerpt}`;
+          })
           .join("\n")}`;
   return `${number}. document: ${item.path}${title}${summary}${owner}${sections}`;
+}
+
+/** Whether an excerpt, as it would be shown, says nothing the document's summary does not. */
+function repeatsSummary(excerpt: string, summary: string | undefined): boolean {
+  if (summary === undefined) return false;
+  const shown = compactSummary(excerpt, 200).replace(/…$/u, "");
+  return shown.length > 0 && compactSummary(summary, summary.length).startsWith(shown);
 }
 
 export function renderFindResult(result: FindResult, words: ToolWords = MCP_TOOL_WORDS): string {
