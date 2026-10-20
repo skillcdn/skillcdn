@@ -17,7 +17,7 @@ PostgreSQL              content index (full-text), permission cache, file bodies
 git host                GitHub, behind the git-host port
 ```
 
-A `worker` role that indexes ahead of requests, a blob store on S3-compatible storage behind the same port, other git hosts behind the git-host port and search by meaning are planned ([roadmap.md](roadmap.md), [ADR-0004](adr/0004-postgresql-only-state.md)).
+A `worker` role that indexes ahead of requests, a blob store on S3-compatible storage behind the same port, other git hosts behind the git-host port and search by meaning are planned ([roadmap.md](roadmap.md), [ADR-0004](adr/0004-postgresql-only-state.md), [ADR-0063](adr/0063-packs-of-documents-are-served-to-agents-through-structure-words-and-meaning.md), [ADR-0064](adr/0064-meaning-search-runs-on-pgvector-and-pg-boss-behind-an-embedder-port.md)).
 
 Four properties shape everything else:
 
@@ -83,7 +83,7 @@ Details and open questions live in [specs/](specs/).
 
 ## Data and storage
 
-PostgreSQL is the only stateful dependency and plays three roles: content index with full-text search, permission cache, and the store of file bodies; a job queue and vector search are planned ([ADR-0004](adr/0004-postgresql-only-state.md)). Conceptual entities (the actual schema is documented in [`packages/db/README.md`](../packages/db/README.md)):
+PostgreSQL is the only stateful dependency and plays three roles: content index with full-text search, permission cache, and the store of file bodies; a job queue and vector search are planned ([ADR-0004](adr/0004-postgresql-only-state.md), [ADR-0063](adr/0063-packs-of-documents-are-served-to-agents-through-structure-words-and-meaning.md), [ADR-0064](adr/0064-meaning-search-runs-on-pgvector-and-pg-boss-behind-an-embedder-port.md)). Conceptual entities (the actual schema is documented in [`packages/db/README.md`](../packages/db/README.md)):
 
 - **Account**: an organization or user on a git host. Everything tenant-scoped hangs off an account.
 - **Repo**, **ref → commit** resolution, and **index entries** per `(repo, commit)`: canonical path, kind, front-matter, discoverability, readability, reference targets, search vector, blob hash, the digest and size of what the file is served as, and whether the skills extension lists a skill. Index entries for a commit are immutable. The reading-rule version invalidates indexes when interpretation changes.
