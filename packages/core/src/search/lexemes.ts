@@ -150,7 +150,10 @@ function tokensOfRun(run: string): Token[] {
 function tokensOfScripts(run: string): Token[] {
   const tokens: Token[] = [];
   for (const piece of run.match(SCRIPT_RUNS) ?? []) {
-    tokens.push(...(CJK.test(piece) ? bigramTokens(piece) : tokensOfRun(piece)));
+    // One by one: a run of some hundred thousand characters has more pairs than one call takes.
+    for (const token of CJK.test(piece) ? bigramTokens(piece) : tokensOfRun(piece)) {
+      tokens.push(token);
+    }
   }
   return tokens;
 }
@@ -190,7 +193,9 @@ function tokensOf(text: string): Token[] {
       tokens.push({ text: whole, stem: false });
       continue;
     }
-    tokens.push(...tokensOfScripts(whole));
+    for (const token of tokensOfScripts(whole)) {
+      tokens.push(token);
+    }
   }
   return tokens.filter(
     (token) => token.text.length <= SHORT_ENOUGH || utf8Length(token.text) <= MAX_LEXEME_BYTES,

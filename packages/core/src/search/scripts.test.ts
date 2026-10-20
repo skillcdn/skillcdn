@@ -44,6 +44,12 @@ describe("scripts without word stems", () => {
     const han = word(0x4e2d, 0x6587);
     expect(lexemesOf(han)).toEqual([han]);
   });
+
+  it("reads a run of two hundred thousand characters by pairs, however long the run", () => {
+    // Pushing the pairs of a run as the arguments of one call overflowed the stack past some
+    // hundred thousand of them, and a file with such a run failed the indexing of its pack.
+    expect(searchLexemes(word(0xac00).repeat(200_000))).toHaveLength(199_999);
+  });
 });
 
 describe("wordRulesOf", () => {
