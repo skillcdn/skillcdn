@@ -23,6 +23,7 @@ import {
   findCachedRef,
   findMissingRepo,
   findRepoByAlias,
+  getRepo,
   markRepositoryNotPublic,
   type RepoAliasRecord,
   type RepoRecord,
@@ -220,6 +221,35 @@ export class MountService {
     }
     const name: RepoCoordinates = { host: address.host, owner: address.owner, repo: address.repo };
     const repo = await this.#repositoryFor(name, viewer);
+    return this.#mountOf(address, name, repo);
+  }
+
+  /**
+   * Resolves an address to a repository somebody resolved before, by its row, without asking the
+   * host what the name is to anyone: for the worker indexing what an administrator of the
+   * repository asked for (ADR-0064), where the asking checked who they were. A row that is not
+   * there is nothing, in the same words as any other.
+   */
+  async resolveRepository(
+    address: Address,
+    scope: { readonly accountId: string; readonly repoId: string },
+  ): Promise<Mount> {
+    if (!isGitHostAddress(address)) {
+      throw new MountError("repo_not_found", "The repository was not found.");
+    }
+    const repo = await getRepo(this.#options.database, scope);
+    if (repo === undefined) {
+      throw new MountError("repo_not_found", "The repository was not found.");
+    }
+    return this.#mountOf(
+      address,
+      { host: address.host, owner: address.owner, repo: address.repo },
+      repo,
+    );
+  }
+
+  /** The mount of a repository the address names, once the repository is known: its commit, and what is known of it. */
+  async #mountOf(address: GitHostAddress, name: RepoCoordinates, repo: RepoRecord): Promise<Mount> {
     // What is not public is read through the app's installation on it, never as the deployment.
     const coordinates: RepoCoordinates = isAnonymouslyReadable(repo.repository)
       ? name

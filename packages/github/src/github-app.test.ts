@@ -519,7 +519,13 @@ describe("signing in", () => {
   it("asks who a person is, and what they can see, with their own credential", async () => {
     const { fetchLike, seen } = replay({
       "GET /user": json(200, { id: 1001, login: "octo", name: "Octo Cat", type: "User" }),
-      "GET /repos/skillcdn/private-skills": json(200, { id: 99, private: true }),
+      "GET /repos/skillcdn/private-skills": json(200, {
+        id: 99,
+        private: true,
+        permissions: { admin: true, maintain: true, push: true, triage: true, pull: true },
+      }),
+      "GET /repos/skillcdn/shared": json(200, { id: 100, permissions: { push: true, pull: true } }),
+      "GET /repos/skillcdn/public-skills": json(200, { id: 101 }),
       "GET /repos/skillcdn/elsewhere": json(404, { message: "Not Found" }),
       "GET /repos/skillcdn/sso": json(403, { message: "Resource protected by organization SAML" }),
     });
@@ -530,6 +536,17 @@ describe("signing in", () => {
       name: "Octo Cat",
     });
     expect(await github.visibleRepository("ghu_person", secret)).toBe("99");
+    // What they may do there, as the host says it: administer, push, or only read.
+    expect(await github.repositoryPermission?.("ghu_person", secret)).toBe("admin");
+    expect(await github.repositoryPermission?.("ghu_person", { ...secret, repo: "shared" })).toBe(
+      "write",
+    );
+    expect(
+      await github.repositoryPermission?.("ghu_person", { ...secret, repo: "public-skills" }),
+    ).toBe("read");
+    expect(
+      await github.repositoryPermission?.("ghu_person", { ...secret, repo: "elsewhere" }),
+    ).toBeUndefined();
     // What they cannot see, and what the host will not show them now, are both nothing.
     expect(
       await github.visibleRepository("ghu_person", { ...secret, repo: "elsewhere" }),

@@ -126,6 +126,7 @@ export type {
   HostInstallation,
   HostInstallations,
   HostInstalledRepository,
+  HostRepositoryPermission,
   HostUser,
 } from "./ports/git-host-login.js";
 export type {
@@ -217,7 +218,9 @@ export {
   type RestConnectStarted,
   type RestConnectView,
   type RestGrants,
+  type RestIndexNow,
   type RestMe,
+  type RestMyIndex,
   type RestMyRepositories,
   type RestNewRepoToken,
   type RestOwner,
@@ -234,7 +237,9 @@ export {
   restConnectStartedSchema,
   restConnectViewSchema,
   restGrantsSchema,
+  restIndexNowSchema,
   restMeSchema,
+  restMyIndexSchema,
   restMyRepositoriesSchema,
   restNewRepoTokenSchema,
   restOwnerSchema,

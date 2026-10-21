@@ -51,6 +51,9 @@ export interface HostInstallations {
   readonly truncated: boolean;
 }
 
+/** What a person may do at a repository, as the host puts it: administer it, push to it, or read it. */
+export type HostRepositoryPermission = "admin" | "write" | "read";
+
 /**
  * What the domain needs from a git host about people: signing them in, and asking the host what
  * they can see. The host owns permissions; this port only ever asks. Every method rejects with a
@@ -86,6 +89,18 @@ export interface GitHostLogin {
    * the app, and `undefined` when they cannot or it does not exist: the two are not told apart.
    */
   visibleRepository(accessToken: string, coordinates: RepoCoordinates): Promise<string | undefined>;
+
+  /**
+   * What whoever holds the token may do at the repository, as the host tells them: `admin` for
+   * an administrator, the owner of a personal repository among them, `write` for someone who
+   * pushes, `read` for anyone else it shows the repository to, and `undefined` when it shows them
+   * none, which is not told apart from a repository that does not exist. A host that cannot say
+   * leaves the method out, and nobody administers anything through it.
+   */
+  repositoryPermission?(
+    accessToken: string,
+    coordinates: RepoCoordinates,
+  ): Promise<HostRepositoryPermission | undefined>;
 
   /** Where the app is installed, as far as this person can reach, with the repositories there. */
   listInstallations(accessToken: string): Promise<HostInstallations>;

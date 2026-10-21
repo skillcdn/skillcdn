@@ -181,10 +181,12 @@ export class EmbeddingReads {
   /**
    * Queues the indexing of an address now, and its embedding ahead of everything else where the
    * deployment embeds. `queued` is false when the same address waits in the queue already;
-   * `undefined` where this process has no queue.
+   * `undefined` where this process has no queue. With the repository's row, from a caller that
+   * checked who asked, the worker indexes that repository whatever the name is to everyone.
    */
   async designate(
     written: string,
+    repository?: { readonly accountId: string; readonly repoId: string },
   ): Promise<{ readonly address: string; readonly queued: boolean } | "unavailable" | "invalid"> {
     const parsed = parseAddress(written.startsWith("/") ? written : `/${written}`);
     if (!parsed.ok || !isGitHostAddress(parsed.value) || parsed.value.path.length > 0) {
@@ -195,7 +197,7 @@ export class EmbeddingReads {
       return "unavailable";
     }
     const address = formatAddress(parsed.value);
-    const queued = await sendIndexJob(jobs, { address });
+    const queued = await sendIndexJob(jobs, { address, ...(repository ?? {}) });
     return { address, queued };
   }
 

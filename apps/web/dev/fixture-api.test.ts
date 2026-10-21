@@ -361,6 +361,22 @@ describe("the fixture API", () => {
     resetFixtureState();
   });
 
+  it("tells the fixture person what they may ask of a repository's index, and queues it once", () => {
+    resetFixtureState();
+    const route = "/api/v1/me/index/gh/acme/handbook";
+    expect(send("GET", route).status).toBe(401);
+    ask("/auth/gh/login");
+    expect(ask(route).body).toEqual({ administers: true });
+    expect(ask("/api/v1/me/index/gh/demo/long").body).toEqual({ administers: false });
+    expect(send("GET", `${route}/docs`).status).toBe(400);
+    const first = send("POST", route);
+    expect(first.status).toBe(202);
+    expect(first.body).toEqual({ queued: true });
+    expect(send("POST", route).body).toEqual({ queued: false });
+    expect(send("POST", "/api/v1/me/index/gh/demo/long").status).toBe(403);
+    resetFixtureState();
+  });
+
   it("answers the page of an account with indexed skills first and the rest in pages", () => {
     resetFixtureState();
     const first = restOwnerSchema.parse(ask("/api/v1/owners/gh/acme").body);

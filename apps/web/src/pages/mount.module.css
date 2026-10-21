@@ -113,6 +113,14 @@
   color: var(--color-text-muted);
 }
 
+/* The administrator's way to have the repository indexed now, and what came of asking. */
+.indexNow {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
 /* An action, not a fact: it stays quiet until it is pointed at. */
 .hostLink {
   font-size: var(--text-sm);

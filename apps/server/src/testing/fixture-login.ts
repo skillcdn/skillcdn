@@ -14,13 +14,20 @@ export interface FixturePerson {
   readonly user: HostUser;
   /** The private repositories of `acme` this person can see, by name. */
   readonly sees: string[];
+  /** Those of them this person administers; the rest they only read. */
+  readonly administers?: string[];
 }
 
 export interface FixtureLogin extends GitHostLogin {
   readonly people: Record<string, FixturePerson>;
   /** Calls per port method, to assert how often the host was asked. */
   readonly calls: Record<
-    "exchangeCode" | "refresh" | "getUser" | "visibleRepository" | "listInstallations",
+    | "exchangeCode"
+    | "refresh"
+    | "getUser"
+    | "visibleRepository"
+    | "repositoryPermission"
+    | "listInstallations",
     number
   >;
   /**
@@ -57,6 +64,7 @@ export function createFixtureLogin(
     alice: {
       user: { hostAccountId: "1001", login: "Alice", name: "Alice Example" },
       sees: Object.keys(INSTALLED_PRIVATE_REPOSITORIES),
+      administers: Object.keys(INSTALLED_PRIVATE_REPOSITORIES),
     },
     bob: {
       user: { hostAccountId: "1002", login: "bob", name: undefined },
@@ -69,6 +77,7 @@ export function createFixtureLogin(
     refresh: 0,
     getUser: 0,
     visibleRepository: 0,
+    repositoryPermission: 0,
     listInstallations: 0,
   };
   /** What a sign-in was started with, by its state: the challenge a code is redeemed against. */
@@ -192,6 +201,15 @@ export function createFixtureLogin(
       return coordinates.owner === "acme" && person.sees.includes(coordinates.repo)
         ? fixtureRepoId(coordinates.repo)
         : undefined;
+    },
+
+    async repositoryPermission(accessToken, coordinates) {
+      calls.repositoryPermission += 1;
+      const person = holder(accessToken);
+      if (coordinates.owner !== "acme" || !person.sees.includes(coordinates.repo)) {
+        return undefined;
+      }
+      return person.administers?.includes(coordinates.repo) === true ? "admin" : "read";
     },
 
     async listInstallations(accessToken) {

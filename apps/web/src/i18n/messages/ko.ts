@@ -165,6 +165,12 @@ export const ko: Messages = {
       body: (code: string) => `사유: ${code}. 자동으로 다시 시도하니 잠시 후 다시 확인해 주세요.`,
     },
     truncated: "저장소가 색인 한도보다 커서 일부 파일이 색인에서 빠졌습니다.",
+    indexNow: {
+      button: "지금 색인",
+      hint: "최신 커밋을 지금 읽고, 그 문서들을 가장 먼저 임베딩합니다. GitHub에서 이 저장소를 관리하는 사람에게 보입니다.",
+      queued: "대기열에 넣었습니다. 색인과 임베딩이 진행되는 대로 페이지가 갱신됩니다.",
+      already: "이미 대기 중입니다. 다음 차례예요.",
+    },
     tabs: {
       skills: (count: number) => `스킬 (${count})`,
       documents: (count: number) => `문서 (${count})`,
@@ -293,6 +299,14 @@ export const ko: Messages = {
       "mount.repo_not_found": {
         title: "저장소를 찾을 수 없습니다",
         body: "존재하지 않거나 비공개 저장소입니다.",
+      },
+      "index.not_administrator": {
+        title: "요청할 권한이 없습니다",
+        body: "GitHub에서 이 저장소를 관리하는 사람만 지금 색인을 요청할 수 있습니다.",
+      },
+      "index.unavailable": {
+        title: "워커가 없습니다",
+        body: "이 배포에는 요청을 받아 색인하는 워커가 없습니다.",
       },
       "mount.ref_not_found": {
         title: "ref를 찾을 수 없습니다",

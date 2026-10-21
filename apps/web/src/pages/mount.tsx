@@ -1,10 +1,10 @@
 import { type Address, formatAddress, type RestMount, type RestSkill } from "@skillcdn/core";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { pageOfMount, track, useAnalyticsPage } from "../analytics.js";
-import { api } from "../api/client.js";
+import { ApiError, api } from "../api/client.js";
 import { resourceKeys } from "../api/keys.js";
 import { useResource } from "../api/use-resource.js";
-import { useSession } from "../auth/session.js";
+import { useSession, useUser } from "../auth/session.js";
 import { AddressForm } from "../components/address-form.js";
 import { ConnectGuide } from "../components/connect-guide.js";
 import { ConnectStrip } from "../components/connect-strip.js";
@@ -53,6 +53,70 @@ function Fact(props: {
   );
 }
 
+/**
+ * The way for whoever administers the repository at the git host to have it indexed now, with
+ * its documents embedded ahead of everything else (ADR-0064). Shown to them alone, which the
+ * server says once the session is known: nothing of it is in the server's render.
+ */
+function IndexNow(props: { readonly address: Address; readonly onAsked: () => void }) {
+  const user = useUser();
+  return user === undefined ? null : <IndexNowFor {...props} login={user.login} />;
+}
+
+function IndexNowFor(props: {
+  readonly address: Address;
+  readonly login: string;
+  readonly onAsked: () => void;
+}) {
+  const { t } = useI18n();
+  const { address, login } = props;
+  const mine = useResource(resourceKeys.myIndex(login, address), (signal) =>
+    api.myIndex(address, signal),
+  );
+  const [asked, setAsked] = useState<{
+    readonly busy: boolean;
+    readonly queued?: boolean;
+    readonly error?: ApiError;
+  }>({ busy: false });
+  // Anyone the server tells nothing, or whom it refuses, sees no way to ask: the page is about
+  // the repository, and this is not theirs.
+  if (mine.state !== "ready" || !mine.value.administers) {
+    return null;
+  }
+  const ask = () => {
+    if (asked.busy) {
+      return;
+    }
+    setAsked({ busy: true });
+    api.indexNow(address).then(
+      (answer) => {
+        track("index_now", { queued: answer.queued });
+        setAsked({ busy: false, queued: answer.queued });
+        props.onAsked();
+      },
+      (error: unknown) =>
+        setAsked({
+          busy: false,
+          error:
+            error instanceof ApiError ? error : new ApiError(0, "unknown", "Unexpected failure."),
+        }),
+    );
+  };
+  return (
+    <div className={styles.indexNow}>
+      <Button size="sm" onClick={ask} disabled={asked.busy} title={t.mount.indexNow.hint}>
+        {asked.busy ? t.common.loading : t.mount.indexNow.button}
+      </Button>
+      {asked.queued !== undefined && (
+        <span className={styles.note}>
+          {asked.queued ? t.mount.indexNow.queued : t.mount.indexNow.already}
+        </span>
+      )}
+      {asked.error !== undefined && <ErrorCallout error={asked.error} />}
+    </div>
+  );
+}
+
 function MountHeader(props: {
   readonly origin: string;
   readonly address: Address;
@@ -62,6 +126,8 @@ function MountHeader(props: {
    * which has the guide itself, and while the address cannot be served.
    */
   readonly use: "skill" | "folder" | undefined;
+  /** Asks the server about the address again: after an administrator had it indexed now. */
+  readonly reload: () => void;
 }) {
   const { t, language } = useI18n();
   const { address, mount } = props;
@@ -178,6 +244,7 @@ function MountHeader(props: {
               {t.mount.viewOnHost}
             </a>
           )}
+          <IndexNow address={address} onAsked={props.reload} />
         </div>
       )}
     </header>
@@ -353,7 +420,13 @@ export function MountPage(props: MountPageProps) {
 
   return (
     <Container className={styles.page}>
-      <MountHeader origin={origin} address={address} mount={loaded} use={use} />
+      <MountHeader
+        origin={origin}
+        address={address}
+        mount={loaded}
+        use={use}
+        reload={mount.reload}
+      />
       {atRoot && mount.state !== "error" && (
         <ConnectGuide origin={origin} address={address} mount={loaded} />
       )}

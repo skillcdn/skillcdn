@@ -238,13 +238,14 @@ export function createApi(
         ? {}
         : { maxUnusedClients: config.auth.maxUnusedClients }),
     });
-    permissions = new Permissions({
+    const repoPermissions = new Permissions({
       database,
       login: ports.login,
       credentials,
       clock,
       ttlMs: config.auth.permissionTtlMs,
     });
+    permissions = repoPermissions;
     const tokens = new RepoTokens({ database, clock, logger });
     auth = {
       origin,
@@ -255,6 +256,8 @@ export function createApi(
       connections: new Connections({ database, clock, logger, tokens, origin }),
       hostLogin: ports.login,
       clock,
+      administers: (user, coordinates) => repoPermissions.administers(user, coordinates),
+      index: embeddings,
       login: new Login({
         database,
         login: ports.login,

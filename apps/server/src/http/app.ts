@@ -27,6 +27,7 @@ import {
   parseOwnerPath,
   REPO_TOKEN_PREFIX,
   REST_MOUNT_LIST_LIMIT,
+  type RepoCoordinates,
   type RestMount,
   type RestShowcase,
   type RestSkill,
@@ -94,6 +95,10 @@ export interface AppAuth {
   readonly credentials: UserCredentials;
   readonly hostLogin: GitHostLogin;
   readonly clock: Clock;
+  /** Whether the person administers the repository at the host, asked of the host as them. */
+  readonly administers: (user: UserRecord, coordinates: RepoCoordinates) => Promise<boolean>;
+  /** What an administrator asks of a repository's index: that it be indexed now (ADR-0064). */
+  readonly index: Pick<EmbeddingReads, "designate">;
 }
 
 export interface AppDependencies {

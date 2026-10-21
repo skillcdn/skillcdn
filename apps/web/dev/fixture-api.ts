@@ -29,8 +29,10 @@ import {
   type RestFind,
   type RestFindItem,
   type RestGrants,
+  type RestIndexNow,
   type RestMe,
   type RestMount,
+  type RestMyIndex,
   type RestMyRepositories,
   type RestNewRepoToken,
   type RestOwner,
@@ -106,6 +108,8 @@ const startedConnections = new Map<
 >();
 const decidedConnections = new Map<string, "approved" | "denied">();
 let connectionsStarted = 0;
+/** The repositories the fixture person had indexed now since the server started, by key. */
+const designated = new Set<string>();
 
 /**
  * Forgets when `demo/slow` was first asked for, so that it starts indexing again, and who signed
@@ -120,6 +124,7 @@ export function resetFixtureState(): void {
   startedConnections.clear();
   decidedConnections.clear();
   connectionsStarted = 0;
+  designated.clear();
 }
 
 const problem = (status: number, code: string, message: string, extra = {}): FixtureAnswer => ({
@@ -1091,6 +1096,39 @@ function accountAnswer(
     }
     removedGrants.add(id);
     return { status: 200, body: { id, removed: true } };
+  }
+  // What the person may ask of a repository's index: the fixture person administers Acme's
+  // repositories and nobody else's, as the server would learn from the host.
+  const index = `${REST_ROUTES.me}/index`;
+  if (url.pathname.startsWith(`${index}/`)) {
+    if (!signedIn) {
+      return signInRequired();
+    }
+    const parsed = parseAddress(url.pathname.slice(index.length));
+    if (!parsed.ok) {
+      return problem(400, `address.${parsed.error.code}`, parsed.error.message);
+    }
+    if (parsed.value.path !== "") {
+      return problem(400, "index.not_a_repository", "A repository is indexed whole.");
+    }
+    const resolved = resolve(parsed.value);
+    if ("status" in resolved) {
+      return resolved;
+    }
+    const administers = resolved.repository.owner.toLowerCase() === "acme";
+    if (method === "GET") {
+      const answer: RestMyIndex = { administers };
+      return { status: 200, body: answer };
+    }
+    if (method === "POST") {
+      if (!administers) {
+        return problem(403, "index.not_administrator", "Only an administrator may ask.");
+      }
+      const queued = !designated.has(resolved.key);
+      designated.add(resolved.key);
+      const answer: RestIndexNow = { queued };
+      return { status: 202, body: answer };
+    }
   }
   const tokens = tokensAnswer(url, method, now, body);
   if (tokens !== undefined) {

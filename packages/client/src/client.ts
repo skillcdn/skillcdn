@@ -2,6 +2,7 @@ import {
   type Address,
   AUTH_ROUTES,
   CONSENT_REQUEST_PARAM,
+  formatAddress,
   type LegalDocumentKind,
   legalPath,
   type OwnerPath,
@@ -19,9 +20,11 @@ import {
   type RestFile,
   type RestFind,
   type RestGrants,
+  type RestIndexNow,
   type RestLegalDocument,
   type RestMe,
   type RestMount,
+  type RestMyIndex,
   type RestMyRepositories,
   type RestNewRepoToken,
   type RestOwner,
@@ -41,9 +44,11 @@ import {
   restFileSchema,
   restFindSchema,
   restGrantsSchema,
+  restIndexNowSchema,
   restLegalDocumentSchema,
   restMeSchema,
   restMountSchema,
+  restMyIndexSchema,
   restMyRepositoriesSchema,
   restNewRepoTokenSchema,
   restOwnerSchema,
@@ -182,6 +187,10 @@ export interface SkillCdnClient {
   // a browser sends; a token reads its repository and nothing of these.
   me(signal?: AbortSignal): Promise<RestMe>;
   myRepositories(signal?: AbortSignal): Promise<RestMyRepositories>;
+  /** What the person may ask of a repository's index: whether they administer it at the host. */
+  myIndex(address: Address, signal?: AbortSignal): Promise<RestMyIndex>;
+  /** Asks, as an administrator of the repository, that it be indexed now; answers whether it was queued. */
+  indexNow(address: Address): Promise<RestIndexNow>;
   myGrants(signal?: AbortSignal): Promise<RestGrants>;
   removeGrant(id: string): Promise<void>;
   myTokens(signal?: AbortSignal): Promise<RestRepoTokens>;
@@ -358,6 +367,20 @@ export function createClient(options: ClientOptions): SkillCdnClient {
         signal,
       ),
     me: (signal) => read(REST_ROUTES.me, restMeSchema, signal),
+    myIndex: (address, signal) =>
+      read(`${REST_ROUTES.me}/index${formatAddress(address)}`, restMyIndexSchema, signal),
+    indexNow: async (address) => {
+      const asked = await write(
+        "POST",
+        `${REST_ROUTES.me}/index${formatAddress(address)}`,
+        undefined,
+        restIndexNowSchema,
+      );
+      if (asked === undefined) {
+        throw new ApiError(0, "invalid_response", "The server answered unexpectedly.");
+      }
+      return asked;
+    },
     myRepositories: (signal) =>
       read(`${REST_ROUTES.me}/repositories`, restMyRepositoriesSchema, signal),
     myGrants: (signal) => read(`${REST_ROUTES.me}/grants`, restGrantsSchema, signal),

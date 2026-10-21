@@ -63,6 +63,7 @@ Whether a person can see a repository is asked of the git host with that person'
 - The name has to mean the same repository to the person and to the app: a renamed or recycled name is another repository, compared by the host's immutable id.
 - When the host cannot be asked and no answer is fresh, the request fails with `503 mount.unavailable` or `mount.rate_limited`. An answer written by a process whose clock runs ahead is not believed longer for that.
 - What is public is another matter and an older rule: that a repository is public is believed for `REPO_TTL_SECONDS`, and somewhat longer while the git host cannot be asked, so that an outage of the host does not take public repositories down. Making a repository private therefore takes effect here within that time, and within the permission time for its own people, or at once where the host's events are received.
+- Who administers a repository is the host's to say as well: a person's request to have a repository indexed now ([REST](rest.md#get-apiv1meindexaddress-and-post-apiv1meindexaddress)) is taken only after the host, asked as them, says they administer it, and that answer is kept for nobody.
 
 ## Events of the git host
 

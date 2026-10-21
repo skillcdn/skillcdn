@@ -17,13 +17,16 @@ import {
   REPO_TOKEN_MAX_LABEL_LENGTH,
   REST_ROUTES,
   RETURN_TO_PARAM,
+  type RepoCoordinates,
   type RestAuthorization,
   type RestConnectClaimed,
   type RestConnectDecided,
   type RestConnectStarted,
   type RestConnectView,
   type RestGrants,
+  type RestIndexNow,
   type RestMe,
+  type RestMyIndex,
   type RestMyRepositories,
   type RestNewRepoToken,
   type RestRepoTokens,
@@ -53,6 +56,7 @@ import {
 import { ClientLimitError, ClientMetadataError, type OAuthClients } from "../auth/oauth/clients.js";
 import { MAX_REPO_TOKENS_PER_USER, type RepoTokens } from "../auth/repo-tokens.js";
 import type { Sessions } from "../auth/sessions.js";
+import type { EmbeddingReads } from "../jobs/reads.js";
 import type { Logger } from "../logger.js";
 import { type Mount, MountError } from "../mounts/mount-service.js";
 import type { AppEnv } from "./request-context.js";
@@ -92,6 +96,10 @@ export interface AuthDependencies {
    * with a `MountError` for what they cannot open, a name that is nothing included.
    */
   readonly open: (address: Address, user: UserRecord) => Promise<Mount>;
+  /** Whether the person administers the repository at the host, asked of the host as them. */
+  readonly administers: (user: UserRecord, coordinates: RepoCoordinates) => Promise<boolean>;
+  /** What an administrator asks of a repository's index: that it be indexed now (ADR-0064). */
+  readonly index: Pick<EmbeddingReads, "designate">;
 }
 
 /** The size of the pictures the pages ask the host for: 80 CSS pixels on a 2x screen. */
@@ -485,6 +493,160 @@ export function registerAuth(app: Hono<AppEnv>, dependencies: AuthDependencies):
     }
     return parsed.value;
   };
+
+  // What an administrator of a repository asks of its index (ADR-0064): that it be indexed now,
+  // and its documents embedded first of all, for a repository that is not public as well. The
+  // host says who administers a repository, asked as the person; the page shows the way to them
+  // alone, and the answer tells it so.
+  const INDEX_ROUTE = `${REST_ROUTES.me}/index`;
+  const indexAddressOf = (c: Context<AppEnv>): Address | Response => {
+    // The raw path, percent-escapes included: the address parser decodes exactly once.
+    const parsed = parseAddress(new URL(c.req.url).pathname.slice(INDEX_ROUTE.length));
+    if (!parsed.ok) {
+      return c.json(errorBody(`address.${parsed.error.code}`, parsed.error.message), 400);
+    }
+    if (parsed.value.path !== ROOT_PATH) {
+      return c.json(
+        errorBody(
+          "index.not_a_repository",
+          "A repository is indexed whole: name it, with a ref at most, and no path.",
+        ),
+        400,
+      );
+    }
+    return parsed.value;
+  };
+  /** The repository as the person may open it, or why not, in the words every request uses. */
+  const openFor = async (
+    c: Context<AppEnv>,
+    address: Address,
+    user: UserRecord,
+  ): Promise<Mount | Response> => {
+    try {
+      return await dependencies.open(address, user);
+    } catch (error) {
+      if (!(error instanceof MountError)) {
+        throw error;
+      }
+      if (error.retryAfterSeconds !== undefined) {
+        c.header("retry-after", String(error.retryAfterSeconds));
+      }
+      const status =
+        error.reason === "rate_limited" || error.reason === "unavailable"
+          ? 503
+          : error.reason === "not_allowed"
+            ? 403
+            : 404;
+      return c.json(errorBody(error.code, error.detail), status);
+    }
+  };
+  /** Whether the person administers the mount's repository, or the answer when the host could not say. */
+  const administersOr = async (
+    c: Context<AppEnv>,
+    user: UserRecord,
+    mount: Mount,
+  ): Promise<boolean | Response> => {
+    try {
+      return await dependencies.administers(user, mount.coordinates);
+    } catch (error) {
+      if (error instanceof CredentialsLostError) {
+        return signedOut(c);
+      }
+      if (error instanceof GitHostError && error.kind === "unauthorized") {
+        return signedOut(c);
+      }
+      const known = hostFailure(error);
+      if (known === undefined) {
+        throw error;
+      }
+      if (known.retryAfterSeconds !== undefined) {
+        c.header("retry-after", String(known.retryAfterSeconds));
+      }
+      return c.json(errorBody(known.code, known.message), known.status as 503);
+    }
+  };
+
+  app.get(`${INDEX_ROUTE}/*`, async (c) => {
+    const user = await sessionUser(c);
+    if (user === undefined) {
+      return signInRequired(c);
+    }
+    const address = indexAddressOf(c);
+    if (address instanceof Response) {
+      return address;
+    }
+    const mount = await openFor(c, address, user);
+    if (mount instanceof Response) {
+      return mount;
+    }
+    const administers = await administersOr(c, user, mount);
+    if (administers instanceof Response) {
+      return administers;
+    }
+    const body: RestMyIndex = { administers };
+    return c.json(body);
+  });
+
+  app.post(`${INDEX_ROUTE}/*`, async (c) => {
+    if (!fromOwnPages(c)) {
+      return foreignOrigin(c);
+    }
+    const user = await sessionUser(c);
+    if (user === undefined) {
+      return signInRequired(c);
+    }
+    const address = indexAddressOf(c);
+    if (address instanceof Response) {
+      return address;
+    }
+    const mount = await openFor(c, address, user);
+    if (mount instanceof Response) {
+      return mount;
+    }
+    const administers = await administersOr(c, user, mount);
+    if (administers instanceof Response) {
+      return administers;
+    }
+    if (!administers) {
+      return c.json(
+        errorBody(
+          "index.not_administrator",
+          "Only someone who administers the repository at the git host may ask for it to be indexed now.",
+        ),
+        403,
+      );
+    }
+    const outcome = await dependencies.index.designate(formatAddress(address), {
+      accountId: mount.repo.accountId,
+      repoId: mount.repo.id,
+    });
+    if (outcome === "unavailable") {
+      return c.json(
+        errorBody("index.unavailable", "This deployment runs no worker to index a repository now."),
+        503,
+      );
+    }
+    if (outcome === "invalid") {
+      return c.json(
+        errorBody(
+          "index.not_a_repository",
+          "A repository is indexed whole: name it, with a ref at most.",
+        ),
+        400,
+      );
+    }
+    logger.info(
+      {
+        user: user.id,
+        address: outcome.address,
+        queued: outcome.queued,
+        requestId: c.get("requestId"),
+      },
+      "repository designated for indexing by its administrator",
+    );
+    const body: RestIndexNow = { queued: outcome.queued };
+    return c.json(body, 202);
+  });
 
   app.post(REST_ROUTES.connect, smallJson, async (c) => {
     c.header("cache-control", "no-store");

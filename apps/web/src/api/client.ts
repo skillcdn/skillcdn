@@ -20,6 +20,10 @@ export const api = {
   /** Makes a token and answers with its secret, which the server shows this once. */
   makeToken: (request: Parameters<typeof client.makeToken>[0]) => client.makeToken(request),
   removeToken: (id: string) => client.removeToken(id),
+  /** Whether the person signed in administers the repository at the host, and so may have it indexed now. */
+  myIndex: (address: Address, signal: AbortSignal) => client.myIndex(address, signal),
+  /** Asks, as an administrator, that the repository be indexed now; answers whether it was queued. */
+  indexNow: (address: Address) => client.indexNow(address),
   signOut: () => client.signOut(),
   owner: (owner: OwnerPath, page: number, signal: AbortSignal) => client.owner(owner, page, signal),
   /** What a client asked a person to allow, for the consent page. */

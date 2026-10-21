@@ -4,6 +4,7 @@ import {
   type HostCredentials,
   type HostInstallation,
   type HostInstallations,
+  type HostRepositoryPermission,
   type HostUser,
   type RepoCoordinates,
 } from "@skillcdn/core";
@@ -65,6 +66,19 @@ const userSchema = z.object({
 });
 
 const visibleRepositorySchema = z.object({ id: z.number().int().positive() });
+
+/** What the host says the holder of the token may do at a repository, when it says anything. */
+const repositoryPermissionSchema = z.object({
+  permissions: z
+    .object({
+      admin: z.boolean().optional(),
+      maintain: z.boolean().optional(),
+      push: z.boolean().optional(),
+      triage: z.boolean().optional(),
+      pull: z.boolean().optional(),
+    })
+    .optional(),
+});
 
 const accountSchema = z.object({
   id: z.number().int().positive(),
@@ -231,6 +245,31 @@ export function createGitHubLogin(
           { accept: JSON_ACCEPT, credential: as(accessToken) },
         );
         return String(decodeJson(reply.body, visibleRepositorySchema).id);
+      } catch (error) {
+        if (error instanceof GitHostError && error.kind === "not_found") {
+          return undefined;
+        }
+        throw error;
+      }
+    },
+
+    async repositoryPermission(
+      accessToken: string,
+      coordinates: RepoCoordinates,
+    ): Promise<HostRepositoryPermission | undefined> {
+      try {
+        // The repository as the person sees it carries what they may do at it; a repository
+        // shown without saying is one they may read.
+        const reply = await http.get(
+          `/repos/${encodeURIComponent(coordinates.owner)}/${encodeURIComponent(coordinates.repo)}`,
+          { accept: JSON_ACCEPT, credential: as(accessToken) },
+        );
+        const { permissions } = decodeJson(reply.body, repositoryPermissionSchema);
+        return permissions?.admin === true
+          ? "admin"
+          : permissions?.maintain === true || permissions?.push === true
+            ? "write"
+            : "read";
       } catch (error) {
         if (error instanceof GitHostError && error.kind === "not_found") {
           return undefined;

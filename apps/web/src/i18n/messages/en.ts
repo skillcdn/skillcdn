@@ -184,6 +184,13 @@ export const en = {
     },
     truncated:
       "This repository is larger than the indexing limits, so some files are missing from the index.",
+    /** For whoever administers the repository on the git host: have it indexed now (ADR-0064). */
+    indexNow: {
+      button: "Index now",
+      hint: "Reads the newest commit now and embeds its documents ahead of everything else. Shown to people who administer this repository on GitHub.",
+      queued: "Queued. The page updates as the index and the embedding come along.",
+      already: "Already queued; it is next in line.",
+    },
     tabs: {
       skills: (count: number) => `Skills (${count})`,
       documents: (count: number) => `Documents (${count})`,
@@ -316,6 +323,14 @@ export const en = {
       "mount.repo_not_found": {
         title: "Repository not found",
         body: "It does not exist, or it is private.",
+      },
+      "index.not_administrator": {
+        title: "Not yours to ask",
+        body: "Only someone who administers this repository on GitHub can have it indexed now.",
+      },
+      "index.unavailable": {
+        title: "No worker here",
+        body: "This deployment runs no worker that indexes on request.",
       },
       "mount.ref_not_found": {
         title: "Ref not found",

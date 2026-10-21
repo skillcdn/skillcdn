@@ -86,6 +86,27 @@ export class Permissions implements RepoPermissions {
     return this.#ask(user, coordinates);
   }
 
+  /**
+   * Whether the person administers the repository at the host, asked of the host as them, every
+   * time: what an administrator asks of a repository's index is rare, and the answer is nothing
+   * to keep. A host that cannot say makes nobody an administrator.
+   */
+  async administers(user: UserRecord, coordinates: RepoCoordinates): Promise<boolean> {
+    const { login, credentials } = this.#options;
+    if (login.repositoryPermission === undefined) {
+      return false;
+    }
+    const token = await credentials.accessToken(user.id);
+    try {
+      return (await login.repositoryPermission(token, coordinates)) === "admin";
+    } catch (error) {
+      if (error instanceof GitHostError && error.kind === "unauthorized") {
+        await credentials.refused(user.id);
+      }
+      throw error;
+    }
+  }
+
   async remember(user: UserRecord, repo: RepoRecord, allowed: boolean): Promise<void> {
     const { database, clock } = this.#options;
     await saveRepoPermission(database, { userId: user.id, repoId: repo.id }, allowed, clock.now());

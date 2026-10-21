@@ -63,9 +63,15 @@ export const embedJobSchema = z.object({
 });
 export type EmbedJob = z.infer<typeof embedJobSchema>;
 
-/** A repository to index now, by its address: the job data of {@link INDEX_QUEUE}. */
+/**
+ * A repository to index now, by its address: the job data of {@link INDEX_QUEUE}. With the
+ * repository's row named as well, the worker indexes that repository, whatever the name is to
+ * everyone: how an administrator's request for a repository not everyone sees is carried.
+ */
 export const indexJobSchema = z.object({
   address: z.string().min(1).max(2048),
+  accountId: z.uuid().optional(),
+  repoId: z.uuid().optional(),
 });
 export type IndexJob = z.infer<typeof indexJobSchema>;
 

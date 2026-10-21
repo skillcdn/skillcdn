@@ -121,6 +121,17 @@ export const restMyRepositoriesSchema = z.object({
 });
 export type RestMyRepositories = z.infer<typeof restMyRepositoriesSchema>;
 
+/**
+ * `GET /api/v1/me/index/<address>`: what the person may ask of the repository's index (ADR-0064):
+ * whether they administer the repository at the git host, which is what asking takes.
+ */
+export const restMyIndexSchema = z.object({ administers: z.boolean() });
+export type RestMyIndex = z.infer<typeof restMyIndexSchema>;
+
+/** `POST /api/v1/me/index/<address>`: the repository was queued to be indexed now, or waits in the queue already. */
+export const restIndexNowSchema = z.object({ queued: z.boolean() });
+export type RestIndexNow = z.infer<typeof restIndexNowSchema>;
+
 /** `GET /api/v1/me/grants`: the clients the person let read an address for them. */
 export const restGrantsSchema = z.object({
   items: z.array(
