@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { queryLexemes } from "./lexemes.js";
-import { MAX_EXCERPT_LENGTH, matchSections } from "./sections.js";
+import { MAX_EXCERPT_LENGTH, matchSections, SECTIONING_VERSION, sectionsOf } from "./sections.js";
 
 const DOCUMENT = [
   "---",
@@ -31,6 +31,45 @@ const DOCUMENT = [
   "An invoice is sent on the first of the month.",
   "",
 ].join("\n");
+
+describe("sectionsOf", () => {
+  it("lists every section in document order, the heading path and what reads each", () => {
+    const sections = sectionsOf(DOCUMENT);
+    expect(sections.map((section) => section.heading)).toEqual([
+      ["Billing"],
+      ["Billing", "Plans"],
+      ["Billing", "Discounts"],
+      ["Billing", "Discounts", "Education"],
+      ["Billing", "Invoices"],
+    ]);
+    // The sections tile the body: each ends where the next begins, the last at the end.
+    expect(sections[0]?.offset).toBe(DOCUMENT.indexOf("# Billing"));
+    sections.forEach((section, index) => {
+      const next = sections[index + 1];
+      expect(section.offset + section.length).toBe(next?.offset ?? DOCUMENT.length);
+    });
+    // Front-matter belongs to no section.
+    expect(sections[0]?.offset).toBeGreaterThan(0);
+  });
+
+  it("makes a section of the text before the first heading when it holds anything, and of a document without headings", () => {
+    expect(sectionsOf("Intro mentions invoices.\n\n# Title\n\nBody.\n")).toEqual([
+      { heading: [], offset: 0, length: "Intro mentions invoices.\n\n".length },
+      { heading: ["Title"], offset: 26, length: "# Title\n\nBody.\n".length },
+    ]);
+    expect(sectionsOf("\n\n# Title\nBody.\n")).toEqual([
+      { heading: ["Title"], offset: 2, length: "# Title\nBody.\n".length },
+    ]);
+    const plain = "Just a note.\n";
+    expect(sectionsOf(plain)).toEqual([{ heading: [], offset: 0, length: plain.length }]);
+    expect(sectionsOf("")).toEqual([]);
+    expect(sectionsOf("---\ntitle: Empty\n---\n")).toEqual([]);
+  });
+
+  it("is at its first version", () => {
+    expect(SECTIONING_VERSION).toBe(1);
+  });
+});
 
 describe("matchSections", () => {
   it("names the sections that match, best first, with the heading path and what reads them", () => {

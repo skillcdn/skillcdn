@@ -389,10 +389,13 @@ export {
   outlineMarkdown,
 } from "./search/outline.js";
 export {
+  type DocumentSection,
   MAX_EXCERPT_LENGTH,
   MAX_MATCHED_SECTIONS,
   type MatchedSection,
   matchSections,
+  SECTIONING_VERSION,
+  sectionsOf,
 } from "./search/sections.js";
 export { ENGLISH_STOP_WORDS } from "./search/stop-words.js";
 export {

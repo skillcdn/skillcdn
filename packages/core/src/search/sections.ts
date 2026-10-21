@@ -9,27 +9,62 @@ import { rankSearchVector, searchVectorOf } from "./vector.js";
 // section, and a short excerpt around the first matching words. The same rules run in a
 // deployment and in the command, over the same text, so both name the same sections.
 
-/** A section of a document that matched a search. */
-export interface MatchedSection {
+/** A section of a document: what heads it, and the characters that read it. */
+export interface DocumentSection {
   /** The heading path, outermost first; empty for the text before the first heading. */
   readonly heading: readonly string[];
   /** Where the section starts, in characters from the start of the file. */
   readonly offset: number;
   /** The characters of the section, to the next heading or the end of the file. */
   readonly length: number;
+}
+
+/** A section of a document that matched a search. */
+export interface MatchedSection extends DocumentSection {
   /** A glimpse of the passage that matched, as plain text; `undefined` when the section has no prose. */
   readonly excerpt: string | undefined;
 }
+
+/**
+ * The version of the rules that cut a document into sections. What is computed from a section
+ * and kept, such as the vector of its meaning, is keyed by it (ADR-0064), so a change to these
+ * rules is a new version here and a backfill, never a mismatch between a stored section and
+ * the text it names.
+ */
+export const SECTIONING_VERSION = 1;
 
 /** How many sections of one document a search result names. */
 export const MAX_MATCHED_SECTIONS = 2;
 /** An excerpt is a glimpse, not the passage. */
 export const MAX_EXCERPT_LENGTH = 200;
 
-interface Section {
-  readonly heading: readonly string[];
-  readonly offset: number;
-  readonly length: number;
+/**
+ * Every section of `text`, in document order: the text before the first heading when it holds
+ * anything but blank lines, then the section under each heading of the outline, to the next
+ * heading of any level or the end of the file. A document without headings is one section, and
+ * one whose body is blank has none. Front-matter belongs to no section. The outline is computed
+ * when the caller has none.
+ */
+export function sectionsOf(text: string, outline?: MarkdownOutline): DocumentSection[] {
+  const headings = outline ?? outlineMarkdown(text);
+  const sections: DocumentSection[] = [];
+  const firstHeading = headings.headings[0];
+  const preambleEnd = firstHeading?.offset ?? text.length;
+  if (
+    preambleEnd > headings.bodyOffset &&
+    !BLANK.test(text.slice(headings.bodyOffset, preambleEnd))
+  ) {
+    sections.push({
+      heading: [],
+      offset: headings.bodyOffset,
+      length: preambleEnd - headings.bodyOffset,
+    });
+  }
+  const paths = headingPaths(headings.headings);
+  headings.headings.forEach((heading, index) => {
+    sections.push({ heading: paths[index] ?? [], offset: heading.offset, length: heading.length });
+  });
+  return sections;
 }
 
 /** A line as an excerpt shows it: plain, on one line, and safe to display. */
@@ -128,24 +163,7 @@ export function matchSections(
   if (lexemes.length === 0) {
     return [];
   }
-  const outline = options.outline ?? outlineMarkdown(text);
-  const sections: Section[] = [];
-  const firstHeading = outline.headings[0];
-  const preambleEnd = firstHeading?.offset ?? text.length;
-  if (
-    preambleEnd > outline.bodyOffset &&
-    !BLANK.test(text.slice(outline.bodyOffset, preambleEnd))
-  ) {
-    sections.push({
-      heading: [],
-      offset: outline.bodyOffset,
-      length: preambleEnd - outline.bodyOffset,
-    });
-  }
-  const paths = headingPaths(outline.headings);
-  outline.headings.forEach((heading, index) => {
-    sections.push({ heading: paths[index] ?? [], offset: heading.offset, length: heading.length });
-  });
+  const sections = sectionsOf(text, options.outline);
 
   const wanted = new Set(lexemes);
   /** How many of the words searched for a text holds, each counted once. */
