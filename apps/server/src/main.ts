@@ -32,6 +32,9 @@ async function run(role: Exclude<Role, "check">, argument: string | undefined): 
     if (role === "api") {
       const { runApi } = await import("./roles/api.js");
       await runApi(config, logger);
+    } else if (role === "worker") {
+      const { runWorker } = await import("./roles/worker.js");
+      await runWorker(config, logger);
     } else if (role === "migrate") {
       const { runMigrate } = await import("./roles/migrate.js");
       await runMigrate(config, logger);
@@ -43,9 +46,6 @@ async function run(role: Exclude<Role, "check">, argument: string | undefined): 
       }
       const { runPurge } = await import("./roles/purge.js");
       process.exitCode = await runPurge(config, logger, argument);
-    } else {
-      logger.fatal({ role }, "this role is not implemented yet");
-      process.exitCode = 70;
     }
   } catch (error) {
     // Settings that only a role can check, such as a directory it is pointed at.

@@ -8,7 +8,7 @@ The single deployable. One build, one container image, several process roles ([A
 | `migrate` | `node dist/main.js migrate` | Apply pending database migrations, then exit. | implemented |
 | `check` | `node dist/main.js check [directory]` | Read a directory as the indexer reads a commit and print what an agent would get: for repository authors, before they push ([convention](../../docs/specs/skill-repo.md), "Checking a repository before pushing"). Needs no database and no git host; exits with `1` when index diagnostics are present. The same code is the `skillcdn check` command of [`@skillcdn/cli`](../../packages/cli/README.md); the role stays for whoever has the image. From this checkout: `pnpm --filter @skillcdn/server run start check ../skills`. | implemented |
 | `purge` | `node dist/main.js purge /gh/owner/repo` | Remove what was indexed for a repository: its snapshots, their index entries, its cached refs and the file bodies nothing references any more ([ADR-0026](../../docs/adr/0026-serving-follows-the-license-and-the-operators-lists.md)). Exits with `1` when the repository was never indexed. The same purge is `POST /admin/v1/purge/gh/owner/repo`. | implemented |
-| `worker` | `node dist/main.js worker` | Webhook-driven and scheduled re-indexing. | not yet; `api` indexes lazily until then, unless `INDEX_CONCURRENCY=0` leaves indexing to another process |
+| `worker` | `node dist/main.js worker` | Run the jobs of the queue ([ADR-0064](../../docs/adr/0064-meaning-search-runs-on-pgvector-and-pg-boss-behind-an-embedder-port.md), [deploy](../../deploy/README.md#the-worker)): index a repository on request, embed the sections of indexed commits where an embedder is configured and the database keeps vectors, and sweep hourly for what is served and not yet embedded under the configured model. Indexing ahead of requests, when a push arrives and on a schedule, is still to come; `api` indexes lazily until then, unless `INDEX_CONCURRENCY=0` leaves indexing to another process. | implemented for the jobs of the search by meaning |
 
 ## Running locally
 
@@ -49,8 +49,14 @@ src/
   main.ts        role dispatch and exit codes; nothing else
   roles.ts       the list of roles
   config/        the only place that reads process.env; validates once at boot
-  roles/         api.ts (composition root, HTTP server, shutdown), migrate.ts and purge.ts; the check
-                 role is main.ts handing a directory to @skillcdn/indexer
+  roles/         api.ts (composition root, HTTP server, shutdown), worker.ts (the queue's jobs until told
+                 to stop), migrate.ts and purge.ts; the check role is main.ts handing a directory to
+                 @skillcdn/indexer
+  jobs/          the queues and their jobs (ADR-0064): what a job carries and in which order the queue
+                 takes them (queues.ts), one slice of the embedding of a snapshot (embed-snapshot.ts),
+                 the indexing of a repository on request (index-repository.ts), the sweep that backfills
+                 and drops a replaced model (sweep.ts), and the worker wired to its ports (worker.ts),
+                 which the role and the tests run alike
   auth/          signing in and what follows from it (ADR-0035, ADR-0036): secrets.ts (sealing, token
                  making and hashing), login.ts (the round trip to the git host), sessions.ts,
                  credentials.ts (the person's token of the host, encrypted, renewed, forgotten when
@@ -88,7 +94,9 @@ src/
                  reader.ts composes the Reader of @skillcdn/reader over the index the database keeps (ADR-0054)
   indexer/       coordinates who indexes a commit (ADR-0007); the index itself is built by @skillcdn/indexer
   stats/         daily usage counters per public repository and for the deployment as a whole, with distinct clients by app: added up in memory, written in batches
-  adapters/      implementations of core ports that are not their own package (clock, ...)
+  adapters/      implementations of core ports that are not their own package (clock, the embeddings
+                 and reranking servers of the search by meaning behind the common inference APIs, and
+                 meaning.ts, which wires them from the configuration the same way in every role)
   testing/       test support: a git host backed by fixtures/.repositories/, and the git host's side
                  of signing in for three made-up people (not compiled into dist)
 ```
@@ -121,5 +129,6 @@ Create directories when they get their first file. Do not add empty scaffolding.
 - `src/admin.int.test.ts` covers the admin API: the operator's lists, the showcase entries and the uploads they are made of (stored by hash, served immutably in byte ranges), and the takedown.
 - `src/tokens.int.test.ts` covers the tokens people make for agents: made on the deployment's own pages, for a repository the person can open, with or without an end; an agent reads every address of that repository with one, nothing else, and loses it when it ends or its maker does. `src/connect.int.test.ts` covers a command connecting with a code a person approves (ADR-0059). `src/webhooks.int.test.ts` covers the receiver of the git host's events: what is refused unsigned, and what a delivery ends.
 - `src/skills-extension.int.test.ts` covers what a host that implements the MCP skills extension gets (ADR-0024, ADR-0025). `src/mcp-discovery.int.test.ts` and `src/repository-layout.int.test.ts` cover discovery and loading over MCP: README introductions, hidden copies, exclusions, publication decisions before cold reads, paged results under the response budget, ancestor rules through whole-repository and nested mounts, shared pages, cursors bound to their request, and what a failed policy manifest withholds.
+- `src/worker.int.test.ts` covers the worker against the fixture host and an embedder in the process: a repository indexed on request and then embedded ahead of the rest, every section of a snapshot embedded once in slices that take turns on the queue, a slice tried again after the embedder failed, the sweep that backfills what is served and drops a replaced model's vectors once nothing is left, and the api queueing the commits it indexes.
 - `src/memory-index.int.test.ts` holds the reader over an index in memory and over the index the database keeps to the same answers from the same fixture (ADR-0053, ADR-0054). `src/stats.int.test.ts` covers the usage statistics: what an MCP session and REST reads count, distinct clients by keyed hash folded when the day is over, the names of client apps, and writes that pile up or fail.
 - `src/testing/harness.ts` wires the app for all of them. Every test file has a database of its own; tests inside a file share it.

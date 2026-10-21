@@ -20,7 +20,7 @@ import type { OperatorImages } from "../operator/images.js";
 import type { LegalDocuments } from "../operator/legal.js";
 import type { OperatorLists } from "../operator/lists.js";
 import type { Showcase } from "../operator/showcase.js";
-import { createApi } from "../roles/api.js";
+import { type ApiPorts, createApi } from "../roles/api.js";
 import type { UsageStats } from "../stats/usage-recorder.js";
 import { createFixtureHost, type FixtureHost } from "./fixture-host.js";
 import type { FixtureLogin } from "./fixture-login.js";
@@ -103,6 +103,8 @@ export interface HarnessOptions {
   readonly fetchClientDocument?: DocumentFetcher;
   /** How many clients nobody has used may be stored; the built-in bound when left out. */
   readonly maxUnusedClients?: number;
+  /** What follows a commit the harness indexed; left out, nothing. */
+  readonly onIndexed?: ApiPorts["onIndexed"];
 }
 
 /** The session cookie a response set, as a Cookie header would carry it. */
@@ -179,6 +181,7 @@ export function createHarness(testDatabase: TestDatabase, options: HarnessOption
       isShuttingDown: () => false,
       web: options.web,
       stats: options.stats,
+      onIndexed: options.onIndexed,
       // Tests never leave the process: a picture is found only when a test hands one in, and a
       // client's document only when a test serves one.
       fetch: options.fetch ?? (async () => new Response(null, { status: 404 })),

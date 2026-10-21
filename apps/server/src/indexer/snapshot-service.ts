@@ -43,6 +43,18 @@ export interface SnapshotServiceOptions {
   readonly newLeaseOwner: () => string;
   /** How often a waiting request looks at the database. */
   readonly pollMs?: number;
+  /**
+   * What follows an index this process wrote: the embedding of its sections, queued for the
+   * worker (ADR-0064). A failure here is logged and the index stands; the worker's sweep finds
+   * what was not queued.
+   */
+  readonly onIndexed?: ((mount: Mount, snapshot: IndexedSnapshot) => Promise<void>) | undefined;
+}
+
+/** A snapshot this process just indexed, as what follows it needs it named. */
+export interface IndexedSnapshot extends SnapshotScope {
+  readonly repoId: string;
+  readonly commitSha: string;
 }
 
 const FIRST_RETRY_MS = 30_000;
@@ -222,6 +234,17 @@ export class SnapshotService {
         quantity: searchable,
         unit: "file",
       });
+      if (this.#options.onIndexed !== undefined) {
+        try {
+          await this.#options.onIndexed(mount, {
+            ...scope,
+            repoId: mount.repo.id,
+            commitSha: mount.commit,
+          });
+        } catch (error) {
+          log.warn({ err: error }, "what follows the index could not be queued");
+        }
+      }
     } catch (error) {
       if (signal.aborted) {
         await releaseSnapshot(database, scope, owner, clock.now()).catch(() => {});

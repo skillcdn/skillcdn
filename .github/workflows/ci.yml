@@ -122,6 +122,16 @@ jobs:
       - name: Migrate, serve, become ready, shut down cleanly
         run: |
           docker run --rm --network host -e DATABASE_URL skillcdn:ci migrate
+          # The worker takes the queue up without an embedder, and hands it back on SIGTERM.
+          docker run -d --name worker --network host -e DATABASE_URL skillcdn:ci worker
+          for _ in $(seq 1 30); do
+            if docker logs worker 2>&1 | grep -q '"worker started"'; then break; fi
+            sleep 1
+          done
+          docker logs worker 2>&1 | grep -q '"worker started"'
+          docker stop --time 30 worker
+          test "$(docker inspect --format '{{.State.ExitCode}}' worker)" -eq 0
+          docker logs worker
           docker run -d --name api --network host -e DATABASE_URL skillcdn:ci api
           for _ in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:11188/readyz; then break; fi
