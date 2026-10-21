@@ -4,6 +4,7 @@ import { OPERATOR_LIST_KINDS, type OperatorListKind, purgeRepository } from "@sk
 import type { Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import * as z from "zod";
+import { DEFAULT_REPOSITORIES, type EmbeddingReads, MAX_REPOSITORIES } from "../jobs/reads.js";
 import type { Logger } from "../logger.js";
 import { OperatorImageError, type OperatorImages } from "../operator/images.js";
 import { LegalDocumentError, LegalDocuments } from "../operator/legal.js";
@@ -35,6 +36,8 @@ export interface AdminDependencies {
   readonly legal: LegalDocuments;
   readonly purge: (address: string) => Promise<{ snapshots: number; blobs: number } | undefined>;
   readonly usage: UsageReads;
+  /** The search by meaning: its state, where the embedding went, what it took, and what the operator asks of it (ADR-0064). */
+  readonly embeddings: EmbeddingReads;
   readonly logger: Logger;
 }
 
@@ -48,6 +51,14 @@ export const ADMIN_PREFIX = "/admin/v1";
 const MAX_ENTRY_BYTES = 256 * 1024;
 /** A policy in a few languages; far more than any needs. */
 const MAX_DOCUMENT_BYTES = 1024 * 1024;
+/** Two thousand vectors of a thousand numbers, written out. */
+const MAX_IMPORT_BYTES = 48 * 1024 * 1024;
+const repositoriesLimit = z.coerce
+  .number()
+  .int()
+  .min(1)
+  .max(MAX_REPOSITORIES)
+  .default(DEFAULT_REPOSITORIES);
 
 /** Equal without leaking how far the comparison got; the hashes make the lengths equal. */
 function sameToken(presented: string, expected: string): boolean {
@@ -60,7 +71,7 @@ function kindOf(value: string): OperatorListKind | undefined {
 }
 
 export function registerAdmin(app: Hono<AppEnv>, dependencies: AdminDependencies): void {
-  const { token, lists, showcase, images, legal, usage, logger } = dependencies;
+  const { token, lists, showcase, images, legal, usage, embeddings, logger } = dependencies;
 
   app.use(`${ADMIN_PREFIX}/*`, async (c, next) => {
     const header = c.req.header("authorization") ?? "";
@@ -426,6 +437,133 @@ export function registerAdmin(app: Hono<AppEnv>, dependencies: AdminDependencies
       return refused(c, error);
     }
   });
+
+  // The search by meaning (ADR-0064, point 5): how it stands, where the embedding went and what
+  // it took, a repository indexed on request, and vectors computed elsewhere brought in.
+  app.get(`${ADMIN_PREFIX}/embeddings`, async (c) => {
+    const state = await embeddings.state();
+    return c.json({
+      ...state,
+      failures:
+        state.failures === null
+          ? null
+          : state.failures.map((failure) => ({
+              ...failure,
+              createdAt: failure.createdAt.toISOString(),
+              failedAt: failure.failedAt?.toISOString() ?? null,
+              error: failure.error ?? null,
+            })),
+    });
+  });
+
+  app.get(`${ADMIN_PREFIX}/embeddings/repositories`, async (c) => {
+    const limit = repositoriesLimit.safeParse(c.req.query("limit"));
+    if (!limit.success) {
+      return c.json(
+        errorBody("usage.invalid_limit", `limit is a number from 1 to ${MAX_REPOSITORIES}.`),
+        400,
+      );
+    }
+    const items = (await embeddings.repositories(limit.data)).map((item) => ({
+      ...item,
+      lastEmbeddedAt: item.lastEmbeddedAt.toISOString(),
+    }));
+    return c.json({ items });
+  });
+
+  app.get(`${ADMIN_PREFIX}/embeddings/usage`, async (c) => {
+    const range = rangeOf(c);
+    if (range instanceof Response) {
+      return range;
+    }
+    return c.json({ ...range, items: await embeddings.usage(range.from, range.to) });
+  });
+
+  app.post(`${ADMIN_PREFIX}/embeddings/index/*`, async (c) => {
+    const written = addressAfter(c.req.url, `${ADMIN_PREFIX}/embeddings/index`);
+    const outcome = await embeddings.designate(written);
+    if (outcome === "invalid") {
+      return c.json(
+        errorBody(
+          "embeddings.invalid_address",
+          "The address names a repository of a git host, with a ref at most: /gh/owner/repo[@ref].",
+        ),
+        400,
+      );
+    }
+    if (outcome === "unavailable") {
+      return c.json(
+        errorBody(
+          "embeddings.unavailable",
+          "This process has no job queue to ask the worker with.",
+        ),
+        503,
+      );
+    }
+    logger.info(
+      { ...outcome, requestId: c.get("requestId") },
+      "repository designated for indexing",
+    );
+    return c.json(outcome, 202);
+  });
+
+  app.post(
+    `${ADMIN_PREFIX}/embeddings/import`,
+    bodyLimit({
+      maxSize: MAX_IMPORT_BYTES,
+      onError: (c) => c.json(errorBody("request.too_large", "The request body is too large."), 413),
+    }),
+    async (c) => {
+      let body: unknown;
+      try {
+        body = await c.req.json();
+      } catch {
+        return c.json(errorBody("embeddings.invalid", "The body is not JSON."), 400);
+      }
+      const outcome = await embeddings.importVectors(body);
+      switch (outcome.status) {
+        case "written":
+          logger.info(
+            { written: outcome.written, skipped: outcome.skipped, requestId: c.get("requestId") },
+            "vectors imported",
+          );
+          return c.json({ written: outcome.written, skipped: outcome.skipped });
+        case "unavailable":
+          return c.json(
+            errorBody(
+              "embeddings.unavailable",
+              "The search by meaning is not configured here, or the database keeps no vectors.",
+            ),
+            503,
+          );
+        case "invalid":
+          return c.json(
+            errorBody("embeddings.invalid", "The body is not an import of vectors.", {
+              problems: outcome.problems,
+            }),
+            400,
+          );
+        case "other_key":
+          return c.json(
+            errorBody(
+              "embeddings.other_model",
+              "The vectors are of another model, dimensions or sectioning rules than this deployment embeds with.",
+              { key: outcome.key },
+            ),
+            409,
+          );
+        case "unknown_bodies":
+          return c.json(
+            errorBody(
+              "embeddings.unknown_bodies",
+              "Some bodies are not stored here; a vector is kept only for a body an index names.",
+              { blobShas: outcome.blobShas },
+            ),
+            400,
+          );
+      }
+    },
+  );
 }
 
 /** Removes what a repository's address names from the index; see `purgeRepository`. */

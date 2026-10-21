@@ -53,6 +53,7 @@ import type { RepoTokens } from "../auth/repo-tokens.js";
 import type { Sessions } from "../auth/sessions.js";
 import type { HostEvents } from "../events/host-events.js";
 import type { SnapshotService } from "../indexer/snapshot-service.js";
+import type { EmbeddingReads } from "../jobs/reads.js";
 import type { Logger } from "../logger.js";
 import { createMountServer, type ToolDependencies, usageHooksOf } from "../mcp/tools.js";
 import { type Mount, MountError, type MountService, type Viewer } from "../mounts/mount-service.js";
@@ -121,7 +122,7 @@ export interface AppDependencies {
   /** The deployment's own pages: its terms and its privacy policy (ADR-0029). */
   readonly legal: LegalDocuments;
   /** The admin API, when a token is configured; without one it does not exist. */
-  readonly admin: { readonly token: string } | undefined;
+  readonly admin: { readonly token: string; readonly embeddings: EmbeddingReads } | undefined;
   /** A build of the web UI to serve. Left out, the server is MCP and REST only. */
   readonly web: WebBundle | undefined;
   /** Draws the social previews of addresses (ADR-0032); nothing to draw without the web UI. */
@@ -582,6 +583,7 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
       legal: dependencies.legal,
       purge: purgeByAddress(database),
       usage: new UsageReads({ database, clock: dependencies.tools.clock }),
+      embeddings: dependencies.admin.embeddings,
       logger,
     });
   }

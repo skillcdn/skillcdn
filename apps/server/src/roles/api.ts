@@ -61,6 +61,7 @@ import { loadWebBundle, type WebBundle, WebBundleError } from "../http/web.js";
 import { SnapshotService } from "../indexer/snapshot-service.js";
 import { Janitor } from "../janitor.js";
 import { ensureJobQueues } from "../jobs/queues.js";
+import { EmbeddingReads } from "../jobs/reads.js";
 import { createEmbedTriggers } from "../jobs/triggers.js";
 import type { Logger } from "../logger.js";
 import { MountService } from "../mounts/mount-service.js";
@@ -113,11 +114,18 @@ export interface ApiPorts {
    */
   readonly fetch?: ((input: string, init: RequestInit) => Promise<Response>) | undefined;
   /**
-   * Where the embedding of commits is queued for the worker (ADR-0064): the queue, the key the
-   * vectors are made under, and which repositories are embedded. Left out, nothing is queued.
+   * How commits are embedded for the search by meaning (ADR-0064): the queue the worker is
+   * handed them through, where this process opened it, the key the vectors are made under, and
+   * which repositories are embedded. Left out, the search by meaning is not configured.
    */
   readonly embedding?:
-    | { readonly jobs: JobQueue; readonly key: VectorKey; readonly scope: EmbeddingScope }
+    | {
+        readonly jobs: JobQueue | undefined;
+        readonly key: VectorKey;
+        readonly scope: EmbeddingScope;
+        /** Whether the database keeps vectors: without them nothing is queued or searched by meaning. */
+        readonly vectors: boolean;
+      }
     | undefined;
   /** The search by meaning (ADR-0064, ADR-0065). Left out, the search is by words alone. */
   readonly meaning?: Omit<MountMeaning, "onSearched"> | undefined;
@@ -167,17 +175,35 @@ export function createApi(
   const entitlements = createOperatorEntitlements(lists, ports.entitlements);
   // The commits this process indexes, and the snapshots a search asks for that were never
   // embedded, are queued for the worker within the scope and the entitlements (ADR-0064).
+  const queue = ports.embedding?.jobs;
   const triggers =
-    ports.embedding === undefined
+    ports.embedding === undefined || queue === undefined || !ports.embedding.vectors
       ? undefined
       : createEmbedTriggers({
           database,
-          jobs: ports.embedding.jobs,
+          jobs: queue,
           key: ports.embedding.key,
           policy: { scope: ports.embedding.scope, entitlements },
           clock,
           logger,
         });
+  // What the operator reads and asks of the search by meaning through the admin API.
+  const embeddings = new EmbeddingReads({
+    database,
+    blobs: blobStore,
+    clock,
+    configured:
+      ports.embedding === undefined
+        ? undefined
+        : {
+            model: ports.embedding.key.model,
+            dimensions: ports.embedding.key.dimensions,
+            scope: ports.embedding.scope,
+            reranker: ports.meaning?.reranker?.model ?? null,
+          },
+    vectors: ports.embedding?.vectors ?? false,
+    jobs: queue,
+  });
 
   // People sign in only where the deployment is configured for it and the git host can be
   // asked who they are. Everything that follows from it hangs off this one value: without it
@@ -349,7 +375,8 @@ export function createApi(
     showcase,
     images,
     legal,
-    admin: config.admin?.token === undefined ? undefined : { token: config.admin.token },
+    admin:
+      config.admin?.token === undefined ? undefined : { token: config.admin.token, embeddings },
     web: ports.web,
     social,
     pictures,
@@ -494,9 +521,7 @@ export async function runApi(config: Config, logger: Logger): Promise<void> {
         "the job queue could not be opened, so the commits this process indexes wait for the worker's sweep to be embedded",
       );
     }
-    if (jobs !== undefined && supported) {
-      embedding = { jobs, key, scope: config.meaning.embeddings.scope };
-    }
+    embedding = { jobs, key, scope: config.meaning.embeddings.scope, vectors: supported };
     logger.info(
       {
         model: key.model,

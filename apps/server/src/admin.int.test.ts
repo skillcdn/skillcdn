@@ -1,8 +1,27 @@
-import { restLegalDocumentSchema, restShowcaseSchema } from "@skillcdn/core";
-import { addUsage, findRepoByAlias, saveRepository } from "@skillcdn/db";
+import {
+  allowEverything,
+  discardUsage,
+  type Embedder,
+  restLegalDocumentSchema,
+  restShowcaseSchema,
+} from "@skillcdn/core";
+import {
+  addUsage,
+  createBlobStore,
+  createJobQueue,
+  ensureSnapshot,
+  findRepoByAlias,
+  saveRepository,
+  servedEntries,
+  usageDayOf,
+} from "@skillcdn/db";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
+import { INDEX_VERSION } from "@skillcdn/indexer";
 import { pino } from "pino";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { vectorKeyOf } from "./adapters/meaning.js";
+import { embedSnapshotSlice } from "./jobs/embed-snapshot.js";
+import { EMBED_QUEUE, ensureJobQueues, INDEX_QUEUE, SWEEP_QUEUE } from "./jobs/queues.js";
 import { UsageRecorder } from "./stats/usage-recorder.js";
 import { createFixtureHost, fixtureCommits } from "./testing/fixture-host.js";
 import { createHarness } from "./testing/harness.js";
@@ -599,5 +618,233 @@ describe("the pictures of addresses in the admin API (ADR-0031)", () => {
     expect((await remove("/admin/v1/images/gh/acme/single-skill")).status).toBe(404);
     expect((await remove("/admin/v1/images/gh/acme/multi-skill@main/skills")).status).toBe(200);
     expect((await remove(`/admin/v1/media/${clip.sha}`)).status).toBe(200);
+  });
+});
+
+describe("the search by meaning in the admin API (ADR-0064)", () => {
+  const DIMENSIONS = 8;
+  /** An embedder in the process: every text points one way, by its length. */
+  const embedder: Embedder = {
+    model: "admin-fake",
+    dimensions: DIMENSIONS,
+    maxTexts: 16,
+    maxTextChars: 8000,
+    maxBatchChars: 32_000,
+    async embed(texts) {
+      return {
+        vectors: texts.map((text) => {
+          const vector = new Float32Array(DIMENSIONS);
+          vector[text.length % DIMENSIONS] = 1;
+          return vector;
+        }),
+        tokens: texts.length * 10,
+      };
+    },
+  };
+  const KEY = vectorKeyOf(embedder);
+  const json = { ...authorized, "content-type": "application/json" };
+  interface State {
+    readonly configured: unknown;
+    readonly vectors: boolean;
+    readonly pending: number | null;
+    readonly queues: { readonly name: string; readonly queued: number }[] | null;
+    readonly failures: unknown[] | null;
+  }
+  interface Repositories {
+    readonly items: {
+      readonly address: string;
+      readonly visibility: string;
+      readonly snapshots: number;
+      readonly completed: number;
+      readonly sections: number;
+      readonly bytes: number;
+    }[];
+  }
+  interface Usage {
+    readonly items: { readonly day: string; readonly tokens: number }[];
+  }
+
+  it("says it is not configured, and has no queue to ask, where the search by meaning is off", async () => {
+    const h = createHarness(testDatabase, {
+      adminToken: TOKEN,
+      host: createFixtureHost("admin-meaning-off"),
+    });
+    const state = (await (
+      await h.request("/admin/v1/embeddings", { headers: authorized })
+    ).json()) as State;
+    expect(state).toMatchObject({ configured: null, pending: null, queues: null, failures: null });
+    expect(typeof state.vectors).toBe("boolean");
+    expect(
+      (
+        await h.request("/admin/v1/embeddings/index/gh/acme/single-skill", {
+          method: "POST",
+          headers: authorized,
+        })
+      ).status,
+    ).toBe(503);
+    expect(
+      (
+        await h.request("/admin/v1/embeddings/import", {
+          method: "POST",
+          headers: json,
+          body: JSON.stringify({ ...KEY, items: [] }),
+        })
+      ).status,
+    ).toBe(503);
+    expect(
+      await (await h.request("/admin/v1/embeddings/repositories", { headers: authorized })).json(),
+    ).toEqual({ items: [] });
+  });
+
+  it("reads the queues, designates a repository, shows where the embedding went and what it took, and imports vectors", async () => {
+    const jobs = await createJobQueue(testDatabase.database, { role: "api", onError: () => {} });
+    await ensureJobQueues(jobs);
+    try {
+      const host = createFixtureHost("admin-meaning");
+      const commit = fixtureCommits("admin-meaning").main;
+      const h = createHarness(testDatabase, {
+        adminToken: TOKEN,
+        host,
+        embedding: { jobs, key: KEY, scope: "public", vectors: true },
+        meaning: { embedder, reranker: undefined, rerankCandidates: undefined, key: KEY },
+      });
+      // Indexing queues the embedding; no worker runs here, so the job waits.
+      const client = await h.connect(`/gh/acme/document-pack@${commit}`);
+      await client.callTool({ name: "browse_repo", arguments: {} });
+      await client.close();
+      await h.snapshots.idle();
+
+      const state = (await (
+        await h.request("/admin/v1/embeddings", { headers: authorized })
+      ).json()) as State;
+      expect(state).toMatchObject({
+        configured: { model: KEY.model, dimensions: DIMENSIONS, scope: "public", reranker: null },
+        vectors: true,
+        failures: [],
+      });
+      // Every served public snapshot of this database is still to embed under this key.
+      const pending = state.pending ?? 0;
+      expect(pending).toBeGreaterThanOrEqual(1);
+      const queues = state.queues ?? [];
+      expect(queues.map((queue) => queue.name).sort()).toEqual(
+        [EMBED_QUEUE, INDEX_QUEUE, SWEEP_QUEUE].sort(),
+      );
+      expect(queues.find((queue) => queue.name === EMBED_QUEUE)?.queued).toBe(1);
+
+      // Designated: queued once, and not again while it waits.
+      const designated = await h.request("/admin/v1/embeddings/index/gh/acme/single-skill", {
+        method: "POST",
+        headers: authorized,
+      });
+      expect(designated.status).toBe(202);
+      expect(await designated.json()).toEqual({ address: "/gh/acme/single-skill", queued: true });
+      expect(
+        await (
+          await h.request("/admin/v1/embeddings/index/gh/acme/single-skill", {
+            method: "POST",
+            headers: authorized,
+          })
+        ).json(),
+      ).toMatchObject({ queued: false });
+      expect(
+        (
+          await h.request("/admin/v1/embeddings/index/gh/acme/single-skill/skills", {
+            method: "POST",
+            headers: authorized,
+          })
+        ).status,
+      ).toBe(400);
+
+      // Embedded as the worker would embed it: where it went, and what it took.
+      const known = await findRepoByAlias(testDatabase.database, {
+        host: "gh",
+        owner: "acme",
+        repo: "document-pack",
+      });
+      if (known === undefined) throw new Error("the pack was not resolved");
+      const repo = { accountId: known.accountId, repoId: known.id };
+      const snapshot = await ensureSnapshot(
+        testDatabase.database,
+        repo,
+        commit,
+        INDEX_VERSION,
+        new Date(),
+      );
+      const scope = { accountId: repo.accountId, snapshotId: snapshot.id };
+      const embedded = await embedSnapshotSlice(
+        {
+          database: testDatabase.database,
+          blobs: createBlobStore(testDatabase.database),
+          embedder,
+          policy: { scope: "public", entitlements: allowEverything },
+          usage: discardUsage,
+          clock: { now: () => new Date() },
+          logger: pino({ level: "silent" }),
+        },
+        { ...scope, repoId: repo.repoId, commitSha: commit, key: KEY, reason: "indexed" },
+      );
+      expect(embedded).toMatchObject({ status: "embedded", next: undefined });
+
+      const repositories = (await (
+        await h.request("/admin/v1/embeddings/repositories", { headers: authorized })
+      ).json()) as Repositories;
+      expect(repositories.items).toHaveLength(1);
+      expect(repositories.items[0]).toMatchObject({
+        address: "/gh/acme/document-pack",
+        visibility: "public",
+        snapshots: 1,
+        completed: 1,
+      });
+      expect(repositories.items[0]?.sections).toBeGreaterThan(0);
+      expect(repositories.items[0]?.bytes).toBeGreaterThan(0);
+      const usage = (await (
+        await h.request("/admin/v1/embeddings/usage", { headers: authorized })
+      ).json()) as Usage;
+      expect(usage.items).toHaveLength(1);
+      expect(usage.items[0]).toMatchObject({ day: usageDayOf(new Date()) });
+      expect(usage.items[0]?.tokens).toBeGreaterThan(0);
+      const after = (await (
+        await h.request("/admin/v1/embeddings", { headers: authorized })
+      ).json()) as State;
+      expect(after.pending).toBe(pending - 1);
+
+      // Imports: vectors of a stored body under the deployment's key; anything else is refused.
+      const body = (await servedEntries(testDatabase.database, scope)).find(
+        (entry) => entry.kind === "markdown",
+      );
+      if (body === undefined) throw new Error("a document");
+      const post = (payload: unknown) =>
+        h.request("/admin/v1/embeddings/import", {
+          method: "POST",
+          headers: json,
+          body: JSON.stringify(payload),
+        });
+      const item = {
+        blobSha: body.blobSha,
+        section: 99,
+        heading: ["Imported"],
+        offset: 0,
+        length: 10,
+        vector: Array.from({ length: DIMENSIONS }, (_, at) => (at === 0 ? 1 : 0)),
+      };
+      expect(await (await post({ ...KEY, items: [item] })).json()).toEqual({
+        written: 1,
+        skipped: 0,
+      });
+      expect(await (await post({ ...KEY, items: [item] })).json()).toEqual({
+        written: 0,
+        skipped: 1,
+      });
+      expect((await post({ ...KEY, model: "another-model", items: [item] })).status).toBe(409);
+      expect((await post({ ...KEY, items: [{ ...item, vector: [1, 0] }] })).status).toBe(400);
+      const unknown = await post({ ...KEY, items: [{ ...item, blobSha: "f".repeat(40) }] });
+      expect(unknown.status).toBe(400);
+      expect(await unknown.json()).toMatchObject({
+        error: { code: "embeddings.unknown_bodies", blobShas: ["f".repeat(40)] },
+      });
+      expect((await post({ nonsense: true })).status).toBe(400);
+    } finally {
+      await jobs.stop({ timeoutMs: 1000 });
+    }
   });
 });

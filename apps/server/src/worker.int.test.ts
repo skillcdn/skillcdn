@@ -386,7 +386,7 @@ describe("the worker", () => {
   it("is sent the embedding of every commit the api indexes", async () => {
     const h = createHarness(testDatabase, {
       host,
-      embedding: { jobs, key: KEY, scope: "all" },
+      embedding: { jobs, key: KEY, scope: "all", vectors: true },
     });
     const client = await h.connect("/gh/acme/with-manifest");
     await client.callTool({ name: "browse_repo", arguments: {} });
@@ -554,6 +554,7 @@ describe("the worker", () => {
       work: async () => {},
       schedule: async () => {},
       counts: async () => [],
+      failures: async () => [],
       stop: async () => {},
     };
     const made = await madeSnapshot({
