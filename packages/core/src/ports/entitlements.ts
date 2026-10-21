@@ -19,11 +19,24 @@ export interface IndexLimits {
   readonly maxArchiveBytes: number;
 }
 
+/**
+ * Bounds on what is embedded for the search by meaning (ADR-0064): the bytes of the bodies sent
+ * to the embedding model. There are no defaults; a bound an implementation leaves out is none.
+ */
+export interface EmbedLimits {
+  /** Bytes of bodies embedded for one repository, over every commit of it, under the model in use. */
+  readonly maxBytesPerRepository: number;
+  /** Bytes of bodies embedded for one account on one day (UTC). */
+  readonly maxBytesPerAccountPerDay: number;
+}
+
 export type EntitlementAction =
   /** Serve requests for a repository. */
   | "mount"
   /** Build the index for a commit. */
-  | "index";
+  | "index"
+  /** Embed the sections of a commit's documents for the search by meaning (ADR-0064). */
+  | "embed";
 
 export interface EntitlementQuery {
   readonly action: EntitlementAction;
@@ -40,7 +53,12 @@ export interface EntitlementQuery {
 }
 
 export type EntitlementDecision =
-  | { readonly allowed: true; readonly limits?: Partial<IndexLimits> }
+  | {
+      readonly allowed: true;
+      readonly limits?: Partial<IndexLimits>;
+      /** For `embed`: the bounds of the embedding; a bound left out is none. */
+      readonly embed?: Partial<EmbedLimits>;
+    }
   /**
    * `reason` is shown to the caller: keep it free of anything account-specific. A `hidden`
    * refusal is answered as if the repository did not exist, which is what a deny list needs.

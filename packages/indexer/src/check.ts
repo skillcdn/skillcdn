@@ -140,6 +140,9 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
           : `  unavailable: ${manifest.frontMatter.manifestError}\n`) +
         translationsLine(manifest, "  ") +
         `  documents: ${(manifest.frontMatter?.documents ?? []).map((directory) => (directory === "" ? "." : directory)).join(", ") || "(none)"}\n` +
+        (manifest.frontMatter?.search?.meaning === false
+          ? "  search: by words alone; the search by meaning is turned off for these documents\n"
+          : "") +
         `  rules: ${rules.length === 0 ? "none" : `${rules.length} characters`}\n` +
         warningsLine(manifest, "  ") +
         "\n",

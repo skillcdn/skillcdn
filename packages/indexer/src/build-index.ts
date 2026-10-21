@@ -513,6 +513,9 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
             exclude: [...manifest.exclude],
             references: referencesOf(entry.path, text),
             ...(manifest.language === undefined ? {} : { language: manifest.language }),
+            // Stored only when it says something: the documents under it are searched by words
+            // alone, and their text is not embedded (ADR-0064).
+            ...(manifest.search.meaning ? {} : { search: { meaning: false } }),
             ...(storedTranslations(manifest.translations) === undefined
               ? {}
               : { translations: storedTranslations(manifest.translations) }),

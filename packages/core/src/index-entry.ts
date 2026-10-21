@@ -45,6 +45,11 @@ export interface SkillFrontMatter {
   /** Repository manifest only: the tag of the language the repository is written in. */
   readonly language?: string;
   /**
+   * Repository manifest only: how the documents it governs are searched (ADR-0064), stored when
+   * the manifest turns the search by meaning off; absent, they are embedded like any other.
+   */
+  readonly search?: { readonly meaning: boolean };
+  /**
    * Repository manifest only: the picture it declares (ADR-0031), as a repository-root path of a
    * file the tree has, or as an `https` URL.
    */

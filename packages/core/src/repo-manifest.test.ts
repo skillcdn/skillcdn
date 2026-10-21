@@ -53,6 +53,24 @@ describe("parseRepoManifest", () => {
     expect(warnings).toEqual([]);
   });
 
+  it("searches by meaning unless told not to, and reports a search field it cannot read", () => {
+    expect(parsed("---\ndescription: Playbooks.\n---\n").manifest.search).toEqual({
+      meaning: true,
+    });
+    expect(
+      parsed("---\ndescription: Playbooks.\nsearch:\n  meaning: false\n---\n").manifest.search,
+    ).toEqual({ meaning: false });
+    expect(
+      parsed("---\ndescription: Playbooks.\nsearch:\n  meaning: true\n---\n").manifest.search,
+    ).toEqual({ meaning: true });
+    const odd = parsed("---\ndescription: Playbooks.\nsearch: off\n---\n");
+    expect(odd.manifest.search).toEqual({ meaning: true });
+    expect(odd.warnings.map((warning) => warning.code)).toEqual(["ignored_field"]);
+    const odder = parsed("---\ndescription: Playbooks.\nsearch:\n  meaning: maybe\n---\n");
+    expect(odder.manifest.search).toEqual({ meaning: true });
+    expect(odder.warnings).toHaveLength(1);
+  });
+
   it("needs only a description", () => {
     const { manifest } = parsed("---\ndescription: Playbooks.\n---\n");
     expect(manifest.name).toBeUndefined();

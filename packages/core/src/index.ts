@@ -86,6 +86,7 @@ export type { Clock } from "./ports/clock.js";
 export type { Embedder, EmbeddingRole, Embeddings } from "./ports/embedder.js";
 export {
   allowEverything,
+  type EmbedLimits,
   type EntitlementAction,
   type EntitlementDecision,
   type EntitlementQuery,
@@ -167,6 +168,7 @@ export {
   type RepoManifestErrorCode,
   type RepoManifestWarning,
   type RepoManifestWarningCode,
+  type RepoSearch,
   type RepoTranslation,
 } from "./repo-manifest.js";
 export {

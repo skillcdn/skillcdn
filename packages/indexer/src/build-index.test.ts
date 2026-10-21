@@ -149,6 +149,21 @@ describe("repository publication and link indexing", () => {
     expect(result.byPath.get("SKILLCDN.md")?.search).toBeUndefined();
   });
 
+  it("stores that a manifest turns the search by meaning off, and nothing when it does not", async () => {
+    const result = await index({
+      "SKILLCDN.md": manifest("", "documents: [docs]\n"),
+      "docs/guide.md": "# Guide\n\nPublic.\n",
+      "docs/private/SKILLCDN.md": manifest("", "documents: [.]\nsearch:\n  meaning: false\n"),
+      "docs/private/notes.md": "# Notes\n\nKept to the words.\n",
+    });
+    expect(result.byPath.get("SKILLCDN.md")?.frontMatter?.search).toBeUndefined();
+    expect(result.byPath.get("docs/private/SKILLCDN.md")?.frontMatter?.search).toEqual({
+      meaning: false,
+    });
+    // The documents themselves are indexed as before: what is embedded is decided later.
+    expect(result.byPath.get("docs/private/notes.md")?.search).toContain("'word'");
+  });
+
   it("keeps the picture a manifest declares as the page loads it, and reports one the tree lacks", async () => {
     const result = await index({
       "SKILLCDN.md": manifest("", "documents: []\nimage: ./assets/banner.svg\n"),

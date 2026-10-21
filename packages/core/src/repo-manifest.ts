@@ -39,6 +39,15 @@ export type RepoImage =
   | { readonly kind: "path"; readonly path: RepoPath }
   | { readonly kind: "url"; readonly url: string };
 
+/**
+ * How the documents the manifest governs are searched (ADR-0064): by their words always, and by
+ * their meaning unless the manifest turns it off, which keeps their text from being sent to the
+ * embedding model a deployment runs.
+ */
+export interface RepoSearch {
+  readonly meaning: boolean;
+}
+
 export interface RepoManifest {
   /** Absent: the repository is named as its git host names it. */
   readonly name: string | undefined;
@@ -59,6 +68,8 @@ export interface RepoManifest {
   readonly language: string | undefined;
   /** The name and the description in other languages, by language tag. */
   readonly translations: Readonly<Record<string, RepoTranslation>>;
+  /** How the documents are searched: by meaning too, unless turned off. */
+  readonly search: RepoSearch;
   /** The Markdown after the front-matter: the rules that hold for every skill. */
   readonly body: string;
 }
@@ -157,10 +168,36 @@ export function parseRepoManifest(text: string): Result<ParsedRepoManifest, Repo
       metadata: readMetadata(fields.get("metadata"), ignored),
       language: optionalLanguage(fields, ignored),
       translations: readTranslations(fields.get("translations"), pickRepoTranslation, ignored),
+      search: readSearch(fields.get("search"), ignored),
       body: split.body,
     },
     warnings,
   });
+}
+
+const SEARCH_ALL: RepoSearch = { meaning: true };
+
+/**
+ * The `search` field: a mapping whose `meaning` is `false` turns the search by meaning off for the
+ * documents this manifest governs. Anything else is reported and leaves the search as it is.
+ */
+function readSearch(value: unknown, ignored: (message: string) => void): RepoSearch {
+  if (value === undefined || value === null) {
+    return SEARCH_ALL;
+  }
+  if (!(value instanceof Map)) {
+    ignored('"search" is ignored: expected a mapping such as "meaning: false"');
+    return SEARCH_ALL;
+  }
+  const meaning = value.get("meaning");
+  if (meaning === undefined || meaning === null || meaning === true || meaning === "true") {
+    return SEARCH_ALL;
+  }
+  if (meaning === false || meaning === "false") {
+    return { meaning: false };
+  }
+  ignored('"search.meaning" is ignored: expected true or false');
+  return SEARCH_ALL;
 }
 
 /**
