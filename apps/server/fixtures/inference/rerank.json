@@ -1,0 +1,54 @@
+{
+  "recorded": "2026-10-21",
+  "server": "llama.cpp llama-server, image ghcr.io/ggml-org/llama.cpp:server (CPU), flags -c 8192 -b 8192 -ub 8192",
+  "model": "ggml-org/Qwen3-Reranker-0.6B-Q8_0-GGUF, --reranking",
+  "responses": {
+    "both-spellings": {
+      "request": {
+        "model": "qwen3-reranker-0.6b-q8_0",
+        "query": "What does the worker embed, and when?",
+        "documents": [
+          "A pack is a git repository that holds skills and documents. SkillCDN indexes it and serves it to agents over MCP.",
+          "The worker embeds the sections of a ready snapshot after a commit is indexed, never while a request waits.",
+          "팩은 스킬과 문서를 담은 git 저장소다. SkillCDN은 그것을 색인해서 MCP로 에이전트에게 제공한다.",
+          "The weather in Seoul is mild in October, with clear skies most days."
+        ],
+        "texts": [
+          "A pack is a git repository that holds skills and documents. SkillCDN indexes it and serves it to agents over MCP.",
+          "The worker embeds the sections of a ready snapshot after a commit is indexed, never while a request waits.",
+          "팩은 스킬과 문서를 담은 git 저장소다. SkillCDN은 그것을 색인해서 MCP로 에이전트에게 제공한다.",
+          "The weather in Seoul is mild in October, with clear skies most days."
+        ],
+        "top_n": 4,
+        "return_documents": false,
+        "truncate": true
+      },
+      "status": 200,
+      "headers": {
+        "content-type": "application/json; charset=utf-8"
+      },
+      "body": "[{\"index\":1,\"score\":0.9999110698699951},{\"index\":2,\"score\":0.003449446288868785},{\"index\":0,\"score\":0.0006819057161919773},{\"index\":3,\"score\":5.272372072795406e-05}]",
+      "ms": 1161
+    },
+    "documents-only": {
+      "request": {
+        "model": "qwen3-reranker-0.6b-q8_0",
+        "query": "What does the worker embed, and when?",
+        "documents": [
+          "A pack is a git repository that holds skills and documents. SkillCDN indexes it and serves it to agents over MCP.",
+          "The worker embeds the sections of a ready snapshot after a commit is indexed, never while a request waits.",
+          "팩은 스킬과 문서를 담은 git 저장소다. SkillCDN은 그것을 색인해서 MCP로 에이전트에게 제공한다.",
+          "The weather in Seoul is mild in October, with clear skies most days."
+        ],
+        "top_n": 4,
+        "return_documents": false
+      },
+      "status": 200,
+      "headers": {
+        "content-type": "application/json; charset=utf-8"
+      },
+      "body": "{\"model\":\"qwen3-reranker-0.6b-q8_0\",\"object\":\"list\",\"usage\":{\"prompt_tokens\":418,\"total_tokens\":418},\"results\":[{\"index\":1,\"relevance_score\":0.9999110698699951},{\"index\":2,\"relevance_score\":0.003449446288868785},{\"index\":0,\"relevance_score\":0.0006819057161919773},{\"index\":3,\"relevance_score\":5.272372072795406e-05}]}",
+      "ms": 1168
+    }
+  }
+}

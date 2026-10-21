@@ -21,6 +21,8 @@ const SECRET_NAMES = [
   "GITHUB_APP_CLIENT_SECRET",
   "GITHUB_APP_WEBHOOK_SECRET",
   "AUTH_SECRET",
+  "EMBEDDINGS_KEY",
+  "RERANKER_KEY",
 ] as const;
 /** What signing in needs, all of it or none of it. */
 const SIGN_IN_NAMES = [
@@ -190,6 +192,27 @@ const environmentSchema = z.object({
   // 0: this process indexes nothing and serves only what another process has indexed.
   INDEX_CONCURRENCY: integer(2, 0, 64),
   INDEX_LEASE_SECONDS: integer(120, 10, 3600),
+
+  // The search by meaning (ADR-0064, ADR-0065): the inference servers, each read with its URL.
+  EMBEDDINGS_URL: z.url({ protocol: /^https?$/ }).optional(),
+  EMBEDDINGS_MODEL: z.string().min(1).max(200).optional(),
+  EMBEDDINGS_DIMENSIONS: integer(1024, 32, 4096),
+  EMBEDDINGS_QUERY_INSTRUCTION: z
+    .string()
+    .regex(/^[^\n\r]{1,500}$/, "must be one line of at most 500 characters")
+    .optional(),
+  EMBEDDINGS_KEY: z.string().min(1).optional(),
+  EMBEDDINGS_TIMEOUT_MS: integer(60_000, 1000, 600_000),
+  EMBEDDINGS_QUERY_TIMEOUT_MS: integer(5000, 100, 60_000),
+  EMBEDDINGS_CONCURRENCY: integer(2, 1, 64),
+  EMBEDDINGS_BATCH_TEXTS: integer(16, 1, 256),
+  EMBEDDINGS_BATCH_CHARS: integer(32_000, 1000, 1_000_000),
+  EMBEDDINGS_TEXT_CHARS: integer(8000, 100, 100_000),
+  RERANKER_URL: z.url({ protocol: /^https?$/ }).optional(),
+  RERANKER_MODEL: z.string().min(1).max(200).optional(),
+  RERANKER_KEY: z.string().min(1).optional(),
+  RERANKER_TIMEOUT_MS: integer(5000, 100, 60_000),
+  RERANKER_CONCURRENCY: integer(2, 1, 64),
 });
 
 export interface WebTags {
@@ -236,6 +259,41 @@ export interface AuthConfig {
   readonly refreshTokenTtlMs: number;
   /** How long the git host's answer about what a person can see is believed. */
   readonly permissionTtlMs: number;
+}
+
+/** The embeddings server of the search by meaning (ADR-0064, ADR-0065). */
+export interface EmbeddingsConfig {
+  /** The endpoint itself, of the common embeddings shape. */
+  readonly url: string;
+  /** What the request names, and what the vectors are keyed by. */
+  readonly model: string;
+  /** How many numbers every vector has; a longer vector the model answers is cut to them. */
+  readonly dimensions: number;
+  /** The one-line task told to the model in front of a query, never of a document. Unset: none. */
+  readonly queryInstruction: string | undefined;
+  /** Sent as a bearer token when the server wants one. */
+  readonly key: string | undefined;
+  /** How long a call embedding documents may take, its turn included; the same for a query. */
+  readonly timeoutMs: number;
+  readonly queryTimeoutMs: number;
+  /** Calls one process has in flight at once; the rest wait their turn within their timeout. */
+  readonly concurrency: number;
+  /** How sections are packed into one call: the most texts, and the most characters over them. */
+  readonly batchTexts: number;
+  readonly batchChars: number;
+  /** What a text is cut to before it is embedded. */
+  readonly textChars: number;
+}
+
+/** The reranking server of the search by meaning (ADR-0065). */
+export interface RerankerConfig {
+  /** The endpoint itself, of the common reranking shape. */
+  readonly url: string;
+  readonly model: string;
+  readonly key: string | undefined;
+  /** How long a call may take, its turn included: a search waits for it. */
+  readonly timeoutMs: number;
+  readonly concurrency: number;
 }
 
 export interface Config {
@@ -307,6 +365,14 @@ export interface Config {
     readonly concurrency: number;
     readonly leaseMs: number;
     readonly limits: IndexLimits;
+  };
+  /**
+   * The search by meaning, where a deployment turns it on (ADR-0064, ADR-0065): the servers that
+   * embed and rerank. Unset, the search is by words alone.
+   */
+  readonly meaning: {
+    readonly embeddings: EmbeddingsConfig | undefined;
+    readonly reranker: RerankerConfig | undefined;
   };
 }
 
@@ -412,6 +478,60 @@ function authOf(
 }
 
 /**
+ * The inference servers, each read only when its URL is: a server without a model named for it is
+ * a mistake, and so is a model or a credential named for no server.
+ */
+function meaningOf(env: z.infer<typeof environmentSchema>, problems: string[]): Config["meaning"] {
+  let embeddings: EmbeddingsConfig | undefined;
+  if (env.EMBEDDINGS_URL === undefined) {
+    for (const name of [
+      "EMBEDDINGS_MODEL",
+      "EMBEDDINGS_QUERY_INSTRUCTION",
+      "EMBEDDINGS_KEY",
+    ] as const) {
+      if (env[name] !== undefined) {
+        problems.push(`${name}: read only with EMBEDDINGS_URL`);
+      }
+    }
+  } else if (env.EMBEDDINGS_MODEL === undefined) {
+    problems.push("EMBEDDINGS_MODEL: required with EMBEDDINGS_URL");
+  } else {
+    embeddings = {
+      url: env.EMBEDDINGS_URL,
+      model: env.EMBEDDINGS_MODEL,
+      dimensions: env.EMBEDDINGS_DIMENSIONS,
+      queryInstruction: env.EMBEDDINGS_QUERY_INSTRUCTION,
+      key: env.EMBEDDINGS_KEY,
+      timeoutMs: env.EMBEDDINGS_TIMEOUT_MS,
+      queryTimeoutMs: env.EMBEDDINGS_QUERY_TIMEOUT_MS,
+      concurrency: env.EMBEDDINGS_CONCURRENCY,
+      batchTexts: env.EMBEDDINGS_BATCH_TEXTS,
+      batchChars: env.EMBEDDINGS_BATCH_CHARS,
+      textChars: env.EMBEDDINGS_TEXT_CHARS,
+    };
+  }
+  let reranker: RerankerConfig | undefined;
+  if (env.RERANKER_URL === undefined) {
+    for (const name of ["RERANKER_MODEL", "RERANKER_KEY"] as const) {
+      if (env[name] !== undefined) {
+        problems.push(`${name}: read only with RERANKER_URL`);
+      }
+    }
+  } else if (env.RERANKER_MODEL === undefined) {
+    problems.push("RERANKER_MODEL: required with RERANKER_URL");
+  } else {
+    reranker = {
+      url: env.RERANKER_URL,
+      model: env.RERANKER_MODEL,
+      key: env.RERANKER_KEY,
+      timeoutMs: env.RERANKER_TIMEOUT_MS,
+      concurrency: env.RERANKER_CONCURRENCY,
+    };
+  }
+  return { embeddings, reranker };
+}
+
+/**
  * Parses and validates the environment once, at boot. Problems name the variable and the rule,
  * never the value: a connection string or a token must not end up in a log.
  */
@@ -446,6 +566,7 @@ export function loadConfig(
 
   const env = parsed.data;
   const auth = authOf(env, problems);
+  const meaning = meaningOf(env, problems);
   if (problems.length > 0) {
     throw new ConfigError(problems);
   }
@@ -497,6 +618,7 @@ export function loadConfig(
       leaseMs: env.INDEX_LEASE_SECONDS * 1000,
       limits: limits.value,
     },
+    meaning,
   };
 }
 

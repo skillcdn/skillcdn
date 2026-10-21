@@ -440,3 +440,119 @@ describe("signing in", () => {
     );
   });
 });
+
+describe("the search by meaning", () => {
+  it("is off until its servers are configured, and reads each with its model and safe bounds", () => {
+    expect(loadConfig({ DATABASE_URL }, noFiles).meaning).toEqual({
+      embeddings: undefined,
+      reranker: undefined,
+    });
+    const { meaning } = loadConfig(
+      {
+        DATABASE_URL,
+        EMBEDDINGS_URL: "http://inference.internal:8080/v1/embeddings",
+        EMBEDDINGS_MODEL: "an-embedding-model",
+        EMBEDDINGS_QUERY_INSTRUCTION: "Given a question, retrieve the sections that answer it",
+        RERANKER_URL: "http://inference.internal:8081/v1/rerank",
+        RERANKER_MODEL: "a-reranking-model",
+      },
+      noFiles,
+    );
+    expect(meaning.embeddings).toEqual({
+      url: "http://inference.internal:8080/v1/embeddings",
+      model: "an-embedding-model",
+      dimensions: 1024,
+      queryInstruction: "Given a question, retrieve the sections that answer it",
+      key: undefined,
+      timeoutMs: 60_000,
+      queryTimeoutMs: 5000,
+      concurrency: 2,
+      batchTexts: 16,
+      batchChars: 32_000,
+      textChars: 8000,
+    });
+    expect(meaning.reranker).toEqual({
+      url: "http://inference.internal:8081/v1/rerank",
+      model: "a-reranking-model",
+      key: undefined,
+      timeoutMs: 5000,
+      concurrency: 2,
+    });
+  });
+
+  it("reads the bounds and the credentials, from a file too", () => {
+    const { meaning } = loadConfig(
+      {
+        DATABASE_URL,
+        EMBEDDINGS_URL: "https://inference.example/v1/embeddings",
+        EMBEDDINGS_MODEL: "m",
+        EMBEDDINGS_DIMENSIONS: "256",
+        EMBEDDINGS_KEY_FILE: "/run/secrets/embeddings",
+        EMBEDDINGS_TIMEOUT_MS: "120000",
+        EMBEDDINGS_QUERY_TIMEOUT_MS: "2000",
+        EMBEDDINGS_CONCURRENCY: "4",
+        EMBEDDINGS_BATCH_TEXTS: "64",
+        EMBEDDINGS_BATCH_CHARS: "200000",
+        EMBEDDINGS_TEXT_CHARS: "16000",
+        RERANKER_URL: "https://inference.example/v1/rerank",
+        RERANKER_MODEL: "r",
+        RERANKER_KEY: "a-reranking-key",
+        RERANKER_TIMEOUT_MS: "3000",
+        RERANKER_CONCURRENCY: "1",
+      },
+      (path) => (path === "/run/secrets/embeddings" ? "an-embeddings-key\n" : "?"),
+    );
+    expect(meaning.embeddings).toMatchObject({
+      dimensions: 256,
+      key: "an-embeddings-key",
+      timeoutMs: 120_000,
+      queryTimeoutMs: 2000,
+      concurrency: 4,
+      batchTexts: 64,
+      batchChars: 200_000,
+      textChars: 16_000,
+    });
+    expect(meaning.reranker).toMatchObject({
+      key: "a-reranking-key",
+      timeoutMs: 3000,
+      concurrency: 1,
+    });
+  });
+
+  it("wants a model with each server and nothing for a server that is not there, and one line of task", () => {
+    expect(
+      problemsOf({ DATABASE_URL, EMBEDDINGS_URL: "http://inference.internal/v1/embeddings" })
+        .problems,
+    ).toEqual(["EMBEDDINGS_MODEL: required with EMBEDDINGS_URL"]);
+    expect(
+      problemsOf({ DATABASE_URL, EMBEDDINGS_MODEL: "m", EMBEDDINGS_KEY: "k", RERANKER_MODEL: "r" })
+        .problems,
+    ).toEqual([
+      "EMBEDDINGS_MODEL: read only with EMBEDDINGS_URL",
+      "EMBEDDINGS_KEY: read only with EMBEDDINGS_URL",
+      "RERANKER_MODEL: read only with RERANKER_URL",
+    ]);
+    expect(
+      problemsOf({ DATABASE_URL, RERANKER_URL: "http://inference.internal/v1/rerank" }).problems,
+    ).toEqual(["RERANKER_MODEL: required with RERANKER_URL"]);
+    const twoLines = problemsOf({
+      DATABASE_URL,
+      EMBEDDINGS_URL: "http://inference.internal/v1/embeddings",
+      EMBEDDINGS_MODEL: "m",
+      EMBEDDINGS_QUERY_INSTRUCTION: "one line\nand another",
+    });
+    expect(twoLines.problems).toEqual([
+      "EMBEDDINGS_QUERY_INSTRUCTION: must be one line of at most 500 characters",
+    ]);
+    const wrong = problemsOf({
+      DATABASE_URL,
+      EMBEDDINGS_URL: "ftp://inference.internal/v1/embeddings",
+      EMBEDDINGS_MODEL: "m",
+      EMBEDDINGS_DIMENSIONS: "7",
+    });
+    expect(wrong.problems.map((problem) => problem.split(":")[0])).toEqual([
+      "EMBEDDINGS_URL",
+      "EMBEDDINGS_DIMENSIONS",
+    ]);
+  });
+});

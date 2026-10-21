@@ -156,6 +156,8 @@ The business model is not in this codebase. What the code provides is structure 
 - **Account** is the tenant unit and maps to a git-host organization or user, so the same model serves teams and individuals.
 - **`Entitlements` port:** answers "may this account do X, and within what limits". The default implementation allows everything; the composition root wraps it with the operator's blocked list, which denies as if the repository did not exist. Enforcement points ask this port and never branch on a plan name.
 - **`UsageSink` port:** receives neutral usage events (what happened, for which account, how much). The default implementation discards them.
+- **`Embedder` port:** turns texts into vectors for the search by meaning, as documents or as a query ([ADR-0064](adr/0064-meaning-search-runs-on-pgvector-and-pg-boss-behind-an-embedder-port.md)). The one adapter speaks the common embeddings API that hosted and self-hosted servers share, keeps a few calls in flight at once and sheds a call that cannot start within its timeout, and leaves a server that keeps failing alone for a while.
+- **`Reranker` port:** scores candidate texts against a query ([ADR-0065](adr/0065-meaning-search-runs-on-open-weight-models-served-beside-the-image.md)). The one adapter speaks the common reranking API in both of its spellings, bounded the same way.
 
 ## Delivery
 
