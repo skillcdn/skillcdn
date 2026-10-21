@@ -43,6 +43,7 @@ packages/
   db/         PostgreSQL schema, migrations, query layer
   github/     GitHub implementation of the git-host port
   indexer/    the reading rules: a commit or a working tree read into an index   @skillcdn/indexer on npm
+  inference/  the adapters of the common embeddings and reranking APIs, for the search by meaning   @skillcdn/inference on npm
   reader/     the reads of a mount over an index, wherever the index is kept    @skillcdn/reader on npm
   client/     the REST API as typed functions, for Node.js and the browser      @skillcdn/client on npm
   serve/      the MCP surface and the REST address routes as a library over a reader   @skillcdn/serve on npm
@@ -55,7 +56,7 @@ docs/         architecture, specs, ADRs, roadmap, user guides; nav.json lists wh
 
 Two reference repositories sit beside this one and are never imported from it: `skillcdn/skills`, the reference pack, and `skillcdn/console`, the reference console for an organization that runs its work with agents. Both are examples that follow the standard and are meant for real use; the console consumes the published packages and the REST API like any other consumer and defines nothing of the specification ([ADR-0047](docs/adr/0047-the-console-is-a-separate-repository-built-on-the-published-packages.md)).
 
-Dependencies point inward only: `server → db, github, indexer, reader, serve → core`, `serve → core, reader`, `client → core`, `cli → core, indexer, reader, client, serve`, and `web → core, brand, client`. `core` imports nothing from the workspace and nothing from Node; `brand` is files and imports nothing. `web` may import `core`, `brand` and `client` and nothing else. A package can only import what its own `package.json` declares, and only from another package's entry point (never `@skillcdn/x/src/...`). Changing these edges needs an ADR.
+Dependencies point inward only: `server → db, github, indexer, inference, reader, serve → core`, `serve → core, reader`, `client → core`, `inference → core`, `cli → core, indexer, inference, reader, client, serve`, and `web → core, brand, client`. `core` imports nothing from the workspace and nothing from Node; `brand` is files and imports nothing. `web` may import `core`, `brand` and `client` and nothing else. A package can only import what its own `package.json` declares, and only from another package's entry point (never `@skillcdn/x/src/...`). Changing these edges needs an ADR.
 
 ## Commands
 

@@ -36,9 +36,9 @@ import {
 } from "@skillcdn/db";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
 import { INDEX_VERSION } from "@skillcdn/indexer";
+import { InferenceError } from "@skillcdn/inference";
 import { pino } from "pino";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { InferenceError } from "./adapters/inference.js";
 import type { EmbeddingScope } from "./config/config.js";
 import { embedSnapshotSlice } from "./jobs/embed-snapshot.js";
 import {

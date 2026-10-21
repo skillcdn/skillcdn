@@ -1,6 +1,6 @@
 # Recorded answers of inference servers
 
-What the embeddings and reranking servers of the search by meaning ([ADR-0064](../../../docs/adr/0064-meaning-search-runs-on-pgvector-and-pg-boss-behind-an-embedder-port.md), [ADR-0065](../../../docs/adr/0065-meaning-search-runs-on-open-weight-models-served-beside-the-image.md)) answered to the adapters in `src/adapters/`, recorded from a server run on a developer's machine, so that the adapter tests read the shapes a real server writes and never call one.
+What the embeddings and reranking servers of the search by meaning ([ADR-0064](../../../../docs/adr/0064-meaning-search-runs-on-pgvector-and-pg-boss-behind-an-embedder-port.md), [ADR-0065](../../../../docs/adr/0065-meaning-search-runs-on-open-weight-models-served-beside-the-image.md)) answered to the adapters in `src/`, recorded from a server run on a developer's machine, so that the adapter tests read the shapes a real server writes and never call one.
 
 Each file names the server, the model and the flags it was recorded with, and holds `responses` by name: the request the adapter sent (`request`), the status, the content type and the body as it came (`body`), and how long the call took (`ms`, on a CPU, for a sense of proportion only).
 

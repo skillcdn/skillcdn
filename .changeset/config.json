@@ -6,6 +6,7 @@
     [
       "@skillcdn/core",
       "@skillcdn/indexer",
+      "@skillcdn/inference",
       "@skillcdn/reader",
       "@skillcdn/client",
       "@skillcdn/serve",

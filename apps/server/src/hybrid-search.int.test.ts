@@ -10,9 +10,9 @@ import {
 import { createBlobStore, ensureSnapshot, findRepoByAlias, type SnapshotScope } from "@skillcdn/db";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
 import { INDEX_VERSION } from "@skillcdn/indexer";
+import { InferenceError } from "@skillcdn/inference";
 import { pino } from "pino";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { InferenceError } from "./adapters/inference.js";
 import { vectorKeyOf } from "./adapters/meaning.js";
 import { embedSnapshotSlice } from "./jobs/embed-snapshot.js";
 import { createFixtureHost, type FixtureHost, fixtureCommits } from "./testing/fixture-host.js";

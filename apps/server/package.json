@@ -26,6 +26,7 @@
     "@skillcdn/db": "workspace:*",
     "@skillcdn/github": "workspace:*",
     "@skillcdn/indexer": "workspace:*",
+    "@skillcdn/inference": "workspace:*",
     "@skillcdn/reader": "workspace:*",
     "@skillcdn/serve": "workspace:*",
     "hono": "catalog:",

@@ -43,6 +43,7 @@
     "@skillcdn/client": "workspace:^",
     "@skillcdn/core": "workspace:^",
     "@skillcdn/indexer": "workspace:^",
+    "@skillcdn/inference": "workspace:^",
     "@skillcdn/reader": "workspace:^",
     "@skillcdn/serve": "workspace:^"
   },

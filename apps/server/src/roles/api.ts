@@ -29,13 +29,9 @@ import {
   createGitHubLogin,
   type GitHubHostOptions,
 } from "@skillcdn/github";
+import { withQueryCache } from "@skillcdn/inference";
 import type { Hono } from "hono";
-import {
-  createEmbedderOf,
-  createRerankerOf,
-  vectorKeyOf,
-  withQueryCache,
-} from "../adapters/meaning.js";
+import { createEmbedderOf, createRerankerOf, vectorKeyOf } from "../adapters/meaning.js";
 import { systemClock } from "../adapters/system-clock.js";
 import { Connections } from "../auth/connections.js";
 import { UserCredentials } from "../auth/credentials.js";

@@ -4,7 +4,7 @@ import { createEmbeddingsApi } from "./embeddings-api.js";
 import type { FetchLike } from "./inference.js";
 import { createRerankApi } from "./rerank-api.js";
 
-// What a real inference server answered, recorded once (fixtures/inference/README.md): the
+// What a real inference server answered, recorded once (fixtures/recorded/README.md): the
 // adapters read the shapes a server writes, the reranking shape in both of its forms from the
 // same server, and ask what they were recorded asking.
 
@@ -17,7 +17,7 @@ interface Recorded {
 
 function recorded(file: string, name: string): Recorded {
   const fixture = JSON.parse(
-    readFileSync(new URL(`../../fixtures/inference/${file}`, import.meta.url), "utf8"),
+    readFileSync(new URL(`../fixtures/recorded/${file}`, import.meta.url), "utf8"),
   ) as { readonly responses: Readonly<Record<string, Recorded>> };
   const reply = fixture.responses[name];
   if (reply === undefined) {

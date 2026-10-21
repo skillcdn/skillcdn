@@ -96,9 +96,9 @@ src/
                  reader.ts composes the Reader of @skillcdn/reader over the index the database keeps (ADR-0054)
   indexer/       coordinates who indexes a commit (ADR-0007); the index itself is built by @skillcdn/indexer
   stats/         daily usage counters per public repository and for the deployment as a whole, with distinct clients by app: added up in memory, written in batches
-  adapters/      implementations of core ports that are not their own package (clock, the embeddings
-                 and reranking servers of the search by meaning behind the common inference APIs, and
-                 meaning.ts, which wires them from the configuration the same way in every role)
+  adapters/      implementations of core ports that are not their own package (clock), and meaning.ts,
+                 which wires the embedding and reranking servers of the search by meaning from the
+                 configuration to the adapters of @skillcdn/inference the same way in every role
   testing/       test support: a git host backed by fixtures/.repositories/, and the git host's side
                  of signing in for three made-up people (not compiled into dist)
 ```
