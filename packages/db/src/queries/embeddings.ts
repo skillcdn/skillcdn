@@ -1,6 +1,7 @@
-import { and, eq, isNotNull, ne, notExists, or, sql } from "drizzle-orm";
+import { and, eq, gte, isNotNull, lte, ne, notExists, or, sql } from "drizzle-orm";
 import { type Database, drizzleOf } from "../client.js";
 import {
+  accounts,
   embeddingUsageDaily,
   repoRefs,
   repos,
@@ -270,6 +271,136 @@ export async function listSnapshotsToEmbed(
     repoId,
     snapshotId,
     commitSha,
+  }));
+}
+
+/** How many served snapshots `listSnapshotsToEmbed` would answer without a limit. */
+export async function countSnapshotsToEmbed(
+  database: Database,
+  key: VectorKey,
+  options: SnapshotsToEmbedOptions = {},
+): Promise<number> {
+  const db = drizzleOf(database);
+  const [row] = await db
+    .select({ count: sql<number>`count(distinct ${snapshots.id})::integer` })
+    .from(snapshots)
+    .innerJoin(
+      repoRefs,
+      and(eq(repoRefs.repoId, snapshots.repoId), eq(repoRefs.commitSha, snapshots.commitSha)),
+    )
+    .innerJoin(repos, eq(repos.id, snapshots.repoId))
+    .where(
+      and(
+        eq(snapshots.status, "ready"),
+        options.visibility === undefined ? undefined : eq(repos.visibility, options.visibility),
+        notExists(
+          db
+            .select({ one: sql`1` })
+            .from(snapshotEmbeddings)
+            .where(
+              and(
+                eq(snapshotEmbeddings.snapshotId, snapshots.id),
+                underKey(key),
+                isNotNull(snapshotEmbeddings.completedAt),
+              ),
+            ),
+        ),
+      ),
+    );
+  return row?.count ?? 0;
+}
+
+/** What was embedded for one repository under a key, over its snapshots. */
+export interface EmbeddedRepository {
+  readonly host: string;
+  /** The account's login, as the host spells it. */
+  readonly owner: string;
+  readonly name: string;
+  readonly visibility: "public" | "private";
+  /** Snapshots with an embedding under the key, and how many of them are complete. */
+  readonly snapshots: number;
+  readonly completed: number;
+  readonly bodies: number;
+  readonly sections: number;
+  readonly bytes: number;
+  readonly tokens: number;
+  readonly lastEmbeddedAt: Date;
+}
+
+/**
+ * The repositories with an embedding under the key, the most bytes first, at most `limit`: what
+ * the operator reads of where the embedding went. A body shared by two repositories counts for
+ * each, since each had it written for its own snapshots.
+ */
+export async function listEmbeddedRepositories(
+  database: Database,
+  key: VectorKey,
+  limit: number,
+): Promise<EmbeddedRepository[]> {
+  const rows = await drizzleOf(database)
+    .select({
+      host: repos.host,
+      owner: accounts.login,
+      name: repos.name,
+      visibility: repos.visibility,
+      snapshots: sql<number>`count(*)::integer`,
+      completed: sql<number>`count(${snapshotEmbeddings.completedAt})::integer`,
+      bodies: sql<string>`coalesce(sum(${snapshotEmbeddings.bodies}), 0)`,
+      sections: sql<string>`coalesce(sum(${snapshotEmbeddings.sections}), 0)`,
+      bytes: sql<string>`coalesce(sum(${snapshotEmbeddings.bytes}), 0)`,
+      tokens: sql<string>`coalesce(sum(${snapshotEmbeddings.tokens}), 0)`,
+      lastEmbeddedAt: sql<Date>`max(${snapshotEmbeddings.updatedAt})`,
+    })
+    .from(snapshotEmbeddings)
+    .innerJoin(snapshots, eq(snapshots.id, snapshotEmbeddings.snapshotId))
+    .innerJoin(repos, eq(repos.id, snapshots.repoId))
+    .innerJoin(accounts, eq(accounts.id, repos.accountId))
+    .where(underKey(key))
+    .groupBy(repos.id, repos.host, accounts.login, repos.name, repos.visibility)
+    .orderBy(sql`sum(${snapshotEmbeddings.bytes}) desc`, repos.host, accounts.login, repos.name)
+    .limit(limit);
+  return rows.map((row) => ({
+    host: row.host,
+    owner: row.owner,
+    name: row.name,
+    visibility: row.visibility,
+    snapshots: row.snapshots,
+    completed: row.completed,
+    bodies: Number(row.bodies),
+    sections: Number(row.sections),
+    bytes: Number(row.bytes),
+    tokens: Number(row.tokens),
+    lastEmbeddedAt: new Date(row.lastEmbeddedAt),
+  }));
+}
+
+/** What was embedded on one day over every account. */
+export interface EmbeddingUsageDay extends EmbeddingUsage {
+  readonly day: UsageDay;
+}
+
+/** The deployment's embedding per day over every account, from `from` to `to` included, oldest first. */
+export async function listEmbeddingUsage(
+  database: Database,
+  from: UsageDay,
+  to: UsageDay,
+): Promise<EmbeddingUsageDay[]> {
+  const rows = await drizzleOf(database)
+    .select({
+      day: embeddingUsageDaily.day,
+      bytes: sql<string>`sum(${embeddingUsageDaily.bytes})`,
+      sections: sql<string>`sum(${embeddingUsageDaily.sections})`,
+      tokens: sql<string>`sum(${embeddingUsageDaily.tokens})`,
+    })
+    .from(embeddingUsageDaily)
+    .where(and(gte(embeddingUsageDaily.day, from), lte(embeddingUsageDaily.day, to)))
+    .groupBy(embeddingUsageDaily.day)
+    .orderBy(embeddingUsageDaily.day);
+  return rows.map((row) => ({
+    day: row.day,
+    bytes: Number(row.bytes),
+    sections: Number(row.sections),
+    tokens: Number(row.tokens),
   }));
 }
 

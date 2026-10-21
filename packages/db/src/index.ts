@@ -2,6 +2,7 @@
 export { createDatabase, type Database, type DatabaseOptions } from "./client.js";
 export {
   createJobQueue,
+  type FailedJob,
   installJobQueue,
   JOB_QUEUE_SCHEMA,
   type JobQueue,
@@ -28,12 +29,17 @@ export {
 } from "./queries/connect.js";
 export {
   addEmbeddingUsage,
+  countSnapshotsToEmbed,
   deleteEmbeddingsOutsideKey,
+  type EmbeddedRepository,
   type EmbeddingProgress,
   type EmbeddingUsage,
+  type EmbeddingUsageDay,
   embeddedBytesOfRepository,
   getEmbeddingUsage,
   getSnapshotEmbedding,
+  listEmbeddedRepositories,
+  listEmbeddingUsage,
   listSnapshotsToEmbed,
   recordSnapshotEmbedding,
   type SnapshotEmbeddingRecord,

@@ -56,6 +56,21 @@ export interface QueueCounts {
    * maintenance pass: a figure for a dashboard, not for a test of what just ran.
    */
   readonly total: number;
+  /** How long the oldest job ready to run had waited, as of the last pass; null until one counted. */
+  readonly oldestWaitSeconds: number | null;
+}
+
+/** A job that failed for good, as the queue still remembers it. */
+export interface FailedJob {
+  readonly id: string;
+  readonly data: unknown;
+  readonly priority: number;
+  /** How many times it was tried. */
+  readonly attempts: number;
+  readonly createdAt: Date;
+  readonly failedAt: Date | null;
+  /** What the last attempt said, when it said anything. */
+  readonly error: string | undefined;
 }
 
 export interface JobQueue {
@@ -83,6 +98,8 @@ export interface JobQueue {
   schedule(name: string, cron: string, data: object, key: string): Promise<void>;
   /** The counts of these queues, read fresh. */
   counts(names: readonly string[]): Promise<QueueCounts[]>;
+  /** The jobs of the queue that failed for good, newest first, at most `limit`. */
+  failures(name: string, limit: number): Promise<FailedJob[]>;
   /** Stops taking jobs, waits for the running ones up to `timeoutMs`, and lets the queue go. */
   stop(options?: { readonly timeoutMs?: number }): Promise<void>;
 }
@@ -98,6 +115,18 @@ export interface JobQueueOptions {
   /** What the queue reports: a lost connection, a failed maintenance pass. */
   readonly onError: (error: Error) => void;
   readonly onWarning?: ((message: string) => void) | undefined;
+}
+
+/** How many of a queue's remembered jobs are looked through for the failed ones. */
+const FAILURES_SCAN_LIMIT = 5000;
+
+/** The message of what a failed attempt threw, as the queue stored it; nothing else of it. */
+function errorOf(output: unknown): string | undefined {
+  if (typeof output !== "object" || output === null) {
+    return undefined;
+  }
+  const message = (output as { readonly message?: unknown }).message;
+  return typeof message === "string" && message.length > 0 ? message : undefined;
 }
 
 /**
@@ -197,9 +226,28 @@ export async function createJobQueue(
           active: stats?.activeCount ?? 0,
           failed: stats?.failedCount ?? 0,
           total: stats?.totalCount ?? 0,
+          oldestWaitSeconds: stats?.readyOldestSeconds ?? null,
         });
       }
       return counts;
+    },
+    async failures(name, limit) {
+      // The queue lists jobs oldest first and by every state; the failed ones are picked out
+      // here, from what it still keeps, which its retention bounds.
+      const jobs = await boss.findJobs(name, { limit: FAILURES_SCAN_LIMIT });
+      return jobs
+        .filter((job) => job.state === "failed")
+        .sort((a, b) => (b.completedOn?.getTime() ?? 0) - (a.completedOn?.getTime() ?? 0))
+        .slice(0, limit)
+        .map((job) => ({
+          id: job.id,
+          data: job.data,
+          priority: job.priority,
+          attempts: job.retryCount + 1,
+          createdAt: job.createdOn,
+          failedAt: job.completedOn,
+          error: errorOf(job.output),
+        }));
     },
     async stop(options = {}) {
       await boss.stop({ close: false, graceful: true, timeout: options.timeoutMs ?? 30_000 });
