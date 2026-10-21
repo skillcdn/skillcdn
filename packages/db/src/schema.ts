@@ -506,6 +506,8 @@ export const snapshotEmbeddings = pgTable(
     bodies: integer().notNull().default(0),
     sections: integer().notNull().default(0),
     tokens: bigint({ mode: "number" }).notNull().default(0),
+    /** The bytes of the bodies written: what the bounds of the embedding are measured in. */
+    bytes: bigint({ mode: "number" }).notNull().default(0),
     /** When the snapshot's last body was done; null while the worker is still at it. */
     completedAt: instant(),
     createdAt: createdAt(),
@@ -517,6 +519,29 @@ export const snapshotEmbeddings = pgTable(
       columns: [table.snapshotId, table.model, table.dimensions, table.sectioningVersion],
     }),
     index("snapshot_embeddings_account_idx").on(table.accountId),
+  ],
+);
+
+/**
+ * What was embedded for one account on one UTC day (ADR-0064): the bytes of the bodies, the
+ * sections and the tokens the model read, added to by the worker as it goes, so that a bound per
+ * account and day is held against it, and whoever meters a deployment reads it.
+ */
+export const embeddingUsageDaily = pgTable(
+  "embedding_usage_daily",
+  {
+    accountId: uuid()
+      .notNull()
+      .references(() => accounts.id),
+    day: date({ mode: "string" }).notNull(),
+    bytes: bigint({ mode: "number" }).notNull().default(0),
+    sections: integer().notNull().default(0),
+    tokens: bigint({ mode: "number" }).notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: instant().notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ name: "embedding_usage_daily_pkey", columns: [table.accountId, table.day] }),
   ],
 );
 

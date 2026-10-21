@@ -192,6 +192,39 @@ export async function findRepoByHostId(
   return row;
 }
 
+/** The repository known here by its id, with what the host last reported of it and its account. */
+export async function getRepo(
+  database: Database,
+  scope: RepoScope,
+): Promise<RepoRecord | undefined> {
+  const [row] = await drizzleOf(database)
+    .select({ repo: repos, account: accounts })
+    .from(repos)
+    .innerJoin(accounts, eq(accounts.id, repos.accountId))
+    .where(and(eq(repos.id, scope.repoId), eq(repos.accountId, scope.accountId)))
+    .limit(1);
+  if (row === undefined) {
+    return undefined;
+  }
+  return {
+    id: row.repo.id,
+    accountId: row.repo.accountId,
+    host: row.repo.host as GitHostKey,
+    repository: {
+      hostRepoId: row.repo.hostRepoId,
+      name: row.repo.name,
+      defaultBranch: row.repo.defaultBranch,
+      description: row.repo.description ?? undefined,
+      visibility: row.repo.visibility,
+      owner: {
+        hostAccountId: row.account.hostAccountId,
+        login: row.account.login,
+        kind: row.account.kind,
+      },
+    },
+  };
+}
+
 /** The repositories of the account the host knows by this id, as far as they were seen here. */
 export async function listReposOfHostAccount(
   database: Database,

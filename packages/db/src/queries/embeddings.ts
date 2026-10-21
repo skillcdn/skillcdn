@@ -1,12 +1,22 @@
 import { and, eq, isNotNull, ne, notExists, or, sql } from "drizzle-orm";
 import { type Database, drizzleOf } from "../client.js";
-import { repoRefs, sectionVectors, snapshotEmbeddings, snapshots } from "../schema.js";
+import {
+  embeddingUsageDaily,
+  repoRefs,
+  repos,
+  sectionVectors,
+  snapshotEmbeddings,
+  snapshots,
+} from "../schema.js";
+import type { RepoScope } from "./repos.js";
 import type { SnapshotScope } from "./snapshots.js";
+import type { UsageDay } from "./usage.js";
 import type { VectorKey } from "./vectors.js";
 
 // How far each snapshot's sections have been embedded under a key (ADR-0064): what the worker
 // writes down as it goes, what tells it which served snapshots are still to be embedded under the
-// configured model, and what goes when a model is replaced.
+// configured model, what the bounds of the embedding are measured against, and what goes when a
+// model is replaced.
 
 export interface SnapshotEmbeddingRecord {
   readonly snapshotId: string;
@@ -16,6 +26,8 @@ export interface SnapshotEmbeddingRecord {
   readonly bodies: number;
   readonly sections: number;
   readonly tokens: number;
+  /** The bytes of the bodies written. */
+  readonly bytes: number;
   /** Null while the snapshot is still being embedded. */
   readonly completedAt: Date | null;
   readonly updatedAt: Date;
@@ -26,6 +38,8 @@ export interface EmbeddingProgress {
   readonly bodies: number;
   readonly sections: number;
   readonly tokens: number;
+  /** The bytes of the bodies written. */
+  readonly bytes: number;
   /** True when this slice was the snapshot's last. */
   readonly completed: boolean;
 }
@@ -61,6 +75,7 @@ export async function recordSnapshotEmbedding(
       bodies: progress.bodies,
       sections: progress.sections,
       tokens: progress.tokens,
+      bytes: progress.bytes,
       completedAt,
       updatedAt: now,
     })
@@ -75,6 +90,7 @@ export async function recordSnapshotEmbedding(
         bodies: sql`${snapshotEmbeddings.bodies} + excluded.bodies`,
         sections: sql`${snapshotEmbeddings.sections} + excluded.sections`,
         tokens: sql`${snapshotEmbeddings.tokens} + excluded.tokens`,
+        bytes: sql`${snapshotEmbeddings.bytes} + excluded.bytes`,
         completedAt: sql`coalesce(${snapshotEmbeddings.completedAt}, excluded.completed_at)`,
         updatedAt: now,
       },
@@ -96,6 +112,7 @@ export async function getSnapshotEmbedding(
       bodies: snapshotEmbeddings.bodies,
       sections: snapshotEmbeddings.sections,
       tokens: snapshotEmbeddings.tokens,
+      bytes: snapshotEmbeddings.bytes,
       completedAt: snapshotEmbeddings.completedAt,
       updatedAt: snapshotEmbeddings.updatedAt,
     })
@@ -111,12 +128,95 @@ export async function getSnapshotEmbedding(
   return row;
 }
 
+/**
+ * The bytes of the bodies embedded for a repository under the key, over every snapshot of it:
+ * what a bound per repository is held against. A body shared by two commits was written once and
+ * counts once.
+ */
+export async function embeddedBytesOfRepository(
+  database: Database,
+  scope: RepoScope,
+  key: VectorKey,
+): Promise<number> {
+  const [row] = await drizzleOf(database)
+    .select({ bytes: sql<string>`coalesce(sum(${snapshotEmbeddings.bytes}), 0)` })
+    .from(snapshotEmbeddings)
+    .innerJoin(snapshots, eq(snapshots.id, snapshotEmbeddings.snapshotId))
+    .where(
+      and(
+        eq(snapshots.repoId, scope.repoId),
+        eq(snapshotEmbeddings.accountId, scope.accountId),
+        underKey(key),
+      ),
+    );
+  return Number(row?.bytes ?? 0);
+}
+
+/** What was embedded for an account on one day. */
+export interface EmbeddingUsage {
+  readonly bytes: number;
+  readonly sections: number;
+  readonly tokens: number;
+}
+
+/** Adds what a slice embedded to the account's day, making the row when it is the first. */
+export async function addEmbeddingUsage(
+  database: Database,
+  accountId: string,
+  day: UsageDay,
+  delta: EmbeddingUsage,
+  now: Date,
+): Promise<void> {
+  await drizzleOf(database)
+    .insert(embeddingUsageDaily)
+    .values({
+      accountId,
+      day,
+      bytes: delta.bytes,
+      sections: delta.sections,
+      tokens: delta.tokens,
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: [embeddingUsageDaily.accountId, embeddingUsageDaily.day],
+      set: {
+        bytes: sql`${embeddingUsageDaily.bytes} + excluded.bytes`,
+        sections: sql`${embeddingUsageDaily.sections} + excluded.sections`,
+        tokens: sql`${embeddingUsageDaily.tokens} + excluded.tokens`,
+        updatedAt: now,
+      },
+    });
+}
+
+/** What was embedded for an account on one day; nothing when nothing was. */
+export async function getEmbeddingUsage(
+  database: Database,
+  accountId: string,
+  day: UsageDay,
+): Promise<EmbeddingUsage | undefined> {
+  const [row] = await drizzleOf(database)
+    .select({
+      bytes: embeddingUsageDaily.bytes,
+      sections: embeddingUsageDaily.sections,
+      tokens: embeddingUsageDaily.tokens,
+    })
+    .from(embeddingUsageDaily)
+    .where(and(eq(embeddingUsageDaily.accountId, accountId), eq(embeddingUsageDaily.day, day)))
+    .limit(1);
+  return row;
+}
+
 /** A snapshot the worker has still to embed under a key. */
 export interface SnapshotToEmbed {
   readonly accountId: string;
   readonly repoId: string;
   readonly snapshotId: string;
   readonly commitSha: string;
+}
+
+export interface SnapshotsToEmbedOptions {
+  /** Only the snapshots of public repositories; left out, of every repository. */
+  readonly visibility?: "public" | undefined;
 }
 
 /**
@@ -128,6 +228,7 @@ export async function listSnapshotsToEmbed(
   database: Database,
   key: VectorKey,
   limit: number,
+  options: SnapshotsToEmbedOptions = {},
 ): Promise<SnapshotToEmbed[]> {
   const db = drizzleOf(database);
   const rows = await db
@@ -143,9 +244,11 @@ export async function listSnapshotsToEmbed(
       repoRefs,
       and(eq(repoRefs.repoId, snapshots.repoId), eq(repoRefs.commitSha, snapshots.commitSha)),
     )
+    .innerJoin(repos, eq(repos.id, snapshots.repoId))
     .where(
       and(
         eq(snapshots.status, "ready"),
+        options.visibility === undefined ? undefined : eq(repos.visibility, options.visibility),
         notExists(
           db
             .select({ one: sql`1` })

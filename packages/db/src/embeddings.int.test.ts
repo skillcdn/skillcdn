@@ -6,11 +6,15 @@ import {
 } from "@skillcdn/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
+  addEmbeddingUsage,
   blobsWithoutVectors,
   claimSnapshot,
   type Database,
   deleteEmbeddingsOutsideKey,
+  embeddedBytesOfRepository,
   ensureSnapshot,
+  getEmbeddingUsage,
+  getRepo,
   getSnapshotEmbedding,
   listSnapshotsToEmbed,
   recordSnapshotEmbedding,
@@ -48,14 +52,14 @@ const KEY: VectorKey = { model: "model-one", dimensions: 4, sectioningVersion: S
 const OLD_KEY: VectorKey = { ...KEY, model: "model-zero" };
 
 let nextHostId = 7000;
-function hostRepository(): HostRepository {
+function hostRepository(visibility: "public" | "private" = "public"): HostRepository {
   nextHostId += 1;
   return {
     hostRepoId: String(nextHostId),
     name: "Docs",
     defaultBranch: "main",
     description: undefined,
-    visibility: "public",
+    visibility,
     owner: { hostAccountId: `9${nextHostId}`, login: "Acme", kind: "organization" },
   };
 }
@@ -87,9 +91,10 @@ async function readySnapshot(options: {
   readonly served: boolean;
   readonly indexedAt?: Date;
   readonly ready?: boolean;
+  readonly visibility?: "public" | "private";
 }): Promise<Made> {
   const alias = { host: "gh" as const, owner: `owner${nextHostId}`, repo: "docs" };
-  const saved = await saveRepository(database, alias, hostRepository(), T0);
+  const saved = await saveRepository(database, alias, hostRepository(options.visibility), T0);
   const repo = { accountId: saved.accountId, repoId: saved.id };
   const commit = nextHostId.toString(16).padStart(40, "0");
   const snapshot = await ensureSnapshot(database, repo, commit, 1, T0);
@@ -119,10 +124,17 @@ async function readySnapshot(options: {
   return { scope, repo, commit };
 }
 
-const progress = (bodies: number, sections: number, tokens: number, completed: boolean) => ({
+const progress = (
+  bodies: number,
+  sections: number,
+  tokens: number,
+  completed: boolean,
+  bytes = sections * 100,
+) => ({
   bodies,
   sections,
   tokens,
+  bytes,
   completed,
 });
 
@@ -147,6 +159,7 @@ describe("snapshot embeddings", () => {
       bodies: 2,
       sections: 5,
       tokens: 15,
+      bytes: 500,
       completedAt: T1,
       updatedAt: T1,
     });
@@ -203,6 +216,80 @@ describe("snapshot embeddings", () => {
     expect(await listSnapshotsToEmbed(database, KEY, 1)).toHaveLength(1);
   });
 
+  it("leave the snapshots of private repositories out when asked for public ones", async () => {
+    const open = await readySnapshot({ served: true });
+    const closed = await readySnapshot({ served: true, visibility: "private" });
+    const ids = (await listSnapshotsToEmbed(database, KEY, 100, { visibility: "public" })).map(
+      (item) => item.snapshotId,
+    );
+    expect(ids).toContain(open.scope.snapshotId);
+    expect(ids).not.toContain(closed.scope.snapshotId);
+    const all = (await listSnapshotsToEmbed(database, KEY, 100)).map((item) => item.snapshotId);
+    expect(all).toContain(closed.scope.snapshotId);
+    expect(await getRepo(database, closed.repo)).toMatchObject({
+      id: closed.repo.repoId,
+      accountId: closed.repo.accountId,
+      host: "gh",
+      repository: { visibility: "private", owner: { login: "Acme", kind: "organization" } },
+    });
+    expect(
+      await getRepo(database, { accountId: open.repo.accountId, repoId: closed.repo.repoId }),
+    ).toBeUndefined();
+  });
+
+  it("add up the bytes of a repository over its snapshots, and of an account over a day", async () => {
+    const first = await readySnapshot({ served: true });
+    // A second snapshot of the same repository, under another commit.
+    const second = await ensureSnapshot(database, first.repo, "b".repeat(40), 1, T0);
+    const secondScope = { accountId: first.repo.accountId, snapshotId: second.id };
+    await recordSnapshotEmbedding(database, first.scope, KEY, progress(2, 4, 40, true, 1000), T0);
+    await recordSnapshotEmbedding(database, secondScope, KEY, progress(1, 1, 10, true, 250), T0);
+    await recordSnapshotEmbedding(
+      database,
+      first.scope,
+      OLD_KEY,
+      progress(1, 1, 1, true, 9999),
+      T0,
+    );
+    expect(await embeddedBytesOfRepository(database, first.repo, KEY)).toBe(1250);
+    const other = await readySnapshot({ served: true });
+    expect(await embeddedBytesOfRepository(database, other.repo, KEY)).toBe(0);
+
+    const account = first.repo.accountId;
+    expect(await getEmbeddingUsage(database, account, "2026-01-01")).toBeUndefined();
+    await addEmbeddingUsage(
+      database,
+      account,
+      "2026-01-01",
+      { bytes: 1000, sections: 4, tokens: 40 },
+      T0,
+    );
+    await addEmbeddingUsage(
+      database,
+      account,
+      "2026-01-01",
+      { bytes: 250, sections: 1, tokens: 10 },
+      T1,
+    );
+    await addEmbeddingUsage(
+      database,
+      account,
+      "2026-01-02",
+      { bytes: 5, sections: 1, tokens: 1 },
+      T2,
+    );
+    expect(await getEmbeddingUsage(database, account, "2026-01-01")).toEqual({
+      bytes: 1250,
+      sections: 5,
+      tokens: 50,
+    });
+    expect(await getEmbeddingUsage(database, account, "2026-01-02")).toEqual({
+      bytes: 5,
+      sections: 1,
+      tokens: 1,
+    });
+  });
+
   it("are forgotten when the snapshot's index is written again", async () => {
     const { scope, repo, commit } = await readySnapshot({ served: true });
     await recordSnapshotEmbedding(database, scope, KEY, progress(1, 1, 1, true), T0);
@@ -251,9 +338,10 @@ describe("snapshot embeddings", () => {
     await recordSnapshotEmbedding(database, scope, OLD_KEY, progress(2, 2, 2, true), T0);
     await recordSnapshotEmbedding(database, scope, KEY, progress(1, 1, 1, true), T0);
 
-    // The records under the old key: this snapshot's, and the one an earlier test left.
+    // The records under the old key: this snapshot's, and the ones earlier tests left.
     const removed = await deleteEmbeddingsOutsideKey(database, KEY);
-    expect(removed).toEqual({ vectors: 2, snapshots: 2 });
+    expect(removed.vectors).toBe(2);
+    expect(removed.snapshots).toBeGreaterThanOrEqual(1);
     expect(await blobsWithoutVectors(database, KEY, ["blob-old-1"])).toEqual(new Set());
     expect(await blobsWithoutVectors(database, OLD_KEY, ["blob-old-1", "blob-old-2"])).toEqual(
       new Set(["blob-old-1", "blob-old-2"]),

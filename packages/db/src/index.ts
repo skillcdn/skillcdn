@@ -27,12 +27,17 @@ export {
   takeApprovedConnectRequest,
 } from "./queries/connect.js";
 export {
+  addEmbeddingUsage,
   deleteEmbeddingsOutsideKey,
   type EmbeddingProgress,
+  type EmbeddingUsage,
+  embeddedBytesOfRepository,
+  getEmbeddingUsage,
   getSnapshotEmbedding,
   listSnapshotsToEmbed,
   recordSnapshotEmbedding,
   type SnapshotEmbeddingRecord,
+  type SnapshotsToEmbedOptions,
   type SnapshotToEmbed,
 } from "./queries/embeddings.js";
 export {
@@ -138,6 +143,7 @@ export {
   findMissingRepo,
   findRepoByAlias,
   findRepoByHostId,
+  getRepo,
   type HostRepoKey,
   type KnownRepo,
   listReposOfHostAccount,
