@@ -9,6 +9,8 @@ import {
   classifyRepoFile,
   contextPage,
   decodeText,
+  type Embedder,
+  embeddingTextOf,
   FIND_DEFAULT_LIMIT,
   FIND_LIST_SKILLS_MAX,
   FIND_MAX_SKILL_FILES,
@@ -18,11 +20,13 @@ import {
   type FileResult,
   type FindFile,
   type FindItem,
+  type FindRanking,
   type FindResult,
   type FolderOverview,
   folderOverview,
   formatSkillUri,
   frontMatterObject,
+  fuseRanks,
   type IncludedFile,
   type IndexDiagnostic,
   type IndexEntry,
@@ -34,6 +38,9 @@ import {
   joinRepoPath,
   type LicenseFact,
   licenseOfPath,
+  MAX_MATCHED_SECTIONS,
+  type MatchedSection,
+  type MeaningMatch,
   type MountCatalog,
   type MountManifest,
   type MountOverview,
@@ -52,15 +59,18 @@ import {
   type ReadableIndex,
   type RepoPath,
   type RepoTranslation,
+  type Reranker,
   ROOT_PATH,
   repoManifestPath,
   SKILL_PAGE_BYTES,
+  SKILL_RANK_BOOST,
   type SkillLookup,
   type SkillResult,
   type SkillRules,
   type SkillServing,
   type SkillTranslation,
   type StoredTranslation,
+  sectionExcerpt,
   servesInFull,
   skillDocumentInput,
   skillUriPrefix,
@@ -73,6 +83,7 @@ import {
   ReaderInputError,
 } from "./continuation.js";
 import type { MountContext } from "./mount.js";
+import { compareByteOrder } from "./order.js";
 import {
   countEntries,
   type DirectoryListing,
@@ -108,6 +119,29 @@ export interface ReaderDependencies<M extends MountContext> {
     hash: string,
     maxBytes: number,
   ) => Promise<Uint8Array | undefined>;
+  /**
+   * The search by meaning (ADR-0064, ADR-0065), where a deployment or a person has it: left out,
+   * the words answer alone, as they do over an index that keeps no vectors.
+   */
+  readonly meaning?: ReaderMeaning | undefined;
+}
+
+/** What a search by meaning is made with. */
+export interface ReaderMeaning {
+  /**
+   * Embeds the query as the vectors of the index were made. A call that fails, or does not answer
+   * in time, leaves the words to answer alone, and the result says so.
+   */
+  readonly embedder: Pick<Embedder, "embed">;
+  /**
+   * Scores the first results against the query before the page is cut; left out, or when it does
+   * not answer, the fused order stands.
+   */
+  readonly reranker?: Reranker | undefined;
+  /** How many of the first results the reranker scores. Default {@link RERANK_CANDIDATES}. */
+  readonly rerankCandidates?: number | undefined;
+  /** How many sections the index is asked for by meaning. Default {@link MEANING_SECTION_CANDIDATES}. */
+  readonly sectionCandidates?: number | undefined;
 }
 
 /** A body the index names is at hand nowhere: not stored, and nothing can fetch it. */
@@ -215,6 +249,103 @@ function remember<T>(
 }
 
 /** Fit a complete prefix and advance by what was returned, never by the requested limit. */
+/** How many of the first results the reranker scores unless told otherwise: a few seconds on a CPU. */
+export const RERANK_CANDIDATES = 10;
+/** How many sections a search by meaning asks the index for: enough documents to fuse with the words'. */
+export const MEANING_SECTION_CANDIDATES = 40;
+/** How many of a document's sections the words rank before the meaning's are fused in. */
+const SECTION_CANDIDATES = 5;
+/** What a reranker is given of a result: the heading path and the start of the best section. */
+const RERANK_CANDIDATE_CHARS = 1200;
+
+/** A result with the sections of its page computed, and the text the reranker scores it by. */
+interface Detailed {
+  readonly item: FindItem;
+  readonly candidate: string;
+}
+
+/** The first `max` characters, never cut through a surrogate pair. */
+function cutChars(text: string, max: number): string {
+  if (text.length <= max) {
+    return text;
+  }
+  const cut = text.slice(0, max);
+  const last = cut.charCodeAt(cut.length - 1);
+  return last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut;
+}
+
+/**
+ * The entries the words found and the entries whose sections the meaning found, in one order
+ * (ADR-0063, point 5): by reciprocal rank fusion of the two lists, an entry's rank by meaning
+ * being that of its nearest section, with the skill boost of the words' ranking kept and ties
+ * broken by path, so that the order is the same on every machine.
+ */
+function fuseEntries(
+  entries: readonly IndexEntry[],
+  words: readonly IndexEntry[],
+  nearest: readonly MeaningMatch[],
+): IndexEntry[] {
+  const byPath = new Map<string, IndexEntry>(words.map((row) => [row.path, row]));
+  const byMeaning: string[] = [];
+  for (const match of nearest) {
+    if (byMeaning.includes(match.path)) {
+      continue;
+    }
+    if (!byPath.has(match.path)) {
+      const entry = getEntry(entries, match.path);
+      if (entry === undefined || !entry.searchable) {
+        continue;
+      }
+      byPath.set(match.path, entry);
+    }
+    byMeaning.push(match.path);
+  }
+  const fused = fuseRanks([words.map((row) => row.path), byMeaning], {
+    boost: (path) => (byPath.get(path)?.kind === "skill" ? SKILL_RANK_BOOST : 1),
+    compare: compareByteOrder,
+  });
+  return fused.flatMap((path) => {
+    const row = byPath.get(path);
+    return row === undefined ? [] : [row];
+  });
+}
+
+/**
+ * Reorders the first `count` of `detailed` by the reranker's scores, in place, highest first and
+ * the fused order among equals. False, and nothing moved, when the reranker did not answer.
+ */
+async function rerankFirst(
+  reranker: Reranker,
+  query: string,
+  detailed: Detailed[],
+  count: number,
+): Promise<boolean> {
+  const first = detailed.slice(0, Math.min(count, reranker.maxCandidates));
+  if (first.length < 2) {
+    return false;
+  }
+  let scores: readonly number[];
+  try {
+    scores = await reranker.rerank(
+      query,
+      first.map((entry) => entry.candidate),
+    );
+  } catch {
+    // The reranker is a layer a search does without: the fused order stands.
+    return false;
+  }
+  if (scores.length !== first.length) {
+    return false;
+  }
+  first
+    .map((entry, at) => ({ entry, score: scores[at] ?? 0, at }))
+    .sort((a, b) => b.score - a.score || a.at - b.at)
+    .forEach((scored, at) => {
+      detailed[at] = scored.entry;
+    });
+  return true;
+}
+
 function boundedPage<T>(
   maximum: number,
   make: (count: number) => T,
@@ -593,33 +724,109 @@ export class Reader<M extends MountContext = MountContext> {
   }
 
   /**
-   * A document result with the sections of the document that matched (ADR-0063), from its text:
-   * none for a file that is not Markdown, none for one this mount describes without serving,
-   * since its offsets could not be read here, and none for a body that is not at hand.
+   * The sections of a mount nearest in meaning to a query (ADR-0064), where the index keeps the
+   * vectors of its sections and an embedder is at hand: `attempted` says whether it was asked,
+   * and `nearest` is undefined when the embedder, or the store, did not answer, which is the
+   * words' moment to answer alone. Nothing here throws: the layer is one a search does without.
    */
-  async #withSections(
+  async #meaningOf(
+    index: ReadableIndex,
+    path: RepoPath,
+    query: string,
+  ): Promise<{
+    readonly attempted: boolean;
+    readonly nearest: readonly MeaningMatch[] | undefined;
+  }> {
+    const meaning = this.#dependencies.meaning;
+    const search = index.store.searchByMeaning;
+    if (meaning === undefined || search === undefined) {
+      return { attempted: false, nearest: undefined };
+    }
+    try {
+      const { vectors } = await meaning.embedder.embed([query], "query");
+      const vector = vectors[0];
+      if (vector === undefined) {
+        return { attempted: true, nearest: undefined };
+      }
+      const nearest = await search.call(
+        index.store,
+        path,
+        vector,
+        meaning.sectionCandidates ?? MEANING_SECTION_CANDIDATES,
+      );
+      return { attempted: true, nearest };
+    } catch {
+      return { attempted: true, nearest: undefined };
+    }
+  }
+
+  /**
+   * A result with the sections that matched (ADR-0063), from the document's text: the sections
+   * the words rank and the sections the meaning found, fused into one order, the first two of
+   * them named; and the text the reranker scores the result by, its best section. A document
+   * that is not Markdown, one this mount describes without serving, since its offsets could not
+   * be read here, and one whose body is not at hand name no sections and are scored by what the
+   * result says of them.
+   */
+  async #sectionsOf(
     mount: M,
     index: ReadableIndex,
     entries: readonly IndexEntry[],
     item: FindItem,
-    lexemes: readonly string[],
-    language: string | undefined,
-  ): Promise<FindItem> {
+    context: {
+      readonly lexemes: readonly string[];
+      readonly language: string | undefined;
+      readonly meaning: { readonly nearest: readonly MeaningMatch[] | undefined };
+    },
+  ): Promise<Detailed> {
     if (item.kind !== "document") {
-      return item;
+      return { item, candidate: `${item.name}: ${item.description}` };
     }
+    const summarized = [item.title, item.summary].filter((part) => part !== undefined).join(": ");
+    const plain: Detailed = { item, candidate: summarized.length > 0 ? summarized : item.path };
     const entry = getEntry(entries, item.path);
     if (entry?.kind !== "markdown") {
-      return item;
+      return plain;
     }
     if (!servesInFull(await this.#licenseAt(index, item.path), mount.verified)) {
-      return item;
+      return plain;
     }
     const text = await index.blobs.read(entry.blobSha);
     if (text === undefined) {
-      return item;
+      return plain;
     }
-    return { ...item, sections: matchSections(text, lexemes, { language }) };
+    const byWords = matchSections(text, context.lexemes, {
+      language: context.language,
+      limit: SECTION_CANDIDATES,
+    });
+    const byMeaning = (context.meaning.nearest ?? []).filter((match) => match.path === item.path);
+    const offsets = fuseRanks(
+      [byWords.map((section) => section.offset), byMeaning.map((match) => match.offset)],
+      { compare: (a, b) => a - b },
+    );
+    const sections = offsets.slice(0, MAX_MATCHED_SECTIONS).flatMap((offset): MatchedSection[] => {
+      const matched = byWords.find((section) => section.offset === offset);
+      if (matched !== undefined) {
+        return [matched];
+      }
+      const near = byMeaning.find((match) => match.offset === offset);
+      return near === undefined
+        ? []
+        : [
+            {
+              heading: near.heading,
+              offset: near.offset,
+              length: near.length,
+              excerpt: sectionExcerpt(text, near, context.lexemes, context.language),
+            },
+          ];
+    });
+    const best = sections[0];
+    const candidate =
+      best === undefined
+        ? `${item.title ?? item.path}: ${item.summary ?? cutChars(text, RERANK_CANDIDATE_CHARS)}`
+        : cutChars(embeddingTextOf(item.title, best, text), RERANK_CANDIDATE_CHARS);
+    return { item: { ...item, sections }, candidate };
   }
 
   /**
@@ -1063,6 +1270,7 @@ export class Reader<M extends MountContext = MountContext> {
     const entries = await this.#entriesOf(index);
     let items: FindItem[];
     let totals: FindResult["totals"];
+    let ranking: FindRanking | undefined;
     if (query === undefined) {
       // A listing names every skill: a skill's own files are reached through the skill.
       const skills = listEntries(entries, path, Number.MAX_SAFE_INTEGER, "skills");
@@ -1079,26 +1287,37 @@ export class Reader<M extends MountContext = MountContext> {
     } else {
       // The words of the query, read with the rules of the language that governs the searched
       // folder, as the vectors were built (ADR-0063).
-      const lexemes = queryLexemes(query, this.#languageAt(entries, path));
-      const rows = await index.store.search(path, lexemes);
+      const language = this.#languageAt(entries, path);
+      const lexemes = queryLexemes(query, language);
+      const words = await index.store.search(path, lexemes);
+      // And the sections nearest in meaning, where the index keeps vectors and an embedder is at
+      // hand (ADR-0064): fused with the words' results, or left out when the embedder did not
+      // answer, which the result says.
+      const meaning = await this.#meaningOf(index, path, query);
+      const rows =
+        meaning.nearest === undefined ? words : fuseEntries(entries, words, meaning.nearest);
       items = this.#fold({ ...mount, address: { ...mount.address, path } }, entries, rows);
       totals = undefined;
-      // The sections that matched, for the documents of this page: their texts are read for it.
-      const page = await Promise.all(
+      // The sections that matched, for the documents of this page and for the first results the
+      // reranker scores: their texts are read for it.
+      const reranker = this.#dependencies.meaning?.reranker;
+      const candidates =
+        reranker === undefined
+          ? 0
+          : (this.#dependencies.meaning?.rerankCandidates ?? RERANK_CANDIDATES);
+      const detailed = await Promise.all(
         items
-          .slice(offset, offset + limit)
+          .slice(0, Math.max(offset + limit, candidates))
           .map((item) =>
-            this.#withSections(
-              mount,
-              index,
-              entries,
-              item,
-              lexemes,
-              this.#languageAt(entries, path),
-            ),
+            this.#sectionsOf(mount, index, entries, item, { lexemes, language, meaning }),
           ),
       );
-      items = [...items.slice(0, offset), ...page, ...items.slice(offset + limit)];
+      const reranked =
+        reranker === undefined ? false : await rerankFirst(reranker, query, detailed, candidates);
+      items = [...detailed.map((entry) => entry.item), ...items.slice(detailed.length)];
+      ranking = meaning.attempted
+        ? { meaning: meaning.nearest !== undefined, reranked }
+        : undefined;
     }
     const diagnostics = await this.#diagnosticsOf(mount, index);
     const make = (count: number): FindResult => ({
@@ -1109,6 +1328,7 @@ export class Reader<M extends MountContext = MountContext> {
       nextCursor: offset + count < items.length ? nextContinuation(key, offset + count) : undefined,
       totals,
       diagnostics,
+      ...(ranking === undefined ? {} : { ranking }),
     });
     return {
       status: "ready",

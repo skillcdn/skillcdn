@@ -6,8 +6,11 @@ export type { MountContext } from "./mount.js";
 export { compareByteOrder } from "./order.js";
 export {
   BodyUnavailableError,
+  MEANING_SECTION_CANDIDATES,
+  RERANK_CANDIDATES,
   Reader,
   type ReaderDependencies,
+  type ReaderMeaning,
   type Resource,
   type ResourceEntry,
   type SkillEntry,
