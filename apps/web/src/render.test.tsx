@@ -766,6 +766,53 @@ describe("the page of an address", () => {
     expect(html).toContain('href="/gh/acme/skills?skill=review%2FSKILL.md"');
   });
 
+  it("shows the sections of a document that matched, each opening the file at its heading", () => {
+    const t = messagesFor("en");
+    const { html } = renderAddressPage(TEMPLATE, {
+      language: "en",
+      origin: "https://skills.example",
+      pathname: "/gh/acme/skills",
+      search: "?q=late+fee",
+      data: {
+        mount: { ready: MOUNT },
+        find: {
+          ready: {
+            status: "ready",
+            query: "late fee",
+            path: "",
+            nextCursor: null,
+            totals: null,
+            ranking: { meaning: true, reranked: false },
+            items: [
+              {
+                kind: "document",
+                path: "docs/invoicing.md",
+                title: "Invoicing",
+                summary: "How invoices go out.",
+                skillDirectory: null,
+                sections: [
+                  {
+                    heading: ["Invoicing", "Late fees"],
+                    offset: 1200,
+                    length: 300,
+                    excerpt: "A late fee is a fixed amount added after the due date.",
+                  },
+                  { heading: [], offset: 0, length: 80, excerpt: null },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    });
+    expect(html).toContain(`aria-label="${t.mount.search.sections}"`);
+    expect(html).toContain(">Invoicing › Late fees<");
+    expect(html).toContain(">A late fee is a fixed amount added after the due date.<");
+    expect(html).toContain('href="/gh/acme/skills?file=docs%2Finvoicing.md&amp;at=1200"');
+    expect(html).toContain(`>${t.mount.search.sectionStart}<`);
+    expect(html).toContain('href="/gh/acme/skills?file=docs%2Finvoicing.md&amp;at=0"');
+  });
+
   it("explains an address that is nothing, or not an address, with the status left to the server", () => {
     const t = messagesFor("en");
     const missing = renderAddressPage(TEMPLATE, {

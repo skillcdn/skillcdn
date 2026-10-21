@@ -102,7 +102,7 @@ function collectHeadings(node: unknown, into: HeadingNode[]): void {
  * document still looks like itself. A document of the site's own also gives each heading its id,
  * the one the git host would give it, so that a fragment written for the file finds it here.
  */
-function headingsUnder(level: 1 | 2 | 3, anchors: boolean) {
+function headingsUnder(level: 1 | 2 | 3, anchors: "none" | "slug" | "ordinal") {
   return () => (tree: unknown) => {
     const headings: HeadingNode[] = [];
     collectHeadings(tree, headings);
@@ -111,12 +111,20 @@ function headingsUnder(level: 1 | 2 | 3, anchors: boolean) {
       top = Math.min(top, heading.depth);
     }
     const slugger = createSlugger();
-    for (const heading of headings) {
+    for (const [index, heading] of headings.entries()) {
+      // A file of a repository names its headings by their place, which the outline of the
+      // same text numbers the same way, and which cannot collide with an id of the page's own.
+      const id =
+        anchors === "slug"
+          ? slugger(headingText(heading))
+          : anchors === "ordinal"
+            ? `section-${index}`
+            : undefined;
       heading.data = {
         ...heading.data,
         hProperties: {
           className: styles[`h${heading.depth}`],
-          ...(anchors ? { id: slugger(headingText(heading)) } : {}),
+          ...(id === undefined ? {} : { id }),
         },
       };
       heading.depth = Math.min(6, heading.depth - top + level + 1);
@@ -144,12 +152,21 @@ export function Markdown(props: {
    * as it is, and every heading carries its id, so that a fragment finds it.
    */
   readonly own?: boolean;
+  /**
+   * For a file of a repository that a search result opens at a section: every heading gets an id
+   * by its place in the document, `section-0` on, which the file view scrolls to. Left out, a
+   * repository's headings carry no id; a document of the site's own carries the host's slugs.
+   */
+  readonly anchors?: "ordinal";
 }) {
   const { t } = useI18n();
   return (
     <div className={styles.prose}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, headingsUnder(props.under, props.own === true)]}
+        remarkPlugins={[
+          remarkGfm,
+          headingsUnder(props.under, props.own === true ? "slug" : (props.anchors ?? "none")),
+        ]}
         // Everything passes through here unchanged; the components below decide what a URL may do.
         urlTransform={(url) => url}
         components={{

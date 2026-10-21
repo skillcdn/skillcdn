@@ -3,6 +3,7 @@ import type {
   RestBrowse,
   RestBrowseEntry,
   RestFind,
+  RestFindSection,
   RestLicense,
   RestMount,
   RestSkillSummary,
@@ -152,7 +153,11 @@ function SkillCard(props: {
   );
 }
 
-/** A document: its title when it has one, else its file name, its summary, and where it is. */
+/**
+ * A document: its title when it has one, else its file name, its summary, and where it is. With a
+ * search, the sections of it that matched follow (ADR-0063), each a way into the file at its
+ * heading, with a glimpse of the passage.
+ */
 function DocumentCard(props: {
   readonly address: Address;
   readonly path: string;
@@ -161,8 +166,10 @@ function DocumentCard(props: {
   /** The skill the document belongs to, when a search turned up one of a skill's own files. */
   readonly partOf?: string | null;
   readonly language?: string | null | undefined;
+  readonly sections?: readonly RestFindSection[] | undefined;
 }) {
   const { t } = useI18n();
+  const sections = props.sections ?? [];
   return (
     <li>
       <Link
@@ -180,6 +187,33 @@ function DocumentCard(props: {
         )}
         <span className={styles.cardPath}>{props.path}</span>
       </Link>
+      {sections.length > 0 && (
+        <ul className={styles.sections} aria-label={t.mount.search.sections}>
+          {sections.map((section) => (
+            <li key={section.offset}>
+              <Link
+                className={styles.section}
+                href={mountHref(props.address, {
+                  kind: "file",
+                  path: props.path,
+                  section: section.offset,
+                })}
+              >
+                <span className={styles.sectionHeading}>
+                  {section.heading.length === 0
+                    ? t.mount.search.sectionStart
+                    : section.heading.join(" › ")}
+                </span>
+                {section.excerpt !== null && (
+                  <span className={styles.sectionExcerpt} lang={props.language ?? undefined}>
+                    {section.excerpt}
+                  </span>
+                )}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
     </li>
   );
 }
@@ -290,6 +324,7 @@ function SearchResults(props: {
                     title={item.title}
                     summary={item.summary}
                     partOf={item.skillDirectory}
+                    sections={item.sections}
                   />,
                 ],
           )}

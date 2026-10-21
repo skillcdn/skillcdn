@@ -348,6 +348,44 @@
   line-clamp: 3;
 }
 
+/* The sections of a document that matched, under its card: each a way into the file at its
+   heading, with a glimpse of the passage. A quieter list than the cards, hung off the card's
+   left edge. */
+.sections {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0 0 0 var(--space-4);
+  padding: 0 0 0 var(--space-3);
+  border-left: 2px solid var(--color-border);
+  list-style: none;
+}
+
+.section {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  text-decoration: none;
+}
+
+.section:hover {
+  background: var(--color-bg-inset);
+  color: var(--color-text);
+}
+
+.sectionHeading {
+  color: var(--color-accent);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+.sectionExcerpt {
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
 .cardFoot {
   display: flex;
   flex-wrap: wrap;
@@ -451,6 +489,12 @@
 .bullets {
   padding-left: var(--space-4);
   list-style: disc;
+}
+
+/* A heading a search result opens the file at lands under the header, with a little air; the
+   document's scroll padding clears the header itself (see the gotcha in CLAUDE.md). */
+.document :is(h1, h2, h3, h4, h5, h6) {
+  scroll-margin-top: var(--space-3);
 }
 
 .document {

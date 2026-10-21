@@ -223,6 +223,8 @@ export const ko: Messages = {
       clear: "지우기",
       resultsFor: (query: string) => `“${query}” 검색 결과`,
       none: "이 폴더에서 일치하는 항목을 찾지 못했습니다. 다른 검색어나 상위 폴더에서 찾아보세요.",
+      sections: "일치한 섹션",
+      sectionStart: "문서 시작 부분",
     },
     kinds: { skill: "스킬", document: "문서" },
     partOfSkill: (directory: string) => `${directory} 스킬에 속한 파일`,

@@ -245,6 +245,9 @@ export const en = {
       clear: "Clear",
       resultsFor: (query: string) => `Results for “${query}”`,
       none: "Nothing matches in this folder. Try another word or a broader folder.",
+      /** Under a document that matched: the sections that did, each opening the file at its heading. */
+      sections: "Sections that matched",
+      sectionStart: "Start of the document",
     },
     kinds: { skill: "Skill", document: "Document" },
     partOfSkill: (directory: string) => `Part of the skill at ${directory}`,

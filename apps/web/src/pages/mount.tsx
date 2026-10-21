@@ -261,7 +261,7 @@ function MountBody(props: {
     );
   }
   if (view.kind === "file") {
-    return <MountFile address={address} mount={mount} path={view.path} />;
+    return <MountFile address={address} mount={mount} path={view.path} section={view.section} />;
   }
   return view.kind === "skill" ? (
     <MountSkill

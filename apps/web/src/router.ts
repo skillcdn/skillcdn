@@ -23,7 +23,15 @@ import { hasDocsPage } from "./docs/catalog.js";
 export type MountView =
   | { readonly kind: "overview"; readonly query: string | undefined; readonly path?: string }
   | { readonly kind: "skill"; readonly path: string }
-  | { readonly kind: "file"; readonly path: string };
+  | {
+      readonly kind: "file";
+      readonly path: string;
+      /** The section the file is opened at, by the character offset a search result names (`at`). */
+      readonly section?: number;
+    };
+
+/** A character offset as a search result names a section: digits, within what a file can hold. */
+const SECTION_OFFSET = /^\d{1,9}$/;
 
 /**
  * The sections of the pages of whoever is signed in, in the order the side menu lists them. A
@@ -157,12 +165,17 @@ export function matchRoute(pathname: string, search: string, development = false
     const params = new URLSearchParams(search);
     const skill = params.get("skill");
     const file = params.get("file");
+    const at = params.get("at");
     const query = params.get("q")?.trim();
     const view: MountView =
       skill !== null && skill.length > 0
         ? { kind: "skill", path: skill }
         : file !== null && file.length > 0
-          ? { kind: "file", path: file }
+          ? {
+              kind: "file",
+              path: file,
+              ...(at !== null && SECTION_OFFSET.test(at) ? { section: Number(at) } : {}),
+            }
           : {
               kind: "overview",
               query: query === undefined || query === "" ? undefined : query,
@@ -187,6 +200,7 @@ export function mountHref(address: Address, view?: MountView): string {
     params.set("skill", view.path);
   } else if (view?.kind === "file") {
     params.set("file", view.path);
+    if (view.section !== undefined) params.set("at", String(view.section));
   } else if (view?.kind === "overview") {
     if (view.path !== undefined && view.path !== address.path) params.set("path", view.path);
     if (view.query !== undefined) params.set("q", view.query);

@@ -42,6 +42,8 @@ import {
   restConnectDecisionSchema,
   restConnectRequestSchema,
   restRepoTokenRequestSchema,
+  sectionBody,
+  sectionsOf,
 } from "@skillcdn/core";
 import {
   FIXTURE_AUTHORIZATIONS,
@@ -298,12 +300,29 @@ function findBody(
         ],
       };
     } else if (words.length > 0 || owner === null) {
+      // With words, the sections of the file whose text holds one, at most two, as the server
+      // names them (ADR-0063): the heading path, what reads the section, and a glimpse of it.
+      const file = repository.files[document.path];
+      const sections =
+        words.length === 0 || file === undefined
+          ? undefined
+          : sectionsOf(file)
+              .filter((section) => matches(sectionBody(file, section)))
+              .slice(0, 2)
+              .map((section) => ({
+                heading: [...section.heading],
+                offset: section.offset,
+                length: section.length,
+                excerpt:
+                  sectionBody(file, section).replaceAll(/\s+/g, " ").trim().slice(0, 200) || null,
+              }));
       documents.push({
         kind: "document",
         path: document.path,
         title: document.title,
         summary: document.summary,
         skillDirectory: owner,
+        ...(sections === undefined ? {} : { sections }),
       });
     }
   }
@@ -316,6 +335,10 @@ function findBody(
     items: items.slice(offset, offset + limit),
     nextCursor: offset + limit < items.length ? String(offset + limit) : null,
     totals: words.length === 0 ? { skills: skills.length, documents: documents.length } : null,
+    // A repository searched by meaning says so of a search with words, as the server does.
+    ...(words.length > 0 && repository.search?.meaning === true
+      ? { ranking: { meaning: true, reranked: false } }
+      : {}),
   };
 }
 

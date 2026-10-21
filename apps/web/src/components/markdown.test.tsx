@@ -95,6 +95,23 @@ describe("Markdown", () => {
     expect(outline("> # Quoted", 1)).toMatch(/<h2 class="[^"]+">Quoted<\/h2>/);
   });
 
+  it("names a repository file's headings by their place when asked, and never otherwise", () => {
+    const numbered = renderToStaticMarkup(
+      <Markdown
+        source={"# Title\n\n## Part\n\n```\n# not a heading\n```\n\n## Part"}
+        baseDirectory=""
+        under={2}
+        anchors="ordinal"
+        fileHref={(path) => path}
+      />,
+    );
+    expect(numbered).toMatch(/<h3 class="[^"]+" id="section-0">Title<\/h3>/);
+    expect(numbered).toMatch(/<h4 class="[^"]+" id="section-1">Part<\/h4>/);
+    expect(numbered).toMatch(/<h4 class="[^"]+" id="section-2">Part<\/h4>/);
+    expect(numbered).not.toContain('id="section-3"');
+    expect(render("# Title\n\n## Part")).not.toContain(' id="');
+  });
+
   it("treats repository content as text, never as markup", () => {
     const html = render(
       'Hello <script>alert(1)</script> <img src=x onerror="alert(2)"> <b>bold</b>',

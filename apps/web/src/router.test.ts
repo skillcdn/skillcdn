@@ -59,6 +59,16 @@ describe("matchRoute", () => {
     expect(matchRoute("/gh/acme/skills", "?file=docs/a%20b.md")).toMatchObject({
       view: { kind: "file", path: "docs/a b.md" },
     });
+    // A search result opens a file at a section, by the offset it named; anything else is ignored.
+    expect(matchRoute("/gh/acme/skills", "?file=docs/a.md&at=120")).toMatchObject({
+      view: { kind: "file", path: "docs/a.md", section: 120 },
+    });
+    expect(matchRoute("/gh/acme/skills", "?file=docs/a.md&at=-1")).toEqual(
+      expect.objectContaining({ view: { kind: "file", path: "docs/a.md" } }),
+    );
+    expect(matchRoute("/gh/acme/skills", "?file=docs/a.md&at=1e3")).toEqual(
+      expect.objectContaining({ view: { kind: "file", path: "docs/a.md" } }),
+    );
   });
 
   it("says which rule a bad address breaks", () => {
@@ -147,6 +157,7 @@ describe("mountHref", () => {
       { kind: "overview", query: "review", path: "marketing/skills" },
       { kind: "skill", path: "skills/release notes/SKILL.md" },
       { kind: "file", path: "docs/a&b=c?.md" },
+      { kind: "file", path: "docs/a.md", section: 1200 },
     ] as const) {
       const [pathname = "", search = ""] = mountHref(parsed.value, view).split("?");
       expect(matchRoute(pathname, `?${search}`)).toEqual({
