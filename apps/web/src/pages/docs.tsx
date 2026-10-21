@@ -186,7 +186,7 @@ function DocsIndex() {
       <h1 className={styles.title}>{t.docs.title}</h1>
       <p className={styles.lead}>{t.docs.lead}</p>
       {DOCS_SECTIONS.map((section) => (
-        <section key={section.id} className={styles.indexSection}>
+        <section key={section.id} id={section.id} className={styles.indexSection}>
           <h2 className={styles.indexTitle}>{docsSectionLabel(t, section.id)}</h2>
           <ul className={styles.indexList}>
             {section.pages.map((page) => (

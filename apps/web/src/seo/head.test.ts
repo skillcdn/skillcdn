@@ -231,13 +231,14 @@ describe("buildHead", () => {
     });
     const crumbs = page.jsonLd[1] as {
       readonly "@type": string;
-      readonly itemListElement: readonly { name: string }[];
+      readonly itemListElement: readonly { name: string; item?: string }[];
     };
     expect(crumbs["@type"]).toBe("BreadcrumbList");
-    expect(crumbs.itemListElement.map((item) => item.name)).toEqual([
-      "Documentation",
-      "Reference",
-      "The SkillCDN Format",
+    // Every step names its URL: a search engine refuses a trail whose middle step has none.
+    expect(crumbs.itemListElement.map((item) => [item.name, item.item])).toEqual([
+      ["Documentation", "https://skills.example/docs"],
+      ["Reference", "https://skills.example/docs#reference"],
+      ["The SkillCDN Format", "https://skills.example/docs/format"],
     ]);
     expect(renderHead(page)).toContain('<meta name="robots" content="index,follow"');
   });

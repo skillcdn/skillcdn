@@ -94,6 +94,11 @@ export function docsHref(slug?: string): string {
   return slug === undefined ? PATHS.docs : `${PATHS.docs}/${slug}`;
 }
 
+/** The index at the heading of one of its sections: the step before a page in its breadcrumbs. */
+export function docsSectionHref(section: string): string {
+  return `${PATHS.docs}#${section}`;
+}
+
 /** The page where a command's code is approved, or the page that asks for a code. */
 export function connectHref(code?: string): string {
   return code === undefined ? PATHS.connect : `${PATHS.connect}/${code}`;

@@ -24,7 +24,7 @@ import {
   skillTitle,
 } from "../i18n/repository-text.js";
 import { firstParagraph, legalTexts } from "../legal.js";
-import { docsHref, mountHref, ownerHref, PATHS, type Route } from "../router.js";
+import { docsHref, docsSectionHref, mountHref, ownerHref, PATHS, type Route } from "../router.js";
 import { showcaseEntries, showcaseTexts } from "../showcase.js";
 import { LINKS } from "../site.js";
 
@@ -351,11 +351,19 @@ export function buildHead(
             },
           },
     );
+    // Every step but the last must name its URL for a search engine to show the trail; a section
+    // is the index at its heading.
     const crumbs = [
       { name: t.docs.title, item: `${origin}${PATHS.docs}` },
       ...(page === undefined
         ? []
-        : [{ name: docsSectionLabel(t, page.section) }, { name: page.title, item: canonical }]),
+        : [
+            {
+              name: docsSectionLabel(t, page.section),
+              item: `${origin}${docsSectionHref(page.section)}`,
+            },
+            { name: page.title, item: canonical },
+          ]),
     ];
     jsonLd.push({
       "@context": "https://schema.org",
@@ -364,7 +372,7 @@ export function buildHead(
         "@type": "ListItem",
         position: index + 1,
         name: crumb.name,
-        ...("item" in crumb ? { item: crumb.item } : {}),
+        item: crumb.item,
       })),
     });
   }

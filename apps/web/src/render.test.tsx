@@ -1049,6 +1049,8 @@ describe("the documentation", () => {
       expect(index.routeName).toBe("docs");
       expect(index.body).toContain(t.docs.title);
       expect(index.body).toContain('href="/docs/format"');
+      // A section of the index is where the breadcrumbs of its pages point.
+      expect(index.body).toContain('<section id="reference"');
       expect(index.head).toContain(`<link rel="canonical" href="${ORIGIN_PLACEHOLDER}/docs"`);
 
       const page = renderPage("/docs/format", language);

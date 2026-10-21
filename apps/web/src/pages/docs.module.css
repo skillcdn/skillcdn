@@ -260,9 +260,17 @@
   }
 }
 
-/* The index: the pages of each section as cards, as many to a row as fit. */
+/* The index: the pages of each section as cards, as many to a row as fit. A section is where a
+   link to it lands (the breadcrumbs of its pages name it), so it stops below the bar. */
 .indexSection {
   margin-top: var(--space-7);
+  scroll-margin-top: calc(var(--docs-bar-height) + var(--space-3));
+}
+
+@media (min-width: 64rem) {
+  .indexSection {
+    scroll-margin-top: var(--space-3);
+  }
 }
 
 .indexTitle {
