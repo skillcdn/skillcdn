@@ -5,9 +5,10 @@ import {
   type IndexLimits,
   type IndexOutcome,
   NO_LICENSE,
+  type RepoPath,
   type Reranker,
 } from "@skillcdn/core";
-import { createIndexStore, type Database, type VectorKey } from "@skillcdn/db";
+import { createIndexStore, type Database, type SnapshotRecord, type VectorKey } from "@skillcdn/db";
 import { Reader } from "@skillcdn/reader";
 import type { SnapshotService } from "../indexer/snapshot-service.js";
 import type { Mount } from "./mount-service.js";
@@ -28,6 +29,11 @@ export interface MountMeaning {
    * query is embedded, and the words answer alone without saying anything of meaning.
    */
   readonly key: VectorKey | undefined;
+  /**
+   * Told of every snapshot a search by meaning asks for, so that one never embedded is queued
+   * (ADR-0064, point 4). Never waited for.
+   */
+  readonly onSearched?: ((mount: Mount, snapshot: SnapshotRecord) => void) | undefined;
 }
 
 export interface MountReaderOptions {
@@ -51,6 +57,24 @@ export function createMountReader(options: MountReaderOptions): Reader<Mount> {
         return outcome;
       }
       const { snapshot } = outcome;
+      const base = createIndexStore(
+        database,
+        { accountId: snapshot.accountId, snapshotId: snapshot.id },
+        { vectors },
+      );
+      const search = base.searchByMeaning;
+      const onSearched = meaning?.onSearched;
+      // A search by meaning says which snapshot it searched, so that one never embedded is queued.
+      const store =
+        search === undefined || onSearched === undefined
+          ? base
+          : {
+              ...base,
+              searchByMeaning: (mountPath: RepoPath, vector: Float32Array, limit: number) => {
+                onSearched(mount, snapshot);
+                return search.call(base, mountPath, vector, limit);
+              },
+            };
       return {
         status: "ready",
         index: {
@@ -59,11 +83,7 @@ export function createMountReader(options: MountReaderOptions): Reader<Mount> {
           version: snapshot.indexVersion,
           truncated: snapshot.truncated,
           license: snapshot.license ?? NO_LICENSE,
-          store: createIndexStore(
-            database,
-            { accountId: snapshot.accountId, snapshotId: snapshot.id },
-            { vectors },
-          ),
+          store,
           blobs: blobStore,
         },
       };

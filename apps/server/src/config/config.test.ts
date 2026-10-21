@@ -461,6 +461,7 @@ describe("the search by meaning", () => {
     expect(meaning.embeddings).toEqual({
       url: "http://inference.internal:8080/v1/embeddings",
       model: "an-embedding-model",
+      scope: "none",
       dimensions: 1024,
       queryInstruction: "Given a question, retrieve the sections that answer it",
       key: undefined,
@@ -487,6 +488,7 @@ describe("the search by meaning", () => {
         DATABASE_URL,
         EMBEDDINGS_URL: "https://inference.example/v1/embeddings",
         EMBEDDINGS_MODEL: "m",
+        EMBEDDINGS_SCOPE: "public",
         EMBEDDINGS_DIMENSIONS: "256",
         EMBEDDINGS_KEY_FILE: "/run/secrets/embeddings",
         EMBEDDINGS_TIMEOUT_MS: "120000",
@@ -505,6 +507,7 @@ describe("the search by meaning", () => {
       (path) => (path === "/run/secrets/embeddings" ? "an-embeddings-key\n" : "?"),
     );
     expect(meaning.embeddings).toMatchObject({
+      scope: "public",
       dimensions: 256,
       key: "an-embeddings-key",
       timeoutMs: 120_000,

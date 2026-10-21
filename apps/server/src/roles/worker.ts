@@ -48,11 +48,17 @@ export async function runWorker(config: Config, logger: Logger): Promise<void> {
       mounts: config.mounts,
       indexing: config.indexing,
       embedConcurrency: config.meaning.embeddings?.concurrency ?? 1,
+      scope: config.meaning.embeddings?.scope ?? "none",
     },
+    // Ports with a default implementation, as in the api role: a build that layers its own
+    // packages on top of this image replaces them here.
     { database, jobs, gitHost, embedder, clock: systemClock, logger },
   );
   const { queues } = await worker.start();
-  logger.info({ queues, model: embedder?.model }, "worker started");
+  logger.info(
+    { queues, model: embedder?.model, scope: config.meaning.embeddings?.scope },
+    "worker started",
+  );
 
   await new Promise<void>((resolve) => {
     const shutdown = (signal: string) => {

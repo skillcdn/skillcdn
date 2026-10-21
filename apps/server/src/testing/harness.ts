@@ -103,8 +103,8 @@ export interface HarnessOptions {
   readonly fetchClientDocument?: DocumentFetcher;
   /** How many clients nobody has used may be stored; the built-in bound when left out. */
   readonly maxUnusedClients?: number;
-  /** What follows a commit the harness indexed; left out, nothing. */
-  readonly onIndexed?: ApiPorts["onIndexed"];
+  /** Where the embedding of indexed commits is queued; left out, nowhere. */
+  readonly embedding?: ApiPorts["embedding"];
   /** The search by meaning; left out, the words answer alone. */
   readonly meaning?: ApiPorts["meaning"];
 }
@@ -183,7 +183,7 @@ export function createHarness(testDatabase: TestDatabase, options: HarnessOption
       isShuttingDown: () => false,
       web: options.web,
       stats: options.stats,
-      onIndexed: options.onIndexed,
+      embedding: options.embedding,
       meaning: options.meaning,
       // Tests never leave the process: a picture is found only when a test hands one in, and a
       // client's document only when a test serves one.

@@ -1,6 +1,12 @@
 import { createHash } from "node:crypto";
 import type { Client } from "@modelcontextprotocol/client";
-import { type Embedder, type Reranker, restFindSchema } from "@skillcdn/core";
+import {
+  allowEverything,
+  discardUsage,
+  type Embedder,
+  type Reranker,
+  restFindSchema,
+} from "@skillcdn/core";
 import { createBlobStore, ensureSnapshot, findRepoByAlias, type SnapshotScope } from "@skillcdn/db";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
 import { INDEX_VERSION } from "@skillcdn/indexer";
@@ -152,6 +158,8 @@ beforeAll(async () => {
       database: testDatabase.database,
       blobs: createBlobStore(testDatabase.database),
       embedder: embed.embedder,
+      policy: { scope: "all", entitlements: allowEverything },
+      usage: discardUsage,
       clock: { now: () => new Date() },
       logger: pino({ level: "silent" }),
     },

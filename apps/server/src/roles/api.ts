@@ -20,6 +20,7 @@ import {
   type Database,
   type JobQueue,
   supportsSectionVectors,
+  type VectorKey,
 } from "@skillcdn/db";
 import {
   connectGitHub,
@@ -46,17 +47,23 @@ import { Permissions } from "../auth/permissions.js";
 import { RepoTokens } from "../auth/repo-tokens.js";
 import { createSecrets } from "../auth/secrets.js";
 import { Sessions } from "../auth/sessions.js";
-import { type AuthConfig, type Config, ConfigError } from "../config/config.js";
+import {
+  type AuthConfig,
+  type Config,
+  ConfigError,
+  type EmbeddingScope,
+} from "../config/config.js";
 import { HostEvents } from "../events/host-events.js";
 import { type AppAuth, createApp } from "../http/app.js";
 import { createClientAddressResolver } from "../http/client-address.js";
 import type { AppEnv } from "../http/request-context.js";
 import { loadWebBundle, type WebBundle, WebBundleError } from "../http/web.js";
-import { type IndexedSnapshot, SnapshotService } from "../indexer/snapshot-service.js";
+import { SnapshotService } from "../indexer/snapshot-service.js";
 import { Janitor } from "../janitor.js";
-import { ensureJobQueues, sendEmbedJob } from "../jobs/queues.js";
+import { ensureJobQueues } from "../jobs/queues.js";
+import { createEmbedTriggers } from "../jobs/triggers.js";
 import type { Logger } from "../logger.js";
-import { type Mount, MountService } from "../mounts/mount-service.js";
+import { MountService } from "../mounts/mount-service.js";
 import { createMountReader, type MountMeaning } from "../mounts/reader.js";
 import { createOperatorEntitlements } from "../operator/entitlements.js";
 import { OperatorImages } from "../operator/images.js";
@@ -106,12 +113,14 @@ export interface ApiPorts {
    */
   readonly fetch?: ((input: string, init: RequestInit) => Promise<Response>) | undefined;
   /**
-   * What follows a commit this process indexed: the embedding of its sections, queued for the
-   * worker (ADR-0064). Left out, nothing follows.
+   * Where the embedding of commits is queued for the worker (ADR-0064): the queue, the key the
+   * vectors are made under, and which repositories are embedded. Left out, nothing is queued.
    */
-  readonly onIndexed?: ((mount: Mount, snapshot: IndexedSnapshot) => Promise<void>) | undefined;
+  readonly embedding?:
+    | { readonly jobs: JobQueue; readonly key: VectorKey; readonly scope: EmbeddingScope }
+    | undefined;
   /** The search by meaning (ADR-0064, ADR-0065). Left out, the search is by words alone. */
-  readonly meaning?: MountMeaning | undefined;
+  readonly meaning?: Omit<MountMeaning, "onSearched"> | undefined;
 }
 
 export type ApiConfig = Pick<Config, "mounts" | "indexing"> & {
@@ -156,6 +165,19 @@ export function createApi(
   const images = new OperatorImages({ database, clock });
   const legal = new LegalDocuments({ database, clock });
   const entitlements = createOperatorEntitlements(lists, ports.entitlements);
+  // The commits this process indexes, and the snapshots a search asks for that were never
+  // embedded, are queued for the worker within the scope and the entitlements (ADR-0064).
+  const triggers =
+    ports.embedding === undefined
+      ? undefined
+      : createEmbedTriggers({
+          database,
+          jobs: ports.embedding.jobs,
+          key: ports.embedding.key,
+          policy: { scope: ports.embedding.scope, entitlements },
+          clock,
+          logger,
+        });
 
   // People sign in only where the deployment is configured for it and the git host can be
   // asked who they are. Everything that follows from it hangs off this one value: without it
@@ -270,7 +292,8 @@ export function createApi(
     concurrency: config.indexing.concurrency,
     leaseMs: config.indexing.leaseMs,
     newLeaseOwner: randomUUID,
-    onIndexed: ports.onIndexed,
+    onIndexed:
+      triggers === undefined ? undefined : (mount, snapshot) => triggers.onIndexed(mount, snapshot),
   });
 
   const reader = createMountReader({
@@ -279,7 +302,16 @@ export function createApi(
     gitHost,
     snapshots,
     limits,
-    meaning: ports.meaning,
+    meaning:
+      ports.meaning === undefined
+        ? undefined
+        : {
+            ...ports.meaning,
+            onSearched:
+              triggers === undefined
+                ? undefined
+                : (mount, snapshot) => triggers.onSearched(mount, snapshot),
+          },
   });
   // The owner's picture, fetched once for the icon of an address's server and for its social
   // preview alike.
@@ -429,8 +461,8 @@ export async function runApi(config: Config, logger: Logger): Promise<void> {
   // worker to embed. The database has to keep vectors, and for the queue the migrate role has to
   // have installed it; without either, the api serves by words as before and says so once.
   let jobs: JobQueue | undefined;
-  let onIndexed: ApiPorts["onIndexed"];
-  let meaning: MountMeaning | undefined;
+  let embedding: ApiPorts["embedding"];
+  let meaning: ApiPorts["meaning"];
   if (config.meaning.embeddings !== undefined) {
     const key = vectorKeyOf(config.meaning.embeddings);
     const supported = await supportsSectionVectors(database);
@@ -463,14 +495,12 @@ export async function runApi(config: Config, logger: Logger): Promise<void> {
       );
     }
     if (jobs !== undefined && supported) {
-      const queue = jobs;
-      onIndexed = async (_mount, snapshot) => {
-        await sendEmbedJob(queue, { ...snapshot, key, reason: "indexed" });
-      };
+      embedding = { jobs, key, scope: config.meaning.embeddings.scope };
     }
     logger.info(
       {
         model: key.model,
+        scope: config.meaning.embeddings.scope,
         reranker: config.meaning.reranker?.model,
         vectors: supported,
         queue: jobs !== undefined,
@@ -481,7 +511,7 @@ export async function runApi(config: Config, logger: Logger): Promise<void> {
 
   let shuttingDown = false;
   const { app, snapshots } = createApi(config, {
-    onIndexed,
+    embedding,
     meaning,
     web,
     stats: recorder,

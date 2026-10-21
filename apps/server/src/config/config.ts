@@ -196,6 +196,7 @@ const environmentSchema = z.object({
   // The search by meaning (ADR-0064, ADR-0065): the inference servers, each read with its URL.
   EMBEDDINGS_URL: z.url({ protocol: /^https?$/ }).optional(),
   EMBEDDINGS_MODEL: z.string().min(1).max(200).optional(),
+  EMBEDDINGS_SCOPE: z.enum(["none", "public", "all"]).optional(),
   EMBEDDINGS_DIMENSIONS: integer(1024, 32, 4096),
   EMBEDDINGS_QUERY_INSTRUCTION: z
     .string()
@@ -262,12 +263,20 @@ export interface AuthConfig {
   readonly permissionTtlMs: number;
 }
 
+/**
+ * Which repositories are embedded (ADR-0064, point 4): none, the public ones, or every one the
+ * deployment indexes, private ones included, whose text then goes to the embedding server too.
+ */
+export type EmbeddingScope = "none" | "public" | "all";
+
 /** The embeddings server of the search by meaning (ADR-0064, ADR-0065). */
 export interface EmbeddingsConfig {
   /** The endpoint itself, of the common embeddings shape. */
   readonly url: string;
   /** What the request names, and what the vectors are keyed by. */
   readonly model: string;
+  /** Which repositories are embedded. `none` embeds nothing, and searches by what was embedded before. */
+  readonly scope: EmbeddingScope;
   /** How many numbers every vector has; a longer vector the model answers is cut to them. */
   readonly dimensions: number;
   /** The one-line task told to the model in front of a query, never of a document. Unset: none. */
@@ -489,6 +498,7 @@ function meaningOf(env: z.infer<typeof environmentSchema>, problems: string[]): 
   if (env.EMBEDDINGS_URL === undefined) {
     for (const name of [
       "EMBEDDINGS_MODEL",
+      "EMBEDDINGS_SCOPE",
       "EMBEDDINGS_QUERY_INSTRUCTION",
       "EMBEDDINGS_KEY",
     ] as const) {
@@ -502,6 +512,7 @@ function meaningOf(env: z.infer<typeof environmentSchema>, problems: string[]): 
     embeddings = {
       url: env.EMBEDDINGS_URL,
       model: env.EMBEDDINGS_MODEL,
+      scope: env.EMBEDDINGS_SCOPE ?? "none",
       dimensions: env.EMBEDDINGS_DIMENSIONS,
       queryInstruction: env.EMBEDDINGS_QUERY_INSTRUCTION,
       key: env.EMBEDDINGS_KEY,

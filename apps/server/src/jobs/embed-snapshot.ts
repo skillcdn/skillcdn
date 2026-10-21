@@ -2,18 +2,25 @@ import {
   type BlobStore,
   type Clock,
   type Embedder,
+  type EmbedLimits,
   embeddingTextOf,
   sectionsOf,
+  type UsageSink,
 } from "@skillcdn/core";
 import {
+  addEmbeddingUsage,
   blobsWithoutVectors,
   type Database,
   type EntryRecord,
+  embeddedBytesOfRepository,
+  getEmbeddingUsage,
+  getRepo,
   getSnapshot,
   recordSnapshotEmbedding,
   type SectionVector,
   type SnapshotScope,
   servedEntries,
+  usageDayOf,
   type VectorKey,
   writeSectionVectors,
 } from "@skillcdn/db";
@@ -21,11 +28,14 @@ import { compareByteOrder } from "@skillcdn/reader";
 import { vectorKeyOf } from "../adapters/meaning.js";
 import type { Logger } from "../logger.js";
 import type { EmbedJob } from "./queues.js";
+import { decideEmbedding, type EmbedPolicy } from "./scope.js";
 
 // One slice of the embedding of a snapshot (ADR-0064): the sections of its bodies, in the order
 // of its entries, embedded and written body by body, for as many sections as a slice takes, and
 // the rest handed back to the queue as the next slice. The vectors already written are the
-// checkpoint: a slice that runs again after an interruption skips the bodies that are done.
+// checkpoint: a slice that runs again after an interruption skips the bodies that are done. What
+// may be embedded at all is the scope's and the entitlements' to say, and a manifest may keep the
+// documents it governs out; the bounds are measured in the bytes of the bodies.
 
 /**
  * How many sections one job embeds before it hands the rest back: a minute or two on a CPU
@@ -38,30 +48,43 @@ export interface EmbedSliceDependencies {
   readonly database: Database;
   readonly blobs: Pick<BlobStore, "read">;
   readonly embedder: Embedder;
+  readonly policy: EmbedPolicy;
+  readonly usage: UsageSink;
   readonly clock: Clock;
   readonly logger: Logger;
   /** In place of {@link SLICE_SECTIONS}; for tests. */
   readonly sliceSections?: number | undefined;
 }
 
+/** What a slice wrote: bodies whose sections were written, their sections, bytes and tokens. */
+export interface EmbeddedCounts {
+  /** A body already done is not counted. */
+  readonly bodies: number;
+  readonly sections: number;
+  readonly tokens: number;
+  readonly bytes: number;
+}
+
 export type EmbedSliceOutcome =
-  | {
+  | (EmbeddedCounts & {
       readonly status: "embedded";
-      /** Bodies whose sections were written by this slice; a body already done is not counted. */
-      readonly bodies: number;
-      readonly sections: number;
-      readonly tokens: number;
       /** The path the next slice continues after; `undefined` when the snapshot is done. */
       readonly next: string | undefined;
-    }
+    })
+  | (EmbeddedCounts & {
+      readonly status: "limited";
+      /** Which bound stopped the slice: the repository's, or the account's for the day. */
+      readonly bound: "repository" | "account";
+    })
   | {
       readonly status: "skipped";
       /**
        * `other_key`: the job is for another model than this worker embeds with. `not_ready`: the
        * snapshot is gone, or being built again. `another_commit`: the snapshot row is another
-       * commit's now.
+       * commit's now. `out_of_scope`: the deployment does not embed repositories like this one.
+       * `refused`: the entitlements said no.
        */
-      readonly reason: "other_key" | "not_ready" | "another_commit";
+      readonly reason: "other_key" | "not_ready" | "another_commit" | "out_of_scope" | "refused";
     };
 
 /** What has sections to embed: a searchable Markdown document, or a skill's manifest, which is Markdown too. */
@@ -72,6 +95,36 @@ const sameKey = (a: VectorKey, b: VectorKey): boolean =>
   a.model === b.model &&
   a.dimensions === b.dimensions &&
   a.sectioningVersion === b.sectioningVersion;
+
+const directoryOf = (path: string): string =>
+  path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
+
+/**
+ * Whether each path's documents are embedded, as the nearest repository manifest at or above it
+ * says (ADR-0064): a manifest that turns the search by meaning off keeps the text of the documents
+ * it governs from the embedding server, and a nearer manifest decides for its own directory.
+ */
+function meaningAllowedBy(entries: readonly EntryRecord[]): (path: string) => boolean {
+  const manifests = new Map<string, boolean>();
+  for (const entry of entries) {
+    if (entry.kind === "manifest") {
+      manifests.set(directoryOf(entry.path), entry.frontMatter?.search?.meaning !== false);
+    }
+  }
+  return (path) => {
+    let directory = directoryOf(path);
+    while (true) {
+      const decided = manifests.get(directory);
+      if (decided !== undefined) {
+        return decided;
+      }
+      if (directory.length === 0) {
+        return true;
+      }
+      directory = directoryOf(directory);
+    }
+  };
+}
 
 /**
  * The texts in calls of what the embedder takes at once: at most `maxTexts` texts and
@@ -137,10 +190,34 @@ async function embedBody(
   return { sections: items.length, tokens };
 }
 
+/** The bytes already embedded that a bound counts, read once per slice where the bound exists. */
+async function embeddedSoFar(
+  deps: EmbedSliceDependencies,
+  job: EmbedJob,
+  key: VectorKey,
+  limits: Partial<EmbedLimits>,
+  day: string,
+): Promise<{ repository: number; account: number }> {
+  const [repository, usage] = await Promise.all([
+    limits.maxBytesPerRepository === undefined
+      ? 0
+      : embeddedBytesOfRepository(
+          deps.database,
+          { accountId: job.accountId, repoId: job.repoId },
+          key,
+        ),
+    limits.maxBytesPerAccountPerDay === undefined
+      ? undefined
+      : getEmbeddingUsage(deps.database, job.accountId, day),
+  ]);
+  return { repository, account: usage?.bytes ?? 0 };
+}
+
 /**
  * Runs one slice of `job`: embeds the bodies of the snapshot's entries after `job.after`, in
- * path order, until a slice's worth of sections is written, and records the progress. A failure
- * of the embedder is thrown, for the queue to try the slice again; what was written stays.
+ * path order, until a slice's worth of sections is written or a bound is reached, and records
+ * the progress, the account's day and a usage event. A failure of the embedder is thrown, for
+ * the queue to try the slice again; what was written stays.
  */
 export async function embedSnapshotSlice(
   deps: EmbedSliceDependencies,
@@ -152,31 +229,58 @@ export async function embedSnapshotSlice(
     return { status: "skipped", reason: "other_key" };
   }
   const scope: SnapshotScope = { accountId: job.accountId, snapshotId: job.snapshotId };
-  const snapshot = await getSnapshot(database, scope);
-  if (snapshot === undefined || snapshot.status !== "ready") {
+  const [snapshot, repo] = await Promise.all([
+    getSnapshot(database, scope),
+    getRepo(database, { accountId: job.accountId, repoId: job.repoId }),
+  ]);
+  if (snapshot === undefined || snapshot.status !== "ready" || repo === undefined) {
     return { status: "skipped", reason: "not_ready" };
   }
   if (snapshot.commitSha !== job.commitSha) {
     return { status: "skipped", reason: "another_commit" };
   }
+  const decision = await decideEmbedding(deps.policy, repo.host, repo.repository);
+  if (!decision.allowed) {
+    return { status: "skipped", reason: decision.reason === "scope" ? "out_of_scope" : "refused" };
+  }
 
-  const entries = (await servedEntries(database, scope)).filter(
+  const served = await servedEntries(database, scope);
+  const allowed = meaningAllowedBy(served);
+  const entries = served.filter(
     (entry) =>
-      embeddable(entry) && (job.after === undefined || compareByteOrder(entry.path, job.after) > 0),
+      embeddable(entry) &&
+      allowed(entry.path) &&
+      (job.after === undefined || compareByteOrder(entry.path, job.after) > 0),
   );
   const missing = await blobsWithoutVectors(
     database,
     key,
     entries.map((entry) => entry.blobSha),
   );
+  const day = usageDayOf(clock.now());
+  const soFar = await embeddedSoFar(deps, job, key, decision.limits, day);
   const limit = deps.sliceSections ?? SLICE_SECTIONS;
   const seen = new Set<string>();
-  let bodies = 0;
-  let sections = 0;
-  let tokens = 0;
+  const counts = { bodies: 0, sections: 0, tokens: 0, bytes: 0 };
   let next: string | undefined;
+  let bound: "repository" | "account" | undefined;
   for (const [index, entry] of entries.entries()) {
     if (missing.has(entry.blobSha) && !seen.has(entry.blobSha)) {
+      const { maxBytesPerRepository, maxBytesPerAccountPerDay } = decision.limits;
+      if (
+        maxBytesPerRepository !== undefined &&
+        soFar.repository + counts.bytes + entry.size > maxBytesPerRepository
+      ) {
+        bound = "repository";
+        break;
+      }
+      if (
+        maxBytesPerAccountPerDay !== undefined &&
+        soFar.account + counts.bytes + entry.size > maxBytesPerAccountPerDay
+      ) {
+        bound = "account";
+        break;
+      }
       seen.add(entry.blobSha);
       const text = await deps.blobs.read(entry.blobSha);
       if (text === undefined) {
@@ -193,23 +297,41 @@ export async function embedSnapshotSlice(
           text,
         );
         if (done.sections > 0) {
-          bodies += 1;
+          counts.bodies += 1;
+          counts.bytes += entry.size;
         }
-        sections += done.sections;
-        tokens += done.tokens;
+        counts.sections += done.sections;
+        counts.tokens += done.tokens;
       }
     }
-    if (sections >= limit && index < entries.length - 1) {
+    if (counts.sections >= limit && index < entries.length - 1) {
       next = entry.path;
       break;
     }
   }
+  const now = clock.now();
   await recordSnapshotEmbedding(
     database,
     scope,
     key,
-    { bodies, sections, tokens, completed: next === undefined },
-    clock.now(),
+    { ...counts, completed: bound === undefined && next === undefined },
+    now,
   );
-  return { status: "embedded", bodies, sections, tokens, next };
+  if (counts.sections > 0) {
+    await addEmbeddingUsage(database, job.accountId, day, counts, now);
+    deps.usage.record({
+      type: "embedding",
+      at: now,
+      hostAccountId: repo.repository.owner.hostAccountId,
+      hostRepoId: repo.repository.hostRepoId,
+      subject: key.model,
+      quantity: counts.tokens,
+      unit: "token",
+    });
+  }
+  if (bound !== undefined) {
+    logger.info({ bound, ...counts }, "the embedding stopped at a bound");
+    return { status: "limited", bound, ...counts };
+  }
+  return { status: "embedded", ...counts, next };
 }

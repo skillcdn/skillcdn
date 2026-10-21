@@ -5,6 +5,7 @@ import {
   listSnapshotsToEmbed,
   type VectorKey,
 } from "@skillcdn/db";
+import type { EmbeddingScope } from "../config/config.js";
 import type { Logger } from "../logger.js";
 import { sendEmbedJob } from "./queues.js";
 
@@ -19,6 +20,8 @@ export interface SweepDependencies {
   readonly database: Database;
   readonly jobs: JobQueue;
   readonly key: VectorKey;
+  /** Which repositories are embedded: under `public`, the snapshots of private ones are not looked at. */
+  readonly scope: EmbeddingScope;
   readonly logger: Logger;
   readonly limit?: number | undefined;
 }
@@ -34,7 +37,12 @@ export interface SweepOutcome {
 
 export async function sweepEmbeddings(deps: SweepDependencies): Promise<SweepOutcome> {
   const { database, jobs, key } = deps;
-  const pending = await listSnapshotsToEmbed(database, key, deps.limit ?? SWEEP_LIMIT);
+  if (deps.scope === "none") {
+    return { pending: 0, queued: 0, dropped: undefined };
+  }
+  const pending = await listSnapshotsToEmbed(database, key, deps.limit ?? SWEEP_LIMIT, {
+    visibility: deps.scope === "public" ? "public" : undefined,
+  });
   let queued = 0;
   for (const snapshot of pending) {
     if (await sendEmbedJob(jobs, { ...snapshot, key, reason: "backfill" })) {

@@ -1,5 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { type Clock, discardUsage, type Embedder, type GitHost } from "@skillcdn/core";
+import {
+  allowEverything,
+  type Clock,
+  discardUsage,
+  type Embedder,
+  type Entitlements,
+  type GitHost,
+  type UsageSink,
+} from "@skillcdn/core";
 import {
   createBlobStore,
   type Database,
@@ -9,7 +17,7 @@ import {
 } from "@skillcdn/db";
 import type * as z from "zod";
 import { vectorKeyOf } from "../adapters/meaning.js";
-import type { Config } from "../config/config.js";
+import type { Config, EmbeddingScope } from "../config/config.js";
 import { SnapshotService } from "../indexer/snapshot-service.js";
 import type { Logger } from "../logger.js";
 import { MountService } from "../mounts/mount-service.js";
@@ -43,6 +51,8 @@ const STALE_GRACE_FACTOR = 10;
 export type WorkerConfig = Pick<Config, "mounts" | "indexing"> & {
   /** Slices embedded at once by this process: the calls the embedder has in flight at once. */
   readonly embedConcurrency: number;
+  /** Which repositories are embedded (ADR-0064, point 4). Under `none` the worker embeds nothing. */
+  readonly scope: EmbeddingScope;
 };
 
 export interface WorkerPorts {
@@ -51,6 +61,10 @@ export interface WorkerPorts {
   readonly gitHost: GitHost;
   /** Left out, the worker indexes on request and embeds nothing. */
   readonly embedder: Embedder | undefined;
+  /** Who may have what embedded, and within which bounds; everything, when left out. */
+  readonly entitlements?: Entitlements | undefined;
+  /** Where the embedding events go; nowhere, when left out. */
+  readonly usage?: UsageSink | undefined;
   readonly clock: Clock;
   readonly logger: Logger;
   /** How often the queues are looked at; for tests. */
@@ -74,11 +88,14 @@ export function createWorker(config: WorkerConfig, ports: WorkerPorts): Worker {
   const { database, jobs, gitHost, embedder, clock, logger } = ports;
   const blobs = createBlobStore(database);
   const lists = new OperatorLists({ database, clock });
+  // The operator's deny list decides first; whatever the port was given decides the rest.
+  const entitlements = createOperatorEntitlements(lists, ports.entitlements ?? allowEverything);
+  const usage = ports.usage ?? discardUsage;
   const mounts = new MountService({
     database,
     gitHost,
     clock,
-    entitlements: createOperatorEntitlements(lists),
+    entitlements,
     repoTtlMs: config.mounts.repoTtlMs,
     refTtlMs: config.mounts.refTtlMs,
     staleGraceMs: Math.max(config.mounts.repoTtlMs, config.mounts.refTtlMs) * STALE_GRACE_FACTOR,
@@ -131,7 +148,15 @@ export function createWorker(config: WorkerConfig, ports: WorkerPorts): Worker {
           "the database has no vector extension, so the sections of indexed commits are not embedded",
         );
       }
-      const embedding = embedder !== undefined && supported && key !== undefined;
+      if (embedder !== undefined && supported && config.scope === "none") {
+        logger.info(
+          { model: embedder.model },
+          "the embedding scope is none, so nothing is embedded; what was embedded before is searched",
+        );
+      }
+      const embedding =
+        embedder !== undefined && supported && key !== undefined && config.scope !== "none";
+      const policy = { scope: config.scope, entitlements };
       await jobs.work(
         INDEX_QUEUE,
         { concurrency: 1, pollSeconds },
@@ -155,7 +180,16 @@ export function createWorker(config: WorkerConfig, ports: WorkerPorts): Worker {
             account: job.accountId,
           });
           const outcome = await embedSnapshotSlice(
-            { database, blobs, embedder, clock, logger: log, sliceSections: ports.sliceSections },
+            {
+              database,
+              blobs,
+              embedder,
+              policy,
+              usage,
+              clock,
+              logger: log,
+              sliceSections: ports.sliceSections,
+            },
             job,
           );
           if (outcome.status === "embedded" && outcome.next !== undefined) {
@@ -168,7 +202,9 @@ export function createWorker(config: WorkerConfig, ports: WorkerPorts): Worker {
       await jobs.work(
         SWEEP_QUEUE,
         { concurrency: 1, pollSeconds },
-        handling(sweepJobSchema, () => sweepEmbeddings({ database, jobs, key, logger })),
+        handling(sweepJobSchema, () =>
+          sweepEmbeddings({ database, jobs, key, scope: config.scope, logger }),
+        ),
       );
       await jobs.schedule(SWEEP_QUEUE, SWEEP_SCHEDULE, {}, SWEEP_SCHEDULE_KEY);
       // And once now: what a deployment that was down, or that changed its model, has to catch up on.
