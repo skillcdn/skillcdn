@@ -17,6 +17,7 @@ import type {
   RestFind,
   RestLicense,
   RestMount,
+  RestMountSearch,
   RestRepository,
   RestRepoTranslation,
   RestSkill,
@@ -192,6 +193,13 @@ export interface MountFacts {
   readonly image: (manifest: MountOverview["manifest"]) => string | null;
 }
 
+/** How the mount is searched, as the API says it: by words alone where nothing says otherwise. */
+function restSearchOf(search: MountOverview["search"]): RestMountSearch {
+  return search === undefined
+    ? { meaning: false, embedding: null }
+    : { meaning: search.meaning, embedding: search.embedding ?? null };
+}
+
 /** What an address serves, as the API says it: shared with the page rendered for browsers. */
 export function mountBody(
   facts: MountFacts,
@@ -213,6 +221,7 @@ export function mountBody(
         : {
             status: "ready",
             truncated: answer.overview.mount.truncated,
+            search: restSearchOf(answer.overview.search),
             license: restLicenseOf(answer.overview.license),
             manifest:
               answer.overview.manifest === undefined

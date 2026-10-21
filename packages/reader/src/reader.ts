@@ -44,6 +44,7 @@ import {
   type MountCatalog,
   type MountManifest,
   type MountOverview,
+  type MountSearch,
   type MountSummary,
   matchSections,
   NO_LICENSE,
@@ -932,9 +933,36 @@ export class Reader<M extends MountContext = MountContext> {
       });
       remember(this.#catalogs, key, MAX_CACHED_CATALOGS, loading);
     }
+    // How the mount is searched changes as its embedding comes along, so it is not kept with the rest.
+    const search = await this.#searchOf(index);
     return {
       status: "ready",
-      catalog: { mount: this.summary(mount, index), ...(await loading) },
+      catalog: {
+        mount: this.summary(mount, index),
+        ...(await loading),
+        ...(search === undefined ? {} : { search }),
+      },
+    };
+  }
+
+  /**
+   * How the mount is searched right now (ADR-0064): nothing to say where the words answer alone;
+   * else whether the vectors of the index take part, which they do once any exist, and how far
+   * the embedding has come where the store counts it.
+   */
+  async #searchOf(index: ReadableIndex): Promise<MountSearch | undefined> {
+    const { store } = index;
+    if (this.#dependencies.meaning === undefined || store.searchByMeaning === undefined) {
+      return undefined;
+    }
+    if (store.embeddingProgress === undefined) {
+      return { meaning: true, embedding: undefined };
+    }
+    const embedding = await store.embeddingProgress();
+    return {
+      meaning:
+        embedding !== undefined && (embedding.status === "complete" || embedding.embedded > 0),
+      embedding,
     };
   }
 
@@ -1815,10 +1843,12 @@ export class Reader<M extends MountContext = MountContext> {
     const counts = countEntries(entries, path);
     const skills = listEntries(entries, path, listLimit, "skills");
     const documents = listEntries(entries, path, listLimit, "documents_outside_skills");
+    const search = await this.#searchOf(index);
     return {
       status: "ready",
       overview: {
         overview: await this.#overviewOf(index, path),
+        ...(search === undefined ? {} : { search }),
         mount: this.summary(mount, index),
         groups: groups.filter((entry) => entry.kind === "directory").slice(0, BROWSE_DEFAULT_LIMIT),
         manifest,

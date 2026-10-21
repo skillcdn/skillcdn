@@ -195,6 +195,21 @@ export const restManifestSchema = z.object({
   translations: restRepoTranslationsSchema,
 });
 
+/**
+ * How the mount is searched right now (ADR-0064): by words alone, or by words and meaning, and
+ * where the embedding of its index stands: `null` where nothing has embedded it or nothing counts
+ * it, complete, or how many of the documents to embed have their vectors so far.
+ */
+export const restMountSearchSchema = z.object({
+  meaning: z.boolean(),
+  embedding: z.nullable(
+    z.discriminatedUnion("status", [
+      z.object({ status: z.literal("complete") }),
+      z.object({ status: z.literal("in_progress"), embedded: count, total: count }),
+    ]),
+  ),
+});
+
 export const restMountSchema = z.object({
   address: z.string(),
   repository: restRepositorySchema,
@@ -223,6 +238,8 @@ export const restMountSchema = z.object({
       documents: z.array(restDocumentSummarySchema),
       diagnostics: z.array(restDiagnosticSchema),
       groups: z.optional(z.array(restBrowseEntrySchema)),
+      /** Absent from an answer of a deployment older than the field. */
+      search: z.optional(restMountSearchSchema),
     }),
     indexing,
     failed,
@@ -429,6 +446,7 @@ export type RestSkillSummary = z.infer<typeof restSkillSummarySchema>;
 export type RestDocumentSummary = z.infer<typeof restDocumentSummarySchema>;
 export type RestDiagnostic = z.infer<typeof restDiagnosticSchema>;
 export type RestMount = z.infer<typeof restMountSchema>;
+export type RestMountSearch = z.infer<typeof restMountSearchSchema>;
 export type RestFindItem = z.infer<typeof restFindItemSchema>;
 export type RestFind = z.infer<typeof restFindSchema>;
 export type RestSkill = z.infer<typeof restSkillSchema>;

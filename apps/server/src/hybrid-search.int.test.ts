@@ -6,6 +6,7 @@ import {
   type Embedder,
   type Reranker,
   restFindSchema,
+  restMountSchema,
 } from "@skillcdn/core";
 import { createBlobStore, ensureSnapshot, findRepoByAlias, type SnapshotScope } from "@skillcdn/db";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
@@ -249,6 +250,22 @@ describe("a search by words and by meaning", () => {
     expect(unranked.items.map((item) => item.path)).toEqual(paths);
   });
 
+  it("says how the pack is searched, on the mount and on connect", async () => {
+    // The whole pack is embedded: the search uses the vectors, and the instructions say so.
+    const response = await h.request(`/api/v1/mounts${ADDRESS}`);
+    const mount = restMountSchema.parse(await response.json());
+    expect(mount.index.status === "ready" ? mount.index.search : undefined).toEqual({
+      meaning: true,
+      embedding: { status: "complete" },
+    });
+    // The connection of the setup predates the embedding: a client connecting now is told.
+    const fresh = await h.connect(ADDRESS);
+    expect(fresh.getInstructions()).toContain(
+      "search_repo matches words and meaning, so ask in your own words",
+    );
+    await fresh.close();
+  });
+
   it("says nothing of meaning where a deployment has none", async () => {
     const plain = createHarness(testDatabase, { host });
     const other = await plain.connect(ADDRESS);
@@ -259,6 +276,14 @@ describe("a search by words and by meaning", () => {
     expect(text).not.toContain("Ranked by");
     const body = await find("waive a late fee", plain);
     expect(body.ranking).toBeUndefined();
+    // The words answer alone, and the mount and the instructions say so.
+    const response = await plain.request(`/api/v1/mounts${ADDRESS}`);
+    const mount = restMountSchema.parse(await response.json());
+    expect(mount.index.status === "ready" ? mount.index.search : undefined).toEqual({
+      meaning: false,
+      embedding: null,
+    });
+    expect(other.getInstructions()).toContain("search_repo matches original words");
     await other.close();
   });
 });

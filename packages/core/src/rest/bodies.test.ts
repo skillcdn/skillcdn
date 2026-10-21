@@ -179,6 +179,59 @@ describe("the mounts body", () => {
       description: "Acme's skills",
     });
   });
+
+  it("says how the mount is searched: by words alone unless the overview says otherwise", () => {
+    expect(restMount.index.status === "ready" ? restMount.index.search : undefined).toEqual({
+      meaning: false,
+      embedding: null,
+    });
+    const state = catalogStateOf(restMount);
+    // Read back, the words answer alone: a catalog made from the body says so too.
+    expect(state.status === "ready" ? state.catalog.search : null).toEqual({
+      meaning: false,
+      embedding: undefined,
+    });
+    const facts = {
+      address: address("/gh/acme/skills"),
+      repository: restMount.repository,
+      commit: COMMIT,
+      verified: true,
+      image: () => null,
+    };
+    const embedding = mountBody(facts, {
+      status: "ready",
+      overview: {
+        ...overview,
+        search: { meaning: true, embedding: { status: "in_progress", embedded: 3, total: 12 } },
+      },
+    });
+    expect(restMountSchema.parse(embedding)).toEqual(embedding);
+    const search = embedding.index.status === "ready" ? embedding.index.search : undefined;
+    expect(search).toEqual({
+      meaning: true,
+      embedding: { status: "in_progress", embedded: 3, total: 12 },
+    });
+    const read = catalogStateOf(embedding);
+    expect(read.status === "ready" ? read.catalog.search : undefined).toEqual({
+      meaning: true,
+      embedding: { status: "in_progress", embedded: 3, total: 12 },
+    });
+    expect(renderInstructions(read)).toContain("matches words and meaning");
+    // Nothing counted: the vectors are there, and that is all that is known.
+    const uncounted = mountBody(facts, {
+      status: "ready",
+      overview: { ...overview, search: { meaning: true, embedding: undefined } },
+    });
+    expect(uncounted.index.status === "ready" ? uncounted.index.search : undefined).toEqual({
+      meaning: true,
+      embedding: null,
+    });
+    const back = catalogStateOf(uncounted);
+    expect(back.status === "ready" ? back.catalog.search : undefined).toEqual({
+      meaning: true,
+      embedding: undefined,
+    });
+  });
 });
 
 describe("the browse body", () => {

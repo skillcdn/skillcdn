@@ -1,4 +1,5 @@
 import type { LicenseFact } from "../license.js";
+import type { MountSearch } from "../ports/index-store.js";
 import type { RepoFileKind } from "../repo-layout.js";
 import type { RepoTranslation } from "../repo-manifest.js";
 import type { RepoPath } from "../repo-path.js";
@@ -114,4 +115,6 @@ export interface MountOverview {
   readonly skills: readonly SkillListing[];
   readonly documents: readonly Extract<FindItem, { kind: "document" }>[];
   readonly diagnostics: readonly IndexDiagnostic[];
+  /** How the mount is searched (ADR-0064); left out where the words answer alone and nothing is to say. */
+  readonly search?: MountSearch | undefined;
 }

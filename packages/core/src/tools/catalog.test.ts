@@ -229,4 +229,30 @@ describe("repository instructions", () => {
     expect(text).toContain("Written in ko");
     expect(text).toContain("nextCursor");
   });
+  it("says in one line what the search matches: words, or words and meaning", () => {
+    const words = renderInstructions({ status: "ready", catalog: base });
+    expect(words).toContain(
+      "search_repo matches original words (usually English) and names the sections that matched.",
+    );
+    expect(words).not.toContain("meaning");
+    const notYet = renderInstructions({
+      status: "ready",
+      catalog: {
+        ...base,
+        search: { meaning: false, embedding: { status: "in_progress", embedded: 0, total: 12 } },
+      },
+    });
+    expect(notYet).toContain("matches original words");
+    const meaning = renderInstructions({
+      status: "ready",
+      catalog: { ...base, search: { meaning: true, embedding: { status: "complete" } } },
+    });
+    expect(meaning).toContain(
+      "search_repo matches words and meaning, so ask in your own words; it names the sections that matched.",
+    );
+    expect(meaning).not.toContain("original words");
+    expect(meaning.length).toBeLessThanOrEqual(INSTRUCTIONS_MAX_LENGTH);
+    // While the commit is not ready there are no vectors to speak of.
+    expect(renderInstructions({ status: "indexing", mount })).toContain("matches original words");
+  });
 });

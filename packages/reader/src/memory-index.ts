@@ -2,9 +2,12 @@ import { createHash } from "node:crypto";
 import {
   type BlobStore,
   type DocumentSection,
+  type EmbeddingProgress,
+  embeddable,
   type IndexEntry,
   type IndexStore,
   type MeaningMatch,
+  meaningSearchOf,
   parseSearchVector,
   type ReadableIndex,
   type RepoPath,
@@ -175,6 +178,26 @@ export function createMemoryIndex(options: MemoryIndexOptions): ReadableIndex {
                   a.section - b.section,
               )
               .slice(0, limit);
+          },
+          async embeddingProgress(): Promise<EmbeddingProgress | undefined> {
+            // The bodies to embed are the ones a deployment's worker would embed (ADR-0064):
+            // the findable documents whose manifest does not keep them to the words, once each.
+            const allowed = meaningSearchOf(index.entries);
+            const wanted = new Set<string>();
+            for (const entry of served) {
+              if (embeddable(entry) && allowed(entry.path)) {
+                wanted.add(entry.blobSha);
+              }
+            }
+            let embedded = 0;
+            for (const blobSha of wanted) {
+              if (options.vectors?.sectionsOf(blobSha) !== undefined) {
+                embedded += 1;
+              }
+            }
+            return embedded === wanted.size
+              ? { status: "complete" }
+              : { status: "in_progress", embedded, total: wanted.size };
           },
         }),
   };

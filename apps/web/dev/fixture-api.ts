@@ -214,6 +214,7 @@ function mountBody(
           : {
               status: "ready",
               truncated: repository.truncated === true,
+              search: repository.search ?? { meaning: false, embedding: null },
               manifest:
                 repository.manifest === undefined
                   ? null

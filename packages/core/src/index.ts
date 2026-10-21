@@ -129,9 +129,11 @@ export type {
   HostUser,
 } from "./ports/git-host-login.js";
 export type {
+  EmbeddingProgress,
   IndexOutcome,
   IndexStore,
   MeaningMatch,
+  MountSearch,
   ReadableIndex,
 } from "./ports/index-store.js";
 export type { Reranker } from "./ports/reranker.js";

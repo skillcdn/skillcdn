@@ -68,6 +68,14 @@ export interface FixtureRepository {
   readonly commit: string;
   readonly state: "ready" | "indexing" | "slow" | "failed";
   readonly truncated?: boolean;
+  /** How the repository is searched (ADR-0064); by words alone when left out. */
+  readonly search?: {
+    readonly meaning: boolean;
+    readonly embedding:
+      | null
+      | { readonly status: "complete" }
+      | { readonly status: "in_progress"; readonly embedded: number; readonly total: number };
+  };
   readonly skills: readonly SkillDetail[];
   readonly documents: readonly RestDocumentSummary[];
   readonly diagnostics: readonly RestDiagnostic[];
@@ -385,6 +393,7 @@ const DEMO_LONG: FixtureRepository = {
   commit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   state: "ready",
   truncated: true,
+  search: { meaning: true, embedding: { status: "in_progress", embedded: 71, total: 230 } },
   skills: Array.from({ length: 230 }, (_, index) =>
     skill(
       `skills/generated/skill-number-${index + 1}-with-a-long-directory-name`,
@@ -426,6 +435,7 @@ export const FIXTURE_REPOSITORIES: Readonly<Record<string, FixtureRepository>> =
   "acme/handbook": {
     owner: "Acme",
     name: "handbook",
+    search: { meaning: true, embedding: { status: "complete" } },
     defaultBranch: "trunk",
     description: "How Acme works, as plain documents.",
     overviews: {

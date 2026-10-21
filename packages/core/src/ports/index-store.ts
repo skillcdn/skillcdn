@@ -32,8 +32,33 @@ export interface IndexStore {
     vector: Float32Array,
     limit: number,
   ): Promise<readonly MeaningMatch[]>;
+  /**
+   * How far the embedding of the index for the search by meaning has come (ADR-0064), where the
+   * store keeps vectors: `undefined` while nothing has embedded it. Left out by a store that
+   * keeps no vectors, and by one that does not count.
+   */
+  embeddingProgress?(): Promise<EmbeddingProgress | undefined>;
   /** What the reading rules could not read as intended. */
   diagnostics(): Promise<readonly SnapshotDiagnostic[]>;
+}
+
+/**
+ * How far the embedding of an index for the search by meaning has come (ADR-0064): complete, or
+ * how many of the bodies that are to be embedded have their vectors so far.
+ */
+export type EmbeddingProgress =
+  | { readonly status: "complete" }
+  | { readonly status: "in_progress"; readonly embedded: number; readonly total: number };
+
+/**
+ * How a mount is searched right now (ADR-0064): by words alone, or by words and meaning, and
+ * how far the embedding of its index has come.
+ */
+export interface MountSearch {
+  /** Whether a search of the mount uses the vectors of its sections: some exist under the model in use. */
+  readonly meaning: boolean;
+  /** Where the embedding stands; `undefined` where nothing has embedded the index, or nothing counts it. */
+  readonly embedding: EmbeddingProgress | undefined;
 }
 
 /** A section of an entry, as near to a query as a search by meaning found it. */

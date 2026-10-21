@@ -11,10 +11,12 @@ import { drizzleOf } from "./client.js";
 import {
   blobsWithoutVectors,
   claimSnapshot,
+  createIndexStore,
   type Database,
   ensureSnapshot,
   migrateDatabase,
   purgeRepositoryIndex,
+  recordSnapshotEmbedding,
   type SectionVector,
   type SnapshotScope,
   saveRepository,
@@ -243,6 +245,62 @@ describe("section vectors", () => {
       ["copy.md", 0],
       ["copy.md", 1],
     ]);
+  });
+
+  it("say how far the embedding of a snapshot has come, as the index store answers it", async () => {
+    const scope = await readySnapshot([
+      entry({
+        path: "SKILLCDN.md",
+        blobSha: "blob-progress-root",
+        kind: "manifest",
+        searchable: false,
+      }),
+      entry({ path: "docs/a.md", blobSha: "blob-progress-a" }),
+      entry({ path: "docs/b.md", blobSha: "blob-progress-b" }),
+      entry({
+        path: "docs/private/SKILLCDN.md",
+        blobSha: "blob-progress-private",
+        kind: "manifest",
+        searchable: false,
+        frontMatter: { metadata: {}, warnings: [], search: { meaning: false } },
+      }),
+      entry({ path: "docs/private/notes.md", blobSha: "blob-progress-notes" }),
+      entry({ path: "docs/data.json", blobSha: "blob-progress-json", kind: "json" }),
+    ]);
+    expect(createIndexStore(database, scope).embeddingProgress).toBeUndefined();
+    const store = createIndexStore(database, scope, { vectors: KEY });
+    // Nothing has embedded the snapshot: nothing to say.
+    expect(await store.embeddingProgress?.()).toBeUndefined();
+    // A slice wrote one of the two bodies to embed: the manifest keeps the notes out, and the
+    // JSON file has no sections.
+    await writeSectionVectors(
+      database,
+      KEY,
+      vectorsOf("blob-progress-a", TOUR, [
+        [1, 0, 0, 0],
+        [0, 1, 0, 0],
+      ]),
+    );
+    await recordSnapshotEmbedding(
+      database,
+      scope,
+      KEY,
+      { bodies: 1, sections: 2, tokens: 0, bytes: 10, completed: false },
+      T0,
+    );
+    expect(await store.embeddingProgress?.()).toEqual({
+      status: "in_progress",
+      embedded: 1,
+      total: 2,
+    });
+    await recordSnapshotEmbedding(
+      database,
+      scope,
+      KEY,
+      { bodies: 1, sections: 2, tokens: 0, bytes: 10, completed: true },
+      T0,
+    );
+    expect(await store.embeddingProgress?.()).toEqual({ status: "complete" });
   });
 
   it("go with the bodies a purge finds unreferenced, and stay with the ones another repository holds", async () => {
