@@ -3,7 +3,10 @@ import {
   type Clock,
   type Embedder,
   type EmbedLimits,
+  embeddable,
+  embeddingBatches,
   embeddingTextOf,
+  meaningSearchOf,
   sectionsOf,
   type UsageSink,
 } from "@skillcdn/core";
@@ -11,7 +14,6 @@ import {
   addEmbeddingUsage,
   blobsWithoutVectors,
   type Database,
-  type EntryRecord,
   embeddedBytesOfRepository,
   getEmbeddingUsage,
   getRepo,
@@ -87,75 +89,10 @@ export type EmbedSliceOutcome =
       readonly reason: "other_key" | "not_ready" | "another_commit" | "out_of_scope" | "refused";
     };
 
-/** What has sections to embed: a searchable Markdown document, or a skill's manifest, which is Markdown too. */
-const embeddable = (entry: EntryRecord): boolean =>
-  entry.searchable && (entry.kind === "markdown" || entry.kind === "skill");
-
 const sameKey = (a: VectorKey, b: VectorKey): boolean =>
   a.model === b.model &&
   a.dimensions === b.dimensions &&
   a.sectioningVersion === b.sectioningVersion;
-
-const directoryOf = (path: string): string =>
-  path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
-
-/**
- * Whether each path's documents are embedded, as the nearest repository manifest at or above it
- * says (ADR-0064): a manifest that turns the search by meaning off keeps the text of the documents
- * it governs from the embedding server, and a nearer manifest decides for its own directory.
- */
-function meaningAllowedBy(entries: readonly EntryRecord[]): (path: string) => boolean {
-  const manifests = new Map<string, boolean>();
-  for (const entry of entries) {
-    if (entry.kind === "manifest") {
-      manifests.set(directoryOf(entry.path), entry.frontMatter?.search?.meaning !== false);
-    }
-  }
-  return (path) => {
-    let directory = directoryOf(path);
-    while (true) {
-      const decided = manifests.get(directory);
-      if (decided !== undefined) {
-        return decided;
-      }
-      if (directory.length === 0) {
-        return true;
-      }
-      directory = directoryOf(directory);
-    }
-  };
-}
-
-/**
- * The texts in calls of what the embedder takes at once: at most `maxTexts` texts and
- * `maxBatchChars` characters, each text counted as the embedder will cut it. One text alone is
- * always a call, however long: the embedder cuts it to what it embeds.
- */
-export function batchesOf(
-  texts: readonly string[],
-  embedder: Pick<Embedder, "maxTexts" | "maxBatchChars" | "maxTextChars">,
-): number[][] {
-  const batches: number[][] = [];
-  let batch: number[] = [];
-  let chars = 0;
-  texts.forEach((text, at) => {
-    const length = Math.min(text.length, embedder.maxTextChars);
-    if (
-      batch.length > 0 &&
-      (batch.length >= embedder.maxTexts || chars + length > embedder.maxBatchChars)
-    ) {
-      batches.push(batch);
-      batch = [];
-      chars = 0;
-    }
-    batch.push(at);
-    chars += length;
-  });
-  if (batch.length > 0) {
-    batches.push(batch);
-  }
-  return batches;
-}
 
 /** Embeds every section of one body and writes them together. */
 async function embedBody(
@@ -172,7 +109,7 @@ async function embedBody(
   const texts = sections.map((section) => embeddingTextOf(title, section, text));
   const items: SectionVector[] = [];
   let tokens = 0;
-  for (const batch of batchesOf(texts, deps.embedder)) {
+  for (const batch of embeddingBatches(texts, deps.embedder)) {
     const embedded = await deps.embedder.embed(
       batch.map((at) => texts[at] ?? ""),
       "document",
@@ -245,7 +182,7 @@ export async function embedSnapshotSlice(
   }
 
   const served = await servedEntries(database, scope);
-  const allowed = meaningAllowedBy(served);
+  const allowed = meaningSearchOf(served);
   const entries = served.filter(
     (entry) =>
       embeddable(entry) &&

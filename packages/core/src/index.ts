@@ -390,6 +390,12 @@ export {
   wordRulesOf,
 } from "./search/lexemes.js";
 export {
+  embeddable,
+  embeddingBatches,
+  meaningSearchOf,
+  type PolicyEntry,
+} from "./search/meaning-policy.js";
+export {
   headingPaths,
   MAX_OUTLINE_HEADINGS,
   type MarkdownOutline,
