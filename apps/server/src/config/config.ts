@@ -213,6 +213,7 @@ const environmentSchema = z.object({
   RERANKER_KEY: z.string().min(1).optional(),
   RERANKER_TIMEOUT_MS: integer(5000, 100, 60_000),
   RERANKER_CONCURRENCY: integer(2, 1, 64),
+  RERANKER_CANDIDATES: integer(10, 1, 32),
 });
 
 export interface WebTags {
@@ -294,6 +295,8 @@ export interface RerankerConfig {
   /** How long a call may take, its turn included: a search waits for it. */
   readonly timeoutMs: number;
   readonly concurrency: number;
+  /** How many of the first results of a search are reranked: what one call scores on a CPU in time. */
+  readonly candidates: number;
 }
 
 export interface Config {
@@ -526,6 +529,7 @@ function meaningOf(env: z.infer<typeof environmentSchema>, problems: string[]): 
       key: env.RERANKER_KEY,
       timeoutMs: env.RERANKER_TIMEOUT_MS,
       concurrency: env.RERANKER_CONCURRENCY,
+      candidates: env.RERANKER_CANDIDATES,
     };
   }
   return { embeddings, reranker };

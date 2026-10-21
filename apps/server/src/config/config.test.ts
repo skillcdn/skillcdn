@@ -477,6 +477,7 @@ describe("the search by meaning", () => {
       key: undefined,
       timeoutMs: 5000,
       concurrency: 2,
+      candidates: 10,
     });
   });
 
@@ -499,6 +500,7 @@ describe("the search by meaning", () => {
         RERANKER_KEY: "a-reranking-key",
         RERANKER_TIMEOUT_MS: "3000",
         RERANKER_CONCURRENCY: "1",
+        RERANKER_CANDIDATES: "20",
       },
       (path) => (path === "/run/secrets/embeddings" ? "an-embeddings-key\n" : "?"),
     );
@@ -516,6 +518,7 @@ describe("the search by meaning", () => {
       key: "a-reranking-key",
       timeoutMs: 3000,
       concurrency: 1,
+      candidates: 20,
     });
   });
 

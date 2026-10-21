@@ -29,7 +29,12 @@ import {
   type GitHubHostOptions,
 } from "@skillcdn/github";
 import type { Hono } from "hono";
-import { vectorKeyOf } from "../adapters/meaning.js";
+import {
+  createEmbedderOf,
+  createRerankerOf,
+  vectorKeyOf,
+  withQueryCache,
+} from "../adapters/meaning.js";
 import { systemClock } from "../adapters/system-clock.js";
 import { Connections } from "../auth/connections.js";
 import { UserCredentials } from "../auth/credentials.js";
@@ -52,7 +57,7 @@ import { Janitor } from "../janitor.js";
 import { ensureJobQueues, sendEmbedJob } from "../jobs/queues.js";
 import type { Logger } from "../logger.js";
 import { type Mount, MountService } from "../mounts/mount-service.js";
-import { createMountReader } from "../mounts/reader.js";
+import { createMountReader, type MountMeaning } from "../mounts/reader.js";
 import { createOperatorEntitlements } from "../operator/entitlements.js";
 import { OperatorImages } from "../operator/images.js";
 import { LegalDocuments } from "../operator/legal.js";
@@ -105,6 +110,8 @@ export interface ApiPorts {
    * worker (ADR-0064). Left out, nothing follows.
    */
   readonly onIndexed?: ((mount: Mount, snapshot: IndexedSnapshot) => Promise<void>) | undefined;
+  /** The search by meaning (ADR-0064, ADR-0065). Left out, the search is by words alone. */
+  readonly meaning?: MountMeaning | undefined;
 }
 
 export type ApiConfig = Pick<Config, "mounts" | "indexing"> & {
@@ -266,7 +273,14 @@ export function createApi(
     onIndexed: ports.onIndexed,
   });
 
-  const reader = createMountReader({ database, blobStore, gitHost, snapshots, limits });
+  const reader = createMountReader({
+    database,
+    blobStore,
+    gitHost,
+    snapshots,
+    limits,
+    meaning: ports.meaning,
+  });
   // The owner's picture, fetched once for the icon of an address's server and for its social
   // preview alike.
   const pictures = new PictureFetcher({
@@ -409,14 +423,32 @@ export async function runApi(config: Config, logger: Logger): Promise<void> {
   const janitor = new Janitor({ database, clock: systemClock, logger });
   janitor.start(JANITOR_INTERVAL_MS);
 
-  // Where the search by meaning is configured, the sections of every commit this process indexes
-  // are queued for the worker to embed (ADR-0064). The queue has to be there, installed by the
-  // migrate role, and the database has to keep vectors; without either, the api serves as before
-  // and says so once.
+  // Where the search by meaning is configured (ADR-0064, ADR-0065), queries are embedded and the
+  // nearest sections fused with the words' results, the first of them reranked where a reranker
+  // is configured too; and the sections of every commit this process indexes are queued for the
+  // worker to embed. The database has to keep vectors, and for the queue the migrate role has to
+  // have installed it; without either, the api serves by words as before and says so once.
   let jobs: JobQueue | undefined;
   let onIndexed: ApiPorts["onIndexed"];
+  let meaning: MountMeaning | undefined;
   if (config.meaning.embeddings !== undefined) {
     const key = vectorKeyOf(config.meaning.embeddings);
+    const supported = await supportsSectionVectors(database);
+    if (!supported) {
+      logger.warn(
+        { model: key.model },
+        "the database has no vector extension, so nothing is embedded and the search stays by words",
+      );
+    }
+    meaning = {
+      embedder: withQueryCache(createEmbedderOf(config.meaning.embeddings)),
+      reranker:
+        config.meaning.reranker === undefined
+          ? undefined
+          : createRerankerOf(config.meaning.reranker),
+      rerankCandidates: config.meaning.reranker?.candidates,
+      key: supported ? key : undefined,
+    };
     try {
       jobs = await createJobQueue(database, {
         role: "api",
@@ -430,24 +462,27 @@ export async function runApi(config: Config, logger: Logger): Promise<void> {
         "the job queue could not be opened, so the commits this process indexes wait for the worker's sweep to be embedded",
       );
     }
-    if (jobs !== undefined) {
-      if (await supportsSectionVectors(database)) {
-        const queue = jobs;
-        onIndexed = async (_mount, snapshot) => {
-          await sendEmbedJob(queue, { ...snapshot, key, reason: "indexed" });
-        };
-      } else {
-        logger.warn(
-          { model: key.model },
-          "the database has no vector extension, so nothing is embedded and the search stays by words",
-        );
-      }
+    if (jobs !== undefined && supported) {
+      const queue = jobs;
+      onIndexed = async (_mount, snapshot) => {
+        await sendEmbedJob(queue, { ...snapshot, key, reason: "indexed" });
+      };
     }
+    logger.info(
+      {
+        model: key.model,
+        reranker: config.meaning.reranker?.model,
+        vectors: supported,
+        queue: jobs !== undefined,
+      },
+      "the search by meaning is configured",
+    );
   }
 
   let shuttingDown = false;
   const { app, snapshots } = createApi(config, {
     onIndexed,
+    meaning,
     web,
     stats: recorder,
     database,

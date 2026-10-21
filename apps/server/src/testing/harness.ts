@@ -105,6 +105,8 @@ export interface HarnessOptions {
   readonly maxUnusedClients?: number;
   /** What follows a commit the harness indexed; left out, nothing. */
   readonly onIndexed?: ApiPorts["onIndexed"];
+  /** The search by meaning; left out, the words answer alone. */
+  readonly meaning?: ApiPorts["meaning"];
 }
 
 /** The session cookie a response set, as a Cookie header would carry it. */
@@ -182,6 +184,7 @@ export function createHarness(testDatabase: TestDatabase, options: HarnessOption
       web: options.web,
       stats: options.stats,
       onIndexed: options.onIndexed,
+      meaning: options.meaning,
       // Tests never leave the process: a picture is found only when a test hands one in, and a
       // client's document only when a test serves one.
       fetch: options.fetch ?? (async () => new Response(null, { status: 404 })),
