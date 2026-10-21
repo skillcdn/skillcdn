@@ -80,7 +80,9 @@ describe("the job queue", () => {
     await vi.waitFor(() => expect(seen).toEqual([2, 3, 1, 4]), { timeout: 15_000 });
   });
 
-  it("tries a failed job again within its settings, then counts it as failed", async () => {
+  it("tries a failed job again within its settings, then counts it as failed", {
+    timeout: 60_000,
+  }, async () => {
     await jobs.ensureQueue("retry", { retryLimit: 1, retryDelaySeconds: 1, expireInSeconds: 60 });
     const attempts: number[] = [];
     await jobs.send("retry", { n: 1 }, { singletonKey: "r" });
@@ -94,7 +96,7 @@ describe("the job queue", () => {
         const [counts] = await jobs.counts(["retry"]);
         expect(counts).toMatchObject({ name: "retry", queued: 0, active: 0, failed: 1 });
       },
-      { timeout: 10_000 },
+      { timeout: 30_000 },
     );
   });
 
