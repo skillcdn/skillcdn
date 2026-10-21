@@ -28,6 +28,8 @@
 
 .data
 tmp
+# The model files of the compose bundle: gigabytes an image never carries (ADR-0065).
+deploy/models
 docs
 **/*.md
 # What the image carries of the repository itself: its overview and its notices (deploy/Dockerfile).

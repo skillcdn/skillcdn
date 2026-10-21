@@ -1,0 +1,30 @@
+# The reranker of the search by meaning beside the embedder (ADR-0065), stacked after
+# compose.meaning.yaml. On a CPU it costs seconds a search and added nothing on the evaluation set
+# (apps/server/fixtures/retrieval/README.md, "What the models measured"), so it is an overlay of
+# its own, for a GPU above all; a search it does not answer in time is ranked without it.
+services:
+  inference-rerank:
+    image: ${LLAMA_CPP_IMAGE:-ghcr.io/ggml-org/llama.cpp:server}
+    command: >-
+      -m /models/${RERANKER_GGUF:-qwen3-reranker-0.6b-q8_0.gguf}
+      --reranking -c 8192 -b 8192 -ub 8192 --no-webui
+    volumes:
+      - ${MODELS_DIR:-./models}:/models:ro
+    restart: unless-stopped
+
+  api:
+    environment: &rerank
+      RERANKER_URL: http://inference-rerank:8080/v1/rerank
+      RERANKER_MODEL: ${RERANKER_MODEL:-qwen3-reranker-0.6b-q8_0}
+      RERANKER_CANDIDATES: ${RERANKER_CANDIDATES:-10}
+      RERANKER_TIMEOUT_MS: ${RERANKER_TIMEOUT_MS:-5000}
+    depends_on:
+      inference-rerank:
+        condition: service_started
+
+  # The same settings on every role, so that the one configuration is valid for each.
+  worker:
+    environment: *rerank
+
+  migrate:
+    environment: *rerank

@@ -1,0 +1,42 @@
+# The search by meaning on the bundle (ADR-0064, ADR-0065): the embedding server beside the image,
+# serving a model file from ./models (deploy/get-models.sh fetches the base profile's), and the
+# api and worker told where it is. Stacked on compose.yaml:
+#
+#   docker compose -f deploy/compose.yaml -f deploy/compose.meaning.yaml up -d
+#
+# Add compose.rerank.yaml for the reranker and compose.gpu.yaml for a GPU. The text of every
+# document embedded goes to this server and nowhere else (deploy/README.md, "Operating a public
+# deployment"). Another file, another profile or another server speaking the same shape is a
+# matter of the variables below, set in deploy/.env (deploy/README.md, "The inference server").
+services:
+  inference-embed:
+    image: ${LLAMA_CPP_IMAGE:-ghcr.io/ggml-org/llama.cpp:server}
+    command: >-
+      -m /models/${EMBEDDING_GGUF:-Qwen3-Embedding-0.6B-Q8_0.gguf}
+      --embeddings --pooling ${EMBEDDING_POOLING:-last} -c 8192 -b 8192 -ub 8192 --no-webui
+    volumes:
+      - ${MODELS_DIR:-./models}:/models:ro
+    restart: unless-stopped
+
+  api:
+    environment: &meaning
+      EMBEDDINGS_URL: http://inference-embed:8080/v1/embeddings
+      EMBEDDINGS_MODEL: ${EMBEDDINGS_MODEL:-Qwen3-Embedding-0.6B-Q8_0}
+      # `public` embeds the public repositories the deployment serves; `all` sends the text of
+      # private repositories to this server as well, which is yours.
+      EMBEDDINGS_SCOPE: ${EMBEDDINGS_SCOPE:-public}
+      # The instruction the Qwen3 embedders take before a query; set it empty for KURE-v1.
+      EMBEDDINGS_QUERY_INSTRUCTION: ${EMBEDDINGS_QUERY_INSTRUCTION-Given a question about a set of documents, retrieve the sections that answer it}
+    depends_on:
+      inference-embed:
+        condition: service_started
+
+  worker:
+    environment: *meaning
+    depends_on:
+      inference-embed:
+        condition: service_started
+
+  # The same settings, so that the one configuration is valid for every role.
+  migrate:
+    environment: *meaning

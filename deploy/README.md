@@ -6,10 +6,13 @@ Everything needed to build the image and hand it to whatever runs it. This repos
 |---|---|
 | [`Dockerfile`](Dockerfile) | The one multi-stage image. Roles `api`, `worker`, `migrate`, `check` and `purge` are selected by the container command. |
 | [`compose.dev.yaml`](compose.dev.yaml) | Local development dependencies (PostgreSQL 18 with the `vector` extension). Not a production topology. |
+| [`compose.yaml`](compose.yaml) | The self-hosting bundle for one host: PostgreSQL, `migrate`, `api` and `worker` from one image ([Running with compose](#running-with-compose)). |
+| [`compose.meaning.yaml`](compose.meaning.yaml), [`compose.rerank.yaml`](compose.rerank.yaml), [`compose.gpu.yaml`](compose.gpu.yaml) | Overlays on the bundle: the embedding server of the search by meaning, the reranker, and both on an NVIDIA GPU. |
+| [`get-models.sh`](get-models.sh) | Fetches the model files of the base profile into [`models/`](models/) and checks their digests; the directory stays out of git and of the image. |
 | [`../.github/workflows/ci.yml`](../.github/workflows/ci.yml) | Lint, build, typecheck, tests (integration tests run against a PostgreSQL service container), secret scan, and an image build that is then exercised: exit codes, `migrate`, the `worker` taking the queue up and handing it back, readiness, non-root user, clean shutdown. It needs no secrets. Every commit on `main` keeps its own run, since any of them may be deployed and a deployment pinned to a commit waits for its verdict; on other refs a newer push cancels the run before it. |
 | [`../.github/workflows/release.yml`](../.github/workflows/release.yml) | Versions and publishes the npm packages from the pending changesets: a pull request that bumps versions and changelogs, and, once it is merged, a publish through the registry's trusted publishing, with provenance and no stored secret ([ADR-0046](../docs/adr/0046-packages-are-published-to-npm-through-trusted-publishing.md)). |
 
-A compose bundle and install script for self-hosting are planned ([roadmap](../docs/roadmap.md)).
+The compose bundle for self-hosting is [below](#running-with-compose); an install script and a published image are planned ([roadmap](../docs/roadmap.md)).
 
 ## Build and run locally
 
@@ -21,6 +24,34 @@ docker run --rm -v "$PWD:/repo:ro" skillcdn check /repo    # what an agent would
 ```
 
 The image runs as a non-root user, contains production dependencies only, and has no secrets and no configuration baked in. It carries the fonts of the web UI under their own license; see [`THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOTICES.md).
+
+## Running with compose
+
+[`compose.yaml`](compose.yaml) runs the whole product on one host: PostgreSQL with the `vector` extension, `migrate` once, then `api` and `worker` from one image, and, as overlays, the servers of the search by meaning. It is a topology for one machine behind a reverse proxy of your own ([below](#behind-a-reverse-proxy)), not a cluster.
+
+1. Build the image from the repository root, `docker build -f deploy/Dockerfile -t skillcdn:local .`, or name an image you built elsewhere in `SKILLCDN_IMAGE`.
+2. Settings: `cp .env.example deploy/.env`, then set `POSTGRES_PASSWORD` to a long random value, from which the bundle builds `DATABASE_URL`, and what your installation needs besides, `PUBLIC_URL`, `GITHUB_TOKEN`, the variables of signing in. The containers read the file, and compose reads it for the variables of the bundle itself; git ignores it.
+3. `docker compose -f deploy/compose.yaml up -d`. The API answers at `http://127.0.0.1:11188` (`SKILLCDN_PORT` moves it) once `migrate` has run. `down` stops the bundle; `down -v` drops the database as well. To update, build or pull the new image and `up -d` again: `migrate` runs first, then `api` and `worker` restart on the new image, as the [rollout contract](#rollout-contract) asks.
+
+The search by meaning joins as overlays. Run [`get-models.sh`](get-models.sh) once: it fetches the two files of the base profile ([the profiles](#the-inference-server-and-the-model-profiles)) into `deploy/models/`, 1.3 GB, and checks their digests. Then:
+
+```sh
+docker compose -f deploy/compose.yaml -f deploy/compose.meaning.yaml up -d
+# and, for the reranker as well
+docker compose -f deploy/compose.yaml -f deploy/compose.meaning.yaml -f deploy/compose.rerank.yaml up -d
+# on an NVIDIA GPU, with the container toolkit installed
+docker compose -f deploy/compose.yaml -f deploy/compose.meaning.yaml -f deploy/compose.rerank.yaml -f deploy/compose.gpu.yaml up -d
+```
+
+The overlays set `EMBEDDINGS_URL`, `EMBEDDINGS_MODEL`, `EMBEDDINGS_SCOPE` (`public`; `all` sends the text of private repositories to the server too, which is yours) and the query instruction, and the reranker's variables; `deploy/.env` may override any of them, and `EMBEDDING_GGUF`, `RERANKER_GGUF`, `EMBEDDING_POOLING`, `MODELS_DIR` and `LLAMA_CPP_IMAGE` choose other files, another profile or another server image. On a CPU the reranker overlay is best left out, as [the evaluation set showed](../apps/server/fixtures/retrieval/README.md#what-the-models-measured); the GPU overlay names both servers, so it goes with the reranker overlay and stacks last.
+
+### An installation without internet
+
+At run time the bundle reaches nothing outside the host but the git host the packs come from, which may be a GitHub Enterprise Server inside the network (`GITHUB_API_URL`). To install where there is no internet:
+
+1. Where there is: build or pull the images and save them, `docker save skillcdn:local pgvector/pgvector:pg18 ghcr.io/ggml-org/llama.cpp:server | gzip > skillcdn-images.tar.gz`; run `deploy/get-models.sh` and keep `deploy/models/`; take this `deploy/` directory along.
+2. On the installation: `docker load < skillcdn-images.tar.gz`; put the model files in `deploy/models/`, or point `MODELS_DIR` at where they are, and check them again with `sha256sum -c` against the digests in `get-models.sh`; write `deploy/.env`; bring the bundle up as above.
+3. Keep the model files with the installation as you keep the images. A change of model is a change of configuration and a backfill ([the worker](#the-worker)), never a file swapped under a running server; the vectors are keyed by the model's name, so a file replaced in place under the same name would be searched by the vectors of another model.
 
 ## Environment contract
 
@@ -80,7 +111,7 @@ Every secret `NAME` may instead be provided as `NAME_FILE`, a path to a file hol
 
 ## The inference server and the model profiles
 
-The search by meaning runs on open-weight models the deployment serves itself ([ADR-0065](../docs/adr/0065-meaning-search-runs-on-open-weight-models-served-beside-the-image.md)), through the common embeddings and reranking shapes the adapters speak: any server that speaks them serves, and the adapters know none by name. The one measured here is llama.cpp's `llama-server` with the models as GGUF files, which runs on a CPU or a GPU from one image and is the one server that scores the Qwen3 reranker as its authors intend; a GGUF of that reranker converted before September 2025 scores at random, so take a current conversion.
+The search by meaning runs on open-weight models the deployment serves itself ([ADR-0065](../docs/adr/0065-meaning-search-runs-on-open-weight-models-served-beside-the-image.md)), through the common embeddings and reranking shapes the adapters speak: any server that speaks them serves, and the adapters know none by name. The one measured here, and the one the compose bundle runs ([Running with compose](#running-with-compose)), is llama.cpp's `llama-server` with the models as GGUF files, which runs on a CPU or a GPU from one image and is the one server that scores the Qwen3 reranker as its authors intend; a GGUF of that reranker converted before September 2025 scores at random, so take a current conversion.
 
 Two profiles, named by the models they run. Which one a deployment runs is its own choice, made by configuration and changed with a backfill ([the worker](#the-worker)).
 

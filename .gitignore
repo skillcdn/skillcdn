@@ -28,6 +28,10 @@ cdk.out/
 
 # Local data (compose volumes, scratch files)
 .data/
+
+# The model files of the compose bundle, fetched by deploy/get-models.sh; never committed.
+deploy/models/*
+!deploy/models/.gitkeep
 tmp/
 
 # Logs

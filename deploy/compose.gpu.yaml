@@ -1,0 +1,30 @@
+# The inference servers on an NVIDIA GPU: the CUDA build of the server with every layer offloaded.
+# Needs the NVIDIA container toolkit on the host. Stacked last, after compose.meaning.yaml and
+# compose.rerank.yaml: it names both servers, so it goes with the reranker overlay.
+x-gpu: &gpu
+  driver: nvidia
+  count: all
+  capabilities: [gpu]
+
+services:
+  inference-embed:
+    image: ${LLAMA_CPP_IMAGE:-ghcr.io/ggml-org/llama.cpp:server-cuda}
+    command: >-
+      -m /models/${EMBEDDING_GGUF:-Qwen3-Embedding-0.6B-Q8_0.gguf}
+      --embeddings --pooling ${EMBEDDING_POOLING:-last} -c 8192 -b 8192 -ub 8192 -ngl 99 --no-webui
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - *gpu
+
+  inference-rerank:
+    image: ${LLAMA_CPP_IMAGE:-ghcr.io/ggml-org/llama.cpp:server-cuda}
+    command: >-
+      -m /models/${RERANKER_GGUF:-qwen3-reranker-0.6b-q8_0.gguf}
+      --reranking -c 8192 -b 8192 -ub 8192 -ngl 99 --no-webui
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - *gpu
