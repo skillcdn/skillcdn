@@ -127,7 +127,12 @@ export type {
   HostInstalledRepository,
   HostUser,
 } from "./ports/git-host-login.js";
-export type { IndexOutcome, IndexStore, ReadableIndex } from "./ports/index-store.js";
+export type {
+  IndexOutcome,
+  IndexStore,
+  MeaningMatch,
+  ReadableIndex,
+} from "./ports/index-store.js";
 export type { Reranker } from "./ports/reranker.js";
 export { discardUsage, type UsageEvent, type UsageSink } from "./ports/usage-sink.js";
 export {
@@ -372,6 +377,7 @@ export {
 } from "./rest/social.js";
 export { err, ok, type Result } from "./result.js";
 export { stemEnglish } from "./search/english-stemmer.js";
+export { type FusionOptions, fuseRanks, RRF_K } from "./search/fusion.js";
 export {
   type Lexeme,
   MAX_LEXEME_BYTES,
@@ -397,6 +403,7 @@ export {
   matchSections,
   SECTIONING_VERSION,
   sectionBody,
+  sectionExcerpt,
   sectionsOf,
 } from "./search/sections.js";
 export { ENGLISH_STOP_WORDS } from "./search/stop-words.js";
@@ -547,6 +554,7 @@ export {
   type FileResult,
   type FindFile,
   type FindItem,
+  type FindRanking,
   type FindResult,
   type FindSection,
   type IncludedFile,

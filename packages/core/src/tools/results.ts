@@ -147,6 +147,20 @@ export type FindItem =
       readonly sections?: readonly FindSection[];
     };
 
+/**
+ * How a search with a query was ranked where the search by meaning is at hand (ADR-0064): absent
+ * where the words alone rank, as on a deployment with no embedder and on the command's index.
+ */
+export interface FindRanking {
+  /**
+   * True when the sections nearest in meaning were fused with the words' results; false when the
+   * embedder did not answer in time, or at all, and the words answered alone this time.
+   */
+  readonly meaning: boolean;
+  /** True when the first results were reranked by the reranker (ADR-0065). */
+  readonly reranked: boolean;
+}
+
 export interface FindResult {
   readonly diagnosticsTotal?: number;
   readonly path?: RepoPath;
@@ -154,6 +168,8 @@ export interface FindResult {
   readonly mount: MountSummary;
   readonly query: string | undefined;
   readonly items: readonly FindItem[];
+  /** With a query, where the search by meaning is at hand: how the results were ranked. */
+  readonly ranking?: FindRanking | undefined;
   /** Without a query: how many skills, and how many documents outside the skills, the mount has. */
   readonly totals: { readonly skills: number; readonly documents: number } | undefined;
   /** Manifests inside the mount that could not be read, so what they declare is not served. */

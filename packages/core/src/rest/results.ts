@@ -296,6 +296,7 @@ export function findResultOf(body: Ready<RestFind>, mount: MountSummary): FindRe
     nextCursor: body.nextCursor === undefined ? undefined : orUndefined(body.nextCursor),
     totals: orUndefined(body.totals),
     diagnostics: diagnosticsOf(body.diagnostics),
+    ...(body.ranking === undefined ? {} : { ranking: { ...body.ranking } }),
   };
 }
 

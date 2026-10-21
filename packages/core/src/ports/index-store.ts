@@ -1,6 +1,7 @@
 import type { IndexEntry, SnapshotDiagnostic } from "../index-entry.js";
 import type { LicenseFact } from "../license.js";
 import type { RepoPath } from "../repo-path.js";
+import type { DocumentSection } from "../search/sections.js";
 import type { IndexNotReady } from "../tools/reads.js";
 import type { BlobStore } from "./blob-store.js";
 
@@ -20,8 +21,29 @@ export interface IndexStore {
    * for none.
    */
   search(mountPath: RepoPath, lexemes: readonly string[]): Promise<readonly IndexEntry[]>;
+  /**
+   * The sections of the findable entries under `mountPath` nearest in meaning to the query's
+   * `vector`, best first and at most `limit` (ADR-0064). Present only where the index keeps the
+   * vectors of its sections, under the model the vector was made with; a store without them
+   * leaves it out, and the words answer alone.
+   */
+  searchByMeaning?(
+    mountPath: RepoPath,
+    vector: Float32Array,
+    limit: number,
+  ): Promise<readonly MeaningMatch[]>;
   /** What the reading rules could not read as intended. */
   diagnostics(): Promise<readonly SnapshotDiagnostic[]>;
+}
+
+/** A section of an entry, as near to a query as a search by meaning found it. */
+export interface MeaningMatch extends DocumentSection {
+  /** The entry's repository-root path. */
+  readonly path: string;
+  /** The section's index in the order `sectionsOf` lists them, from 0. */
+  readonly section: number;
+  /** Cosine similarity to the query: 1 for the same direction, 0 for none. */
+  readonly similarity: number;
 }
 
 /** An index ready to be read: where it is kept, and what is known of it as a whole. */

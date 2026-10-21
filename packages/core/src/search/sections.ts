@@ -144,6 +144,34 @@ function excerptOf(section: string, matched: (text: string) => number): string |
   return best === undefined ? first : excerptOfLine(best.line, matched);
 }
 
+/** How many of the words searched for a text holds, each counted once. */
+function matcherOf(
+  lexemes: readonly string[],
+  language: string | undefined,
+): (candidate: string) => number {
+  const wanted = new Set(lexemes);
+  return (candidate) =>
+    new Set(
+      searchLexemes(candidate, language)
+        .map((lexeme) => lexeme.lexeme)
+        .filter((lexeme) => wanted.has(lexeme)),
+    ).size;
+}
+
+/**
+ * The excerpt of a section a search found by other means than its words, such as its meaning
+ * (ADR-0064): the line of its prose that holds the most of the words searched for, else its first
+ * line of prose, else nothing, as `matchSections` excerpts the sections the words matched.
+ */
+export function sectionExcerpt(
+  text: string,
+  section: DocumentSection,
+  lexemes: readonly string[],
+  language?: string | undefined,
+): string | undefined {
+  return excerptOf(sectionBody(text, section), matcherOf(lexemes, language));
+}
+
 /**
  * The sections of `text` that the lexemes of a query match, best first, at most `limit` of
  * them: each heading's section is ranked by its heading path and its own text, with the word
@@ -164,15 +192,7 @@ export function matchSections(
     return [];
   }
   const sections = sectionsOf(text, options.outline);
-
-  const wanted = new Set(lexemes);
-  /** How many of the words searched for a text holds, each counted once. */
-  const matched = (candidate: string): number =>
-    new Set(
-      searchLexemes(candidate, options.language)
-        .map((lexeme) => lexeme.lexeme)
-        .filter((lexeme) => wanted.has(lexeme)),
-    ).size;
+  const matched = matcherOf(lexemes, options.language);
   // A section is ranked like a document: its own heading as the name, the headings above it as
   // the words of a path, and its text as the body, so that a section does not outrank its parent
   // on the parent's heading alone.

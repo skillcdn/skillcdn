@@ -269,6 +269,23 @@ function renderFindItem(item: FindItem, number: number): string {
   return `${number}. document: ${item.path}${title}${summary}${owner}${sections}`;
 }
 
+/**
+ * One line on how a search was ranked, where the search by meaning is at hand (ADR-0064): that
+ * meaning took part, or that the words answered alone this time, so that a model knows what a
+ * query in other words than the document's can find. Nothing where only words ever rank.
+ */
+function rankingLine(result: FindResult): string | undefined {
+  if (result.query === undefined || result.ranking === undefined) {
+    return undefined;
+  }
+  if (!result.ranking.meaning) {
+    return "Ranked by words alone this time: the search by meaning did not answer.";
+  }
+  return result.ranking.reranked
+    ? "Ranked by words and meaning, the first results reranked."
+    : "Ranked by words and meaning.";
+}
+
 /** Whether an excerpt, as it would be shown, says nothing the document's summary does not. */
 function repeatsSummary(excerpt: string, summary: string | undefined): boolean {
   if (summary === undefined) return false;
@@ -326,6 +343,7 @@ export function renderFindResult(result: FindResult, words: ToolWords = MCP_TOOL
     hasSections
       ? `A section is read with ${words.read}: the path, its offset and its limit.`
       : undefined,
+    rankingLine(result),
     more.join("\n"),
     diagnostics,
     result.nextCursor === undefined

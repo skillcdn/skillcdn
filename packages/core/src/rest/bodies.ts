@@ -140,6 +140,7 @@ export function findBody(
     query: result.query ?? null,
     totals: result.totals ?? null,
     diagnostics: restDiagnostics(result.diagnostics),
+    ...(result.ranking === undefined ? {} : { ranking: { ...result.ranking } }),
     items: result.items.map((item) =>
       item.kind === "skill"
         ? {

@@ -280,6 +280,12 @@ export const restFindSchema = z.discriminatedUnion("status", [
     diagnostics: z.optional(z.array(restDiagnosticSchema)),
     /** Without a query: how many skills, and how many documents outside the skills, there are. */
     totals: z.nullable(z.object({ skills: count, documents: count })),
+    /**
+     * With a query, where the search by meaning is at hand (ADR-0064): whether the sections
+     * nearest in meaning were fused with the words' results, or the words answered alone this
+     * time, and whether the first results were reranked. Absent where only words rank.
+     */
+    ranking: z.optional(z.object({ meaning: z.boolean(), reranked: z.boolean() })),
   }),
   indexing,
   failed,
