@@ -141,6 +141,13 @@
       "when": 1792302965631,
       "tag": "0019_repo-tokens-without-an-end",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1792557463565,
+      "tag": "0020_section-vectors",
+      "breakpoints": true
     }
   ]
 }

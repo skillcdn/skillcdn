@@ -34,6 +34,16 @@ const bytea = customType<{ data: Uint8Array; driverData: Buffer }>({
   fromDriver: (value) => new Uint8Array(value.buffer, value.byteOffset, value.byteLength),
 });
 
+/**
+ * A vector of the `vector` extension, in its text form on the wire. The column names no
+ * dimensions, since the vectors of every model share it; the row says its own.
+ */
+const vector = customType<{ data: Float32Array; driverData: string }>({
+  dataType: () => "vector",
+  toDriver: (value) => `[${Array.from(value).join(",")}]`,
+  fromDriver: (value) => Float32Array.from(value.slice(1, -1).split(","), Number),
+});
+
 const id = () => uuid().primaryKey().default(sql`uuidv7()`);
 const instant = () => timestamp({ withTimezone: true, mode: "date" });
 const createdAt = () => instant().notNull().defaultNow();
@@ -424,6 +434,53 @@ export const blobs = pgTable("blobs", {
   size: integer().notNull(),
   createdAt: createdAt(),
 });
+
+/**
+ * The vector of the meaning of one section of a file body (ADR-0064), keyed by what it was
+ * computed from: the body's git blob hash, the model and its dimensions, the version of the
+ * rules that cut the body into sections, and the section's place in that order. Content-addressed
+ * like `blobs`, so one row serves every commit, ref and fork that holds the same bytes, and a
+ * changed model is a new key. The heading path, offset and length beside the vector name the
+ * section as a search result does. Not tenant data: a row is reached only through an index entry
+ * the caller may see, joined on the blob hash, never by a hash from user input. The table exists
+ * only where the `vector` extension does: its migration creates both or neither.
+ */
+export const sectionVectors = pgTable(
+  "section_vectors",
+  {
+    blobSha: text().notNull(),
+    /** The model's id, as the embedder names it. */
+    model: text().notNull(),
+    dimensions: integer().notNull(),
+    /** `SECTIONING_VERSION` of @skillcdn/core when the sections were cut. */
+    sectioningVersion: integer().notNull(),
+    /** The section's index in the order `sectionsOf` lists them, from 0. */
+    section: integer().notNull(),
+    /** The heading path, outermost first; empty for the text before the first heading. */
+    heading: jsonb().$type<string[]>().notNull(),
+    /** Where the section starts and how many characters it has, as `read_repo_file` counts. */
+    offset: integer().notNull(),
+    length: integer().notNull(),
+    vector: vector().notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    primaryKey({
+      name: "section_vectors_pkey",
+      columns: [
+        table.blobSha,
+        table.model,
+        table.dimensions,
+        table.sectioningVersion,
+        table.section,
+      ],
+    }),
+    check(
+      "section_vectors_dimensions_check",
+      sql`vector_dims(${table.vector}) = ${table.dimensions}`,
+    ),
+  ],
+);
 
 /**
  * Media the operator uploaded for the landing showcase (ADR-0028), keyed by the SHA-256 of the

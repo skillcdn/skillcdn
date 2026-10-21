@@ -8,7 +8,7 @@ name: skillcdn-dev
 
 services:
   postgres:
-    image: postgres:18
+    image: pgvector/pgvector:pg18
     environment:
       POSTGRES_USER: skillcdn
       POSTGRES_PASSWORD: skillcdn-dev-only

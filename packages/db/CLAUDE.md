@@ -9,6 +9,7 @@ Read the root [`CLAUDE.md`](../../CLAUDE.md) first. Mistakes here are the hardes
 - **Expand, then contract.** Old and new versions of the server run side by side during a rollout, so every migration must work with the previous release's code. Add first; remove or rename in a later release, after no deployed code uses the old shape.
 - Be kind to a live database: build indexes `CONCURRENTLY`, avoid rewriting large tables, set a `lock_timeout`, and backfill in batches from a job, not inside a migration.
 - When you and `main` have both added migrations, rebase and regenerate yours.
+- The table of the search by meaning exists only where the `vector` extension does: `0020_section-vectors.sql` creates the extension and `section_vectors` inside one `DO` block, or neither, with a notice. Its first line, `-- needs: vector`, marks it as one `migrateDatabase` applies again, in order with the others so marked, on a database where the extension arrived after the migrations ran, so every statement in it is written to run twice (`IF NOT EXISTS`). The generator writes plain statements, so a later migration that touches that table is wrapped by hand in the same guard (`IF to_regclass('section_vectors') IS NOT NULL`), starts with the same line and is reviewed as such before it is committed.
 
 ## Schema
 
@@ -30,3 +31,7 @@ Read the root [`CLAUDE.md`](../../CLAUDE.md) first. Mistakes here are the hardes
 - Tests isolate themselves: `createTestDatabase` from `src/testing.ts` gives each test file its own migrated database. They fail when no server answers; they never skip.
 - Pass time in (`now: Date`) instead of calling `now()` in SQL, so lease and retry logic is testable.
 - Update the "Data model" section of `README.md` in the same change as the schema.
+
+## Gotchas
+
+- The compose image moved from `postgres:18` to the one with the `vector` extension, which is built on an older Debian. On a data volume from before, PostgreSQL finds the C library's collation version changed and refuses to create a database from `template1` ("collation version mismatch"), so every integration test fails at once. Either start clean (`docker compose -f deploy/compose.dev.yaml down -v`, then `up -d`) or keep the data: `alter database template1 refresh collation version`, the same for `postgres` and `skillcdn`, then `reindex database skillcdn`, all through `docker exec skillcdn-dev-postgres-1 psql -U skillcdn -d postgres`.

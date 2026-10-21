@@ -5,7 +5,7 @@ Everything needed to build the image and hand it to whatever runs it. This repos
 | File | Purpose |
 |---|---|
 | [`Dockerfile`](Dockerfile) | The one multi-stage image. Roles `api`, `migrate`, `check` and `purge` are selected by the container command; `worker` is a name the dispatcher knows and not yet implemented. |
-| [`compose.dev.yaml`](compose.dev.yaml) | Local development dependencies (PostgreSQL 18). Not a production topology. |
+| [`compose.dev.yaml`](compose.dev.yaml) | Local development dependencies (PostgreSQL 18 with the `vector` extension). Not a production topology. |
 | [`../.github/workflows/ci.yml`](../.github/workflows/ci.yml) | Lint, build, typecheck, tests (integration tests run against a PostgreSQL service container), secret scan, and an image build that is then exercised: exit codes, `migrate`, readiness, non-root user, clean shutdown. It needs no secrets. Every commit on `main` keeps its own run, since any of them may be deployed and a deployment pinned to a commit waits for its verdict; on other refs a newer push cancels the run before it. |
 | [`../.github/workflows/release.yml`](../.github/workflows/release.yml) | Versions and publishes the npm packages from the pending changesets: a pull request that bumps versions and changelogs, and, once it is merged, a publish through the registry's trusted publishing, with provenance and no stored secret ([ADR-0046](../docs/adr/0046-packages-are-published-to-npm-through-trusted-publishing.md)). |
 
@@ -37,7 +37,7 @@ The server is configured only through environment variables. [`.env.example`](..
 | `TRUSTED_PROXIES` | `api` | no | no | Addresses or CIDR networks whose forwarding headers are believed. Default: none. |
 | `CLIENT_IP_HEADER`, `REQUEST_ID_HEADER` | `api` | no | no | Defaults `x-forwarded-for` and `x-request-id`. Read only from trusted proxies. |
 | `CLIENT_COUNTRY_HEADER` | `api` | no | no | The header in which a trusted proxy or CDN names the visitor's country (ISO 3166-1 alpha-2, or a subdivision as `US-CA`), which decides whether a page asks before analytics run ([ADR-0051](../docs/adr/0051-analytics-ask-first-only-where-the-visitors-region-asks-and-run-elsewhere.md)). Default: none, and every visitor is asked. Read only from trusted proxies. |
-| `DATABASE_URL` | all | yes | **yes** | PostgreSQL connection string. |
+| `DATABASE_URL` | all | yes | **yes** | PostgreSQL connection string. The search by meaning keeps its vectors under the `vector` extension (pgvector): `migrate` creates the extension and its table where the server offers the extension and the role may create it, and otherwise logs the database's notice and makes neither, so that the search stays by words and everything else runs; the next `migrate` after the extension is installed makes them ([ADR-0064](../docs/adr/0064-meaning-search-runs-on-pgvector-and-pg-boss-behind-an-embedder-port.md)). |
 | `DATABASE_POOL_MAX` | `api` | no | no | Default `10` connections per process. |
 | `GITHUB_API_URL` | `api` | no | no | Default `https://api.github.com`. GitHub Enterprise Server: `https://<host>/api/v3`. |
 | `GITHUB_TOKEN` | `api` | no | **yes** | Optional, no scopes needed. Raises the GitHub rate limit for public-repo reads; without it the anonymous limit applies to the whole deployment. |

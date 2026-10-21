@@ -46,7 +46,7 @@ const entryColumns = {
   licenseKind: indexEntries.licenseKind,
 };
 
-function inSnapshot(scope: SnapshotScope): SQL | undefined {
+export function inSnapshot(scope: SnapshotScope): SQL | undefined {
   return and(
     eq(indexEntries.snapshotId, scope.snapshotId),
     eq(indexEntries.accountId, scope.accountId),
@@ -54,18 +54,18 @@ function inSnapshot(scope: SnapshotScope): SQL | undefined {
 }
 
 /** Restricts to the mounted directory. `starts_with` takes the prefix literally: no wildcards. */
-function underPath(column: typeof indexEntries.path, mountPath: string): SQL | undefined {
+export function underPath(column: typeof indexEntries.path, mountPath: string): SQL | undefined {
   return mountPath.length === 0 ? undefined : sql`starts_with(${column}, ${`${mountPath}/`})`;
 }
 
 /** Byte order, so that results come back in the same order whatever the database's collation. */
-const BY_PATH = sql`${indexEntries.path} collate "C"`;
+export const BY_PATH = sql`${indexEntries.path} collate "C"`;
 
 /** Files a repository manifest leaves out are known to the index and served by nothing. */
 const VISIBLE = eq(indexEntries.visible, true);
 
 /** Documents and skills that are searchable: everything `find` can return. */
-const FINDABLE = and(VISIBLE, sql`${indexEntries.search} is not null`);
+export const FINDABLE = and(VISIBLE, sql`${indexEntries.search} is not null`);
 
 /**
  * Full-text search inside a mount, by the lexemes of a query as `queryLexemes` of @skillcdn/core

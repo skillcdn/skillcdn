@@ -198,3 +198,12 @@ export {
   touchSession,
   type UserRecord,
 } from "./queries/users.js";
+export {
+  blobsWithoutVectors,
+  type SectionMatch,
+  type SectionVector,
+  searchSectionVectors,
+  supportsSectionVectors,
+  type VectorKey,
+  writeSectionVectors,
+} from "./queries/vectors.js";

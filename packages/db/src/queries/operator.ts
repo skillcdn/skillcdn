@@ -9,6 +9,7 @@ import {
   snapshots,
 } from "../schema.js";
 import type { RepoAlias } from "./repos.js";
+import { deleteUnreferencedSectionVectors } from "./vectors.js";
 
 // The operator's lists and the takedown (ADR-0026). Neither is tenant data.
 
@@ -134,6 +135,11 @@ export async function purgeRepositoryIndex(
               ),
             )
             .returning({ sha: blobs.sha });
+    // What was computed from the bodies nothing names any more goes with them (ADR-0064).
+    await deleteUnreferencedSectionVectors(
+      tx,
+      referred.map((row) => row.sha),
+    );
     return { snapshots: removed.length, blobs: unreferenced.length };
   });
 }

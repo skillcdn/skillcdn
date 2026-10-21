@@ -25,7 +25,7 @@ jobs:
     # deploy/compose.dev.yaml. Throwaway values: the database lives for the length of the job.
     services:
       postgres:
-        image: postgres:18
+        image: pgvector/pgvector:pg18
         env:
           POSTGRES_USER: skillcdn
           POSTGRES_PASSWORD: skillcdn-dev-only
@@ -81,7 +81,7 @@ jobs:
     # folder, a dependency that did not make it into the image) only show up there.
     services:
       postgres:
-        image: postgres:18
+        image: pgvector/pgvector:pg18
         env:
           POSTGRES_USER: skillcdn
           POSTGRES_PASSWORD: skillcdn-dev-only
