@@ -182,7 +182,7 @@ describe("the reads of a directory", () => {
     expect(whole.out).toContain("--- content ---\n# Guide");
     const page = await run(["file", root, "docs/guide.md", "--limit", "10"]);
     expect(page.out).toContain("characters 0 to 10 of");
-    expect(page.out).toContain("More follows: call skillcdn file with offset 10.");
+    expect(page.out).toContain("The file continues at offset 10.");
     const rest = await run(["file", root, "docs/guide.md", "--offset", "10"]);
     expect(rest.out).toContain("characters 10 to");
     const folder = await run(["file", root, "marketing/ads"]);

@@ -633,6 +633,26 @@ describe("rendering", () => {
     ).toContain("File: docs/a.md (4 characters)");
   });
 
+  it("says where a file continues after a page that delivered the length asked for", () => {
+    const delivered = renderFileResult({
+      mount,
+      path: path("docs/a.md"),
+      ...pageOfText("0123456789", 0, 4),
+      requestedLength: 4,
+    });
+    expect(delivered).toContain("The file continues at offset 4.");
+    expect(delivered).not.toContain("More follows");
+    // A page cut short of what was asked for is one to read on from.
+    expect(
+      renderFileResult({
+        mount,
+        path: path("docs/a.md"),
+        ...pageOfText("0123456789", 0, 4),
+        requestedLength: 6,
+      }),
+    ).toContain("More follows: call read_repo_file with offset 4.");
+  });
+
   it("has a notice for a commit that is still being indexed", () => {
     expect(INDEXING_NOTICE).toContain("Retry shortly");
     expect(INDEXING_NOTICE).toContain("publication rules have been checked");

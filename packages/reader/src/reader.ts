@@ -437,6 +437,8 @@ export class Reader<M extends MountContext = MountContext> {
       readonly path?: string | undefined;
       readonly cursor?: string | undefined;
       readonly limit?: number | undefined;
+      /** The most headings on a page of an outline, when the path names a file; `limit` when absent. */
+      readonly headings?: number | undefined;
     },
     waitMs: number,
     fits?: (result: BrowseResult) => boolean,
@@ -509,14 +511,18 @@ export class Reader<M extends MountContext = MountContext> {
     mount: M,
     index: ReadableIndex,
     entry: IndexEntry,
-    input: { readonly cursor?: string | undefined; readonly limit?: number | undefined },
+    input: {
+      readonly cursor?: string | undefined;
+      readonly limit?: number | undefined;
+      readonly headings?: number | undefined;
+    },
     fits?: (result: BrowseResult) => boolean,
   ): Promise<{ readonly status: "ready"; readonly result: BrowseResult }> {
     const path = entry.path as RepoPath;
     const limits = { ...this.#dependencies.limits, ...mount.limits };
     const key = this.#pageKey(mount, index, "outline", path);
     const offset = continuationOffset(input.cursor, key);
-    const limit = input.limit ?? BROWSE_DEFAULT_LIMIT;
+    const limit = input.headings ?? input.limit ?? BROWSE_DEFAULT_LIMIT;
     const none: FileOutline = {
       path,
       size: entry.size,
@@ -1548,12 +1554,20 @@ export class Reader<M extends MountContext = MountContext> {
       return { kind: "not_text", path: below, sourceUrl: mount.rawUrl(path) };
     }
     const references = await this.#references(mount, index, entry.frontMatter?.references ?? []);
-    const make = (length: number): FileResult => ({
-      references,
-      mount: this.summary(mount, index),
-      path: below,
-      ...pageOfText(text, input.offset ?? 0, length),
-    });
+    const make = (length: number): FileResult => {
+      const page = pageOfText(text, input.offset ?? 0, length);
+      return {
+        // A page lists the links within it: a section read is not told of the rest of the file's.
+        references:
+          page.content.length === text.length
+            ? references
+            : references.filter((reference) => page.content.includes(reference.href)),
+        mount: this.summary(mount, index),
+        path: below,
+        ...page,
+        requestedLength: input.limit,
+      };
+    };
     const page = boundedPage(input.limit ?? READ_FILE_DEFAULT_LIMIT, make, fits);
     if (page.nextOffset !== undefined && page.content.length === 0) {
       throw new ReaderInputError("This file page cannot advance. Use a larger page limit.");

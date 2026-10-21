@@ -240,6 +240,11 @@ export interface FileResult {
   /** Where the next page starts; `undefined` on the last page. */
   readonly nextOffset: number | undefined;
   readonly totalLength: number;
+  /**
+   * The length the call asked for, when it gave one. A page that holds it with more to come ends
+   * where it was asked to end, as a section read does; a shorter one was cut by the response budget.
+   */
+  readonly requestedLength?: number | undefined;
 }
 
 export interface DirectoryEntry {

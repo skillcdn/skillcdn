@@ -14,6 +14,7 @@ import {
   INDEXING_NOTICE,
   type IndexedFile,
   type IndexNotReady,
+  MAX_OUTLINE_HEADINGS,
   MCP_BROWSE_DEFAULT_LIMIT,
   MCP_SEARCH_DEFAULT_LIMIT,
   readFileTool,
@@ -216,7 +217,13 @@ export async function createMountServer<M extends ServedMount>(
     guarded(browseTool.name, async (input) => {
       const answer = await reader.browse(
         mount,
-        { ...input, limit: input.limit ?? MCP_BROWSE_DEFAULT_LIMIT },
+        {
+          ...input,
+          limit: input.limit ?? MCP_BROWSE_DEFAULT_LIMIT,
+          // An outline page holds as many headings as the response budget takes, unless the call
+          // names a limit: a model gets the headings of a file in one call, or a few.
+          headings: input.limit ?? MAX_OUTLINE_HEADINGS,
+        },
         indexWaitMs,
         (result) => fitsReply(browseReply(result)),
       );

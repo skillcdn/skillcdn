@@ -805,10 +805,11 @@ async function readCommand(
       if (path === undefined || more.length > 0) {
         throw new Misuse("Say which file: its path from the pack's root.");
       }
+      const limit = count(parsed.values.limit, "limit", READ_FILE_MAX_LIMIT);
       const body = await pack.file({
         path,
         offset: count(parsed.values.offset, "offset", Number.MAX_SAFE_INTEGER),
-        limit: count(parsed.values.limit, "limit", READ_FILE_MAX_LIMIT),
+        limit,
       });
       if (json) {
         printJson(body);
@@ -834,7 +835,9 @@ async function readCommand(
           "The pack answered a file in an unexpected shape.",
         );
       }
-      print(renderFileResult(result, COMMAND_WORDS));
+      // The length asked for travels with the result, so that a range the command got in full
+      // says where the file continues, as a tool result does; the body itself does not carry it.
+      print(renderFileResult({ ...result, requestedLength: limit }, COMMAND_WORDS));
       return 0;
     }
   }

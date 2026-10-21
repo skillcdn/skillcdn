@@ -439,6 +439,17 @@ export function renderDirectoryResult(result: DirectoryResult): string {
   return joinSections([header.join("\n"), entries.join("\n"), notices(result.mount).join("\n")]);
 }
 
+/**
+ * A page that delivered the length it was asked for, as a section read does, says where the file
+ * goes on and asks for nothing; one the response budget cut short says to read on.
+ */
+function continuationLine(result: FileResult, words: ToolWords): string | undefined {
+  if (result.nextOffset === undefined) return undefined;
+  return result.requestedLength !== undefined && result.content.length >= result.requestedLength
+    ? `The file continues at offset ${result.nextOffset}.`
+    : `More follows: call ${words.read} with offset ${result.nextOffset}.`;
+}
+
 export function renderFileResult(result: FileResult, words: ToolWords = MCP_TOOL_WORDS): string {
   const end = result.offset + result.content.length;
   const range =
@@ -448,9 +459,7 @@ export function renderFileResult(result: FileResult, words: ToolWords = MCP_TOOL
   const header = [
     `File: ${result.path} (${range})`,
     `Source: ${describeMount(result.mount)}`,
-    result.nextOffset === undefined
-      ? undefined
-      : `More follows: call ${words.read} with offset ${result.nextOffset}.`,
+    continuationLine(result, words),
   ].filter((line) => line !== undefined);
 
   return joinSections([

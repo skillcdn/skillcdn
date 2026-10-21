@@ -96,7 +96,10 @@ export interface FilePage {
 export function filePageOf(text: string): FilePage {
   const range = /^File: \S+ \((?:(\d+) characters|characters (\d+) to \d+ of (\d+))\)$/m.exec(text);
   if (range === null) throw new Error("not a file page");
-  const more = /^More follows: call read_repo_file with offset (\d+)\.$/m.exec(text);
+  const more =
+    /^(?:More follows: call read_repo_file with offset|The file continues at offset) (\d+)\.$/m.exec(
+      text,
+    );
   const marker = "--- content ---\n";
   const start = text.indexOf(marker);
   if (start < 0) throw new Error("a file page without content");

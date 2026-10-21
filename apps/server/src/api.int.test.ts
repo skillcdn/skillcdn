@@ -211,7 +211,9 @@ describe("a multi-skill repository", () => {
 
     const first = await call(client, "read_repo_file", { path: "docs/long.md", limit: 1000 });
     expect(first.text).toContain("characters 0 to 1000 of 2008");
-    expect(first.text).toContain("call read_repo_file with offset 1000");
+    // The range asked for arrived whole: the page says where the file goes on, not to read on.
+    expect(first.text).toContain("The file continues at offset 1000.");
+    expect(first.text).not.toContain("More follows");
     const second = await call(client, "read_repo_file", { path: "docs/long.md", offset: 1000 });
     expect(second.text).toContain("characters 1000 to 2008 of 2008");
 

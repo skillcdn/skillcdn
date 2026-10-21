@@ -29,6 +29,23 @@ interface LocalMount extends ServedMount {
   readonly index: ReadableIndex;
 }
 
+const OUTLINE_SECTIONS = 25;
+
+/** A document of more headings than a folder page lists, with a link in its first and last section. */
+function outlineDocument(): string {
+  const sections = Array.from({ length: OUTLINE_SECTIONS }, (_, index) => {
+    const number = index + 1;
+    const link =
+      number === 1
+        ? " It opens with [the guide](guide.md)."
+        : number === OUTLINE_SECTIONS
+          ? " It ends with [the ads](../marketing/ads/SKILL.md)."
+          : "";
+    return `## Section ${number}\n\nThe text of section ${number}.${link}\n`;
+  });
+  return ["# Outline", "", "A guide with many headings.", "", ...sections].join("\n");
+}
+
 async function pack(): Promise<{ readonly root: string; readonly mount: LocalMount }> {
   const parent = await mkdtemp(join(tmpdir(), "skillcdn-serve-"));
   const root = join(parent, "acme");
@@ -37,6 +54,7 @@ async function pack(): Promise<{ readonly root: string; readonly mount: LocalMou
     "marketing/ads/SKILL.md":
       "---\nname: ads\ndescription: Writes ad copy for a product page.\n---\n# Ads\n\nWrite three variants.\n",
     "docs/guide.md": "# Guide\n\nHow the skills are used.\n",
+    "docs/outline.md": outlineDocument(),
   };
   for (const [file, contents] of Object.entries(files)) {
     const parts = file.split("/");
@@ -177,6 +195,45 @@ describe("a directory served from a machine", () => {
     // A working tree may change at any moment, and is one machine's own.
     expect(skills.ttlMs).toBe(0);
     expect(skills.cacheScope).toBe("private");
+    await client.close();
+  });
+
+  it("outlines a file in one page and tells a section read only of its own links", async () => {
+    const { mount } = await pack();
+    const app = appOf(mount);
+    const client = new Client({ name: "skillcdn-test", version: "0.0.0" });
+    await client.connect(
+      new StreamableHTTPClientTransport(new URL("http://local.test/local/packs/acme"), {
+        fetch: async (input, init) => app.fetch(new Request(input, init)),
+      }),
+    );
+    const call = async (name: string, args: Record<string, unknown>): Promise<string> =>
+      text(await client.callTool({ name, arguments: args }));
+    // An outline page holds what the response budget takes, not the twenty entries of a folder page.
+    const outline = await call("browse_repo", { path: "docs/outline.md" });
+    expect(outline).toContain(`; ${OUTLINE_SECTIONS + 1} headings)`);
+    expect(outline).toContain(`- ## Section ${OUTLINE_SECTIONS} (offset `);
+    expect(outline).not.toContain("nextCursor");
+    const section = (number: number): { offset: number; limit: number } => {
+      const found = new RegExp(`- ## Section ${number} \\(offset (\\d+), limit (\\d+)\\)`).exec(
+        outline,
+      );
+      if (found === null) throw new Error(`section ${number} is not in the outline`);
+      return { offset: Number(found[1]), limit: Number(found[2]) };
+    };
+    // A section read delivers the range it was asked for, and is told where the file goes on,
+    // not that more follows; it lists the links of its own text and no other.
+    const first = await call("read_repo_file", { path: "docs/outline.md", ...section(1) });
+    expect(first).toContain("--- content ---\n## Section 1\n");
+    expect(first).toContain("The file continues at offset ");
+    expect(first).not.toContain("More follows");
+    expect(first).toContain("- guide.md -> docs/guide.md (available)");
+    expect(first).not.toContain("marketing/ads/SKILL.md");
+    const middle = await call("read_repo_file", { path: "docs/outline.md", ...section(2) });
+    expect(middle).not.toContain("Resolved references");
+    const whole = await call("read_repo_file", { path: "docs/outline.md" });
+    expect(whole).toContain("- guide.md -> docs/guide.md (available)");
+    expect(whole).toContain("- ../marketing/ads/SKILL.md -> marketing/ads/SKILL.md (available)");
     await client.close();
   });
 
