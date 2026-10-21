@@ -35,12 +35,20 @@ import { MountFile } from "./mount-file.js";
 import { MountOverview } from "./mount-overview.js";
 import { MountSkill } from "./mount-skill.js";
 
-/** A small label, then the value in the code face. */
-function Fact(props: { readonly label: string; readonly children: ReactNode }) {
+/** A small label, then the value in the code face, or in the text face for a value that is words. */
+function Fact(props: {
+  readonly label: string;
+  readonly children: ReactNode;
+  readonly plain?: boolean;
+}) {
   return (
     <li className={styles.fact}>
       <span className={styles.factLabel}>{props.label}</span>
-      <code>{props.children}</code>
+      {props.plain === true ? (
+        <span className={styles.factText}>{props.children}</span>
+      ) : (
+        <code>{props.children}</code>
+      )}
     </li>
   );
 }
@@ -134,6 +142,29 @@ function MountHeader(props: {
             {mount.index.status === "ready" && mount.index.license !== undefined && (
               <Fact label={t.mount.license}>
                 <LicenseValue license={mount.index.license} mount={mount} />
+              </Fact>
+            )}
+            {/* How an agent's search of this repository matches (ADR-0064), and how far the
+                embedding of its documents has come while it is still going. */}
+            {mount.index.status === "ready" && mount.index.search !== undefined && (
+              <Fact label={t.mount.search.mode} plain>
+                <span
+                  title={
+                    mount.index.search.meaning
+                      ? t.mount.search.meaningHint
+                      : t.mount.search.wordsHint
+                  }
+                >
+                  {mount.index.search.meaning ? t.mount.search.meaning : t.mount.search.words}
+                </span>
+                {mount.index.search.embedding?.status === "in_progress" && (
+                  <span className={styles.factNote}>
+                    {t.mount.search.embedding(
+                      mount.index.search.embedding.embedded,
+                      mount.index.search.embedding.total,
+                    )}
+                  </span>
+                )}
               </Fact>
             )}
           </ul>
@@ -261,10 +292,14 @@ export interface MountPageProps {
 export function MountPage(props: MountPageProps) {
   const { t, language } = useI18n();
   const { address, view, origin } = props;
+  // Asked again while the commit is being indexed, and while its documents are being embedded,
+  // so that the page shows the search catching up.
   const mount = useResource(
     resourceKeys.mount(address),
     (signal) => api.mount(address, signal),
-    (value) => value.index.status === "indexing",
+    (value) =>
+      value.index.status === "indexing" ||
+      (value.index.status === "ready" && value.index.search?.embedding?.status === "in_progress"),
   );
   const [skill, setSkill] = useState<RestSkill | undefined>(undefined);
   const loaded = mount.state === "ready" ? mount.value : undefined;

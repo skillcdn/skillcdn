@@ -231,6 +231,16 @@ export const en = {
       label: "Search this folder and its subfolders",
       placeholder: "Search in this folder…",
       hint: "Searches the original text of skills and documents; display translations are not searched.",
+      hintMeaning:
+        "Searches the original text of skills and documents by words and by meaning; display translations are not searched.",
+      /** The fact under the name: what a search of the repository matches, and how far its embedding has come. */
+      mode: "Search",
+      words: "words",
+      meaning: "words and meaning",
+      wordsHint: "Agents find skills and documents by the words they contain.",
+      meaningHint:
+        "Agents find skills and documents by their words and by their meaning, so a question in other words still finds its passage.",
+      embedding: (embedded: number, total: number) => `${embedded} of ${total} documents embedded`,
       submit: "Search",
       clear: "Clear",
       resultsFor: (query: string) => `Results for “${query}”`,

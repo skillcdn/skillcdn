@@ -99,6 +99,20 @@
   font-size: var(--text-sm);
 }
 
+/* A value that is words, not code: the text face, so that Hangul keeps one face. */
+.factText {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+/* How far something has come, beside the value it qualifies. */
+.factNote {
+  color: var(--color-text-muted);
+}
+
 /* An action, not a fact: it stays quiet until it is pointed at. */
 .hostLink {
   font-size: var(--text-sm);

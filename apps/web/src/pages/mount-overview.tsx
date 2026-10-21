@@ -478,7 +478,7 @@ export function MountOverview(props: {
           )}
         </form>
         <p id="mount-search-hint" className={styles.note}>
-          {t.mount.search.hint}
+          {index.search?.meaning === true ? t.mount.search.hintMeaning : t.mount.search.hint}
         </p>
       </search>
       {query === undefined ? (

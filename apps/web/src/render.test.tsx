@@ -519,6 +519,43 @@ describe("the page of an address", () => {
     );
   });
 
+  it("says how the repository is searched, and how far its embedding has come", () => {
+    const t = messagesFor("en");
+    const render = (search: Extract<RestMount["index"], { status: "ready" }>["search"]) =>
+      renderAddressPage(TEMPLATE, {
+        language: "en",
+        origin: "https://skills.example",
+        pathname: "/gh/acme/skills",
+        search: "",
+        data: {
+          mount: { ready: { ...MOUNT, index: { ...MOUNT.index, search } } },
+          browse: { ready: BROWSE },
+        },
+      }).html;
+    // By words alone, as a deployment without an embedding model says.
+    const words = render({ meaning: false, embedding: null });
+    expect(words).toContain(`>${t.mount.search.mode}<`);
+    expect(words).toContain(`>${t.mount.search.words}<`);
+    expect(words).toContain(t.mount.search.hint);
+    expect(words).not.toContain(t.mount.search.meaning);
+    // By words and meaning, with the embedding still going: the page says how far.
+    const going = render({
+      meaning: true,
+      embedding: { status: "in_progress", embedded: 3, total: 12 },
+    });
+    expect(going).toContain(`>${t.mount.search.meaning}<`);
+    expect(going).toContain(t.mount.search.embedding(3, 12));
+    expect(going).toContain(t.mount.search.hintMeaning);
+    // Complete: nothing to count any more.
+    const done = render({ meaning: true, embedding: { status: "complete" } });
+    expect(done).toContain(`>${t.mount.search.meaning}<`);
+    expect(done).not.toContain("documents embedded");
+    // An answer of a deployment older than the field shows no fact at all.
+    const older = render(undefined);
+    expect(older).not.toContain(`>${t.mount.search.words}<`);
+    expect(older).not.toContain(`>${t.mount.search.meaning}<`);
+  });
+
   it("renders a scoped folder from browse data and keeps the connection address", () => {
     const { html, indexable } = renderAddressPage(TEMPLATE, {
       language: "en",
