@@ -83,6 +83,7 @@ export {
 } from "./markdown-links.js";
 export type { BlobStore } from "./ports/blob-store.js";
 export type { Clock } from "./ports/clock.js";
+export type { Embedder, EmbeddingRole, Embeddings } from "./ports/embedder.js";
 export {
   allowEverything,
   type EntitlementAction,
@@ -127,6 +128,7 @@ export type {
   HostUser,
 } from "./ports/git-host-login.js";
 export type { IndexOutcome, IndexStore, ReadableIndex } from "./ports/index-store.js";
+export type { Reranker } from "./ports/reranker.js";
 export { discardUsage, type UsageEvent, type UsageSink } from "./ports/usage-sink.js";
 export {
   baseName,
