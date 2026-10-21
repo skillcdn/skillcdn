@@ -390,11 +390,13 @@ export {
 } from "./search/outline.js";
 export {
   type DocumentSection,
+  embeddingTextOf,
   MAX_EXCERPT_LENGTH,
   MAX_MATCHED_SECTIONS,
   type MatchedSection,
   matchSections,
   SECTIONING_VERSION,
+  sectionBody,
   sectionsOf,
 } from "./search/sections.js";
 export { ENGLISH_STOP_WORDS } from "./search/stop-words.js";

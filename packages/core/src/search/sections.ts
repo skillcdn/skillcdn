@@ -201,6 +201,42 @@ export function matchSections(
   }));
 }
 
+/**
+ * The text of a section without its heading line: what the section says, under the heading path
+ * that names it. The text before the first heading has no heading line and is given whole.
+ */
+export function sectionBody(text: string, section: DocumentSection): string {
+  const body = text.slice(section.offset, section.offset + section.length);
+  return body.slice(headingLineLength(body, section.heading.length > 0));
+}
+
+/**
+ * A section as it is embedded for the search by meaning (ADR-0064): the document's title and the
+ * heading path, then the body, so that the vector carries where the passage stands as well as what
+ * it says. A title that is the first heading, as a document's title usually is, is not said
+ * twice. The same text is embedded wherever the vectors are made, in a deployment and by the
+ * command, so that both find the same sections by the same query.
+ */
+export function embeddingTextOf(
+  title: string | undefined,
+  section: DocumentSection,
+  text: string,
+): string {
+  const flat = (part: string): string => part.replaceAll(/\s+/g, " ").trim();
+  const first = section.heading[0];
+  const titled =
+    title === undefined ||
+    (first !== undefined && flat(first).toLowerCase() === flat(title).toLowerCase())
+      ? []
+      : [title];
+  const head = [...titled, ...section.heading].map(flat).filter((part) => part.length > 0);
+  const body = sectionBody(text, section).trim();
+  if (head.length === 0) {
+    return body;
+  }
+  return body.length === 0 ? head.join(" > ") : `${head.join(" > ")}: ${body}`;
+}
+
 /** The characters of the heading at the start of a section: one line, two for a setext heading, none for a preamble. */
 function headingLineLength(body: string, headed: boolean): number {
   if (!headed) {

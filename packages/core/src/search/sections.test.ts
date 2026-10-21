@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { queryLexemes } from "./lexemes.js";
-import { MAX_EXCERPT_LENGTH, matchSections, SECTIONING_VERSION, sectionsOf } from "./sections.js";
+import {
+  embeddingTextOf,
+  MAX_EXCERPT_LENGTH,
+  matchSections,
+  SECTIONING_VERSION,
+  sectionBody,
+  sectionsOf,
+} from "./sections.js";
 
 const DOCUMENT = [
   "---",
@@ -68,6 +75,45 @@ describe("sectionsOf", () => {
 
   it("is at its first version", () => {
     expect(SECTIONING_VERSION).toBe(1);
+  });
+});
+
+describe("embeddingTextOf", () => {
+  it("writes the title, the heading path and the body without the heading line", () => {
+    const text = "# Billing\n\nHow it works.\n\n## Plans\n\nOne plan at a time.\nNo trials.\n";
+    const [billing, plans] = sectionsOf(text);
+    if (billing === undefined || plans === undefined) throw new Error("two sections");
+    expect(sectionBody(text, plans)).toBe("\nOne plan at a time.\nNo trials.\n");
+    expect(embeddingTextOf("Handbook", plans, text)).toBe(
+      "Handbook > Billing > Plans: One plan at a time.\nNo trials.",
+    );
+    expect(embeddingTextOf(undefined, billing, text)).toBe("Billing: How it works.");
+    // A document's title is usually its first heading: it is not said twice.
+    expect(embeddingTextOf("Billing", plans, text)).toBe(
+      "Billing > Plans: One plan at a time.\nNo trials.",
+    );
+    expect(embeddingTextOf(" billing ", billing, text)).toBe("Billing: How it works.");
+  });
+
+  it("gives the text before the first heading whole, and a heading alone when its body is blank", () => {
+    const text = "Intro mentions invoices.\n\n# Title\n\n## Empty\n";
+    const [preamble, title, empty] = sectionsOf(text);
+    if (preamble === undefined || title === undefined || empty === undefined) {
+      throw new Error("three sections");
+    }
+    expect(embeddingTextOf(undefined, preamble, text)).toBe("Intro mentions invoices.");
+    expect(embeddingTextOf("Notes", preamble, text)).toBe("Notes: Intro mentions invoices.");
+    expect(embeddingTextOf("Notes", title, text)).toBe("Notes > Title");
+    expect(embeddingTextOf("  Notes  with   spaces ", empty, text)).toBe(
+      "Notes with spaces > Title > Empty",
+    );
+  });
+
+  it("reads a setext heading as the heading line", () => {
+    const text = "Title\n=====\n\nThe body.\n";
+    const [section] = sectionsOf(text);
+    if (section === undefined) throw new Error("one section");
+    expect(embeddingTextOf(undefined, section, text)).toBe("Title: The body.");
   });
 });
 
