@@ -43,6 +43,7 @@ import {
   type ToolWords,
 } from "@skillcdn/core";
 import { checkDirectory, readIndexLimits } from "@skillcdn/indexer";
+import { createEmbeddingsApi, createRerankApi, withQueryCache } from "@skillcdn/inference";
 import { ReaderInputError } from "@skillcdn/reader";
 import { createLocalApp, listenOn, type ServeLogger, serveOverStdio } from "@skillcdn/serve";
 import {
@@ -57,6 +58,7 @@ import {
 } from "./credentials.js";
 import { createMemoryDirectoryStore, DIRECTORY_FILE, type DirectoryStore } from "./directory.js";
 import {
+  type LocalMeaning,
   type LocalMount,
   localAddress,
   localReader,
@@ -67,6 +69,7 @@ import {
 } from "./local.js";
 import { type Pack, PackError } from "./pack.js";
 import { openDeployment } from "./remote.js";
+import { createMemoryVectorCache, type VectorCache } from "./vectors.js";
 
 /** What the command reads and writes, handed in so that a test runs it without a process. */
 export interface CliIo {
@@ -99,6 +102,11 @@ export interface CliIo {
   readonly hold?: (() => Promise<void>) | undefined;
   /** The process's standard input and output, which `mcp` speaks the protocol over. */
   readonly streams?: { readonly stdin: Readable; readonly stdout: Writable } | undefined;
+  /**
+   * Where the vectors of a directory's sections are kept between runs, for the search by
+   * meaning; in memory, for this run only, when left out.
+   */
+  readonly vectors?: VectorCache | undefined;
 }
 
 // Exit codes, as the server's roles use them: 64 for a usage error, 78 for configuration that
@@ -187,7 +195,7 @@ SKILLCDN_TOKEN beside SKILLCDN_URL. Paths start at the pack's root, as marketing
 Every read answers the words an MCP client's model is given, or the JSON of the REST API with --json.
 
 Exit codes: 0 done; 1 the pack does not have it, or refuses it; 2 the pack cannot be read, the
-directory or the deployment; 64 a usage error; 78 a limit variable that cannot be read; 70 a failure.
+directory or the deployment; 64 a usage error; 78 a variable that cannot be read; 70 a failure.
 
 Options:
   -h, --help     Print this help.
@@ -197,6 +205,16 @@ Options:
 const READ_OPTIONS = `  --url <origin>  The deployment an address is read at.
   --as <address>  Address a directory as local/<owner>/<name> instead of its parent's and its own name.
   --json          Print the JSON the REST API answers instead of the words a model is given.`;
+
+/** How a directory is searched by meaning, as the help of the commands that serve one says it. */
+const MEANING_NOTE = `With EMBEDDINGS_URL and EMBEDDINGS_MODEL, the sections of the directory's documents are embedded
+by that server, as a deployment embeds them, and a search ranks by words and meaning; with
+RERANKER_URL and RERANKER_MODEL beside them, the first results are reranked. The variables are
+the ones a deployment takes, with the same defaults. The vectors are kept in the cache directory
+(~/.cache/skillcdn, or under XDG_CACHE_HOME) by the hash of each file, under the model's name,
+so that a directory is embedded once on a machine and a changed file again; a manifest's
+search: { meaning: false } keeps its documents to the words. The text of the documents goes to
+that server and nowhere else; a server that does not answer leaves the words to answer.`;
 
 const HELP: Readonly<Record<Command, string>> = {
   check: `usage: skillcdn check [<directory>]
@@ -227,9 +245,11 @@ ${READ_OPTIONS}
 `,
   find: `usage: skillcdn find [<pack>] <words...> [--path <folder>] [--cursor <cursor>] [--limit <n>] [--url <origin>] [--as <address>] [--json]
 
-What the words find, as search_repo does: words are matched, not meaning, in the language the
-pack is written in, usually English; a skill comes with the files of it that matched, in order of
-relevance, and skills outrank documents. --path keeps the search to a folder. A page of ${FIND_DEFAULT_LIMIT}
+What the words find, as search_repo does: words are matched in the language the pack is written
+in, usually English, and meaning as well where a deployment offers it, or where EMBEDDINGS_URL
+and EMBEDDINGS_MODEL name an embeddings server for a directory (skillcdn help serve says how);
+a skill comes with the files of it that matched, in order of relevance, and skills outrank
+documents. --path keeps the search to a folder. A page of ${FIND_DEFAULT_LIMIT}
 results unless --limit says otherwise (up to ${FIND_MAX_LIMIT}); a page that ends before the results do
 names its nextCursor, which --cursor continues.
 
@@ -268,6 +288,8 @@ hold now. The directory is verified: its content is served in full under its lic
 in it is executed. Standard output carries the protocol alone; what the command has to say
 goes to standard error.
 
+${MEANING_NOTE}
+
 The INDEX_* and READ_MAX_FILE_BYTES variables set the limits a deployment would apply.
 `,
   serve: `usage: skillcdn serve <directory>... [--port <port>] [--host <host>] [--as <address>]
@@ -280,6 +302,8 @@ their files change. Nothing in them is executed. Listens on ${DEFAULT_HOST} at p
 --host and --port say otherwise; --port 0 takes any free port. Whoever reaches the port reads
 everything served, since nothing signs anyone in: keep it on this machine, or on a network of
 your own. Runs until stopped (Ctrl+C).
+
+${MEANING_NOTE}
 
 The INDEX_* and READ_MAX_FILE_BYTES variables set the limits a deployment would apply.
 `,
@@ -389,6 +413,163 @@ function limitsOf(io: CliIo): IndexLimits {
     throw new ConfigurationError(limits.error);
   }
   return limits.value;
+}
+
+interface ConfigurationProblem {
+  readonly variable: string;
+  readonly rule: string;
+}
+
+/** A text from the environment, or nothing when the variable is not set or is blank. */
+function textOf(env: CliIo["environment"], name: string): string | undefined {
+  const value = env[name]?.trim();
+  return value === undefined || value === "" ? undefined : value;
+}
+
+/** A whole number from the environment within its bounds, or the default when it is not set. */
+function wholeNumberOf(
+  env: CliIo["environment"],
+  name: string,
+  fallback: number,
+  min: number,
+  max: number,
+  problems: ConfigurationProblem[],
+): number {
+  const value = textOf(env, name);
+  if (value === undefined) {
+    return fallback;
+  }
+  const number = /^\d{1,9}$/.test(value) ? Number(value) : Number.NaN;
+  if (Number.isNaN(number) || number < min || number > max) {
+    problems.push({ variable: name, rule: `must be an integer between ${min} and ${max}` });
+    return fallback;
+  }
+  return number;
+}
+
+/** A server's endpoint from the environment, an http or https URL, or nothing when it is not set. */
+function serverUrlOf(
+  env: CliIo["environment"],
+  name: string,
+  problems: ConfigurationProblem[],
+): string | undefined {
+  const value = textOf(env, name);
+  if (value === undefined) {
+    return undefined;
+  }
+  try {
+    const url = new URL(value);
+    if (url.protocol === "http:" || url.protocol === "https:") {
+      return value;
+    }
+  } catch {
+    // Not a URL at all: the one problem below.
+  }
+  problems.push({ variable: name, rule: "must be an http or https URL" });
+  return undefined;
+}
+
+/**
+ * The search by meaning over a directory (ADR-0064), from the variables a deployment takes, with
+ * its defaults: nothing without EMBEDDINGS_URL, and the words answer alone; with it, the
+ * embeddings server, the reranking server beside it where RERANKER_URL names one, and where the
+ * vectors are kept. What cannot be read is refused, as a deployment would refuse it.
+ */
+function meaningOf(io: CliIo): LocalMeaning | undefined {
+  const env = io.environment;
+  const problems: ConfigurationProblem[] = [];
+  const url = serverUrlOf(env, "EMBEDDINGS_URL", problems);
+  const model = textOf(env, "EMBEDDINGS_MODEL");
+  if (url === undefined && problems.length === 0) {
+    for (const name of ["EMBEDDINGS_MODEL", "EMBEDDINGS_QUERY_INSTRUCTION", "EMBEDDINGS_KEY"]) {
+      if (textOf(env, name) !== undefined) {
+        problems.push({ variable: name, rule: "read only with EMBEDDINGS_URL" });
+      }
+    }
+  } else if (url !== undefined && model === undefined) {
+    problems.push({ variable: "EMBEDDINGS_MODEL", rule: "required with EMBEDDINGS_URL" });
+  } else if (model !== undefined && model.length > 200) {
+    problems.push({ variable: "EMBEDDINGS_MODEL", rule: "must be at most 200 characters" });
+  }
+  const dimensions = wholeNumberOf(env, "EMBEDDINGS_DIMENSIONS", 1024, 32, 4096, problems);
+  const timeoutMs = wholeNumberOf(env, "EMBEDDINGS_TIMEOUT_MS", 60_000, 1000, 600_000, problems);
+  const queryTimeoutMs = wholeNumberOf(
+    env,
+    "EMBEDDINGS_QUERY_TIMEOUT_MS",
+    5000,
+    100,
+    60_000,
+    problems,
+  );
+  const concurrency = wholeNumberOf(env, "EMBEDDINGS_CONCURRENCY", 2, 1, 64, problems);
+  const maxTexts = wholeNumberOf(env, "EMBEDDINGS_BATCH_TEXTS", 16, 1, 256, problems);
+  const maxBatchChars = wholeNumberOf(
+    env,
+    "EMBEDDINGS_BATCH_CHARS",
+    32_000,
+    1000,
+    1_000_000,
+    problems,
+  );
+  const maxTextChars = wholeNumberOf(env, "EMBEDDINGS_TEXT_CHARS", 8000, 100, 100_000, problems);
+  const rerankerUrl = serverUrlOf(env, "RERANKER_URL", problems);
+  const rerankerModel = textOf(env, "RERANKER_MODEL");
+  if (textOf(env, "RERANKER_URL") === undefined) {
+    for (const name of ["RERANKER_MODEL", "RERANKER_KEY"]) {
+      if (textOf(env, name) !== undefined) {
+        problems.push({ variable: name, rule: "read only with RERANKER_URL" });
+      }
+    }
+  } else if (rerankerUrl !== undefined && rerankerModel === undefined) {
+    problems.push({ variable: "RERANKER_MODEL", rule: "required with RERANKER_URL" });
+  }
+  const rerankTimeoutMs = wholeNumberOf(env, "RERANKER_TIMEOUT_MS", 5000, 100, 60_000, problems);
+  const rerankConcurrency = wholeNumberOf(env, "RERANKER_CONCURRENCY", 2, 1, 64, problems);
+  const rerankCandidates = wholeNumberOf(env, "RERANKER_CANDIDATES", 10, 1, 32, problems);
+  if (problems.length > 0) {
+    throw new ConfigurationError(problems);
+  }
+  if (url === undefined || model === undefined) {
+    return undefined;
+  }
+  const fetchLike: FetchLike = io.fetch ?? ((input, init) => fetch(input, init));
+  const userAgent = io.userAgent ?? "skillcdn";
+  const embedder = withQueryCache(
+    createEmbeddingsApi({
+      url,
+      model,
+      dimensions,
+      queryInstruction: textOf(env, "EMBEDDINGS_QUERY_INSTRUCTION"),
+      key: textOf(env, "EMBEDDINGS_KEY"),
+      userAgent,
+      fetch: fetchLike,
+      timeoutMs,
+      queryTimeoutMs,
+      concurrency,
+      maxTexts,
+      maxBatchChars,
+      maxTextChars,
+    }),
+  );
+  const reranker =
+    rerankerUrl === undefined || rerankerModel === undefined
+      ? undefined
+      : createRerankApi({
+          url: rerankerUrl,
+          model: rerankerModel,
+          key: textOf(env, "RERANKER_KEY"),
+          userAgent,
+          fetch: fetchLike,
+          timeoutMs: rerankTimeoutMs,
+          concurrency: rerankConcurrency,
+        });
+  return {
+    embedder,
+    reranker,
+    rerankCandidates,
+    cache: io.vectors ?? createMemoryVectorCache(),
+    report: (line) => io.stderr(`${line}\n`),
+  };
 }
 
 /** What the command was given to find the pack by, read into where the pack is. */
@@ -534,6 +715,7 @@ async function openPack(
       directory: spec.directory,
       as: values.as ?? spec.as,
       limits,
+      meaning: meaningOf(io),
     });
     if ("error" in opened) {
       throw new Unreadable(opened.error, opened.exit);
@@ -1314,6 +1496,7 @@ async function mountAll(
   directories: readonly string[],
   as: string | undefined,
   io: CliIo,
+  meaning: LocalMeaning | undefined,
 ): Promise<readonly MountedDirectory[]> {
   if (as !== undefined && directories.length > 1) {
     throw new Misuse(
@@ -1327,6 +1510,7 @@ async function mountAll(
       directory: resolve(io.cwd ?? ".", directory),
       as,
       limits,
+      meaning,
     });
     if ("error" in result) {
       throw new Unreadable(result.error, result.exit);
@@ -1380,13 +1564,14 @@ async function mcpCommand(args: readonly string[], io: CliIo): Promise<number> {
   if (io.streams === undefined) {
     throw new Misuse("Standard input and output are not available here.");
   }
-  const [mounted] = await mountAll([directory], parsed.values.as, io);
+  const meaning = meaningOf(io);
+  const [mounted] = await mountAll([directory], parsed.values.as, io, meaning);
   if (mounted === undefined) {
     throw new Error("one directory mounts as one");
   }
   const logger = stderrLogger(io);
   const served = await serveOverStdio(mounted.mount, {
-    reader: localReader(limitsOf(io)),
+    reader: localReader(limitsOf(io), meaning),
     clock: clockOf(io),
     logger,
     server: identity(),
@@ -1396,9 +1581,11 @@ async function mcpCommand(args: readonly string[], io: CliIo): Promise<number> {
   io.stderr(
     `Serving ${mounted.mount.root} as ${formatAddress(mounted.mount.address)} over standard input and output.\n`,
   );
+  void mounted.embedding();
   const watching = watchAll([mounted], logger);
   await Promise.race([served.closed, io.hold?.() ?? served.closed]);
   watching.close();
+  mounted.close();
   await served.close();
   return 0;
 }
@@ -1440,12 +1627,13 @@ async function serveCommand(args: readonly string[], io: CliIo): Promise<number>
   }
   const port = portOf(parsed.values.port);
   const host = hostOf(parsed.values.host);
-  const mounted = await mountAll(parsed.positionals, parsed.values.as, io);
+  const meaning = meaningOf(io);
+  const mounted = await mountAll(parsed.positionals, parsed.values.as, io, meaning);
   const logger = stderrLogger(io);
   const mounts: LocalMount[] = mounted.map(({ mount }) => mount);
   const app = createLocalApp({
     mounts,
-    reader: localReader(limitsOf(io)),
+    reader: localReader(limitsOf(io), meaning),
     clock: clockOf(io),
     logger,
     server: identity(),
@@ -1463,9 +1651,15 @@ async function serveCommand(args: readonly string[], io: CliIo): Promise<number>
       "",
     ].join("\n"),
   );
+  for (const directory of mounted) {
+    void directory.embedding();
+  }
   const watching = watchAll(mounted, logger);
   await io.hold?.();
   watching.close();
+  for (const directory of mounted) {
+    directory.close();
+  }
   await listening.close();
   return 0;
 }

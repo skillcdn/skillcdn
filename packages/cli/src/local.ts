@@ -7,6 +7,7 @@ import {
   browseBody,
   describeLicense,
   directoryBody,
+  type Embedder,
   fileBody,
   findBody,
   type IndexLimits,
@@ -15,13 +16,20 @@ import {
   REST_MOUNT_LIST_LIMIT,
   type ReadableIndex,
   type RepoPath,
+  type Reranker,
   ROOT_PATH,
   skillOutcome,
 } from "@skillcdn/core";
 import { readDirectory, WORKING_TREE_COMMIT } from "@skillcdn/indexer";
-import { createMemoryIndex, Reader } from "@skillcdn/reader";
+import { createMemoryIndex, Reader, type ReaderMeaning } from "@skillcdn/reader";
 import { localMountBody, type ServedMount } from "@skillcdn/serve";
 import { type Pack, PackError } from "./pack.js";
+import {
+  createVectorSet,
+  type EmbeddingOutcome,
+  type VectorCache,
+  type VectorSet,
+} from "./vectors.js";
 
 // A directory on this machine as a pack (ADR-0053, ADR-0055, ADR-0057): read as the indexer
 // reads a commit, kept as an index in memory, read as a deployment reads its own, and answered
@@ -37,10 +45,32 @@ export interface LocalMount extends ServedMount {
   readonly index: () => ReadableIndex;
 }
 
+/**
+ * The search by meaning over a directory (ADR-0064): the servers the person runs, as the reader
+ * takes them, and where the vectors of the directory's sections are kept between runs.
+ */
+export interface LocalMeaning {
+  readonly embedder: Embedder;
+  readonly reranker?: Reranker | undefined;
+  readonly rerankCandidates?: number | undefined;
+  readonly cache: VectorCache;
+  /** Where a line about the embedding goes: standard error. */
+  readonly report: (line: string) => void;
+}
+
 export interface MountedDirectory {
   readonly mount: LocalMount;
   /** Reads the directory again and serves what it holds now; throws, and keeps the last index, when it cannot be read. */
   reload(): Promise<void>;
+  /**
+   * Embeds what the index names now that is not embedded yet, where the search by meaning is
+   * configured, and resolves when that is done; the first call begins it, and every reload after
+   * that continues with the files that changed. `undefined` without the configuration. A server
+   * that fails is reported, never thrown: the words answer alone for what is not embedded.
+   */
+  embedding(): Promise<EmbeddingOutcome> | undefined;
+  /** Ends the embedding after the calls in flight, for a command that is ending. */
+  close(): void;
 }
 
 export interface MountFailure {
@@ -84,6 +114,8 @@ export async function mountDirectory(options: {
   readonly directory: string;
   readonly as?: string | undefined;
   readonly limits: IndexLimits;
+  /** The search by meaning over the directory; left out, the words answer alone. */
+  readonly meaning?: LocalMeaning | undefined;
 }): Promise<MountedDirectory | MountFailure> {
   const root = resolve(options.directory);
   const info = await stat(root).catch(() => undefined);
@@ -95,15 +127,38 @@ export async function mountDirectory(options: {
     return { error: addressed.error, exit: 64 };
   }
   const { address } = addressed;
-  const read = async (): Promise<ReadableIndex> => {
+  const vectors: VectorSet | undefined =
+    options.meaning === undefined ? undefined : createVectorSet(options.meaning);
+  /** What was read last: the index, and the embedding of its bodies once that is asked for. */
+  interface Reading {
+    readonly index: ReadableIndex;
+    readonly embed: () => Promise<EmbeddingOutcome> | undefined;
+    embedding: Promise<EmbeddingOutcome> | undefined;
+  }
+  const read = async (): Promise<Reading> => {
     const result = await readDirectory({
       directory: root,
       limits: options.limits,
       repository: { owner: address.owner, name: address.repo },
     });
-    return createMemoryIndex({ index: result.index, blobs: result.blobs });
+    return {
+      index: createMemoryIndex({ index: result.index, blobs: result.blobs, vectors }),
+      embed: () => vectors?.update(result.index, result.blobs),
+      embedding: undefined,
+    };
   };
-  let index = await read();
+  let reading = await read();
+  // Asked for once, the embedding goes on through every reload: a served directory keeps up
+  // with its files, while a read that needs no vectors never calls the server.
+  let asked = false;
+  const embedding = (): Promise<EmbeddingOutcome> | undefined => {
+    if (vectors === undefined) {
+      return undefined;
+    }
+    asked = true;
+    reading.embedding ??= reading.embed();
+    return reading.embedding;
+  };
   const fileUrl = (path: RepoPath): string =>
     pathToFileURL(path.length === 0 ? root : join(root, ...path.split("/"))).href;
   const mount: LocalMount = {
@@ -119,22 +174,36 @@ export async function mountDirectory(options: {
     // A working tree may change at any moment, and is one machine's own: a client keeps nothing.
     trustedUntil: new Date(0),
     visibility: "private",
-    index: () => index,
+    index: () => reading.index,
   };
   return {
     mount,
     async reload() {
-      index = await read();
+      reading = await read();
+      if (asked) {
+        void embedding();
+      }
+    },
+    embedding,
+    close() {
+      vectors?.stop();
     },
   };
 }
 
 /** The reader of mounted directories: every index is ready, since it is in memory. */
-export const localReader = (limits: IndexLimits): Reader<LocalMount> =>
+export const localReader = (limits: IndexLimits, meaning?: LocalMeaning): Reader<LocalMount> =>
   new Reader<LocalMount>({
     limits,
     index: async (mount) => ({ status: "ready", index: mount.index() }),
+    meaning: meaning === undefined ? undefined : readerMeaningOf(meaning),
   });
+
+const readerMeaningOf = (meaning: LocalMeaning): ReaderMeaning => ({
+  embedder: meaning.embedder,
+  reranker: meaning.reranker,
+  rerankCandidates: meaning.rerankCandidates,
+});
 
 const WATCH_DELAY_MS = 250;
 
@@ -206,13 +275,14 @@ export async function openDirectory(options: {
   readonly directory: string;
   readonly as?: string | undefined;
   readonly limits: IndexLimits;
+  readonly meaning?: LocalMeaning | undefined;
 }): Promise<Pack | MountFailure> {
   const mounted = await mountDirectory(options);
   if ("error" in mounted) {
     return mounted;
   }
   const { mount } = mounted;
-  const reader = localReader(options.limits);
+  const reader = localReader(options.limits, options.meaning);
   const ready = <T extends { readonly status: string }>(
     answer: T,
   ): Extract<T, { status: "ready" }> => {
@@ -231,6 +301,11 @@ export async function openDirectory(options: {
       return browseBody(ready(await reader.browse(mount, query, 0)));
     },
     async find(query) {
+      // A search with words waits for the vectors, so that the first run finds by meaning too;
+      // a listing needs none, and calls no server.
+      if (query.query !== undefined && query.query.trim().length > 0) {
+        await mounted.embedding();
+      }
       return findBody(ready(await reader.find(mount, query, 0)));
     },
     async skill(path, cursor) {

@@ -6,6 +6,7 @@ import { runCli } from "./cli.js";
 import { createFileStore, defaultConfigDir } from "./credentials.js";
 import { createDirectoryStore } from "./directory.js";
 import { guardBrokenPipe } from "./pipe.js";
+import { createFileVectorCache, defaultCacheDir } from "./vectors.js";
 
 // The only place that touches the process: everything else takes what it needs as arguments.
 guardBrokenPipe(process.stdout, (code) => process.exit(code));
@@ -127,6 +128,7 @@ process.exitCode = await runCli(process.argv.slice(2), {
   readStdin,
   store: createFileStore(defaultConfigDir(process.env, homedir()), process.pid),
   directory: createDirectoryStore(process.cwd()),
+  vectors: createFileVectorCache(defaultCacheDir(process.env, homedir()), process.pid),
   userAgent: `skillcdn-cli/${version ?? "0"} (node ${process.versions.node}; ${process.platform})`,
   agentName: agentName(),
   hold,

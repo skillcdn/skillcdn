@@ -66,7 +66,7 @@ To any client on the machine, over HTTP:
 skillcdn serve ./packs/acme                     # an MCP server and the REST API on this machine
 ```
 
-The client gets what a deployment would serve from the folder ([served from a machine](../specs/tools.md#served-from-a-machine)), read again as its files are saved; the address and the port are in [the command's reference](../../packages/cli/README.md#serving-a-directory). Nothing signs anyone in, so whoever reaches the port reads everything served: keep it on the machine, or on a network of your own.
+The client gets what a deployment would serve from the folder ([served from a machine](../specs/tools.md#served-from-a-machine)), read again as its files are saved; the address and the port are in [the command's reference](../../packages/cli/README.md#serving-a-directory). Given an embeddings server on the machine, the folder is searched by meaning as well, as a deployment searches a pack ([searching by meaning](../../packages/cli/README.md#searching-by-meaning)). Nothing signs anyone in, so whoever reaches the port reads everything served: keep it on the machine, or on a network of your own.
 
 ## Private repositories
 
