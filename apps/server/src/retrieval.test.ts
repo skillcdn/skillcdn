@@ -1,6 +1,7 @@
+import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { outlineMarkdown } from "@skillcdn/core";
+import { type Embedder, outlineMarkdown } from "@skillcdn/core";
 import { describe, expect, it } from "vitest";
 import {
   DOCUMENT_PACK_PATH,
@@ -8,6 +9,7 @@ import {
   formatRetrievalReport,
   loadRetrievalSet,
   memorySearch,
+  memorySearchWithMeaning,
   scoreOfLanguage,
 } from "./retrieval/evaluate.js";
 
@@ -80,5 +82,40 @@ describe("the retrieval evaluation set", () => {
     expect(read).toContain("a bookkeeper can waive a fee");
     // The excerpt is the prose that holds the most of the words asked for.
     expect(section?.excerpt).toContain("late fee");
+  });
+
+  it("runs by words and meaning with an embedder, as a profile is measured", async () => {
+    // A bag of words as a vector, with a few words that mean another: what the words miss, the
+    // embedder finds, and the search says that meaning took part.
+    const synonyms: Readonly<Record<string, string>> = { pardon: "waive", tardy: "late" };
+    const dimensions = 64;
+    const vectorOf = (text: string): Float32Array => {
+      const vector = new Float32Array(dimensions);
+      for (const token of text.toLowerCase().match(/[a-z]+/g) ?? []) {
+        const word = synonyms[token] ?? token;
+        const at = (createHash("sha1").update(word).digest()[0] ?? 0) % dimensions;
+        vector[at] = (vector[at] ?? 0) + 1;
+      }
+      return vector;
+    };
+    let documents = 0;
+    const embedder: Embedder = {
+      model: "bag-of-words",
+      dimensions,
+      maxTexts: 16,
+      maxTextChars: 8000,
+      maxBatchChars: 32_000,
+      async embed(texts, as) {
+        if (as === "document") documents += texts.length;
+        return { vectors: texts.map(vectorOf), tokens: 0 };
+      },
+    };
+    const { find, embedded } = await memorySearchWithMeaning({ embedder });
+    expect(embedded.bodies).toBeGreaterThan(0);
+    expect(embedded.sections).toBe(documents);
+    expect(embedded.milliseconds).toBeGreaterThanOrEqual(0);
+    const result = await find("pardon a tardy fee");
+    expect(result.ranking).toEqual({ meaning: true, reranked: false });
+    expect(result.items[0]).toMatchObject({ kind: "document", path: "docs/invoicing.md" });
   });
 });

@@ -1,14 +1,26 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
+  type Embedder,
+  embeddable,
+  embeddingBatches,
+  embeddingTextOf,
   type FindResult,
   type IndexLimits,
+  meaningSearchOf,
   parseAddress,
   type RepoPath,
+  type Reranker,
   ROOT_PATH,
+  sectionsOf,
 } from "@skillcdn/core";
 import { INDEX_LIMIT_DEFAULTS, readDirectory } from "@skillcdn/indexer";
-import { createMemoryIndex, type MountContext, Reader } from "@skillcdn/reader";
+import {
+  createMemoryIndex,
+  type MemorySectionVector,
+  type MountContext,
+  Reader,
+} from "@skillcdn/reader";
 import * as z from "zod";
 
 // The retrieval evaluation set (ADR-0063): questions with the sections that answer them, asked
@@ -160,14 +172,53 @@ export function formatRetrievalReport(score: RetrievalScore): string {
   return `${lines.join("\n")}\n`;
 }
 
+/** The search by meaning a profile is measured with (ADR-0065): its embedder, and its reranker when it has one. */
+export interface MeaningUnderEvaluation {
+  readonly embedder: Embedder;
+  readonly reranker?: Reranker | undefined;
+  /** How many of the first results the reranker scores; the reader's default when left out. */
+  readonly rerankCandidates?: number | undefined;
+}
+
+/** What embedding the directory took, for the report. */
+export interface EmbeddedDirectory {
+  readonly bodies: number;
+  readonly sections: number;
+  readonly milliseconds: number;
+}
+
+export type MemorySearch = (query: string, path?: string) => Promise<FindResult>;
+
 /**
  * A search over a directory as the command searches it: the directory read into an index in
- * memory, and the reader's `find` over it, one page at a time.
+ * memory, and the reader's `find` over it, one page at a time. With `meaning`, the sections of
+ * the directory's documents are embedded first, as a deployment's worker embeds them, and the
+ * search is by words and meaning, reranked where the profile has a reranker.
  */
 export async function memorySearch(
   directory = DOCUMENT_PACK_PATH,
   limits: IndexLimits = INDEX_LIMIT_DEFAULTS,
-): Promise<(query: string, path?: string) => Promise<FindResult>> {
+): Promise<MemorySearch> {
+  return (await memorySearchOf(directory, limits, undefined)).find;
+}
+
+export async function memorySearchWithMeaning(
+  meaning: MeaningUnderEvaluation,
+  directory = DOCUMENT_PACK_PATH,
+  limits: IndexLimits = INDEX_LIMIT_DEFAULTS,
+): Promise<{ readonly find: MemorySearch; readonly embedded: EmbeddedDirectory }> {
+  const made = await memorySearchOf(directory, limits, meaning);
+  if (made.embedded === undefined) {
+    throw new Error("the directory was not embedded");
+  }
+  return { find: made.find, embedded: made.embedded };
+}
+
+async function memorySearchOf(
+  directory: string,
+  limits: IndexLimits,
+  meaning: MeaningUnderEvaluation | undefined,
+): Promise<{ readonly find: MemorySearch; readonly embedded: EmbeddedDirectory | undefined }> {
   const read = await readDirectory({
     directory,
     limits,
@@ -187,12 +238,69 @@ export async function memorySearch(
     sourceUrl: (path: RepoPath) => `file:///${path}`,
     rawUrl: (path: RepoPath) => `file:///${path}`,
   };
-  const index = createMemoryIndex({ index: read.index, blobs: read.blobs });
+  let embedded: EmbeddedDirectory | undefined;
+  let vectors: Map<string, MemorySectionVector[]> | undefined;
+  if (meaning !== undefined) {
+    // The bodies a worker would embed, embedded as it embeds them: the same text per section,
+    // in the same calls, so that the numbers are a deployment's numbers.
+    const started = performance.now();
+    vectors = new Map();
+    const allowed = meaningSearchOf(read.index.entries);
+    let sections = 0;
+    for (const entry of read.index.entries) {
+      if (
+        !entry.visible ||
+        !embeddable(entry) ||
+        !allowed(entry.path) ||
+        vectors.has(entry.blobSha)
+      ) {
+        continue;
+      }
+      const text = await read.blobs.read(entry.blobSha);
+      if (text === undefined) {
+        continue;
+      }
+      const cut = sectionsOf(text);
+      const texts = cut.map((section) => embeddingTextOf(entry.title ?? entry.name, section, text));
+      const made: MemorySectionVector[] = [];
+      for (const batch of embeddingBatches(texts, meaning.embedder)) {
+        const answer = await meaning.embedder.embed(
+          batch.map((at) => texts[at] ?? ""),
+          "document",
+        );
+        batch.forEach((at, position) => {
+          const section = cut[at];
+          const vector = answer.vectors[position];
+          if (section !== undefined && vector !== undefined) {
+            made.push({ ...section, section: at, vector });
+          }
+        });
+      }
+      vectors.set(entry.blobSha, made);
+      sections += made.length;
+    }
+    embedded = { bodies: vectors.size, sections, milliseconds: performance.now() - started };
+  }
+  const known = vectors;
+  const index = createMemoryIndex({
+    index: read.index,
+    blobs: read.blobs,
+    ...(known === undefined ? {} : { vectors: { sectionsOf: (blobSha) => known.get(blobSha) } }),
+  });
   const reader = new Reader<MountContext>({
     limits,
     index: async () => ({ status: "ready", index }),
+    ...(meaning === undefined
+      ? {}
+      : {
+          meaning: {
+            embedder: meaning.embedder,
+            reranker: meaning.reranker,
+            rerankCandidates: meaning.rerankCandidates,
+          },
+        }),
   });
-  return async (query, path) => {
+  const find: MemorySearch = async (query, path) => {
     const answer = await reader.find(
       mount,
       { query, limit: RETRIEVAL_PAGE, ...(path === undefined ? {} : { path }) },
@@ -203,4 +311,5 @@ export async function memorySearch(
     }
     return answer.result;
   };
+  return { find, embedded };
 }

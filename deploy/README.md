@@ -78,6 +78,32 @@ Invalid configuration stops the process with exit code `78` and a message that n
 
 Every secret `NAME` may instead be provided as `NAME_FILE`, a path to a file holding the value, so secret mounts work. Secrets are injected at runtime by the platform (for example a task definition that references a secret store). They are never build arguments, image layers or committed files.
 
+## The inference server and the model profiles
+
+The search by meaning runs on open-weight models the deployment serves itself ([ADR-0065](../docs/adr/0065-meaning-search-runs-on-open-weight-models-served-beside-the-image.md)), through the common embeddings and reranking shapes the adapters speak: any server that speaks them serves, and the adapters know none by name. The one measured here is llama.cpp's `llama-server` with the models as GGUF files, which runs on a CPU or a GPU from one image and is the one server that scores the Qwen3 reranker as its authors intend; a GGUF of that reranker converted before September 2025 scores at random, so take a current conversion.
+
+Two profiles, named by the models they run. Which one a deployment runs is its own choice, made by configuration and changed with a backfill ([the worker](#the-worker)).
+
+| Profile | Embedder | Reranker | Runs on |
+|---|---|---|---|
+| **base** | Qwen3-Embedding-0.6B: `Qwen/Qwen3-Embedding-0.6B-GGUF`, `Qwen3-Embedding-0.6B-Q8_0.gguf` (0.6 GB) | Qwen3-Reranker-0.6B: `ggml-org/Qwen3-Reranker-0.6B-Q8_0-GGUF`, `qwen3-reranker-0.6b-q8_0.gguf` (0.6 GB) | a few CPU cores; on a GPU a search takes tens of milliseconds |
+| **quality** | Qwen3-Embedding-4B: `Qwen/Qwen3-Embedding-4B-GGUF`, `Qwen3-Embedding-4B-Q8_0.gguf` (4.3 GB) or `Qwen3-Embedding-4B-Q4_K_M.gguf` (2.5 GB) | Qwen3-Reranker-4B, a GGUF converted with a llama.cpp of September 2025 or later, such as `mradermacher/Qwen3-Reranker-4B-GGUF`, `Qwen3-Reranker-4B.Q4_K_M.gguf` (2.5 GB) | one GPU: the two 4-bit files together fit in 8 GB (`-np 1 -b 1024 -ub 1024`), the 8-bit embedder alone does |
+
+Where a pack is Korean above all, ADR-0065 names two alternatives, measured beside the profiles: KURE-v1 as the embedder (`Bingsu/KURE-v1-Q8_0-GGUF`, `kure-v1-q8_0.gguf`, a fine-tune of BGE-M3: `--pooling cls`, no query instruction, 1024 dimensions) and bge-reranker-v2-m3 as a lighter reranker (`gpustack/bge-reranker-v2-m3-GGUF`, `bge-reranker-v2-m3-Q8_0.gguf`).
+
+How the two servers of a profile are started, the ports and the path as examples:
+
+```sh
+# The embedder: pooled embeddings, with a context that holds a whole section.
+docker run -d -p 8080:8080 -v ./models:/models:ro ghcr.io/ggml-org/llama.cpp:server \
+  -m /models/Qwen3-Embedding-0.6B-Q8_0.gguf --embeddings --pooling last -c 8192 -b 8192 -ub 8192 --no-webui
+# The reranker.
+docker run -d -p 8081:8080 -v ./models:/models:ro ghcr.io/ggml-org/llama.cpp:server \
+  -m /models/qwen3-reranker-0.6b-q8_0.gguf --reranking -c 8192 -b 8192 -ub 8192 --no-webui
+```
+
+On a GPU, the `:server-cuda` image with `--gpus all` and `-ngl 99`. Then `EMBEDDINGS_URL=http://<host>:8080/v1/embeddings` and `RERANKER_URL=http://<host>:8081/v1/rerank`; `EMBEDDINGS_MODEL` and `RERANKER_MODEL` name the models, which this server takes as any name and answers with the model it loaded, so give the name once and keep it for the model's life, since the vectors are keyed by it; `EMBEDDINGS_QUERY_INSTRUCTION` as in `.env.example` for the Qwen3 embedders and unset for KURE-v1. What the profiles and the alternatives measured on the evaluation set, and the defaults that follow for a CPU and for a GPU, are in [the evaluation set's page](../apps/server/fixtures/retrieval/README.md#what-the-models-measured).
+
 ## The worker
 
 The `worker` role runs the jobs of the deployment ([ADR-0064](../docs/adr/0064-meaning-search-runs-on-pgvector-and-pg-boss-behind-an-embedder-port.md)), kept by pg-boss in the database, in the schema `pgboss` that `migrate` installs. It takes the same environment as `api` and needs no port. One worker is enough; several share the queue, and a worker that is stopped hands its running jobs back within `SHUTDOWN_GRACE_SECONDS`.
