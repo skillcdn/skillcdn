@@ -1,7 +1,12 @@
 // Public surface of @skillcdn/reader. Other workspaces import from this entry point only.
 
 export { ReaderInputError } from "./continuation.js";
-export { createMemoryIndex, type MemoryIndexOptions } from "./memory-index.js";
+export {
+  createMemoryIndex,
+  type MemoryIndexOptions,
+  type MemorySectionVector,
+  type MemoryVectors,
+} from "./memory-index.js";
 export type { MountContext } from "./mount.js";
 export { compareByteOrder } from "./order.js";
 export {

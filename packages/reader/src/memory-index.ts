@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
 import {
   type BlobStore,
+  type DocumentSection,
   type IndexEntry,
   type IndexStore,
+  type MeaningMatch,
   parseSearchVector,
   type ReadableIndex,
   type RepoPath,
@@ -28,6 +30,40 @@ export interface MemoryIndexOptions {
    * other content is refused.
    */
   readonly id?: string | undefined;
+  /**
+   * The vectors of the sections of the bodies, by blob hash, where the person has them
+   * (ADR-0064): the index then answers a search by meaning over them, exactly, as a deployment's
+   * database answers one. Left out, the words answer alone.
+   */
+  readonly vectors?: MemoryVectors | undefined;
+}
+
+/** The vector of one section of a body, as the cache of the command keeps it. */
+export interface MemorySectionVector extends DocumentSection {
+  /** The section's index in the order `sectionsOf` lists them, from 0. */
+  readonly section: number;
+  readonly vector: Float32Array;
+}
+
+/** The vectors of the sections of each body, by the body's blob hash; nothing for a body without. */
+export interface MemoryVectors {
+  sectionsOf(blobSha: string): readonly MemorySectionVector[] | undefined;
+}
+
+/** Cosine similarity of two vectors of the same dimensions; 0 where either has no length. */
+function cosine(a: Float32Array, b: Float32Array): number {
+  let dot = 0;
+  let aa = 0;
+  let bb = 0;
+  for (let at = 0; at < a.length; at += 1) {
+    const x = a[at] ?? 0;
+    const y = b[at] ?? 0;
+    dot += x * y;
+    aa += x * x;
+    bb += y * y;
+  }
+  const length = Math.sqrt(aa * bb);
+  return length === 0 ? 0 : dot / length;
 }
 
 /** A digest of what the entries name: the same content gives the same id. */
@@ -97,6 +133,50 @@ export function createMemoryIndex(options: MemoryIndexOptions): ReadableIndex {
     async diagnostics() {
       return index.diagnostics;
     },
+    ...(options.vectors === undefined
+      ? {}
+      : {
+          async searchByMeaning(
+            mountPath: RepoPath,
+            vector: Float32Array,
+            limit: number,
+          ): Promise<readonly MeaningMatch[]> {
+            // Every section of the findable entries under the mount, compared exactly, as the
+            // deployment's database compares them (ADR-0064); two entries of the same bytes are
+            // two results; ties by path, then section, so that the order is the same everywhere.
+            const nearest: MeaningMatch[] = [];
+            for (const entry of served) {
+              if (!entry.searchable || !underPath(entry.path, mountPath)) {
+                continue;
+              }
+              const sections = options.vectors?.sectionsOf(entry.blobSha);
+              if (sections === undefined) {
+                continue;
+              }
+              for (const section of sections) {
+                if (section.vector.length !== vector.length) {
+                  continue;
+                }
+                nearest.push({
+                  path: entry.path,
+                  section: section.section,
+                  heading: section.heading,
+                  offset: section.offset,
+                  length: section.length,
+                  similarity: cosine(section.vector, vector),
+                });
+              }
+            }
+            return nearest
+              .sort(
+                (a, b) =>
+                  b.similarity - a.similarity ||
+                  compareByteOrder(a.path, b.path) ||
+                  a.section - b.section,
+              )
+              .slice(0, limit);
+          },
+        }),
   };
 
   return {
