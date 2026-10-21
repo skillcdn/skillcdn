@@ -1,7 +1,7 @@
 import type { LicenseFact, SnapshotDiagnostic, SnapshotIndex } from "@skillcdn/core";
 import { and, eq, lt, lte, or, sql } from "drizzle-orm";
 import { type Database, drizzleOf } from "../client.js";
-import { indexEntries, snapshots } from "../schema.js";
+import { indexEntries, snapshotEmbeddings, snapshots } from "../schema.js";
 import type { RepoScope } from "./repos.js";
 
 export type SnapshotStatus = "pending" | "indexing" | "ready" | "failed";
@@ -226,8 +226,11 @@ export async function writeSnapshotIndex(
     if (held === undefined) {
       return false;
     }
-    // A retry starts clean: whatever an interrupted attempt left behind goes first.
+    // A retry starts clean: whatever an interrupted attempt left behind goes first. A new index
+    // may name other bodies, so what was embedded of the old one no longer says the snapshot is
+    // done; the vectors themselves stay with their bodies (ADR-0064).
     await tx.delete(indexEntries).where(eq(indexEntries.snapshotId, scope.snapshotId));
+    await tx.delete(snapshotEmbeddings).where(eq(snapshotEmbeddings.snapshotId, scope.snapshotId));
 
     for (let start = 0; start < index.entries.length; start += ENTRY_BATCH_SIZE) {
       const batch = index.entries.slice(start, start + ENTRY_BATCH_SIZE);

@@ -24,7 +24,7 @@ export interface Database {
   close(): Promise<void>;
 }
 
-const handles = new WeakMap<Database, Drizzle>();
+const handles = new WeakMap<Database, { readonly orm: Drizzle; readonly pool: Pool }>();
 
 export function createDatabase(options: DatabaseOptions): Database {
   const pool = new Pool({
@@ -52,15 +52,24 @@ export function createDatabase(options: DatabaseOptions): Database {
     },
     close: () => pool.end(),
   });
-  handles.set(database, drizzle({ client: pool, schema, casing: "snake_case" }));
+  handles.set(database, { orm: drizzle({ client: pool, schema, casing: "snake_case" }), pool });
   return database;
 }
 
-/** For this package only: the ORM behind a {@link Database}. Not exported from the entry point. */
-export function drizzleOf(database: Database): Drizzle {
+function handleOf(database: Database): { readonly orm: Drizzle; readonly pool: Pool } {
   const handle = handles.get(database);
   if (handle === undefined) {
     throw new TypeError("not a Database created by createDatabase");
   }
   return handle;
+}
+
+/** For this package only: the ORM behind a {@link Database}. Not exported from the entry point. */
+export function drizzleOf(database: Database): Drizzle {
+  return handleOf(database).orm;
+}
+
+/** For this package only: the pool behind a {@link Database}, for a library that runs its own SQL on it. */
+export function poolOf(database: Database): Pool {
+  return handleOf(database).pool;
 }

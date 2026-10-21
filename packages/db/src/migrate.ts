@@ -5,6 +5,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Client } from "pg";
 import { type Database, drizzleOf } from "./client.js";
+import { installJobQueue } from "./jobs.js";
 
 // Generated SQL ships next to the compiled code: <package>/migrations beside <package>/dist.
 const MIGRATIONS_FOLDER = fileURLToPath(new URL("../migrations", import.meta.url));
@@ -64,9 +65,10 @@ async function applyVectorMigrationsAgain(client: Client): Promise<void> {
 
 /**
  * Applies pending migrations on a dedicated connection, under an advisory lock, without the
- * statement timeout that ordinary queries run with. Safe to run concurrently and repeatedly.
- * The notices the database raised on the way come back with the result: a migration that
- * leaves something out, such as the table of the search by meaning where the `vector`
+ * statement timeout that ordinary queries run with, and then installs the schema of the job
+ * queue, or brings it to the version this build ships (ADR-0064). Safe to run concurrently and
+ * repeatedly. The notices the database raised on the way come back with the result: a migration
+ * that leaves something out, such as the table of the search by meaning where the `vector`
  * extension is not available, says so in one.
  */
 export async function migrateDatabase(
@@ -92,6 +94,9 @@ export async function migrateDatabase(
       migrationsTable: MIGRATIONS_TABLE,
     });
     await applyVectorMigrationsAgain(client);
+    // The queue keeps its schema with its own versions, under its own lock, on a connection of
+    // its own; it runs inside ours so that two migrate runs cannot interleave.
+    await installJobQueue(connectionString);
   } finally {
     // Closing the session releases the advisory lock, whatever happened above.
     await client.end();

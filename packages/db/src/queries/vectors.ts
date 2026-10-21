@@ -76,37 +76,43 @@ function vectorLiteral(vector: Float32Array): string {
 }
 
 /**
- * Writes the vectors of sections under one key, in batches, and says how many were new. A
- * section already there is left as it is: the same bytes under the same model and rules give
- * the same vector. A vector of other dimensions than the key's is refused by the table.
+ * Writes the vectors of sections under one key, all of them or none, and says how many were new.
+ * A section already there is left as it is: the same bytes under the same model and rules give
+ * the same vector. A vector of other dimensions than the key's is refused by the table. The
+ * caller writes a body's sections together, since a body with any section written counts as
+ * done ({@link blobsWithoutVectors}); one transaction keeps that true through an interruption.
  */
 export async function writeSectionVectors(
   database: Database,
   key: VectorKey,
   items: readonly SectionVector[],
 ): Promise<number> {
-  const db = drizzleOf(database);
-  let written = 0;
-  for (let start = 0; start < items.length; start += WRITE_BATCH_SIZE) {
-    const rows = items.slice(start, start + WRITE_BATCH_SIZE).map((item) => ({
-      blobSha: item.blobSha,
-      model: key.model,
-      dimensions: key.dimensions,
-      sectioningVersion: key.sectioningVersion,
-      section: item.section,
-      heading: [...item.heading],
-      offset: item.offset,
-      length: item.length,
-      vector: item.vector,
-    }));
-    const inserted = await db
-      .insert(sectionVectors)
-      .values(rows)
-      .onConflictDoNothing()
-      .returning({ section: sectionVectors.section });
-    written += inserted.length;
+  if (items.length === 0) {
+    return 0;
   }
-  return written;
+  return drizzleOf(database).transaction(async (tx) => {
+    let written = 0;
+    for (let start = 0; start < items.length; start += WRITE_BATCH_SIZE) {
+      const rows = items.slice(start, start + WRITE_BATCH_SIZE).map((item) => ({
+        blobSha: item.blobSha,
+        model: key.model,
+        dimensions: key.dimensions,
+        sectioningVersion: key.sectioningVersion,
+        section: item.section,
+        heading: [...item.heading],
+        offset: item.offset,
+        length: item.length,
+        vector: item.vector,
+      }));
+      const inserted = await tx
+        .insert(sectionVectors)
+        .values(rows)
+        .onConflictDoNothing()
+        .returning({ section: sectionVectors.section });
+      written += inserted.length;
+    }
+    return written;
+  });
 }
 
 /**

@@ -1,5 +1,17 @@
 // Public surface of @skillcdn/db. Other workspaces import from this entry point only.
 export { createDatabase, type Database, type DatabaseOptions } from "./client.js";
+export {
+  createJobQueue,
+  installJobQueue,
+  JOB_QUEUE_SCHEMA,
+  type JobQueue,
+  type JobQueueOptions,
+  type QueueCounts,
+  type QueuedJob,
+  type QueueSettings,
+  type SendOptions,
+  type WorkOptions,
+} from "./jobs.js";
 export { getSchemaStatus, migrateDatabase, type SchemaStatus } from "./migrate.js";
 export { createBlobStore } from "./queries/blobs.js";
 export {
@@ -14,6 +26,15 @@ export {
   findConnectRequestBySecret,
   takeApprovedConnectRequest,
 } from "./queries/connect.js";
+export {
+  deleteEmbeddingsOutsideKey,
+  type EmbeddingProgress,
+  getSnapshotEmbedding,
+  listSnapshotsToEmbed,
+  recordSnapshotEmbedding,
+  type SnapshotEmbeddingRecord,
+  type SnapshotToEmbed,
+} from "./queries/embeddings.js";
 export {
   countEntries,
   type DirectoryListing,

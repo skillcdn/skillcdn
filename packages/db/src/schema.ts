@@ -483,6 +483,44 @@ export const sectionVectors = pgTable(
 );
 
 /**
+ * How far the sections of one snapshot have been embedded under one key (ADR-0064): the worker
+ * adds to a row as it writes the vectors of each body, and marks it complete when the snapshot's
+ * last body is done. A ready snapshot without a complete row under the configured key is what
+ * the worker still has to embed; a rebuilt index drops the rows of its snapshot. Tenant-scoped:
+ * a snapshot's embedding is the repository's.
+ */
+export const snapshotEmbeddings = pgTable(
+  "snapshot_embeddings",
+  {
+    snapshotId: uuid()
+      .notNull()
+      .references(() => snapshots.id, { onDelete: "cascade" }),
+    accountId: uuid()
+      .notNull()
+      .references(() => accounts.id),
+    /** The key the vectors were written under: the model, its dimensions and the sectioning rules. */
+    model: text().notNull(),
+    dimensions: integer().notNull(),
+    sectioningVersion: integer().notNull(),
+    /** Bodies whose sections were written, sections written, and the tokens the model read for them. */
+    bodies: integer().notNull().default(0),
+    sections: integer().notNull().default(0),
+    tokens: bigint({ mode: "number" }).notNull().default(0),
+    /** When the snapshot's last body was done; null while the worker is still at it. */
+    completedAt: instant(),
+    createdAt: createdAt(),
+    updatedAt: instant().notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({
+      name: "snapshot_embeddings_pkey",
+      columns: [table.snapshotId, table.model, table.dimensions, table.sectioningVersion],
+    }),
+    index("snapshot_embeddings_account_idx").on(table.accountId),
+  ],
+);
+
+/**
  * Media the operator uploaded for the landing showcase (ADR-0028), keyed by the SHA-256 of the
  * bytes: content-addressed, so the hash is the primary key and the name the file is served under,
  * which never changes. Operator data, not tenant data; served to everyone.
