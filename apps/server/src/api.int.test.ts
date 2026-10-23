@@ -1,11 +1,13 @@
 import type { Client } from "@modelcontextprotocol/client";
 import {
+  allowEverything,
   GitHostError,
   INDEXING_NOTICE,
   INSTRUCTIONS_MAX_LENGTH,
   type IndexEntry,
   NO_LICENSE,
   PROVENANCE_NOTICE,
+  parseAddress,
 } from "@skillcdn/core";
 import {
   claimSnapshot,
@@ -20,6 +22,7 @@ import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillc
 import { INDEX_VERSION } from "@skillcdn/indexer";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as z from "zod";
+import { MountService } from "./mounts/mount-service.js";
 import { createFixtureHost, fixtureCommits } from "./testing/fixture-host.js";
 import { CURRENT_REVISION, createHarness, type HarnessOptions } from "./testing/harness.js";
 import { listedPaths } from "./testing/tool-text.js";
@@ -900,6 +903,32 @@ describe("while a commit is being indexed", () => {
     const late = await call(client, "search_repo", { query: "fresh" });
     expect(late.text).toContain("document: docs/only-here.md - Only here");
     await client.close();
+  });
+
+  it("is idle only once the indexing a request started has finished", async () => {
+    // A request starts indexing without waiting for it, and a wait for idle right after the
+    // response used to find nothing running yet, since the start was still claiming its row, and
+    // return at once: the next read found an index still being made (the flake of
+    // stats.int.test.ts on CI). Started the same way here, with nothing awaited in between.
+    const host = createFixtureHost("idle");
+    const { snapshots } = harness({ host });
+    const parsed = parseAddress(`/gh/acme/single-skill@${fixtureCommits("idle").main}`);
+    if (!parsed.ok) throw new Error("invalid fixture address");
+    const mounts = new MountService({
+      database: testDatabase.database,
+      gitHost: host,
+      clock: { now: () => new Date() },
+      entitlements: allowEverything,
+      repoTtlMs: 60_000,
+      refTtlMs: 60_000,
+      staleGraceMs: 60_000,
+      isVerified: async () => true,
+      imageOf: async () => undefined,
+    });
+    const mount = await mounts.resolve(parsed.value);
+    void snapshots.warm(mount);
+    await snapshots.idle();
+    expect((await snapshots.ready(mount, 0)).status).toBe("ready");
   });
 });
 

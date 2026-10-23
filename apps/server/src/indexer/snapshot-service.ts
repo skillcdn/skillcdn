@@ -72,6 +72,8 @@ function sleep(milliseconds: number): Promise<void> {
 export class SnapshotService {
   readonly #options: SnapshotServiceOptions;
   readonly #running = new Map<string, { done: Promise<void>; abort: AbortController }>();
+  /** The starts in flight: a snapshot row being made or claimed, before anything runs for it. */
+  readonly #starting = new Set<Promise<SnapshotRecord>>();
   #closing = false;
 
   constructor(options: SnapshotServiceOptions) {
@@ -121,9 +123,18 @@ export class SnapshotService {
     }
   }
 
-  /** Resolves when the indexing that is running right now has finished, however it ends. */
+  /**
+   * Resolves when the indexing that is running right now has finished, however it ends, and
+   * when nothing is about to start: a request starts indexing without waiting for it, so a start
+   * may still be claiming its row when the response is out, and what it starts counts as running.
+   */
   async idle(): Promise<void> {
-    await Promise.allSettled([...this.#running.values()].map(({ done }) => done));
+    while (this.#starting.size > 0 || this.#running.size > 0) {
+      await Promise.allSettled([
+        ...this.#starting,
+        ...[...this.#running.values()].map(({ done }) => done),
+      ]);
+    }
   }
 
   /** Stops claiming, aborts what is running and hands the rows back for another process. */
@@ -136,6 +147,16 @@ export class SnapshotService {
   }
 
   async #ensureStarted(mount: Mount): Promise<SnapshotRecord> {
+    const pending = this.#start(mount);
+    this.#starting.add(pending);
+    try {
+      return await pending;
+    } finally {
+      this.#starting.delete(pending);
+    }
+  }
+
+  async #start(mount: Mount): Promise<SnapshotRecord> {
     const { database, clock, concurrency, leaseMs } = this.#options;
     const snapshot = await ensureSnapshot(
       database,
