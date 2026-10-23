@@ -180,6 +180,53 @@ describe("the mounts body", () => {
     });
   });
 
+  it("names the commit the index was read from, with the newest beside it when that is another (ADR-0068)", () => {
+    const served = "fedcba9876543210fedcba9876543210fedcba98";
+    const facts = {
+      address: address("/gh/acme/skills"),
+      repository: restMount.repository,
+      commit: COMMIT,
+      verified: true,
+      image: () => null,
+    };
+    const failed = mountBody(facts, {
+      status: "ready",
+      overview: {
+        ...overview,
+        mount: {
+          ...mount,
+          commit: served,
+          newest: { commit: COMMIT, status: "failed", errorCode: "indexer.failed" },
+        },
+      },
+    });
+    expect(restMountSchema.parse(failed)).toEqual(failed);
+    expect(failed.commit).toBe(served);
+    expect(failed.newest).toEqual({
+      commit: COMMIT,
+      status: "failed",
+      errorCode: "indexer.failed",
+    });
+    expect(mountSummaryOf(failed)).toMatchObject({
+      commit: served,
+      newest: { commit: COMMIT, status: "failed", errorCode: "indexer.failed" },
+    });
+    expect(renderInstructions(catalogStateOf(failed))).toContain(
+      `(commit ${served.slice(0, 7)}; newest ${COMMIT.slice(0, 7)} failed (indexer.failed))`,
+    );
+    // Being indexed, there is no error code: the API says null, the summary leaves it out.
+    const indexing = mountBody(facts, {
+      status: "ready",
+      overview: {
+        ...overview,
+        mount: { ...mount, commit: served, newest: { commit: COMMIT, status: "indexing" } },
+      },
+    });
+    expect(indexing.newest).toEqual({ commit: COMMIT, status: "indexing", errorCode: null });
+    expect(mountSummaryOf(indexing).newest).toEqual({ commit: COMMIT, status: "indexing" });
+    expect(restMount.newest).toBeNull();
+  });
+
   it("says how the mount is searched: by words alone unless the overview says otherwise", () => {
     expect(restMount.index.status === "ready" ? restMount.index.search : undefined).toEqual({
       meaning: false,

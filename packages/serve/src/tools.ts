@@ -363,7 +363,13 @@ export async function createMountServer<M extends ServedMount>(
     if (answer.status !== "ready") {
       return { skills: [], nextCursor: undefined, ttlMs: INDEXING_TTL_MS };
     }
-    return { skills: answer.result.skills, nextCursor: answer.result.nextCursor, ttlMs: undefined };
+    // A page read from another commit's index while the newest is indexed (ADR-0068) is kept
+    // as briefly as an empty one, so that the client asks again soon.
+    return {
+      skills: answer.result.skills,
+      nextCursor: answer.result.nextCursor,
+      ttlMs: answer.result.mount.newest === undefined ? undefined : INDEXING_TTL_MS,
+    };
   };
 
   server.server.setRequestHandler(

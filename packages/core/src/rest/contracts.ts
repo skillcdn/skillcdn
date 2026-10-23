@@ -45,6 +45,17 @@ const count = z.int().check(z.nonnegative());
 const indexing = z.object({ status: z.literal("indexing") });
 const failed = z.object({ status: z.literal("failed"), errorCode: z.string() });
 
+/**
+ * The newest commit of the ref while another index is served in its place (ADR-0068): being
+ * indexed, or failed with the index's own `errorCode`. The same commit as the one served means
+ * that commit's index is being rebuilt under newer reading rules.
+ */
+export const restNewestSchema = z.object({
+  commit: z.string(),
+  status: z.enum(["indexing", "failed"]),
+  errorCode: z.nullable(z.string()),
+});
+
 export const restDiagnosticSchema = z.object({
   path: z.string(),
   code: z.string(),
@@ -223,6 +234,12 @@ export const restMountSchema = z.object({
    * manifest declares, as a URL the browser loads it from; `null` when there is none.
    */
   image: z.nullable(z.string()),
+  /**
+   * The ref's newest commit while `commit` is another one, served in its place, or while this
+   * commit's index is rebuilt (ADR-0068); `null` when what is served is the newest. Absent from
+   * an answer of a deployment older than the field.
+   */
+  newest: z.optional(z.nullable(restNewestSchema)),
   index: z.discriminatedUnion("status", [
     z.object({
       status: z.literal("ready"),

@@ -86,6 +86,40 @@ describe("repository instructions", () => {
     expect(describeFindTool({ status: "ready", catalog })).toContain("Author description.");
   });
 
+  it("says once, on connect, that another commit's index is served and why (ADR-0068)", () => {
+    const newest = "fedcba9876543210fedcba9876543210fedcba98";
+    const indexing = renderInstructions({
+      status: "ready",
+      catalog: { ...base, mount: { ...mount, newest: { commit: newest, status: "indexing" } } },
+    });
+    expect(indexing).toContain("(commit 0123456; newest fedcba9 indexing)");
+    expect(indexing).toContain(
+      "The newest commit of this ref, fedcba9, is being indexed; until it is ready, what is served is the last indexed commit, 0123456.",
+    );
+    const failed = renderInstructions({
+      status: "ready",
+      catalog: {
+        ...base,
+        mount: {
+          ...mount,
+          newest: { commit: newest, status: "failed", errorCode: "indexer.failed" },
+        },
+      },
+    });
+    expect(failed).toContain("(commit 0123456; newest fedcba9 failed (indexer.failed))");
+    expect(failed).toContain("could not be indexed (indexer.failed) and is retried");
+    const rebuilt = renderInstructions({
+      status: "ready",
+      catalog: {
+        ...base,
+        mount: { ...mount, newest: { commit: mount.commit, status: "indexing" } },
+      },
+    });
+    expect(rebuilt).toContain("(commit 0123456; being reindexed)");
+    expect(rebuilt).toContain("is being rebuilt under newer reading rules");
+    expect(renderInstructions({ status: "ready", catalog: base })).not.toContain("newest");
+  });
+
   it("introduces real folders without loading their skills or rules", () => {
     const text = renderInstructions({
       status: "ready",

@@ -159,7 +159,22 @@ const MAX_LISTED_DIAGNOSTICS = 10;
 export function describeMount(mount: MountSummary): string {
   const ref = mount.ref === undefined ? "" : `@${mount.ref}`;
   const path = mount.path.length === 0 ? "" : `, under ${mount.path}`;
-  return `${mount.repository}${ref} (commit ${mount.commit.slice(0, 7)}${path})`;
+  return `${mount.repository}${ref} (commit ${mount.commit.slice(0, 7)}${newestClause(mount)}${path})`;
+}
+
+/**
+ * The one clause a result carries while the index served is not the newest commit's (ADR-0068):
+ * which commit is newest and why it is not served, or that this commit's index is being rebuilt.
+ * The model reads the commit in the same line and is told nothing more in every result.
+ */
+export function newestClause(mount: MountSummary): string {
+  const newest = mount.newest;
+  if (newest === undefined) return "";
+  const failure = newest.status === "failed" ? ` (${newest.errorCode ?? "unknown"})` : "";
+  if (newest.commit === mount.commit) {
+    return newest.status === "indexing" ? "; being reindexed" : `; reindexing failed${failure}`;
+  }
+  return `; newest ${newest.commit.slice(0, 7)} ${newest.status}${failure}`;
 }
 
 /** A skill this mount describes without serving: the license says so (ADR-0026). */

@@ -59,6 +59,24 @@ export function catalogDescription(catalog: MountCatalog): string | undefined {
   return catalog.manifest?.description || catalog.overview?.description || catalog.description;
 }
 
+/**
+ * The one sentence a connection is told while another commit's index is served (ADR-0068): once,
+ * here, so that no result has to say it. The clause in every `Source` line names the commits.
+ */
+function newestSentence(mount: MountSummary): string {
+  const newest = mount.newest;
+  if (newest === undefined) return "";
+  const failure = newest.status === "failed" ? ` (${newest.errorCode ?? "unknown"})` : "";
+  if (newest.commit === mount.commit) {
+    return newest.status === "indexing"
+      ? " The index of this commit is being rebuilt under newer reading rules; until it is, what is served is its index under the rules before."
+      : ` Rebuilding the index of this commit under newer reading rules failed${failure} and is retried; what is served is its index under the rules before.`;
+  }
+  return newest.status === "indexing"
+    ? ` The newest commit of this ref, ${newest.commit.slice(0, 7)}, is being indexed; until it is ready, what is served is the last indexed commit, ${mount.commit.slice(0, 7)}.`
+    : ` The newest commit of this ref, ${newest.commit.slice(0, 7)}, could not be indexed${failure} and is retried; what is served is the last indexed commit, ${mount.commit.slice(0, 7)}.`;
+}
+
 /** A bounded introduction; complete discovery always remains available through the browse read. */
 export function renderInstructions(state: CatalogState, words: ToolWords = MCP_TOOL_WORDS): string {
   const mount = state.status === "ready" ? state.catalog.mount : state.mount;
@@ -85,7 +103,7 @@ export function renderInstructions(state: CatalogState, words: ToolWords = MCP_T
           .slice(0, 3)
           .map((item) => compactSummary(item.path, 80))
           .join(", ")}); ${words.browse} reports diagnostics.`;
-  const summary = `${head} ${plural(catalog.skillCount, "skill")}, ${plural(catalog.documentCount, "document")}.${language}${diagnostics}`;
+  const summary = `${head}${newestSentence(mount)} ${plural(catalog.skillCount, "skill")}, ${plural(catalog.documentCount, "document")}.${language}${diagnostics}`;
   const skillRow = (skill: CatalogSkill): string =>
     `${skill.directory ? `${skill.directory}/` : ""}SKILL.md: ${compactSummary(skill.description, 90)}`;
   // A folder is introduced by what can be discovered in it. One with nothing discoverable (hidden

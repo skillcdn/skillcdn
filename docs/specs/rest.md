@@ -47,6 +47,8 @@ The API shows a person what an agent gets from an address, and gives a program t
 
 Resolving an address starts indexing. REST never waits: endpoints needing the index answer `200` with `status: "indexing"`, or `status: "failed"` and `errorCode`, instead of their usual `status: "ready"` result. Failed indexing retries after backoff.
 
+While the newest commit of a moving ref is being indexed, or could not be, the routes answer from the last indexed commit of the same ref, and from the same commit's index under the previous reading rules while it is being rebuilt ([ADR-0068](../adr/0068-a-mount-serves-the-last-indexed-commit-while-the-newest-is-not-ready.md)): `commit` then names the commit answered from, and the `mounts` route says in `newest` which commit is the newest and why it is not served. An address pinned to a commit is answered from that commit alone.
+
 Paged results identify their commit and return `nextCursor`, or `null` when the page is last. Cursors bind to the snapshot and reading-rule version, mount, operation and request parameters. They cannot be reused with another path or query. If a moving ref changes, restart from the first page; pin a full commit hash for a stable workflow. An index marked `truncated` is partial independently of pagination.
 
 ## Authorization
@@ -82,6 +84,7 @@ Repository identity and a bounded overview of the mount:
 | `ref`, `pinned`, `commit`, `path` | Requested ref (`null` for default), whether it is a full commit hash, resolved commit, and mounted repository-root directory. |
 | `verified` | Whether the operator or, later, the owner vouches for the repository ([tools](tools.md)). |
 | `image` | The picture that stands for the address, as the URL a browser loads it from: the operator's ([admin API](../../deploy/README.md#the-admin-api)), else the one the nearest manifest declares ([format](skill-repo.md#the-repository-manifest-skillcdnmd)), a file of the repository at `commit` at the host or a URL as written; `null` when there is none. |
+| `newest` | The ref's newest commit while `commit` is another one, served in its place, or while this commit's index is being rebuilt ([ADR-0068](../adr/0068-a-mount-serves-the-last-indexed-commit-while-the-newest-is-not-ready.md)): its `commit`, its `status`, `indexing` or `failed`, and its `errorCode`, `null` unless it failed. `null` when what is served is the newest. Absent from an answer of a deployment older than the field. |
 | `index` | State, or a ready overview with manifest metadata, the `license` that governs the mounted directory outside its skills (`kind`, `name`, `source`), skill/document counts, bounded listings and diagnostics. |
 | `index.search` | How the mount is searched right now ([words and meaning](tools.md#words-and-meaning)): `meaning`, whether a search uses the vectors of its sections, and `embedding`, where the embedding of its index stands: `null` where nothing has embedded it, `{ "status": "complete" }`, or `{ "status": "in_progress", "embedded": n, "total": n }` in documents. By words alone where the deployment has no embedding model. |
 

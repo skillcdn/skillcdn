@@ -170,6 +170,8 @@ export interface SkillsPage {
   readonly skills: readonly SkillEntry[];
   readonly nextCursor: string | undefined;
   readonly total: number;
+  /** Where the page was read from: the commit, with the newest one beside it when that is another (ADR-0068). */
+  readonly mount: MountSummary;
 }
 
 /** What `resources/read` answers: text or bytes, and the digest the listing declared. */
@@ -564,7 +566,7 @@ export class Reader<M extends MountContext = MountContext> {
   }
 
   async browse(
-    mount: M,
+    asked: M,
     input: {
       readonly path?: string | undefined;
       readonly cursor?: string | undefined;
@@ -575,10 +577,10 @@ export class Reader<M extends MountContext = MountContext> {
     waitMs: number,
     fits?: (result: BrowseResult) => boolean,
   ): Promise<IndexNotReady | { readonly status: "ready"; readonly result: BrowseResult }> {
-    const path = this.#scopePath(mount, input.path);
-    const outcome = await this.#dependencies.index(mount, waitMs);
+    const path = this.#scopePath(asked, input.path);
+    const outcome = await this.#index(asked, waitMs);
     if (outcome.status !== "ready") return outcome;
-    const { index } = outcome;
+    const { index, mount } = outcome;
     // A path that names a file is answered with the file's outline (ADR-0063).
     const file = path.length === 0 ? undefined : getEntry(await this.#entriesOf(index), path);
     if (file !== undefined && file.frontMatter?.manifestError !== "unsupported_type") {
@@ -885,16 +887,16 @@ export class Reader<M extends MountContext = MountContext> {
    * What a client is told when it connects: the skills of the mount and how much else there is.
    * Never waits for the index; a commit that is not indexed yet says so instead.
    */
-  async catalog(mount: M): Promise<CatalogState> {
-    const outcome = await this.#dependencies.index(mount, 0);
+  async catalog(asked: M): Promise<CatalogState> {
+    const outcome = await this.#index(asked, 0);
     if (outcome.status !== "ready") {
       return {
         status: outcome.status,
-        mount: this.summary(mount, undefined),
-        description: mount.description,
+        mount: this.summary(asked, undefined),
+        description: asked.description,
       };
     }
-    const { index } = outcome;
+    const { index, mount } = outcome;
     const path = mount.address.path;
     const key = `${index.id} ${index.version} ${path}`;
     let loading = this.#catalogs.get(key);
@@ -976,12 +978,35 @@ export class Reader<M extends MountContext = MountContext> {
             ? mount.address.ref.hash
             : mount.address.ref.name,
       commit: mount.commit,
+      ...(mount.newest === undefined ? {} : { newest: mount.newest }),
       path: mount.address.path,
       verified: mount.verified,
       ...(mount.visibility === undefined ? {} : { visibility: mount.visibility }),
       truncated: index?.truncated ?? false,
       skillUri: skillUriPrefix(mount.address),
     };
+  }
+
+  /**
+   * The index of the mount's commit, with the mount a result names: the one asked for, or, when
+   * the caller hands over an index served in place of that commit's (ADR-0068), the same mount at
+   * the commit that index was built from, with the newest commit beside it. Everything read from
+   * the index is named after the commit it was built from, and nothing after the one asked for.
+   */
+  async #index(
+    asked: M,
+    waitMs: number,
+  ): Promise<
+    IndexNotReady | { readonly status: "ready"; readonly index: ReadableIndex; readonly mount: M }
+  > {
+    const outcome = await this.#dependencies.index(asked, waitMs);
+    if (outcome.status !== "ready") return outcome;
+    const { substitute } = outcome;
+    const mount: M =
+      substitute === undefined
+        ? asked
+        : { ...asked, commit: substitute.commit, newest: substitute.newest };
+    return { status: "ready", index: outcome.index, mount };
   }
 
   // The MCP skills extension (ADR-0024): the same index, served as skills and resources.
@@ -1056,13 +1081,13 @@ export class Reader<M extends MountContext = MountContext> {
 
   /** A page of the skills the extension lists inside the mount. */
   async listSkills(
-    mount: M,
+    asked: M,
     input: { readonly cursor?: string | undefined; readonly limit?: number | undefined },
     waitMs: number,
   ): Promise<IndexNotReady | { readonly status: "ready"; readonly result: SkillsPage }> {
-    const outcome = await this.#dependencies.index(mount, waitMs);
+    const outcome = await this.#index(asked, waitMs);
     if (outcome.status !== "ready") return outcome;
-    const { index } = outcome;
+    const { index, mount } = outcome;
     const key = this.#pageKey(mount, index, "skills/list", mount.address.path);
     const offset = continuationOffset(input.cursor, key);
     const limit = input.limit ?? SKILLS_PAGE_SIZE;
@@ -1083,6 +1108,7 @@ export class Reader<M extends MountContext = MountContext> {
             ? nextContinuation(key, offset + page.skills.length)
             : undefined,
         total: page.total,
+        mount: this.summary(mount, index),
       },
     };
   }
@@ -1092,7 +1118,7 @@ export class Reader<M extends MountContext = MountContext> {
    * listed skill of this mount.
    */
   async getSkill(
-    mount: M,
+    asked: M,
     uri: string,
     waitMs: number,
   ): Promise<
@@ -1103,9 +1129,9 @@ export class Reader<M extends MountContext = MountContext> {
         readonly directory: string | undefined;
       }
   > {
-    const outcome = await this.#dependencies.index(mount, waitMs);
+    const outcome = await this.#index(asked, waitMs);
     if (outcome.status !== "ready") return outcome;
-    const { index } = outcome;
+    const { index, mount } = outcome;
     const path = await this.#pathOfUri(mount, index, uri);
     const entry =
       path === undefined || !isWithinRepoPath(mount.address.path, path)
@@ -1130,7 +1156,7 @@ export class Reader<M extends MountContext = MountContext> {
    * file; `undefined` when the URI names nothing served.
    */
   async readResource(
-    mount: M,
+    asked: M,
     uri: string,
     waitMs: number,
   ): Promise<
@@ -1141,9 +1167,9 @@ export class Reader<M extends MountContext = MountContext> {
         readonly indexed: IndexedFile | undefined;
       }
   > {
-    const outcome = await this.#dependencies.index(mount, waitMs);
+    const outcome = await this.#index(asked, waitMs);
     if (outcome.status !== "ready") return outcome;
-    const { index } = outcome;
+    const { index, mount } = outcome;
     const path = await this.#pathOfUri(mount, index, uri);
     const entry =
       path === undefined || !isWithinRepoPath(mount.address.path, path)
@@ -1184,16 +1210,16 @@ export class Reader<M extends MountContext = MountContext> {
 
   /** The direct children of a directory URI, or `undefined` when it names no directory served here. */
   async readDirectory(
-    mount: M,
+    asked: M,
     uri: string,
     waitMs: number,
   ): Promise<
     | IndexNotReady
     | { readonly status: "ready"; readonly entries: readonly ResourceEntry[] | undefined }
   > {
-    const outcome = await this.#dependencies.index(mount, waitMs);
+    const outcome = await this.#index(asked, waitMs);
     if (outcome.status !== "ready") return outcome;
-    const { index } = outcome;
+    const { index, mount } = outcome;
     const root = await this.#rootSkill(index);
     const path = await this.#pathOfUri(mount, index, uri);
     if (path === undefined || !isWithinRepoPath(mount.address.path, path)) {
@@ -1274,7 +1300,7 @@ export class Reader<M extends MountContext = MountContext> {
   }
 
   async find(
-    mount: M,
+    asked: M,
     input: {
       readonly query?: string | undefined;
       readonly limit?: number | undefined;
@@ -1284,11 +1310,11 @@ export class Reader<M extends MountContext = MountContext> {
     waitMs: number,
     fits?: (result: FindResult) => boolean,
   ): Promise<IndexNotReady | { readonly status: "ready"; readonly result: FindResult }> {
-    const outcome = await this.#dependencies.index(mount, waitMs);
+    const outcome = await this.#index(asked, waitMs);
     if (outcome.status !== "ready") {
       return outcome;
     }
-    const { index } = outcome;
+    const { index, mount } = outcome;
     const trimmed = input.query?.trim();
     const query = trimmed === undefined || trimmed.length === 0 ? undefined : trimmed;
     const limit = input.limit ?? FIND_DEFAULT_LIMIT;
@@ -1445,18 +1471,18 @@ export class Reader<M extends MountContext = MountContext> {
   }
 
   async skill(
-    mount: M,
+    asked: M,
     wanted: string,
     waitMs: number,
     cursor?: string,
     exactPath = false,
     fits?: (result: SkillResult) => boolean,
   ): Promise<IndexNotReady | { readonly status: "ready"; readonly lookup: SkillLookup }> {
-    const outcome = await this.#dependencies.index(mount, waitMs);
+    const outcome = await this.#index(asked, waitMs);
     if (outcome.status !== "ready") {
       return outcome;
     }
-    const { index } = outcome;
+    const { index, mount } = outcome;
     const entries = await this.#entriesOf(index);
     const name = exactPath ? wanted : wanted.trim();
     const asDirectory = parseRepoPath(name);
@@ -1715,7 +1741,7 @@ export class Reader<M extends MountContext = MountContext> {
    * tree answers meanwhile.
    */
   async file(
-    mount: M,
+    asked: M,
     input: {
       readonly path: string;
       readonly offset?: number | undefined;
@@ -1723,7 +1749,7 @@ export class Reader<M extends MountContext = MountContext> {
     },
     fits?: (result: FileResult) => boolean,
   ): Promise<FileLookup> {
-    const limits = { ...this.#dependencies.limits, ...mount.limits };
+    const limits = { ...this.#dependencies.limits, ...asked.limits };
     const wanted = input.path;
     let below: RepoPath;
     if (wanted === "." || wanted === "/") {
@@ -1740,13 +1766,13 @@ export class Reader<M extends MountContext = MountContext> {
       below = parsed.value;
     }
     const path = below;
-    if (!isWithinRepoPath(mount.address.path, path)) return { kind: "not_found", path };
+    if (!isWithinRepoPath(asked.address.path, path)) return { kind: "not_found", path };
 
-    const outcome = await this.#dependencies.index(mount, 0);
+    const outcome = await this.#index(asked, 0);
     // Publication policy may exclude any path, including declarations. Never guess before it
     // has been validated; a body at hand is not permission to serve a file.
     if (outcome.status !== "ready") return { kind: "not_ready", outcome };
-    const { index } = outcome;
+    const { index, mount } = outcome;
     const entries = await this.#entriesOf(index);
     let children: readonly DirectoryListing[] = [];
     const entry = below.length === 0 ? undefined : getEntry(entries, path);
@@ -1825,14 +1851,14 @@ export class Reader<M extends MountContext = MountContext> {
 
   /** Everything the mount offers, up to `listLimit` skills and as many documents. Never waits. */
   async overview(
-    mount: M,
+    asked: M,
     listLimit: number,
   ): Promise<IndexNotReady | { readonly status: "ready"; readonly overview: MountOverview }> {
-    const outcome = await this.#dependencies.index(mount, 0);
+    const outcome = await this.#index(asked, 0);
     if (outcome.status !== "ready") {
       return outcome;
     }
-    const { index } = outcome;
+    const { index, mount } = outcome;
     const path = mount.address.path;
     const entries = await this.#entriesOf(index);
     const [diagnostics, manifest, groups] = await Promise.all([

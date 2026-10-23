@@ -1,4 +1,4 @@
-import type { Address, IndexLimits, RepoPath } from "@skillcdn/core";
+import type { Address, IndexLimits, NewestCommit, RepoPath } from "@skillcdn/core";
 
 /**
  * What the reader needs to know of a mount: the address and the commit it serves, whether
@@ -9,7 +9,14 @@ import type { Address, IndexLimits, RepoPath } from "@skillcdn/core";
  */
 export interface MountContext {
   readonly address: Address;
+  /** The commit the mount serves: the one the address resolves to, as the caller resolved it. */
   readonly commit: string;
+  /**
+   * The newest commit of the ref while the index served is another one's (ADR-0068). A caller
+   * leaves it out: the reader sets it on the mount it answers from when the index it is handed
+   * is a substitute, with `commit` changed to the one that index was built from.
+   */
+  readonly newest?: NewestCommit | undefined;
   /**
    * Whether someone has vouched for the repository: its owner, the operator, or the person who
    * chose the directory. Results say so when nobody has, and the license decides what is served.

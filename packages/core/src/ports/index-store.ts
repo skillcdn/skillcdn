@@ -3,6 +3,7 @@ import type { LicenseFact } from "../license.js";
 import type { RepoPath } from "../repo-path.js";
 import type { DocumentSection } from "../search/sections.js";
 import type { IndexNotReady } from "../tools/reads.js";
+import type { NewestCommit } from "../tools/results.js";
 import type { BlobStore } from "./blob-store.js";
 
 /**
@@ -86,7 +87,25 @@ export interface ReadableIndex {
   readonly blobs: Pick<BlobStore, "read" | "readBytes">;
 }
 
-/** The index of a mount's commit, or why there is none to read yet. */
+/**
+ * An index served in place of the one of the mount's own commit, while that one is being built
+ * or could not be (ADR-0068): the last ready commit of the ref, or the same commit's index under
+ * the reading rules before the current ones. What is read names `commit`; `newest` is the commit
+ * the mount asked for and why its index is not served.
+ */
+export interface IndexSubstitute {
+  readonly commit: string;
+  readonly newest: NewestCommit;
+}
+
+/**
+ * The index of a mount's commit, or why there is none to read yet; `substitute` says when the
+ * index is another one, served in its place.
+ */
 export type IndexOutcome =
-  | { readonly status: "ready"; readonly index: ReadableIndex }
+  | {
+      readonly status: "ready";
+      readonly index: ReadableIndex;
+      readonly substitute?: IndexSubstitute | undefined;
+    }
   | IndexNotReady;

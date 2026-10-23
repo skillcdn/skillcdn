@@ -102,6 +102,15 @@ export function mountSummaryOf(mount: RestMount): MountSummary {
     repository: `${mount.repository.owner}/${mount.repository.name}`,
     ref: orUndefined(mount.ref),
     commit: mount.commit,
+    ...(mount.newest == null
+      ? {}
+      : {
+          newest: {
+            commit: mount.newest.commit,
+            status: mount.newest.status,
+            ...(mount.newest.errorCode === null ? {} : { errorCode: mount.newest.errorCode }),
+          },
+        }),
     path: address.path,
     verified: mount.verified,
     ...(mount.repository.visibility === undefined

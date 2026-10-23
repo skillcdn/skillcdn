@@ -9,6 +9,7 @@ import type {
   FileResult,
   FindResult,
   IndexDiagnostic,
+  NewestCommit,
 } from "../tools/results.js";
 import type {
   RestBrowse,
@@ -193,6 +194,12 @@ export interface MountFacts {
   readonly image: (manifest: MountOverview["manifest"]) => string | null;
 }
 
+/** The newest commit beside the one served, as the API says it: `null` while they are the same. */
+const restNewestOf = (newest: NewestCommit | undefined): RestMount["newest"] =>
+  newest === undefined
+    ? null
+    : { commit: newest.commit, status: newest.status, errorCode: newest.errorCode ?? null };
+
 /** How the mount is searched, as the API says it: by words alone where nothing says otherwise. */
 function restSearchOf(search: MountOverview["search"]): RestMountSearch {
   return search === undefined
@@ -206,12 +213,16 @@ export function mountBody(
   answer: IndexNotReady | { readonly status: "ready"; readonly overview: MountOverview },
 ): RestMount {
   const ref = facts.address.ref;
+  // What is read names the commit its index was built from, which is the address's own unless
+  // another is served in its place (ADR-0068); then `newest` says which that is and why.
+  const served = answer.status === "ready" ? answer.overview.mount : undefined;
   return {
     address: formatAddress(facts.address),
     repository: facts.repository,
     ref: ref === undefined ? null : ref.kind === "commit" ? ref.hash : ref.name,
     pinned: isPinnedAddress(facts.address),
-    commit: facts.commit,
+    commit: served?.commit ?? facts.commit,
+    newest: restNewestOf(served?.newest),
     path: facts.address.path,
     verified: facts.verified,
     image: facts.image(answer.status === "ready" ? answer.overview.manifest : undefined),

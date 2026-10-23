@@ -71,13 +71,29 @@ export interface BrowseResult {
   readonly nextCursor: string | undefined;
 }
 
+/**
+ * The newest commit of a mount's ref while the index served is not its own (ADR-0068): the
+ * commit the address resolves to, and why what it serves is another commit's index, or the same
+ * commit's under the rules before the current ones. Results name it in one clause and the
+ * connection instructions in one sentence; the `mounts` route carries it as a field.
+ */
+export interface NewestCommit {
+  readonly commit: string;
+  readonly status: "indexing" | "failed";
+  /** Why indexing failed, as the index's own `errorCode`. */
+  readonly errorCode?: string | undefined;
+}
+
 /** What a tool call was answered from. Content paths are repository-root paths. */
 export interface MountSummary {
   /** `owner/name` as the host spells it. */
   readonly repository: string;
   /** The ref as written in the address; `undefined` for the default branch. */
   readonly ref: string | undefined;
+  /** The commit the result was read from: the ref's newest, or the one served in its place. */
   readonly commit: string;
+  /** The ref's newest commit, when `commit` is not it, or its index is being rebuilt. */
+  readonly newest?: NewestCommit | undefined;
   readonly path: RepoPath;
   /** False until the repository owner, or the operator, has vouched for the repository. */
   readonly verified: boolean;
