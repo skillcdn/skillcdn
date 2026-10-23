@@ -35,7 +35,7 @@ describe("the page of an account", () => {
       avatar: "https://avatars.githubusercontent.com/u/42?s=320&v=4",
       bio: "Skills for everything Acme makes.",
       url: "https://github.com/Acme",
-      publicRepositories: 6,
+      publicRepositories: 7,
     });
     expect(first.indexed).toEqual([]);
     expect(first.repositories).toEqual([
@@ -60,11 +60,8 @@ describe("the page of an account", () => {
     ]);
     expect(first.nextPage).toBe(2);
 
-    const last = restOwnerSchema.parse(await (await h.request(`${OWNER}?page=3`)).json());
-    expect(last.repositories.map((repository) => repository.name)).toEqual([
-      "single-skill",
-      "with-manifest",
-    ]);
+    const last = restOwnerSchema.parse(await (await h.request(`${OWNER}?page=4`)).json());
+    expect(last.repositories.map((repository) => repository.name)).toEqual(["with-manifest"]);
     expect(last.nextPage).toBeNull();
 
     // The listing came from the host's own list: no repository was resolved, none indexed.
@@ -115,7 +112,13 @@ describe("the page of an account", () => {
     expect(named?.manifest).toMatchObject({ description: expect.any(String) });
     // What leads the page is not repeated in the host's list, on any page of it.
     const listed = pages.flatMap((page) => page.repositories.map((repository) => repository.name));
-    expect(listed.sort()).toEqual(["document-pack", "hostile", "licensed", "single-skill"]);
+    expect(listed.sort()).toEqual([
+      "document-pack",
+      "hostile",
+      "licensed",
+      "multilingual-pack",
+      "single-skill",
+    ]);
     // Only the first page leads with it.
     expect(pages[1]?.indexed).toEqual([]);
   });

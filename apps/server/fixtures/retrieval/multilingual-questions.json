@@ -1,0 +1,2705 @@
+{
+  "pack": "apps/server/fixtures/.repositories/multilingual-pack",
+  "questions": [
+    {
+      "id": "en-01",
+      "language": "en",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "Can I sync unpublished measurements to my own online storage account?",
+      "answers": [
+        {
+          "path": "en/docs/research/data-classification.md",
+          "heading": [
+            "Data classification and handling at the Centre",
+            "Approved storage for each tier"
+          ],
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "id": "en-02",
+      "language": "en",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "Is disk disposal based on present contents or the most sensitive data ever held?",
+      "answers": [
+        {
+          "path": "en/docs/research/data-classification.md",
+          "heading": ["Data classification and handling at the Centre", "Destruction of media"],
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "id": "en-03",
+      "language": "en",
+      "kind": "exact-term",
+      "domain": "research",
+      "query": "What must be entered on Form MMCC-3 and who signs it?",
+      "answers": [
+        {
+          "path": "en/docs/research/data-classification.md",
+          "heading": [
+            "Data classification and handling at the Centre",
+            "The transfer log and its signatures"
+          ],
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "id": "en-04",
+      "language": "en",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "Who foots the bill when someone orders goods informally without the paperwork?",
+      "answers": [
+        {
+          "path": "en/docs/research/procurement.md",
+          "heading": [
+            "Procurement of goods and equipment for the Centre",
+            "The requisition flow from need to order"
+          ],
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "id": "en-05",
+      "language": "en",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "Can a large order be broken into smaller ones to avoid a higher sign-off?",
+      "answers": [
+        {
+          "path": "en/docs/research/procurement.md",
+          "heading": [
+            "Procurement of goods and equipment for the Centre",
+            "Approval thresholds by value"
+          ],
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "id": "en-06",
+      "language": "en",
+      "kind": "exact-term",
+      "domain": "research",
+      "query": "Which goods fall under OCC 41-07?",
+      "answers": [
+        {
+          "path": "en/docs/research/procurement.md",
+          "heading": [
+            "Procurement of goods and equipment for the Centre",
+            "Office Commodity Codes and how a line is coded"
+          ],
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "id": "en-07",
+      "language": "en",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "How long is a discovery kept under wraps while the inventors weigh protecting it?",
+      "answers": [
+        {
+          "path": "en/docs/research/publication-clearance.md",
+          "heading": ["Publication clearance and open-access deposit", "The patent hold"],
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "id": "en-08",
+      "language": "en",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "How long before the hand-in date must a dissertation be sent for vetting?",
+      "answers": [
+        {
+          "path": "en/docs/research/publication-clearance.md",
+          "heading": ["Publication clearance and open-access deposit", "Theses of students"],
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "id": "en-09",
+      "language": "en",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "Does lending a specimen or paying for the work earn a byline?",
+      "answers": [
+        {
+          "path": "en/docs/research/publication-clearance.md",
+          "heading": [
+            "Publication clearance and open-access deposit",
+            "Authorship and the acknowledgement of the Office"
+          ],
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "id": "en-10",
+      "language": "en",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "How many hours of supervised practice before I can run the microscope alone?",
+      "answers": [
+        {
+          "path": "en/docs/research/electron-microscopy-facility.md",
+          "heading": ["The electron microscopy facility", "Booking and the three user levels"],
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "id": "en-11",
+      "language": "en",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "What is the penalty for plugging a memory stick into a microscope?",
+      "answers": [
+        {
+          "path": "en/docs/research/electron-microscopy-facility.md",
+          "heading": [
+            "The electron microscopy facility",
+            "Data export from the instrument computers"
+          ],
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "id": "en-12",
+      "language": "en",
+      "kind": "exact-term",
+      "domain": "research",
+      "query": "What is the Rilke FB-120 used for?",
+      "answers": [
+        {
+          "path": "en/docs/research/electron-microscopy-facility.md",
+          "heading": ["The electron microscopy facility", "The instruments of the facility"],
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "id": "en-13",
+      "language": "en",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "How much leeway is allowed around the due date of a yearly check?",
+      "answers": [
+        {
+          "path": "en/docs/defense/maintenance-levels.md",
+          "heading": [
+            "Levels of maintenance and the maintenance request",
+            "PMCS and its intervals"
+          ],
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "id": "en-14",
+      "language": "en",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "When may a working part be taken off one broken item to repair another?",
+      "answers": [
+        {
+          "path": "en/docs/defense/maintenance-levels.md",
+          "heading": ["Levels of maintenance and the maintenance request", "Controlled exchange"],
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "id": "en-15",
+      "language": "en",
+      "kind": "exact-term",
+      "domain": "defense",
+      "query": "What is listed in TM 131-0045-20P?",
+      "answers": [
+        {
+          "path": "en/docs/defense/maintenance-levels.md",
+          "heading": [
+            "Levels of maintenance and the maintenance request",
+            "Technical manual numbering"
+          ],
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "id": "en-16",
+      "language": "en",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "Why should a unit not order by the maker's own reference?",
+      "answers": [
+        {
+          "path": "en/docs/defense/stock-numbers-and-requisitions.md",
+          "heading": [
+            "Stock numbers and requisitions",
+            "Stock numbers, part numbers and the supplier code"
+          ],
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "id": "en-17",
+      "language": "en",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "Who is allowed to write off a broken item as not worth fixing?",
+      "answers": [
+        {
+          "path": "en/docs/defense/stock-numbers-and-requisitions.md",
+          "heading": ["Stock numbers and requisitions", "Condition codes"],
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "id": "en-18",
+      "language": "en",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "Does a new officer taking over property have to recount everything?",
+      "answers": [
+        {
+          "path": "en/docs/defense/stock-numbers-and-requisitions.md",
+          "heading": ["Stock numbers and requisitions", "Inventory counts"],
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "id": "en-19",
+      "language": "en",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "How far in advance of the first trial must the go/no-go meeting take place?",
+      "answers": [
+        {
+          "path": "en/docs/defense/test-and-evaluation.md",
+          "heading": ["Test and evaluation of materiel", "The test readiness review"],
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "id": "en-20",
+      "language": "en",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "Can well-performing equipment be rejected as too hard to look after in service?",
+      "answers": [
+        {
+          "path": "en/docs/defense/test-and-evaluation.md",
+          "heading": [
+            "Test and evaluation of materiel",
+            "The elements of integrated logistics support"
+          ],
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "id": "en-21",
+      "language": "en",
+      "kind": "exact-term",
+      "domain": "defense",
+      "query": "Which test methods does VDS 1211 collect?",
+      "answers": [
+        {
+          "path": "en/docs/defense/test-and-evaluation.md",
+          "heading": ["Test and evaluation of materiel", "Dynamic test methods under VDS 1211"],
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "id": "en-22",
+      "language": "en",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "Which word promises to carry out an order rather than just acknowledge it?",
+      "answers": [
+        {
+          "path": "en/docs/defense/radio-voice-procedure.md",
+          "heading": ["Radio voice procedure", "Prowords and their meaning"],
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "id": "en-23",
+      "language": "en",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "Which settings on the backpack radio may the soldier carrying it adjust?",
+      "answers": [
+        {
+          "path": "en/docs/defense/radio-voice-procedure.md",
+          "heading": ["Radio voice procedure", "The FR-23 manpack radio and its controls"],
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "id": "en-24",
+      "language": "en",
+      "kind": "exact-term",
+      "domain": "defense",
+      "query": "What is recorded on Form MSD-22?",
+      "answers": [
+        {
+          "path": "en/docs/defense/radio-voice-procedure.md",
+          "heading": ["Radio voice procedure", "The radio log on Form MSD-22"],
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "id": "ko-01",
+      "language": "ko",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "불이 나면 연구동 사람들은 어디로 모이나",
+      "answers": [
+        {
+          "path": "ko/docs/research/lab-access.md",
+          "heading": ["실험실 출입 통제 규정", "비상시 대피와 인원 확인"],
+          "language": "ko"
+        }
+      ]
+    },
+    {
+      "id": "ko-02",
+      "language": "ko",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "출입증을 잃어버렸을 때 다시 받는 데 걸리는 시간",
+      "answers": [
+        {
+          "path": "ko/docs/research/lab-access.md",
+          "heading": ["실험실 출입 통제 규정", "등급별 인증 수단"],
+          "language": "ko"
+        }
+      ]
+    },
+    {
+      "id": "ko-03",
+      "language": "ko",
+      "kind": "exact-term",
+      "domain": "research",
+      "query": "양식 서돌-4는 언제까지 내야 하나",
+      "answers": [
+        {
+          "path": "ko/docs/research/lab-access.md",
+          "heading": ["실험실 출입 통제 규정", "방문자와 외부 연구자의 등록"],
+          "language": "ko"
+        }
+      ]
+    },
+    {
+      "id": "ko-04",
+      "language": "ko",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "실험실 폐수를 거둬 가는 요일은 언제인가",
+      "answers": [
+        {
+          "path": "ko/docs/research/samples-and-reagents.md",
+          "heading": ["시료와 시약의 관리 규정", "폐액의 분류와 배출 요청"],
+          "language": "ko"
+        }
+      ]
+    },
+    {
+      "id": "ko-05",
+      "language": "ko",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "에테르는 뚜껑을 연 뒤 얼마나 쓸 수 있나",
+      "answers": [
+        {
+          "path": "ko/docs/research/samples-and-reagents.md",
+          "heading": ["시료와 시약의 관리 규정", "시약의 유효기간과 폐기"],
+          "language": "ko"
+        }
+      ]
+    },
+    {
+      "id": "ko-06",
+      "language": "ko",
+      "kind": "exact-term",
+      "domain": "research",
+      "query": "SR-2026-0183-A는 무엇을 뜻하나",
+      "answers": [
+        {
+          "path": "ko/docs/research/samples-and-reagents.md",
+          "heading": ["시료와 시약의 관리 규정", "시료 식별번호의 체계와 라벨"],
+          "language": "ko"
+        }
+      ]
+    },
+    {
+      "id": "ko-07",
+      "language": "ko",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "키가 큰 가스통은 몇 줄로 묶어서 세워 두나",
+      "answers": [
+        {
+          "path": "ko/docs/research/lab-safety.md",
+          "heading": ["실험실 안전 규정", "고압가스 실린더의 고정과 운반과 교체"],
+          "language": "ko"
+        }
+      ]
+    },
+    {
+      "id": "ko-08",
+      "language": "ko",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "세안기는 일하는 자리에서 몇 초 안에 닿을 수 있어야 하나",
+      "answers": [
+        {
+          "path": "ko/docs/research/lab-safety.md",
+          "heading": ["실험실 안전 규정", "비상샤워와 세안기의 위치와 점검 주기"],
+          "language": "ko"
+        }
+      ]
+    },
+    {
+      "id": "ko-09",
+      "language": "ko",
+      "kind": "exact-term",
+      "domain": "research",
+      "query": "VDS 2301은 무엇을 정하나",
+      "answers": [
+        {
+          "path": "ko/docs/research/lab-safety.md",
+          "heading": ["실험실 안전 규정", "흄후드의 면속도 기준과 점검"],
+          "language": "ko"
+        }
+      ]
+    },
+    {
+      "id": "ko-10",
+      "language": "ko",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "손으로 쓴 메모를 전자 노트에 올리는 기한",
+      "answers": [
+        {
+          "path": "ko/docs/research/research-notebooks.md",
+          "heading": [
+            "연구노트와 연구 데이터의 관리 규정",
+            "전자연구노트 시스템의 사용 의무와 기록 단위"
+          ],
+          "language": "ko"
+        }
+      ]
+    },
+    {
+      "id": "ko-11",
+      "language": "ko",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "특허가 될 만한 성과는 며칠 안에 알려야 하나",
+      "answers": [
+        {
+          "path": "ko/docs/research/research-notebooks.md",
+          "heading": ["연구노트와 연구 데이터의 관리 규정", "발명 신고의 절차와 기한"],
+          "language": "ko"
+        }
+      ]
+    },
+    {
+      "id": "ko-12",
+      "language": "ko",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "연구노트를 넘겨주지 않으면 퇴사 처리가 되나",
+      "answers": [
+        {
+          "path": "ko/docs/research/research-notebooks.md",
+          "heading": ["연구노트와 연구 데이터의 관리 규정", "퇴직과 이동 시 노트의 인계"],
+          "language": "ko"
+        }
+      ]
+    },
+    {
+      "id": "ko-13",
+      "language": "ko",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "탄약 창고가 3일 내리 습하면 어떻게 하나",
+      "answers": [
+        {
+          "path": "ko/docs/defense/ammunition-storage.md",
+          "heading": ["탄약 저장과 취급 규정", "탄약고의 온도와 습도 관리와 점검 주기"],
+          "language": "ko"
+        }
+      ]
+    },
+    {
+      "id": "ko-14",
+      "language": "ko",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "탄약을 싣거나 내리는 동안 트럭 시동은 켜 둬도 되나",
+      "answers": [
+        {
+          "path": "ko/docs/defense/ammunition-storage.md",
+          "heading": ["탄약 저장과 취급 규정", "탄약 운반 차량의 표지와 운행 조건"],
+          "language": "ko"
+        }
+      ]
+    },
+    {
+      "id": "ko-15",
+      "language": "ko",
+      "kind": "exact-term",
+      "domain": "defense",
+      "query": "SDA-26-D-0417은 언제 만든 로트인가",
+      "answers": [
+        {
+          "path": "ko/docs/defense/ammunition-storage.md",
+          "heading": ["탄약 저장과 취급 규정", "로트 번호의 구성과 표기"],
+          "language": "ko"
+        }
+      ]
+    },
+    {
+      "id": "ko-16",
+      "language": "ko",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "사격장에 빨간 기가 올라가 있으면 무슨 뜻인가",
+      "answers": [
+        {
+          "path": "ko/docs/defense/range-safety.md",
+          "heading": ["사격장 안전 규정", "통제탑의 깃발과 등화 신호 체계"],
+          "language": "ko"
+        }
+      ]
+    },
+    {
+      "id": "ko-17",
+      "language": "ko",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "바람이 초속 몇 미터를 넘으면 사격을 못 하나",
+      "answers": [
+        {
+          "path": "ko/docs/defense/range-safety.md",
+          "heading": ["사격장 안전 규정", "사격 전 점검표와 안전 브리핑"],
+          "language": "ko"
+        }
+      ]
+    },
+    {
+      "id": "ko-18",
+      "language": "ko",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "밤에 사격할 수 있는 부대의 조건은",
+      "answers": [
+        {
+          "path": "ko/docs/defense/range-safety.md",
+          "heading": ["사격장 안전 규정", "야간 사격의 추가 조치"],
+          "language": "ko"
+        }
+      ]
+    },
+    {
+      "id": "ko-19",
+      "language": "ko",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "결정을 미룬 장비 요구는 언제 다시 다루나",
+      "answers": [
+        {
+          "path": "ko/docs/defense/requirements-and-acquisition.md",
+          "heading": ["소요제기와 획득 절차 규정", "소요제기와 소요 결정의 단계"],
+          "language": "ko"
+        }
+      ]
+    },
+    {
+      "id": "ko-20",
+      "language": "ko",
+      "kind": "exact-term",
+      "domain": "defense",
+      "query": "ROC-2026-004는 어떤 장비의 문서인가",
+      "answers": [
+        {
+          "path": "ko/docs/defense/requirements-and-acquisition.md",
+          "heading": ["소요제기와 획득 절차 규정", "작전요구성능의 구성 항목"],
+          "language": "ko"
+        }
+      ]
+    },
+    {
+      "id": "ko-21",
+      "language": "ko",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "시제품을 만들기 전에 거치는 설계 심사 횟수",
+      "answers": [
+        {
+          "path": "ko/docs/defense/requirements-and-acquisition.md",
+          "heading": ["소요제기와 획득 절차 규정", "탐색개발과 체계개발의 구분"],
+          "language": "ko"
+        }
+      ]
+    },
+    {
+      "id": "ko-22",
+      "language": "ko",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "먹을 것과 연료를 한 트럭에 함께 실어도 되나",
+      "answers": [
+        {
+          "path": "ko/docs/defense/supply-classes.md",
+          "heading": ["보급품의 종 분류와 보급 절차 규정", "수송 요청과 적재 기준"],
+          "language": "ko"
+        }
+      ]
+    },
+    {
+      "id": "ko-23",
+      "language": "ko",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "수리비가 얼마를 넘으면 못 쓰는 물품으로 보나",
+      "answers": [
+        {
+          "path": "ko/docs/defense/supply-classes.md",
+          "heading": ["보급품의 종 분류와 보급 절차 규정", "반납과 불용 처리"],
+          "language": "ko"
+        }
+      ]
+    },
+    {
+      "id": "ko-24",
+      "language": "ko",
+      "kind": "exact-term",
+      "domain": "defense",
+      "query": "8970-81-201-0455는 어떤 품목인가",
+      "answers": [
+        {
+          "path": "ko/docs/defense/supply-classes.md",
+          "heading": ["보급품의 종 분류와 보급 절차 규정", "재고번호의 구조와 종별 예"],
+          "language": "ko"
+        }
+      ]
+    },
+    {
+      "id": "ja-01",
+      "language": "ja",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "毎日長く使う測定器の校正間隔は短くすべきか",
+      "answers": [
+        {
+          "path": "ja/docs/research/calibration-and-inspection.md",
+          "heading": ["計測器の校正及び点検に関する規程", "計測器ごとの校正周期"],
+          "language": "ja"
+        }
+      ]
+    },
+    {
+      "id": "ja-02",
+      "language": "ja",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "黄色いシールが貼られた測定器は使ってよいか",
+      "answers": [
+        {
+          "path": "ja/docs/research/calibration-and-inspection.md",
+          "heading": ["計測器の校正及び点検に関する規程", "校正ラベルの色と記載"],
+          "language": "ja"
+        }
+      ]
+    },
+    {
+      "id": "ja-03",
+      "language": "ja",
+      "kind": "exact-term",
+      "domain": "research",
+      "query": "様式 蒼陵-2 は何を記録する票か",
+      "answers": [
+        {
+          "path": "ja/docs/research/calibration-and-inspection.md",
+          "heading": [
+            "計測器の校正及び点検に関する規程",
+            "校正期限を超過した計測器の処置と使用禁止表示"
+          ],
+          "language": "ja"
+        }
+      ]
+    },
+    {
+      "id": "ja-04",
+      "language": "ja",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "所外の共同研究者は試験装置を自分で操作できるか",
+      "answers": [
+        {
+          "path": "ja/docs/research/test-equipment-operation.md",
+          "heading": ["試験装置の運用要領", "装置予約と使用資格"],
+          "language": "ja"
+        }
+      ]
+    },
+    {
+      "id": "ja-05",
+      "language": "ja",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "振動試験機の定期点検は年に何回受けるか",
+      "answers": [
+        {
+          "path": "ja/docs/research/test-equipment-operation.md",
+          "heading": ["試験装置の運用要領", "定期保守と外部点検"],
+          "language": "ja"
+        }
+      ]
+    },
+    {
+      "id": "ja-06",
+      "language": "ja",
+      "kind": "exact-term",
+      "domain": "research",
+      "query": "6635-81-302-5518 は何の部品の番号か",
+      "answers": [
+        {
+          "path": "ja/docs/research/test-equipment-operation.md",
+          "heading": ["試験装置の運用要領", "消耗部品の交換時期"],
+          "language": "ja"
+        }
+      ]
+    },
+    {
+      "id": "ja-07",
+      "language": "ja",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "ふたを開けた標準液はいつまで使えるか",
+      "answers": [
+        {
+          "path": "ja/docs/research/reference-materials.md",
+          "heading": ["標準物質及び参照標準の管理規程", "開封後の有効期限"],
+          "language": "ja"
+        }
+      ]
+    },
+    {
+      "id": "ja-08",
+      "language": "ja",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "手で直接触ってはいけないはかりのおもりはどのクラスか",
+      "answers": [
+        {
+          "path": "ja/docs/research/reference-materials.md",
+          "heading": ["標準物質及び参照標準の管理規程", "分銅の等級と用途"],
+          "language": "ja"
+        }
+      ]
+    },
+    {
+      "id": "ja-09",
+      "language": "ja",
+      "kind": "exact-term",
+      "domain": "research",
+      "query": "VDS 3135 は何を定める規格か",
+      "answers": [
+        {
+          "path": "ja/docs/research/reference-materials.md",
+          "heading": ["標準物質及び参照標準の管理規程", "対象と登録番号の体系"],
+          "language": "ja"
+        }
+      ]
+    },
+    {
+      "id": "ja-10",
+      "language": "ja",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "試験をした本人が自分の報告書をチェックしてもよいか",
+      "answers": [
+        {
+          "path": "ja/docs/research/test-reports.md",
+          "heading": ["試験報告書の作成及び管理規程", "承認フロー"],
+          "language": "ja"
+        }
+      ]
+    },
+    {
+      "id": "ja-11",
+      "language": "ja",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "なくした報告書をもう一度客に渡すときの手順",
+      "answers": [
+        {
+          "path": "ja/docs/research/test-reports.md",
+          "heading": ["試験報告書の作成及び管理規程", "依頼者への発行と再発行"],
+          "language": "ja"
+        }
+      ]
+    },
+    {
+      "id": "ja-12",
+      "language": "ja",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "合否の判断を頼まれていないときも合否を書くべきか",
+      "answers": [
+        {
+          "path": "ja/docs/research/test-reports.md",
+          "heading": ["試験報告書の作成及び管理規程", "不確かさの記載方法"],
+          "language": "ja"
+        }
+      ]
+    },
+    {
+      "id": "ja-13",
+      "language": "ja",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "戻ってきたら燃料タンクはどこまで満たしておくか",
+      "answers": [
+        {
+          "path": "ja/docs/defense/vehicle-inspection-and-fuel.md",
+          "heading": ["車両の運行前後点検及び燃料・油脂類の取扱要領", "運行後点検の項目"],
+          "language": "ja"
+        }
+      ]
+    },
+    {
+      "id": "ja-14",
+      "language": "ja",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "走行中にハンドルがおかしいと感じたら運転を続けてよいか",
+      "answers": [
+        {
+          "path": "ja/docs/defense/vehicle-inspection-and-fuel.md",
+          "heading": ["車両の運行前後点検及び燃料・油脂類の取扱要領", "故障・異音の報告"],
+          "language": "ja"
+        }
+      ]
+    },
+    {
+      "id": "ja-15",
+      "language": "ja",
+      "kind": "exact-term",
+      "domain": "defense",
+      "query": "KT-4 のタイヤの空気圧はいくらか",
+      "answers": [
+        {
+          "path": "ja/docs/defense/vehicle-inspection-and-fuel.md",
+          "heading": ["車両の運行前後点検及び燃料・油脂類の取扱要領", "タイヤの空気圧と交換基準"],
+          "language": "ja"
+        }
+      ]
+    },
+    {
+      "id": "ja-16",
+      "language": "ja",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "高い山の上で水を沸かすときは何分煮立たせるか",
+      "answers": [
+        {
+          "path": "ja/docs/defense/field-sanitation-and-water.md",
+          "heading": ["野外衛生及び飲料水の確保に関する要領", "飲料水の確保と浄水"],
+          "language": "ja"
+        }
+      ]
+    },
+    {
+      "id": "ja-17",
+      "language": "ja",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "お腹を壊した隊員が同時に何人出たら報告するか",
+      "answers": [
+        {
+          "path": "ja/docs/defense/field-sanitation-and-water.md",
+          "heading": ["野外衛生及び飲料水の確保に関する要領", "衛生検査の記録"],
+          "language": "ja"
+        }
+      ]
+    },
+    {
+      "id": "ja-18",
+      "language": "ja",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "暑さ指数が何度を超えたら外の作業はやめるか",
+      "answers": [
+        {
+          "path": "ja/docs/defense/field-sanitation-and-water.md",
+          "heading": ["野外衛生及び飲料水の確保に関する要領", "熱中症の予防と初期対応"],
+          "language": "ja"
+        }
+      ]
+    },
+    {
+      "id": "ja-19",
+      "language": "ja",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "地図をなくしたら誰にいつ知らせるか",
+      "answers": [
+        {
+          "path": "ja/docs/defense/map-reading.md",
+          "heading": ["地図判読教範", "地図の保管と更新"],
+          "language": "ja"
+        }
+      ]
+    },
+    {
+      "id": "ja-20",
+      "language": "ja",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "歩いて距離を測るとき100メートルは何歩か",
+      "answers": [
+        {
+          "path": "ja/docs/defense/map-reading.md",
+          "heading": ["地図判読教範", "距離の測定（図上と歩測）"],
+          "language": "ja"
+        }
+      ]
+    },
+    {
+      "id": "ja-21",
+      "language": "ja",
+      "kind": "exact-term",
+      "domain": "defense",
+      "query": "33UXP 1234 5678 はどう読むか",
+      "answers": [
+        {
+          "path": "ja/docs/defense/map-reading.md",
+          "heading": ["地図判読教範", "UTM 図法と MGRS 座標の読み方"],
+          "language": "ja"
+        }
+      ]
+    },
+    {
+      "id": "ja-22",
+      "language": "ja",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "雷が鳴っているときに無線は使えるか",
+      "answers": [
+        {
+          "path": "ja/docs/defense/communications-equipment-care.md",
+          "heading": ["携帯無線機の手入れ及び管理要領", "接地の方法"],
+          "language": "ja"
+        }
+      ]
+    },
+    {
+      "id": "ja-23",
+      "language": "ja",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "無線機の電池を満タンのまましまっておいてよいか",
+      "answers": [
+        {
+          "path": "ja/docs/defense/communications-equipment-care.md",
+          "heading": ["携帯無線機の手入れ及び管理要領", "バッテリーの充電・保管・寒冷時の管理"],
+          "language": "ja"
+        }
+      ]
+    },
+    {
+      "id": "ja-24",
+      "language": "ja",
+      "kind": "exact-term",
+      "domain": "defense",
+      "query": "様式 北嶺-13 はどんなときに書く報告か",
+      "answers": [
+        {
+          "path": "ja/docs/defense/communications-equipment-care.md",
+          "heading": ["携帯無線機の手入れ及び管理要領", "妨害（ジャミング）が疑われる兆候と報告"],
+          "language": "ja"
+        }
+      ]
+    },
+    {
+      "id": "zh-01",
+      "language": "zh",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "进洁净区前的吹风间风力低于多少要换滤网",
+      "answers": [
+        {
+          "path": "zh/docs/research/cleanroom.md",
+          "heading": ["洁净室管理规程", "风淋室的使用"],
+          "language": "zh"
+        }
+      ]
+    },
+    {
+      "id": "zh-02",
+      "language": "zh",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "洁净室各区的打扫用具颜色怎么区分",
+      "answers": [
+        {
+          "path": "zh/docs/research/cleanroom.md",
+          "heading": ["洁净室管理规程", "耗材与清洁剂"],
+          "language": "zh"
+        }
+      ]
+    },
+    {
+      "id": "zh-03",
+      "language": "zh",
+      "kind": "exact-term",
+      "domain": "research",
+      "query": "QL-CR-2026-03 是哪种报告的编号",
+      "answers": [
+        {
+          "path": "zh/docs/research/cleanroom.md",
+          "heading": ["洁净室管理规程", "停机与再验证"],
+          "language": "zh"
+        }
+      ]
+    },
+    {
+      "id": "zh-04",
+      "language": "zh",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "特别有毒的药品买回来后多久必须锁进柜子",
+      "answers": [
+        {
+          "path": "zh/docs/research/hazardous-chemicals.md",
+          "heading": ["危险化学品管理规程", "剧毒品的双人双锁与登记"],
+          "language": "zh"
+        }
+      ]
+    },
+    {
+      "id": "zh-05",
+      "language": "zh",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "排风橱停电时该怎么办",
+      "answers": [
+        {
+          "path": "zh/docs/research/hazardous-chemicals.md",
+          "heading": ["危险化学品管理规程", "通风柜的使用"],
+          "language": "zh"
+        }
+      ]
+    },
+    {
+      "id": "zh-06",
+      "language": "zh",
+      "kind": "exact-term",
+      "domain": "research",
+      "query": "表格 青岚-33 是用来做什么的",
+      "answers": [
+        {
+          "path": "zh/docs/research/hazardous-chemicals.md",
+          "heading": ["危险化学品管理规程", "废液的分类与交接"],
+          "language": "zh"
+        }
+      ]
+    },
+    {
+      "id": "zh-07",
+      "language": "zh",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "撤离后氧气浓度回到多少才可以回去",
+      "answers": [
+        {
+          "path": "zh/docs/research/gas-cylinders-and-cryogenics.md",
+          "heading": ["高压气瓶与低温介质管理规程", "氧含量监测与报警阈值"],
+          "language": "zh"
+        }
+      ]
+    },
+    {
+      "id": "zh-08",
+      "language": "zh",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "退库的空气瓶在气瓶间最多能放多少天",
+      "answers": [
+        {
+          "path": "zh/docs/research/gas-cylinders-and-cryogenics.md",
+          "heading": ["高压气瓶与低温介质管理规程", "气瓶的退库"],
+          "language": "zh"
+        }
+      ]
+    },
+    {
+      "id": "zh-09",
+      "language": "zh",
+      "kind": "exact-term",
+      "domain": "research",
+      "query": "VDS 4205 规定了什么",
+      "answers": [
+        {
+          "path": "zh/docs/research/gas-cylinders-and-cryogenics.md",
+          "heading": ["高压气瓶与低温介质管理规程", "气瓶的颜色标识与检验周期"],
+          "language": "zh"
+        }
+      ]
+    },
+    {
+      "id": "zh-10",
+      "language": "zh",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "仪器送回厂家修理前要先删掉什么",
+      "answers": [
+        {
+          "path": "zh/docs/research/equipment-maintenance.md",
+          "heading": ["设备维护管理规程", "外部维修与返厂"],
+          "language": "zh"
+        }
+      ]
+    },
+    {
+      "id": "zh-11",
+      "language": "zh",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "半年没用的仪器可以不做月度保养吗",
+      "answers": [
+        {
+          "path": "zh/docs/research/equipment-maintenance.md",
+          "heading": ["设备维护管理规程", "预防性维护计划与维护等级"],
+          "language": "zh"
+        }
+      ]
+    },
+    {
+      "id": "zh-12",
+      "language": "zh",
+      "kind": "exact-term",
+      "domain": "research",
+      "query": "QL-EQ-0485 是什么编号",
+      "answers": [
+        {
+          "path": "zh/docs/research/equipment-maintenance.md",
+          "heading": ["设备维护管理规程", "停机记录与设备档案"],
+          "language": "zh"
+        }
+      ]
+    },
+    {
+      "id": "zh-13",
+      "language": "zh",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "营部每隔多久要向旅里报一次位置",
+      "answers": [
+        {
+          "path": "zh/docs/defense/c4i-isr-ew-glossary.md",
+          "heading": ["C4I、ISR 与电子战术语手册", "态势感知与通用作战图"],
+          "language": "zh"
+        }
+      ]
+    },
+    {
+      "id": "zh-14",
+      "language": "zh",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "专业名词在公文里头一次出现时该怎么写",
+      "answers": [
+        {
+          "path": "zh/docs/defense/c4i-isr-ew-glossary.md",
+          "heading": ["C4I、ISR 与电子战术语手册", "在本旅文件中的用法"],
+          "language": "zh"
+        }
+      ]
+    },
+    {
+      "id": "zh-15",
+      "language": "zh",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "和用语音联络相比，机器之间自动交换数据有哪些优点",
+      "answers": [
+        {
+          "path": "zh/docs/defense/c4i-isr-ew-glossary.md",
+          "heading": ["C4I、ISR 与电子战术语手册", "数据链的一般概念"],
+          "language": "zh"
+        }
+      ]
+    },
+    {
+      "id": "zh-16",
+      "language": "zh",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "哪一种识别模式是按一百英尺一档报高度的",
+      "answers": [
+        {
+          "path": "zh/docs/defense/iff-and-tacan.md",
+          "heading": ["敌我识别与塔康设备使用规定", "公开模式的说明"],
+          "language": "zh"
+        }
+      ]
+    },
+    {
+      "id": "zh-17",
+      "language": "zh",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "飞机停在地面不动时应答设备应放在哪个位置",
+      "answers": [
+        {
+          "path": "zh/docs/defense/iff-and-tacan.md",
+          "heading": ["敌我识别与塔康设备使用规定", "应答机的操作要点"],
+          "language": "zh"
+        }
+      ]
+    },
+    {
+      "id": "zh-18",
+      "language": "zh",
+      "kind": "exact-term",
+      "domain": "defense",
+      "query": "VDS 4411 规范的内容是什么",
+      "answers": [
+        {
+          "path": "zh/docs/defense/iff-and-tacan.md",
+          "heading": ["敌我识别与塔康设备使用规定", "引用的联邦军标准与机场资料页"],
+          "language": "zh"
+        }
+      ]
+    },
+    {
+      "id": "zh-19",
+      "language": "zh",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "考试没过的人多少天内要重考",
+      "answers": [
+        {
+          "path": "zh/docs/defense/training-and-evaluation.md",
+          "heading": ["训练与考核规定", "考核等级与评定标准"],
+          "language": "zh"
+        }
+      ]
+    },
+    {
+      "id": "zh-20",
+      "language": "zh",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "教员多久没教这门课资格就自动作废",
+      "answers": [
+        {
+          "path": "zh/docs/defense/training-and-evaluation.md",
+          "heading": ["训练与考核规定", "教官与考核员资格"],
+          "language": "zh"
+        }
+      ]
+    },
+    {
+      "id": "zh-21",
+      "language": "zh",
+      "kind": "exact-term",
+      "domain": "defense",
+      "query": "库存号 6920-81-404-2104 是什么装备",
+      "answers": [
+        {
+          "path": "zh/docs/defense/training-and-evaluation.md",
+          "heading": ["训练与考核规定", "训练器材的管理"],
+          "language": "zh"
+        }
+      ]
+    },
+    {
+      "id": "zh-22",
+      "language": "zh",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "命令一下，几秒内得把面具戴上并查好是否密封",
+      "answers": [
+        {
+          "path": "zh/docs/defense/cbrn-protection-basics.md",
+          "heading": ["核生化防护基础", "防毒面具的佩戴与检查"],
+          "language": "zh"
+        }
+      ]
+    },
+    {
+      "id": "zh-23",
+      "language": "zh",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "受到污染后的清洗顺序是先人还是先装备",
+      "answers": [
+        {
+          "path": "zh/docs/defense/cbrn-protection-basics.md",
+          "heading": ["核生化防护基础", "洗消的分级与一般程序"],
+          "language": "zh"
+        }
+      ]
+    },
+    {
+      "id": "zh-24",
+      "language": "zh",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "试纸变了颜色能不能据此判断是哪种毒",
+      "answers": [
+        {
+          "path": "zh/docs/defense/cbrn-protection-basics.md",
+          "heading": ["核生化防护基础", "检测纸与报警器的一般用途"],
+          "language": "zh"
+        }
+      ]
+    },
+    {
+      "id": "de-01",
+      "language": "de",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "Wann muss beim Zerreißversuch ein zusätzliches Probestück geprüft werden?",
+      "answers": [
+        {
+          "path": "de/docs/research/pruefverfahren.md",
+          "heading": [
+            "Prüfverfahren des Orvane-Instituts für Werkstoffprüfung",
+            "Zugversuch nach OIW-PV-101"
+          ],
+          "language": "de"
+        }
+      ]
+    },
+    {
+      "id": "de-02",
+      "language": "de",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "Bei wie vielen Lastwechseln wird ein Dauerschwingversuch spätestens abgebrochen?",
+      "answers": [
+        {
+          "path": "de/docs/research/pruefverfahren.md",
+          "heading": [
+            "Prüfverfahren des Orvane-Instituts für Werkstoffprüfung",
+            "Ermüdungsversuch unter zyklischer Belastung (OIW-PV-140)"
+          ],
+          "language": "de"
+        }
+      ]
+    },
+    {
+      "id": "de-03",
+      "language": "de",
+      "kind": "exact-term",
+      "domain": "research",
+      "query": "Bei welchen Temperaturen wird nach OIW-PV-120 geprüft?",
+      "answers": [
+        {
+          "path": "de/docs/research/pruefverfahren.md",
+          "heading": [
+            "Prüfverfahren des Orvane-Instituts für Werkstoffprüfung",
+            "Kerbschlagbiegeversuch nach Charpy (OIW-PV-120)"
+          ],
+          "language": "de"
+        }
+      ]
+    },
+    {
+      "id": "de-04",
+      "language": "de",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "Ab welcher Lautstärke muss man an der Trennsäge die Ohren schützen?",
+      "answers": [
+        {
+          "path": "de/docs/research/arbeitsschutz-und-gefahrstoffe.md",
+          "heading": [
+            "Arbeitsschutz und Gefahrstoffe in den Laboratorien des OIW",
+            "Persönliche Schutzausrüstung nach Tätigkeit"
+          ],
+          "language": "de"
+        }
+      ]
+    },
+    {
+      "id": "de-05",
+      "language": "de",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "Ab wie vielen Krankheitstagen geht eine Verletzung im Labor an die Berufsgenossenschaft?",
+      "answers": [
+        {
+          "path": "de/docs/research/arbeitsschutz-und-gefahrstoffe.md",
+          "heading": [
+            "Arbeitsschutz und Gefahrstoffe in den Laboratorien des OIW",
+            "Unfallmeldung und Fristen"
+          ],
+          "language": "de"
+        }
+      ]
+    },
+    {
+      "id": "de-06",
+      "language": "de",
+      "kind": "exact-term",
+      "domain": "research",
+      "query": "Was wird auf Vordruck OIW-14 festgehalten?",
+      "answers": [
+        {
+          "path": "de/docs/research/arbeitsschutz-und-gefahrstoffe.md",
+          "heading": [
+            "Arbeitsschutz und Gefahrstoffe in den Laboratorien des OIW",
+            "Betriebsanweisungen und Unterweisung"
+          ],
+          "language": "de"
+        }
+      ]
+    },
+    {
+      "id": "de-07",
+      "language": "de",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "Wie lange werden Probenreste aus Aufträgen des Militärs aufgehoben?",
+      "answers": [
+        {
+          "path": "de/docs/research/probenverwaltung.md",
+          "heading": ["Probenverwaltung des OIW", "Rückstellmuster und Aufbewahrungsfrist"],
+          "language": "de"
+        }
+      ]
+    },
+    {
+      "id": "de-08",
+      "language": "de",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "Warum wird die Kennung vor dem Wegwerfen einer Probe abgeschliffen?",
+      "answers": [
+        {
+          "path": "de/docs/research/probenverwaltung.md",
+          "heading": ["Probenverwaltung des OIW", "Entsorgung nach Werkstoffgruppe"],
+          "language": "de"
+        }
+      ]
+    },
+    {
+      "id": "de-09",
+      "language": "de",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "Was passiert, wenn möglicherweise Proben vertauscht worden sind?",
+      "answers": [
+        {
+          "path": "de/docs/research/probenverwaltung.md",
+          "heading": ["Probenverwaltung des OIW", "Verwechslungsschutz"],
+          "language": "de"
+        }
+      ]
+    },
+    {
+      "id": "de-10",
+      "language": "de",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "Was macht das Institut, wenn für ein Prüfverfahren kein externer Vergleichstest angeboten wird?",
+      "answers": [
+        {
+          "path": "de/docs/research/qualitaetsmanagement.md",
+          "heading": ["Qualitätsmanagement des OIW", "Ringversuche und Eignungsprüfungen"],
+          "language": "de"
+        }
+      ]
+    },
+    {
+      "id": "de-11",
+      "language": "de",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "Wie schnell bekommt ein unzufriedener Kunde eine Antwort auf seine Reklamation?",
+      "answers": [
+        {
+          "path": "de/docs/research/qualitaetsmanagement.md",
+          "heading": ["Qualitätsmanagement des OIW", "Kundenbeschwerden"],
+          "language": "de"
+        }
+      ]
+    },
+    {
+      "id": "de-12",
+      "language": "de",
+      "kind": "exact-term",
+      "domain": "research",
+      "query": "Wofür ist der Vordruck OIW-20 vorgesehen?",
+      "answers": [
+        {
+          "path": "de/docs/research/qualitaetsmanagement.md",
+          "heading": ["Qualitätsmanagement des OIW", "Abweichungen und Korrekturmaßnahmen"],
+          "language": "de"
+        }
+      ]
+    },
+    {
+      "id": "de-13",
+      "language": "de",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "Wie viel Kochsalz enthält die Lösung für die Rostprüfung im Sprühnebel?",
+      "answers": [
+        {
+          "path": "de/docs/defense/normen-und-spezifikationen.md",
+          "heading": [
+            "Verteidigungsnormen und Spezifikationen",
+            "Korrosive und partikuläre Umgebungen: Salznebel, Sand und Staub"
+          ],
+          "language": "de"
+        }
+      ]
+    },
+    {
+      "id": "de-14",
+      "language": "de",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "Welche Fassung einer Norm ist bei einem Vertrag maßgeblich?",
+      "answers": [
+        {
+          "path": "de/docs/defense/normen-und-spezifikationen.md",
+          "heading": [
+            "Verteidigungsnormen und Spezifikationen",
+            "Ausgabestände und Änderungsdienst"
+          ],
+          "language": "de"
+        }
+      ]
+    },
+    {
+      "id": "de-15",
+      "language": "de",
+      "kind": "exact-term",
+      "domain": "defense",
+      "query": "Was wird mit Vordruck VB-33 beantragt?",
+      "answers": [
+        {
+          "path": "de/docs/defense/normen-und-spezifikationen.md",
+          "heading": ["Verteidigungsnormen und Spezifikationen", "Abweichungsantrag"],
+          "language": "de"
+        }
+      ]
+    },
+    {
+      "id": "de-16",
+      "language": "de",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "Wer darf eine Abbindung am Arm oder Bein wieder öffnen?",
+      "answers": [
+        {
+          "path": "de/docs/defense/sanitaetsdienst-und-medevac.md",
+          "heading": ["Sanitätsdienst im Feld und MEDEVAC-Anforderung", "Erste Hilfe im Feld"],
+          "language": "de"
+        }
+      ]
+    },
+    {
+      "id": "de-17",
+      "language": "de",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "In welcher Dringlichkeitsstufe werden Tote abtransportiert?",
+      "answers": [
+        {
+          "path": "de/docs/defense/sanitaetsdienst-und-medevac.md",
+          "heading": ["Sanitätsdienst im Feld und MEDEVAC-Anforderung", "Transportprioritäten"],
+          "language": "de"
+        }
+      ]
+    },
+    {
+      "id": "de-18",
+      "language": "de",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "Wie viele Patienten auf Tragen fasst der gepanzerte Krankenwagen?",
+      "answers": [
+        {
+          "path": "de/docs/defense/sanitaetsdienst-und-medevac.md",
+          "heading": [
+            "Sanitätsdienst im Feld und MEDEVAC-Anforderung",
+            "Sanitätsfahrzeuge des Bataillons"
+          ],
+          "language": "de"
+        }
+      ]
+    },
+    {
+      "id": "de-19",
+      "language": "de",
+      "kind": "exact-term",
+      "domain": "defense",
+      "query": "Welches Gerät hat die Versorgungsnummer 6115-81-504-0917?",
+      "answers": [
+        {
+          "path": "de/docs/defense/feldlager-energie-und-wasser.md",
+          "heading": [
+            "Feldlager: Energieversorgung und Wasser",
+            "Stromerzeugeraggregate und Leistungsklassen"
+          ],
+          "language": "de"
+        }
+      ]
+    },
+    {
+      "id": "de-20",
+      "language": "de",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "Warum darf ein Generator nicht ständig schwach ausgelastet laufen?",
+      "answers": [
+        {
+          "path": "de/docs/defense/feldlager-energie-und-wasser.md",
+          "heading": ["Feldlager: Energieversorgung und Wasser", "Lastverteilung und Erdung"],
+          "language": "de"
+        }
+      ]
+    },
+    {
+      "id": "de-21",
+      "language": "de",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "Wie viel Wasser steht jedem in den ersten drei Tagen eines Lagers zu?",
+      "answers": [
+        {
+          "path": "de/docs/defense/feldlager-energie-und-wasser.md",
+          "heading": ["Feldlager: Energieversorgung und Wasser", "Wasserbedarf als Planungsgröße"],
+          "language": "de"
+        }
+      ]
+    },
+    {
+      "id": "de-22",
+      "language": "de",
+      "kind": "exact-term",
+      "domain": "defense",
+      "query": "Was regelt die Norm VDS 5215?",
+      "answers": [
+        {
+          "path": "de/docs/defense/gueteprufung-und-abnahme.md",
+          "heading": [
+            "Güteprüfung und Abnahme bei der Beschaffung",
+            "Prüflos und Stichprobenplan mit AQL"
+          ],
+          "language": "de"
+        }
+      ]
+    },
+    {
+      "id": "de-23",
+      "language": "de",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "Wie lange läuft der Testbetrieb, wenn volle Last vor Ort unmöglich ist?",
+      "answers": [
+        {
+          "path": "de/docs/defense/gueteprufung-und-abnahme.md",
+          "heading": [
+            "Güteprüfung und Abnahme bei der Beschaffung",
+            "Abnahme am Aufstellort (SAT)"
+          ],
+          "language": "de"
+        }
+      ]
+    },
+    {
+      "id": "de-24",
+      "language": "de",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "Was passiert, wenn sich die Herstellererklärung zu einer Lieferung als falsch herausstellt?",
+      "answers": [
+        {
+          "path": "de/docs/defense/gueteprufung-und-abnahme.md",
+          "heading": [
+            "Güteprüfung und Abnahme bei der Beschaffung",
+            "Konformitätserklärung des Lieferanten"
+          ],
+          "language": "de"
+        }
+      ]
+    },
+    {
+      "id": "ru-01",
+      "language": "ru",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "Кого и как быстро оповестить, если пропал радиоактивный источник?",
+      "answers": [
+        {
+          "path": "ru/docs/research/radiation-safety.md",
+          "heading": [
+            "Радиационная безопасность при работе с источниками ионизирующего излучения",
+            "Действия при обнаружении потери источника"
+          ],
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "ru-02",
+      "language": "ru",
+      "kind": "exact-term",
+      "domain": "research",
+      "query": "Что учтено в реестре под номером ИИИ-0417?",
+      "answers": [
+        {
+          "path": "ru/docs/research/radiation-safety.md",
+          "heading": [
+            "Радиационная безопасность при работе с источниками ионизирующего излучения",
+            "Категории источников и реестр ИИИ"
+          ],
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "ru-03",
+      "language": "ru",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "С какого возраста разрешают работать с радиоактивными источниками?",
+      "answers": [
+        {
+          "path": "ru/docs/research/radiation-safety.md",
+          "heading": [
+            "Радиационная безопасность при работе с источниками ионизирующего излучения",
+            "Обучение, медицинские осмотры и допуск к работам"
+          ],
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "ru-04",
+      "language": "ru",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "Как поднять жидкий азот на другой этаж?",
+      "answers": [
+        {
+          "path": "ru/docs/research/cryogenics.md",
+          "heading": [
+            "Безопасное обращение с криогенными жидкостями",
+            "Транспортировка сосудов и правило пустого лифта"
+          ],
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "ru-05",
+      "language": "ru",
+      "kind": "exact-term",
+      "domain": "research",
+      "query": "Что требует стандарт VDS 6204?",
+      "answers": [
+        {
+          "path": "ru/docs/research/cryogenics.md",
+          "heading": [
+            "Безопасное обращение с криогенными жидкостями",
+            "Контроль содержания кислорода в помещениях"
+          ],
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "ru-06",
+      "language": "ru",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "Чем и как долго согревать место холодового ожога от азота?",
+      "answers": [
+        {
+          "path": "ru/docs/research/cryogenics.md",
+          "heading": [
+            "Безопасное обращение с криогенными жидкостями",
+            "Обморожение и первая помощь"
+          ],
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "ru-07",
+      "language": "ru",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "Почему детали для вакуумной камеры нельзя брать голыми руками?",
+      "answers": [
+        {
+          "path": "ru/docs/research/vacuum-equipment.md",
+          "heading": [
+            "Эксплуатация и обслуживание вакуумного оборудования",
+            "Чистота вакуумной камеры и предотвращение загрязнения"
+          ],
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "ru-08",
+      "language": "ru",
+      "kind": "exact-term",
+      "domain": "research",
+      "query": "Какая установка учтена под номером ВУ-207?",
+      "answers": [
+        {
+          "path": "ru/docs/research/vacuum-equipment.md",
+          "heading": [
+            "Эксплуатация и обслуживание вакуумного оборудования",
+            "Учёт установок и журнал вакуумной установки"
+          ],
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "ru-09",
+      "language": "ru",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "Что делает оператор, если во время откачки пропало электричество?",
+      "answers": [
+        {
+          "path": "ru/docs/research/vacuum-equipment.md",
+          "heading": [
+            "Эксплуатация и обслуживание вакуумного оборудования",
+            "Последовательность запуска и останова установки"
+          ],
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "ru-10",
+      "language": "ru",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "Что означает красная лампочка над входом в лазерную комнату?",
+      "answers": [
+        {
+          "path": "ru/docs/research/laser-safety.md",
+          "heading": [
+            "Лазерная безопасность в лабораториях института",
+            "Блокировки дверей и сигнальные лампы"
+          ],
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "ru-11",
+      "language": "ru",
+      "kind": "exact-term",
+      "domain": "research",
+      "query": "Где установлен лазер «Иволга-1070» и какова его мощность?",
+      "answers": [
+        {
+          "path": "ru/docs/research/laser-safety.md",
+          "heading": [
+            "Лазерная безопасность в лабораториях института",
+            "Лазерные установки института и их учёт"
+          ],
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "ru-12",
+      "language": "ru",
+      "kind": "paraphrase",
+      "domain": "research",
+      "query": "Как быстро пострадавшего от лазерного луча должен осмотреть глазной врач?",
+      "answers": [
+        {
+          "path": "ru/docs/research/laser-safety.md",
+          "heading": [
+            "Лазерная безопасность в лабораториях института",
+            "Действия при облучении и при возгорании от луча"
+          ],
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "ru-13",
+      "language": "ru",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "Зачем машине, отправленной на долгое хранение, почти полный бак?",
+      "answers": [
+        {
+          "path": "ru/docs/defense/equipment-storage-and-preservation.md",
+          "heading": [
+            "Хранение и консервация техники в бригаде материально-технического обеспечения",
+            "Кратковременное и длительное хранение"
+          ],
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "ru-14",
+      "language": "ru",
+      "kind": "exact-term",
+      "domain": "defense",
+      "query": "Что оформляют актом по форме МТО-12?",
+      "answers": [
+        {
+          "path": "ru/docs/defense/equipment-storage-and-preservation.md",
+          "heading": [
+            "Хранение и консервация техники в бригаде материально-технического обеспечения",
+            "Учётные документы хранения"
+          ],
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "ru-15",
+      "language": "ru",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "Можно ли ставить на долгое хранение машину со старыми покрышками?",
+      "answers": [
+        {
+          "path": "ru/docs/defense/equipment-storage-and-preservation.md",
+          "heading": [
+            "Хранение и консервация техники в бригаде материально-технического обеспечения",
+            "Шины и давление в них"
+          ],
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "ru-16",
+      "language": "ru",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "Какой высоты насыпают земляной вал перед стрелком?",
+      "answers": [
+        {
+          "path": "ru/docs/defense/field-fortification-and-camouflage.md",
+          "heading": [
+            "Полевое фортификационное оборудование и маскировка",
+            "Бруствер и его устройство"
+          ],
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "ru-17",
+      "language": "ru",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "Можно ли ночью курить на улице в полевом лагере?",
+      "answers": [
+        {
+          "path": "ru/docs/defense/field-fortification-and-camouflage.md",
+          "heading": [
+            "Полевое фортификационное оборудование и маскировка",
+            "Световая и тепловая маскировка"
+          ],
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "ru-18",
+      "language": "ru",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "Сколько времени уходит у одного бойца на окоп в полный рост?",
+      "answers": [
+        {
+          "path": "ru/docs/defense/field-fortification-and-camouflage.md",
+          "heading": [
+            "Полевое фортификационное оборудование и маскировка",
+            "Нормы времени на фортификационные работы"
+          ],
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "ru-19",
+      "language": "ru",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "Сколько часов подряд водителю разрешено сидеть за рулём?",
+      "answers": [
+        {
+          "path": "ru/docs/defense/military-transport.md",
+          "heading": [
+            "Воинские перевозки: железнодорожный транспорт и автомобильные колонны",
+            "Привалы и отдых водителей"
+          ],
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "ru-20",
+      "language": "ru",
+      "kind": "exact-term",
+      "domain": "defense",
+      "query": "Что поступает по номенклатурному номеру 4010-81-670-2231?",
+      "answers": [
+        {
+          "path": "ru/docs/defense/military-transport.md",
+          "heading": [
+            "Воинские перевозки: железнодорожный транспорт и автомобильные колонны",
+            "Крепление техники растяжками и упорами"
+          ],
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "ru-21",
+      "language": "ru",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "Какой зазор держат между грузовиками при езде по асфальту днём?",
+      "answers": [
+        {
+          "path": "ru/docs/defense/military-transport.md",
+          "heading": [
+            "Воинские перевозки: железнодорожный транспорт и автомобильные колонны",
+            "Построение автомобильной колонны, дистанции и скорость"
+          ],
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "ru-22",
+      "language": "ru",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "При какой температуре в бригаде переходят на зимнюю солярку?",
+      "answers": [
+        {
+          "path": "ru/docs/defense/pol-service.md",
+          "heading": [
+            "Служба горюче-смазочных материалов бригады",
+            "Марки топлива и масел, применяемых в бригаде"
+          ],
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "ru-23",
+      "language": "ru",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "Сколько нужно подождать после заправки цистерны, прежде чем брать пробу топлива?",
+      "answers": [
+        {
+          "path": "ru/docs/defense/pol-service.md",
+          "heading": [
+            "Служба горюче-смазочных материалов бригады",
+            "Заземление при перекачке и защита от статического электричества"
+          ],
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "ru-24",
+      "language": "ru",
+      "kind": "paraphrase",
+      "domain": "defense",
+      "query": "Как далеко от казарм и парков техники должен стоять склад топлива?",
+      "answers": [
+        {
+          "path": "ru/docs/defense/pol-service.md",
+          "heading": [
+            "Служба горюче-смазочных материалов бригады",
+            "Пожарная безопасность склада ГСМ"
+          ],
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "xr-01",
+      "language": "ko",
+      "kind": "cross",
+      "domain": "research",
+      "query": "통제 데이터실에서 자료를 꺼낼 때 쓰는 저장장치는?",
+      "answers": [
+        {
+          "path": "en/docs/research/data-classification.md",
+          "heading": [
+            "Data classification and handling at the Centre",
+            "Approved media and the write-once rule"
+          ],
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "id": "xr-02",
+      "language": "zh",
+      "kind": "cross",
+      "domain": "research",
+      "query": "样品掉进电子显微镜的样品室里该怎么办？",
+      "answers": [
+        {
+          "path": "en/docs/research/electron-microscopy-facility.md",
+          "heading": ["The electron microscopy facility", "Vacuum incidents"],
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "id": "xr-03",
+      "language": "de",
+      "kind": "cross",
+      "domain": "research",
+      "query": "Wer darf als Autor einer Veröffentlichung genannt werden?",
+      "answers": [
+        {
+          "path": "en/docs/research/publication-clearance.md",
+          "heading": [
+            "Publication clearance and open-access deposit",
+            "Authorship and the acknowledgement of the Office"
+          ],
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "id": "xr-04",
+      "language": "en",
+      "kind": "cross",
+      "domain": "research",
+      "query": "Who may witness a lab notebook entry and how soon must they sign?",
+      "answers": [
+        {
+          "path": "ko/docs/research/research-notebooks.md",
+          "heading": ["연구노트와 연구 데이터의 관리 규정", "서명과 날짜와 증인 서명"],
+          "language": "ko"
+        }
+      ]
+    },
+    {
+      "id": "xr-05",
+      "language": "zh",
+      "kind": "cross",
+      "domain": "research",
+      "query": "实验室的电炉可以在夜间无人值守时运行吗？",
+      "answers": [
+        {
+          "path": "ko/docs/research/lab-safety.md",
+          "heading": ["실험실 안전 규정", "고온 장비와 전기 안전"],
+          "language": "ko"
+        }
+      ]
+    },
+    {
+      "id": "xr-06",
+      "language": "ru",
+      "kind": "cross",
+      "domain": "research",
+      "query": "Как долго можно использовать эфир после вскрытия бутылки?",
+      "answers": [
+        {
+          "path": "ko/docs/research/samples-and-reagents.md",
+          "heading": ["시료와 시약의 관리 규정", "시약의 유효기간과 폐기"],
+          "language": "ko"
+        }
+      ]
+    },
+    {
+      "id": "xr-07",
+      "language": "en",
+      "kind": "cross",
+      "domain": "research",
+      "query": "When may the climatic chamber door be opened after a high-temperature test?",
+      "answers": [
+        {
+          "path": "ja/docs/research/test-equipment-operation.md",
+          "heading": ["試験装置の運用要領", "騒音と高温への注意"],
+          "language": "ja"
+        }
+      ]
+    },
+    {
+      "id": "xr-08",
+      "language": "zh",
+      "kind": "cross",
+      "domain": "research",
+      "query": "检测报告中判定是否符合规格时可以写哪几种结论？",
+      "answers": [
+        {
+          "path": "ja/docs/research/test-reports.md",
+          "heading": ["試験報告書の作成及び管理規程", "不確かさの記載方法"],
+          "language": "ja"
+        }
+      ]
+    },
+    {
+      "id": "xr-09",
+      "language": "de",
+      "kind": "cross",
+      "domain": "research",
+      "query": "Mit welcher Gewichtsklasse wird die Analysenwaage kalibriert?",
+      "answers": [
+        {
+          "path": "ja/docs/research/reference-materials.md",
+          "heading": ["標準物質及び参照標準の管理規程", "分銅の等級と用途"],
+          "language": "ja"
+        }
+      ]
+    },
+    {
+      "id": "xr-10",
+      "language": "ko",
+      "kind": "cross",
+      "domain": "research",
+      "query": "성분 모르는 약품이 많이 쏟아지면 어떻게 하나요?",
+      "answers": [
+        {
+          "path": "zh/docs/research/hazardous-chemicals.md",
+          "heading": ["危险化学品管理规程", "泄漏应急与洗消"],
+          "language": "zh"
+        }
+      ]
+    },
+    {
+      "id": "xr-11",
+      "language": "ja",
+      "kind": "cross",
+      "domain": "research",
+      "query": "クリーンルームに物品を持ち込む手順は？",
+      "answers": [
+        {
+          "path": "zh/docs/research/cleanroom.md",
+          "heading": ["洁净室管理规程", "传递窗与物料进入"],
+          "language": "zh"
+        }
+      ]
+    },
+    {
+      "id": "xr-12",
+      "language": "ru",
+      "kind": "cross",
+      "domain": "research",
+      "query": "Почему газовый баллон нельзя расходовать до конца?",
+      "answers": [
+        {
+          "path": "zh/docs/research/gas-cylinders-and-cryogenics.md",
+          "heading": ["高压气瓶与低温介质管理规程", "气瓶的退库"],
+          "language": "zh"
+        }
+      ]
+    },
+    {
+      "id": "xr-13",
+      "language": "ko",
+      "kind": "cross",
+      "domain": "research",
+      "query": "주조품처럼 조직이 거친 재료의 경도 측정 방법은?",
+      "answers": [
+        {
+          "path": "de/docs/research/pruefverfahren.md",
+          "heading": [
+            "Prüfverfahren des Orvane-Instituts für Werkstoffprüfung",
+            "Härteprüfung nach Vickers, Brinell und Rockwell (OIW-PV-112)"
+          ],
+          "language": "de"
+        }
+      ]
+    },
+    {
+      "id": "xr-14",
+      "language": "ja",
+      "kind": "cross",
+      "domain": "research",
+      "query": "ピクラール腐食液を乾燥させてはいけない理由は？",
+      "answers": [
+        {
+          "path": "de/docs/research/arbeitsschutz-und-gefahrstoffe.md",
+          "heading": [
+            "Arbeitsschutz und Gefahrstoffe in den Laboratorien des OIW",
+            "Ätzmittel der Metallographie unter dem Abzug"
+          ],
+          "language": "de"
+        }
+      ]
+    },
+    {
+      "id": "xr-15",
+      "language": "ru",
+      "kind": "cross",
+      "domain": "research",
+      "query": "Какие правила не дают перепутать образцы в лаборатории?",
+      "answers": [
+        {
+          "path": "de/docs/research/probenverwaltung.md",
+          "heading": ["Probenverwaltung des OIW", "Verwechslungsschutz"],
+          "language": "de"
+        }
+      ]
+    },
+    {
+      "id": "xr-16",
+      "language": "en",
+      "kind": "cross",
+      "domain": "research",
+      "query": "How is short-lived radioactive waste disposed of?",
+      "answers": [
+        {
+          "path": "ru/docs/research/radiation-safety.md",
+          "heading": [
+            "Радиационная безопасность при работе с источниками ионизирующего излучения",
+            "Радиоактивные отходы и дезактивация"
+          ],
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "xr-17",
+      "language": "ja",
+      "kind": "cross",
+      "domain": "research",
+      "query": "クライオポンプの再生はどんなときに必要ですか",
+      "answers": [
+        {
+          "path": "ru/docs/research/vacuum-equipment.md",
+          "heading": [
+            "Эксплуатация и обслуживание вакуумного оборудования",
+            "Криогенные насосы КНВ-8 и их регенерация"
+          ],
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "xr-18",
+      "language": "de",
+      "kind": "cross",
+      "domain": "research",
+      "query": "Was bedeuten die Farben der Signallampe über der Tür des Laserraums?",
+      "answers": [
+        {
+          "path": "ru/docs/research/laser-safety.md",
+          "heading": [
+            "Лазерная безопасность в лабораториях института",
+            "Блокировки дверей и сигнальные лампы"
+          ],
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "xd-01",
+      "language": "zh",
+      "kind": "cross",
+      "domain": "defense",
+      "query": "什么情况下可以拆故障车的好零件去修同型车？",
+      "answers": [
+        {
+          "path": "en/docs/defense/maintenance-levels.md",
+          "heading": ["Levels of maintenance and the maintenance request", "Controlled exchange"],
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "id": "xd-02",
+      "language": "ja",
+      "kind": "cross",
+      "domain": "defense",
+      "query": "無線の通話試験で信号の強さと明瞭度はどう答える？",
+      "answers": [
+        {
+          "path": "en/docs/defense/radio-voice-procedure.md",
+          "heading": ["Radio voice procedure", "Radio checks and signal reports"],
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "id": "xd-03",
+      "language": "ru",
+      "kind": "cross",
+      "domain": "defense",
+      "query": "Что проверяют перед тем, как разрешить начало испытаний опытного образца?",
+      "answers": [
+        {
+          "path": "en/docs/defense/test-and-evaluation.md",
+          "heading": ["Test and evaluation of materiel", "The test readiness review"],
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "id": "xd-04",
+      "language": "ru",
+      "kind": "cross",
+      "domain": "defense",
+      "query": "Из чего складывается номер партии боеприпасов и где его наносят?",
+      "answers": [
+        {
+          "path": "ko/docs/defense/ammunition-storage.md",
+          "heading": ["탄약 저장과 취급 규정", "로트 번호의 구성과 표기"],
+          "language": "ko"
+        }
+      ]
+    },
+    {
+      "id": "xd-05",
+      "language": "en",
+      "kind": "cross",
+      "domain": "defense",
+      "query": "For each item it stocks, how much safety stock does the supply warehouse keep and when does it reorder?",
+      "answers": [
+        {
+          "path": "ko/docs/defense/supply-classes.md",
+          "heading": ["보급품의 종 분류와 보급 절차 규정", "재고 통제 수준"],
+          "language": "ko"
+        }
+      ]
+    },
+    {
+      "id": "xd-06",
+      "language": "de",
+      "kind": "cross",
+      "domain": "defense",
+      "query": "Was bedeuten die roten, gelben und grünen Flaggen am Schießplatz?",
+      "answers": [
+        {
+          "path": "ko/docs/defense/range-safety.md",
+          "heading": ["사격장 안전 규정", "통제탑의 깃발과 등화 신호 체계"],
+          "language": "ko"
+        }
+      ]
+    },
+    {
+      "id": "xd-07",
+      "language": "de",
+      "kind": "cross",
+      "domain": "defense",
+      "query": "Wie bestimme ich meinen Standort durch Anpeilen bekannter Geländepunkte?",
+      "answers": [
+        {
+          "path": "ja/docs/defense/map-reading.md",
+          "heading": ["地図判読教範", "現在位置の決定（交会法）"],
+          "language": "ja"
+        }
+      ]
+    },
+    {
+      "id": "xd-08",
+      "language": "en",
+      "kind": "cross",
+      "domain": "defense",
+      "query": "How are radio batteries kept usable in hard frost and stored for months?",
+      "answers": [
+        {
+          "path": "ja/docs/defense/communications-equipment-care.md",
+          "heading": ["携帯無線機の手入れ及び管理要領", "バッテリーの充電・保管・寒冷時の管理"],
+          "language": "ja"
+        }
+      ]
+    },
+    {
+      "id": "xd-09",
+      "language": "zh",
+      "kind": "cross",
+      "domain": "defense",
+      "query": "冬天车辆出发前要额外检查哪些项目？",
+      "answers": [
+        {
+          "path": "ja/docs/defense/vehicle-inspection-and-fuel.md",
+          "heading": ["車両の運行前後点検及び燃料・油脂類の取扱要領", "冬季の点検追加項目"],
+          "language": "ja"
+        }
+      ]
+    },
+    {
+      "id": "xd-10",
+      "language": "ja",
+      "kind": "cross",
+      "domain": "defense",
+      "query": "敵味方識別で応答が返らない目標は敵と見なしてよいか",
+      "answers": [
+        {
+          "path": "zh/docs/defense/iff-and-tacan.md",
+          "heading": ["敌我识别与塔康设备使用规定", "敌我识别的用途与设备构成"],
+          "language": "zh"
+        }
+      ]
+    },
+    {
+      "id": "xd-11",
+      "language": "ko",
+      "kind": "cross",
+      "domain": "defense",
+      "query": "제독은 어떤 단계로 나누고 어떤 순서로 하나?",
+      "answers": [
+        {
+          "path": "zh/docs/defense/cbrn-protection-basics.md",
+          "heading": ["核生化防护基础", "洗消的分级与一般程序"],
+          "language": "zh"
+        }
+      ]
+    },
+    {
+      "id": "xd-12",
+      "language": "de",
+      "kind": "cross",
+      "domain": "defense",
+      "query": "Welche Voraussetzungen braucht ein Ausbilder, und wen darf ein Prüfer nicht prüfen?",
+      "answers": [
+        {
+          "path": "zh/docs/defense/training-and-evaluation.md",
+          "heading": ["训练与考核规定", "教官与考核员资格"],
+          "language": "zh"
+        }
+      ]
+    },
+    {
+      "id": "xd-13",
+      "language": "ko",
+      "kind": "cross",
+      "domain": "defense",
+      "query": "후송 순위는 어떻게 매기고 전사자는 언제 옮기나?",
+      "answers": [
+        {
+          "path": "de/docs/defense/sanitaetsdienst-und-medevac.md",
+          "heading": ["Sanitätsdienst im Feld und MEDEVAC-Anforderung", "Transportprioritäten"],
+          "language": "de"
+        }
+      ]
+    },
+    {
+      "id": "xd-14",
+      "language": "ja",
+      "kind": "cross",
+      "domain": "defense",
+      "query": "野営地の発電機はどの程度の負荷率で運転すべきか",
+      "answers": [
+        {
+          "path": "de/docs/defense/feldlager-energie-und-wasser.md",
+          "heading": ["Feldlager: Energieversorgung und Wasser", "Lastverteilung und Erdung"],
+          "language": "de"
+        }
+      ]
+    },
+    {
+      "id": "xd-15",
+      "language": "ru",
+      "kind": "cross",
+      "domain": "defense",
+      "query": "Что делать поставщику, если он не может выполнить требование оборонного стандарта?",
+      "answers": [
+        {
+          "path": "de/docs/defense/normen-und-spezifikationen.md",
+          "heading": ["Verteidigungsnormen und Spezifikationen", "Abweichungsantrag"],
+          "language": "de"
+        }
+      ]
+    },
+    {
+      "id": "xd-16",
+      "language": "en",
+      "kind": "cross",
+      "domain": "defense",
+      "query": "What does a driver do when the truck breaks down in a convoy?",
+      "answers": [
+        {
+          "path": "ru/docs/defense/military-transport.md",
+          "heading": [
+            "Воинские перевозки: железнодорожный транспорт и автомобильные колонны",
+            "Действия при поломке машины в колонне"
+          ],
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "xd-17",
+      "language": "ko",
+      "kind": "cross",
+      "domain": "defense",
+      "query": "드럼통 연료의 보관 기한은 얼마고 지나면 어떻게 하나?",
+      "answers": [
+        {
+          "path": "ru/docs/defense/pol-service.md",
+          "heading": [
+            "Служба горюче-смазочных материалов бригады",
+            "Хранение топлива и масел в таре"
+          ],
+          "language": "ru"
+        }
+      ]
+    },
+    {
+      "id": "xd-18",
+      "language": "zh",
+      "kind": "cross",
+      "domain": "defense",
+      "query": "夜间怎样隐蔽发动机和发电机的热辐射？",
+      "answers": [
+        {
+          "path": "ru/docs/defense/field-fortification-and-camouflage.md",
+          "heading": [
+            "Полевое фортификационное оборудование и маскировка",
+            "Световая и тепловая маскировка"
+          ],
+          "language": "ru"
+        }
+      ]
+    }
+  ]
+}

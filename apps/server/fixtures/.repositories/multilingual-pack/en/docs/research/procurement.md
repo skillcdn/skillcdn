@@ -1,0 +1,44 @@
+---
+title: Procurement of goods and equipment for the Centre
+description: How a requisition moves through the Marrowfield Materials Characterization Centre, who approves which value, how a line is coded with an Office Commodity Code, how controlled items, vendors, incoming goods, asset tags, consumables, capital equipment and returns are handled.
+---
+
+# Procurement of goods and equipment for the Centre
+
+This procedure applies to everyone at the Marrowfield Materials Characterization Centre (MMCC) who orders, receives or disposes of goods, from a box of grinding papers to a diffractometer. It governs the requisition, its coding and approval, the qualification of vendors, the inspection of what arrives and the register of what the Centre owns.
+
+## The requisition flow from need to order
+
+Every purchase begins with a requisition on Form MMCC-12, raised in the procurement system by the person who needs the goods, never by the vendor's representative. The requester enters each line with a description, a quantity, a unit price from a quote not older than 30 days, the Office Commodity Code and the project or cost centre to be charged. The system routes the form to the approver the value determines, then to the Procurement Officer, who checks vendor status, coding and control flags before converting it into a purchase order. Only a purchase order carrying the Centre's order number commits the Centre; a requester who orders by telephone or email without one pays personally unless the Head of Administration ratifies the order within five working days. A requisition not approved within 60 days lapses and is raised anew.
+
+## Approval thresholds by value
+
+Approval depends on the total value of the requisition in Vendrel florins (VF), excluding tax. Up to VF 2,000 the head of the requesting laboratory approves alone and a single quote suffices. From VF 2,000 to VF 25,000 the Head of Administration approves and the requester attaches three written quotes or a note explaining why fewer exist, such as a sole-source consumable tied to an instrument. Above VF 25,000 the purchase goes to the Office's procurement board as a tender with a written specification, and the board decides within 40 working days. Splitting a need into several requisitions to stay under a threshold is forbidden, and the Procurement Officer merges requisitions from one requester to one vendor within any 30-day window before applying the threshold. Framework agreements negotiated by the Office bypass the quote requirement but not the approval.
+
+## Office Commodity Codes and how a line is coded
+
+Every line of a requisition carries an Office Commodity Code (OCC), two groups of two digits separated by a hyphen. The first group is the commodity class and the second the family within it, so that OCC 41-07 denotes laboratory consumables for sample preparation, including abrasive papers, diamond suspensions and mounting resins, while OCC 41-12 denotes certified reference materials and OCC 23-01 denotes compressed and liquefied gases. Capital instruments fall under class 55, and OCC 55-02 covers analytical instruments for microscopy and spectroscopy. The code decides which approver sees the line, which budget it draws on and whether a safety data sheet must accompany delivery, which is the case for every line in class 23 and class 42. The requester proposes the code and the Procurement Officer may correct it; a line with no code is returned unprocessed.
+
+## Controlled items and the Vendrel Control List
+
+Some goods may not be bought, held or passed on freely. The Vendrel Control List (VCL) names the chemicals, alloys, components and software whose acquisition requires a licence or a notification to the Office, among them beryllium alloys above two per cent by mass, certain high-purity isotopes, and precision bearings and encoders above stated tolerances. The procurement system flags a line as controlled when its OCC or description matches the list, and the requester cannot clear the flag. A controlled line needs the Compliance Officer's release before the purchase order issues, and the Compliance Officer records the licence number, the quantity authorized and the storage location in the control register. Controlled goods are received by the Compliance Officer personally, stored in locked cabinets and counted at every inventory, and their disposal follows the licence conditions, not the ordinary waste route.
+
+## Vendor qualification and re-qualification
+
+The Centre buys only from qualified vendors. A new vendor completes the vendor questionnaire, provides a tax registration, evidence of a quality system (an ISO 9001 certificate or an equivalent assessment) and, for consumables that affect measurement results, a sample batch with its certificate of analysis. The Procurement Officer and the Quality Manager decide within 20 working days and assign a vendor number. Qualification lasts three years, after which the vendor is re-qualified on its delivery record: a vendor with more than five per cent of lines rejected at receiving inspection in the period, or with two late deliveries of controlled items, is placed on probation for one year and may not receive orders above VF 10,000. A vendor that has supplied a counterfeit or mislabelled reference material is removed permanently and the Office is informed.
+
+## Receiving inspection and quarantine
+
+Goods are received at the central stores and nowhere else. The storekeeper checks the delivery against the purchase order for quantity, part number, lot number and visible damage, and records the result in the receiving log the same day. Reagents, reference materials and sample-preparation consumables that affect measurements go into the quarantine shelf with a yellow quarantine label until the responsible laboratory confirms the certificate of analysis, the expiry date and, where a procedure requires it, an identity check such as a melting point or infrared spectrum. Only a laboratory technician may release goods from quarantine, and the release is written on the label with date and initials. A delivery that fails inspection is held 30 days for the vendor's collection, then disposed of at the vendor's cost, and the rejection counts in the vendor's record.
+
+## Asset tags and the asset register
+
+Every item that is not a consumable receives an asset tag at receiving inspection, before leaving the stores. The tag is a barcoded label reading MMCC-A followed by a five-digit number, for example MMCC-A-03317, and the number is never reused after disposal. The asset register, kept by the Head of Administration, records for each tag the description, serial number, purchase order, acquisition value, location, custodian and date of the last physical verification. Custodians confirm the location of every asset in their care once a year, in the first-quarter inventory campaign, and an asset not seen in two consecutive campaigns is reported to the Director as missing. Moving an asset between rooms requires a change of location in the register within five working days; moving it off site requires a loan form signed by the custodian.
+
+## Consumables versus capital equipment
+
+The Centre distinguishes consumables, capital and minor equipment. Capital equipment is any item with an acquisition value of VF 5,000 or more and a useful life above one year; it is depreciated over a period fixed by its OCC class, five years for computers and ten for analytical instruments, and its purchase must appear in the year's equipment plan or be authorized by the Director as unplanned. Minor equipment, below VF 5,000 but lasting over a year, is tagged and registered but not depreciated. Consumables are items used up within a year or by a single measurement, such as crucibles, reagents and grinding papers; they are not tagged, and the laboratory manages their stock with a minimum level set for each item in the stores list. Perpetual software licences follow the rules of capital equipment, annual ones those of consumables.
+
+## Returns and warranty claims
+
+A wrong, damaged or defective item is returned through the Procurement Officer, never by the requester directly, so that the credit note reaches the Centre's account. The return is raised within 14 days of receipt for an incorrect or damaged delivery and within the warranty period for a defect, and the item ships in its original packaging with the vendor's return authorization number. Warranty claims on instruments are made in writing with the asset tag number, serial number, fault description and service log, and the vendor's response time is measured against the service terms of the purchase order. A storage medium that held data above Tier 1 is never returned, whatever the warranty says, and the claim is made without it. The Procurement Officer keeps a returns log and reports to the Quality Manager quarterly the vendors with repeated returns.

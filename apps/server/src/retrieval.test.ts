@@ -8,8 +8,13 @@ import {
   evaluateRetrieval,
   formatRetrievalReport,
   loadRetrievalSet,
+  MULTILINGUAL_PACK_PATH,
+  MULTILINGUAL_SET_PATH,
   memorySearch,
   memorySearchWithMeaning,
+  QUESTION_KINDS,
+  type RetrievalScore,
+  scoreOf,
   scoreOfLanguage,
 } from "./retrieval/evaluate.js";
 
@@ -29,23 +34,7 @@ describe("the retrieval evaluation set", () => {
   const set = loadRetrievalSet();
 
   it("names documents and sections the fixture has", () => {
-    const walk = (directory: string, prefix: string): string[] =>
-      readdirSync(directory).flatMap((name) => {
-        const absolute = join(directory, name);
-        const relative = prefix.length === 0 ? name : `${prefix}/${name}`;
-        return statSync(absolute).isDirectory() ? walk(absolute, relative) : [relative];
-      });
-    const files = new Set(walk(DOCUMENT_PACK_PATH, ""));
-    for (const question of set.questions) {
-      for (const answer of question.answers) {
-        expect(files.has(answer.path), `${question.id}: ${answer.path}`).toBe(true);
-        const text = readFileSync(join(DOCUMENT_PACK_PATH, ...answer.path.split("/")), "utf8");
-        const headings = outlineMarkdown(text).headings.map((heading) => heading.text);
-        const last = answer.heading[answer.heading.length - 1];
-        expect(headings, `${question.id}: ${answer.heading.join(" > ")}`).toContain(last);
-      }
-    }
-    expect(new Set(set.questions.map((question) => question.id)).size).toBe(set.questions.length);
+    expectAnswersInPack(set, DOCUMENT_PACK_PATH);
   });
 
   it("holds the lexical baseline, in English and in Korean", async () => {
@@ -117,5 +106,121 @@ describe("the retrieval evaluation set", () => {
     const result = await find("pardon a tardy fee");
     expect(result.ranking).toEqual({ meaning: true, reranked: false });
     expect(result.items[0]).toMatchObject({ kind: "document", path: "docs/invoicing.md" });
+  });
+});
+
+/** The files of a pack, by their repository paths. */
+const filesOf = (root: string): Set<string> => {
+  const walk = (directory: string, prefix: string): string[] =>
+    readdirSync(directory).flatMap((name) => {
+      const absolute = join(directory, name);
+      const relative = prefix.length === 0 ? name : `${prefix}/${name}`;
+      return statSync(absolute).isDirectory() ? walk(absolute, relative) : [relative];
+    });
+  return new Set(walk(root, ""));
+};
+
+/** Every answer of the set names a file of the pack and a heading that file has; every id is one question's. */
+function expectAnswersInPack(set: ReturnType<typeof loadRetrievalSet>, root: string): void {
+  const files = filesOf(root);
+  for (const question of set.questions) {
+    for (const answer of question.answers) {
+      expect(files.has(answer.path), `${question.id}: ${answer.path}`).toBe(true);
+      const text = readFileSync(join(root, ...answer.path.split("/")), "utf8");
+      const headings = outlineMarkdown(text).headings.map((heading) => heading.text);
+      const last = answer.heading[answer.heading.length - 1];
+      expect(headings, `${question.id}: ${answer.heading.join(" > ")}`).toContain(last);
+    }
+  }
+  expect(new Set(set.questions.map((question) => question.id)).size).toBe(set.questions.length);
+}
+
+// The second set (ADR-0063): the library of an invented federation in six languages, in the
+// vocabulary of research and defense documents, which the first set does not reach: scripts
+// matched by pairs of characters (Japanese and Chinese beside Korean), languages read without a
+// stemmer (German and Russian), questions in another language than their document, which words
+// alone cannot answer, and codes asked verbatim, which words must not lose. The floors are the
+// lexical baseline measured when the set was written (2026-10, reading rules version 11): by the
+// language of the question, file@1 from 17% (German) to 60% (Korean), file@5 from 40% to 77%,
+// section@2 from 23% to 60%; the codes asked verbatim 42% file@1 and 78% file@5; nothing across
+// languages. The floors are a little under the numbers, so that a tie broken the other way does
+// not fail the build.
+
+const MULTILINGUAL_FLOORS: Readonly<
+  Record<string, { fileAt1: number; fileAt5: number; sectionAt2: number }>
+> = {
+  en: { fileAt1: 0.25, fileAt5: 0.6, sectionAt2: 0.45 },
+  ko: { fileAt1: 0.5, fileAt5: 0.65, sectionAt2: 0.45 },
+  ja: { fileAt1: 0.45, fileAt5: 0.7, sectionAt2: 0.4 },
+  zh: { fileAt1: 0.35, fileAt5: 0.65, sectionAt2: 0.5 },
+  de: { fileAt1: 0.1, fileAt5: 0.3, sectionAt2: 0.15 },
+  ru: { fileAt1: 0.25, fileAt5: 0.6, sectionAt2: 0.3 },
+};
+/** What the words alone reach on the codes asked verbatim. */
+const EXACT_TERM_FLOOR = { fileAt1: 0.35, fileAt5: 0.7 };
+/** What they reach at most across languages: the codes and names the two languages share. */
+const CROSS_CEILING = { fileAt5: 0.1 };
+
+describe("the multilingual retrieval evaluation set", () => {
+  const set = loadRetrievalSet(MULTILINGUAL_SET_PATH);
+  const languages = ["en", "ko", "ja", "zh", "de", "ru"];
+
+  it("names documents and sections the pack has, with the language and the domain of each", () => {
+    expectAnswersInPack(set, MULTILINGUAL_PACK_PATH);
+    for (const question of set.questions) {
+      expect(QUESTION_KINDS, question.id).toContain(question.kind);
+      expect(["research", "defense"], question.id).toContain(question.domain);
+      for (const answer of question.answers) {
+        const [language, docs, domain] = answer.path.split("/");
+        expect(docs, question.id).toBe("docs");
+        expect(answer.language, question.id).toBe(language);
+        expect(question.domain, question.id).toBe(domain);
+        // A question in another language than its document is a cross question, and only one.
+        expect(language !== question.language, question.id).toBe(question.kind === "cross");
+      }
+    }
+  });
+
+  it("is as large as it was designed to be", () => {
+    const count = (pick: (question: (typeof set.questions)[number]) => boolean): number =>
+      set.questions.filter(pick).length;
+    expect(set.questions.length).toBeGreaterThanOrEqual(150);
+    for (const language of languages) {
+      expect(
+        count((question) => question.language === language),
+        language,
+      ).toBeGreaterThanOrEqual(20);
+      expect(
+        count((question) => question.answers.some((answer) => answer.language === language)),
+        `documents in ${language}`,
+      ).toBeGreaterThanOrEqual(20);
+    }
+    expect(count((question) => question.kind === "cross")).toBeGreaterThanOrEqual(30);
+    expect(count((question) => question.kind === "exact-term")).toBeGreaterThanOrEqual(20);
+  });
+
+  it("holds the lexical baseline in every language and on the codes asked verbatim, and no more across languages", async () => {
+    const find = await memorySearch(MULTILINGUAL_PACK_PATH);
+    const score = await evaluateRetrieval(set, (question) => find(question.query));
+    const report = formatRetrievalReport(score);
+    const atLeast = (part: RetrievalScore, floor: Partial<RetrievalScore>, label: string): void => {
+      for (const [key, value] of Object.entries(floor) as [keyof RetrievalScore, number][]) {
+        expect(part[key], `${label} ${key}\n${report}`).toBeGreaterThanOrEqual(value);
+      }
+    };
+    for (const language of languages) {
+      const part = scoreOfLanguage(score, language);
+      expect(part.questions, language).toBeGreaterThan(0);
+      atLeast(part, MULTILINGUAL_FLOORS[language] ?? {}, language);
+    }
+    atLeast(
+      scoreOf(score, (outcome) => outcome.kind === "exact-term"),
+      EXACT_TERM_FLOOR,
+      "exact-term",
+    );
+    // Words alone cannot read a question in another language than the document: what reaches the
+    // page there is the codes and names the two share, and the rest is what meaning adds.
+    const cross = scoreOf(score, (outcome) => outcome.kind === "cross");
+    expect(cross.fileAt5, `cross\n${report}`).toBeLessThanOrEqual(CROSS_CEILING.fileAt5);
   });
 });

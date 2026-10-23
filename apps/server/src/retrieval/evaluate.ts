@@ -23,25 +23,52 @@ import {
 } from "@skillcdn/reader";
 import * as z from "zod";
 
-// The retrieval evaluation set (ADR-0063): questions with the sections that answer them, asked
-// of the document-pack fixture, and the numbers a search is held to. A change to the word rules,
-// to the ranking or, later, to a model is measured here, by the same reads an agent makes.
+// The retrieval evaluation sets (ADR-0063): questions with the sections that answer them, asked
+// of the document-pack fixture and of the multilingual-pack fixture, and the numbers a search is
+// held to. A change to the word rules, to the ranking or to a model is measured here, by the same
+// reads an agent makes.
 
+/** The first set: the handbook of a fictional product in English and of an office in Korean. */
 export const RETRIEVAL_SET_PATH = fileURLToPath(
   new URL("../../fixtures/retrieval/questions.json", import.meta.url),
 );
 export const DOCUMENT_PACK_PATH = fileURLToPath(
   new URL("../../fixtures/.repositories/document-pack/", import.meta.url),
 );
+/**
+ * The second set: the library of an invented federation in six languages, in the vocabulary of
+ * research and defense documents, with questions in other words than the document, in another
+ * language than it, and with a term of it verbatim.
+ */
+export const MULTILINGUAL_SET_PATH = fileURLToPath(
+  new URL("../../fixtures/retrieval/multilingual-questions.json", import.meta.url),
+);
+export const MULTILINGUAL_PACK_PATH = fileURLToPath(
+  new URL("../../fixtures/.repositories/multilingual-pack/", import.meta.url),
+);
 
+/** A language tag as the sets write one: `en`, `ko`, `pt-BR`. */
+const languageSchema = z.string().regex(/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3}$/);
 const answerSchema = z.object({
   path: z.string().min(1),
   heading: z.array(z.string()),
+  /** The language the answering document is written in, when it is not the question's. */
+  language: languageSchema.optional(),
 });
+/**
+ * How a question is written: in other words than the document (`paraphrase`), in another
+ * language than the document (`cross`), or with a term of the document verbatim, a code or a
+ * number (`exact-term`), which the words should win and the fusion must not lose.
+ */
+export const QUESTION_KINDS = ["paraphrase", "cross", "exact-term"] as const;
+export type QuestionKind = (typeof QUESTION_KINDS)[number];
 const questionSchema = z.object({
   id: z.string().min(1),
-  language: z.enum(["en", "ko"]),
+  language: languageSchema,
   query: z.string().min(1),
+  kind: z.enum(QUESTION_KINDS).optional(),
+  /** The domain of the documents asked, as a set groups them (`research`, `defense`). */
+  domain: z.string().min(1).optional(),
   answers: z.array(answerSchema).min(1),
 });
 const retrievalSetSchema = z.object({
@@ -63,7 +90,12 @@ export const RETRIEVAL_PAGE = 5;
 /** What one search answered, as the numbers are taken from it. */
 export interface RetrievalOutcome {
   readonly id: string;
-  readonly language: "en" | "ko";
+  /** The language the question is written in. */
+  readonly language: string;
+  readonly kind: QuestionKind | undefined;
+  readonly domain: string | undefined;
+  /** The languages of the answering documents; the question's where the set does not say. */
+  readonly documentLanguages: readonly string[];
   /** The answering document is the first result. */
   readonly fileAt1: boolean;
   /** An answering document is on the page. */
@@ -110,10 +142,30 @@ export function scoreQuestion(question: RetrievalQuestion, result: FindResult): 
   return {
     id: question.id,
     language: question.language,
+    kind: question.kind,
+    domain: question.domain,
+    documentLanguages: [
+      ...new Set(question.answers.map((answer) => answer.language ?? question.language)),
+    ],
     fileAt1: answering === 0,
     fileAt5: answering >= 0,
     sectionAt1: sectionAt(1),
     sectionAt2: sectionAt(2),
+  };
+}
+
+/** The numbers over the given outcomes. */
+function scoreOutcomes(outcomes: readonly RetrievalOutcome[]): RetrievalScore {
+  const share = (pick: (outcome: RetrievalOutcome) => boolean): number =>
+    outcomes.length === 0 ? 0 : outcomes.filter(pick).length / outcomes.length;
+  return {
+    questions: outcomes.length,
+    fileAt1: share((outcome) => outcome.fileAt1),
+    fileAt5: share((outcome) => outcome.fileAt5),
+    sectionAt1: share((outcome) => outcome.sectionAt1),
+    sectionAt2: share((outcome) => outcome.sectionAt2),
+    missed: outcomes.filter((outcome) => !outcome.fileAt5).map((outcome) => outcome.id),
+    outcomes,
   };
 }
 
@@ -126,46 +178,70 @@ export async function evaluateRetrieval(
   for (const question of set.questions) {
     outcomes.push(scoreQuestion(question, await find(question)));
   }
-  const share = (pick: (outcome: RetrievalOutcome) => boolean): number =>
-    outcomes.length === 0 ? 0 : outcomes.filter(pick).length / outcomes.length;
-  return {
-    questions: outcomes.length,
-    fileAt1: share((outcome) => outcome.fileAt1),
-    fileAt5: share((outcome) => outcome.fileAt5),
-    sectionAt1: share((outcome) => outcome.sectionAt1),
-    sectionAt2: share((outcome) => outcome.sectionAt2),
-    missed: outcomes.filter((outcome) => !outcome.fileAt5).map((outcome) => outcome.id),
-    outcomes,
-  };
+  return scoreOutcomes(outcomes);
 }
 
-/** The score of the questions in one language, from a score over every language. */
-export function scoreOfLanguage(score: RetrievalScore, language: "en" | "ko"): RetrievalScore {
-  const outcomes = score.outcomes.filter((outcome) => outcome.language === language);
-  const share = (pick: (outcome: RetrievalOutcome) => boolean): number =>
-    outcomes.length === 0 ? 0 : outcomes.filter(pick).length / outcomes.length;
-  return {
-    questions: outcomes.length,
-    fileAt1: share((outcome) => outcome.fileAt1),
-    fileAt5: share((outcome) => outcome.fileAt5),
-    sectionAt1: share((outcome) => outcome.sectionAt1),
-    sectionAt2: share((outcome) => outcome.sectionAt2),
-    missed: outcomes.filter((outcome) => !outcome.fileAt5).map((outcome) => outcome.id),
-    outcomes,
-  };
+/** The score of the questions `pick` chooses, from a score over the whole set. */
+export function scoreOf(
+  score: RetrievalScore,
+  pick: (outcome: RetrievalOutcome) => boolean,
+): RetrievalScore {
+  return scoreOutcomes(score.outcomes.filter(pick));
 }
 
-/** The numbers as a table for a person, one row per language and one for all. */
+/** The score of the questions written in one language. */
+export function scoreOfLanguage(score: RetrievalScore, language: string): RetrievalScore {
+  return scoreOf(score, (outcome) => outcome.language === language);
+}
+
+/** The distinct values among the outcomes, in the order the set has them. */
+const distinct = (values: readonly (string | undefined)[]): string[] => [
+  ...new Set(values.filter((value): value is string => value !== undefined)),
+];
+
+/**
+ * The numbers as a table for a person: a row per language the questions are written in, then,
+ * where the set says them, per kind of question, per domain and, for the questions in another
+ * language than their document, per language of the document reached; and one row for all.
+ */
 export function formatRetrievalReport(score: RetrievalScore): string {
   const percent = (value: number): string => `${Math.round(value * 100)}%`;
   const row = (label: string, part: RetrievalScore): string =>
-    `${label.padEnd(8)} ${String(part.questions).padStart(3)}  ${percent(part.fileAt1).padStart(7)} ${percent(part.fileAt5).padStart(7)} ${percent(part.sectionAt1).padStart(10)} ${percent(part.sectionAt2).padStart(10)}`;
-  const lines = [
-    `${"".padEnd(8)}   n   file@1  file@5  section@1  section@2`,
-    row("en", scoreOfLanguage(score, "en")),
-    row("ko", scoreOfLanguage(score, "ko")),
-    row("all", score),
-  ];
+    `${label.padEnd(12)} ${String(part.questions).padStart(3)}  ${percent(part.fileAt1).padStart(7)} ${percent(part.fileAt5).padStart(7)} ${percent(part.sectionAt1).padStart(10)} ${percent(part.sectionAt2).padStart(10)}`;
+  const outcomes = score.outcomes;
+  const lines = [`${"".padEnd(12)}   n   file@1  file@5  section@1  section@2`];
+  for (const language of distinct(outcomes.map((outcome) => outcome.language))) {
+    lines.push(row(language, scoreOfLanguage(score, language)));
+  }
+  for (const kind of distinct(outcomes.map((outcome) => outcome.kind))) {
+    lines.push(
+      row(
+        kind,
+        scoreOf(score, (outcome) => outcome.kind === kind),
+      ),
+    );
+  }
+  for (const domain of distinct(outcomes.map((outcome) => outcome.domain))) {
+    lines.push(
+      row(
+        domain,
+        scoreOf(score, (outcome) => outcome.domain === domain),
+      ),
+    );
+  }
+  const crossed = outcomes.filter((outcome) => outcome.kind === "cross");
+  for (const language of distinct(crossed.flatMap((outcome) => outcome.documentLanguages))) {
+    lines.push(
+      row(
+        `cross:${language}`,
+        scoreOf(
+          score,
+          (outcome) => outcome.kind === "cross" && outcome.documentLanguages.includes(language),
+        ),
+      ),
+    );
+  }
+  lines.push(row("all", score));
   if (score.missed.length > 0) {
     lines.push(`missed on the page: ${score.missed.join(", ")}`);
   }

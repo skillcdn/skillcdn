@@ -26,6 +26,7 @@ const FIXTURE_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "with-manifest": "What the host says, which the manifest replaces.",
   licensed: "Skills under different licenses.",
   "document-pack": "A handbook with no skill, in English and in Korean.",
+  "multilingual-pack": "A library in six languages, of research and defense documents.",
 };
 
 /**
