@@ -1,7 +1,9 @@
 import { randomBytes } from "node:crypto";
+import { eq } from "drizzle-orm";
 import { Client } from "pg";
-import { createDatabase, type Database } from "./client.js";
+import { createDatabase, type Database, drizzleOf } from "./client.js";
 import { migrateDatabase } from "./migrate.js";
+import { snapshots } from "./schema.js";
 
 // Support for integration tests, here and in other workspaces: `@skillcdn/db/testing`.
 
@@ -59,4 +61,19 @@ export async function createTestDatabase(adminUrl: string): Promise<TestDatabase
       }
     },
   };
+}
+
+/**
+ * For a test of a rebuild (ADR-0068): marks the index of a commit as written under `version` of
+ * the reading rules, which is how a deployment finds its indexes after the rules have changed.
+ */
+export async function markIndexVersion(
+  database: Database,
+  commitSha: string,
+  version: number,
+): Promise<void> {
+  await drizzleOf(database)
+    .update(snapshots)
+    .set({ indexVersion: version })
+    .where(eq(snapshots.commitSha, commitSha));
 }

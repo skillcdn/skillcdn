@@ -66,6 +66,14 @@ import { gitBlobHash, sha256Hex } from "./git-hash.js";
  */
 export const INDEX_VERSION = 11;
 
+/**
+ * The lowest version of the reading rules whose index is still served while the commit is
+ * rebuilt under `INDEX_VERSION` (ADR-0068). Raised along with `INDEX_VERSION` only when a version
+ * changes the entries in a way the reader of the new one cannot read; left where it is otherwise,
+ * so that a change of the rules takes no pack down while its commits are rebuilt.
+ */
+export const MIN_SERVABLE_INDEX_VERSION = 11;
+
 const MAX_DIAGNOSTICS = 50;
 const FETCH_CONCURRENCY = 8;
 /** With this many bodies to fetch, one archive request is cheaper than one request per file. */

@@ -73,6 +73,8 @@ export interface HarnessOptions {
   readonly indexWaitMs?: number;
   /** Commits indexed at once by this process; 0 leaves indexing to another process. */
   readonly indexConcurrency?: number;
+  /** The lowest reading-rules version served while a commit is rebuilt (ADR-0068). */
+  readonly minServableIndexVersion?: number;
   readonly entitlements?: Entitlements;
   readonly host?: FixtureHost;
   readonly trustedProxies?: readonly string[];
@@ -157,6 +159,7 @@ export function createHarness(testDatabase: TestDatabase, options: HarnessOption
         waitMs: options.indexWaitMs ?? 10_000,
         concurrency: options.indexConcurrency ?? 2,
         leaseMs: 60_000,
+        minServableIndexVersion: options.minServableIndexVersion,
         limits: {
           maxTreeEntries: 1000,
           maxIndexedFiles: 100,

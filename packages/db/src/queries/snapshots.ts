@@ -110,6 +110,30 @@ export async function getSnapshot(
 }
 
 /**
+ * The snapshot of a commit, whatever its state, without making one: `undefined` when the commit
+ * was never asked for. What answers for a ref while its newest commit's index is not ready is
+ * found this way (ADR-0068).
+ */
+export async function findSnapshotOfCommit(
+  database: Database,
+  scope: RepoScope,
+  commitSha: string,
+): Promise<SnapshotRecord | undefined> {
+  const [row] = await drizzleOf(database)
+    .select(snapshotColumns)
+    .from(snapshots)
+    .where(
+      and(
+        eq(snapshots.repoId, scope.repoId),
+        eq(snapshots.commitSha, commitSha),
+        eq(snapshots.accountId, scope.accountId),
+      ),
+    )
+    .limit(1);
+  return row;
+}
+
+/**
  * Takes the right to index a snapshot, atomically. Succeeds when nobody has started, when the
  * previous holder's lease ran out, or when a failed attempt is due for a retry. Returns
  * `undefined` when someone else holds it or there is nothing to do.

@@ -153,6 +153,12 @@ export const repoRefs = pgTable(
       .references(() => repos.id, { onDelete: "cascade" }),
     ref: text().notNull(),
     commitSha: text().notNull(),
+    /**
+     * The commit the ref was at before `commit_sha`, when that commit has an index: what answers
+     * while the index of `commit_sha` is not ready (ADR-0068). Null until the ref moves away from
+     * an indexed commit.
+     */
+    previousCommitSha: text(),
     checkedAt: instant().notNull(),
     createdAt: createdAt(),
   },

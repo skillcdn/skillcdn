@@ -52,11 +52,12 @@ export function createMountReader(options: MountReaderOptions): Reader<Mount> {
   return new Reader<Mount>({
     limits,
     index: async (mount, waitMs): Promise<IndexOutcome> => {
-      const outcome = await snapshots.ready(mount, waitMs);
+      // The commit's own index, or one served in its place while that is not ready (ADR-0068).
+      const outcome = await snapshots.serving(mount, waitMs);
       if (outcome.status !== "ready") {
         return outcome;
       }
-      const { snapshot } = outcome;
+      const { snapshot, substitute } = outcome;
       const base = createIndexStore(
         database,
         { accountId: snapshot.accountId, snapshotId: snapshot.id },
@@ -77,6 +78,7 @@ export function createMountReader(options: MountReaderOptions): Reader<Mount> {
             };
       return {
         status: "ready",
+        ...(substitute === undefined ? {} : { substitute }),
         index: {
           // A rebuilt index keeps its snapshot id, so everything cached keys on both.
           id: snapshot.id,

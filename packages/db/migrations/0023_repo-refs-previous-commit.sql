@@ -1,0 +1,1 @@
+ALTER TABLE "repo_refs" ADD COLUMN "previous_commit_sha" text;

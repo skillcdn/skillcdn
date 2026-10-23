@@ -77,6 +77,11 @@ export interface Mount extends ServedMount {
   readonly coordinates: RepoCoordinates;
   readonly repo: RepoRecord;
   readonly commit: string;
+  /**
+   * The commit the ref was at before this one, when that one has an index (ADR-0068): what the
+   * mount is served from while this commit's index is not ready. Never for a pinned commit.
+   */
+  readonly previousCommit: string | undefined;
   /** Limits that replace the configured defaults for this account. */
   readonly limits: Partial<IndexLimits>;
   /**
@@ -152,6 +157,8 @@ const PINNED_KEY = "commit:";
 interface ResolvedCommit {
   readonly commit: string;
   readonly trustedUntil: Date | undefined;
+  /** The ref's previous commit, when it has an index (ADR-0068); never for a pinned commit. */
+  readonly previous: string | undefined;
 }
 
 function refNotFound(address: Address): MountError {
@@ -284,12 +291,12 @@ export class MountService {
     }
     const { repository } = repo;
     const atHost = { host: address.host, owner: repository.owner.login, name: repository.name };
-    const commit = resolved.commit;
-    return {
+    const mount: Mount = {
       address,
       coordinates,
       repo,
-      commit,
+      commit: resolved.commit,
+      previousCommit: resolved.previous,
       limits: decision.limits ?? {},
       // Whoever vouched for the repository vouched for its default branch (ADR-0026).
       verified:
@@ -299,9 +306,16 @@ export class MountService {
       visibility: repository.visibility,
       repository: `${repository.owner.login}/${repository.name}`,
       description: repository.description,
-      sourceUrl: (path: RepoPath) => sourceFileUrl(atHost, commit, path),
-      rawUrl: (path: RepoPath) => rawFileUrl(atHost, commit, path),
+      // Named after the commit of the mount they are called on: the reader answers from another
+      // commit's index at times (ADR-0068), as a copy of the mount at that commit.
+      sourceUrl(path: RepoPath) {
+        return sourceFileUrl(atHost, this.commit, path);
+      },
+      rawUrl(path: RepoPath) {
+        return rawFileUrl(atHost, this.commit, path);
+      },
     };
+    return mount;
   }
 
   /** Whether the deployment serves the repository at all, and within which limits. */
@@ -617,15 +631,26 @@ export class MountService {
       pinned ? undefined : new Date(checkedAt.getTime() + refTtlMs);
     const age =
       cached === undefined ? undefined : clock.now().getTime() - cached.checkedAt.getTime();
+    // A pinned commit asks for itself alone: nothing answers in its place (ADR-0068).
+    const previousOf = (previous: string | null): string | undefined =>
+      pinned || previous === null ? undefined : previous;
     // A pinned commit that the host confirmed once is confirmed for good.
     if (cached !== undefined && (pinned || (age !== undefined && age < refTtlMs))) {
-      return { commit: cached.commitSha, trustedUntil: trustedUntil(cached.checkedAt) };
+      return {
+        commit: cached.commitSha,
+        trustedUntil: trustedUntil(cached.checkedAt),
+        previous: previousOf(cached.previousCommitSha),
+      };
     }
     try {
       const commit = await gitHost.resolveRef(coordinates, address.ref);
       const now = clock.now();
-      await saveCachedRef(database, scope, refKey, commit, now);
-      return { commit, trustedUntil: trustedUntil(now) };
+      const saved = await saveCachedRef(database, scope, refKey, commit, now);
+      return {
+        commit,
+        trustedUntil: trustedUntil(now),
+        previous: previousOf(saved.previousCommitSha),
+      };
     } catch (error) {
       if (!(error instanceof GitHostError)) {
         throw error;
@@ -635,7 +660,11 @@ export class MountService {
       }
       if (cached !== undefined && age !== undefined && age < refTtlMs + staleGraceMs) {
         // Served on borrowed time: nothing downstream should keep it longer than now.
-        return { commit: cached.commitSha, trustedUntil: pinned ? undefined : clock.now() };
+        return {
+          commit: cached.commitSha,
+          trustedUntil: pinned ? undefined : clock.now(),
+          previous: previousOf(cached.previousCommitSha),
+        };
       }
       throw hostUnavailable(error);
     }

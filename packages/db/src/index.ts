@@ -181,6 +181,7 @@ export {
   claimSnapshot,
   ensureSnapshot,
   failSnapshot,
+  findSnapshotOfCommit,
   getSnapshot,
   getSnapshotDiagnostics,
   releaseSnapshot,

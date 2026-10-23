@@ -235,10 +235,41 @@ describe("repositories", () => {
     await saveCachedRef(database, scope, "release/1.2", "c".repeat(40), minutes(2));
     expect(await findCachedRef(database, scope, "")).toEqual({
       commitSha: "b".repeat(40),
+      previousCommitSha: null,
       checkedAt: minutes(2),
     });
     const otherAccount = { ...scope, accountId: "00000000-0000-7000-8000-000000000000" };
     expect(await findCachedRef(database, otherAccount, "")).toBeUndefined();
+  });
+
+  it("remembers the commit a ref moves away from when that commit has an index (ADR-0068)", async () => {
+    const repo = await saveRepository(
+      database,
+      { host: "gh", owner: "acme", repo: "previous" },
+      hostRepository(),
+      T0,
+    );
+    const scope = { accountId: repo.accountId, repoId: repo.id };
+    const [a, b, c] = ["a".repeat(40), "b".repeat(40), "c".repeat(40)];
+    await saveCachedRef(database, scope, "main", a, T0);
+    // Away from a commit that was never indexed: nothing that could answer in its place.
+    expect(
+      (await saveCachedRef(database, scope, "main", b, minutes(1))).previousCommitSha,
+    ).toBeNull();
+    await ensureSnapshot(database, scope, b, 1, minutes(1));
+    await drizzleOf(database)
+      .update(snapshots)
+      .set({ indexVersion: 1 })
+      .where(eq(snapshots.commitSha, b));
+    expect((await saveCachedRef(database, scope, "main", c, minutes(2))).previousCommitSha).toBe(b);
+    // Away from a commit that has no index, the one remembered stays; the same commit again changes nothing.
+    expect((await saveCachedRef(database, scope, "main", a, minutes(3))).previousCommitSha).toBe(b);
+    expect((await saveCachedRef(database, scope, "main", a, minutes(4))).previousCommitSha).toBe(b);
+    expect(await findCachedRef(database, scope, "main")).toEqual({
+      commitSha: a,
+      previousCommitSha: b,
+      checkedAt: minutes(4),
+    });
   });
 
   it("is found by the host's id, alone or with the others of its account", async () => {
@@ -292,6 +323,7 @@ describe("repositories", () => {
     );
     expect(await findCachedRef(database, scope, "")).toEqual({
       commitSha: "a".repeat(40),
+      previousCommitSha: null,
       checkedAt: minutes(5),
     });
     expect((await findCachedRef(database, scope, "v1"))?.checkedAt).toEqual(minutes(2));

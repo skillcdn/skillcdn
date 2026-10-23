@@ -377,6 +377,11 @@ export interface Config {
     readonly concurrency: number;
     readonly leaseMs: number;
     readonly limits: IndexLimits;
+    /**
+     * The lowest version of the reading rules served while a commit's index is rebuilt
+     * (ADR-0068): the indexer's floor unless a test says otherwise; no variable sets it.
+     */
+    readonly minServableIndexVersion?: number | undefined;
   };
   /**
    * The search by meaning, where a deployment turns it on (ADR-0064, ADR-0065): the servers that

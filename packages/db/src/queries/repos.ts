@@ -1,7 +1,7 @@
 import type { GitHostKey, HostRepository } from "@skillcdn/core";
 import { and, eq, gt, lt, sql } from "drizzle-orm";
 import { type Database, drizzleOf } from "../client.js";
-import { accounts, missingRepos, repoAliases, repoRefs, repos } from "../schema.js";
+import { accounts, missingRepos, repoAliases, repoRefs, repos, snapshots } from "../schema.js";
 
 export interface RepoRecord {
   readonly id: string;
@@ -338,6 +338,11 @@ export async function deleteStaleMissingRepos(database: Database, before: Date):
 
 export interface CachedRef {
   readonly commitSha: string;
+  /**
+   * The commit the ref was at before, when that commit has an index: what answers while the
+   * index of `commitSha` is not ready (ADR-0068); null until the ref moved away from one.
+   */
+  readonly previousCommitSha: string | null;
   readonly checkedAt: Date;
 }
 
@@ -348,7 +353,11 @@ export async function findCachedRef(
   ref: string,
 ): Promise<CachedRef | undefined> {
   const [row] = await drizzleOf(database)
-    .select({ commitSha: repoRefs.commitSha, checkedAt: repoRefs.checkedAt })
+    .select({
+      commitSha: repoRefs.commitSha,
+      previousCommitSha: repoRefs.previousCommitSha,
+      checkedAt: repoRefs.checkedAt,
+    })
     .from(repoRefs)
     .where(
       and(
@@ -361,18 +370,31 @@ export async function findCachedRef(
   return row;
 }
 
+/**
+ * Remembers where a ref was seen. When the ref moves away from a commit that has an index, that
+ * commit is kept as the ref's previous one, to answer while the new commit's index is not ready
+ * (ADR-0068); a move away from a commit that has none keeps the previous one there was.
+ */
 export async function saveCachedRef(
   database: Database,
   scope: RepoScope,
   ref: string,
   commitSha: string,
   now: Date,
-): Promise<void> {
-  await drizzleOf(database)
+): Promise<Pick<CachedRef, "previousCommitSha">> {
+  const indexed = sql`exists (select 1 from ${snapshots} where ${snapshots.repoId} = ${repoRefs.repoId} and ${snapshots.commitSha} = ${repoRefs.commitSha} and ${snapshots.indexVersion} > 0)`;
+  const [row] = await drizzleOf(database)
     .insert(repoRefs)
     .values({ accountId: scope.accountId, repoId: scope.repoId, ref, commitSha, checkedAt: now })
     .onConflictDoUpdate({
       target: [repoRefs.repoId, repoRefs.ref],
-      set: { commitSha, checkedAt: now, accountId: sql`excluded.account_id` },
-    });
+      set: {
+        commitSha,
+        checkedAt: now,
+        accountId: sql`excluded.account_id`,
+        previousCommitSha: sql`case when ${repoRefs.commitSha} <> excluded.commit_sha and ${indexed} then ${repoRefs.commitSha} else ${repoRefs.previousCommitSha} end`,
+      },
+    })
+    .returning({ previousCommitSha: repoRefs.previousCommitSha });
+  return { previousCommitSha: row?.previousCommitSha ?? null };
 }
