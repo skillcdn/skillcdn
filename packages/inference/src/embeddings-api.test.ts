@@ -181,6 +181,23 @@ describe("the embeddings API adapter", () => {
     }
   });
 
+  it("says what shape an answer that is not embeddings had, and never what it said", async () => {
+    const replies = [
+      json({ error: "nothing", detail: "secret text" }),
+      json([1, 2, 3]),
+      json("a plain string"),
+    ];
+    const { fetchLike } = serving((_seen, nth) => replies[nth - 1] ?? json({}));
+    const embedder = api(fetchLike);
+    await expect(embedder.embed(["a"], "document")).rejects.toThrow(
+      "something other than embeddings: an object with keys error, detail",
+    );
+    const list = embedder.embed(["a"], "document");
+    await expect(list).rejects.toThrow("an array of 3, the first a number");
+    await expect(list).rejects.not.toThrow("secret");
+    await expect(embedder.embed(["a"], "document")).rejects.toThrow("a string of 14 characters");
+  });
+
   it("takes vectors without an index in the order they come", async () => {
     const { fetchLike } = serving(() =>
       json({ data: [{ embedding: vector(0) }, { embedding: vector(1) }] }),

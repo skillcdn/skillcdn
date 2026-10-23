@@ -46,6 +46,27 @@ export function isTransientInferenceError(error: unknown): boolean {
 }
 
 /** Cuts a text to `max` characters, never through a surrogate pair. */
+/**
+ * The shape of an answer that is not what was expected, for the message of the error that says
+ * so: its type, how many items or characters it has, and the names of its keys, never a value.
+ * An inference server that answers something else now and then is found by what it answered.
+ */
+export function describeShape(value: unknown): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) {
+    return `an array of ${value.length}${value.length === 0 ? "" : `, the first ${describeShape(value[0])}`}`;
+  }
+  if (typeof value === "object") {
+    const keys = Object.keys(value);
+    const shown = keys.slice(0, 8).join(", ");
+    return keys.length === 0
+      ? "an object with no keys"
+      : `an object with keys ${shown}${keys.length > 8 ? ` and ${keys.length - 8} more` : ""}`;
+  }
+  if (typeof value === "string") return `a string of ${value.length} characters`;
+  return `a ${typeof value}`;
+}
+
 export function cutText(text: string, max: number): string {
   if (text.length <= max) {
     return text;
@@ -276,8 +297,13 @@ export async function postJson(call: InferenceCall, body: unknown): Promise<unkn
   try {
     return JSON.parse(text) as unknown;
   } catch (error) {
-    throw new InferenceError("inference_malformed", "the inference server did not answer JSON", {
-      cause: error,
-    });
+    // What it answered instead is described by its type and size, never quoted: a proxy's error
+    // page or a stream of another shape is found by that much.
+    const type = response.headers.get("content-type") ?? "no content type";
+    throw new InferenceError(
+      "inference_malformed",
+      `the inference server did not answer JSON (${type}, ${text.length} characters)`,
+      { cause: error },
+    );
   }
 }

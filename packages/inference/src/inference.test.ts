@@ -232,6 +232,13 @@ describe("postJson", () => {
       {},
     );
     await expect(codeOf(text)).resolves.toBe("inference_malformed");
+    // What was answered instead is described by its type and size, never quoted.
+    await expect(
+      postJson(
+        call(async () => new Response("<html>away</html>", { status: 200 })),
+        {},
+      ),
+    ).rejects.toThrow("did not answer JSON (text/plain;charset=UTF-8, 17 characters)");
     const long = postJson(
       call(async () => json({ pad: "y".repeat(2000) })),
       {},

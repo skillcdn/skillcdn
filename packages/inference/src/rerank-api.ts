@@ -5,6 +5,7 @@ import {
   createBreaker,
   createGate,
   cutText,
+  describeShape,
   type FetchLike,
   InferenceError,
   postJson,
@@ -98,7 +99,7 @@ export function createRerankApi(options: RerankApiOptions): Reranker {
       );
       const parsed = replySchema.safeParse(reply);
       if (!parsed.success) {
-        throw malformed("something other than scores");
+        throw malformed(`something other than scores: ${describeShape(reply)}`);
       }
       const items = Array.isArray(parsed.data) ? parsed.data : parsed.data.results;
       const scores: (number | undefined)[] = Array.from(candidates, () => undefined);

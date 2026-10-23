@@ -617,6 +617,33 @@ describe("the worker", () => {
     expect(sent).toHaveLength(2);
   });
 
+  it("says the snapshot is being embedded before its first slice has written a body", async () => {
+    // Under a key of its own, on a snapshot the tests above indexed: the worker's own embedding of
+    // it, under its key, is not in the way, and nothing new joins what the sweep counts.
+    const key: VectorKey = { ...KEY, model: "first-slice-embedding" };
+    const failing = fakeEmbedder(4);
+    failing.fail(new InferenceError("inference_unreachable", "the server is away"));
+    const scope = await snapshotOf("single-skill");
+    const deps = {
+      database: testDatabase.database,
+      blobs: createBlobStore(testDatabase.database),
+      embedder: { ...failing.embedder, model: key.model },
+      policy: { scope: "all" as const, entitlements: allowEverything },
+      usage: discardUsage,
+      clock,
+      logger,
+    };
+    const job = { ...scope, commitSha: fixtureCommits().main, key, reason: "backfill" as const };
+    expect(await getSnapshotEmbedding(testDatabase.database, scope, key)).toBeUndefined();
+    await expect(embedSnapshotSlice(deps, job)).rejects.toThrow("the server is away");
+    // The slice wrote nothing, and the snapshot already says it is being embedded.
+    expect(await getSnapshotEmbedding(testDatabase.database, scope, key)).toMatchObject({
+      bodies: 0,
+      sections: 0,
+      completedAt: null,
+    });
+  });
+
   it("reported nothing wrong from the queue", () => {
     expect(queueErrors).toEqual([]);
   });

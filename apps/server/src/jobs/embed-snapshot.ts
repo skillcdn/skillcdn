@@ -194,6 +194,18 @@ export async function embedSnapshotSlice(
     key,
     entries.map((entry) => entry.blobSha),
   );
+  // The first slice says at once that the snapshot is being embedded, before a body is written:
+  // a slice of hundreds of sections takes minutes on a CPU, and until it ended the page and the
+  // instructions showed no embedding at all. The counts stay at zero until the slice adds its own.
+  if (job.after === undefined && missing.size > 0) {
+    await recordSnapshotEmbedding(
+      database,
+      scope,
+      key,
+      { bodies: 0, sections: 0, tokens: 0, bytes: 0, completed: false },
+      clock.now(),
+    );
+  }
   const day = usageDayOf(clock.now());
   const soFar = await embeddedSoFar(deps, job, key, decision.limits, day);
   const limit = deps.sliceSections ?? SLICE_SECTIONS;

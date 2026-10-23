@@ -5,6 +5,7 @@ import {
   createBreaker,
   createGate,
   cutText,
+  describeShape,
   type FetchLike,
   InferenceError,
   postJson,
@@ -158,7 +159,7 @@ export function createEmbeddingsApi(options: EmbeddingsApiOptions): Embedder {
       );
       const parsed = replySchema.safeParse(reply);
       if (!parsed.success) {
-        throw malformed("something other than embeddings");
+        throw malformed(`something other than embeddings: ${describeShape(reply)}`);
       }
       const vectors: (Float32Array | undefined)[] = Array.from(texts, () => undefined);
       for (const [position, item] of parsed.data.data.entries()) {
