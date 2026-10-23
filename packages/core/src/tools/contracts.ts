@@ -116,6 +116,31 @@ export const getSkillTool: ToolContract<typeof getSkillInputSchema> = {
     "Load an exact SKILL.md path with inherited rules and required files, assembled as one document. Follow nextCursor until complete before applying it. Read optional supporting files with read_repo_file only when needed.",
   inputSchema: getSkillInputSchema,
 };
+/** How many results a search across packs answers unless told otherwise, and at most. */
+export const HUB_DEFAULT_LIMIT = 10;
+export const HUB_MAX_LIMIT = 20;
+
+export const searchPacksInputSchema = z.object({
+  query: z
+    .string()
+    .min(1)
+    .max(MAX_QUERY_LENGTH)
+    .refine((value) => value.trim().length > 0),
+  limit: z.number().int().min(1).max(HUB_MAX_LIMIT).optional(),
+});
+
+/**
+ * The one tool of a deployment's root (ADR-0070): a search across every public pack it serves,
+ * answering the packs to connect to for the rest.
+ */
+export const searchPacksTool: ToolContract<typeof searchPacksInputSchema> = {
+  name: "search_packs",
+  title: "Search every pack",
+  description:
+    "Search words, and meaning where this deployment has it, across every public pack it serves: skills and documents, each with the address of its pack. Connect to a pack's address for browse_repo, search_repo, load_skill and read_repo_file. Original content, usually English; display translations are excluded.",
+  inputSchema: searchPacksInputSchema,
+};
+
 export const TOOL_NAMES = [
   browseTool.name,
   searchTool.name,

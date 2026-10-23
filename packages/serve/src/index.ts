@@ -1,5 +1,6 @@
 // Public surface of @skillcdn/serve. Other workspaces import from this entry point only.
 
+export { createHubServer, type HubServerOptions } from "./hub.js";
 export {
   createLocalApp,
   type Listening,

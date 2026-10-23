@@ -524,8 +524,11 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
             references: referencesOf(entry.path, text),
             ...(manifest.language === undefined ? {} : { language: manifest.language }),
             // Stored only when it says something: the documents under it are searched by words
-            // alone, and their text is not embedded (ADR-0064).
-            ...(manifest.search.meaning ? {} : { search: { meaning: false } }),
+            // alone, and their text is not embedded (ADR-0064), or the repository stays out of
+            // the search across every pack (ADR-0070).
+            ...(manifest.search.meaning && manifest.search.hub
+              ? {}
+              : { search: { meaning: manifest.search.meaning, hub: manifest.search.hub } }),
             ...(storedTranslations(manifest.translations) === undefined
               ? {}
               : { translations: storedTranslations(manifest.translations) }),

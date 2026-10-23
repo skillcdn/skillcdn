@@ -37,6 +37,7 @@ import {
 } from "@skillcdn/core";
 import { type Database, getSchemaStatus, type UserRecord } from "@skillcdn/db";
 import { type Reader, ReaderInputError } from "@skillcdn/reader";
+import { createHubServer } from "@skillcdn/serve";
 import { type Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
@@ -63,9 +64,11 @@ import type { LegalDocuments } from "../operator/legal.js";
 import type { OperatorLists } from "../operator/lists.js";
 import type { Showcase } from "../operator/showcase.js";
 import { OwnerNotFoundError, type OwnerService } from "../owners/owner-service.js";
+import type { HubSearch } from "../search/hub.js";
 import type { SocialCards } from "../social/cards.js";
 import { type PictureFetcher, rasterImageType } from "../social/pictures.js";
 import { UsageReads } from "../stats/usage-reads.js";
+import { SERVER_NAME, SERVER_VERSION } from "../version.js";
 import { purgeByAddress, registerAdmin } from "./admin.js";
 import { registerAuth } from "./auth.js";
 import type { ClientAddressResolver } from "./client-address.js";
@@ -105,6 +108,8 @@ export interface AppDependencies {
   readonly database: Database;
   /** Signing in and what stands on it. Left out, nobody signs in and every request is nobody's. */
   readonly auth: AppAuth | undefined;
+  /** The search across every pack (ADR-0070), at the root and on the REST API; left out, neither is there. */
+  readonly hub: HubSearch | undefined;
   /**
    * The git host's events and what applies them (ADR-0038). Left out, the deployment receives
    * none, and what it remembers ends when its time is up.
@@ -532,6 +537,7 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
     reader,
     logger,
     mountAt,
+    hub: dependencies.hub,
     hooks: usageHooksOf(tools),
     mountOf: async (address) => {
       try {
@@ -958,6 +964,72 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
       maxAge: CORS_MAX_AGE_SECONDS,
     }),
   );
+
+  // The root of the deployment is an MCP server too (ADR-0070): the search across every pack,
+  // for whatever is not a page. A browser's GET stays the landing page, below; the MCP transport
+  // posts, deletes, and gets a stream it asks for by name.
+  const { hub } = dependencies;
+  if (hub !== undefined) {
+    const hubMcp = createMcpHandler(
+      async (context) => {
+        const request = context.requestInfo;
+        return createHubServer({
+          search: (query, limit) => hub.search(query, limit),
+          packs: () => hub.packs(),
+          server: { name: SERVER_NAME, version: SERVER_VERSION },
+          logger,
+          origin: request === undefined ? undefined : originOf(request.url),
+        });
+      },
+      { onerror: (error) => logger.warn({ err: error }, "mcp handler error at the root") },
+    );
+    app.all(
+      "/",
+      bodyLimit({
+        maxSize: MAX_REQUEST_BYTES,
+        onError: (c) =>
+          c.json(errorBody("request.too_large", "The request body is too large."), 413),
+      }),
+      async (c, next) => {
+        const method = c.req.method;
+        const accept = (c.req.header("accept") ?? "").toLowerCase();
+        const isMcp =
+          method === "POST" ||
+          method === "DELETE" ||
+          (method === "GET" && accept.includes("text/event-stream"));
+        if (!isMcp) {
+          await next();
+          return;
+        }
+        let body: string | undefined;
+        if (method === "POST") {
+          body = await c.req.text();
+          if (/^\s*\[/.test(body)) {
+            return c.json(
+              {
+                jsonrpc: "2.0",
+                id: null,
+                error: { code: -32600, message: "JSON-RPC batches are not supported." },
+              },
+              400,
+            );
+          }
+        }
+        const headers = new Headers(c.req.raw.headers);
+        headers.delete("authorization");
+        const response = await hubMcp.fetch(
+          new Request(c.req.raw.url, {
+            method,
+            headers,
+            signal: c.req.raw.signal,
+            ...(body === undefined ? {} : { body }),
+          }),
+        );
+        response.headers.set("cache-control", "no-store");
+        return response;
+      },
+    );
+  }
 
   app.all(
     "/gh/*",

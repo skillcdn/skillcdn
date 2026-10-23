@@ -56,7 +56,7 @@ export function supportsSectionVectors(database: Database): Promise<boolean> {
   return present(drizzleOf(database));
 }
 
-const underKey = (key: VectorKey) =>
+export const underKey = (key: VectorKey) =>
   and(
     eq(sectionVectors.model, key.model),
     eq(sectionVectors.dimensions, key.dimensions),
@@ -64,7 +64,7 @@ const underKey = (key: VectorKey) =>
   );
 
 /** The text form the extension reads. A value that is not a number has no place in a vector. */
-function vectorLiteral(vector: Float32Array): string {
+export function vectorLiteral(vector: Float32Array): string {
   const parts: string[] = [];
   for (const value of vector) {
     if (!Number.isFinite(value)) {

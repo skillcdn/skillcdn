@@ -46,6 +46,11 @@ export type RepoImage =
  */
 export interface RepoSearch {
   readonly meaning: boolean;
+  /**
+   * Whether the repository is found by a search across every pack the deployment serves
+   * (ADR-0070); `false` keeps it to searches of its own address. Read from the root manifest.
+   */
+  readonly hub: boolean;
 }
 
 export interface RepoManifest {
@@ -175,11 +180,12 @@ export function parseRepoManifest(text: string): Result<ParsedRepoManifest, Repo
   });
 }
 
-const SEARCH_ALL: RepoSearch = { meaning: true };
+const SEARCH_ALL: RepoSearch = { meaning: true, hub: true };
 
 /**
  * The `search` field: a mapping whose `meaning` is `false` turns the search by meaning off for the
- * documents this manifest governs. Anything else is reported and leaves the search as it is.
+ * documents this manifest governs, and whose `hub` is `false` keeps the repository out of the
+ * search across every pack (ADR-0070). Anything else is reported and leaves the search as it is.
  */
 function readSearch(value: unknown, ignored: (message: string) => void): RepoSearch {
   if (value === undefined || value === null) {
@@ -189,15 +195,22 @@ function readSearch(value: unknown, ignored: (message: string) => void): RepoSea
     ignored('"search" is ignored: expected a mapping such as "meaning: false"');
     return SEARCH_ALL;
   }
-  const meaning = value.get("meaning");
-  if (meaning === undefined || meaning === null || meaning === true || meaning === "true") {
-    return SEARCH_ALL;
+  return {
+    meaning: readSearchFlag(value.get("meaning"), "meaning", ignored),
+    hub: readSearchFlag(value.get("hub"), "hub", ignored),
+  };
+}
+
+/** One flag of the `search` mapping: on unless written `false`; anything else is reported and on. */
+function readSearchFlag(value: unknown, name: string, ignored: (message: string) => void): boolean {
+  if (value === undefined || value === null || value === true || value === "true") {
+    return true;
   }
-  if (meaning === false || meaning === "false") {
-    return { meaning: false };
+  if (value === false || value === "false") {
+    return false;
   }
-  ignored('"search.meaning" is ignored: expected true or false');
-  return SEARCH_ALL;
+  ignored(`"search.${name}" is ignored: expected true or false`);
+  return true;
 }
 
 /**

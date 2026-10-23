@@ -159,6 +159,7 @@ describe("repository publication and link indexing", () => {
     expect(result.byPath.get("SKILLCDN.md")?.frontMatter?.search).toBeUndefined();
     expect(result.byPath.get("docs/private/SKILLCDN.md")?.frontMatter?.search).toEqual({
       meaning: false,
+      hub: true,
     });
     // The documents themselves are indexed as before: what is embedded is decided later.
     expect(result.byPath.get("docs/private/notes.md")?.search).toContain("'word'");

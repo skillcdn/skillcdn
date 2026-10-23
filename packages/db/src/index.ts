@@ -65,6 +65,16 @@ export {
   servedEntries,
 } from "./queries/entries.js";
 export {
+  countHubLexemes,
+  type HubEntryRecord,
+  type HubSectionMatch,
+  isStatementTimeout,
+  listSearchablePacks,
+  type SearchablePack,
+  searchHubEntries,
+  searchHubSectionVectors,
+} from "./queries/hub.js";
+export {
   listOperatorImages,
   type OperatorImageInput,
   type OperatorImageRecord,

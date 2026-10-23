@@ -97,6 +97,9 @@ const cidrList = z
     return networks;
   });
 
+/** The search across packs as it runs with nothing configured: on, and bounded in time. */
+export const HUB_DEFAULTS: HubConfig = { enabled: true, timeoutMs: 2000, candidates: 50 };
+
 const environmentSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("production"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
@@ -215,6 +218,9 @@ const environmentSchema = z.object({
   RERANKER_TIMEOUT_MS: integer(5000, 100, 60_000),
   RERANKER_CONCURRENCY: integer(2, 1, 64),
   RERANKER_CANDIDATES: integer(10, 1, 32),
+  HUB_SEARCH: flag(HUB_DEFAULTS.enabled),
+  HUB_SEARCH_TIMEOUT_MS: integer(HUB_DEFAULTS.timeoutMs, 100, 60_000),
+  HUB_SEARCH_CANDIDATES: integer(HUB_DEFAULTS.candidates, 5, 200),
 });
 
 export interface WebTags {
@@ -391,6 +397,17 @@ export interface Config {
     readonly embeddings: EmbeddingsConfig | undefined;
     readonly reranker: RerankerConfig | undefined;
   };
+  /** The search across every pack the deployment serves (ADR-0070). */
+  readonly hub: HubConfig;
+}
+
+export interface HubConfig {
+  /** Whether the root of the deployment searches across every public pack; off, the route and the server are not there. */
+  readonly enabled: boolean;
+  /** How long each statement over every pack may take before the database cancels it. */
+  readonly timeoutMs: number;
+  /** How many entries the words, and the meaning, each bring to the fusion of a search. */
+  readonly candidates: number;
 }
 
 export class ConfigError extends Error {
@@ -639,6 +656,11 @@ export function loadConfig(
       limits: limits.value,
     },
     meaning,
+    hub: {
+      enabled: env.HUB_SEARCH,
+      timeoutMs: env.HUB_SEARCH_TIMEOUT_MS,
+      candidates: env.HUB_SEARCH_CANDIDATES,
+    },
   };
 }
 

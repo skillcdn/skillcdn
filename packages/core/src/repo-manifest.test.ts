@@ -56,19 +56,33 @@ describe("parseRepoManifest", () => {
   it("searches by meaning unless told not to, and reports a search field it cannot read", () => {
     expect(parsed("---\ndescription: Playbooks.\n---\n").manifest.search).toEqual({
       meaning: true,
+      hub: true,
     });
     expect(
       parsed("---\ndescription: Playbooks.\nsearch:\n  meaning: false\n---\n").manifest.search,
-    ).toEqual({ meaning: false });
+    ).toEqual({ meaning: false, hub: true });
     expect(
       parsed("---\ndescription: Playbooks.\nsearch:\n  meaning: true\n---\n").manifest.search,
-    ).toEqual({ meaning: true });
+    ).toEqual({ meaning: true, hub: true });
     const odd = parsed("---\ndescription: Playbooks.\nsearch: off\n---\n");
-    expect(odd.manifest.search).toEqual({ meaning: true });
+    expect(odd.manifest.search).toEqual({ meaning: true, hub: true });
     expect(odd.warnings.map((warning) => warning.code)).toEqual(["ignored_field"]);
     const odder = parsed("---\ndescription: Playbooks.\nsearch:\n  meaning: maybe\n---\n");
-    expect(odder.manifest.search).toEqual({ meaning: true });
+    expect(odder.manifest.search).toEqual({ meaning: true, hub: true });
     expect(odder.warnings).toHaveLength(1);
+  });
+
+  it("stays out of the search across every pack when told so (ADR-0070)", () => {
+    expect(
+      parsed("---\ndescription: Playbooks.\nsearch:\n  hub: false\n---\n").manifest.search,
+    ).toEqual({ meaning: true, hub: false });
+    expect(
+      parsed("---\ndescription: Playbooks.\nsearch:\n  hub: false\n  meaning: false\n---\n")
+        .manifest.search,
+    ).toEqual({ meaning: false, hub: false });
+    const odd = parsed("---\ndescription: Playbooks.\nsearch:\n  hub: never\n---\n");
+    expect(odd.manifest.search).toEqual({ meaning: true, hub: true });
+    expect(odd.warnings).toHaveLength(1);
   });
 
   it("needs only a description", () => {

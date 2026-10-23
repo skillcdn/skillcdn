@@ -11,6 +11,7 @@ import type { TestDatabase } from "@skillcdn/db/testing";
 import type { Hono } from "hono";
 import { pino } from "pino";
 import type { DocumentFetcher } from "../auth/oauth/document-fetch.js";
+import type { HubConfig } from "../config/config.js";
 import type { AppAuth } from "../http/app.js";
 import { parseCidr } from "../http/client-address.js";
 import type { AppEnv } from "../http/request-context.js";
@@ -75,6 +76,8 @@ export interface HarnessOptions {
   readonly indexConcurrency?: number;
   /** The lowest reading-rules version served while a commit is rebuilt (ADR-0068). */
   readonly minServableIndexVersion?: number;
+  /** The search across every pack (ADR-0070); left out, on with its defaults. */
+  readonly hub?: HubConfig;
   readonly entitlements?: Entitlements;
   readonly host?: FixtureHost;
   readonly trustedProxies?: readonly string[];
@@ -132,6 +135,7 @@ export function createHarness(testDatabase: TestDatabase, options: HarnessOption
   const { app, snapshots, lists, showcase, images, legal, auth } = createApi(
     {
       mounts: { repoTtlMs: ttlMs, refTtlMs: ttlMs },
+      hub: options.hub,
       ...(options.login === undefined
         ? {}
         : {

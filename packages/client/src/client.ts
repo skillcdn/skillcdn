@@ -30,6 +30,7 @@ import {
   type RestOwner,
   type RestRepoTokenRequest,
   type RestRepoTokens,
+  type RestSearch,
   type RestShowcase,
   type RestSkill,
   restAuthorizationDecisionSchema,
@@ -54,6 +55,7 @@ import {
   restOwnerSchema,
   restPath,
   restRepoTokensSchema,
+  restSearchSchema,
   restShowcaseSchema,
   restSkillSchema,
 } from "@skillcdn/core";
@@ -179,6 +181,8 @@ export interface SkillCdnClient {
     signal?: AbortSignal,
   ): Promise<RestFile>;
   featured(signal?: AbortSignal): Promise<RestFeatured>;
+  /** A search across every pack the deployment serves (ADR-0070): at most `limit` results. */
+  search(query: string, limit?: number, signal?: AbortSignal): Promise<RestSearch>;
   showcase(signal?: AbortSignal): Promise<RestShowcase>;
   legal(kind: LegalDocumentKind, signal?: AbortSignal): Promise<RestLegalDocument>;
   /** The page of an account, a page of its repositories. */
@@ -358,6 +362,8 @@ export function createClient(options: ClientOptions): SkillCdnClient {
         signal,
       ),
     featured: (signal) => read(REST_ROUTES.featured, restFeaturedSchema, signal),
+    search: (query, limit, signal) =>
+      read(`${REST_ROUTES.search}${queryOf({ query, limit })}`, restSearchSchema, signal),
     showcase: (signal) => read(REST_ROUTES.showcase, restShowcaseSchema, signal),
     legal: (kind, signal) => read(legalPath(kind), restLegalDocumentSchema, signal),
     owner: (owner, page, signal) =>

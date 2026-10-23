@@ -2,9 +2,13 @@ import {
   type Address,
   accountAvatarUrl,
   formatAddress,
+  HUB_DEFAULT_LIMIT,
+  HUB_MAX_LIMIT,
+  hubBody,
   type IndexNotReady,
   isLegalDocumentKind,
   type LegalDocumentKind,
+  MAX_QUERY_LENGTH,
   type MountOverview,
   parseOwnerPath,
   parseRepoPath,
@@ -19,6 +23,7 @@ import {
   mountBody as restMountBody,
   restRepoTranslations,
 } from "@skillcdn/core";
+import { isStatementTimeout } from "@skillcdn/db";
 import { type Reader, ReaderInputError } from "@skillcdn/reader";
 import { errorBody, hostFailure, registerAddressRoutes, type UsageHooks } from "@skillcdn/serve";
 import type { Context, Hono } from "hono";
@@ -26,6 +31,7 @@ import * as z from "zod";
 import type { Logger } from "../logger.js";
 import type { Mount } from "../mounts/mount-service.js";
 import { OwnerNotFoundError, type OwnerService } from "../owners/owner-service.js";
+import type { HubSearch } from "../search/hub.js";
 import type { AppEnv } from "./request-context.js";
 
 export interface RestDependencies {
@@ -43,6 +49,8 @@ export interface RestDependencies {
   readonly legal: (kind: LegalDocumentKind) => Promise<RestLegalDocument | undefined>;
   /** The pages of accounts (ADR-0037). Left out, there are none. */
   readonly owners: OwnerService | undefined;
+  /** The search across every pack (ADR-0070). Left out, the route is not there. */
+  readonly hub: HubSearch | undefined;
   /** Milliseconds from a clock that never goes backwards. */
   readonly now: () => number;
   /** What the deployment counts of the reads, as it counts the tools' (ADR-0050). */
@@ -234,6 +242,40 @@ export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies):
 
   // Empty when the operator wrote nothing: the pages then show the build's own showcase.
   app.get(REST_ROUTES.showcase, async (c) => c.json(await showcase()));
+
+  // The search across every public pack (ADR-0070): what the root's MCP server answers, as data.
+  const { hub } = dependencies;
+  if (hub !== undefined) {
+    const searchQuery = z.object({
+      query: z
+        .string()
+        .min(1)
+        .max(MAX_QUERY_LENGTH)
+        .refine((value) => value.trim().length > 0),
+      limit: z.coerce.number().int().min(1).max(HUB_MAX_LIMIT).optional(),
+    });
+    app.get(REST_ROUTES.search, async (c) => {
+      const query = queryOf(c, searchQuery);
+      if (query instanceof Response) {
+        return query;
+      }
+      c.header("cache-control", "no-store");
+      try {
+        return c.json(hubBody(await hub.search(query.query, query.limit ?? HUB_DEFAULT_LIMIT)));
+      } catch (error) {
+        if (isStatementTimeout(error)) {
+          return c.json(
+            errorBody(
+              "search.timeout",
+              "The search across packs ran out of time. Try fewer words, or again later.",
+            ),
+            503,
+          );
+        }
+        return failure(c, error);
+      }
+    });
+  }
 
   // The page of an account (ADR-0037): who it is and what it has in public, as the git host
   // says, with what is already indexed first. Asking indexes nothing.

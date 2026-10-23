@@ -48,6 +48,7 @@ import {
   type Config,
   ConfigError,
   type EmbeddingScope,
+  HUB_DEFAULTS,
 } from "../config/config.js";
 import { HostEvents } from "../events/host-events.js";
 import { type AppAuth, createApp } from "../http/app.js";
@@ -68,6 +69,7 @@ import { LegalDocuments } from "../operator/legal.js";
 import { OperatorLists } from "../operator/lists.js";
 import { Showcase } from "../operator/showcase.js";
 import { OwnerService } from "../owners/owner-service.js";
+import { createHubSearch } from "../search/hub.js";
 import { SocialCards } from "../social/cards.js";
 import { PictureFetcher } from "../social/pictures.js";
 import { noUsageStats, UsageRecorder, type UsageStats } from "../stats/usage-recorder.js";
@@ -129,6 +131,8 @@ export interface ApiPorts {
 
 export type ApiConfig = Pick<Config, "mounts" | "indexing"> & {
   readonly web?: { readonly publicUrl?: string | undefined };
+  /** The search across every pack (ADR-0070); left out, on with its defaults. */
+  readonly hub?: Config["hub"] | undefined;
   /** Left out, nobody signs in. What it needs of the git host arrives through the ports. */
   readonly auth?:
     | (Omit<AuthConfig, "github"> & {
@@ -169,6 +173,21 @@ export function createApi(
   const images = new OperatorImages({ database, clock });
   const legal = new LegalDocuments({ database, clock });
   const entitlements = createOperatorEntitlements(lists, ports.entitlements);
+  // The search across every public pack (ADR-0070), over the same embedder and reranker the
+  // mounts search by, where the operator leaves it on.
+  const hubConfig = config.hub ?? HUB_DEFAULTS;
+  const hub = hubConfig.enabled
+    ? createHubSearch({
+        database,
+        blobStore,
+        meaning: ports.meaning,
+        lists,
+        timeoutMs: hubConfig.timeoutMs,
+        candidates: hubConfig.candidates,
+        clock,
+        logger,
+      })
+    : undefined;
   // The commits this process indexes, and the snapshots a search asks for that were never
   // embedded, are queued for the worker within the scope and the entitlements (ADR-0064).
   const queue = ports.embedding?.jobs;
@@ -354,6 +373,7 @@ export function createApi(
   const app = createApp({
     database,
     auth,
+    hub,
     webhooks:
       ports.events === undefined
         ? undefined

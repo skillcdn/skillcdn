@@ -11,6 +11,8 @@ export const REST_ROUTES = {
   mounts: "/api/v1/mounts",
   browse: "/api/v1/browse",
   find: "/api/v1/find",
+  /** A search across every pack the deployment serves (ADR-0070). */
+  search: "/api/v1/search",
   skills: "/api/v1/skills",
   files: "/api/v1/files",
   featured: "/api/v1/featured",
@@ -324,6 +326,27 @@ export const restFindSchema = z.discriminatedUnion("status", [
   indexing,
   failed,
 ]);
+
+/** One result of a search across packs (ADR-0070): the item, and the pack it is in. */
+export const restHubItemSchema = z.object({
+  /** The canonical address of the pack, `/gh/<owner>/<repo>`. */
+  address: z.string(),
+  /** `owner/name` as the host spells it. */
+  repository: z.string(),
+  item: restFindItemSchema,
+});
+
+/** What `GET /api/v1/search` answers: the items that matched across the packs searched. */
+export const restSearchSchema = z.object({
+  status: z.literal("ready"),
+  query: z.string(),
+  /** How many packs were searched. */
+  packs: count,
+  items: z.array(restHubItemSchema),
+  /** Where the search by meaning is at hand: as the `find` route says it. */
+  ranking: z.optional(z.object({ meaning: z.boolean(), reranked: z.boolean() })),
+});
+export type RestSearch = z.infer<typeof restSearchSchema>;
 
 export const restSkillSchema = z.discriminatedUnion("status", [
   z.object({

@@ -121,6 +121,38 @@ describe("createClient", () => {
     ]);
   });
 
+  it("searches across every pack of the deployment at its route (ADR-0070)", async () => {
+    const answer = {
+      status: "ready",
+      query: "release notes",
+      packs: 2,
+      items: [
+        {
+          address: "/gh/acme/skills",
+          repository: "Acme/skills",
+          item: {
+            kind: "skill",
+            name: "release-notes",
+            path: "skills/release-notes/SKILL.md",
+            directory: "skills/release-notes",
+            description: "Writes the notes of a release.",
+            translations: {},
+            files: [],
+            moreFiles: 0,
+          },
+        },
+      ],
+    };
+    const { fetch, calls } = fakeFetch(() => json(answer));
+    const client = createClient({ baseUrl: "https://skillcdn.example", fetch });
+    expect(await client.search("release notes", 5)).toEqual(answer);
+    await client.search("release notes");
+    expect(calls.map((call) => call.url.slice("https://skillcdn.example".length))).toEqual([
+      "/api/v1/search?query=release+notes&limit=5",
+      "/api/v1/search?query=release+notes",
+    ]);
+  });
+
   it("turns an error answer into an ApiError with its code and what came with it", async () => {
     const { fetch } = fakeFetch((url) =>
       url.includes("/files/")

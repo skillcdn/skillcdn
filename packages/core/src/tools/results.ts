@@ -1,3 +1,4 @@
+import type { Address } from "../address.js";
 import type { LicenseFact } from "../license.js";
 import type { RepoPath } from "../repo-path.js";
 import type { OutlineHeading } from "../search/outline.js";
@@ -175,6 +176,25 @@ export interface FindRanking {
   readonly meaning: boolean;
   /** True when the first results were reranked by the reranker (ADR-0065). */
   readonly reranked: boolean;
+}
+
+/** One result of a search across the packs a deployment serves (ADR-0070): an item, and the pack it is in. */
+export interface HubItem {
+  /** The address of the pack, `/gh/<owner>/<repo>`, which an agent connects to for the rest. */
+  readonly address: Address;
+  /** `owner/name` as the host spells it. */
+  readonly repository: string;
+  readonly item: FindItem;
+}
+
+/** What a search across the packs of a deployment answers (ADR-0070). */
+export interface HubResult {
+  readonly query: string;
+  /** How many packs were searched: every public pack the deployment serves that did not opt out. */
+  readonly packs: number;
+  readonly items: readonly HubItem[];
+  /** Where the search by meaning is at hand: how the results were ranked. */
+  readonly ranking?: FindRanking | undefined;
 }
 
 export interface FindResult {

@@ -7,7 +7,9 @@ import type {
   BrowseResult,
   DirectoryResult,
   FileResult,
+  FindItem,
   FindResult,
+  HubResult,
   IndexDiagnostic,
   NewestCommit,
 } from "../tools/results.js";
@@ -16,11 +18,13 @@ import type {
   RestDiagnostic,
   RestFile,
   RestFind,
+  RestFindItem,
   RestLicense,
   RestMount,
   RestMountSearch,
   RestRepository,
   RestRepoTranslation,
+  RestSearch,
   RestSkill,
   RestSkillTranslation,
 } from "./contracts.js";
@@ -143,41 +147,59 @@ export function findBody(
     totals: result.totals ?? null,
     diagnostics: restDiagnostics(result.diagnostics),
     ...(result.ranking === undefined ? {} : { ranking: { ...result.ranking } }),
-    items: result.items.map((item) =>
-      item.kind === "skill"
-        ? {
-            kind: "skill",
-            name: item.name,
-            path: item.directory.length === 0 ? "SKILL.md" : `${item.directory}/SKILL.md`,
-            directory: item.directory,
-            description: item.description,
-            translations: restSkillTranslations(item.translations),
-            files: item.files.map((file) => ({
-              path: file.path,
-              title: file.title ?? null,
-              summary: file.summary ?? null,
-            })),
-            moreFiles: item.moreFiles,
-            ...licensing(item),
-          }
-        : {
-            kind: "document",
-            path: item.path,
-            title: item.title ?? null,
-            summary: item.summary ?? null,
-            skillDirectory: item.skillDirectory ?? null,
-            ...(item.sections === undefined
-              ? {}
-              : {
-                  sections: item.sections.map((section) => ({
-                    heading: [...section.heading],
-                    offset: section.offset,
-                    length: section.length,
-                    excerpt: section.excerpt ?? null,
-                  })),
-                }),
-          },
-    ),
+    items: result.items.map(restFindItemOf),
+  };
+}
+
+/** One item of a search, as the `find` and `search` routes answer it. */
+function restFindItemOf(item: FindItem): RestFindItem {
+  return item.kind === "skill"
+    ? {
+        kind: "skill",
+        name: item.name,
+        path: item.directory.length === 0 ? "SKILL.md" : `${item.directory}/SKILL.md`,
+        directory: item.directory,
+        description: item.description,
+        translations: restSkillTranslations(item.translations),
+        files: item.files.map((file) => ({
+          path: file.path,
+          title: file.title ?? null,
+          summary: file.summary ?? null,
+        })),
+        moreFiles: item.moreFiles,
+        ...licensing(item),
+      }
+    : {
+        kind: "document",
+        path: item.path,
+        title: item.title ?? null,
+        summary: item.summary ?? null,
+        skillDirectory: item.skillDirectory ?? null,
+        ...(item.sections === undefined
+          ? {}
+          : {
+              sections: item.sections.map((section) => ({
+                heading: [...section.heading],
+                offset: section.offset,
+                length: section.length,
+                excerpt: section.excerpt ?? null,
+              })),
+            }),
+      };
+}
+
+/** What a search across the packs of a deployment answers, as the API says it (ADR-0070). */
+export function hubBody(result: HubResult): RestSearch {
+  return {
+    status: "ready",
+    query: result.query,
+    packs: result.packs,
+    items: result.items.map((found) => ({
+      address: formatAddress(found.address),
+      repository: found.repository,
+      item: restFindItemOf(found.item),
+    })),
+    ...(result.ranking === undefined ? {} : { ranking: { ...result.ranking } }),
   };
 }
 

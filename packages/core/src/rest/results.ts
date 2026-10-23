@@ -13,6 +13,8 @@ import type {
   FindItem,
   FindResult,
   FolderOverview,
+  HubItem,
+  HubResult,
   IncludedFile,
   IndexDiagnostic,
   MountSummary,
@@ -26,9 +28,11 @@ import type {
   RestFile,
   RestFileOutline,
   RestFind,
+  RestFindItem,
   RestFolderOverview,
   RestLicense,
   RestMount,
+  RestSearch,
   RestSkill,
   RestSkillTranslation,
 } from "./contracts.js";
@@ -247,63 +251,7 @@ export function browseResultOf(
 
 /** A `find` answer as the result it was made from. */
 export function findResultOf(body: Ready<RestFind>, mount: MountSummary): FindResult {
-  const items = body.items.flatMap((item): FindItem[] => {
-    if (item.kind === "skill") {
-      const directory = pathOf(item.directory);
-      const path = item.path === undefined ? undefined : pathOf(item.path);
-      if (directory === undefined) {
-        return [];
-      }
-      return [
-        {
-          kind: "skill",
-          ...(path === undefined ? {} : { path }),
-          name: item.name,
-          directory,
-          description: item.description,
-          files: item.files.flatMap((file) => {
-            const filePath = pathOf(file.path);
-            return filePath === undefined
-              ? []
-              : [
-                  {
-                    path: filePath,
-                    title: orUndefined(file.title),
-                    summary: orUndefined(file.summary),
-                  },
-                ];
-          }),
-          moreFiles: item.moreFiles,
-          translations: translationsOf(item.translations),
-          ...(item.license === undefined ? {} : { license: licenseOf(item.license) }),
-          ...(item.describedOnly === true ? { describedOnly: true } : {}),
-        },
-      ];
-    }
-    const path = pathOf(item.path);
-    const skillDirectory = item.skillDirectory === null ? undefined : pathOf(item.skillDirectory);
-    return path === undefined
-      ? []
-      : [
-          {
-            kind: "document",
-            path,
-            title: orUndefined(item.title),
-            summary: orUndefined(item.summary),
-            skillDirectory,
-            ...(item.sections === undefined
-              ? {}
-              : {
-                  sections: item.sections.map((section) => ({
-                    heading: [...section.heading],
-                    offset: section.offset,
-                    length: section.length,
-                    excerpt: orUndefined(section.excerpt),
-                  })),
-                }),
-          },
-        ];
-  });
+  const items = body.items.flatMap(findItemOf);
   const path = body.path === undefined ? undefined : pathOf(body.path);
   return {
     mount: summaryAt(mount, body.commit),
@@ -313,6 +261,85 @@ export function findResultOf(body: Ready<RestFind>, mount: MountSummary): FindRe
     nextCursor: body.nextCursor === undefined ? undefined : orUndefined(body.nextCursor),
     totals: orUndefined(body.totals),
     diagnostics: diagnosticsOf(body.diagnostics),
+    ...(body.ranking === undefined ? {} : { ranking: { ...body.ranking } }),
+  };
+}
+
+/** One item of a `find` or a `search` answer as the item it was made from; none when its paths are not ones. */
+function findItemOf(item: RestFindItem): FindItem[] {
+  if (item.kind === "skill") {
+    const directory = pathOf(item.directory);
+    const path = item.path === undefined ? undefined : pathOf(item.path);
+    if (directory === undefined) {
+      return [];
+    }
+    return [
+      {
+        kind: "skill",
+        ...(path === undefined ? {} : { path }),
+        name: item.name,
+        directory,
+        description: item.description,
+        files: item.files.flatMap((file) => {
+          const filePath = pathOf(file.path);
+          return filePath === undefined
+            ? []
+            : [
+                {
+                  path: filePath,
+                  title: orUndefined(file.title),
+                  summary: orUndefined(file.summary),
+                },
+              ];
+        }),
+        moreFiles: item.moreFiles,
+        translations: translationsOf(item.translations),
+        ...(item.license === undefined ? {} : { license: licenseOf(item.license) }),
+        ...(item.describedOnly === true ? { describedOnly: true } : {}),
+      },
+    ];
+  }
+  const path = pathOf(item.path);
+  const skillDirectory = item.skillDirectory === null ? undefined : pathOf(item.skillDirectory);
+  return path === undefined
+    ? []
+    : [
+        {
+          kind: "document",
+          path,
+          title: orUndefined(item.title),
+          summary: orUndefined(item.summary),
+          skillDirectory,
+          ...(item.sections === undefined
+            ? {}
+            : {
+                sections: item.sections.map((section) => ({
+                  heading: [...section.heading],
+                  offset: section.offset,
+                  length: section.length,
+                  excerpt: orUndefined(section.excerpt),
+                })),
+              }),
+        },
+      ];
+}
+
+/** A `search` answer as the result it was made from (ADR-0070); an item whose pack is no address is dropped. */
+export function hubResultOf(body: RestSearch): HubResult {
+  return {
+    query: body.query,
+    packs: body.packs,
+    items: body.items.flatMap((found): HubItem[] => {
+      const parsed = parseAddress(found.address);
+      if (!parsed.ok) {
+        return [];
+      }
+      return findItemOf(found.item).map((item) => ({
+        address: parsed.value,
+        repository: found.repository,
+        item,
+      }));
+    }),
     ...(body.ranking === undefined ? {} : { ranking: { ...body.ranking } }),
   };
 }

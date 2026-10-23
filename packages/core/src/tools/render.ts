@@ -1,3 +1,4 @@
+import { formatAddress } from "../address.js";
 import { describeLicense } from "../license.js";
 import { renderSkillSections } from "../skill-document.js";
 import {
@@ -13,6 +14,7 @@ import type {
   FileResult,
   FindItem,
   FindResult,
+  HubResult,
   IndexDiagnostic,
   MountSummary,
   SkillResult,
@@ -235,9 +237,15 @@ export function renderDiagnostics(
 }
 
 function renderFindItem(item: FindItem, number: number): string {
+  const [first, ...rest] = findItemLines(item);
+  return [`${number}. ${first}`, ...rest].join("\n");
+}
+
+/** The lines of one item of a search: what it is, on the first line, then what is said of it, indented. */
+function findItemLines(item: FindItem): string[] {
   if (item.kind === "skill") {
     const lines = [
-      `${number}. skill: ${item.name} (${item.directory.length === 0 ? "SKILL.md" : `${item.directory}/SKILL.md`})${describedOnlyNote(item)}`,
+      `skill: ${item.name} (${item.directory.length === 0 ? "SKILL.md" : `${item.directory}/SKILL.md`})${describedOnlyNote(item)}`,
       `   ${compactSummary(item.description, SEARCH_DESCRIPTION_MAX_LENGTH)}`,
     ];
     if (item.files.length > 0) {
@@ -251,37 +259,80 @@ function renderFindItem(item: FindItem, number: number): string {
         lines.push(`   - ... (${item.moreFiles} more)`);
       }
     }
-    return lines.join("\n");
+    return lines;
   }
   const title = item.title === undefined ? "" : ` - ${compactSummary(item.title, 120)}`;
-  const summary =
-    item.summary === undefined
-      ? ""
-      : `\n   ${compactSummary(item.summary, SEARCH_DESCRIPTION_MAX_LENGTH)}`;
-  const owner =
-    item.skillDirectory === undefined
-      ? ""
-      : `\n   Skill: ${item.skillDirectory.length === 0 ? "SKILL.md" : `${item.skillDirectory}/SKILL.md`}`;
+  const lines = [`document: ${item.path}${title}`];
+  if (item.summary !== undefined) {
+    lines.push(`   ${compactSummary(item.summary, SEARCH_DESCRIPTION_MAX_LENGTH)}`);
+  }
+  if (item.skillDirectory !== undefined) {
+    lines.push(
+      `   Skill: ${item.skillDirectory.length === 0 ? "SKILL.md" : `${item.skillDirectory}/SKILL.md`}`,
+    );
+  }
   // The sections that matched, each as one line with what reads it (ADR-0063). An excerpt that
   // repeats the summary above it is left out: a document without front matter is summarized by
   // its first paragraph, which is often the very passage that matched.
-  const sections =
-    item.sections === undefined || item.sections.length === 0
-      ? ""
-      : `\n   Sections:\n${item.sections
-          .map((section) => {
-            const heading =
-              section.heading.length === 0
-                ? "(before the first heading)"
-                : section.heading.map((text) => compactSummary(text, 80)).join(" > ");
-            const excerpt =
-              section.excerpt === undefined || repeatsSummary(section.excerpt, item.summary)
-                ? ""
-                : `: ${compactSummary(section.excerpt, 200)}`;
-            return `   - ${heading} (${sectionRange(section)})${excerpt}`;
-          })
-          .join("\n")}`;
-  return `${number}. document: ${item.path}${title}${summary}${owner}${sections}`;
+  if (item.sections !== undefined && item.sections.length > 0) {
+    lines.push("   Sections:");
+    for (const section of item.sections) {
+      const heading =
+        section.heading.length === 0
+          ? "(before the first heading)"
+          : section.heading.map((text) => compactSummary(text, 80)).join(" > ");
+      const excerpt =
+        section.excerpt === undefined || repeatsSummary(section.excerpt, item.summary)
+          ? ""
+          : `: ${compactSummary(section.excerpt, 200)}`;
+      lines.push(`   - ${heading} (${sectionRange(section)})${excerpt}`);
+    }
+  }
+  return lines;
+}
+
+/**
+ * The result of a search across the packs of a deployment, as one text for the model (ADR-0070):
+ * every item under the address of its pack, which is where the model goes on from.
+ */
+export function renderHubResult(result: HubResult, origin?: string): string {
+  const count = result.items.length;
+  const query = JSON.stringify(result.query);
+  const across = `across ${plural(result.packs, "pack")}`;
+  const ranking = rankingLine(result);
+  if (count === 0) {
+    return joinSections([
+      `No results for ${query} ${across}. Try fewer or different keywords, in the language a pack is written in.`,
+      ranking,
+    ]);
+  }
+  const items = result.items.map((found, index) => {
+    const [first, ...rest] = findItemLines(found.item);
+    return [`${index + 1}. ${formatAddress(found.address)}`, `   ${first}`, ...rest].join("\n");
+  });
+  const hasSections = result.items.some(
+    ({ item }) =>
+      item.kind === "document" && item.sections !== undefined && item.sections.length > 0,
+  );
+  const at = origin === undefined ? "" : ` at ${origin}`;
+  return joinSections([
+    `${count} result${count === 1 ? "" : "s"} for ${query} ${across}:`,
+    items.join("\n"),
+    hasSections
+      ? "A section is read at its pack with read_repo_file: the path, its offset and its limit."
+      : undefined,
+    ranking,
+    `Connect to a pack${at} by its address for browse_repo, search_repo, load_skill and read_repo_file, or read it over REST under /api/v1/ there.`,
+  ]);
+}
+
+/**
+ * What a client is told as it connects to the root of a deployment (ADR-0070): what is served
+ * here, the one tool, and how a pack it finds is used from there.
+ */
+export function renderHubInstructions(packs: number, origin?: string): string {
+  const where = origin === undefined ? "this deployment" : origin;
+  return `Skills and documents from ${plural(packs, "public pack")} served at ${where}, each a git repository. search_packs finds the skills and the documents that match words, and meaning where this deployment searches by it, across every pack, and names the pack of each result by its address. A pack is used at its address, ${origin ?? ""}/gh/<owner>/<repo>: connect there for browse_repo, search_repo, load_skill and read_repo_file, or read it over REST under /api/v1/. Nothing is read through this server but the search.`;
 }
 
 /**
@@ -289,7 +340,7 @@ function renderFindItem(item: FindItem, number: number): string {
  * meaning took part, or that the words answered alone this time, so that a model knows what a
  * query in other words than the document's can find. Nothing where only words ever rank.
  */
-function rankingLine(result: FindResult): string | undefined {
+function rankingLine(result: Pick<FindResult, "query" | "ranking">): string | undefined {
   if (result.query === undefined || result.ranking === undefined) {
     return undefined;
   }

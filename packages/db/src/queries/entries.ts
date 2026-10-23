@@ -31,7 +31,7 @@ export interface EntryRecord {
   readonly licenseKind: LicenseKind | null;
 }
 
-const entryColumns = {
+export const entryColumns = {
   searchable: sql<boolean>`${indexEntries.search} is not null`,
   path: indexEntries.path,
   kind: indexEntries.kind,
@@ -64,7 +64,7 @@ export function underPath(column: typeof indexEntries.path, mountPath: string): 
 export const BY_PATH = sql`${indexEntries.path} collate "C"`;
 
 /** Files a repository manifest leaves out are known to the index and served by nothing. */
-const VISIBLE = eq(indexEntries.visible, true);
+export const VISIBLE = eq(indexEntries.visible, true);
 
 /** Documents and skills that are searchable: everything `find` can return. */
 export const FINDABLE = and(VISIBLE, sql`${indexEntries.search} is not null`);
@@ -84,7 +84,7 @@ const TS_RANK_WEIGHTS = sql.raw(
  * over the lexemes of a query and divides by the logarithm of the length once, so the weighed
  * mean of the lexemes' ranks is the rank of the weighed query.
  */
-function rankOf(lexemes: readonly string[], weights: readonly number[] | undefined): SQL {
+export function rankOf(lexemes: readonly string[], weights: readonly number[] | undefined): SQL {
   const whole = sql`ts_rank(${TS_RANK_WEIGHTS}, ${indexEntries.search}, ${serializeSearchQuery(lexemes)}::tsquery, 1)`;
   if (weights === undefined || weights.every((weight) => weight === weights[0])) {
     return whole;
