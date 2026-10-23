@@ -4,6 +4,7 @@ import {
   parseSearchVector,
   queryLexemes,
   rankSearchVector,
+  SEARCH_WEIGHTS,
   type SearchField,
   searchVectorOf,
   serializeSearchQuery,
@@ -11,6 +12,12 @@ import {
   stemEnglish,
 } from "@skillcdn/core";
 import { sql } from "drizzle-orm";
+
+/** The field weights as `ts_rank` takes them, `{D, C, B, A}`, from the constants the server ranks with. */
+const WEIGHTS = sql.raw(
+  `'{${SEARCH_WEIGHTS.D}, ${SEARCH_WEIGHTS.C}, ${SEARCH_WEIGHTS.B}, ${SEARCH_WEIGHTS.A}}'`,
+);
+
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type Database, drizzleOf } from "./client.js";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "./testing.js";
@@ -167,7 +174,7 @@ describe("the search vectors of core against the server", () => {
           const vector = serializeSearchVector(searchVectorOf(fields));
           const result = await drizzleOf(database).execute<{ rank: number; matches: boolean }>(
             sql`select
-              ts_rank('{0.05, 0.2, 0.6, 1.0}', ${vector}::tsvector, ${serializeSearchQuery(lexemes)}::tsquery, 1)::float8 as rank,
+              ts_rank(${WEIGHTS}, ${vector}::tsvector, ${serializeSearchQuery(lexemes)}::tsquery, 1)::float8 as rank,
               ${vector}::tsvector @@ ${serializeSearchQuery(lexemes)}::tsquery as matches`,
           );
           return result.rows[0] ?? { rank: -1, matches: false };
@@ -176,6 +183,38 @@ describe("the search vectors of core against the server", () => {
       own.forEach((rank, index) => {
         expect(Number(server[index]?.rank), `${query} in document ${index}`).toBeCloseTo(rank, 5);
         expect(server[index]?.matches, `${query} in document ${index}`).toBe(rank > 0);
+      });
+    }
+  });
+
+  it("ranks with the weights of the query's words as the memory index does (ADR-0069)", async () => {
+    // The weighed mean of `ts_rank` over each word alone is the rank of the weighed query, which
+    // is what `searchEntries` computes for weights that differ.
+    for (const query of QUERIES) {
+      const lexemes = queryLexemes(query);
+      const weights = lexemes.map((_, at) => 0.3 + at * 0.7);
+      const total = weights.reduce((sum, weight) => sum + weight, 0);
+      const own = DOCUMENTS.map((fields) =>
+        rankSearchVector(searchVectorOf(fields), lexemes, weights),
+      );
+      const server = await Promise.all(
+        DOCUMENTS.map(async (fields) => {
+          const vector = serializeSearchVector(searchVectorOf(fields));
+          const terms = sql.join(
+            lexemes.map(
+              (lexeme, at) =>
+                sql`${weights[at] ?? 1}::float8 * ts_rank(${WEIGHTS}, ${vector}::tsvector, ${serializeSearchQuery([lexeme])}::tsquery, 1)`,
+            ),
+            sql` + `,
+          );
+          const result = await drizzleOf(database).execute<{ rank: number }>(
+            sql`select ((${terms}) / ${total}::float8)::float8 as rank`,
+          );
+          return Number(result.rows[0]?.rank ?? -1);
+        }),
+      );
+      own.forEach((rank, index) => {
+        expect(server[index], `${query} weighed in document ${index}`).toBeCloseTo(rank, 5);
       });
     }
   });

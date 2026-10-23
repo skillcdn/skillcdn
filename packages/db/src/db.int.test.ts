@@ -3,6 +3,7 @@ import {
   type IndexEntry,
   NO_LICENSE,
   queryLexemes,
+  queryWeights,
   type ShowcaseTexts,
   searchFieldsOf,
   searchVectorOf,
@@ -15,6 +16,7 @@ import {
   addOperatorRepository,
   claimSnapshot,
   countEntries,
+  countLexemes,
   createBlobStore,
   type Database,
   deleteRepoAlias,
@@ -661,6 +663,41 @@ describe("search", () => {
 
   it("honors the limit", async () => {
     expect(await search(scope, "", "release", 1)).toHaveLength(1);
+  });
+
+  it("counts how many entries hold each word, and ranks with the weights made of it (ADR-0069)", async () => {
+    // The common word in two short documents, the rare one in a longer document.
+    const weighed = await readySnapshot(
+      [entry({ path: "codes/a.md" }), entry({ path: "codes/b.md" }), entry({ path: "codes/c.md" })],
+      {
+        "sha-codes/a.md": "VDS",
+        "sha-codes/b.md": "4205 standard list",
+        "sha-codes/c.md": "VDS other",
+      },
+    );
+    const lexemes = queryLexemes("VDS 4205");
+    expect(await countLexemes(database, weighed, "", lexemes)).toEqual({
+      total: 3,
+      counts: [2, 1],
+    });
+    expect(await countLexemes(database, weighed, "codes", [])).toEqual({ total: 3, counts: [] });
+    expect(await countLexemes(database, weighed, "elsewhere", lexemes)).toEqual({
+      total: 0,
+      counts: [0, 0],
+    });
+    // Every word the same, the shorter documents win; weighed, the one with the rare word does.
+    const plain = await searchEntries(database, weighed, "", lexemes);
+    expect(plain.map((row) => row.path)).toEqual(["codes/a.md", "codes/c.md", "codes/b.md"]);
+    const { total, counts } = await countLexemes(database, weighed, "", lexemes);
+    const ranked = await searchEntries(
+      database,
+      weighed,
+      "",
+      lexemes,
+      undefined,
+      queryWeights(total, counts),
+    );
+    expect(ranked.map((row) => row.path)).toEqual(["codes/b.md", "codes/a.md", "codes/c.md"]);
   });
 
   it("lists skills before documents and leaves unsearchable files out", async () => {

@@ -17,11 +17,21 @@ export interface IndexStore {
   entries(): Promise<readonly IndexEntry[]>;
   /**
    * The findable entries under `mountPath` whose search vector holds any of `lexemes`, best
-   * first, as `rankSearchVector` ranks them: a skill outranks a document, and ties keep path
-   * order. The lexemes are a query's, read with the pack's word rules (`queryLexemes`); empty
-   * for none.
+   * first, as `rankSearchVector` ranks them with `weights`, one per lexeme and every one the
+   * same when left out (ADR-0069): a skill outranks a document, and ties keep path order. The
+   * lexemes are a query's, read with the pack's word rules (`queryLexemes`); empty for none.
    */
-  search(mountPath: RepoPath, lexemes: readonly string[]): Promise<readonly IndexEntry[]>;
+  search(
+    mountPath: RepoPath,
+    lexemes: readonly string[],
+    weights?: readonly number[],
+  ): Promise<readonly IndexEntry[]>;
+  /**
+   * How many findable entries there are under `mountPath`, and how many of them hold each of
+   * `lexemes` (ADR-0069): what `queryWeights` weighs a query from. A store that does not count
+   * leaves it out, and every lexeme weighs the same.
+   */
+  frequencies?(mountPath: RepoPath, lexemes: readonly string[]): Promise<LexemeFrequencies>;
   /**
    * The sections of the findable entries under `mountPath` nearest in meaning to the query's
    * `vector`, best first and at most `limit` (ADR-0064). Present only where the index keeps the
@@ -41,6 +51,13 @@ export interface IndexStore {
   embeddingProgress?(): Promise<EmbeddingProgress | undefined>;
   /** What the reading rules could not read as intended. */
   diagnostics(): Promise<readonly SnapshotDiagnostic[]>;
+}
+
+/** How many findable entries a mount has, and how many of them hold each lexeme of a query (ADR-0069). */
+export interface LexemeFrequencies {
+  readonly total: number;
+  /** One count per lexeme, in the order asked. */
+  readonly counts: readonly number[];
 }
 
 /**

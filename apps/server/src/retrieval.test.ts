@@ -19,15 +19,15 @@ import {
 } from "./retrieval/evaluate.js";
 
 // The lexical baseline of the retrieval evaluation set (ADR-0063), over the command's index in
-// memory: the numbers search by words alone reached when the set was written (2026-10, reading
-// rules version 11): English 76% file@1, 100% file@5, 91% section@1, 100% section@2; Korean 88%,
-// 100%, 76%, 100%. A change to the word rules or the ranking that lowers them is a regression; a
-// model that raises them is what phase B is measured by. The floors are a little under the
-// numbers measured, so that a tie broken the other way does not fail the build.
+// memory: the numbers search by words alone reaches (2026-10-23, reading rules version 12, each
+// word weighed by its rarity, ADR-0069): English 91% file@1, 100% file@5, 97% section@1, 100%
+// section@2; Korean 100%, 100%, 88%, 100%. A change to the word rules or the ranking that lowers
+// them is a regression; a model that raises them is what phase B is measured by. The floors are a
+// little under the numbers measured, so that a tie broken the other way does not fail the build.
 
 const FLOORS = {
-  en: { fileAt1: 0.65, fileAt5: 0.95, sectionAt2: 0.9 },
-  ko: { fileAt1: 0.75, fileAt5: 0.95, sectionAt2: 0.9 },
+  en: { fileAt1: 0.85, fileAt5: 0.95, sectionAt2: 0.95 },
+  ko: { fileAt1: 0.9, fileAt5: 0.95, sectionAt2: 0.95 },
 };
 
 describe("the retrieval evaluation set", () => {
@@ -140,24 +140,24 @@ function expectAnswersInPack(set: ReturnType<typeof loadRetrievalSet>, root: str
 // matched by pairs of characters (Japanese and Chinese beside Korean), languages read without a
 // stemmer (German and Russian), questions in another language than their document, which words
 // alone cannot answer, and codes asked verbatim, which words must not lose. The floors are the
-// lexical baseline measured when the set was written (2026-10, reading rules version 11): by the
-// language of the question, file@1 from 17% (German) to 60% (Korean), file@5 from 40% to 77%,
-// section@2 from 23% to 60%; the codes asked verbatim 42% file@1 and 78% file@5; nothing across
-// languages. The floors are a little under the numbers, so that a tie broken the other way does
-// not fail the build.
+// lexical baseline (2026-10-23, reading rules version 12, each word weighed by its rarity and a
+// hyphenated code a word of its own, ADR-0069): by the language of the question, file@1 from 43%
+// (German) to 67% (Russian), file@5 from 73% to 80%, section@2 from 43% to 67%; the codes asked
+// verbatim 86% file@1 and 97% file@5; nothing across languages. The floors are a little under the
+// numbers, so that a tie broken the other way does not fail the build.
 
 const MULTILINGUAL_FLOORS: Readonly<
   Record<string, { fileAt1: number; fileAt5: number; sectionAt2: number }>
 > = {
-  en: { fileAt1: 0.25, fileAt5: 0.6, sectionAt2: 0.45 },
-  ko: { fileAt1: 0.5, fileAt5: 0.65, sectionAt2: 0.45 },
-  ja: { fileAt1: 0.45, fileAt5: 0.7, sectionAt2: 0.4 },
-  zh: { fileAt1: 0.35, fileAt5: 0.65, sectionAt2: 0.5 },
-  de: { fileAt1: 0.1, fileAt5: 0.3, sectionAt2: 0.15 },
-  ru: { fileAt1: 0.25, fileAt5: 0.6, sectionAt2: 0.3 },
+  en: { fileAt1: 0.5, fileAt5: 0.7, sectionAt2: 0.5 },
+  ko: { fileAt1: 0.45, fileAt5: 0.7, sectionAt2: 0.5 },
+  ja: { fileAt1: 0.55, fileAt5: 0.7, sectionAt2: 0.5 },
+  zh: { fileAt1: 0.55, fileAt5: 0.7, sectionAt2: 0.6 },
+  de: { fileAt1: 0.35, fileAt5: 0.65, sectionAt2: 0.35 },
+  ru: { fileAt1: 0.6, fileAt5: 0.7, sectionAt2: 0.5 },
 };
 /** What the words alone reach on the codes asked verbatim. */
-const EXACT_TERM_FLOOR = { fileAt1: 0.35, fileAt5: 0.7 };
+const EXACT_TERM_FLOOR = { fileAt1: 0.8, fileAt5: 0.9 };
 /** What they reach at most across languages: the codes and names the two languages share. */
 const CROSS_CEILING = { fileAt5: 0.1 };
 

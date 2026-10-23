@@ -20,15 +20,15 @@ pnpm --filter @skillcdn/server run eval:search
 pnpm --filter @skillcdn/server run eval:search fixtures/.repositories/multilingual-pack fixtures/retrieval/multilingual-questions.json
 ```
 
-The lexical baseline of the first set, measured when it was written (2026-10, reading rules version 11):
+The lexical baseline of the first set (2026-10-23, reading rules version 12, each word weighed by its rarity among the entries searched, [ADR-0069](../../../docs/adr/0069-a-word-of-a-query-weighs-by-its-rarity-among-the-entries-searched.md)):
 
 | | n | file@1 | file@5 | section@1 | section@2 |
 |---|---|---|---|---|---|
-| en | 34 | 76% | 100% | 91% | 100% |
-| ko | 25 | 88% | 100% | 76% | 100% |
-| all | 59 | 81% | 100% | 85% | 100% |
+| en | 34 | 91% | 100% | 97% | 100% |
+| ko | 25 | 100% | 100% | 88% | 100% |
+| all | 59 | 95% | 100% | 93% | 100% |
 
-The first set is small and its questions are written by the same hands as its documents, so the numbers say what search by words alone does on a pack that is written for it; they are the baseline the models of phase B are compared against, not a claim about search in general.
+When the set was written, under version 11 of the rules with every word equal and the server's steep field weights, the words reached the first document for 76% of the English and 88% of the Korean questions; the weighing by rarity and the flatter field weights account for the rest. The first set is small and its questions are written by the same hands as its documents, so the numbers say what search by words alone does on a pack that is written for it; they are the baseline the models of phase B are compared against, not a claim about search in general.
 
 ### The second set: six languages, two domains
 
@@ -38,34 +38,35 @@ Two domains, four documents of each per language. Research: laboratory access, s
 
 The 180 questions, 30 per language, are of three kinds. A `paraphrase` question (108) is in the language of its document and in other words than the section: an everyday word for the technical term, an abbreviation spelled out or the term abbreviated, the consequence of a rule instead of its words; these are what search by meaning is measured on in each language. An `exact-term` question (36) carries a code, a number, a form or a designation exactly as the document writes it; the words should win these, and the fusion with meaning must not lose them. A `cross` question (36) is written in another language than its document, with no code in it, six per document language and every ordered pair of languages used once; words alone cannot answer them, so what they measure is meaning alone. The documents were written by six runs from one brief, one language each; the questions by other runs that read only the documents, one run per language for the paraphrase and exact-term questions and one per domain for the cross questions; and two further runs checked every question against all 24 documents of its domain for a wrong or a shared answer. No hand that wrote a document wrote a question about it.
 
-The lexical baseline, measured when the set was written (2026-10, reading rules version 11), by the language of the question, by kind and by domain:
+The lexical baseline (2026-10-23, reading rules version 12, each word weighed by its rarity among the entries searched and a hyphenated code a word of its own, [ADR-0069](../../../docs/adr/0069-a-word-of-a-query-weighs-by-its-rarity-among-the-entries-searched.md)), by the language of the question, by kind and by domain. When the set was written, under version 11 with every word equal, the words reached the first document for 40% of the questions, the page for 67%, and the first document for 42% of the codes asked verbatim.
 
 | | n | file@1 | file@5 | section@1 | section@2 |
 |---|---|---|---|---|---|
-| en | 30 | 33% | 70% | 37% | 53% |
-| ko | 30 | 60% | 73% | 40% | 53% |
-| ja | 30 | 53% | 77% | 27% | 50% |
-| zh | 30 | 43% | 73% | 50% | 60% |
-| de | 30 | 17% | 40% | 13% | 23% |
-| ru | 30 | 33% | 67% | 37% | 40% |
-| paraphrase | 108 | 53% | 85% | 36% | 53% |
-| exact-term | 36 | 42% | 78% | 61% | 75% |
+| en | 30 | 57% | 77% | 47% | 57% |
+| ko | 30 | 53% | 80% | 60% | 60% |
+| ja | 30 | 63% | 77% | 50% | 60% |
+| zh | 30 | 63% | 77% | 60% | 67% |
+| de | 30 | 43% | 73% | 40% | 43% |
+| ru | 30 | 67% | 77% | 50% | 57% |
+| paraphrase | 108 | 68% | 95% | 53% | 63% |
+| exact-term | 36 | 86% | 97% | 97% | 97% |
 | cross | 36 | 0% | 0% | 0% | 0% |
-| research | 90 | 41% | 64% | 27% | 39% |
-| defense | 90 | 39% | 69% | 41% | 54% |
-| all | 180 | 40% | 67% | 34% | 47% |
+| research | 90 | 58% | 77% | 46% | 52% |
+| defense | 90 | 58% | 77% | 57% | 62% |
+| all | 180 | 58% | 77% | 51% | 57% |
 
-What the words alone say here. Across languages they answer nothing, as expected: a cross question shares no word with its document, and the whole of that row is what meaning has to add. German reaches two questions in five and Russian two in three: these languages are read without a stemmer and without stop words, so a compound does not match its parts, an inflected form does not match another, and the function words of a question are matched like any other word, which lifts the maps and the long documents that repeat them above the answer. Japanese and Chinese are matched by pairs of characters and reach three questions in four, but name the answering section first for half of them or fewer: pairs match in many sections of a document, and the section named first is the one with the most matched words. The codes asked verbatim are on the page for three questions in four and first for fewer than half, although every code occurs in exactly one document: the ranking counts occurrences and knows nothing of rarity, so `VDS`, which every defense document repeats, outweighs the one `4205` next to it, and `Form` and the institute's name outweigh the number of the form. That is a property of the word rules, not of the set, and it is what the exact-term questions are there to measure as the rules or the ranking change. The English questions, written in other words on purpose, reach the page for seven in ten. The floors in `src/retrieval.test.ts` are a little under these numbers; what the models reach on the same questions is below.
+What the words alone say here. Across languages they answer nothing, as expected: a cross question shares no word with its document, and the whole of that row is what meaning has to add. The codes asked verbatim are first for 86% of the questions and on the page for 97%: a code is one word that one document holds, and it decides; under version 11 the parser cut `OIW-PV-120` into `oiw`, `pv` and `-120`, which are common where the code is unique, and the ranking counted occurrences and knew nothing of rarity, so the prefix every defense document repeats outweighed the number next to it. German reaches two questions in five first and three in four on the page, Russian two in three and three in four: these languages are read without a stemmer, so a compound does not match its parts and an inflected form does not match another; their function words no longer lift the maps above the answer, since a word every document repeats weighs next to nothing. Japanese and Chinese are matched by pairs of characters, reach three questions in four on the page and name the answering section first for half to six in ten of them: the common pairs weigh little now, and what remains is the pairs a question shares with several sections of its document. The English questions, written in other words on purpose, are first for six in ten and on the page for three in four. What the words still miss is the paraphrase, by design: the everyday word for the technical term, the abbreviation spelled out, which is what meaning is measured on. The floors in `src/retrieval.test.ts` are a little under these numbers; what the models reached on the same questions, over the words of version 11, is below.
 
 ### What the models measured
 
 The two profiles of [ADR-0065](../../../docs/adr/0065-meaning-search-runs-on-open-weight-models-served-beside-the-image.md), its two alternatives and the candidates of the re-measurement were run over both sets with llama.cpp's server from GGUF files on one machine, an eight-core desktop CPU and a consumer GPU with 8 GB of memory, 2 GB of which the desktop holds ([the inference server](../../../deploy/README.md#the-inference-server-and-the-model-profiles)), by `pnpm --filter @skillcdn/server run eval:search` given the servers (`--embeddings-url`, `--embeddings-model`, `--reranker-url`, `--reranker-model`, `--instruction`, `--dimensions`): the first set on 2026-10-21 and both sets on 2026-10-23, and a configuration measured on both days agrees to a question. The Qwen3 embedders and the harrier models took the query instruction of `.env.example`, KURE-v1 none; a reranker scored ten candidates, or five where the table says so, with a timeout long enough to always answer. The candidates: harrier-oss-v1-0.6b and harrier-oss-v1-270m (MIT, last-token pooling, 1024 and 640 dimensions), which have no official GGUF and were converted here with the current llama.cpp, the 270M one with the tokenizer model file of its Gemma 3 base, which its own repository does not ship; the 4B embedder in 8 bits; and Qwen3-Reranker-4B from a GGUF whose header carries the reranking metadata (`qwen3.pooling_type`, `tokenizer.chat_template.rerank`), which a probe confirmed scores an answering passage near 1 and an unrelated one near 0. The embedding times are for the sections of a set on a server that holds only that model; the 4B embedder in 8 bits had 6 GB of GPU memory and ran several times slower than its size predicts, which the times show.
 
-On the first set (59 questions, 105 sections): percentages over all questions, then the 25 Korean ones; the mean time of a search per question. One question is about two points.
+On the first set (59 questions, 105 sections): percentages over all questions, then the 25 Korean ones; the mean time of a search per question. One question is about two points. The model rows were measured over the words of version 11 of the reading rules, with every word equal; the words of version 12, weighed by rarity ([ADR-0069](../../../docs/adr/0069-a-word-of-a-query-weighs-by-its-rarity-among-the-entries-searched.md)), are the second row, and the fusion with meaning inherits them without being measured again here.
 
 | Configuration | file@1 | file@5 | section@1 | section@2 | ko file@1 | ko section@1 | embedding | search |
 |---|---|---|---|---|---|---|---|---|
-| words alone | 81% | 100% | 85% | 100% | 88% | 76% | | 5 ms |
+| words alone, as the model rows had them (version 11, every word equal) | 81% | 100% | 85% | 100% | 88% | 76% | | 5 ms |
+| words alone, version 12, weighed by rarity (2026-10-23) | 95% | 100% | 93% | 100% | 100% | 88% | | 4 ms |
 | base embedder, Qwen3-Embedding-0.6B (Q8_0), CPU | 93% | 100% | 90% | 100% | 100% | 84% | 27 s | 100 ms |
 | base embedder with its reranker, Qwen3-Reranker-0.6B (Q8_0), CPU | 93% | 98% | 90% | 98% | 96% | 84% | | 5.3 s |
 | base embedder with bge-reranker-v2-m3 (Q8_0), CPU | 93% | 98% | 90% | 98% | 100% | 84% | | 2.5 s |
@@ -93,7 +94,8 @@ On the second set (180 questions, 508 sections with the maps): percentages over 
 
 | Configuration | file@1 | file@5 | section@1 | section@2 | paraphrase file@1 | exact-term file@1 | cross file@1 | de file@5 | embedding | search |
 |---|---|---|---|---|---|---|---|---|---|---|
-| words alone | 40% | 67% | 34% | 47% | 53% | 42% | 0% | 40% | | 17 ms |
+| words alone, as the model rows had them (version 11, every word equal) | 40% | 67% | 34% | 47% | 53% | 42% | 0% | 40% | | 17 ms |
+| words alone, version 12, weighed by rarity (2026-10-23) | 58% | 77% | 51% | 57% | 68% | 86% | 0% | 73% | | 19 ms |
 | base embedder, Qwen3-Embedding-0.6B (Q8_0), CPU | 56% | 84% | 59% | 67% | 80% | 33% | 6% | 83% | 350 s | 142 ms |
 | base embedder with its reranker, Qwen3-Reranker-0.6B (Q8_0), CPU | 75% | 91% | 68% | 76% | 73% | 72% | 83% | 87% |  | 9.8 s |
 | base embedder with bge-reranker-v2-m3 (Q8_0), CPU | 77% | 91% | 68% | 76% | 80% | 69% | 75% | 83% |  | 4.6 s |

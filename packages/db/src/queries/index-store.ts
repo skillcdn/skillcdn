@@ -3,6 +3,7 @@ import {
   embeddable,
   type IndexEntry,
   type IndexStore,
+  type LexemeFrequencies,
   type MeaningMatch,
   meaningSearchOf,
   type RepoPath,
@@ -10,7 +11,7 @@ import {
 } from "@skillcdn/core";
 import type { Database } from "../client.js";
 import { getSnapshotEmbedding } from "./embeddings.js";
-import { type EntryRecord, searchEntries, servedEntries } from "./entries.js";
+import { countLexemes, type EntryRecord, searchEntries, servedEntries } from "./entries.js";
 import { getSnapshotDiagnostics, type SnapshotScope } from "./snapshots.js";
 import { blobsWithoutVectors, searchSectionVectors, type VectorKey } from "./vectors.js";
 
@@ -58,8 +59,17 @@ export function createIndexStore(
     async entries(): Promise<readonly IndexEntry[]> {
       return (await servedEntries(database, scope)).map(entryOf);
     },
-    async search(mountPath: RepoPath, lexemes: readonly string[]): Promise<readonly IndexEntry[]> {
-      return (await searchEntries(database, scope, mountPath, lexemes)).map(entryOf);
+    async search(
+      mountPath: RepoPath,
+      lexemes: readonly string[],
+      weights?: readonly number[],
+    ): Promise<readonly IndexEntry[]> {
+      return (await searchEntries(database, scope, mountPath, lexemes, undefined, weights)).map(
+        entryOf,
+      );
+    },
+    async frequencies(mountPath: RepoPath, lexemes: readonly string[]): Promise<LexemeFrequencies> {
+      return countLexemes(database, scope, mountPath, lexemes);
     },
     ...(key === undefined
       ? {}

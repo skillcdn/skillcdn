@@ -77,6 +77,8 @@ const SCRIPT_RUNS = new RegExp(`[${CJK_CLASS}]+|[^${CJK_CLASS}]+`, "gu");
 const LETTERS = /^\p{L}+$/u;
 const DIGITS = /^\p{N}+$/u;
 const WORDY = /^[\p{L}\p{N}]*\p{L}[\p{L}\p{N}]*$/u;
+/** A code: parts of letters and digits joined by single hyphens, `OIW-PV-120`, `6635-81-302-5518`, `서돌-4`. */
+const CODE = /^[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)+$/u;
 
 /** A raw token and which dictionary reads it: letters are stemmed, everything else is kept. */
 interface Token {
@@ -133,6 +135,12 @@ function tokensOfRun(run: string): Token[] {
   const parts = text.split("-");
   if (parts.some((part) => part.length === 0 || DIGITS.test(part))) {
     const tokens: Token[] = [];
+    // A code with a digit part, `OIW-PV-120` or `6635-81-302-5518`, is kept whole as well: its
+    // parts say little on their own, and the whole names one thing (ADR-0069). A sign (`-5`) or a
+    // doubled hyphen makes no code.
+    if (CODE.test(text)) {
+      tokens.push({ text, stem: false });
+    }
     parts.forEach((part, index) => {
       if (part.length === 0) {
         return;
@@ -149,7 +157,13 @@ function tokensOfRun(run: string): Token[] {
 /** The tokens of a run, its scripts cut apart: pairs for the scripts without stems, words for the rest. */
 function tokensOfScripts(run: string): Token[] {
   const tokens: Token[] = [];
-  for (const piece of run.match(SCRIPT_RUNS) ?? []) {
+  const pieces = run.match(SCRIPT_RUNS) ?? [];
+  // A code across scripts, `서돌-4` or `蒼陵-2`, is kept whole as well, as a code in one script is
+  // (ADR-0069); its pieces follow, as pairs and as words.
+  if (pieces.length > 1 && CODE.test(run)) {
+    tokens.push({ text: run, stem: false });
+  }
+  for (const piece of pieces) {
     // One by one: a run of some hundred thousand characters has more pairs than one call takes.
     for (const token of CJK.test(piece) ? bigramTokens(piece) : tokensOfRun(piece)) {
       tokens.push(token);

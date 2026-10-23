@@ -5,7 +5,7 @@ import {
   markIndexVersion,
   type TestDatabase,
 } from "@skillcdn/db/testing";
-import { INDEX_VERSION } from "@skillcdn/indexer";
+import { INDEX_VERSION, MIN_SERVABLE_INDEX_VERSION } from "@skillcdn/indexer";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createFixtureHost, fixtureCommits } from "./testing/fixture-host.js";
 import { createHarness, type Harness, type HarnessOptions } from "./testing/harness.js";
@@ -137,7 +137,8 @@ describe("a commit whose index is rebuilt under newer reading rules", () => {
     const h = harness({ host });
     const commit = fixtureCommits("serving-floor").main;
     await servedFrom(h, DOCUMENTS, commit);
-    await markIndexVersion(testDatabase.database, commit, INDEX_VERSION - 1);
+    // Below the floor the indexer sets, whatever the current version is above it.
+    await markIndexVersion(testDatabase.database, commit, MIN_SERVABLE_INDEX_VERSION - 1);
 
     const release = host.holdTrees();
     const during = await mountOf(h, DOCUMENTS);

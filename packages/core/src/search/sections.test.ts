@@ -132,6 +132,16 @@ describe("matchSections", () => {
     expect(sections[1]?.heading).toEqual(["Billing", "Discounts", "Education"]);
   });
 
+  it("ranks the sections with the weights of the query's words (ADR-0069)", () => {
+    const lexemes = queryLexemes("billing discounts");
+    // The heading that holds the one word that counts comes first, whichever word that is.
+    expect(matchSections(DOCUMENT, lexemes, { weights: [1, 0] })[0]?.heading).toEqual(["Billing"]);
+    expect(matchSections(DOCUMENT, lexemes, { weights: [0, 1] })[0]?.heading).toEqual([
+      "Billing",
+      "Discounts",
+    ]);
+  });
+
   it("takes the excerpt from the line that matched, not from code, and falls back to the first prose", () => {
     const invoices = matchSections(DOCUMENT, queryLexemes("invoice"))[0];
     expect(invoices?.heading).toEqual(["Billing", "Invoices"]);

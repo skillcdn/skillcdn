@@ -14,7 +14,9 @@ function vectorText(text: string): string {
 }
 
 // Every expectation here is what `to_tsvector('english', ...)` printed on PostgreSQL 18 for text
-// in the Latin script, which this parser follows; the scripts matched by pairs have their own test.
+// in the Latin script, which this parser follows, with one addition of our own: a hyphenated code
+// with a digit part (`top-10`, `beta-1`) is a word of the vector beside its parts (ADR-0069), which
+// the server's parser does not make. The scripts matched by pairs have their own test.
 describe("searchLexemes", () => {
   it("cuts words, hyphenated words, hosts, versions, paths and addresses as the parser does", () => {
     expect(
@@ -22,7 +24,7 @@ describe("searchLexemes", () => {
         "Foo_bar skill-cdn top-10 SKILL.md v1.2.0 https://example.com/x/y 2026 abc123 don't marketing/ads e-mail",
       ),
     ).toBe(
-      "'-10':7 '/x/y':12 '2026':13 'abc123':14 'bar':2 'cdn':5 'e':19 'e-mail':18 'example.com':11 'example.com/x/y':10 'foo':1 'mail':20 'marketing/ads':17 'skill':4 'skill-cdn':3 'skill.md':8 'top':6 'v1.2.0':9",
+      "'-10':8 '/x/y':13 '2026':14 'abc123':15 'bar':2 'cdn':5 'e':20 'e-mail':19 'example.com':12 'example.com/x/y':11 'foo':1 'mail':21 'marketing/ads':18 'skill':4 'skill-cdn':3 'skill.md':9 'top':7 'top-10':6 'v1.2.0':10",
     );
   });
 
@@ -32,8 +34,50 @@ describe("searchLexemes", () => {
         "10-top a1-b2 -foo foo--bar docs/ wait... e.g. /usr/local user@example.com https://example.com x_y-z 3.14 1e10 AI-driven self-hosted C++ R&D foo'bar self-hosted-thing top-10-list beta-1 -5 5- a-",
       ),
     ).toBe(
-      "'-1':40 '-10':37 '-5':41 '/usr/local':12 '10':1 '1e10':20 '3.14':19 '5':42 'a1':4 'a1-b2':3 'ai':22 'ai-driven':21 'b2':5 'bar':8,31 'beta':39 'c':27 'd':29 'doc':9 'driven':23 'e.g':11 'example.com':14 'foo':6,7,30 'host':26,34 'list':38 'r':28 'self':25,33 'self-host':24 'self-hosted-th':32 'thing':35 'top':2,36 'user@example.com':13 'wait':10 'x':15 'y':17 'y-z':16 'z':18",
+      "'-1':43 '-10':39 '-5':44 '/usr/local':13 '10':2 '10-top':1 '1e10':21 '3.14':20 '5':45 'a1':5 'a1-b2':4 'ai':23 'ai-driven':22 'b2':6 'bar':9,32 'beta':42 'beta-1':41 'c':28 'd':30 'doc':10 'driven':24 'e.g':12 'example.com':15 'foo':7,8,31 'host':27,35 'list':40 'r':29 'self':26,34 'self-host':25 'self-hosted-th':33 'thing':36 'top':3,38 'top-10-list':37 'user@example.com':14 'wait':11 'x':16 'y':18 'y-z':17 'z':19",
     );
+  });
+
+  it("keeps a code whole beside its parts, in one script or across scripts (ADR-0069)", () => {
+    expect(queryLexemes("Form MMCC-3 and OIW-PV-120")).toEqual([
+      "form",
+      "mmcc-3",
+      "mmcc",
+      "-3",
+      "oiw-pv-120",
+      "oiw",
+      "pv",
+      "-120",
+    ]);
+    expect(queryLexemes("stock number 6635-81-302-5518")).toEqual([
+      "stock",
+      "number",
+      "6635-81-302-5518",
+      "6635",
+      "-81",
+      "-302",
+      "-5518",
+    ]);
+    expect(queryLexemes("양식 서돌-4, 様式 蒼陵-2")).toEqual([
+      "양식",
+      "서돌-4",
+      "서돌",
+      "-4",
+      "様式",
+      "蒼陵-2",
+      "蒼陵",
+      "-2",
+    ]);
+    // A sign, a doubled hyphen, a version and a particle written onto a word make no code.
+    expect(queryLexemes("-5 foo--10 2.0.1-beta.3 MCP를")).toEqual([
+      "-5",
+      "foo",
+      "-10",
+      "2.0.1",
+      "beta.3",
+      "mcp",
+      "를",
+    ]);
   });
 
   it("keeps a path with its dots as one word, and drops stop words while counting them", () => {

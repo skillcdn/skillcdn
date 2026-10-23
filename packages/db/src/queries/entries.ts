@@ -1,6 +1,8 @@
 import {
+  type LexemeFrequencies,
   type LicenseKind,
   type RepoFileKind,
+  SEARCH_WEIGHTS,
   type SkillFrontMatter,
   serializeSearchQuery,
 } from "@skillcdn/core";
@@ -68,11 +70,46 @@ const VISIBLE = eq(indexEntries.visible, true);
 export const FINDABLE = and(VISIBLE, sql`${indexEntries.search} is not null`);
 
 /**
+ * The weights `ts_rank` is given, `{D, C, B, A}`: `SEARCH_WEIGHTS` of @skillcdn/core, in the order
+ * the server takes them. The literal is made of the package's own constants, never of an input.
+ */
+const TS_RANK_WEIGHTS = sql.raw(
+  `'{${SEARCH_WEIGHTS.D}, ${SEARCH_WEIGHTS.C}, ${SEARCH_WEIGHTS.B}, ${SEARCH_WEIGHTS.A}}'`,
+);
+
+/**
+ * The rank of an entry's vector for the query: `ts_rank` over the whole query where every lexeme
+ * weighs the same, else the weighed mean of `ts_rank` over each lexeme alone (ADR-0069), which
+ * is what `rankSearchVector` of @skillcdn/core computes with the same weights: `ts_rank` averages
+ * over the lexemes of a query and divides by the logarithm of the length once, so the weighed
+ * mean of the lexemes' ranks is the rank of the weighed query.
+ */
+function rankOf(lexemes: readonly string[], weights: readonly number[] | undefined): SQL {
+  const whole = sql`ts_rank(${TS_RANK_WEIGHTS}, ${indexEntries.search}, ${serializeSearchQuery(lexemes)}::tsquery, 1)`;
+  if (weights === undefined || weights.every((weight) => weight === weights[0])) {
+    return whole;
+  }
+  const total = weights.reduce((sum, weight) => sum + weight, 0);
+  if (!(total > 0)) {
+    return whole;
+  }
+  const terms = sql.join(
+    lexemes.map(
+      (lexeme, at) =>
+        sql`${weights[at] ?? 1}::float8 * ts_rank(${TS_RANK_WEIGHTS}, ${indexEntries.search}, ${serializeSearchQuery([lexeme])}::tsquery, 1)`,
+    ),
+    sql` + `,
+  );
+  return sql`((${terms}) / ${total}::float8)`;
+}
+
+/**
  * Full-text search inside a mount, by the lexemes of a query as `queryLexemes` of @skillcdn/core
  * read it with the pack's word rules (ADR-0063). An entry matches when its stored vector holds
- * any of them; `ts_rank` decides the order, as `rankSearchVector` computes it in memory, and
- * skills outrank plain documents. Returns nothing for no lexemes (a query of stop words or
- * punctuation alone): the caller decides what to show instead.
+ * any of them; `ts_rank` decides the order, as `rankSearchVector` computes it in memory, each
+ * lexeme weighing what `weights` says of it (ADR-0069), and skills outrank plain documents.
+ * Returns nothing for no lexemes (a query of stop words or punctuation alone): the caller decides
+ * what to show instead.
  */
 export async function searchEntries(
   database: Database,
@@ -80,13 +117,14 @@ export async function searchEntries(
   mountPath: string,
   lexemes: readonly string[],
   limit?: number,
+  weights?: readonly number[],
 ): Promise<EntryRecord[]> {
   if (lexemes.length === 0) {
     return [];
   }
   // The query in the text form of a tsquery, every lexeme quoted: the server parses it once.
   const tsquery = sql`${serializeSearchQuery(lexemes)}::tsquery`;
-  const rank = sql<number>`ts_rank('{0.05, 0.2, 0.6, 1.0}', ${indexEntries.search}, ${tsquery}, 1) * case when ${indexEntries.kind} = 'skill' then 1.5 else 1 end`;
+  const rank = sql<number>`${rankOf(lexemes, weights)} * case when ${indexEntries.kind} = 'skill' then 1.5 else 1 end`;
   const queryRows = drizzleOf(database)
     .select(entryColumns)
     .from(indexEntries)
@@ -100,6 +138,39 @@ export async function searchEntries(
     )
     .orderBy(sql`${rank} desc`, BY_PATH);
   return limit === undefined ? queryRows : queryRows.limit(limit);
+}
+
+/**
+ * How many findable entries there are under `mountPath`, and how many of them hold each lexeme
+ * (ADR-0069): what a query's words are weighed by, counted in one pass over the mount's entries,
+ * as the memory index counts them.
+ */
+export async function countLexemes(
+  database: Database,
+  scope: SnapshotScope,
+  mountPath: string,
+  lexemes: readonly string[],
+): Promise<LexemeFrequencies> {
+  const findable = and(inSnapshot(scope), underPath(indexEntries.path, mountPath), FINDABLE);
+  if (lexemes.length === 0) {
+    const [row] = await drizzleOf(database)
+      .select({ total: sql<number>`count(*)::int` })
+      .from(indexEntries)
+      .where(findable);
+    return { total: row?.total ?? 0, counts: [] };
+  }
+  const counted = sql.join(
+    lexemes.map(
+      (lexeme) =>
+        sql`(count(*) filter (where ${indexEntries.search} @@ ${serializeSearchQuery([lexeme])}::tsquery))::int`,
+    ),
+    sql`, `,
+  );
+  const [row] = await drizzleOf(database)
+    .select({ total: sql<number>`count(*)::int`, counts: sql<number[]>`array[${counted}]::int[]` })
+    .from(indexEntries)
+    .where(findable);
+  return { total: row?.total ?? 0, counts: row?.counts ?? lexemes.map(() => 0) };
 }
 
 /** The bounded index's served tree, shared by browsing, reference resolution and rule ancestry. */

@@ -6,6 +6,7 @@ import {
   embeddable,
   type IndexEntry,
   type IndexStore,
+  type LexemeFrequencies,
   type MeaningMatch,
   meaningSearchOf,
   parseSearchVector,
@@ -110,7 +111,11 @@ export function createMemoryIndex(options: MemoryIndexOptions): ReadableIndex {
     async entries(): Promise<readonly IndexEntry[]> {
       return served;
     },
-    async search(mountPath: RepoPath, lexemes: readonly string[]): Promise<readonly IndexEntry[]> {
+    async search(
+      mountPath: RepoPath,
+      lexemes: readonly string[],
+      weights?: readonly number[],
+    ): Promise<readonly IndexEntry[]> {
       if (lexemes.length === 0) {
         return [];
       }
@@ -124,7 +129,7 @@ export function createMemoryIndex(options: MemoryIndexOptions): ReadableIndex {
         if (vector === undefined) {
           continue;
         }
-        const rank = rankSearchVector(vector, lexemes);
+        const rank = rankSearchVector(vector, lexemes, weights);
         if (rank > 0) {
           ranked.push({ entry, rank: entry.kind === "skill" ? rank * SKILL_RANK_BOOST : rank });
         }
@@ -132,6 +137,29 @@ export function createMemoryIndex(options: MemoryIndexOptions): ReadableIndex {
       return ranked
         .sort((a, b) => b.rank - a.rank || compareByteOrder(a.entry.path, b.entry.path))
         .map((item) => item.entry);
+    },
+    // The findable entries under the path, and how many hold each lexeme: what a query's words
+    // are weighed by (ADR-0069), counted as the deployment counts them in one pass.
+    async frequencies(mountPath: RepoPath, lexemes: readonly string[]): Promise<LexemeFrequencies> {
+      const built = vectorsOf();
+      let total = 0;
+      const counts = lexemes.map(() => 0);
+      for (const entry of served) {
+        if (!underPath(entry.path, mountPath)) {
+          continue;
+        }
+        const vector = built.get(entry.path);
+        if (vector === undefined) {
+          continue;
+        }
+        total += 1;
+        lexemes.forEach((lexeme, at) => {
+          if (vector.has(lexeme)) {
+            counts[at] = (counts[at] ?? 0) + 1;
+          }
+        });
+      }
+      return { total, counts };
     },
     async diagnostics() {
       return index.diagnostics;

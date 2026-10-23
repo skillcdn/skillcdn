@@ -63,8 +63,10 @@ import { gitBlobHash, sha256Hex } from "./git-hash.js";
  * deployment keeps serving what the old rules produced until the repository moves on.
  *
  * 11: the search vector is built here, with the word rules of the pack's language (ADR-0063).
+ * 12: a hyphenated code with a digit part, or across scripts, is a word of the vector beside its
+ *     parts (ADR-0069).
  */
-export const INDEX_VERSION = 11;
+export const INDEX_VERSION = 12;
 
 /**
  * The lowest version of the reading rules whose index is still served while the commit is

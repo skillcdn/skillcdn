@@ -56,6 +56,7 @@ import {
   parseRepoPath,
   parseSkillUri,
   queryLexemes,
+  queryWeights,
   READ_FILE_DEFAULT_LIMIT,
   type ReadableIndex,
   type RepoPath,
@@ -778,6 +779,7 @@ export class Reader<M extends MountContext = MountContext> {
     item: FindItem,
     context: {
       readonly lexemes: readonly string[];
+      readonly weights: readonly number[] | undefined;
       readonly language: string | undefined;
       readonly meaning: { readonly nearest: readonly MeaningMatch[] | undefined };
     },
@@ -800,6 +802,7 @@ export class Reader<M extends MountContext = MountContext> {
     }
     const byWords = matchSections(text, context.lexemes, {
       language: context.language,
+      weights: context.weights,
       limit: SECTION_CANDIDATES,
     });
     const byMeaning = (context.meaning.nearest ?? []).filter((match) => match.path === item.path);
@@ -985,6 +988,23 @@ export class Reader<M extends MountContext = MountContext> {
       truncated: index?.truncated ?? false,
       skillUri: skillUriPrefix(mount.address),
     };
+  }
+
+  /**
+   * How much each word of a query counts: by its rarity among the findable entries under the
+   * path (ADR-0069), where the store counts them; every word the same where it does not.
+   */
+  async #weightsOf(
+    index: ReadableIndex,
+    path: RepoPath,
+    lexemes: readonly string[],
+  ): Promise<readonly number[] | undefined> {
+    const count = index.store.frequencies;
+    if (count === undefined || lexemes.length === 0) {
+      return undefined;
+    }
+    const { total, counts } = await count.call(index.store, path, lexemes);
+    return queryWeights(total, counts);
   }
 
   /**
@@ -1343,7 +1363,9 @@ export class Reader<M extends MountContext = MountContext> {
       // folder, as the vectors were built (ADR-0063).
       const language = this.#languageAt(entries, path);
       const lexemes = queryLexemes(query, language);
-      const words = await index.store.search(path, lexemes);
+      // Each word weighs by its rarity among the entries searched (ADR-0069), where the store counts.
+      const weights = await this.#weightsOf(index, path, lexemes);
+      const words = await index.store.search(path, lexemes, weights);
       // And the sections nearest in meaning, where the index keeps vectors and an embedder is at
       // hand (ADR-0064): fused with the words' results, or left out when the embedder did not
       // answer, which the result says.
@@ -1363,7 +1385,7 @@ export class Reader<M extends MountContext = MountContext> {
         items
           .slice(0, Math.max(offset + limit, candidates))
           .map((item) =>
-            this.#sectionsOf(mount, index, entries, item, { lexemes, language, meaning }),
+            this.#sectionsOf(mount, index, entries, item, { lexemes, weights, language, meaning }),
           ),
       );
       const reranked =

@@ -48,6 +48,7 @@ export {
 } from "./queries/embeddings.js";
 export {
   countEntries,
+  countLexemes,
   type DirectoryListing,
   type EntryListing,
   type EntryRecord,

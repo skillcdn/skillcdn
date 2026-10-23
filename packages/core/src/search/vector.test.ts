@@ -3,6 +3,7 @@ import { queryLexemes } from "./lexemes.js";
 import {
   MAX_SEARCHED_BODY_LENGTH,
   MAX_VECTOR_BYTES,
+  queryWeights,
   rankSearchVector,
   searchFieldsOf,
   searchVectorOf,
@@ -99,6 +100,45 @@ describe("searchVectorOf and rankSearchVector", () => {
     const long = searchVectorOf([{ weight: "D", text: `ads ${"word ".repeat(200)}` }]);
     const query = queryLexemes("ads");
     expect(rankSearchVector(short, query)).toBeGreaterThan(rankSearchVector(long, query));
+  });
+
+  it("weighs each word of the query as told, and the same as before when every weight is one (ADR-0069)", () => {
+    // Two documents of the same length: one holds the common word, the other the rare one.
+    const common = searchVectorOf([{ weight: "D", text: "VDS standard" }]);
+    const rare = searchVectorOf([{ weight: "D", text: "4205 standard" }]);
+    const query = queryLexemes("VDS 4205");
+    expect(rankSearchVector(common, query)).toBeCloseTo(rankSearchVector(rare, query), 10);
+    expect(rankSearchVector(common, query, [1, 1])).toBeCloseTo(
+      rankSearchVector(common, query),
+      10,
+    );
+    expect(rankSearchVector(common, query, [2, 2])).toBeCloseTo(
+      rankSearchVector(common, query),
+      10,
+    );
+    const weights = queryWeights(48, [24, 1]);
+    expect(rankSearchVector(rare, query, weights)).toBeGreaterThan(
+      rankSearchVector(common, query, weights),
+    );
+    // A document that holds only the common word still ranks above one that holds nothing.
+    expect(rankSearchVector(common, query, weights)).toBeGreaterThan(0);
+    expect(rankSearchVector(searchVectorOf([{ weight: "D", text: "other" }]), query, weights)).toBe(
+      0,
+    );
+  });
+});
+
+describe("queryWeights", () => {
+  it("weighs a word by how few of the entries hold it, every word the same where nothing was counted", () => {
+    const [everywhere, half, once, nowhere] = queryWeights(100, [100, 50, 1, 0]);
+    expect(everywhere).toBeGreaterThan(0);
+    expect(everywhere ?? 0).toBeLessThan(0.01);
+    expect(half).toBeGreaterThan(everywhere ?? 0);
+    expect(once).toBeGreaterThan(half ?? 0);
+    expect(nowhere).toBeGreaterThan(once ?? 0);
+    expect(queryWeights(0, [3, 0])).toEqual([1, 1]);
+    // A count above the total, which a stale count can be, is read as the total.
+    expect(queryWeights(10, [12])).toEqual(queryWeights(10, [10]));
   });
 });
 

@@ -9,12 +9,17 @@ import { searchLexemes, utf8Length } from "./lexemes.js";
 /** The weight of a field, as `setweight` marks it: names first, bodies last. */
 export type SearchWeight = "A" | "B" | "C" | "D";
 
-/** What each weight counts for in a rank: the array `ts_rank` is given, `{D, C, B, A}`. */
+/**
+ * What each weight counts for in a rank: the array `ts_rank` is given, `{D, C, B, A}`. A match
+ * in a name counts twice a match in the body, no more: with the server's steeper defaults a common
+ * word in a short map's title outweighed a code in a long body, whatever the code's rarity, and
+ * the two evaluation sets reached the most first documents with these (ADR-0069).
+ */
 export const SEARCH_WEIGHTS: Readonly<Record<SearchWeight, number>> = {
   A: 1.0,
-  B: 0.6,
-  C: 0.2,
-  D: 0.05,
+  B: 0.85,
+  C: 0.7,
+  D: 0.5,
 };
 
 /** How the weights rank when one position is kept of several: A above D. */
@@ -160,13 +165,25 @@ const BASEL = 1.64493406685;
  * weights above and normalization 1 computes it: each matched lexeme counts its best occurrence
  * and a little for every further one, the sum is averaged over the query's lexemes and divided
  * by the logarithm of the document's length. Zero when nothing matches.
+ *
+ * Given `weights`, one per lexeme of the query, the average is weighed (ADR-0069): a lexeme's
+ * occurrences count its weight's share, and the sum is divided by the sum of the weights, which
+ * is the average `ts_rank` computes when every weight is one. A deployment computes the same as
+ * the weighed mean of `ts_rank` over each lexeme alone.
  */
-export function rankSearchVector(vector: SearchVector, query: readonly string[]): number {
+export function rankSearchVector(
+  vector: SearchVector,
+  query: readonly string[],
+  weights?: readonly number[],
+): number {
   if (query.length === 0 || vector.size === 0) {
     return 0;
   }
   let rank = 0;
-  for (const lexeme of query) {
+  let total = 0;
+  for (const [at, lexeme] of query.entries()) {
+    const weight = weights?.[at] ?? 1;
+    total += weight;
     const positions = vector.get(lexeme);
     if (positions === undefined) {
       continue;
@@ -174,25 +191,43 @@ export function rankSearchVector(vector: SearchVector, query: readonly string[])
     let sum = 0;
     let best = -1;
     let bestAt = 0;
-    positions.forEach(({ weight }, index) => {
-      const value = SEARCH_WEIGHTS[weight];
+    positions.forEach(({ weight: field }, index) => {
+      const value = SEARCH_WEIGHTS[field];
       sum += value / ((index + 1) * (index + 1));
       if (value > best) {
         best = value;
         bestAt = index;
       }
     });
-    rank += (best + sum - best / ((bestAt + 1) * (bestAt + 1))) / BASEL;
+    rank += (weight * (best + sum - best / ((bestAt + 1) * (bestAt + 1)))) / BASEL;
   }
-  if (rank === 0) {
+  if (rank === 0 || total <= 0) {
     return 0;
   }
-  rank /= query.length;
+  rank /= total;
   let length = 0;
   for (const positions of vector.values()) {
     length += positions.length;
   }
   return length > 0 ? rank / (Math.log(length + 1) / Math.LN2) : rank;
+}
+
+/**
+ * How much each lexeme of a query counts, by its rarity among the `total` findable entries of
+ * the mount, `frequencies` being how many of them hold each lexeme (ADR-0069): the fewer entries
+ * hold a word, the more a match of it says. The weight is the inverse document frequency as BM25
+ * smooths it, ln(1 + (N - n + 0.5) / (n + 0.5)), so that a word in every entry weighs next to
+ * nothing and still ranks the entries that hold only it above those that hold nothing of the
+ * query. Every lexeme weighs one where nothing was counted.
+ */
+export function queryWeights(total: number, frequencies: readonly number[]): number[] {
+  if (total <= 0) {
+    return frequencies.map(() => 1);
+  }
+  return frequencies.map((count) => {
+    const held = Math.min(Math.max(count, 0), total);
+    return Math.log(1 + (total - held + 0.5) / (held + 0.5));
+  });
 }
 
 /** A lexeme quoted as the text forms of `tsvector` and `tsquery` take it: quotes and backslashes doubled. */

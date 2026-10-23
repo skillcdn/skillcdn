@@ -184,6 +184,8 @@ export function matchSections(
   lexemes: readonly string[],
   options: {
     readonly language?: string | undefined;
+    /** How much each lexeme counts, by its rarity in the mount (ADR-0069); every one the same when left out. */
+    readonly weights?: readonly number[] | undefined;
     readonly limit?: number | undefined;
     readonly outline?: MarkdownOutline | undefined;
   } = {},
@@ -207,7 +209,7 @@ export function matchSections(
         ],
         options.language,
       );
-      return { section, body, rank: rankSearchVector(vector, lexemes) };
+      return { section, body, rank: rankSearchVector(vector, lexemes, options.weights) };
     })
     .filter((item) => item.rank > 0)
     .sort((a, b) => b.rank - a.rank || a.section.offset - b.section.offset)
