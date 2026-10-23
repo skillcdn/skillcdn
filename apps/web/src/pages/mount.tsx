@@ -234,6 +234,7 @@ function MountHeader(props: {
               </Fact>
             )}
           </ul>
+          <NewestNotice mount={mount} />
           {hostTreeUrl(mount) !== undefined && (
             <a
               className={styles.hostLink}
@@ -248,6 +249,37 @@ function MountHeader(props: {
         </div>
       )}
     </header>
+  );
+}
+
+/**
+ * While another commit's index is served (ADR-0068), the one place a person is told: which
+ * commit the page shows, which commit is the newest, and why the newest is not served. An agent
+ * is told once as it connects, the same way.
+ */
+function NewestNotice(props: { readonly mount: RestMount }) {
+  const { t } = useI18n();
+  const { mount } = props;
+  const newest = mount.newest;
+  if (newest == null) return null;
+  const failed = newest.status === "failed";
+  const code = newest.errorCode ?? "unknown";
+  const rebuilding = newest.commit === mount.commit;
+  const title = rebuilding
+    ? t.mount.rebuilding.title
+    : t.mount.newest.title(mount.commit.slice(0, 7));
+  let body: string;
+  if (rebuilding) {
+    body = failed ? t.mount.rebuilding.failed(code) : t.mount.rebuilding.body;
+  } else {
+    body = failed
+      ? t.mount.newest.failed(newest.commit.slice(0, 7), code)
+      : t.mount.newest.indexing(newest.commit.slice(0, 7));
+  }
+  return (
+    <Callout {...(failed ? { tone: "warning" as const } : {})} title={title}>
+      {body}
+    </Callout>
   );
 }
 

@@ -164,6 +164,19 @@ export const ko: Messages = {
       title: "이 커밋을 색인하지 못했습니다",
       body: (code: string) => `사유: ${code}. 자동으로 다시 시도하니 잠시 후 다시 확인해 주세요.`,
     },
+    newest: {
+      title: (commit: string) => `커밋 ${commit} 기준으로 보여 주고 있습니다`,
+      indexing: (commit: string) =>
+        `최신 커밋(${commit})을 색인하는 중입니다. 준비될 때까지 이 페이지와 모든 에이전트에는 마지막으로 색인된 커밋이 제공됩니다.`,
+      failed: (commit: string, code: string) =>
+        `최신 커밋(${commit})을 색인하지 못했습니다 (${code}). 자동으로 다시 시도하며, 그때까지 이 페이지와 모든 에이전트에는 마지막으로 색인된 커밋이 제공됩니다.`,
+    },
+    rebuilding: {
+      title: "이 커밋의 색인을 다시 만드는 중",
+      body: "읽기 규칙이 바뀌었습니다. 새 색인이 준비될 때까지 이 페이지와 모든 에이전트에는 이전 규칙으로 만든 색인이 제공됩니다.",
+      failed: (code: string) =>
+        `색인을 다시 만들지 못했습니다 (${code}). 자동으로 다시 시도하며, 그때까지 이 페이지와 모든 에이전트에는 이전 규칙으로 만든 색인이 제공됩니다.`,
+    },
     truncated: "저장소가 색인 한도보다 커서 일부 파일이 색인에서 빠졌습니다.",
     indexNow: {
       button: "지금 색인",

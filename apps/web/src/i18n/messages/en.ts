@@ -182,6 +182,20 @@ export const en = {
       title: "This commit could not be indexed",
       body: (code: string) => `Reason: ${code}. It is retried automatically; try again later.`,
     },
+    /** While another commit's index is served (ADR-0068): which commit the page shows, and why. */
+    newest: {
+      title: (commit: string) => `Showing commit ${commit}`,
+      indexing: (commit: string) =>
+        `The newest commit, ${commit}, is being indexed. Until it is ready, this page and every agent are served the last indexed commit.`,
+      failed: (commit: string, code: string) =>
+        `The newest commit, ${commit}, could not be indexed (${code}). It is retried automatically; until then this page and every agent are served the last indexed commit.`,
+    },
+    rebuilding: {
+      title: "Rebuilding the index of this commit",
+      body: "The reading rules changed. Until the new index is ready, this page and every agent are served the index made under the previous rules.",
+      failed: (code: string) =>
+        `Rebuilding the index failed (${code}). It is retried automatically; until then this page and every agent are served the index made under the previous rules.`,
+    },
     truncated:
       "This repository is larger than the indexing limits, so some files are missing from the index.",
     /** For whoever administers the repository on the git host: have it indexed now (ADR-0064). */
