@@ -1,4 +1,4 @@
-import type { GitHostKey, HostRepository } from "@skillcdn/core";
+import type { AddressHost, HostRepository } from "@skillcdn/core";
 import { and, eq, gt, lt, sql } from "drizzle-orm";
 import { type Database, drizzleOf } from "../client.js";
 import { accounts, missingRepos, repoAliases, repoRefs, repos, snapshots } from "../schema.js";
@@ -6,7 +6,7 @@ import { accounts, missingRepos, repoAliases, repoRefs, repos, snapshots } from 
 export interface RepoRecord {
   readonly id: string;
   readonly accountId: string;
-  readonly host: GitHostKey;
+  readonly host: AddressHost;
   /** What the host reported; this is what gets handed back to domain code. */
   readonly repository: HostRepository;
 }
@@ -17,7 +17,8 @@ export interface RepoAliasRecord extends RepoRecord {
 }
 
 export interface RepoAlias {
-  readonly host: GitHostKey;
+  /** A git host, or `local` for a pack served from a directory of the deployment (ADR-0071). */
+  readonly host: AddressHost;
   /** Lowercase, as the address parser produces them. */
   readonly owner: string;
   readonly repo: string;
@@ -170,7 +171,7 @@ export async function markRepositoryNotPublic(
 
 /** A repository as an event of the git host names it: by the host's immutable id. */
 export interface HostRepoKey {
-  readonly host: GitHostKey;
+  readonly host: AddressHost;
   readonly hostRepoId: string;
 }
 
@@ -209,7 +210,7 @@ export async function getRepo(
   return {
     id: row.repo.id,
     accountId: row.repo.accountId,
-    host: row.repo.host as GitHostKey,
+    host: row.repo.host as AddressHost,
     repository: {
       hostRepoId: row.repo.hostRepoId,
       name: row.repo.name,
@@ -228,7 +229,7 @@ export async function getRepo(
 /** The repositories of the account the host knows by this id, as far as they were seen here. */
 export async function listReposOfHostAccount(
   database: Database,
-  key: { readonly host: GitHostKey; readonly hostAccountId: string },
+  key: { readonly host: AddressHost; readonly hostAccountId: string },
 ): Promise<KnownRepo[]> {
   return drizzleOf(database)
     .select({ repoId: repos.id, accountId: repos.accountId, visibility: repos.visibility })

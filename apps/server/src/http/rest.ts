@@ -6,6 +6,7 @@ import {
   HUB_MAX_LIMIT,
   hubBody,
   type IndexNotReady,
+  isGitHostKey,
   isLegalDocumentKind,
   type LegalDocumentKind,
   MAX_QUERY_LENGTH,
@@ -67,13 +68,18 @@ const AVATAR_SIZE = 160;
 
 function repositoryOf(mount: Mount): RestRepository {
   const { repository } = mount.repo;
+  const { host } = mount.address;
   return {
-    host: mount.address.host,
+    host,
     owner: repository.owner.login,
     name: repository.name,
     defaultBranch: repository.defaultBranch,
     description: repository.description ?? null,
-    avatar: accountAvatarUrl(mount.address.host, repository.owner.hostAccountId, AVATAR_SIZE),
+    // The owner of a pack served from a directory of the deployment is a name with no picture
+    // anywhere (ADR-0071).
+    avatar: isGitHostKey(host)
+      ? accountAvatarUrl(host, repository.owner.hostAccountId, AVATAR_SIZE)
+      : "",
     visibility: repository.visibility,
   };
 }

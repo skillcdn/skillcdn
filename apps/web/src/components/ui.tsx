@@ -116,7 +116,9 @@ export function Avatar(props: {
   readonly eager?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
-  if (failed) {
+  // An owner with no picture anywhere, such as the one of a pack served from a directory of the
+  // deployment, is given as an empty source.
+  if (failed || props.src === "") {
     return null;
   }
   return (

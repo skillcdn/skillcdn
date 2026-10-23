@@ -16,8 +16,10 @@ export {
   readIndexLimits,
 } from "./limits.js";
 export {
+  type LocalFile,
   type ReadDirectory,
   type ReadDirectoryOptions,
   readDirectory,
+  readWorkingTree,
   WORKING_TREE_COMMIT,
 } from "./read-directory.js";

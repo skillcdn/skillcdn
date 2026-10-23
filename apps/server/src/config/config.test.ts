@@ -153,6 +153,15 @@ describe("loadConfig", () => {
     }
   });
 
+  it("serves packs from a directory of its own only when one is named", () => {
+    expect(loadConfig({ DATABASE_URL }, noFiles).packs).toBeUndefined();
+    expect(loadConfig({ DATABASE_URL, PACKS_DIR: "/srv/packs" }, noFiles).packs).toEqual({
+      root: "/srv/packs",
+    });
+    // An empty value is no value, as for every variable.
+    expect(loadConfig({ DATABASE_URL, PACKS_DIR: "" }, noFiles).packs).toBeUndefined();
+  });
+
   it("takes the deployment's own pages and contact, each only when set", () => {
     const none = loadConfig({ DATABASE_URL }, noFiles).web.tags;
     expect([none.termsUrl, none.privacyUrl, none.contactEmail]).toEqual([

@@ -80,7 +80,7 @@ Repository identity and a bounded overview of the mount:
 | Field | Meaning |
 |---|---|
 | `address` | Canonical address. |
-| `repository` | Host, owner, name, default branch, host description, `avatar`, the owner's picture as the host serves it ([ADR-0031](../adr/0031-a-picture-for-a-repository-comes-from-its-manifest-or-the-operator.md)), and `visibility`: `public`, or `private` for a repository that is only ever answered to someone the git host lets see it ([permissions](permissions.md)). |
+| `repository` | Host, owner, name, default branch, host description, `avatar`, the owner's picture as the host serves it ([ADR-0031](../adr/0031-a-picture-for-a-repository-comes-from-its-manifest-or-the-operator.md)) or the empty string for a pack served from a directory of the deployment, whose owner has none ([ADR-0071](../adr/0071-a-deployment-serves-packs-from-a-directory-of-its-own.md)), and `visibility`: `public`, or `private` for a repository that is only ever answered to someone the git host lets see it ([permissions](permissions.md)). |
 | `ref`, `pinned`, `commit`, `path` | Requested ref (`null` for default), whether it is a full commit hash, resolved commit, and mounted repository-root directory. |
 | `verified` | Whether the operator or, later, the owner vouches for the repository ([tools](tools.md)). |
 | `image` | The picture that stands for the address, as the URL a browser loads it from: the operator's ([admin API](../../deploy/README.md#the-admin-api)), else the one the nearest manifest declares ([format](skill-repo.md#the-repository-manifest-skillcdnmd)), a file of the repository at `commit` at the host or a URL as written; `null` when there is none. |

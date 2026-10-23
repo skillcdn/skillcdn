@@ -6,11 +6,11 @@ import {
   type Entitlements,
   formatAddress,
   type GitHost,
-  type GitHostAddress,
   GitHostError,
   type IndexLimits,
   isAnonymouslyReadable,
   isGitHostAddress,
+  LOCAL_HOST_KEY,
   type RepoCoordinates,
   type RepoPath,
   ROOT_PATH,
@@ -72,7 +72,7 @@ export interface RepoPermissions {
 
 /** An address resolved to a repository and a commit: what tools answer from. */
 export interface Mount extends ServedMount {
-  readonly address: GitHostAddress;
+  readonly address: Address;
   /** Where the repository is, and with which credential the git host is asked about it. */
   readonly coordinates: RepoCoordinates;
   readonly repo: RepoRecord;
@@ -148,6 +148,17 @@ export interface MountServiceOptions {
    * public repositories exist as far as it is concerned.
    */
   readonly permissions?: RepoPermissions | undefined;
+  /**
+   * Whether the deployment serves `local` addresses, from the directory it is configured to
+   * read packs from through its git host (ADR-0071). Left out, such an address is a name that
+   * is nothing, as it is to a deployment with no such directory.
+   */
+  readonly servesLocal?: boolean | undefined;
+  /**
+   * The origin visitors use, for the URLs a pack served from a directory names: its source is a
+   * page of this deployment. Left out, those URLs are paths of it.
+   */
+  readonly publicUrl?: string | undefined;
 }
 
 const MAX_REMEMBERED_MISSING = 10_000;
@@ -221,9 +232,7 @@ export class MountService {
    * not.
    */
   async resolve(address: Address, viewer?: Viewer): Promise<Mount> {
-    // A pack served from a machine (ADR-0053) is no repository of any git host: to a
-    // deployment its address is a name that is nothing, in the same words as any other.
-    if (!isGitHostAddress(address)) {
+    if (!this.#serves(address)) {
       throw new MountError("repo_not_found", "The repository was not found.");
     }
     const name: RepoCoordinates = { host: address.host, owner: address.owner, repo: address.repo };
@@ -241,7 +250,7 @@ export class MountService {
     address: Address,
     scope: { readonly accountId: string; readonly repoId: string },
   ): Promise<Mount> {
-    if (!isGitHostAddress(address)) {
+    if (!this.#serves(address)) {
       throw new MountError("repo_not_found", "The repository was not found.");
     }
     const repo = await getRepo(this.#options.database, scope);
@@ -255,8 +264,21 @@ export class MountService {
     );
   }
 
+  /**
+   * Whether an address names something this deployment may serve: a repository of a git host,
+   * or a pack of the directory it serves `local` addresses from, when it has one (ADR-0071). A
+   * pack served from a machine by the command (ADR-0053) is otherwise a name that is nothing,
+   * in the same words as any other.
+   */
+  #serves(address: Address): boolean {
+    return (
+      isGitHostAddress(address) ||
+      (address.host === LOCAL_HOST_KEY && this.#options.servesLocal === true)
+    );
+  }
+
   /** The mount of a repository the address names, once the repository is known: its commit, and what is known of it. */
-  async #mountOf(address: GitHostAddress, name: RepoCoordinates, repo: RepoRecord): Promise<Mount> {
+  async #mountOf(address: Address, name: RepoCoordinates, repo: RepoRecord): Promise<Mount> {
     // What is not public is read through the app's installation on it, never as the deployment.
     const coordinates: RepoCoordinates = isAnonymouslyReadable(repo.repository)
       ? name
@@ -291,6 +313,11 @@ export class MountService {
     }
     const { repository } = repo;
     const atHost = { host: address.host, owner: repository.owner.login, name: repository.name };
+    // A pack served from a directory names its source as a page of this deployment: at the
+    // origin visitors use where that is configured, else as a path of it.
+    const { publicUrl } = this.#options;
+    const here = (url: string): string =>
+      publicUrl !== undefined && url.startsWith("/") ? `${publicUrl}${url}` : url;
     const mount: Mount = {
       address,
       coordinates,
@@ -298,9 +325,11 @@ export class MountService {
       commit: resolved.commit,
       previousCommit: resolved.previous,
       limits: decision.limits ?? {},
-      // Whoever vouched for the repository vouched for its default branch (ADR-0026).
+      // Whoever vouched for the repository vouched for its default branch (ADR-0026). A pack of
+      // the deployment's own directory is vouched for by whoever put it there (ADR-0071).
       verified:
-        address.ref === undefined && (await this.#options.isVerified(repositoryKey(address))),
+        address.host === LOCAL_HOST_KEY ||
+        (address.ref === undefined && (await this.#options.isVerified(repositoryKey(address)))),
       image: await this.#options.imageOf(address),
       trustedUntil: resolved.trustedUntil,
       visibility: repository.visibility,
@@ -309,10 +338,10 @@ export class MountService {
       // Named after the commit of the mount they are called on: the reader answers from another
       // commit's index at times (ADR-0068), as a copy of the mount at that commit.
       sourceUrl(path: RepoPath) {
-        return sourceFileUrl(atHost, this.commit, path);
+        return here(sourceFileUrl(atHost, this.commit, path));
       },
       rawUrl(path: RepoPath) {
-        return rawFileUrl(atHost, this.commit, path);
+        return here(rawFileUrl(atHost, this.commit, path));
       },
     };
     return mount;
@@ -341,8 +370,8 @@ export class MountService {
    * nothing indexed. Rejects with a `MountError` when the git host could not be asked.
    */
   async asksForPermission(address: Address): Promise<boolean> {
-    // Nothing by that name, as for any name that is nothing (ADR-0053).
-    if (!isGitHostAddress(address)) {
+    // Nothing by that name, as for any name that is nothing.
+    if (!this.#serves(address)) {
       return true;
     }
     const name: RepoCoordinates = { host: address.host, owner: address.owner, repo: address.repo };

@@ -5,6 +5,7 @@ import {
   classifyLicenseText,
   describeLicense,
   isLicenseFileName,
+  localFileUrl,
   MAX_LICENSE_TEXT_LENGTH,
   NO_LICENSE,
   preferredLicenseFile,
@@ -292,5 +293,19 @@ describe("what a license means for serving", () => {
         path("skills/écrire/SKILL.md"),
       ),
     ).toBe(`https://github.com/Acme/skills/blob/${"a".repeat(40)}/skills/%C3%A9crire/SKILL.md`);
+  });
+
+  it("points at the page of the address at the file for a pack served from a directory", () => {
+    // Nothing of a working tree is at a host: the page of the deployment is where a reader goes,
+    // whatever the commit stands in for.
+    const url = sourceFileUrl(
+      { host: "local", owner: "Acme", name: "handbook" },
+      "b".repeat(40),
+      path("docs/écrire/a b.md"),
+    );
+    expect(url).toBe("/local/Acme/handbook?file=docs%2F%C3%A9crire%2Fa%20b.md");
+    expect(localFileUrl({ owner: "Acme", name: "handbook" }, path("README.md"))).toBe(
+      "/local/Acme/handbook?file=README.md",
+    );
   });
 });

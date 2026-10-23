@@ -1,4 +1,4 @@
-import type { EmbedLimits, Entitlements, GitHostKey, HostRepository } from "@skillcdn/core";
+import type { AddressHost, EmbedLimits, Entitlements, HostRepository } from "@skillcdn/core";
 import type { EmbeddingScope } from "../config/config.js";
 
 // What may be embedded (ADR-0064, point 4): the scope the deployment configured decides which
@@ -26,7 +26,7 @@ export type EmbedDecision =
 /** Whether a repository may be embedded, and within which bounds. */
 export async function decideEmbedding(
   policy: EmbedPolicy,
-  host: GitHostKey,
+  host: AddressHost,
   repository: HostRepository,
 ): Promise<EmbedDecision> {
   if (!withinScope(policy.scope, repository.visibility)) {

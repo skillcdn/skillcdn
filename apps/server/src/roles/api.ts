@@ -50,6 +50,7 @@ import {
   type EmbeddingScope,
   HUB_DEFAULTS,
 } from "../config/config.js";
+import { createDirectoryHost, routeGitHosts } from "../directory/directory-host.js";
 import { HostEvents } from "../events/host-events.js";
 import { type AppAuth, createApp } from "../http/app.js";
 import { createClientAddressResolver } from "../http/client-address.js";
@@ -133,6 +134,8 @@ export type ApiConfig = Pick<Config, "mounts" | "indexing"> & {
   readonly web?: { readonly publicUrl?: string | undefined };
   /** The search across every pack (ADR-0070); left out, on with its defaults. */
   readonly hub?: Config["hub"] | undefined;
+  /** The directory of packs served at `local` addresses (ADR-0071); left out, there is none. */
+  readonly packs?: Config["packs"];
   /** Left out, nobody signs in. What it needs of the git host arrives through the ports. */
   readonly auth?:
     | (Omit<AuthConfig, "github"> & {
@@ -163,9 +166,18 @@ export function createApi(
   /** What signing in is made of, when people can. */
   readonly auth: AppAuth | undefined;
 } {
-  const { database, gitHost, clock, usage, logger } = ports;
+  const { database, clock, usage, logger } = ports;
   const blobStore = createBlobStore(database);
   const limits: IndexLimits = config.indexing.limits;
+  // The packs of the deployment's own directory are read through the same port as a git host's
+  // repositories, by the host key of the address (ADR-0071).
+  const gitHost =
+    config.packs === undefined
+      ? ports.gitHost
+      : routeGitHosts({
+          gh: ports.gitHost,
+          local: createDirectoryHost({ root: config.packs.root, limits }),
+        });
 
   // The operator's deny list decides first; whatever the port was given decides the rest.
   const lists = new OperatorLists({ database, clock });
@@ -312,6 +324,8 @@ export function createApi(
     isVerified: (key) => lists.isVerified(key),
     imageOf: (address) => images.imageFor(address),
     permissions,
+    servesLocal: config.packs !== undefined,
+    publicUrl: config.web?.publicUrl,
   });
   const owners =
     ports.directory === undefined

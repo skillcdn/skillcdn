@@ -155,7 +155,11 @@ export const restRepositorySchema = z.object({
   defaultBranch: z.string(),
   /** What the host shows as the repository's description, or `null`. */
   description: z.nullable(z.string()),
-  /** The owner's picture as the host serves it: an https URL, loaded by the browser (ADR-0031). */
+  /**
+   * The owner's picture as the host serves it: an https URL, loaded by the browser (ADR-0031);
+   * the empty string for an owner with no picture anywhere, as the one of a pack served from a
+   * directory of the deployment (ADR-0071).
+   */
   avatar: z.string(),
   /**
    * Whether everyone can see the repository or only the people the host lets

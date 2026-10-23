@@ -18,6 +18,7 @@ import {
 import type * as z from "zod";
 import { vectorKeyOf } from "../adapters/meaning.js";
 import type { Config, EmbeddingScope } from "../config/config.js";
+import { createDirectoryHost, routeGitHosts } from "../directory/directory-host.js";
 import { SnapshotService } from "../indexer/snapshot-service.js";
 import type { Logger } from "../logger.js";
 import { MountService } from "../mounts/mount-service.js";
@@ -53,6 +54,8 @@ export type WorkerConfig = Pick<Config, "mounts" | "indexing"> & {
   readonly embedConcurrency: number;
   /** Which repositories are embedded (ADR-0064, point 4). Under `none` the worker embeds nothing. */
   readonly scope: EmbeddingScope;
+  /** The directory of packs served at `local` addresses (ADR-0071); left out, there is none. */
+  readonly packs?: Config["packs"];
 };
 
 export interface WorkerPorts {
@@ -85,7 +88,16 @@ export interface Worker {
 }
 
 export function createWorker(config: WorkerConfig, ports: WorkerPorts): Worker {
-  const { database, jobs, gitHost, embedder, clock, logger } = ports;
+  const { database, jobs, embedder, clock, logger } = ports;
+  // The same packs the api role serves from the deployment's directory (ADR-0071): the worker
+  // indexes them when asked, as it indexes a repository.
+  const gitHost =
+    config.packs === undefined
+      ? ports.gitHost
+      : routeGitHosts({
+          gh: ports.gitHost,
+          local: createDirectoryHost({ root: config.packs.root, limits: config.indexing.limits }),
+        });
   const blobs = createBlobStore(database);
   const lists = new OperatorLists({ database, clock });
   // The operator's deny list decides first; whatever the port was given decides the rest.
@@ -102,6 +114,7 @@ export function createWorker(config: WorkerConfig, ports: WorkerPorts): Worker {
     // Neither decides what is indexed; both are the pages' and the results' business.
     isVerified: async () => false,
     imageOf: async () => undefined,
+    servesLocal: config.packs !== undefined,
   });
   const snapshots = new SnapshotService({
     database,

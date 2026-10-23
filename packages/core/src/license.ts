@@ -1,4 +1,4 @@
-import type { GitHostKey } from "./address.js";
+import { type AddressHost, LOCAL_HOST_KEY } from "./address.js";
 import { parentDirectory } from "./repo-layout.js";
 import { isWithinRepoPath, type RepoPath } from "./repo-path.js";
 
@@ -402,15 +402,30 @@ export function servesInFull(fact: LicenseFact, verified: boolean): boolean {
   return fact.kind !== "restrictive" || verified;
 }
 
-/** Where a file of a commit can be read at its host, for a reader sent to the source. */
+/**
+ * Where a file of a commit can be read at its host, for a reader sent to the source. A pack
+ * served from a directory of the deployment (ADR-0071) has no host but the deployment: the URL
+ * is the page of the address at the file, relative to the deployment's origin.
+ */
 export function sourceFileUrl(
-  repository: { readonly host: GitHostKey; readonly owner: string; readonly name: string },
+  repository: { readonly host: AddressHost; readonly owner: string; readonly name: string },
   commit: string,
   path: RepoPath,
 ): string {
+  if (repository.host === LOCAL_HOST_KEY) {
+    return localFileUrl(repository, path);
+  }
   const encoded = path
     .split("/")
     .map((segment) => encodeURIComponent(segment))
     .join("/");
   return `https://github.com/${encodeURIComponent(repository.owner)}/${encodeURIComponent(repository.name)}/blob/${commit}/${encoded}`;
+}
+
+/** The page of a pack served from a directory, open at a file: all the deployment has of a source. */
+export function localFileUrl(
+  repository: { readonly owner: string; readonly name: string },
+  path: RepoPath,
+): string {
+  return `/${LOCAL_HOST_KEY}/${encodeURIComponent(repository.owner)}/${encodeURIComponent(repository.name)}?file=${encodeURIComponent(path)}`;
 }

@@ -2,7 +2,6 @@ import {
   type BlobStore,
   type Clock,
   formatAddress,
-  isGitHostAddress,
   parseAddress,
   SECTIONING_VERSION,
 } from "@skillcdn/core";
@@ -189,7 +188,7 @@ export class EmbeddingReads {
     repository?: { readonly accountId: string; readonly repoId: string },
   ): Promise<{ readonly address: string; readonly queued: boolean } | "unavailable" | "invalid"> {
     const parsed = parseAddress(written.startsWith("/") ? written : `/${written}`);
-    if (!parsed.ok || !isGitHostAddress(parsed.value) || parsed.value.path.length > 0) {
+    if (!parsed.ok || parsed.value.path.length > 0) {
       return "invalid";
     }
     const { jobs } = this.#deps;

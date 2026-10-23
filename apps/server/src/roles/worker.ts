@@ -49,6 +49,7 @@ export async function runWorker(config: Config, logger: Logger): Promise<void> {
       indexing: config.indexing,
       embedConcurrency: config.meaning.embeddings?.concurrency ?? 1,
       scope: config.meaning.embeddings?.scope ?? "none",
+      packs: config.packs,
     },
     // Ports with a default implementation, as in the api role: a build that layers its own
     // packages on top of this image replaces them here.

@@ -63,6 +63,7 @@ export {
   type LicenseKind,
   type LicenseSources,
   licenseOfPath,
+  localFileUrl,
   MAX_LICENSE_TEXT_LENGTH,
   NO_LICENSE,
   preferredLicenseFile,

@@ -78,6 +78,8 @@ export interface HarnessOptions {
   readonly minServableIndexVersion?: number;
   /** The search across every pack (ADR-0070); left out, on with its defaults. */
   readonly hub?: HubConfig;
+  /** The directory of packs served at `local` addresses (ADR-0071); left out, there is none. */
+  readonly packsRoot?: string;
   readonly entitlements?: Entitlements;
   readonly host?: FixtureHost;
   readonly trustedProxies?: readonly string[];
@@ -136,6 +138,7 @@ export function createHarness(testDatabase: TestDatabase, options: HarnessOption
     {
       mounts: { repoTtlMs: ttlMs, refTtlMs: ttlMs },
       hub: options.hub,
+      packs: options.packsRoot === undefined ? undefined : { root: options.packsRoot },
       ...(options.login === undefined
         ? {}
         : {

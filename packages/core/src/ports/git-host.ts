@@ -1,4 +1,4 @@
-import type { AddressRef, GitHostKey } from "../address.js";
+import type { AddressHost, AddressRef } from "../address.js";
 import { DomainError } from "../errors.js";
 import type { RepoPath } from "../repo-path.js";
 
@@ -9,9 +9,13 @@ import type { RepoPath } from "../repo-path.js";
  */
 export type HostCredential = "deployment" | "installation";
 
-/** Where a repository lives, as written in an address, and with which credential it is read. */
+/**
+ * Where a repository lives, as written in an address, and with which credential it is read: on a
+ * git host, or, under `local`, in the directory a deployment is configured to serve packs from,
+ * through an adapter of this same port (ADR-0071).
+ */
 export interface RepoCoordinates {
-  readonly host: GitHostKey;
+  readonly host: AddressHost;
   readonly owner: string;
   readonly repo: string;
   /** Left out: the deployment's own credential. */

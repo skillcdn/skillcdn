@@ -153,6 +153,7 @@ const environmentSchema = z.object({
     .min(MIN_SECRET_LENGTH, `must be at least ${MIN_SECRET_LENGTH} characters`)
     .optional(),
   WEB_ROOT: z.string().min(1).optional(),
+  PACKS_DIR: z.string().min(1).optional(),
   PUBLIC_URL: z
     .url({ protocol: /^https?$/ })
     .refine((value) => {
@@ -399,6 +400,11 @@ export interface Config {
   };
   /** The search across every pack the deployment serves (ADR-0070). */
   readonly hub: HubConfig;
+  /**
+   * The packs the deployment serves from its own filesystem, at `local` addresses (ADR-0071):
+   * every directory `<owner>/<name>` under `root`. Unset, such an address is a name that is nothing.
+   */
+  readonly packs: { readonly root: string } | undefined;
 }
 
 export interface HubConfig {
@@ -661,6 +667,7 @@ export function loadConfig(
       timeoutMs: env.HUB_SEARCH_TIMEOUT_MS,
       candidates: env.HUB_SEARCH_CANDIDATES,
     },
+    packs: env.PACKS_DIR === undefined ? undefined : { root: env.PACKS_DIR },
   };
 }
 

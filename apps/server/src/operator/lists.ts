@@ -1,8 +1,7 @@
 import {
+  type Address,
   type Clock,
   formatAddress,
-  type GitHostAddress,
-  isGitHostAddress,
   parseAddress,
   REFERENCE_REPOSITORY_ADDRESS,
 } from "@skillcdn/core";
@@ -23,15 +22,15 @@ const LISTS_TTL_MS = 30_000;
  * What a fresh deployment features until the operator features something: the reference
  * repository of this project (ADR-0028). It leaves the list the moment the operator adds an entry.
  */
-const DEFAULT_FEATURED: readonly GitHostAddress[] = (() => {
+const DEFAULT_FEATURED: readonly Address[] = (() => {
   const parsed = parseAddress(REFERENCE_REPOSITORY_ADDRESS);
-  return parsed.ok && isGitHostAddress(parsed.value) ? [parsed.value] : [];
+  return parsed.ok ? [parsed.value] : [];
 })();
 
-/** An entry of a list as an address of a git host, which is all the lists hold; nothing for anything else. */
-function listedAddress(text: string): GitHostAddress | undefined {
+/** An entry of a list as an address; nothing for an entry that is none. */
+function listedAddress(text: string): Address | undefined {
   const parsed = parseAddress(text);
-  return parsed.ok && isGitHostAddress(parsed.value) ? parsed.value : undefined;
+  return parsed.ok ? parsed.value : undefined;
 }
 
 export class OperatorListError extends Error {
@@ -56,15 +55,13 @@ export class OperatorLists {
   }
 
   /** The address an entry of `kind` is stored under, or why the text is not one. */
-  static addressOf(kind: OperatorListKind, text: string): GitHostAddress {
+  static addressOf(kind: OperatorListKind, text: string): Address {
     const parsed = parseAddress(text.startsWith("/") ? text : `/${text}`);
     if (!parsed.ok) {
       throw new OperatorListError(`not an address such as /gh/owner/repo: ${parsed.error.message}`);
     }
-    // The lists name repositories of a git host; a pack served from a machine is none (ADR-0053).
-    if (!isGitHostAddress(parsed.value)) {
-      throw new OperatorListError("not an address such as /gh/owner/repo: not a git host");
-    }
+    // A `local` address names a pack of the directory a deployment serves them from (ADR-0071);
+    // one that has no such directory lists a name that is nothing, as it may list any name.
     if (kind !== "featured" && (parsed.value.ref !== undefined || parsed.value.path.length > 0)) {
       throw new OperatorListError(
         `a ${kind} repository is written as /gh/owner/repo, without a ref or a path`,
@@ -87,7 +84,7 @@ export class OperatorLists {
   }
 
   /** The featured addresses, in the order they were added; the default while there are none. */
-  async featured(): Promise<readonly GitHostAddress[]> {
+  async featured(): Promise<readonly Address[]> {
     const listed = (await this.all("featured")).flatMap((entry) => {
       const address = listedAddress(entry.address);
       return address === undefined ? [] : [address];
@@ -100,10 +97,10 @@ export class OperatorLists {
    * none) and the vouched-for repositories, without duplicates and without anything blocked. A
    * blocked repository does not exist for callers, so no list may name it.
    */
-  async listed(): Promise<readonly GitHostAddress[]> {
+  async listed(): Promise<readonly Address[]> {
     const blocked = await this.#keys("blocked");
     const entries = await this.#entries();
-    const candidates: GitHostAddress[] = entries.some((entry) => entry.kind === "featured")
+    const candidates: Address[] = entries.some((entry) => entry.kind === "featured")
       ? []
       : [...DEFAULT_FEATURED];
     for (const entry of entries) {
@@ -113,7 +110,7 @@ export class OperatorLists {
       }
     }
     const seen = new Set<string>();
-    const addresses: GitHostAddress[] = [];
+    const addresses: Address[] = [];
     for (const address of candidates) {
       const written = formatAddress(address);
       if (blocked.has(repositoryKey(address)) || seen.has(written)) {

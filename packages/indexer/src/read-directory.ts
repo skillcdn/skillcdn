@@ -42,7 +42,8 @@ export interface ReadDirectory {
   readonly commit: string;
 }
 
-interface LocalFile {
+/** A file of a working tree: its tree entry, and its bytes where they were read. */
+export interface LocalFile {
   readonly entry: TreeEntry;
   /** Left out for a file too large to be indexed: listed, never read. */
   readonly bytes: Uint8Array | undefined;
@@ -60,9 +61,10 @@ function isSkipped(name: string): boolean {
  * The files of a directory as tree entries: `.git`, `node_modules` and ordinary symbolic links
  * are left out. A symlink policy remains an unreadable boundary, without following its target.
  * Hidden skills and explicitly referenced files follow the indexer's rules. A file too large to
- * be indexed or read gets a stand-in hash: nothing ever asks for its body.
+ * be indexed or read gets a stand-in hash: nothing ever asks for its body. The entries come in
+ * byte order of path, so that two reads of the same files are the same list.
  */
-async function readWorkingTree(
+export async function readWorkingTree(
   root: string,
   limits: IndexLimits,
 ): Promise<{ readonly files: LocalFile[]; readonly skipped: number }> {

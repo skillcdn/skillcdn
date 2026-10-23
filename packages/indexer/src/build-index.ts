@@ -5,6 +5,7 @@ import type {
   StoredTranslation,
 } from "@skillcdn/core";
 import {
+  type AddressHost,
   assembleSkillDocument,
   type BlobStore,
   classifyLicenseFile,
@@ -15,7 +16,6 @@ import {
   describeOmittedFile,
   type GitHost,
   GitHostError,
-  type GitHostKey,
   type IndexLimits,
   inspectMarkdownReferences,
   isExcludedPath,
@@ -93,7 +93,7 @@ export interface BuildIndexOptions {
    * the coordinates stand in, which an address spells as the caller typed it.
    */
   readonly repository?: {
-    readonly host: GitHostKey;
+    readonly host: AddressHost;
     readonly owner: string;
     readonly name: string;
   };

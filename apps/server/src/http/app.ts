@@ -17,6 +17,8 @@ import {
   type GitHostLogin,
   ICON_ROUTE,
   ICON_SIZE,
+  isGitHostAddress,
+  isGitHostKey,
   LEGAL_DOCUMENT_KINDS,
   LEGAL_PAGE_PATHS,
   type LegalDocumentKind,
@@ -155,6 +157,8 @@ export interface AppDependencies {
 
 /** JSON-RPC messages are small. This is the ceiling for anything a client may send. */
 const MAX_REQUEST_BYTES = 1024 * 1024;
+/** The routes of addresses: a repository of a git host, and a pack of the deployment's own directory (ADR-0071). */
+const ADDRESS_ROUTES = ["/gh/*", "/local/*"] as const;
 /** The header under which the route names a request to the MCP handler; never a client's to set. */
 const RESOLVED_HEADER = "x-skillcdn-resolved";
 const pageQuery = z.object({
@@ -781,6 +785,10 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
       }
       throw error;
     }
+    // The owner of a pack served from a directory of the deployment has no picture anywhere.
+    if (!isGitHostKey(mount.address.host)) {
+      return c.notFound();
+    }
     const owner = mount.repo.repository.owner.hostAccountId;
     const bytes = await dependencies.pictures.get(
       accountAvatarUrl(mount.address.host, owner, ICON_SIZE),
@@ -940,30 +948,30 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
   // origin may reach the endpoint, as it may reach the REST API. No cookies are involved, so
   // credentials are never allowed; a token travels in a header the page sets itself, and the
   // challenge that asks for one is readable to it.
-  app.use(
-    "/gh/*",
-    cors({
-      origin: "*",
-      allowMethods: ["GET", "POST", "OPTIONS"],
-      allowHeaders: [
-        "accept",
-        "authorization",
-        "content-type",
-        "mcp-method",
-        "mcp-name",
-        "mcp-protocol-version",
-        "mcp-session-id",
-      ],
-      exposeHeaders: [
-        "mcp-protocol-version",
-        "mcp-session-id",
-        "retry-after",
-        "www-authenticate",
-        "x-request-id",
-      ],
-      maxAge: CORS_MAX_AGE_SECONDS,
-    }),
-  );
+  const addressCors = cors({
+    origin: "*",
+    allowMethods: ["GET", "POST", "OPTIONS"],
+    allowHeaders: [
+      "accept",
+      "authorization",
+      "content-type",
+      "mcp-method",
+      "mcp-name",
+      "mcp-protocol-version",
+      "mcp-session-id",
+    ],
+    exposeHeaders: [
+      "mcp-protocol-version",
+      "mcp-session-id",
+      "retry-after",
+      "www-authenticate",
+      "x-request-id",
+    ],
+    maxAge: CORS_MAX_AGE_SECONDS,
+  });
+  for (const route of ADDRESS_ROUTES) {
+    app.use(route, addressCors);
+  }
 
   // The root of the deployment is an MCP server too (ADR-0070): the search across every pack,
   // for whatever is not a page. A browser's GET stays the landing page, below; the MCP transport
@@ -1031,73 +1039,75 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
     );
   }
 
-  app.all(
-    "/gh/*",
-    bodyLimit({
-      maxSize: MAX_REQUEST_BYTES,
-      onError: (c) => c.json(errorBody("request.too_large", "The request body is too large."), 413),
-    }),
-    async (c) => {
-      // An address answers a browser with the explorer and everything else with MCP.
-      if (web !== undefined && wantsHtml(webRequestOf(c))) {
-        return addressPage(c, web);
+  const addressBodyLimit = bodyLimit({
+    maxSize: MAX_REQUEST_BYTES,
+    onError: (c) => c.json(errorBody("request.too_large", "The request body is too large."), 413),
+  });
+  const addressRoute = async (c: Context<AppEnv>): Promise<Response> => {
+    // An address answers a browser with the explorer and everything else with MCP.
+    if (web !== undefined && wantsHtml(webRequestOf(c))) {
+      return addressPage(c, web);
+    }
+    const mount = await mcpMountAt(c);
+    if (mount instanceof Response) {
+      return mount;
+    }
+    let body: string | undefined;
+    if (c.req.method === "POST") {
+      // A JSON-RPC batch would let one request carry thousands of calls, and no protocol
+      // revision the server speaks needs one: an array body is refused before the handler.
+      body = await c.req.text();
+      if (/^\s*\[/.test(body)) {
+        return c.json(
+          {
+            jsonrpc: "2.0",
+            id: null,
+            error: { code: -32600, message: "JSON-RPC batches are not supported." },
+          },
+          400,
+        );
       }
-      const mount = await mcpMountAt(c);
-      if (mount instanceof Response) {
-        return mount;
+      // A client of the earlier revisions used this repository today, through the app its
+      // handshake names; every other message is counted where the tools answer it.
+      const app = clientAppOf(body);
+      if (app !== undefined) {
+        tools.stats.client(mount, c.get("clientAddress"), app);
       }
-      let body: string | undefined;
-      if (c.req.method === "POST") {
-        // A JSON-RPC batch would let one request carry thousands of calls, and no protocol
-        // revision the server speaks needs one: an array body is refused before the handler.
-        body = await c.req.text();
-        if (/^\s*\[/.test(body)) {
-          return c.json(
-            {
-              jsonrpc: "2.0",
-              id: null,
-              error: { code: -32600, message: "JSON-RPC batches are not supported." },
-            },
-            400,
-          );
-        }
-        // A client of the earlier revisions used this repository today, through the app its
-        // handshake names; every other message is counted where the tools answer it.
-        const app = clientAppOf(body);
-        if (app !== undefined) {
-          tools.stats.client(mount, c.get("clientAddress"), app);
-        }
-      }
-      // The handler gets the request under a key of this route's making, and without the access
-      // token: who the request is for was settled above, and nothing further on needs the token.
-      const key = dependencies.requests.newRequestId();
-      const headers = new Headers(c.req.raw.headers);
-      headers.set(RESOLVED_HEADER, key);
-      headers.delete("authorization");
-      const request = new Request(c.req.raw.url, {
-        method: c.req.method,
-        headers,
-        signal: c.req.raw.signal,
-        ...(body === undefined ? {} : { body }),
-      });
-      // The client's address goes along for the statistics, which count a client where the
-      // tools know which app it is; the request itself keeps no trace of it.
-      resolvedFor.set(key, {
-        mount,
-        requestId: c.get("requestId"),
-        origin: originOf(c.req.url),
-        clientAddress: c.get("clientAddress"),
-      });
-      try {
-        const response = await mcp.fetch(request);
-        // A moving ref, or one person's: nothing between us and the client keeps it.
-        response.headers.set("cache-control", "no-store");
-        return response;
-      } finally {
-        resolvedFor.delete(key);
-      }
-    },
-  );
+    }
+    // The handler gets the request under a key of this route's making, and without the access
+    // token: who the request is for was settled above, and nothing further on needs the token.
+    const key = dependencies.requests.newRequestId();
+    const headers = new Headers(c.req.raw.headers);
+    headers.set(RESOLVED_HEADER, key);
+    headers.delete("authorization");
+    const request = new Request(c.req.raw.url, {
+      method: c.req.method,
+      headers,
+      signal: c.req.raw.signal,
+      ...(body === undefined ? {} : { body }),
+    });
+    // The client's address goes along for the statistics, which count a client where the
+    // tools know which app it is; the request itself keeps no trace of it.
+    resolvedFor.set(key, {
+      mount,
+      requestId: c.get("requestId"),
+      origin: originOf(c.req.url),
+      clientAddress: c.get("clientAddress"),
+    });
+    try {
+      const response = await mcp.fetch(request);
+      // A moving ref, or one person's: nothing between us and the client keeps it.
+      response.headers.set("cache-control", "no-store");
+      return response;
+    } finally {
+      resolvedFor.delete(key);
+    }
+  };
+  // The addresses of a git host, and of the packs the deployment serves from its own directory
+  // (ADR-0071), answer alike: what each is is settled when the mount is resolved.
+  for (const route of ADDRESS_ROUTES) {
+    app.all(route, addressBodyLimit, addressRoute);
+  }
 
   if (web !== undefined) {
     const bundle = web;
@@ -1117,10 +1127,17 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
         const addresses = await dependencies.lists.listed();
         return {
           addresses: addresses.map(formatAddress),
+          // Only an account of a git host has a page; the owner of a directory pack is a name.
           owners:
             dependencies.owners === undefined
               ? []
-              : [...new Set(addresses.map(({ host, owner }) => formatOwnerPath({ host, owner })))],
+              : [
+                  ...new Set(
+                    addresses
+                      .filter(isGitHostAddress)
+                      .map(({ host, owner }) => formatOwnerPath({ host, owner })),
+                  ),
+                ],
         };
       } catch (error) {
         logger.warn({ err: error }, "the operator's lists could not be read for the sitemap");
