@@ -63,7 +63,7 @@
     "postpack": "node ../../scripts/pack-license.mjs remove TRADEMARKS.md"
   },
   "devDependencies": {
-    "@napi-rs/canvas": "^1.0.10",
+    "@napi-rs/canvas": "^1.0.11",
     "@skillcdn/core": "workspace:^",
     "@types/node": "catalog:",
     "typescript": "catalog:",
