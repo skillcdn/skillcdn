@@ -12,7 +12,9 @@ import {
 } from "@skillcdn/core";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { loadWebBundle, type WebBundle } from "./http/web.js";
 import { createHarness, type Harness, type HarnessOptions } from "./testing/harness.js";
+import { createWebBuild, type WebBuildFixture } from "./testing/web-build.js";
 
 // A deployment serves packs from a directory of its own at `local` addresses (ADR-0071): as a
 // repository of a git host is served, by the same routes and tools, with the hash of the tree
@@ -23,11 +25,16 @@ const FIXTURES = fileURLToPath(new URL("../fixtures/.repositories", import.meta.
 const INDEXED_WITHIN = { timeout: 15_000, interval: 50 };
 const HANDBOOK = "/local/acme/handbook";
 const NOTES = "/local/acme/notes";
+const BROWSER = { accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" };
 
 let testDatabase: TestDatabase;
 let root: string;
+let build: WebBuildFixture;
+let web: WebBundle;
 beforeAll(async () => {
   testDatabase = await createTestDatabase(process.env.TEST_DATABASE_URL ?? DEV_DATABASE_URL);
+  build = createWebBuild();
+  web = await loadWebBundle(build.root, { publicUrl: "https://skills.example" });
   root = mkdtempSync(join(tmpdir(), "skillcdn-packs-"));
   cpSync(join(FIXTURES, "document-pack"), join(root, "acme", "handbook"), { recursive: true });
   // A document pack of this test's own, which one test changes.
@@ -46,6 +53,7 @@ beforeAll(async () => {
 });
 afterAll(async () => {
   rmSync(root, { recursive: true, force: true });
+  build?.remove();
   await testDatabase?.drop();
 });
 
@@ -121,6 +129,25 @@ describe("a deployment with a directory of packs", () => {
     const text = (found.content as { text?: string }[]).map((block) => block.text ?? "").join("\n");
     expect(text).toContain("docs/invoicing.md");
     await client.close();
+  });
+
+  it("renders the page of the address for a browser with what the address serves", async () => {
+    const h = harness({ web });
+    const body = await ready(h, HANDBOOK);
+    const page = await h.request(HANDBOOK, { headers: BROWSER });
+    expect(page.status).toBe(200);
+    expect(page.headers.get("content-type")).toBe("text/html; charset=utf-8");
+    const input = /<pre id="input">(.*?)<\/pre>/s.exec(await page.text())?.[1];
+    expect(JSON.parse(input ?? "{}")).toMatchObject({
+      pathname: HANDBOOK,
+      data: {
+        mount: {
+          ready: { address: HANDBOOK, commit: body.commit, repository: { host: "local" } },
+        },
+      },
+    });
+    // The owner of a directory has no page (ADR-0071): one segment is an address short of one.
+    expect((await h.request("/local/acme", { headers: BROWSER })).status).toBe(404);
   });
 
   it("knows no ref of a working tree, and nothing by another name, in the words of any name that is nothing", async () => {

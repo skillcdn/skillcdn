@@ -1,5 +1,6 @@
 import {
   formatAddress,
+  isGitHostKey,
   type RestLegalDocument,
   type RestMount,
   type RestOwner,
@@ -410,8 +411,11 @@ export function buildHead(
       url: canonical,
       description: text.description,
       inLanguage,
+      // A pack served from a directory of the deployment is at no git host (ADR-0071).
       ...(skill === undefined
-        ? { codeRepository: `https://github.com/${repository.owner}/${repository.name}` }
+        ? isGitHostKey(repository.host)
+          ? { codeRepository: `https://github.com/${repository.owner}/${repository.name}` }
+          : {}
         : {
             isPartOf: {
               "@type": "SoftwareSourceCode",

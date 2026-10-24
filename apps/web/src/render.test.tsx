@@ -519,6 +519,41 @@ describe("the page of an address", () => {
     );
   });
 
+  it("renders the page of a pack served from a directory of the deployment, which is at no git host", () => {
+    // ADR-0071: the owner has no picture and no page, and nothing of the pack is at a git host.
+    const mount: RestMount = {
+      ...MOUNT,
+      address: "/local/acme/handbook",
+      repository: {
+        host: "local",
+        owner: "acme",
+        name: "handbook",
+        defaultBranch: "working",
+        description: null,
+        avatar: "",
+      },
+      verified: true,
+    };
+    const { html, indexable } = renderAddressPage(TEMPLATE, {
+      language: "en",
+      origin: "https://skills.example",
+      pathname: "/local/acme/handbook",
+      search: "",
+      data: { mount: { ready: mount }, browse: { ready: BROWSE } },
+    });
+    expect(indexable).toBe(true);
+    expect(html).toContain('data-prerendered="mount"');
+    expect(html).toContain('<title data-head="">acme/handbook | SkillCDN</title>');
+    expect(html).toContain(
+      '<link rel="canonical" href="https://skills.example/local/acme/handbook',
+    );
+    expect(html).toContain("skills.example/local/acme/handbook");
+    expect(html).toContain(">review<");
+    expect(html).not.toContain("github.com/acme/handbook");
+    expect(html).not.toContain("codeRepository");
+    expect(html).not.toContain('src=""');
+  });
+
   it("says how the repository is searched, and how far its embedding has come", () => {
     const t = messagesFor("en");
     const render = (search: Extract<RestMount["index"], { status: "ready" }>["search"]) =>

@@ -92,6 +92,21 @@ describe("matchRoute", () => {
     expect(matchRoute("/gh/acme/skills", "")).toMatchObject({ name: "mount" });
   });
 
+  it("reads an address of a pack served from a directory of the deployment the same way", () => {
+    // ADR-0071: `local` is a host of its own, with names as written and no page of an owner.
+    expect(matchRoute("/local/Acme/Handbook", "?file=docs/a.md")).toEqual({
+      name: "mount",
+      address: { host: "local", owner: "Acme", repo: "Handbook", path: "" },
+      view: { kind: "file", path: "docs/a.md" },
+    });
+    expect(matchRoute("/local/acme", "")).toMatchObject({
+      name: "bad-address",
+      error: { code: "missing_repo" },
+    });
+    expect(matchRoute("/local/", "")).toMatchObject({ name: "bad-address" });
+    expect(matchRoute("/locale/acme/handbook", "")).toEqual({ name: "not-found" });
+  });
+
   it("knows the sections of the account pages, each at one path", () => {
     expect(matchRoute("/account", "")).toEqual({ name: "account", section: "overview" });
     for (const section of ACCOUNT_SECTIONS) {

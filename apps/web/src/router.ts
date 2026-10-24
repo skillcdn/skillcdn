@@ -76,7 +76,12 @@ export const PATHS = {
   ogCard: "/dev/og",
 } as const;
 
-const MOUNT_PREFIX = "/gh/";
+/**
+ * Where addresses live: a prefix per host, `/gh/` for the git host and `/local/` for a directory
+ * of the deployment (ADR-0071). What is under either is an address, good or bad, or the page of an
+ * account where the host has those.
+ */
+const ADDRESS_PREFIXES = ADDRESS_HOST_KEYS.map((host) => `/${host}/`);
 
 /** The path of a section of the account pages; the first section is the account page itself. */
 export function accountHref(section: AccountSection = "overview"): string {
@@ -153,7 +158,7 @@ export function matchRoute(pathname: string, search: string, development = false
     );
     return section === undefined ? { name: "not-found" } : { name: "account", section };
   }
-  if (pathname.startsWith(MOUNT_PREFIX)) {
+  if (ADDRESS_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
     const owner = parseOwnerPath(pathname);
     if (owner !== undefined) {
       return { name: "owner", owner };
