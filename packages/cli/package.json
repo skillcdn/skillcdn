@@ -1,6 +1,6 @@
 {
   "name": "@skillcdn/cli",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "The skillcdn command: check a pack before pushing, read a pack as an agent gets it over MCP, and serve a directory to MCP clients over stdio or HTTP.",
   "license": "FSL-1.1-ALv2",
   "homepage": "https://skillcdn.ai",

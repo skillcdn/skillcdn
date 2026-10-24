@@ -1,5 +1,0 @@
----
-"@skillcdn/cli": patch
----
-
-The command searches a directory by meaning as well as by words, given the variables a deployment takes (ADR-0064): with `EMBEDDINGS_URL` and `EMBEDDINGS_MODEL`, `find`, `mcp` and `serve` embed the sections of the directory's documents with that server, as a deployment embeds them, and a result says it was ranked by words and meaning; `RERANKER_URL` and `RERANKER_MODEL` rerank the first results. The vectors are kept in the cache directory (`~/.cache/skillcdn`, or under `XDG_CACHE_HOME`) by the hash of each file, under the model's name and dimensions, so that a directory is embedded once on a machine and a changed file again; a manifest's `search: { meaning: false }` keeps its documents to the words. A served directory answers by words alone until its vectors arrive, `find` waits for them, and a read without words calls no server. A server that does not answer leaves the words to answer, with a line on standard error. Exit code `78` now covers every variable the command reads, not the limit variables alone.

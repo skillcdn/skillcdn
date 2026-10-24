@@ -1,6 +1,6 @@
 {
   "name": "@skillcdn/inference",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "The adapters of the common embeddings and reranking APIs, for the search by meaning of SkillCDN: one call shape for the inference servers a deployment or a person runs, bounded in time and in flight.",
   "license": "FSL-1.1-ALv2",
   "homepage": "https://skillcdn.ai",
