@@ -186,6 +186,9 @@ describe("postJson", () => {
   it("tells apart a server that is away, one that is overloaded, one that failed and one that refused", async () => {
     const away: FetchLike = () => Promise.reject(new TypeError("fetch failed"));
     await expect(codeOf(postJson(call(away), {}))).resolves.toBe("inference_unreachable");
+    await expect(postJson(call(away), {})).rejects.toThrow(
+      /^the inference server could not be reached$/,
+    );
     const reply = (status: number, body = "") =>
       postJson(
         call(async () => new Response(body, { status })),
@@ -216,13 +219,32 @@ describe("postJson", () => {
     expect(message.length).toBeLessThan(300);
   });
 
-  it("gives up when the server does not answer in time", async () => {
+  it("gives up when the server does not answer in time, and says so with the time it had", async () => {
     const hanging: FetchLike = (_url, init) =>
       new Promise((_resolve, reject) => {
         init.signal?.addEventListener("abort", () => reject(init.signal?.reason));
       });
     await expect(codeOf(postJson({ ...call(hanging), timeoutMs: 20 }, {}))).resolves.toBe(
       "inference_unreachable",
+    );
+    await expect(postJson({ ...call(hanging), timeoutMs: 20 }, {})).rejects.toThrow(
+      "the inference server did not answer within 20 ms",
+    );
+    // An answer that starts in time and does not end in time is the same failure.
+    const trickling: FetchLike = async (_url, init) =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('{"data": ['));
+            init.signal?.addEventListener("abort", () => controller.error(init.signal?.reason));
+          },
+        }),
+        { status: 200 },
+      );
+    const cutShort = postJson({ ...call(trickling), timeoutMs: 20 }, {});
+    await expect(codeOf(cutShort)).resolves.toBe("inference_unreachable");
+    await expect(postJson({ ...call(trickling), timeoutMs: 20 }, {})).rejects.toThrow(
+      "the inference server did not answer within 20 ms",
     );
   });
 

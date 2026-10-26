@@ -240,6 +240,36 @@ function excerpt(text: string): string {
 }
 
 /**
+ * The failure of a call the server did not answer. One whose time ran out, waiting for the answer
+ * or reading it, says so with the time it had, since such a server is busy as often as it is
+ * away; one that never reached the server says that.
+ */
+function unanswered(call: InferenceCall, error: unknown): InferenceError {
+  const timedOut = error instanceof Error && error.name === "TimeoutError";
+  // The cause stays attached for the log; the message carries nothing of the request.
+  return new InferenceError(
+    "inference_unreachable",
+    timedOut
+      ? `the inference server did not answer within ${call.timeoutMs} ms`
+      : "the inference server could not be reached",
+    { cause: error },
+  );
+}
+
+/** The answer read as {@link readText} reads it, within the time of the call. */
+async function readAnswer(
+  call: InferenceCall,
+  response: Response,
+  maxBytes: number,
+): Promise<string | undefined> {
+  try {
+    return await readText(response, maxBytes);
+  } catch (error) {
+    throw unanswered(call, error);
+  }
+}
+
+/**
  * POSTs `body` as JSON and returns the JSON the server answered with. A redirect is not followed:
  * the credential goes to the URL the operator named and nowhere else.
  */
@@ -262,12 +292,7 @@ export async function postJson(call: InferenceCall, body: unknown): Promise<unkn
       signal: AbortSignal.timeout(call.timeoutMs),
     });
   } catch (error) {
-    // The cause stays attached for the log; the message carries nothing of the request.
-    throw new InferenceError(
-      "inference_unreachable",
-      "the inference server could not be reached in time",
-      { cause: error },
-    );
+    throw unanswered(call, error);
   }
   if (response.status === 429) {
     await response.body?.cancel();
@@ -281,13 +306,13 @@ export async function postJson(call: InferenceCall, body: unknown): Promise<unkn
     );
   }
   if (response.status < 200 || response.status >= 300) {
-    const said = (await readText(response, REFUSAL_EXCERPT * 4)) ?? "";
+    const said = (await readAnswer(call, response, REFUSAL_EXCERPT * 4)) ?? "";
     throw new InferenceError(
       "inference_refused",
       `the inference server refused the request (${response.status}): ${excerpt(said)}`,
     );
   }
-  const text = await readText(response, call.maxReplyBytes);
+  const text = await readAnswer(call, response, call.maxReplyBytes);
   if (text === undefined) {
     throw new InferenceError(
       "inference_malformed",

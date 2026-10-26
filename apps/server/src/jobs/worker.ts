@@ -197,12 +197,16 @@ export function createWorker(config: WorkerConfig, ports: WorkerPorts): Worker {
       await jobs.work(
         EMBED_QUEUE,
         { concurrency: config.embedConcurrency, pollSeconds },
-        handling(embedJobSchema, async (job) => {
+        handling(embedJobSchema, async (job, queued) => {
           const log = logger.child({
             snapshot: job.snapshotId,
             commit: job.commitSha,
             account: job.accountId,
           });
+          // The queue aborts the signal once this worker's grace to stop is over, or when the
+          // attempt has run past its time or lost its claim: the queue runs the job again then,
+          // and the slice stops before its next call rather than hold this worker on work whose
+          // result nobody takes.
           const outcome = await embedSnapshotSlice(
             {
               database,
@@ -216,10 +220,16 @@ export function createWorker(config: WorkerConfig, ports: WorkerPorts): Worker {
               sliceSections: ports.sliceSections,
             },
             job,
+            queued.signal,
           );
-          if (outcome.status === "embedded" && outcome.next !== undefined) {
+          if (
+            outcome.status === "embedded" &&
+            outcome.next !== undefined &&
+            !queued.signal.aborted
+          ) {
             // The rest of the snapshot takes its turn behind the slices of the others, at the rank
-            // its repository has now.
+            // its repository has now. A slice whose attempt the queue gave up on leaves the rest to
+            // the job's next attempt instead.
             await sendEmbedJob(jobs, {
               ...job,
               tier: outcome.tier ?? job.tier,

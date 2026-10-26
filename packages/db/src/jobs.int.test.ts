@@ -35,30 +35,44 @@ describe("the job queue", () => {
   });
 
   it("is made sure of a queue as often as asked, and keeps the latest settings", async () => {
+    const settingsOf = async () => {
+      const result = await drizzleOf(database).execute<{
+        retry_limit: number;
+        retry_delay: number;
+        expire_seconds: number;
+        heartbeat_seconds: number | null;
+        policy: string;
+      }>(
+        sql`select retry_limit, retry_delay, expire_seconds, heartbeat_seconds, policy from ${sql.identifier(JOB_QUEUE_SCHEMA)}.queue where name = 'settings'`,
+      );
+      return result.rows[0];
+    };
     await jobs.ensureQueue("settings", {
       retryLimit: 2,
       retryDelaySeconds: 1,
       expireInSeconds: 60,
+      heartbeatSeconds: 30,
     });
     await jobs.ensureQueue("settings", {
       retryLimit: 4,
       retryDelaySeconds: 3,
       expireInSeconds: 90,
+      heartbeatSeconds: 45,
     });
-    const result = await drizzleOf(database).execute<{
-      retry_limit: number;
-      retry_delay: number;
-      expire_seconds: number;
-      policy: string;
-    }>(
-      sql`select retry_limit, retry_delay, expire_seconds, policy from ${sql.identifier(JOB_QUEUE_SCHEMA)}.queue where name = 'settings'`,
-    );
-    expect(result.rows[0]).toMatchObject({
+    expect(await settingsOf()).toMatchObject({
       retry_limit: 4,
       retry_delay: 3,
       expire_seconds: 90,
+      heartbeat_seconds: 45,
       policy: "stately",
     });
+    // A heartbeat left out is turned off.
+    await jobs.ensureQueue("settings", {
+      retryLimit: 4,
+      retryDelaySeconds: 3,
+      expireInSeconds: 90,
+    });
+    expect(await settingsOf()).toMatchObject({ heartbeat_seconds: null });
   });
 
   it("queues one job per singleton key and runs the higher priority first", async () => {

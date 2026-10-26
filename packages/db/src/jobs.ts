@@ -15,6 +15,13 @@ export interface QueueSettings {
   readonly retryDelaySeconds: number;
   /** How long one attempt may run before it counts as failed and the job is tried again. */
   readonly expireInSeconds: number;
+  /**
+   * How long a running job may go unheard before it counts as failed and is tried again: the
+   * process that runs it says it is alive every half of this, so a job whose process died goes
+   * back to the queue this soon, however long it may run. Left out, a job is heard from only
+   * when it ends. At least 10.
+   */
+  readonly heartbeatSeconds?: number | undefined;
 }
 
 export interface SendOptions {
@@ -199,9 +206,15 @@ export async function createJobQueue(
         retryBackoff: true,
         expireInSeconds: settings.expireInSeconds,
       };
-      // Creating a queue that exists changes nothing, so the settings are written after.
-      await boss.createQueue(name, { policy: "stately", ...queue });
-      await boss.updateQueue(name, queue);
+      const heartbeat = settings.heartbeatSeconds;
+      // Creating a queue that exists changes nothing, so the settings are written after, a
+      // heartbeat left out turned off.
+      await boss.createQueue(name, {
+        policy: "stately",
+        ...queue,
+        ...(heartbeat === undefined ? {} : { heartbeatSeconds: heartbeat }),
+      });
+      await boss.updateQueue(name, { ...queue, heartbeatSeconds: heartbeat ?? null });
     },
     async send(name, data, options = {}) {
       const id = await boss.send(name, data, {

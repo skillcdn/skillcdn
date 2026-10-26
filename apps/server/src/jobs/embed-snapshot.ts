@@ -36,18 +36,23 @@ import type { EmbedJob } from "./queues.js";
 import { decideEmbedding, type EmbedPolicy } from "./scope.js";
 
 // One slice of the embedding of a snapshot (ADR-0064): the sections of its bodies, in the order
-// of its entries, embedded and written body by body, for as many sections as a slice takes, and
-// the rest handed back to the queue as the next slice. The vectors already written are the
-// checkpoint: a slice that runs again after an interruption skips the bodies that are done. What
-// may be embedded at all is the scope's and the entitlements' to say, a repository that is no
-// pack is embedded only for a search or a request (ADR-0072), and a manifest may keep the
-// documents it governs out; the bounds are measured in the bytes of the bodies.
+// of its entries, embedded and written body by body, for as long or as many sections as a slice
+// takes, and the rest handed back to the queue as the next slice. The vectors already written are
+// the checkpoint: a slice that runs again after an interruption skips the bodies that are done,
+// and a slice the queue stops, as its worker stops or its time runs out, stops before its next
+// call to the embedder and leaves the body it was at to the next attempt. What may be embedded
+// at all is the scope's and the entitlements' to say, a repository that is no pack is embedded
+// only for a search or a request (ADR-0072), and a manifest may keep the documents it governs
+// out; the bounds are measured in the bytes of the bodies.
 
 /**
- * How many sections one job embeds before it hands the rest back: a minute or two on a CPU
- * server, so that a large pack takes turns with the others and a restart loses little. A body is
- * finished whole, so a slice may run over by one body.
+ * How long one job embeds before it hands the rest back, whatever the server: a few minutes, so
+ * that a large pack takes turns with the others of its rank, a restart loses little, and an
+ * attempt ends far within the queue's time for it. A body is finished whole, so a slice may run
+ * over by one body.
  */
+export const SLICE_MS = 5 * 60_000;
+/** How many sections one job embeds at most, where the server is fast enough to reach them. */
 export const SLICE_SECTIONS = 256;
 
 export interface EmbedSliceDependencies {
@@ -89,6 +94,13 @@ export type EmbedSliceOutcome =
       /** Which bound stopped the slice: the repository's, or the account's for the day. */
       readonly bound: "repository" | "account";
     })
+  | (EmbeddedCounts & {
+      /**
+       * The queue stopped the slice, as its worker stopped or its time ran out: the body it was
+       * at is not written, and the queue runs the job again, which goes on from there.
+       */
+      readonly status: "interrupted";
+    })
   | {
       readonly status: "skipped";
       /**
@@ -112,14 +124,18 @@ const sameKey = (a: VectorKey, b: VectorKey): boolean =>
   a.dimensions === b.dimensions &&
   a.sectioningVersion === b.sectioningVersion;
 
-/** Embeds every section of one body and writes them together. */
+/**
+ * Embeds every section of one body and writes them together; `undefined`, with nothing written,
+ * when `signal` stops it before one of its calls to the embedder.
+ */
 async function embedBody(
   deps: EmbedSliceDependencies,
   key: VectorKey,
   blobSha: string,
   title: string | undefined,
   text: string,
-): Promise<{ readonly sections: number; readonly tokens: number }> {
+  signal: AbortSignal | undefined,
+): Promise<{ readonly sections: number; readonly tokens: number } | undefined> {
   const sections = sectionsOf(text);
   if (sections.length === 0) {
     return { sections: 0, tokens: 0 };
@@ -128,6 +144,9 @@ async function embedBody(
   const items: SectionVector[] = [];
   let tokens = 0;
   for (const batch of embeddingBatches(texts, deps.embedder)) {
+    if (signal?.aborted) {
+      return undefined;
+    }
     const embedded = await deps.embedder.embed(
       batch.map((at) => texts[at] ?? ""),
       "document",
@@ -170,13 +189,15 @@ async function embeddedSoFar(
 
 /**
  * Runs one slice of `job`: embeds the bodies of the snapshot's entries after `job.after`, in
- * path order, until a slice's worth of sections is written or a bound is reached, and records
- * the progress, the account's day and a usage event. A failure of the embedder is thrown, for
- * the queue to try the slice again; what was written stays.
+ * path order, until a slice's time or sections are spent or a bound is reached, and records the
+ * progress, the account's day and a usage event. A failure of the embedder is thrown, for the
+ * queue to try the slice again; what was written stays. `signal`, the job's as the queue runs
+ * it, stops the slice before its next call to the embedder.
  */
 export async function embedSnapshotSlice(
   deps: EmbedSliceDependencies,
   job: EmbedJob,
+  signal?: AbortSignal,
 ): Promise<EmbedSliceOutcome> {
   const { database, embedder, clock, logger } = deps;
   const key = vectorKeyOf(embedder);
@@ -222,8 +243,8 @@ export async function embedSnapshotSlice(
     entries.map((entry) => entry.blobSha),
   );
   // The first slice says at once that the snapshot is being embedded, before a body is written:
-  // a slice of hundreds of sections takes minutes on a CPU, and until it ended the page and the
-  // instructions showed no embedding at all. The counts stay at zero until the slice adds its own.
+  // a slice takes minutes on a CPU, and until it ended the page and the instructions showed no
+  // embedding at all. The counts stay at zero until the slice adds its own.
   if (job.after === undefined && missing.size > 0) {
     await recordSnapshotEmbedding(
       database,
@@ -236,10 +257,12 @@ export async function embedSnapshotSlice(
   const day = usageDayOf(clock.now());
   const soFar = await embeddedSoFar(deps, job, key, decision.limits, day);
   const limit = deps.sliceSections ?? SLICE_SECTIONS;
+  const started = clock.now().getTime();
   const seen = new Set<string>();
   const counts = { bodies: 0, sections: 0, tokens: 0, bytes: 0 };
   let next: string | undefined;
   let bound: "repository" | "account" | undefined;
+  let interrupted = false;
   for (const [index, entry] of entries.entries()) {
     if (missing.has(entry.blobSha) && !seen.has(entry.blobSha)) {
       const { maxBytesPerRepository, maxBytesPerAccountPerDay } = decision.limits;
@@ -271,7 +294,12 @@ export async function embedSnapshotSlice(
           entry.blobSha,
           entry.title ?? entry.name ?? undefined,
           text,
+          signal,
         );
+        if (done === undefined) {
+          interrupted = true;
+          break;
+        }
         if (done.sections > 0) {
           counts.bodies += 1;
           counts.bytes += entry.size;
@@ -280,7 +308,8 @@ export async function embedSnapshotSlice(
         counts.tokens += done.tokens;
       }
     }
-    if (counts.sections >= limit && index < entries.length - 1) {
+    const spent = clock.now().getTime() - started >= SLICE_MS || counts.sections >= limit;
+    if (spent && index < entries.length - 1) {
       next = entry.path;
       break;
     }
@@ -290,7 +319,7 @@ export async function embedSnapshotSlice(
     database,
     scope,
     key,
-    { ...counts, completed: bound === undefined && next === undefined },
+    { ...counts, completed: !interrupted && bound === undefined && next === undefined },
     now,
   );
   if (counts.sections > 0) {
@@ -304,6 +333,9 @@ export async function embedSnapshotSlice(
       quantity: counts.tokens,
       unit: "token",
     });
+  }
+  if (interrupted) {
+    return { status: "interrupted", ...counts };
   }
   if (bound !== undefined) {
     logger.info({ bound, ...counts }, "the embedding stopped at a bound");

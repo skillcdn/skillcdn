@@ -822,6 +822,117 @@ describe("the worker", () => {
     });
   });
 
+  it("hands the rest back once a slice has run its time, whatever its sections", async () => {
+    // A server that takes three minutes a call, on a clock of its own.
+    let at = Date.parse("2026-10-26T00:00:00.000Z");
+    const slow: Embedder = {
+      ...fake.embedder,
+      async embed(texts, kind) {
+        at += 3 * 60_000;
+        return fake.embedder.embed(texts, kind);
+      },
+    };
+    const made = await madeSnapshot({
+      visibility: "public",
+      files: [
+        { path: "docs/a.md", text: "# A\n\nFirst.\n" },
+        { path: "docs/b.md", text: "# B\n\nSecond.\n" },
+        { path: "docs/c.md", text: "# C\n\nThird.\n" },
+      ],
+    });
+    const deps = {
+      database: testDatabase.database,
+      blobs: createBlobStore(testDatabase.database),
+      embedder: slow,
+      policy: { scope: "public" as const, entitlements: allowEverything },
+      lists: noLists,
+      usage: discardUsage,
+      clock: { now: () => new Date(at) },
+      logger,
+    };
+    const job = {
+      ...made.scope,
+      repoId: made.repo.repoId,
+      commitSha: made.commit,
+      key: KEY,
+      reason: "searched" as const,
+    };
+    // Three minutes, then six: past the five of a slice, which ends after the second body.
+    expect(await embedSnapshotSlice(deps, job)).toMatchObject({
+      status: "embedded",
+      bodies: 2,
+      next: "docs/b.md",
+    });
+    expect(await embedSnapshotSlice(deps, { ...job, after: "docs/b.md" })).toMatchObject({
+      status: "embedded",
+      bodies: 1,
+      next: undefined,
+    });
+  });
+
+  it("stops before its next call when the queue stops it, and leaves the body it was at to the next attempt", async () => {
+    const stopping = new AbortController();
+    let calls = 0;
+    const stopped: Embedder = {
+      ...fake.embedder,
+      async embed(texts, kind) {
+        calls += 1;
+        if (calls === 2) {
+          stopping.abort();
+        }
+        return fake.embedder.embed(texts, kind);
+      },
+    };
+    // The second body takes two calls of four sections at most; the queue stops the slice during
+    // its first.
+    const parts = Array.from({ length: 6 }, (_, at) => `## Part ${at}\n\nText ${at}.\n`);
+    const made = await madeSnapshot({
+      visibility: "public",
+      files: [
+        { path: "docs/a.md", text: "# A\n\nFirst.\n" },
+        { path: "docs/b.md", text: parts.join("\n") },
+        { path: "docs/c.md", text: "# C\n\nThird.\n" },
+      ],
+    });
+    const deps = {
+      database: testDatabase.database,
+      blobs: createBlobStore(testDatabase.database),
+      embedder: stopped,
+      policy: { scope: "public" as const, entitlements: allowEverything },
+      lists: noLists,
+      usage: discardUsage,
+      clock,
+      logger,
+    };
+    const job = {
+      ...made.scope,
+      repoId: made.repo.repoId,
+      commitSha: made.commit,
+      key: KEY,
+      reason: "searched" as const,
+    };
+    expect(await embedSnapshotSlice(deps, job, stopping.signal)).toMatchObject({
+      status: "interrupted",
+      bodies: 1,
+      sections: 1,
+    });
+    const [a, b, c] = made.entries;
+    if (a === undefined || b === undefined || c === undefined) throw new Error("three entries");
+    expect(
+      await blobsWithoutVectors(testDatabase.database, KEY, [a.blobSha, b.blobSha, c.blobSha]),
+    ).toEqual(new Set([b.blobSha, c.blobSha]));
+    expect(
+      (await getSnapshotEmbedding(testDatabase.database, made.scope, KEY))?.completedAt,
+    ).toBeNull();
+    // The next attempt goes on from the body the slice was at.
+    expect(await embedSnapshotSlice({ ...deps, embedder: fake.embedder }, job)).toMatchObject({
+      status: "embedded",
+      bodies: 2,
+      sections: 7,
+      next: undefined,
+    });
+  });
+
   it("reported nothing wrong from the queue", () => {
     expect(queueErrors).toEqual([]);
   });

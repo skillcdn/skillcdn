@@ -56,9 +56,20 @@ export function embedPriority(reason: EmbedReason, tier: EmbedTier | undefined):
  * How each queue treats its jobs. A failed attempt is tried again after a delay that doubles
  * each time, so that an inference server that is away is asked again in minutes, not at once;
  * an attempt that runs past its time is counted as failed and tried again.
+ *
+ * A slice of embedding runs for minutes and one body more, and a body is written whole: on two
+ * CPU cores the largest the indexer takes by default reads for about half an hour. So the queue
+ * hears from a running slice every half minute and knows within a minute or two that its process
+ * died, and the time of an attempt only bounds one that hangs, far past any body: a slice that
+ * outran it would start again at the same body for as long as it is tried.
  */
 export const QUEUE_SETTINGS: Readonly<Record<(typeof JOB_QUEUES)[number], QueueSettings>> = {
-  [EMBED_QUEUE]: { retryLimit: 5, retryDelaySeconds: 30, expireInSeconds: 1800 },
+  [EMBED_QUEUE]: {
+    retryLimit: 5,
+    retryDelaySeconds: 30,
+    expireInSeconds: 4 * 3600,
+    heartbeatSeconds: 60,
+  },
   [INDEX_QUEUE]: { retryLimit: 5, retryDelaySeconds: 60, expireInSeconds: 1800 },
   [SWEEP_QUEUE]: { retryLimit: 1, retryDelaySeconds: 60, expireInSeconds: 600 },
 };
