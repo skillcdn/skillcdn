@@ -74,6 +74,15 @@ async function mountOf(h: Pick<Harness, "request">, repo: string, cookie?: strin
 }
 const commitOf = async (h: Pick<Harness, "request">, repo: string, cookie?: string) =>
   (await mountOf(h, repo, cookie)).commit;
+/**
+ * The commit the address resolves to: the one served, or, while the one before is served in
+ * its place (ADR-0068), the newest beside it. Which of the two is served depends on whether the
+ * one before has been indexed by then.
+ */
+const resolvedOf = async (h: Pick<Harness, "request">, repo: string) => {
+  const body = await mountOf(h, repo);
+  return body.newest?.commit ?? body.commit;
+};
 /** How far the index of what the address serves has come: `ready` only while it is kept. */
 const indexOf = async (h: Pick<Harness, "request">, repo: string, cookie?: string) =>
   (await mountOf(h, repo, cookie)).index.status;
@@ -176,7 +185,7 @@ describe("what an event ends", () => {
     expect(old).toBe(fixtureCommits("webhook-push").main);
     const pushed = host.push();
     // Without an event the answer stands for as long as a ref is believed.
-    expect(await commitOf(h, "with-manifest")).toBe(old);
+    expect(await resolvedOf(h, "with-manifest")).toBe(old);
 
     const response = await deliver(h, "push", {
       ref: "refs/heads/main",
@@ -185,9 +194,9 @@ describe("what an event ends", () => {
       repository: repository("with-manifest"),
     });
     expect(response.status).toBe(204);
-    expect(await commitOf(h, "with-manifest")).toBe(pushed);
-    // Every process reads the same refs: one that never heard of the push serves it too.
-    expect(await commitOf(harness({ host }), "with-manifest")).toBe(pushed);
+    expect(await resolvedOf(h, "with-manifest")).toBe(pushed);
+    // Every process reads the same refs: one that never heard of the push resolves it too.
+    expect(await resolvedOf(harness({ host }), "with-manifest")).toBe(pushed);
     expect(h.logs.find((line) => line.msg === "git host event")).toMatchObject({
       event: "push",
       applied: ["refs_changed"],
