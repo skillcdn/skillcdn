@@ -170,6 +170,16 @@ export function createWorker(config: WorkerConfig, ports: WorkerPorts): Worker {
       const embedding =
         embedder !== undefined && supported && key !== undefined && config.scope !== "none";
       const policy = { scope: config.scope, entitlements };
+      if (embedding) {
+        // What waits in the embedding queue is derived from the database: let it go, and let the
+        // sweep below queue it again in the order of this build (ADR-0072). A slice that runs
+        // goes on, and queues its next slice itself.
+        const released = await jobs.clear(EMBED_QUEUE);
+        logger.info(
+          { released },
+          "the embedding jobs that waited were let go, for the sweep to queue again",
+        );
+      }
       await jobs.work(
         INDEX_QUEUE,
         { concurrency: 1, pollSeconds },
@@ -198,6 +208,7 @@ export function createWorker(config: WorkerConfig, ports: WorkerPorts): Worker {
               blobs,
               embedder,
               policy,
+              lists,
               usage,
               clock,
               logger: log,
@@ -216,7 +227,7 @@ export function createWorker(config: WorkerConfig, ports: WorkerPorts): Worker {
         SWEEP_QUEUE,
         { concurrency: 1, pollSeconds },
         handling(sweepJobSchema, () =>
-          sweepEmbeddings({ database, jobs, key, scope: config.scope, logger }),
+          sweepEmbeddings({ database, jobs, key, scope: config.scope, lists, logger }),
         ),
       );
       await jobs.schedule(SWEEP_QUEUE, SWEEP_SCHEDULE, {}, SWEEP_SCHEDULE_KEY);

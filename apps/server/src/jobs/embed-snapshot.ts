@@ -22,6 +22,7 @@ import {
   type SectionVector,
   type SnapshotScope,
   servedEntries,
+  tierOfSnapshot,
   usageDayOf,
   type VectorKey,
   writeSectionVectors,
@@ -29,6 +30,7 @@ import {
 import { compareByteOrder } from "@skillcdn/reader";
 import { vectorKeyOf } from "../adapters/meaning.js";
 import type { Logger } from "../logger.js";
+import type { OperatorLists } from "../operator/lists.js";
 import type { EmbedJob } from "./queues.js";
 import { decideEmbedding, type EmbedPolicy } from "./scope.js";
 
@@ -36,7 +38,8 @@ import { decideEmbedding, type EmbedPolicy } from "./scope.js";
 // of its entries, embedded and written body by body, for as many sections as a slice takes, and
 // the rest handed back to the queue as the next slice. The vectors already written are the
 // checkpoint: a slice that runs again after an interruption skips the bodies that are done. What
-// may be embedded at all is the scope's and the entitlements' to say, and a manifest may keep the
+// may be embedded at all is the scope's and the entitlements' to say, a repository that is no
+// pack is embedded only for a search or a request (ADR-0072), and a manifest may keep the
 // documents it governs out; the bounds are measured in the bytes of the bodies.
 
 /**
@@ -51,6 +54,8 @@ export interface EmbedSliceDependencies {
   readonly blobs: Pick<BlobStore, "read">;
   readonly embedder: Embedder;
   readonly policy: EmbedPolicy;
+  /** The operator's lists, which rank a repository first. */
+  readonly lists: Pick<OperatorLists, "listedKeys">;
   readonly usage: UsageSink;
   readonly clock: Clock;
   readonly logger: Logger;
@@ -84,9 +89,16 @@ export type EmbedSliceOutcome =
        * `other_key`: the job is for another model than this worker embeds with. `not_ready`: the
        * snapshot is gone, or being built again. `another_commit`: the snapshot row is another
        * commit's now. `out_of_scope`: the deployment does not embed repositories like this one.
-       * `refused`: the entitlements said no.
+       * `refused`: the entitlements said no. `unasked`: the repository is no pack, and the job
+       * came from the backfill or an index, not from a search or a request.
        */
-      readonly reason: "other_key" | "not_ready" | "another_commit" | "out_of_scope" | "refused";
+      readonly reason:
+        | "other_key"
+        | "not_ready"
+        | "another_commit"
+        | "out_of_scope"
+        | "refused"
+        | "unasked";
     };
 
 const sameKey = (a: VectorKey, b: VectorKey): boolean =>
@@ -179,6 +191,14 @@ export async function embedSnapshotSlice(
   const decision = await decideEmbedding(deps.policy, repo.host, repo.repository);
   if (!decision.allowed) {
     return { status: "skipped", reason: decision.reason === "scope" ? "out_of_scope" : "refused" };
+  }
+  // The rank is asked again as the scope is (ADR-0072): a repository that is no pack is embedded
+  // for a search or a request, never for the backfill or an index, whatever queued the job.
+  if (job.reason === "backfill" || job.reason === "indexed") {
+    const tier = await tierOfSnapshot(database, scope, await deps.lists.listedKeys());
+    if (tier === "other") {
+      return { status: "skipped", reason: "unasked" };
+    }
   }
 
   const served = await servedEntries(database, scope);

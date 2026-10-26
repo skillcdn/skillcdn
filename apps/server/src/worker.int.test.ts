@@ -27,6 +27,7 @@ import {
   recordSnapshotEmbedding,
   type SectionVector,
   type SnapshotScope,
+  saveCachedRef,
   saveRepository,
   servedEntries,
   usageDayOf,
@@ -55,6 +56,7 @@ import { sweepEmbeddings } from "./jobs/sweep.js";
 import { createEmbedTriggers } from "./jobs/triggers.js";
 import { createWorker, type Worker } from "./jobs/worker.js";
 import type { Mount } from "./mounts/mount-service.js";
+import { OperatorLists } from "./operator/lists.js";
 import { createFixtureHost, type FixtureHost, fixtureCommits } from "./testing/fixture-host.js";
 import { createHarness } from "./testing/harness.js";
 
@@ -62,8 +64,11 @@ import { createHarness } from "./testing/harness.js";
 // in the process: a repository indexed on request and then embedded ahead of the rest, the
 // sections of a snapshot embedded body by body in slices that take turns on the queue, a slice
 // tried again after the embedder failed without embedding a body twice, the sweep that queues
-// what is served and not yet embedded and drops a replaced model's vectors once it is, and the
-// api queueing the embedding of the commits it indexes.
+// what is served and not yet embedded by the repository's rank (ADR-0072) and drops a replaced
+// model's vectors once it is, and the api queueing the embedding of the commits it indexes.
+
+/** The operator's lists as the worker reads them; nothing listed in this database. */
+const noLists = { listedKeys: async (): Promise<readonly string[]> => [] };
 
 const DIMENSIONS = 8;
 const KEY: VectorKey = {
@@ -304,6 +309,7 @@ describe("the worker", () => {
       blobs,
       embedder: fake.embedder,
       policy: { scope: "all" as const, entitlements: allowEverything },
+      lists: noLists,
       usage: discardUsage,
       clock,
       logger,
@@ -355,14 +361,21 @@ describe("the worker", () => {
       new Date(),
     );
 
+    const lists = new OperatorLists({ database: testDatabase.database, clock });
     const first = await sweepEmbeddings({
       database: testDatabase.database,
       jobs,
       key: KEY,
       scope: "all",
+      lists,
       logger,
     });
-    expect(first).toMatchObject({ pending: 1, queued: 1, dropped: undefined });
+    expect(first).toMatchObject({
+      pending: 1,
+      queued: 1,
+      tiers: { listed: 0, declared: 0, skills: 1 },
+      dropped: undefined,
+    });
     await completed(scope);
     const expected = await expectedOf(scope);
     expect(await blobsWithoutVectors(testDatabase.database, KEY, expected.blobs)).toEqual(
@@ -374,9 +387,15 @@ describe("the worker", () => {
       jobs,
       key: KEY,
       scope: "all",
+      lists,
       logger,
     });
-    expect(second).toEqual({ pending: 0, queued: 0, dropped: { vectors: 1, snapshots: 1 } });
+    expect(second).toEqual({
+      pending: 0,
+      queued: 0,
+      tiers: { listed: 0, declared: 0, skills: 0 },
+      dropped: { vectors: 1, snapshots: 1 },
+    });
     expect(await blobsWithoutVectors(testDatabase.database, OLD_KEY, [old.blobSha])).toEqual(
       new Set([old.blobSha]),
     );
@@ -405,6 +424,7 @@ describe("the worker", () => {
       blobs: createBlobStore(testDatabase.database),
       embedder: fake.embedder,
       policy: { scope, entitlements },
+      lists: noLists,
       usage: { record: (event: UsageEvent) => events.push(event) },
       clock,
       logger,
@@ -477,10 +497,12 @@ describe("the worker", () => {
       blobs: createBlobStore(testDatabase.database),
       embedder: fake.embedder,
       policy: { scope: "public" as const, entitlements },
+      lists: noLists,
       usage: discardUsage,
       clock,
       logger,
     });
+    // Neither repository is a pack: a search's job embeds them, the backfill's would not (ADR-0072).
     const first = await madeSnapshot({
       visibility: "public",
       owner: "bounded",
@@ -496,7 +518,7 @@ describe("the worker", () => {
       repoId: first.repo.repoId,
       commitSha: first.commit,
       key: KEY,
-      reason: "indexed" as const,
+      reason: "searched" as const,
     };
     // One body fits under the repository's bound; the second does not, and the slice stops.
     const repository = bounded({ maxBytesPerRepository: a.size + b.size - 1 });
@@ -533,7 +555,7 @@ describe("the worker", () => {
       repoId: second.repo.repoId,
       commitSha: second.commit,
       key: KEY,
-      reason: "indexed" as const,
+      reason: "searched" as const,
     };
     expect(
       await embedSnapshotSlice(deps(bounded({ maxBytesPerAccountPerDay: a.size })), job2),
@@ -553,13 +575,23 @@ describe("the worker", () => {
       },
       work: async () => {},
       schedule: async () => {},
+      clear: async () => 0,
       counts: async () => [],
       failures: async () => [],
       stop: async () => {},
     };
+    // A declared pack: what an index queues, as what a search asks for.
     const made = await madeSnapshot({
       visibility: "public",
-      files: [{ path: "docs/a.md", text: "# A\n\nText.\n" }],
+      files: [
+        {
+          path: "SKILLCDN.md",
+          kind: "manifest",
+          text: "---\ndescription: A pack.\n---\n",
+          frontMatter: { metadata: {}, warnings: [], documents: ["docs"] },
+        },
+        { path: "docs/a.md", text: "# A\n\nText.\n" },
+      ],
     });
     const snapshot = await getSnapshot(testDatabase.database, made.scope);
     if (snapshot === undefined) throw new Error("the snapshot");
@@ -575,6 +607,7 @@ describe("the worker", () => {
         jobs: recording,
         key: KEY,
         policy: { scope: "public", entitlements: allowEverything },
+        lists: noLists,
         clock,
         logger,
       });
@@ -587,7 +620,8 @@ describe("the worker", () => {
       repoId: made.repo.repoId,
       commitSha: made.commit,
       key: KEY,
-      reason: "backfill",
+      reason: "searched",
+      tier: "declared",
     });
     // Asked again at once: remembered, and not looked at.
     triggers.onSearched(mountOf("public"), snapshot);
@@ -612,9 +646,157 @@ describe("the worker", () => {
     const indexed = { ...made.scope, repoId: made.repo.repoId, commitSha: made.commit };
     await triggers.onIndexed(mountOf("public"), indexed);
     expect(sent).toHaveLength(2);
-    expect(sent[1]).toMatchObject({ reason: "indexed", snapshotId: made.scope.snapshotId });
+    expect(sent[1]).toMatchObject({
+      reason: "indexed",
+      tier: "declared",
+      snapshotId: made.scope.snapshotId,
+    });
     await triggers.onIndexed(mountOf("private"), indexed);
     expect(sent).toHaveLength(2);
+
+    // A repository that is no pack (ADR-0072): its index queues nothing, and a search queues it
+    // with the rest, behind every pack.
+    const plain = await madeSnapshot({
+      visibility: "public",
+      files: [{ path: "docs/b.md", text: "# B\n\nText.\n" }],
+    });
+    const plainMount = {
+      repo: { host: "gh", repository: plain.repository },
+    } as unknown as Mount;
+    await triggers.onIndexed(plainMount, {
+      ...plain.scope,
+      repoId: plain.repo.repoId,
+      commitSha: plain.commit,
+    });
+    expect(sent).toHaveLength(2);
+    const plainSnapshot = await getSnapshot(testDatabase.database, plain.scope);
+    if (plainSnapshot === undefined) throw new Error("the snapshot");
+    triggers.onSearched(plainMount, plainSnapshot);
+    await vi.waitFor(() => expect(sent).toHaveLength(3));
+    expect(sent[2]).toMatchObject({
+      snapshotId: plain.scope.snapshotId,
+      reason: "searched",
+      tier: "other",
+    });
+  });
+
+  it("ranks the backfill, the operator's lists first, and leaves what is no pack to a search", async () => {
+    const sent: { readonly job: EmbedJob; readonly priority: number | undefined }[] = [];
+    const recording: JobQueue = {
+      ensureQueue: async () => {},
+      send: async (_name, data, options) => {
+        sent.push({ job: data as EmbedJob, priority: options?.priority });
+        return "sent";
+      },
+      work: async () => {},
+      schedule: async () => {},
+      clear: async () => 0,
+      counts: async () => [],
+      failures: async () => [],
+      stop: async () => {},
+    };
+    const document = { path: "docs/a.md", text: "# A\n\nText.\n" };
+    const other = await madeSnapshot({ visibility: "public", served: true, files: [document] });
+    const skills = await madeSnapshot({
+      visibility: "public",
+      served: true,
+      files: [
+        {
+          path: "skills/one/SKILL.md",
+          kind: "skill",
+          text: "---\nname: one\ndescription: One.\n---\n\n# One\n\nDo it.\n",
+        },
+        document,
+      ],
+    });
+    const declared = await madeSnapshot({
+      visibility: "public",
+      served: true,
+      files: [
+        {
+          path: "SKILLCDN.md",
+          kind: "manifest",
+          text: "---\ndescription: A pack.\n---\n",
+          frontMatter: { metadata: {}, warnings: [], documents: ["docs"] },
+        },
+        document,
+      ],
+    });
+    const listed = await madeSnapshot({ visibility: "public", served: true, files: [document] });
+    // The operator wrote the address as the host spells it; the rank ignores case.
+    const lists = {
+      listedKeys: async () => [
+        `/gh/${listed.repository.owner.login}/${listed.repository.name}`.toUpperCase(),
+      ],
+    };
+    const outcome = await sweepEmbeddings({
+      database: testDatabase.database,
+      jobs: recording,
+      key: KEY,
+      scope: "public",
+      lists,
+      logger,
+    });
+    const mine = sent.filter(({ job }) =>
+      [other, skills, declared, listed].some((made) => made.scope.snapshotId === job.snapshotId),
+    );
+    expect(
+      mine.map(({ job, priority }) => [job.snapshotId, job.reason, job.tier, priority]),
+    ).toEqual([
+      [listed.scope.snapshotId, "backfill", "listed", 31],
+      [declared.scope.snapshotId, "backfill", "declared", 21],
+      [skills.scope.snapshotId, "backfill", "skills", 11],
+    ]);
+    expect(outcome).toMatchObject({ pending: sent.length, queued: sent.length });
+    expect(outcome.tiers.listed).toBeGreaterThanOrEqual(1);
+    expect(outcome.tiers.declared).toBeGreaterThanOrEqual(1);
+    expect(outcome.tiers.skills).toBeGreaterThanOrEqual(1);
+
+    // The slice asks the rank again: the backfill and an index of what is no pack are skipped; a
+    // search's job embeds it, behind everything else.
+    const deps = {
+      database: testDatabase.database,
+      blobs: createBlobStore(testDatabase.database),
+      embedder: fake.embedder,
+      policy: { scope: "public" as const, entitlements: allowEverything },
+      lists,
+      usage: discardUsage,
+      clock,
+      logger,
+    };
+    const job = { ...other.scope, repoId: other.repo.repoId, commitSha: other.commit, key: KEY };
+    expect(await embedSnapshotSlice(deps, { ...job, reason: "backfill" })).toEqual({
+      status: "skipped",
+      reason: "unasked",
+    });
+    expect(await embedSnapshotSlice(deps, { ...job, reason: "indexed" })).toEqual({
+      status: "skipped",
+      reason: "unasked",
+    });
+    expect(await embedSnapshotSlice(deps, { ...job, reason: "searched" })).toMatchObject({
+      status: "embedded",
+      bodies: 1,
+      next: undefined,
+    });
+    // What the operator lists is embedded for the backfill, whatever its index holds.
+    expect(
+      await embedSnapshotSlice(deps, {
+        ...listed.scope,
+        repoId: listed.repo.repoId,
+        commitSha: listed.commit,
+        key: KEY,
+        reason: "backfill",
+      }),
+    ).toMatchObject({ status: "embedded", bodies: 1 });
+  });
+
+  it("let go of the embedding jobs that waited when it started, for the sweep to queue again", () => {
+    expect(
+      logs.some(
+        (line) =>
+          line.msg === "the embedding jobs that waited were let go, for the sweep to queue again",
+      ),
+    ).toBe(true);
   });
 
   it("says the snapshot is being embedded before its first slice has written a body", async () => {
@@ -629,6 +811,7 @@ describe("the worker", () => {
       blobs: createBlobStore(testDatabase.database),
       embedder: { ...failing.embedder, model: key.model },
       policy: { scope: "all" as const, entitlements: allowEverything },
+      lists: noLists,
       usage: discardUsage,
       clock,
       logger,
@@ -656,10 +839,12 @@ async function madeSnapshot(options: {
   readonly visibility: "public" | "private";
   /** The account's login; repositories of one owner share an account. */
   readonly owner?: string;
+  /** The commit of the default branch, so served right now, when true. */
+  readonly served?: boolean;
   readonly files: readonly {
     readonly path: string;
     readonly text: string;
-    readonly kind?: "markdown" | "manifest";
+    readonly kind?: "markdown" | "manifest" | "skill";
     readonly frontMatter?: IndexEntry["frontMatter"];
   }[];
 }) {
@@ -691,13 +876,14 @@ async function madeSnapshot(options: {
     const bytes = new TextEncoder().encode(file.text);
     const blobSha = `blob-${nextHostId}-${entries.length}`;
     await blobs.write(blobSha, bytes);
+    const skillDir = file.path.slice(0, file.path.lastIndexOf("/"));
     entries.push({
       path: file.path,
       kind: file.kind ?? "markdown",
       size: bytes.byteLength,
       blobSha,
-      skillDir: undefined,
-      name: undefined,
+      skillDir: file.kind === "skill" ? skillDir : undefined,
+      name: file.kind === "skill" ? skillDir.split("/").at(-1) : undefined,
       title: undefined,
       description: undefined,
       frontMatter: file.frontMatter,
@@ -721,6 +907,9 @@ async function madeSnapshot(options: {
       now,
     ),
   ).toBe(true);
+  if (options.served) {
+    await saveCachedRef(testDatabase.database, repo, "", commit, now);
+  }
   return { scope, repo, commit, repository, entries };
 }
 

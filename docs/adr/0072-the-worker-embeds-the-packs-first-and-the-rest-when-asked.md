@@ -1,0 +1,25 @@
+# ADR-0072: The worker embeds the packs first, and the rest only when asked
+
+- Status: Accepted
+- Date: 2026-10-26
+- Amends points 3 and 4 of [ADR-0064](0064-meaning-search-runs-on-pgvector-and-pg-boss-behind-an-embedder-port.md) (the order of the queue, and when a repository is embedded); builds on [ADR-0026](0026-serving-follows-the-license-and-the-operators-lists.md) (the operator's lists), [ADR-0063](0063-packs-of-documents-are-served-to-agents-through-structure-words-and-meaning.md) (what a pack is) and [ADR-0071](0071-a-deployment-serves-packs-from-a-directory-of-its-own.md) (the packs of a deployment's own directory).
+
+## Context
+
+A public deployment indexes whatever repository anyone points an agent at, and most of them are no pack: no manifest, no skill, a repository somebody tried once. ADR-0064 said a repository is embedded when a search first asks for it or when it is designated, and that the queue takes the designated first and the backfill last. What was built embedded every commit the `api` indexed and swept every served snapshot, all at two priorities, the newest index first. On a CPU a few hundred sections take minutes, so a worker spent its hours on repositories nobody made into a pack, while the packs the deployment is for, the operator's own among them, waited at the back of a queue that grew with every mount. The maintainer asked for an order: the repositories the operator lists, then the packs that declare themselves, then the repositories that hold skills, and the rest last or not at all.
+
+## Decision
+
+1. **A repository has a rank** among what the worker embeds unasked, decided from what the database knows of it: `listed`, the operator's verified or featured lists name it, or it is a pack of the deployment's own directory (ADR-0071); `declared`, its index holds a `SKILLCDN.md`, or it is a private repository and the deployment embeds those (`EMBEDDINGS_SCOPE=all`), since the operator chose to and whoever mounted it could see it; `skills`, its index holds a `SKILL.md`; `other`, none of these.
+2. **The queue takes the embedding by rank, then by reason.** What somebody asked for by hand, the designated indexing, comes first whatever the repository. Below it, every job of a higher rank comes before every job of a lower one, and within a rank what a search by meaning just asked for comes before what was just indexed, before the backfill. Among equals the oldest job first, one slice of one snapshot each, as before.
+3. **What is `other` is embedded only when asked**: by a search by meaning that reached the repository, behind everything else, or by a designation. The sweep does not queue it, the `api` does not queue it when it indexes it, and the worker asks the rank again before it embeds and skips a backfill or an index job of such a repository, as it asks the scope and the entitlements again. Its search answers by words until then, and the search across packs (ADR-0070) finds it by words alone.
+4. **The queue is derived from the database.** At start the worker lets go of every embedding job that waits and sweeps: what is served and not yet embedded is queued again, in the order of the build that starts. A job that waits keeps a job of the same slice out, so a changed order would never reach what an older build queued; this way a restart is enough. A slice that runs goes on; a designation whose embedding had not started is queued again at its repository's rank.
+5. **None of this is configuration.** The ranks follow from what a pack is in this product: a repository that wants the search by meaning ahead of its first search declares itself with a manifest, holds a skill, or is listed by the operator. No deployment that wants every repository embedded unasked is known; when one is, a setting is a small change, and until then every deployment gets the same order.
+
+## Consequences
+
+- The packs a deployment is for are embedded first, on every deployment alike; a CPU-only worker reaches them in minutes, whatever else was mounted.
+- A repository with neither manifest nor skill gets the search by meaning after its first search, not before; its page says it is searched by words until then. ADR-0064's sentence that a repository is embedded when a search first asks for it holds again for these.
+- The admin API's `pending` counts what the sweep has still to do, which leaves `other` out; a job carries the rank it was queued at, and `searched` joins the reasons.
+- The vectors of a replaced model are dropped once every ranked snapshot is embedded under the new one; an `other` repository embedded for a search loses them then, and is embedded again on its next search.
+- Rejected: a priority by reason alone with the rank as a tie-break (a fresh commit of a repository nobody wants would still come before the operator's own packs); keeping `other` out of the search by meaning for good (a search that asks is a want, and the exclusion from the sweep already keeps the cost to what is asked for); a setting that embeds everything unasked (point 5); changing the priority of queued jobs in the queue's own tables (the library owns them).

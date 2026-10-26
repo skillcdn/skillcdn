@@ -22,6 +22,7 @@ import {
 } from "@skillcdn/db";
 import * as z from "zod";
 import type { EmbeddingScope } from "../config/config.js";
+import type { OperatorLists } from "../operator/lists.js";
 import { JOB_QUEUES, sendIndexJob } from "./queues.js";
 
 // What the operator reads and does about the search by meaning through the admin API (ADR-0064,
@@ -55,6 +56,8 @@ export interface EmbeddingReadsDependencies {
   readonly vectors: boolean;
   /** The queue, where this process opened it. */
   readonly jobs: JobQueue | undefined;
+  /** The operator's lists, which rank a repository first for the worker (ADR-0072). */
+  readonly lists: Pick<OperatorLists, "listedKeys">;
 }
 
 export interface QueueFailure extends Omit<FailedJob, "data"> {
@@ -66,7 +69,10 @@ export interface QueueFailure extends Omit<FailedJob, "data"> {
 export interface EmbeddingState {
   readonly configured: EmbeddingsConfigured | null;
   readonly vectors: boolean;
-  /** Served snapshots within the scope without a complete embedding under the model; null without a model. */
+  /**
+   * Served snapshots within the scope the sweep has still to embed under the model: those of the
+   * repositories the worker embeds unasked, not the rest (ADR-0072); null without a model.
+   */
   readonly pending: number | null;
   /** The queues as they stand; null where this process has no queue. */
   readonly queues: QueueCounts[] | null;
@@ -130,13 +136,14 @@ export class EmbeddingReads {
   }
 
   async state(): Promise<EmbeddingState> {
-    const { configured, jobs, vectors, database } = this.#deps;
+    const { configured, jobs, vectors, database, lists } = this.#deps;
     const key = this.key;
     const pending =
       key === undefined || configured === undefined || !vectors || configured.scope === "none"
         ? null
         : await countSnapshotsToEmbed(database, key, {
             visibility: configured.scope === "public" ? "public" : undefined,
+            listed: await lists.listedKeys(),
           });
     let queues: QueueCounts[] | null = null;
     let failures: QueueFailure[] | null = null;

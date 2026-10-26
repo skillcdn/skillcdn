@@ -160,6 +160,7 @@ beforeAll(async () => {
       blobs: createBlobStore(testDatabase.database),
       embedder: embed.embedder,
       policy: { scope: "all", entitlements: allowEverything },
+      lists: h.lists,
       usage: discardUsage,
       clock: { now: () => new Date() },
       logger: pino({ level: "silent" }),

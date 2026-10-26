@@ -1,9 +1,9 @@
-import type { JobQueue, QueueSettings } from "@skillcdn/db";
+import { EMBED_TIERS, type EmbedTier, type JobQueue, type QueueSettings } from "@skillcdn/db";
 import * as z from "zod";
 
-// The jobs of the deployment (ADR-0064, point 3): what the queues are named, what a job carries,
-// in which order the queue takes them, and how each queue treats a failure. The `api` role sends;
-// the `worker` role sends and runs them.
+// The jobs of the deployment (ADR-0064, point 3; ADR-0072): what the queues are named, what a job
+// carries, in which order the queue takes them, and how each queue treats a failure. The `api`
+// role sends; the `worker` role sends and runs them.
 
 /** The sections of one snapshot, embedded under one key, a slice at a time. */
 export const EMBED_QUEUE = "embed-sections";
@@ -14,13 +14,40 @@ export const SWEEP_QUEUE = "sweep-embeddings";
 export const JOB_QUEUES = [EMBED_QUEUE, INDEX_QUEUE, SWEEP_QUEUE] as const;
 
 /**
- * Why a snapshot is embedded, and the order the queue takes them in: what was asked for first,
- * what was just indexed next, the backfill of what was served before last. Among equals, the
- * oldest job first, and each job is one slice of one snapshot, so that the repositories of every
- * account take turns.
+ * Why a snapshot is embedded: somebody asked for the repository by hand (`designated`), a search
+ * by meaning just asked for the snapshot (`searched`), the commit was just indexed (`indexed`), or
+ * the sweep found it served and not embedded (`backfill`).
  */
-export const EMBED_PRIORITY = { designated: 3, indexed: 2, backfill: 1 } as const;
-export type EmbedReason = keyof typeof EMBED_PRIORITY;
+export const EMBED_REASONS = ["designated", "searched", "indexed", "backfill"] as const;
+export type EmbedReason = (typeof EMBED_REASONS)[number];
+
+/** What somebody asked for by hand comes first, whatever the repository. */
+export const DESIGNATED_PRIORITY = 100;
+/**
+ * The order the queue takes the rest in (ADR-0072): by the repository's rank first, the
+ * operator's lists before the declared packs before the repositories with skills before the
+ * rest, and within a rank by the reason, what a search asked for before what was just indexed
+ * before the backfill. Among equals the oldest job first, and each job is one slice of one
+ * snapshot, so that the repositories of every account take turns.
+ */
+const TIER_PRIORITY: Readonly<Record<EmbedTier, number>> = {
+  listed: 30,
+  declared: 20,
+  skills: 10,
+  other: 0,
+};
+const REASON_PRIORITY: Readonly<Record<Exclude<EmbedReason, "designated">, number>> = {
+  searched: 3,
+  indexed: 2,
+  backfill: 1,
+};
+
+/** The priority of a slice. A job without a rank, queued by an older build, ranks with the rest. */
+export function embedPriority(reason: EmbedReason, tier: EmbedTier | undefined): number {
+  return reason === "designated"
+    ? DESIGNATED_PRIORITY
+    : TIER_PRIORITY[tier ?? "other"] + REASON_PRIORITY[reason];
+}
 
 /**
  * How each queue treats its jobs. A failed attempt is tried again after a delay that doubles
@@ -57,7 +84,9 @@ export const embedJobSchema = z.object({
   commitSha: z.string().regex(/^[0-9a-f]{40}$/),
   /** The key the vectors are written under: the job is for the worker that embeds under it. */
   key: vectorKeySchema,
-  reason: z.enum(["designated", "indexed", "backfill"]),
+  reason: z.enum(EMBED_REASONS),
+  /** The rank of the repository when the job was queued; the worker asks again before it embeds. */
+  tier: z.enum(EMBED_TIERS).optional(),
   /** The path the slice before ended at; the first slice has none. */
   after: z.string().min(1).max(4096).optional(),
 });
@@ -99,7 +128,7 @@ export function embedJobKey(job: EmbedJob): string {
 /** Queues a slice. False when the same slice was queued already. */
 export async function sendEmbedJob(jobs: JobQueue, job: EmbedJob): Promise<boolean> {
   const id = await jobs.send(EMBED_QUEUE, job, {
-    priority: EMBED_PRIORITY[job.reason],
+    priority: embedPriority(job.reason, job.tier),
     singletonKey: embedJobKey(job),
   });
   return id !== undefined;
@@ -108,7 +137,7 @@ export async function sendEmbedJob(jobs: JobQueue, job: EmbedJob): Promise<boole
 /** Queues the indexing of an address, ahead of everything else. False when it was queued already. */
 export async function sendIndexJob(jobs: JobQueue, job: IndexJob): Promise<boolean> {
   const id = await jobs.send(INDEX_QUEUE, job, {
-    priority: EMBED_PRIORITY.designated,
+    priority: DESIGNATED_PRIORITY,
     singletonKey: job.address,
   });
   return id !== undefined;

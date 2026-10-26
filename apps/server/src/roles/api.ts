@@ -211,6 +211,7 @@ export function createApi(
           jobs: queue,
           key: ports.embedding.key,
           policy: { scope: ports.embedding.scope, entitlements },
+          lists,
           clock,
           logger,
         });
@@ -230,6 +231,7 @@ export function createApi(
           },
     vectors: ports.embedding?.vectors ?? false,
     jobs: queue,
+    lists,
   });
 
   // People sign in only where the deployment is configured for it and the git host can be

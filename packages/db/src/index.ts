@@ -31,10 +31,12 @@ export {
   addEmbeddingUsage,
   countSnapshotsToEmbed,
   deleteEmbeddingsOutsideKey,
+  EMBED_TIERS,
   type EmbeddedRepository,
   type EmbeddingProgress,
   type EmbeddingUsage,
   type EmbeddingUsageDay,
+  type EmbedTier,
   embeddedBytesOfRepository,
   getEmbeddingUsage,
   getSnapshotEmbedding,
@@ -45,6 +47,7 @@ export {
   type SnapshotEmbeddingRecord,
   type SnapshotsToEmbedOptions,
   type SnapshotToEmbed,
+  tierOfSnapshot,
 } from "./queries/embeddings.js";
 export {
   countEntries,

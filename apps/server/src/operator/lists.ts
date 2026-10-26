@@ -122,6 +122,16 @@ export class OperatorLists {
     return addresses;
   }
 
+  /**
+   * The repositories of {@link listed}, as the worker ranks what it embeds (ADR-0072): the
+   * repository of every featured address and every vouched-for repository, `/gh/owner/repo` in
+   * lower case.
+   */
+  async listedKeys(): Promise<readonly string[]> {
+    const keys = (await this.listed()).map((address) => repositoryKey(address).toLowerCase());
+    return [...new Set(keys)];
+  }
+
   async add(kind: OperatorListKind, text: string): Promise<string> {
     const address = formatAddress(OperatorLists.addressOf(kind, text));
     await addOperatorRepository(this.#database, kind, address);

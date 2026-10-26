@@ -777,6 +777,7 @@ describe("the search by meaning in the admin API (ADR-0064)", () => {
           blobs: createBlobStore(testDatabase.database),
           embedder,
           policy: { scope: "public", entitlements: allowEverything },
+          lists: h.lists,
           usage: discardUsage,
           clock: { now: () => new Date() },
           logger: pino({ level: "silent" }),

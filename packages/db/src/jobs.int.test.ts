@@ -80,6 +80,31 @@ describe("the job queue", () => {
     await vi.waitFor(() => expect(seen).toEqual([2, 3, 1, 4]), { timeout: 15_000 });
   });
 
+  it("lets go of the jobs that wait, their keys with them, and not of the one that runs", async () => {
+    await jobs.ensureQueue("waiting", { retryLimit: 0, retryDelaySeconds: 1, expireInSeconds: 60 });
+    expect(await jobs.send("waiting", { n: 1 }, { singletonKey: "a" })).toBeDefined();
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const started: number[] = [];
+    await jobs.work("waiting", { pollSeconds: 0.5 }, async (job) => {
+      started.push(data(job));
+      await held;
+    });
+    await vi.waitFor(() => expect(started).toEqual([1]), { timeout: 15_000 });
+    expect(await jobs.send("waiting", { n: 2 }, { singletonKey: "b" })).toBeDefined();
+    expect(await jobs.send("waiting", { n: 3 }, { singletonKey: "c" })).toBeDefined();
+
+    expect(await jobs.clear("waiting")).toBe(2);
+    const [counts] = await jobs.counts(["waiting"]);
+    expect(counts).toMatchObject({ name: "waiting", queued: 0, active: 1 });
+    // The key of a job let go is free again, and the one that ran on is run to its end.
+    expect(await jobs.send("waiting", { n: 4 }, { singletonKey: "b" })).toBeDefined();
+    release();
+    await vi.waitFor(() => expect(started).toEqual([1, 4]), { timeout: 15_000 });
+  });
+
   it("tries a failed job again within its settings, then counts it as failed", {
     timeout: 60_000,
   }, async () => {

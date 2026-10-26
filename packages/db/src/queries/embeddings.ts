@@ -1,8 +1,10 @@
-import { and, eq, gte, isNotNull, lte, ne, notExists, or, sql } from "drizzle-orm";
-import { type Database, drizzleOf } from "../client.js";
+import { LOCAL_HOST_KEY } from "@skillcdn/core";
+import { and, eq, gte, isNotNull, lte, ne, notExists, or, type SQL, sql } from "drizzle-orm";
+import { type Database, type Drizzle, drizzleOf } from "../client.js";
 import {
   accounts,
   embeddingUsageDaily,
+  indexEntries,
   repoRefs,
   repos,
   sectionVectors,
@@ -207,23 +209,91 @@ export async function getEmbeddingUsage(
   return row;
 }
 
+/**
+ * The rank of a repository among what the worker embeds unasked (ADR-0072), first to last:
+ * `listed`, the operator lists the repository or it is a pack of the deployment's own directory;
+ * `declared`, its index holds a manifest, or the repository is private and the deployment embeds
+ * those; `skills`, its index holds a skill; `other`, none of these, which is embedded only when a
+ * search or a request asks for it.
+ */
+export const EMBED_TIERS = ["listed", "declared", "skills", "other"] as const;
+export type EmbedTier = (typeof EMBED_TIERS)[number];
+
+/** The tier at a place of {@link EMBED_TIERS}, as a rank computed in SQL names it. */
+const tierAt = (rank: number): EmbedTier => EMBED_TIERS[Number(rank)] ?? "other";
+
+/**
+ * The rank of the snapshot's repository as the place of its tier in {@link EMBED_TIERS}, computed
+ * in SQL so that a list is ordered and cut by it. `listed` holds the repositories the operator
+ * lists as `/gh/owner/repo`; the comparison ignores case, as a git host does. Over `snapshots`
+ * joined with `repos` and `accounts`.
+ */
+function rankOf(listed: readonly string[]): SQL<number> {
+  const keys = sql.param(listed.map((key) => key.toLowerCase()));
+  const key = sql`lower('/' || ${repos.host} || '/' || ${accounts.login} || '/' || ${repos.name})`;
+  const holds = (kind: "manifest" | "skill") =>
+    sql`exists (select 1 from ${indexEntries} where ${indexEntries.snapshotId} = ${snapshots.id} and ${indexEntries.kind} = ${kind})`;
+  return sql<number>`case
+    when ${repos.host} = ${LOCAL_HOST_KEY} or ${key} = any(${keys}::text[]) then 0
+    when ${repos.visibility} = 'private' or ${holds("manifest")} then 1
+    when ${holds("skill")} then 2
+    else 3
+  end`;
+}
+
 /** A snapshot the worker has still to embed under a key. */
 export interface SnapshotToEmbed {
   readonly accountId: string;
   readonly repoId: string;
   readonly snapshotId: string;
   readonly commitSha: string;
+  /** The rank of its repository; never `other`, which the sweep leaves to a search. */
+  readonly tier: EmbedTier;
 }
 
 export interface SnapshotsToEmbedOptions {
   /** Only the snapshots of public repositories; left out, of every repository. */
   readonly visibility?: "public" | undefined;
+  /** The repositories the operator lists, `/gh/owner/repo` each; none when left out. */
+  readonly listed?: readonly string[] | undefined;
 }
 
 /**
- * The snapshots served right now, the ready index of the commit some ref of the repository points
- * at, that have no complete embedding under the key: the backfill after a change of model, and
- * whatever the queue lost. Newest index first, at most `limit`.
+ * What the sweep has still to embed under the key: a ready snapshot of the commit some ref of
+ * its repository points at, so served right now, within the visibility, without a complete
+ * embedding under the key, and of a repository the worker embeds unasked, which leaves `other`
+ * out.
+ */
+function toEmbed(
+  db: Drizzle,
+  key: VectorKey,
+  rank: SQL<number>,
+  options: SnapshotsToEmbedOptions,
+): SQL | undefined {
+  return and(
+    eq(snapshots.status, "ready"),
+    sql`exists (select 1 from ${repoRefs} where ${repoRefs.repoId} = ${snapshots.repoId} and ${repoRefs.commitSha} = ${snapshots.commitSha})`,
+    options.visibility === undefined ? undefined : eq(repos.visibility, options.visibility),
+    notExists(
+      db
+        .select({ one: sql`1` })
+        .from(snapshotEmbeddings)
+        .where(
+          and(
+            eq(snapshotEmbeddings.snapshotId, snapshots.id),
+            underKey(key),
+            isNotNull(snapshotEmbeddings.completedAt),
+          ),
+        ),
+    ),
+    sql`${rank} < ${EMBED_TIERS.indexOf("other")}`,
+  );
+}
+
+/**
+ * The snapshots served right now that have no complete embedding under the key, of the
+ * repositories the worker embeds unasked: the backfill after a change of model, and whatever the
+ * queue lost. The highest rank first, and within a rank the newest index first, at most `limit`.
  */
 export async function listSnapshotsToEmbed(
   database: Database,
@@ -232,46 +302,23 @@ export async function listSnapshotsToEmbed(
   options: SnapshotsToEmbedOptions = {},
 ): Promise<SnapshotToEmbed[]> {
   const db = drizzleOf(database);
+  const rank = rankOf(options.listed ?? []);
   const rows = await db
-    .selectDistinct({
+    .select({
       accountId: snapshots.accountId,
       repoId: snapshots.repoId,
       snapshotId: snapshots.id,
       commitSha: snapshots.commitSha,
-      indexedAt: snapshots.indexedAt,
+      rank,
     })
     .from(snapshots)
-    .innerJoin(
-      repoRefs,
-      and(eq(repoRefs.repoId, snapshots.repoId), eq(repoRefs.commitSha, snapshots.commitSha)),
-    )
     .innerJoin(repos, eq(repos.id, snapshots.repoId))
-    .where(
-      and(
-        eq(snapshots.status, "ready"),
-        options.visibility === undefined ? undefined : eq(repos.visibility, options.visibility),
-        notExists(
-          db
-            .select({ one: sql`1` })
-            .from(snapshotEmbeddings)
-            .where(
-              and(
-                eq(snapshotEmbeddings.snapshotId, snapshots.id),
-                underKey(key),
-                isNotNull(snapshotEmbeddings.completedAt),
-              ),
-            ),
-        ),
-      ),
-    )
-    .orderBy(sql`${snapshots.indexedAt} desc nulls last`, snapshots.id)
+    .innerJoin(accounts, eq(accounts.id, repos.accountId))
+    .where(toEmbed(db, key, rank, options))
+    // Within a rank the newest index first, as the backfill is worth the most where the pack moves.
+    .orderBy(rank, sql`${snapshots.indexedAt} desc nulls last`, snapshots.id)
     .limit(limit);
-  return rows.map(({ accountId, repoId, snapshotId, commitSha }) => ({
-    accountId,
-    repoId,
-    snapshotId,
-    commitSha,
-  }));
+  return rows.map(({ rank: place, ...snapshot }) => ({ ...snapshot, tier: tierAt(place) }));
 }
 
 /** How many served snapshots `listSnapshotsToEmbed` would answer without a limit. */
@@ -281,33 +328,33 @@ export async function countSnapshotsToEmbed(
   options: SnapshotsToEmbedOptions = {},
 ): Promise<number> {
   const db = drizzleOf(database);
+  const rank = rankOf(options.listed ?? []);
   const [row] = await db
-    .select({ count: sql<number>`count(distinct ${snapshots.id})::integer` })
+    .select({ count: sql<number>`count(*)::integer` })
     .from(snapshots)
-    .innerJoin(
-      repoRefs,
-      and(eq(repoRefs.repoId, snapshots.repoId), eq(repoRefs.commitSha, snapshots.commitSha)),
-    )
     .innerJoin(repos, eq(repos.id, snapshots.repoId))
-    .where(
-      and(
-        eq(snapshots.status, "ready"),
-        options.visibility === undefined ? undefined : eq(repos.visibility, options.visibility),
-        notExists(
-          db
-            .select({ one: sql`1` })
-            .from(snapshotEmbeddings)
-            .where(
-              and(
-                eq(snapshotEmbeddings.snapshotId, snapshots.id),
-                underKey(key),
-                isNotNull(snapshotEmbeddings.completedAt),
-              ),
-            ),
-        ),
-      ),
-    );
+    .innerJoin(accounts, eq(accounts.id, repos.accountId))
+    .where(toEmbed(db, key, rank, options));
   return row?.count ?? 0;
+}
+
+/**
+ * The rank of one snapshot's repository, for whatever queues or runs its embedding: the question
+ * the sweep asks of every served snapshot, asked of one. Nothing for a snapshot that is not there.
+ */
+export async function tierOfSnapshot(
+  database: Database,
+  scope: SnapshotScope,
+  listed: readonly string[],
+): Promise<EmbedTier | undefined> {
+  const [row] = await drizzleOf(database)
+    .select({ rank: rankOf(listed) })
+    .from(snapshots)
+    .innerJoin(repos, eq(repos.id, snapshots.repoId))
+    .innerJoin(accounts, eq(accounts.id, repos.accountId))
+    .where(and(eq(snapshots.id, scope.snapshotId), eq(snapshots.accountId, scope.accountId)))
+    .limit(1);
+  return row === undefined ? undefined : tierAt(row.rank);
 }
 
 /** What was embedded for one repository under a key, over its snapshots. */

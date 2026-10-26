@@ -52,10 +52,11 @@ src/
   roles/         api.ts (composition root, HTTP server, shutdown), worker.ts (the queue's jobs until told
                  to stop), migrate.ts and purge.ts; the check role is main.ts handing a directory to
                  @skillcdn/indexer
-  jobs/          the queues and their jobs (ADR-0064): what a job carries and in which order the queue
-                 takes them (queues.ts), one slice of the embedding of a snapshot (embed-snapshot.ts),
-                 the indexing of a repository on request (index-repository.ts), the sweep that backfills
-                 and drops a replaced model (sweep.ts), what may be embedded under the scope and the
+  jobs/          the queues and their jobs (ADR-0064, ADR-0072): what a job carries and in which order
+                 the queue takes them, by the repository's rank (queues.ts), one slice of the embedding
+                 of a snapshot (embed-snapshot.ts), the indexing of a repository on request
+                 (index-repository.ts), the sweep that backfills the ranked repositories and drops a
+                 replaced model (sweep.ts), what may be embedded under the scope and the
                  entitlements (scope.ts), when the api queues an embedding (triggers.ts), what the operator
                  reads and asks of it through the admin API (reads.ts), and the worker wired to its
                  ports (worker.ts), which the role and the tests run alike

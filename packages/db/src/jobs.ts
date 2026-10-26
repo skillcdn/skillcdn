@@ -96,6 +96,13 @@ export interface JobQueue {
    * queued twice. Takes effect only on a process that runs the schedules (the worker).
    */
   schedule(name: string, cron: string, data: object, key: string): Promise<void>;
+  /**
+   * Lets go of every job of the queue that waits to run, their singleton keys with them; a job
+   * that runs goes on, and what the queue remembers of finished ones stays. Answers how many
+   * went. For a queue whose jobs are derived from the database, which a process queues again at
+   * start in the order of its own build.
+   */
+  clear(name: string): Promise<number>;
   /** The counts of these queues, read fresh. */
   counts(names: readonly string[]): Promise<QueueCounts[]>;
   /** The jobs of the queue that failed for good, newest first, at most `limit`. */
@@ -215,6 +222,9 @@ export async function createJobQueue(
     },
     async schedule(name, cron, data, key) {
       await boss.schedule(name, cron, data, { key, singletonKey: key });
+    },
+    async clear(name) {
+      return boss.deleteQueuedJobs(name);
     },
     async counts(names) {
       const counts: QueueCounts[] = [];

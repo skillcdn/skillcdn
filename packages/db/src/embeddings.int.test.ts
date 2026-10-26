@@ -9,6 +9,7 @@ import {
   addEmbeddingUsage,
   blobsWithoutVectors,
   claimSnapshot,
+  countSnapshotsToEmbed,
   type Database,
   deleteEmbeddingsOutsideKey,
   embeddedBytesOfRepository,
@@ -23,6 +24,7 @@ import {
   saveCachedRef,
   saveRepository,
   supportsSectionVectors,
+  tierOfSnapshot,
   type VectorKey,
   writeSectionVectors,
   writeSnapshotIndex,
@@ -30,8 +32,8 @@ import {
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "./testing.js";
 
 // How far each snapshot has been embedded (ADR-0064): the worker's record of its slices, the
-// list of what is served and still to embed under the configured key, and what goes with a
-// replaced model.
+// list of what is served and still to embed under the configured key, ranked by what the
+// repository is (ADR-0072), and what goes with a replaced model.
 
 let testDatabase: TestDatabase;
 let database: Database;
@@ -52,11 +54,14 @@ const KEY: VectorKey = { model: "model-one", dimensions: 4, sectioningVersion: S
 const OLD_KEY: VectorKey = { ...KEY, model: "model-zero" };
 
 let nextHostId = 7000;
-function hostRepository(visibility: "public" | "private" = "public"): HostRepository {
+function hostRepository(
+  visibility: "public" | "private" = "public",
+  name = "Docs",
+): HostRepository {
   nextHostId += 1;
   return {
     hostRepoId: String(nextHostId),
-    name: "Docs",
+    name,
     defaultBranch: "main",
     description: undefined,
     visibility,
@@ -64,21 +69,31 @@ function hostRepository(visibility: "public" | "private" = "public"): HostReposi
   };
 }
 
-const ENTRIES: IndexEntry[] = [
-  {
-    path: "docs/a.md",
-    kind: "markdown",
-    size: 10,
-    blobSha: "blob-a",
-    skillDir: undefined,
-    name: undefined,
-    title: "A",
-    description: undefined,
-    frontMatter: undefined,
-    searchable: true,
-    visible: true,
-  },
-];
+const entry = (fields: Partial<IndexEntry> & Pick<IndexEntry, "path" | "blobSha">): IndexEntry => ({
+  kind: "markdown",
+  size: 10,
+  skillDir: undefined,
+  name: undefined,
+  title: undefined,
+  description: undefined,
+  frontMatter: undefined,
+  searchable: true,
+  visible: true,
+  ...fields,
+});
+
+const DOCUMENT = entry({ path: "docs/a.md", blobSha: "blob-a", title: "A" });
+const MANIFEST = entry({ path: "SKILLCDN.md", kind: "manifest", blobSha: "blob-m" });
+const SKILL = entry({
+  path: "skills/one/SKILL.md",
+  kind: "skill",
+  blobSha: "blob-s",
+  skillDir: "skills/one",
+  name: "one",
+});
+
+/** A declared pack, as most repositories here are: a manifest and a document. */
+const ENTRIES: IndexEntry[] = [MANIFEST, DOCUMENT];
 
 interface Made {
   readonly scope: SnapshotScope;
@@ -92,9 +107,24 @@ async function readySnapshot(options: {
   readonly indexedAt?: Date;
   readonly ready?: boolean;
   readonly visibility?: "public" | "private";
+  /** The repository's name at the host; `Docs` unless said. */
+  readonly name?: string;
+  /** A pack of the deployment's own directory, when `local`. */
+  readonly host?: "gh" | "local";
+  /** What the index holds; a declared pack unless said. */
+  readonly entries?: IndexEntry[];
 }): Promise<Made> {
-  const alias = { host: "gh" as const, owner: `owner${nextHostId}`, repo: "docs" };
-  const saved = await saveRepository(database, alias, hostRepository(options.visibility), T0);
+  const alias = {
+    host: options.host ?? ("gh" as const),
+    owner: `owner${nextHostId}`,
+    repo: (options.name ?? "docs").toLowerCase(),
+  };
+  const saved = await saveRepository(
+    database,
+    alias,
+    hostRepository(options.visibility, options.name),
+    T0,
+  );
   const repo = { accountId: saved.accountId, repoId: saved.id };
   const commit = nextHostId.toString(16).padStart(40, "0");
   const snapshot = await ensureSnapshot(database, repo, commit, 1, T0);
@@ -107,7 +137,7 @@ async function readySnapshot(options: {
         scope,
         "builder",
         {
-          entries: ENTRIES,
+          entries: options.entries ?? ENTRIES,
           truncated: false,
           indexedBytes: 0,
           diagnostics: [],
@@ -212,8 +242,90 @@ describe("snapshot embeddings", () => {
       repoId: unembedded.repo.repoId,
       snapshotId: unembedded.scope.snapshotId,
       commitSha: unembedded.commit,
+      tier: "declared",
     });
     expect(await listSnapshotsToEmbed(database, KEY, 1)).toHaveLength(1);
+  });
+
+  it("rank the repositories, the operator's and the deployment's own first, and leave what is no pack out", async () => {
+    // Indexed newest to oldest in the order that rank alone reverses.
+    const other = await readySnapshot({ served: true, indexedAt: T2, entries: [DOCUMENT] });
+    const skills = await readySnapshot({
+      served: true,
+      indexedAt: T2,
+      entries: [SKILL, DOCUMENT],
+    });
+    const closed = await readySnapshot({
+      served: true,
+      indexedAt: T1,
+      visibility: "private",
+      entries: [DOCUMENT],
+    });
+    const declared = await readySnapshot({ served: true, indexedAt: T2 });
+    const listed = await readySnapshot({ served: true, indexedAt: T0, name: "Listed" });
+    const local = await readySnapshot({
+      served: true,
+      indexedAt: T1,
+      host: "local",
+      entries: [DOCUMENT],
+    });
+    // The operator writes the address as the host spells it; the rank ignores case.
+    const options = { listed: ["/gh/ACME/listed"] };
+
+    const all = await listSnapshotsToEmbed(database, KEY, 100, options);
+    const ids = all.map((item) => item.snapshotId);
+    expect(ids).not.toContain(other.scope.snapshotId);
+    const ranked = all.filter((item) =>
+      [skills, closed, declared, listed, local].some(
+        (made) => made.scope.snapshotId === item.snapshotId,
+      ),
+    );
+    expect(ranked.map((item) => [item.snapshotId, item.tier])).toEqual([
+      [local.scope.snapshotId, "listed"],
+      [listed.scope.snapshotId, "listed"],
+      [declared.scope.snapshotId, "declared"],
+      [closed.scope.snapshotId, "declared"],
+      [skills.scope.snapshotId, "skills"],
+    ]);
+    // Within a rank, the newest index first: the same tier, the later `indexedAt` ahead.
+    expect(ids.indexOf(local.scope.snapshotId)).toBeLessThan(ids.indexOf(listed.scope.snapshotId));
+    // Without the operator's list, the listed one is what its index makes it: a declared pack.
+    expect(
+      (await listSnapshotsToEmbed(database, KEY, 100)).find(
+        (item) => item.snapshotId === listed.scope.snapshotId,
+      )?.tier,
+    ).toBe("declared");
+    // The count agrees with the list, and leaves the private one out under the public visibility.
+    expect(await countSnapshotsToEmbed(database, KEY, options)).toBe(all.length);
+    expect(await countSnapshotsToEmbed(database, KEY, { ...options, visibility: "public" })).toBe(
+      all.length - 1,
+    );
+
+    // The rank of one snapshot, as whatever queues its embedding asks it.
+    const tierOf = (made: Made, keys: readonly string[] = options.listed) =>
+      tierOfSnapshot(database, made.scope, keys);
+    expect(await tierOf(other)).toBe("other");
+    expect(await tierOf(skills)).toBe("skills");
+    expect(await tierOf(closed)).toBe("declared");
+    expect(await tierOf(declared)).toBe("declared");
+    expect(await tierOf(listed)).toBe("listed");
+    expect(await tierOf(listed, [])).toBe("declared");
+    expect(await tierOf(local, [])).toBe("listed");
+    expect(
+      await tierOfSnapshot(
+        database,
+        { accountId: other.scope.accountId, snapshotId: "00000000-0000-7000-8000-000000000000" },
+        [],
+      ),
+    ).toBeUndefined();
+    // Another account's scope sees nothing of it.
+    expect(
+      await tierOfSnapshot(
+        database,
+        { accountId: closed.scope.accountId, snapshotId: other.scope.snapshotId },
+        [],
+      ),
+    ).toBeUndefined();
   });
 
   it("leave the snapshots of private repositories out when asked for public ones", async () => {
