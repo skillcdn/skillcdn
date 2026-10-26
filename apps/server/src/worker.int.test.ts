@@ -5,9 +5,6 @@ import {
   type Embedder,
   type EmbedLimits,
   type Entitlements,
-  type HostRepository,
-  type IndexEntry,
-  NO_LICENSE,
   parseAddress,
   SECTIONING_VERSION,
   sectionsOf,
@@ -15,7 +12,6 @@ import {
 } from "@skillcdn/core";
 import {
   blobsWithoutVectors,
-  claimSnapshot,
   createBlobStore,
   createJobQueue,
   ensureSnapshot,
@@ -27,13 +23,10 @@ import {
   recordSnapshotEmbedding,
   type SectionVector,
   type SnapshotScope,
-  saveCachedRef,
-  saveRepository,
   servedEntries,
   usageDayOf,
   type VectorKey,
   writeSectionVectors,
-  writeSnapshotIndex,
 } from "@skillcdn/db";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
 import { INDEX_VERSION } from "@skillcdn/indexer";
@@ -59,6 +52,7 @@ import type { Mount } from "./mounts/mount-service.js";
 import { OperatorLists } from "./operator/lists.js";
 import { createFixtureHost, type FixtureHost, fixtureCommits } from "./testing/fixture-host.js";
 import { createHarness } from "./testing/harness.js";
+import { type MadeSnapshotOptions, makeSnapshot } from "./testing/made-snapshot.js";
 
 // The worker role (ADR-0064, point 3) against the fixture git host and an embedder that answers
 // in the process: a repository indexed on request and then embedded ahead of the rest, the
@@ -393,6 +387,7 @@ describe("the worker", () => {
     expect(second).toEqual({
       pending: 0,
       queued: 0,
+      reordered: 0,
       tiers: { listed: 0, declared: 0, skills: 0 },
       dropped: { vectors: 1, snapshots: 1 },
     });
@@ -575,7 +570,8 @@ describe("the worker", () => {
       },
       work: async () => {},
       schedule: async () => {},
-      clear: async () => 0,
+      waiting: async () => [],
+      reorder: async () => false,
       counts: async () => [],
       failures: async () => [],
       stop: async () => {},
@@ -690,7 +686,8 @@ describe("the worker", () => {
       },
       work: async () => {},
       schedule: async () => {},
-      clear: async () => 0,
+      waiting: async () => [],
+      reorder: async () => false,
       counts: async () => [],
       failures: async () => [],
       stop: async () => {},
@@ -790,13 +787,11 @@ describe("the worker", () => {
     ).toMatchObject({ status: "embedded", bodies: 1 });
   });
 
-  it("let go of the embedding jobs that waited when it started, for the sweep to queue again", () => {
-    expect(
-      logs.some(
-        (line) =>
-          line.msg === "the embedding jobs that waited were let go, for the sweep to queue again",
-      ),
-    ).toBe(true);
+  it("swept when it started, in its own process, before it took a slice", () => {
+    const swept = logs.findIndex((line) => line.msg === "embeddings swept");
+    const sliced = logs.findIndex((line) => line.msg === "embedding slice done");
+    expect(swept).toBeGreaterThanOrEqual(0);
+    expect(sliced).toBeGreaterThan(swept);
   });
 
   it("says the snapshot is being embedded before its first slice has written a body", async () => {
@@ -832,86 +827,8 @@ describe("the worker", () => {
   });
 });
 
-let nextHostId = 8000;
-
 /** A ready snapshot of a repository of its own, from these files, outside every fixture. */
-async function madeSnapshot(options: {
-  readonly visibility: "public" | "private";
-  /** The account's login; repositories of one owner share an account. */
-  readonly owner?: string;
-  /** The commit of the default branch, so served right now, when true. */
-  readonly served?: boolean;
-  readonly files: readonly {
-    readonly path: string;
-    readonly text: string;
-    readonly kind?: "markdown" | "manifest" | "skill";
-    readonly frontMatter?: IndexEntry["frontMatter"];
-  }[];
-}) {
-  nextHostId += 1;
-  const owner = options.owner ?? `owner-${nextHostId}`;
-  const repository: HostRepository = {
-    hostRepoId: String(nextHostId),
-    name: `repo-${nextHostId}`,
-    defaultBranch: "main",
-    description: undefined,
-    visibility: options.visibility,
-    owner: { hostAccountId: `account-${owner}`, login: owner, kind: "organization" },
-  };
-  const now = clock.now();
-  const saved = await saveRepository(
-    testDatabase.database,
-    { host: "gh", owner, repo: repository.name },
-    repository,
-    now,
-  );
-  const repo = { accountId: saved.accountId, repoId: saved.id };
-  const commit = nextHostId.toString(16).padStart(40, "0");
-  const snapshot = await ensureSnapshot(testDatabase.database, repo, commit, INDEX_VERSION, now);
-  const scope: SnapshotScope = { accountId: repo.accountId, snapshotId: snapshot.id };
-  expect(await claimSnapshot(testDatabase.database, scope, "test", now, 60_000)).toBeDefined();
-  const blobs = createBlobStore(testDatabase.database);
-  const entries: IndexEntry[] = [];
-  for (const file of options.files) {
-    const bytes = new TextEncoder().encode(file.text);
-    const blobSha = `blob-${nextHostId}-${entries.length}`;
-    await blobs.write(blobSha, bytes);
-    const skillDir = file.path.slice(0, file.path.lastIndexOf("/"));
-    entries.push({
-      path: file.path,
-      kind: file.kind ?? "markdown",
-      size: bytes.byteLength,
-      blobSha,
-      skillDir: file.kind === "skill" ? skillDir : undefined,
-      name: file.kind === "skill" ? skillDir.split("/").at(-1) : undefined,
-      title: undefined,
-      description: undefined,
-      frontMatter: file.frontMatter,
-      searchable: file.kind !== "manifest",
-      visible: true,
-    });
-  }
-  expect(
-    await writeSnapshotIndex(
-      testDatabase.database,
-      scope,
-      "test",
-      {
-        entries,
-        truncated: false,
-        indexedBytes: 0,
-        diagnostics: [],
-        license: NO_LICENSE,
-        version: INDEX_VERSION,
-      },
-      now,
-    ),
-  ).toBe(true);
-  if (options.served) {
-    await saveCachedRef(testDatabase.database, repo, "", commit, now);
-  }
-  return { scope, repo, commit, repository, entries };
-}
+const madeSnapshot = (options: MadeSnapshotOptions) => makeSnapshot(testDatabase.database, options);
 
 /** A mount of a fixture address, resolved as the worker resolves one. */
 async function resolveMount(address: string) {

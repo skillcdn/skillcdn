@@ -14,6 +14,7 @@ import {
   addEmbeddingUsage,
   blobsWithoutVectors,
   type Database,
+  type EmbedTier,
   embeddedBytesOfRepository,
   getEmbeddingUsage,
   getRepo,
@@ -77,6 +78,11 @@ export type EmbedSliceOutcome =
       readonly status: "embedded";
       /** The path the next slice continues after; `undefined` when the snapshot is done. */
       readonly next: string | undefined;
+      /**
+       * The rank the slice found the repository at, where it asked, for a backfill or an index:
+       * the slice after it carries it, whatever the job was queued with (ADR-0073).
+       */
+      readonly tier?: EmbedTier | undefined;
     })
   | (EmbeddedCounts & {
       readonly status: "limited";
@@ -194,11 +200,12 @@ export async function embedSnapshotSlice(
   }
   // The rank is asked again as the scope is (ADR-0072): a repository that is no pack is embedded
   // for a search or a request, never for the backfill or an index, whatever queued the job.
-  if (job.reason === "backfill" || job.reason === "indexed") {
-    const tier = await tierOfSnapshot(database, scope, await deps.lists.listedKeys());
-    if (tier === "other") {
-      return { status: "skipped", reason: "unasked" };
-    }
+  const tier =
+    job.reason === "backfill" || job.reason === "indexed"
+      ? await tierOfSnapshot(database, scope, await deps.lists.listedKeys())
+      : undefined;
+  if (tier === "other") {
+    return { status: "skipped", reason: "unasked" };
   }
 
   const served = await servedEntries(database, scope);
@@ -302,5 +309,5 @@ export async function embedSnapshotSlice(
     logger.info({ bound, ...counts }, "the embedding stopped at a bound");
     return { status: "limited", bound, ...counts };
   }
-  return { status: "embedded", ...counts, next };
+  return { status: "embedded", ...counts, next, ...(tier === undefined ? {} : { tier }) };
 }

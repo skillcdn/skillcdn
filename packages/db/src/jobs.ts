@@ -60,6 +60,13 @@ export interface QueueCounts {
   readonly oldestWaitSeconds: number | null;
 }
 
+/** A job that waits to run, a retry among them, as the queue holds it. */
+export interface WaitingJob {
+  readonly id: string;
+  readonly data: unknown;
+  readonly priority: number;
+}
+
 /** A job that failed for good, as the queue still remembers it. */
 export interface FailedJob {
   readonly id: string;
@@ -97,12 +104,16 @@ export interface JobQueue {
    */
   schedule(name: string, cron: string, data: object, key: string): Promise<void>;
   /**
-   * Lets go of every job of the queue that waits to run, their singleton keys with them; a job
-   * that runs goes on, and what the queue remembers of finished ones stays. Answers how many
-   * went. For a queue whose jobs are derived from the database, which a process queues again at
-   * start in the order of its own build.
+   * The jobs of the queue that wait to run, a retry among them, oldest first, at most `limit`:
+   * what a process that puts the queue in order looks through.
    */
-  clear(name: string): Promise<number>;
+  waiting(name: string, limit: number): Promise<WaitingJob[]>;
+  /**
+   * Gives a job that waits another priority and the data that goes with it, in place: it keeps
+   * its singleton key and its place among the jobs of its new priority by age. False when the job
+   * no longer waits, because it started or is gone; a job that runs is never changed.
+   */
+  reorder(name: string, id: string, priority: number, data: object): Promise<boolean>;
   /** The counts of these queues, read fresh. */
   counts(names: readonly string[]): Promise<QueueCounts[]>;
   /** The jobs of the queue that failed for good, newest first, at most `limit`. */
@@ -223,8 +234,14 @@ export async function createJobQueue(
     async schedule(name, cron, data, key) {
       await boss.schedule(name, cron, data, { key, singletonKey: key });
     },
-    async clear(name) {
-      return boss.deleteQueuedJobs(name);
+    async waiting(name, limit) {
+      const jobs = await boss.findJobs(name, { queued: true, limit });
+      return jobs.map((job) => ({ id: job.id, data: job.data, priority: job.priority }));
+    },
+    async reorder(name, id, priority, data) {
+      // The library's own edit of a job that waits: it leaves alone a job that has started.
+      const { updated } = await boss.update(name, data, { id, priority });
+      return updated > 0;
     },
     async counts(names) {
       const counts: QueueCounts[] = [];

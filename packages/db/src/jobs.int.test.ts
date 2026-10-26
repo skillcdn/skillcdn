@@ -80,9 +80,10 @@ describe("the job queue", () => {
     await vi.waitFor(() => expect(seen).toEqual([2, 3, 1, 4]), { timeout: 15_000 });
   });
 
-  it("lets go of the jobs that wait, their keys with them, and not of the one that runs", async () => {
+  it("lists the jobs that wait, and gives one another priority and data in place, never one that runs", async () => {
     await jobs.ensureQueue("waiting", { retryLimit: 0, retryDelaySeconds: 1, expireInSeconds: 60 });
-    expect(await jobs.send("waiting", { n: 1 }, { singletonKey: "a" })).toBeDefined();
+    const running = await jobs.send("waiting", { n: 1 }, { singletonKey: "a" });
+    if (running === undefined) throw new Error("the first job was not queued");
     let release: () => void = () => {};
     const held = new Promise<void>((resolve) => {
       release = resolve;
@@ -93,16 +94,27 @@ describe("the job queue", () => {
       await held;
     });
     await vi.waitFor(() => expect(started).toEqual([1]), { timeout: 15_000 });
-    expect(await jobs.send("waiting", { n: 2 }, { singletonKey: "b" })).toBeDefined();
-    expect(await jobs.send("waiting", { n: 3 }, { singletonKey: "c" })).toBeDefined();
+    expect(await jobs.send("waiting", { n: 2 }, { singletonKey: "b", priority: 5 })).toBeDefined();
+    expect(await jobs.send("waiting", { n: 3 }, { singletonKey: "c", priority: 7 })).toBeDefined();
 
-    expect(await jobs.clear("waiting")).toBe(2);
-    const [counts] = await jobs.counts(["waiting"]);
-    expect(counts).toMatchObject({ name: "waiting", queued: 0, active: 1 });
-    // The key of a job let go is free again, and the one that ran on is run to its end.
-    expect(await jobs.send("waiting", { n: 4 }, { singletonKey: "b" })).toBeDefined();
+    // Oldest first, and the job that runs is not among them.
+    const waiting = await jobs.waiting("waiting", 10);
+    expect(waiting.map((job) => [data(job), job.priority])).toEqual([
+      [2, 5],
+      [3, 7],
+    ]);
+    const [second] = waiting;
+    if (second === undefined) throw new Error("two jobs wait");
+    expect(await jobs.reorder("waiting", second.id, 9, { n: 20 })).toBe(true);
+    expect(await jobs.reorder("waiting", running, 9, { n: 10 })).toBe(false);
+    expect((await jobs.waiting("waiting", 10)).map((job) => [data(job), job.priority])).toEqual([
+      [20, 9],
+      [3, 7],
+    ]);
+    // It kept its singleton key.
+    expect(await jobs.send("waiting", { n: 4 }, { singletonKey: "b" })).toBeUndefined();
     release();
-    await vi.waitFor(() => expect(started).toEqual([1, 4]), { timeout: 15_000 });
+    await vi.waitFor(() => expect(started).toEqual([1, 20, 3]), { timeout: 15_000 });
   });
 
   it("tries a failed job again within its settings, then counts it as failed", {

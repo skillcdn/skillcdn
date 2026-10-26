@@ -11,6 +11,7 @@ export {
   type QueuedJob,
   type QueueSettings,
   type SendOptions,
+  type WaitingJob,
   type WorkOptions,
 } from "./jobs.js";
 export { getSchemaStatus, migrateDatabase, type SchemaStatus } from "./migrate.js";

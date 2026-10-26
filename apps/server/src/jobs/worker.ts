@@ -36,7 +36,6 @@ import {
   SWEEP_SCHEDULE,
   SWEEP_SCHEDULE_KEY,
   sendEmbedJob,
-  sendSweepJob,
   sweepJobSchema,
 } from "./queues.js";
 import { sweepEmbeddings } from "./sweep.js";
@@ -170,16 +169,6 @@ export function createWorker(config: WorkerConfig, ports: WorkerPorts): Worker {
       const embedding =
         embedder !== undefined && supported && key !== undefined && config.scope !== "none";
       const policy = { scope: config.scope, entitlements };
-      if (embedding) {
-        // What waits in the embedding queue is derived from the database: let it go, and let the
-        // sweep below queue it again in the order of this build (ADR-0072). A slice that runs
-        // goes on, and queues its next slice itself.
-        const released = await jobs.clear(EMBED_QUEUE);
-        logger.info(
-          { released },
-          "the embedding jobs that waited were let go, for the sweep to queue again",
-        );
-      }
       await jobs.work(
         INDEX_QUEUE,
         { concurrency: 1, pollSeconds },
@@ -192,6 +181,18 @@ export function createWorker(config: WorkerConfig, ports: WorkerPorts): Worker {
       );
       if (!embedding) {
         return { queues: [INDEX_QUEUE] };
+      }
+      const sweep = () =>
+        sweepEmbeddings({ database, jobs, key, scope: config.scope, lists, logger });
+      // The first sweep runs here, in the process that starts, before it takes a slice, and never
+      // through the queue: while a deployment rolls, the worker of the build before still takes
+      // jobs, and would queue the backfill in the order of its own build (ADR-0073). It puts what
+      // waits in the order of this one, and queues what a deployment that was down, or that
+      // changed its model, has to catch up on.
+      try {
+        await sweep();
+      } catch (error) {
+        logger.warn({ err: error }, "the sweep at start failed; the hourly one does its work");
       }
       await jobs.work(
         EMBED_QUEUE,
@@ -217,8 +218,13 @@ export function createWorker(config: WorkerConfig, ports: WorkerPorts): Worker {
             job,
           );
           if (outcome.status === "embedded" && outcome.next !== undefined) {
-            // The rest of the snapshot takes its turn behind the slices of the others.
-            await sendEmbedJob(jobs, { ...job, after: outcome.next });
+            // The rest of the snapshot takes its turn behind the slices of the others, at the rank
+            // its repository has now.
+            await sendEmbedJob(jobs, {
+              ...job,
+              tier: outcome.tier ?? job.tier,
+              after: outcome.next,
+            });
           }
           log.info({ reason: job.reason, ...outcome }, "embedding slice done");
         }),
@@ -226,13 +232,9 @@ export function createWorker(config: WorkerConfig, ports: WorkerPorts): Worker {
       await jobs.work(
         SWEEP_QUEUE,
         { concurrency: 1, pollSeconds },
-        handling(sweepJobSchema, () =>
-          sweepEmbeddings({ database, jobs, key, scope: config.scope, lists, logger }),
-        ),
+        handling(sweepJobSchema, sweep),
       );
       await jobs.schedule(SWEEP_QUEUE, SWEEP_SCHEDULE, {}, SWEEP_SCHEDULE_KEY);
-      // And once now: what a deployment that was down, or that changed its model, has to catch up on.
-      await sendSweepJob(jobs);
       return { queues: [INDEX_QUEUE, EMBED_QUEUE, SWEEP_QUEUE] };
     },
     async close(graceMs) {

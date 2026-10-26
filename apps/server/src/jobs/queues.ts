@@ -42,7 +42,10 @@ const REASON_PRIORITY: Readonly<Record<Exclude<EmbedReason, "designated">, numbe
   backfill: 1,
 };
 
-/** The priority of a slice. A job without a rank, queued by an older build, ranks with the rest. */
+/**
+ * The priority of a slice. A job without a rank, queued by an older build, ranks with the rest
+ * until a sweep gives it the rank of its repository (ADR-0073).
+ */
 export function embedPriority(reason: EmbedReason, tier: EmbedTier | undefined): number {
   return reason === "designated"
     ? DESIGNATED_PRIORITY
@@ -104,7 +107,10 @@ export const indexJobSchema = z.object({
 });
 export type IndexJob = z.infer<typeof indexJobSchema>;
 
-/** A sweep carries nothing; the schedule's row and a send at start both make one. */
+/**
+ * A sweep carries nothing, and only the schedule's row makes one: the sweep a worker runs at
+ * start runs in its own process, never through the queue (ADR-0073).
+ */
 export const sweepJobSchema = z.record(z.string(), z.unknown());
 
 /** Hourly, at the top of the hour. */
@@ -140,11 +146,5 @@ export async function sendIndexJob(jobs: JobQueue, job: IndexJob): Promise<boole
     priority: DESIGNATED_PRIORITY,
     singletonKey: job.address,
   });
-  return id !== undefined;
-}
-
-/** Queues a sweep. False when one is waiting already. */
-export async function sendSweepJob(jobs: JobQueue): Promise<boolean> {
-  const id = await jobs.send(SWEEP_QUEUE, {}, { singletonKey: SWEEP_SCHEDULE_KEY });
   return id !== undefined;
 }
