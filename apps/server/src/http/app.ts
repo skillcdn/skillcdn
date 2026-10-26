@@ -74,6 +74,7 @@ import { SERVER_NAME, SERVER_VERSION } from "../version.js";
 import { purgeByAddress, registerAdmin } from "./admin.js";
 import { registerAuth } from "./auth.js";
 import type { ClientAddressResolver } from "./client-address.js";
+import { isCrawler } from "./crawlers.js";
 import { type AppEnv, requestContext } from "./request-context.js";
 import { CORS_MAX_AGE_SECONDS, hostFailure, mountBody, registerRest } from "./rest.js";
 import {
@@ -299,6 +300,34 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
         "could not start indexing",
       );
     });
+  };
+
+  /**
+   * What a look at an address may set going (ADR-0074). A person's or an agent's reads the
+   * repository it names. A crawler's, or the preview of a link someone shared, reads nothing,
+   * and for a name the deployment has not read it does not even ask the git host: `undefined`
+   * then, for the route to answer with what it has without the repository.
+   */
+  const lookOf = async (
+    c: Context<AppEnv>,
+    address: Address,
+  ): Promise<{ readonly indexes: boolean } | undefined> => {
+    if (!isCrawler(c.req.header("user-agent"))) {
+      return { indexes: true };
+    }
+    return (await mounts.knowsPublicly(address)) ? { indexes: false } : undefined;
+  };
+
+  /**
+   * The mount as a look may read it: a person's or an agent's starts indexing its commit, and a
+   * crawler's is served what is indexed already and starts nothing, reading included.
+   */
+  const mountFor = (mount: Mount, look: { readonly indexes: boolean }): Mount => {
+    if (look.indexes) {
+      startIndexing(mount);
+      return mount;
+    }
+    return { ...mount, startsIndexing: false };
   };
 
   /**
@@ -663,10 +692,15 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
       if (!parsed.ok || !query.success) {
         return c.notFound();
       }
+      // A link preview asks for the card: of a repository the deployment has not read there is
+      // none, and the preview falls back to the page's own.
+      const look = await lookOf(c, parsed.value);
+      if (look === undefined) {
+        return c.notFound();
+      }
       let mount: Mount;
       try {
-        mount = await mounts.resolve(parsed.value);
-        startIndexing(mount);
+        mount = mountFor(await mounts.resolve(parsed.value), look);
       } catch (error) {
         if (error instanceof MountError) {
           return c.notFound();
@@ -725,18 +759,22 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
 
   // The badge of an address (specs/rest.md): the symbol, the name of the service and how many
   // skills the address serves, as an SVG for the README of the repository. Asking for it
-  // resolves the address and starts indexing it, as the page does; until the index is ready the
-  // badge says so and is kept only briefly, so that the next look gets the count.
+  // resolves the address and starts indexing it, as the page does, unless a crawler asks
+  // (ADR-0074); until the index is ready the badge says so and is kept only briefly, so that the
+  // next look gets the count.
   app.on(["GET", "HEAD"], `${BADGE_ROUTE}/*`, async (c) => {
     const request = webRequestOf(c);
     const parsed = parseAddress(request.url.pathname.slice(BADGE_ROUTE.length));
     if (!parsed.ok) {
       return c.notFound();
     }
+    const look = await lookOf(c, parsed.value);
+    if (look === undefined) {
+      return c.notFound();
+    }
     let mount: Mount;
     try {
-      mount = await mounts.resolve(parsed.value);
-      startIndexing(mount);
+      mount = mountFor(await mounts.resolve(parsed.value), look);
     } catch (error) {
       if (error instanceof MountError) {
         return c.notFound();
@@ -776,6 +814,10 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
     if (!parsed.ok) {
       return c.notFound();
     }
+    // A crawler gets the icon of a repository the deployment knows, and asks the host nothing.
+    if ((await lookOf(c, parsed.value)) === undefined) {
+      return c.notFound();
+    }
     let mount: Mount;
     try {
       mount = await mounts.resolve(parsed.value);
@@ -811,7 +853,8 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
   /**
    * The page of an address for a browser, rendered with what the address serves: the same
    * answers the page would otherwise ask the REST API for, so that a crawler reads what a
-   * person sees. Serving the page resolves the address and starts indexing it, like the API.
+   * person sees. Serving the page to a person resolves the address and starts indexing it, like
+   * the API; serving it to a crawler starts nothing (ADR-0074).
    */
   const addressPage = async (c: Context<AppEnv>, bundle: WebBundle): Promise<Response> => {
     const request = await pageRequestOf(c);
@@ -868,10 +911,16 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
         400,
       );
     }
+    // A crawler, or the preview of a link, that names a repository the deployment has not read
+    // gets the page without it, as the browser gets it before it asks the REST API: a person
+    // taken for a crawler sees it filled in by that API, which robots.txt keeps crawlers out of.
+    const look = await lookOf(c, parsed.value);
+    if (look === undefined) {
+      return bundle.address(request, {});
+    }
     let mount: Mount;
     try {
-      mount = await resolveFor(parsed.value, sessionViewer(c));
-      startIndexing(mount);
+      mount = mountFor(await resolveFor(parsed.value, sessionViewer(c)), look);
     } catch (error) {
       if (error instanceof MountError) {
         const status = STATUS_BY_REASON[error.reason];
@@ -914,9 +963,13 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
       if (wanted === undefined && query.data.file === undefined) {
         const path = query.data.path;
         const search = query.data.q ?? query.data.query;
-        if (search !== undefined && search.trim().length > 0)
-          data.find = { ready: findBody(await reader.find(mount, { query: search, path }, 0)) };
-        else data.browse = { ready: browseBody(await reader.browse(mount, { path }, 0)) };
+        // A search embeds its query and may queue the embedding of what it reaches: a person's,
+        // not a crawler's, whose page leaves the results to the browser.
+        if (search !== undefined && search.trim().length > 0) {
+          if (look.indexes) {
+            data.find = { ready: findBody(await reader.find(mount, { query: search, path }, 0)) };
+          }
+        } else data.browse = { ready: browseBody(await reader.browse(mount, { path }, 0)) };
       }
       return bundle.address(request, data, 200, forOne);
     } catch (error) {

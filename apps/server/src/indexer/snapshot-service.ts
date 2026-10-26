@@ -119,9 +119,11 @@ export class SnapshotService {
    * the budget; else, for a moving ref, the commit's own index under the previous reading rules
    * while it is rebuilt, or the index of the ref's previous commit, each with the newest commit's
    * state beside it; else why there is nothing to serve. A pinned address is its commit alone.
+   * A mount that may not start indexing (ADR-0074) is served what is there, without waiting.
    */
   async serving(mount: Mount, budgetMs: number): Promise<ServingOutcome> {
-    const { outcome, snapshot } = await this.#await(mount, budgetMs);
+    const { outcome, snapshot } =
+      mount.startsIndexing === false ? await this.#held(mount) : await this.#await(mount, budgetMs);
     if (outcome.status === "ready" || mount.address.ref?.kind === "commit") {
       return outcome;
     }
@@ -148,6 +150,31 @@ export class SnapshotService {
       return outcome;
     }
     return { status: "ready", snapshot: last, substitute: { commit: last.commitSha, newest } };
+  }
+
+  /**
+   * The outcome for a mount as the database holds its commit, starting and claiming nothing: a
+   * commit never started, or being built, is `indexing` to whoever reads it this way, and what
+   * its row holds may still be served in its place.
+   */
+  async #held(
+    mount: Mount,
+  ): Promise<{ readonly outcome: SnapshotOutcome; readonly snapshot: SnapshotRecord | undefined }> {
+    const snapshot = await findSnapshotOfCommit(
+      this.#options.database,
+      { accountId: mount.repo.accountId, repoId: mount.repo.id },
+      mount.commit,
+    );
+    if (snapshot?.status === "ready" && snapshot.indexVersion >= INDEX_VERSION) {
+      return { outcome: { status: "ready", snapshot }, snapshot };
+    }
+    if (snapshot?.status === "failed") {
+      return {
+        outcome: { status: "failed", errorCode: snapshot.errorCode ?? "unknown" },
+        snapshot,
+      };
+    }
+    return { outcome: { status: "indexing" }, snapshot };
   }
 
   /** The outcome for a mount within the budget, with the last state seen of its own snapshot. */

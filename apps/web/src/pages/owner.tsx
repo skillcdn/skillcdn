@@ -35,7 +35,8 @@ type ListedRepository = RestOwner["repositories"][number];
  * One public repository as the host lists it: a way in, and what the host says about it. The
  * way in is for a person: opening a repository indexes it, most of an account's repositories
  * hold no skills, and a crawler that walked every list would have all of them read. So the link
- * asks not to be followed; what is indexed and has skills is linked from its card.
+ * asks not to be followed, and a crawler that follows it anyway is shown nothing it would start
+ * (ADR-0074); what is indexed and has skills is linked from its card.
  */
 function Repository(props: { readonly repository: ListedRepository }) {
   const { t } = useI18n();

@@ -8,6 +8,12 @@ import { createWebBuild, type WebBuildFixture } from "./testing/web-build.js";
 
 const BROWSER = { accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" };
 const MCP = { accept: "application/json, text/event-stream", "content-type": "application/json" };
+/** A crawler that walks pages, and one that draws the preview of a shared link (ADR-0074). */
+const CRAWLER = {
+  ...BROWSER,
+  "user-agent": "Mozilla/5.0 (compatible; AhrefsBot/7.0; +http://ahrefs.com/robot/)",
+};
+const PREVIEW = { "user-agent": "Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)" };
 
 let testDatabase: TestDatabase;
 let build: WebBuildFixture;
@@ -497,6 +503,63 @@ describe("a server with a web build", () => {
     expect(missing.headers.get("content-type")).toContain("application/json");
     expect((await h.request("/api/v1/nothing", { headers: BROWSER })).status).toBe(404);
   });
+
+  it("shows a crawler what it already holds of a public repository, and starts nothing for it", async () => {
+    const host = createFixtureHost("web-crawler");
+    const h = createHarness(testDatabase, { web, host, ttlMs: 0 });
+    const address = "/gh/acme/with-manifest";
+
+    // A name the deployment has not read: the page without it, which a browser fills in through
+    // the API; no card, badge or icon; and nothing is asked of the git host.
+    const unread = await h.request(address, { headers: CRAWLER });
+    expect(unread.status).toBe(200);
+    expect((await inputOf(unread)).data).toEqual({});
+    for (const route of ["/social", "/badge", "/icon"]) {
+      expect((await h.request(`${route}${address}`, { headers: CRAWLER })).status).toBe(404);
+    }
+    // The preview of a shared link is a crawler too, whatever it accepts.
+    expect((await inputOf(await h.request(address, { headers: PREVIEW }))).data).toEqual({});
+    expect(host.calls.getRepository).toBe(0);
+    expect(host.calls.resolveRef).toBe(0);
+
+    // A person's look reads it, as it always did.
+    const first = fixtureCommits("web-crawler").main;
+    await h.request(address, { headers: BROWSER });
+    expect(host.calls.getRepository).toBe(1);
+    const statusOf = async () =>
+      (
+        (await (await h.request(`/api/v1/mounts${address}`)).json()) as {
+          readonly index: { readonly status: string };
+        }
+      ).index.status;
+    const deadline = Date.now() + 20_000;
+    while ((await statusOf()) !== "ready" && Date.now() < deadline) {
+      await h.snapshots.idle();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    expect(await statusOf()).toBe("ready");
+    const trees = host.calls.getTree;
+
+    // Read now: the crawler gets the page of what it serves, its card and its badge.
+    expect((await inputOf(await h.request(address, { headers: CRAWLER }))).data).toMatchObject({
+      mount: { ready: { commit: first, index: { status: "ready" } } },
+    });
+    expect((await h.request(`/social${address}`, { headers: CRAWLER })).status).toBe(200);
+    expect((await h.request(`/badge${address}`, { headers: CRAWLER })).status).toBe(200);
+
+    // A push moves the branch: the crawler is served the commit read before, and reads nothing
+    // new; the next person's look reads the newest.
+    const newest = host.push();
+    expect((await inputOf(await h.request(address, { headers: CRAWLER }))).data).toMatchObject({
+      mount: { ready: { commit: first, index: { status: "ready" }, newest: { commit: newest } } },
+    });
+    expect((await h.request(`/badge${address}`, { headers: CRAWLER })).status).toBe(200);
+    await h.snapshots.idle();
+    expect(host.calls.getTree).toBe(trees);
+    await h.request(address, { headers: BROWSER });
+    await h.snapshots.idle();
+    expect(host.calls.getTree).toBeGreaterThan(trees);
+  });
 });
 
 describe("a server with a web build that cannot render", () => {
@@ -567,6 +630,14 @@ describe("the pages of a deployment where people sign in", () => {
     expect((await h.request(`/social${SECRET}`)).status).toBe(404);
     expect((await h.request(`/badge${SECRET}`)).status).toBe(404);
     expect((await h.request(`/icon${SECRET}`)).status).toBe(404);
+    // To a crawler, a private repository somebody opened is a name never read, page and all.
+    const crawled = await h.request(SECRET, { headers: CRAWLER });
+    const never = await h.request("/gh/acme/no-such-repo", { headers: CRAWLER });
+    expect(crawled.status).toBe(200);
+    expect(never.status).toBe(200);
+    expect((await inputOf(crawled)).data).toEqual({});
+    expect((await inputOf(never)).data).toEqual({});
+    expect((await h.request(`/social${SECRET}`, { headers: CRAWLER })).status).toBe(404);
   });
 
   it("tells every page that people can sign in, and serves the pages of whoever is signed in", async () => {

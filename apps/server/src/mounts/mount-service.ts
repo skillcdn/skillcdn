@@ -99,6 +99,12 @@ export interface Mount extends ServedMount {
    * changes. What a client may cache what it reads is bounded by it.
    */
   readonly trustedUntil: Date | undefined;
+  /**
+   * Whether reading the mount may start indexing its commit. False for a crawler's look, which
+   * is served what is indexed already, the commit before in place of one not read yet, and
+   * starts nothing (ADR-0074). Left out, it may.
+   */
+  readonly startsIndexing?: boolean | undefined;
 }
 
 /** How a repository is named in the operator's list of verified repositories: `/gh/owner/repo`. */
@@ -401,6 +407,24 @@ export class MountService {
       }
       throw error;
     }
+  }
+
+  /**
+   * Whether the deployment knows a public repository by the name an address gives, from what it
+   * holds and without asking the git host: one that somebody resolved before, public to everyone.
+   * For a crawler's request, which starts nothing (ADR-0074). A repository that is not public is
+   * answered like a name never seen, after the same one look at the database.
+   */
+  async knowsPublicly(address: Address): Promise<boolean> {
+    if (!this.#serves(address)) {
+      return false;
+    }
+    const known = await findRepoByAlias(this.#options.database, {
+      host: address.host,
+      owner: address.owner,
+      repo: address.repo,
+    });
+    return known !== undefined && isAnonymouslyReadable(known.repository);
   }
 
   /**

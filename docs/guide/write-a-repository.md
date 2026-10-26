@@ -144,7 +144,7 @@ It exits with `1` when something could not be read as intended, so it can gate a
 
 ## Publish
 
-Push to a public repository on GitHub and open its page: `https://skillcdn.ai/gh/<owner>/<repo>`. The first look indexes the commit. A branch is looked up again after a short while, and where the deployment's GitHub App is installed on the repository, a push is served by the very next request. The page shows what an agent gets, with the connection guide first, and the explorer's card for the repository. A few things that make the page, and the agent's view, better:
+Push to a public repository on GitHub and open its page: `https://skillcdn.ai/gh/<owner>/<repo>`. The first look of a person or an agent indexes the commit; a search engine's crawler, or the preview of a link in a chat, is shown only what was indexed already, so a link shared before anyone has opened the page unfurls with the site's own card. A branch is looked up again after a short while, and where the deployment's GitHub App is installed on the repository, a push is served by the very next request. The page shows what an agent gets, with the connection guide first, and the explorer's card for the repository. A few things that make the page, and the agent's view, better:
 
 - **Translations for people.** `translations` in the manifest and `skillcdn.translations` in a skill give the page a title and a description in another language; agents keep reading the original ([recommended](../specs/skill-repo.md#recommended)).
 - **A picture.** `image` in the manifest names a file of the repository or an `https` URL; the explorer's card and the page show it.
