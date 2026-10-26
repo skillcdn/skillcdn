@@ -554,11 +554,18 @@ describe("a server with a web build", () => {
       mount: { ready: { commit: first, index: { status: "ready" }, newest: { commit: newest } } },
     });
     expect((await h.request(`/badge${address}`, { headers: CRAWLER })).status).toBe(200);
+    const before = await h.request(`/social${address}`, { headers: CRAWLER });
+    expect(before.status).toBe(200);
     await h.snapshots.idle();
     expect(host.calls.getTree).toBe(trees);
     await h.request(address, { headers: BROWSER });
     await h.snapshots.idle();
     expect(host.calls.getTree).toBeGreaterThan(trees);
+    // The card drawn from the commit before is another card than the newest's, whatever the ref
+    // named when each was drawn.
+    const after = await h.request(`/social${address}`, { headers: CRAWLER });
+    expect(after.status).toBe(200);
+    expect(after.headers.get("etag")).not.toBe(before.headers.get("etag"));
   });
 });
 

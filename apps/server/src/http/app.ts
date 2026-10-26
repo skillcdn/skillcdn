@@ -726,11 +726,13 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
         if (drawn === undefined) {
           return c.notFound();
         }
-        // Everything the card is made from names it: a change to any of it is another card.
+        // Everything the card is made from names it: a change to any of it is another card. The
+        // commit is the one it was drawn from, which is the one before while the newest is not
+        // read (ADR-0068), not the one the ref names.
         const key = [
           drawn.language,
           body.address,
-          mount.commit,
+          body.commit,
           query.data.skill ?? "",
           body.index.status,
         ].join("\n");
