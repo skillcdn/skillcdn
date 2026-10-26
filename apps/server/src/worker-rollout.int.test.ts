@@ -259,12 +259,20 @@ describe("a worker beside one of the build before", () => {
 
     await completed(listed.scope);
     await completed(skills.scope);
-    const embedded = logs
-      .filter((line) => line.msg === "embedding slice done" && line.status === "embedded")
-      .map((line) => line.snapshot);
-    expect(embedded.indexOf(listed.scope.snapshotId)).toBeGreaterThanOrEqual(0);
-    expect(embedded.indexOf(listed.scope.snapshotId)).toBeLessThan(
-      embedded.indexOf(skills.scope.snapshotId),
+    // A slice records its snapshot complete before the worker logs it: wait for the log too.
+    const embedded = () =>
+      logs
+        .filter((line) => line.msg === "embedding slice done" && line.status === "embedded")
+        .map((line) => line.snapshot);
+    await vi.waitFor(
+      () =>
+        expect(embedded()).toEqual(
+          expect.arrayContaining([listed.scope.snapshotId, skills.scope.snapshotId]),
+        ),
+      { timeout: 25_000, interval: 250 },
+    );
+    expect(embedded().indexOf(listed.scope.snapshotId)).toBeLessThan(
+      embedded().indexOf(skills.scope.snapshotId),
     );
     // What is no pack waits for a search: its job from the build before is skipped.
     await vi.waitFor(
