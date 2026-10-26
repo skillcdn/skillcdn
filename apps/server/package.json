@@ -21,7 +21,7 @@
   "dependencies": {
     "@hono/node-server": "catalog:",
     "@modelcontextprotocol/server": "catalog:",
-    "@napi-rs/canvas": "^1.0.10",
+    "@napi-rs/canvas": "^1.0.13",
     "@skillcdn/core": "workspace:*",
     "@skillcdn/db": "workspace:*",
     "@skillcdn/github": "workspace:*",
