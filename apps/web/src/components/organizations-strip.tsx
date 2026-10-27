@@ -7,7 +7,8 @@ import { ArrowIcon } from "./ui.js";
 
 /**
  * The organizations working with the deployment (ADR-0028), their marks in a strip under the
- * first screen, with the way to join beside the label. On a phone the strip rolls, the marks
+ * first screen, with the way to join beside the label; both leave the site, in a tab of their
+ * own. On a phone the strip rolls, the marks
  * twice over so that the roll never shows its end; the second set is for the eye alone.
  */
 export function OrganizationsStrip(props: {
@@ -24,7 +25,13 @@ export function OrganizationsStrip(props: {
             <img src={organization.logo.url} alt="" />
           </span>
         ) : (
-          <a key={organization.id} className={styles.mark} href={organization.url} rel="noopener">
+          <a
+            key={organization.id}
+            className={styles.mark}
+            href={organization.url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             <img src={organization.logo.url} alt={organization.name} />
           </a>
         ),
@@ -41,7 +48,8 @@ export function OrganizationsStrip(props: {
         <a
           className={styles.join}
           href={LINKS.builders}
-          rel="noopener"
+          target="_blank"
+          rel="noopener noreferrer"
           onClick={() => track("cta_click", { id: "organizations_join" })}
         >
           {copy.join}

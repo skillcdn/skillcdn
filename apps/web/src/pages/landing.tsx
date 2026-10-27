@@ -355,7 +355,8 @@ export function LandingPage(props: { readonly origin: string }) {
                 <a
                   className={cx(styles.primary, styles.large)}
                   href={LINKS.builders}
-                  rel="noopener"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   onClick={() => track("cta_click", { id: "builders_join" })}
                 >
                   {copy.builders.join}
@@ -401,7 +402,12 @@ export function LandingPage(props: { readonly origin: string }) {
                 <ArrowIcon />
               </Link>
               {shows("builders") && (
-                <a className={cx(styles.ghost, styles.large)} href={LINKS.builders} rel="noopener">
+                <a
+                  className={cx(styles.ghost, styles.large)}
+                  href={LINKS.builders}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   {copy.cta.join}
                   <ExternalIcon />
                 </a>
