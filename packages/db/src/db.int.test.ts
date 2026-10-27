@@ -45,6 +45,7 @@ import {
   listOperatorRepositories,
   listReposOfHostAccount,
   listShowcaseEntries,
+  listShowcaseOrganizations,
   listSkillFiles,
   migrateDatabase,
   purgeRepository,
@@ -53,12 +54,14 @@ import {
   putOperatorImage,
   putOperatorMedia,
   putShowcaseEntry,
+  putShowcaseOrganization,
   releaseSnapshot,
   removeLegalDocument,
   removeOperatorImage,
   removeOperatorMedia,
   removeOperatorRepository,
   removeShowcaseEntry,
+  removeShowcaseOrganization,
   renewSnapshotLease,
   type SnapshotScope,
   saveCachedRef,
@@ -965,6 +968,8 @@ describe("the landing showcase", () => {
     slug: "spring",
     position: 2,
     address: "/gh/acme/skills",
+    link: null,
+    origin: "pack" as const,
     width: 640,
     height: 480,
     durationMs: null,
@@ -1005,6 +1010,8 @@ describe("the landing showcase", () => {
       await putShowcaseEntry(database, {
         ...base,
         position: 1,
+        link: "https://example.com/the-ad",
+        origin: "builder",
         durationMs: 8000,
         published: "2026-10-01",
         media: { poster, clip },
@@ -1016,6 +1023,8 @@ describe("the landing showcase", () => {
       slug: "spring",
       position: 1,
       address: "/gh/acme/skills",
+      link: "https://example.com/the-ad",
+      origin: "builder",
       durationMs: 8000,
       published: "2026-10-01",
       texts: { en: words },
@@ -1027,6 +1036,52 @@ describe("the landing showcase", () => {
     const stored = await getOperatorMedia(database, poster);
     expect(stored).toMatchObject({ contentType: "image/webp", size: 3 });
     expect(Array.from(stored?.bytes ?? [])).toEqual([1, 2, 3]);
+  });
+
+  it("keeps organizations by name with the upload that is their mark", async () => {
+    const mark = "m".repeat(64);
+    const organization = {
+      slug: "acme",
+      name: "Acme",
+      url: "https://acme.example",
+      logo: mark,
+      position: 0,
+    };
+    expect(await putShowcaseOrganization(database, organization)).toEqual({
+      outcome: "media_missing",
+      missing: [mark],
+    });
+    await putOperatorMedia(database, {
+      sha: mark,
+      contentType: "image/png",
+      bytes: new Uint8Array([8]),
+    });
+    expect(await putShowcaseOrganization(database, organization)).toEqual({ outcome: "created" });
+    expect(
+      await putShowcaseOrganization(database, { ...organization, name: "Acme Corp.", position: 3 }),
+    ).toEqual({ outcome: "updated" });
+    expect(
+      await putShowcaseOrganization(database, { ...organization, slug: "zed", position: 1 }),
+    ).toEqual({ outcome: "created" });
+    expect(
+      (await listShowcaseOrganizations(database)).map((found) => [found.slug, found.name]),
+    ).toEqual([
+      ["zed", "Acme"],
+      ["acme", "Acme Corp."],
+    ]);
+    expect((await listShowcaseOrganizations(database))[0]?.logo).toEqual({
+      sha: mark,
+      contentType: "image/png",
+    });
+    // The mark is in use by both; gone with them.
+    expect(await removeOperatorMedia(database, mark)).toBe("in_use");
+    expect(await removeShowcaseOrganization(database, "zed")).toBe(true);
+    expect(await removeShowcaseOrganization(database, "zed")).toBe(false);
+    expect(
+      (await listOperatorMedia(database)).find((upload) => upload.sha === mark)?.usedBy,
+    ).toEqual(["acme"]);
+    expect(await removeShowcaseOrganization(database, "acme")).toBe(true);
+    expect(await removeOperatorMedia(database, mark)).toBe("removed");
   });
 
   it("lists uploads with the entries that use them, and deletes only what nothing uses", async () => {

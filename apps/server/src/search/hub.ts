@@ -1,5 +1,6 @@
 import {
   type Address,
+  accountAvatarUrl,
   type BlobStore,
   type Clock,
   type FindItem,
@@ -7,7 +8,9 @@ import {
   type FindSection,
   fuseRanks,
   type HubItem,
+  type HubPack,
   type HubResult,
+  isGitHostKey,
   MAX_MATCHED_SECTIONS,
   matchSections,
   NO_LICENSE,
@@ -206,7 +209,8 @@ export function createHubSearch(options: HubSearchOptions): HubSearch {
           vouched = lists.isVerified(repositoryKey(address));
           verified.set(candidate.pack.snapshotId, vouched);
         }
-        const item = await itemOf(candidate, await vouched, {
+        const isVerified = await vouched;
+        const item = await itemOf(candidate, isVerified, {
           lexemes,
           weights,
           nearest: (nearest ?? []).filter((match) => keyOf(match.snapshotId, match.path) === key),
@@ -215,7 +219,12 @@ export function createHubSearch(options: HubSearchOptions): HubSearch {
           continue;
         }
         scored.push({
-          item: { address, repository: `${candidate.pack.owner}/${candidate.pack.name}`, item },
+          item: {
+            address,
+            repository: `${candidate.pack.owner}/${candidate.pack.name}`,
+            pack: packFactsOf(candidate.pack, isVerified),
+            item,
+          },
           candidate: candidateTextOf(item),
         });
       }
@@ -313,6 +322,26 @@ export function createHubSearch(options: HubSearchOptions): HubSearch {
     return { ...plain, sections };
   }
 }
+
+/**
+ * What a pack is, for a result to say beside the pack's name: a pack of skills where the
+ * manifest and skills are, a pack of documents where the manifest is and no skill, and a
+ * repository read without a manifest otherwise.
+ */
+function packFactsOf(pack: SearchablePack, verified: boolean): HubPack {
+  return {
+    kind: pack.hasManifest ? (pack.skillCount > 0 ? "skills" : "documents") : "repository",
+    verified,
+    skills: pack.skillCount,
+    // A pack served from a directory of the deployment has no owner at a git host (ADR-0071).
+    avatar: isGitHostKey(pack.host)
+      ? accountAvatarUrl(pack.host, pack.hostAccountId, AVATAR_SIZE)
+      : "",
+  };
+}
+
+/** The size the owner's picture is asked for: what a result's line shows, twice over for a dense screen. */
+const AVATAR_SIZE = 64;
 
 /** The address of a pack, `/gh/<owner>/<repo>`; `undefined` for names the grammar does not take. */
 function addressOf(pack: SearchablePack): Address | undefined {

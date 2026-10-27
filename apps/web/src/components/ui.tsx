@@ -157,6 +157,64 @@ export function VerifiedMark(props: { readonly label: string; readonly hint?: st
   );
 }
 
+/** An arrow to the right: what a link to a page of this site carries at its end. */
+export function ArrowIcon() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M5 12h14m-6-6 6 6-6 6" />
+    </svg>
+  );
+}
+
+/** An arrow up and out: what a link that leaves for a result, or another site, carries. */
+export function ExternalIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M7 17 17 7M9 7h8v8" />
+    </svg>
+  );
+}
+
+/** A magnifier: the mark of a search box. */
+export function SearchIcon(props: { readonly size?: number }) {
+  const size = props.size ?? 20;
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.5-3.5" />
+    </svg>
+  );
+}
+
 export function Spinner(props: { readonly label: string }) {
   return (
     <span className={styles.spinner} role="status">

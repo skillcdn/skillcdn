@@ -1,0 +1,234 @@
+/* A showcase entry (ADR-0028): the stage with the result, the words under it, and the two ways
+   out. The first entry lies across the row, the stage beside the words; the rest are cards. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  gap: var(--space-5);
+}
+
+.card {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  overflow: hidden;
+}
+
+/* The lead takes the whole row, and lays its stage beside its words once there is room. */
+.lead {
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 52.01rem) {
+  .lead {
+    grid-template-columns: 1.3fr 1fr;
+    grid-template-rows: none;
+  }
+
+  .lead .stage {
+    aspect-ratio: auto;
+    min-height: var(--showcase-lead-min);
+  }
+
+  .lead .words {
+    justify-content: center;
+    padding: var(--space-7) var(--space-7) var(--space-7) var(--space-6);
+  }
+
+  .lead .title {
+    font-size: var(--text-2xl);
+  }
+
+  .lead .body {
+    font-size: var(--text-md);
+  }
+}
+
+/* The stage: every poster at one ratio, the picture filling it; the clip the same. */
+.stage {
+  position: relative;
+  min-width: 0;
+  aspect-ratio: var(--showcase-ratio);
+  overflow: hidden;
+  background: var(--color-bg);
+}
+
+.stage video,
+.stage img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.words {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: var(--space-5);
+}
+
+/* Whose work it is, in a pill, and what it came from beside it. */
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+}
+
+.origin {
+  display: inline-flex;
+  padding-inline: var(--space-2);
+  padding-block: calc(var(--space-1) / 2 - var(--label-optical))
+    calc(var(--space-1) / 2 + var(--label-optical));
+  border-radius: var(--radius-full);
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.02em;
+}
+
+/* A builder's own case takes the point: the one warm pill on the page, for what to look at. */
+.builder {
+  background: var(--color-point-subtle);
+  color: var(--color-point);
+}
+
+.title {
+  font-size: var(--text-xl);
+  line-height: var(--leading-tight);
+  text-wrap: pretty;
+}
+
+/* The way in: the title's link, stretched over the whole card. Its focus ring is the card's. */
+.stretched {
+  color: inherit;
+  text-decoration: none;
+}
+
+.stretched:hover {
+  color: inherit;
+}
+
+.stretched::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.stretched:focus-visible {
+  outline: none;
+}
+
+.body {
+  margin-top: var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  text-wrap: pretty;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.tags li {
+  padding-inline: var(--space-3);
+  padding-block: calc(var(--space-1) - var(--label-optical))
+    calc(var(--space-1) + var(--label-optical));
+  border: var(--border-lit);
+  border-radius: var(--radius-full);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+/* The two ways out, at the foot: the result, which the stretched link opens, and the skill,
+   which is a link of its own and so stands above the stretched one. */
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin-top: auto;
+  padding-top: var(--space-5);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+}
+
+.result,
+.skill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  text-decoration: none;
+  transition: color var(--transition);
+}
+
+.result {
+  color: var(--color-text);
+}
+
+.skill {
+  position: relative;
+  z-index: 2;
+  color: var(--color-text-muted);
+  font-weight: var(--weight-medium);
+}
+
+.skill:hover {
+  color: var(--color-accent-hover);
+}
+
+/* The arrows ride on the letters, not on the line box they sit in. */
+.result svg,
+.skill svg {
+  translate: 0 var(--mark-optical);
+}
+
+.card:hover .result {
+  color: var(--color-accent-hover);
+}
+
+.requirement {
+  margin-top: var(--space-2);
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+}
+
+@media (max-width: 40rem) {
+  /* On a phone the entries are a row to swipe through, one card at a time with the next one
+     showing at the edge, instead of a column of tall cards. The row bleeds to the edges of the
+     screen and snaps card by card; the lead is a card like the others. */
+  .grid {
+    grid-auto-flow: column;
+    grid-auto-columns: 86%;
+    grid-template-columns: none;
+    gap: var(--space-3);
+    margin-inline: calc(-1 * var(--space-4));
+    padding: var(--space-1) var(--space-4) var(--space-3);
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: var(--space-4);
+    scrollbar-width: none;
+  }
+
+  .grid > * {
+    scroll-snap-align: start;
+  }
+
+  .lead {
+    grid-column: auto;
+  }
+
+  .grid:has(> :only-child) {
+    grid-auto-columns: 100%;
+  }
+
+  .words {
+    padding: var(--space-4);
+  }
+}

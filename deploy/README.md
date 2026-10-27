@@ -106,6 +106,10 @@ The server is configured only through environment variables. [`.env.example`](..
 | `RERANKER_CANDIDATES` | `api` | no | no | How many of the first results of a search the reranker scores before the page is cut, each by its title, heading path and the start of its best section. Default `10`, at most `32`: about what a CPU server scores within `RERANKER_TIMEOUT_MS`; a GPU takes more. |
 | `HUB_SEARCH` | `api` | no | no | Whether the root of the deployment is searched across every public pack it serves, over MCP and at `GET /api/v1/search` ([ADR-0070](../docs/adr/0070-a-deployment-is-searched-across-every-pack-it-serves.md)). Default `true`; `false` leaves the route and the server out. |
 | `HUB_SEARCH_TIMEOUT_MS`, `HUB_SEARCH_CANDIDATES` | `api` | no | no | How long each statement of that search over every pack may take before the database cancels it (default `2000`, 100 to 60000: the words running out answer `503`, the meaning running out leaves the words to answer), and how many entries the words, and the meaning, each bring to the fusion of a search (default `50`, 5 to 200). A deployment with many packs raises the time or lowers the candidates as it measures. |
+| `SEARCH_CACHE_SECONDS`, `SEARCH_CACHE_ENTRIES` | `api` | no | no | How long the answer to a search across packs is kept ([ADR-0075](../docs/adr/0075-a-search-across-the-packs-has-a-page-per-term-that-search-engines-may-list.md)): in each process, where the same question asked within the time is answered from what was kept, and as what the page of a term and `GET /api/v1/search` tell a cache in front of the deployment (`public, max-age=60, s-maxage=<seconds>, stale-while-revalidate=<seconds>`). Defaults `300` and `1000` answers per process; `0` keeps nothing and answers `no-store`. |
+| `SEARCH_CONCURRENCY` | `api` | no | no | How many searches across packs one process runs at once (default `8`); past that a search, on the page or on the API, is refused with `503 search.busy` and `retry-after`. The same question asked twice at once runs once. |
+| `SEARCH_SITEMAP_TERMS` | `api` | no | no | Terms, comma-separated, whose pages of results (`/search/<term>`) the sitemap lists in every language. Default: none. A page of results is offered to search engines only when it has at least three results, whether listed here or not. |
+| `LANDING_SECTIONS` | `api` | no | no | The sections the front page shows after its first screen, comma-separated from `organizations`, `showcase`, `console`, `steps`, `packs`, `builders`, `faq` and `cta`, in the page's own order; `none` for the first screen alone. Unset: every section. Written into the head of every page, which the pages read; the pages that depend on it are rendered per request rather than served prerendered. `packs,faq` is a plain front page for an installation of your own. |
 | `INDEX_MAX_*`, `READ_MAX_FILE_BYTES` | `api`, `worker`, `check` | no | no | Limits on the work one repository may cause, including the unpacked size of a commit archive; see [`.env.example`](../.env.example). A file over `READ_MAX_FILE_BYTES` is not served: the skill is listed without it and names it with where to fetch it ([ADR-0033](../docs/adr/0033-a-file-over-the-read-limit-is-named-with-its-source.md)). The decision is made when a commit is indexed, so a changed limit shows after re-indexing. `check` and the `skillcdn check` command read these and nothing else. |
 
 Invalid configuration stops the process with exit code `78` and a message that names the variable and the rule, never the value.
@@ -175,9 +179,12 @@ The operator's lists and the takedown ([ADR-0026](../docs/adr/0026-serving-follo
 | `GET /admin/v1/embeddings/usage[?from=&to=]` | What was embedded per day over every account: `bytes`, `sections` and `tokens`, under the same `from` and `to` as the usage statistics. |
 | `POST /admin/v1/embeddings/index/gh/<owner>/<repo>[@ref]` | Asks the worker to index the address now and embed it ahead of everything else, the designated indexing of ADR-0064. Answers `202` with the `address` and whether it was `queued`, false when the same address waits in the queue already; `400` for an address with a path; `503` where this process has no queue. The worker resolves the address as everyone sees it: a repository that is not public is not indexed this way, only from its page by someone who administers it. |
 | `POST /admin/v1/embeddings/import` | Writes vectors computed elsewhere, for an operator who runs a model in bulk: a JSON body with the `model`, `dimensions` and `sectioningVersion` they were made under, which must be what the deployment embeds with, and `items`, up to 2,000, each the `blobSha` the index names a stored body by, the `section` index as the sectioning rules count it, its `heading` path, `offset` and `length`, and the `vector`. Answers with how many were `written` and how many were `skipped` as there already; `409` with `embeddings.other_model` for another key, `400` with `embeddings.unknown_bodies` for bodies not stored here, since a vector is reached only through an index entry, `503` where the search by meaning is not configured or the database keeps no vectors. The body may be up to 48 MiB. |
-| `GET /admin/v1/showcase` | The entries the front page leads with ([ADR-0028](../docs/adr/0028-the-front-page-and-the-explorer-are-operator-content.md)), as `GET /api/v1/showcase` shows them to everyone. |
+| `GET /admin/v1/showcase` | The entries the front page leads with and the organizations named beside them ([ADR-0028](../docs/adr/0028-the-front-page-and-the-explorer-are-operator-content.md)), as `GET /api/v1/showcase` shows them to everyone. |
 | `PUT /admin/v1/showcase/<id>` | Writes the entry named `<id>` (a lowercase slug) from a JSON body, replacing what was there; the body is described below. Answers with the entry as the pages read it, or `400` with `problems` that say what is wrong. |
 | `DELETE /admin/v1/showcase/<id>` | Removes the entry. Its uploads stay. |
+| `GET /admin/v1/organizations` | The organizations the front page names beside the showcase, in order. |
+| `PUT /admin/v1/organizations/<id>` | Writes the organization named `<id>` (a lowercase slug) from a JSON body with its `name`, its `url` (where its mark leads) and `logo`, the hash of an uploaded picture, with an optional `position`; replaces what was there. Until the operator writes one, the pages show the organization that operates the reference deployment. |
+| `DELETE /admin/v1/organizations/<id>` | Removes the organization. Its upload stays. |
 | `GET /admin/v1/images` | The pictures of addresses ([ADR-0031](../docs/adr/0031-a-picture-for-a-repository-comes-from-its-manifest-or-the-operator.md)): the address, the upload's hash or `null`, and the URL the pages load the picture from. |
 | `PUT /admin/v1/images/gh/<owner>/<repo>[@ref][/path]` | Gives the address a picture, replacing what was there, from a JSON body with exactly one of `media` (the hash of an upload that is a picture) and `url` (an `https` URL). The explorer's card and the page of that address, and of every address of that repository when the picture is the repository's, show it in place of what the repository's manifest declares. A URL keeps the picture's traffic off the deployment; an upload is served from it. |
 | `DELETE /admin/v1/images/gh/<owner>/<repo>[@ref][/path]` | Removes the picture; `404` when there was none. The repository's own picture, when it declares one, shows again. |
@@ -201,7 +208,7 @@ curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" https://skills.example.com/
 
 The same purge runs without the API, from a shell with the database configured: `node dist/main.js purge /gh/owner/repo`.
 
-What the front page leads with is the showcase: a list of entries the operator writes, each a card with media and words, in order. Until the operator writes one, the page shows the build's own showcase of the reference repository. Upload the media first, then write the entry that names it:
+What the front page leads with is the showcase: a list of entries the operator writes, each a card with a result, the way to the result itself and the way to the skill it came from, in order. Until the operator writes one, the page shows the build's own showcase: real results of the reference repository's skills. Upload the media first, then write the entry that names it; a result that is a document, a deck as PDF, say, is uploaded the same way and named by the entry's `link`:
 
 ```sh
 curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" -H "content-type: image/webp" --data-binary @poster.webp https://skills.example.com/admin/v1/media
@@ -211,29 +218,41 @@ curl -X PUT -H "Authorization: Bearer $ADMIN_TOKEN" -H "content-type: applicatio
 
 An entry is a JSON document:
 
-- `address`: where the card leads, any address such as `/gh/owner/repo` or `/gh/owner/repo@main/skills/ad`.
+- `address`: where the card's skill link leads, any address such as `/gh/owner/repo` or `/gh/owner/repo@main/skills/ad`: the skill the result was made with.
+- `link`: where the result itself is, which the card opens: an `https` URL, or a path of the deployment such as an upload (`/media/<sha>`). Left out, the card opens the address.
+- `origin`: whose work the entry shows: `pack`, a result made with the pack at the address (the default), or `builder`, a builder's own case running on their site, made with that pack.
 - `position`: its place in the list, lowest first; `0` when left out.
 - `width` and `height`: the pixel size of the clip and its poster.
-- `media`: uploads by hash. `poster` is required; `clip` (a video), `animation` (the clip as an animated image, for browsers that will not play video), `reference` and `picture` (what the example conversation attaches) and `social` (a 1200 x 630 picture for link previews) are optional. A `clip` needs `durationMs`, one pass of it, and `published`, its date as `YYYY-MM-DD`.
-- `texts`: the words by language tag (`en`, `ko`), at least one language. Each has `title`, `body` and `action` (the button), and optionally `tags` (up to four), `requirement` (what the skill needs besides the AI app), `clip` (what the clip shows, for whoever cannot see it), `credit`, and `demo`, the example conversation: `prompt` (what the person asks, with the `picture` and `reference` attached, captioned by those two words, when the entry has that media), the assistant's `question`, the person's `answer`, the assistant's `plan`, the `approval` line that says the plan and the estimate were reviewed, the person's `consent`, `working` (said over the result while it is made) and `result` (what the result is, in one line, for whoever cannot see it). A visitor is shown their language, else the default language of the pages; an entry without a `demo` in the visitor's language shows the build's own conversation.
+- `media`: uploads by hash. `poster` is required, a picture of the result at 16:10; `clip` (a video of it), `animation` (the clip as an animated image, for browsers that will not play video) and `social` (a 1200 x 630 picture for link previews) are optional; `reference` and `picture` are kept for an entry written before the pages stopped showing the example conversation. A `clip` needs `durationMs`, one pass of it, and `published`, its date as `YYYY-MM-DD`. An upload may also be a PDF (`application/pdf`), which no slot takes and `link` points at.
+- `texts`: the words by language tag (`en`, `ko`), at least one language. Each has `title` (what was asked, in quotes, is what the cards of the build say), `body` (what came back) and `action` (the words of the way to the result, or to the address without a `link`), and optionally `tags` (up to four), `requirement` (what the skill needs besides the AI app), `clip` (what the poster or the clip shows, for whoever cannot see it), `credit` (what the result came from, said beside whose work it is) and `demo`, an example conversation the pages no longer show. A visitor is shown their language, else the default language of the pages.
 
 ```json
 {
-  "address": "/gh/owner/repo",
-  "width": 752,
-  "height": 560,
+  "address": "/gh/owner/repo/marketing/skills/short-ad",
+  "link": "https://example.com/ads/spring",
+  "origin": "builder",
+  "width": 1440,
+  "height": 900,
   "durationMs": 9500,
   "published": "2026-10-01",
   "media": { "poster": "<sha of poster.webp>", "clip": "<sha of clip.mp4>" },
   "texts": {
     "en": {
-      "title": "The ad you love, with your star in it.",
-      "body": "Show it an ad you admire and a picture of your product.",
-      "tags": ["A video and a picture in", "Ready to post"],
-      "action": "Make something like this"
+      "title": "“Make a 15-second ad for this product”",
+      "body": "A product picture went in; a vertical ad with captions came back.",
+      "tags": ["15 seconds", "Captions"],
+      "action": "Watch the ad",
+      "credit": "Example Co. · marketing"
     }
   }
 }
+```
+
+The organizations named beside the showcase are written the same way, each with an uploaded picture as its mark:
+
+```sh
+curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" -H "content-type: image/png" --data-binary @mark.png https://skills.example.com/admin/v1/media
+curl -X PUT -H "Authorization: Bearer $ADMIN_TOKEN" -H "content-type: application/json" --data '{"name":"Example Co.","url":"https://example.com","logo":"<sha of mark.png>"}' https://skills.example.com/admin/v1/organizations/example
 ```
 
 A repository declares its own picture in its manifest ([format](../docs/specs/skill-repo.md#the-repository-manifest-skillcdnmd)). To show another one on a repository's card and page, give its address a picture: an `https` URL, or an upload from `POST /admin/v1/media`.

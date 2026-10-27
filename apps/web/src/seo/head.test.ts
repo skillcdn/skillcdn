@@ -9,8 +9,7 @@ import { describe, expect, it } from "vitest";
 import { messagesFor } from "../i18n/index.js";
 import { LANGUAGES } from "../i18n/languages.js";
 import { matchRoute } from "../router.js";
-import { DEFAULT_SHOWCASE_MEDIA } from "../site.js";
-import { buildHead, renderHead } from "./head.js";
+import { buildHead, renderHead, SEARCH_INDEX_MIN_RESULTS } from "./head.js";
 
 const ORIGIN = "https://skills.example";
 
@@ -116,26 +115,73 @@ describe("buildHead", () => {
   it("describes the product as structured data on the front page, in the page's language", () => {
     for (const language of LANGUAGES) {
       const head = buildHead(matchRoute("/", ""), language, ORIGIN);
+      // The build's own showcase has no clip: nothing to describe as a video.
       expect(head.jsonLd.map((data) => data["@type"])).toEqual([
         "WebSite",
         "SoftwareApplication",
-        "VideoObject",
         "FAQPage",
       ]);
       expect(head.jsonLd.every((data) => data.inLanguage === language)).toBe(true);
-      // The site is one entity with a logo, and the clip is described where it is served from.
+      // The site is one entity with a logo, and offers its search to search engines (ADR-0075).
       expect(head.jsonLd[0]?.publisher).toMatchObject({
         "@type": "Organization",
         name: "SkillCDN",
         logo: `${ORIGIN}/brand/logo-black.png`,
       });
-      expect(head.jsonLd[2]).toMatchObject({
-        contentUrl: `${ORIGIN}${DEFAULT_SHOWCASE_MEDIA.clip}`,
-        thumbnailUrl: [`${ORIGIN}${DEFAULT_SHOWCASE_MEDIA.poster}`],
-        uploadDate: DEFAULT_SHOWCASE_MEDIA.published,
+      expect(head.jsonLd[0]?.potentialAction).toMatchObject({
+        "@type": "SearchAction",
+        target: { urlTemplate: `${ORIGIN}/search?q={search_term_string}` },
       });
     }
     expect(buildHead(matchRoute("/explore", ""), "en", ORIGIN).jsonLd).toEqual([]);
+  });
+
+  it("offers the page of a search term once it has enough to show, and the page of the box always", () => {
+    const t = messagesFor("en");
+    const item = {
+      address: "/gh/acme/skills",
+      repository: "Acme/skills",
+      item: {
+        kind: "document" as const,
+        path: "docs/a.md",
+        title: "A",
+        summary: null,
+        skillDirectory: null,
+      },
+    };
+    const results = (count: number) => ({
+      search: {
+        status: "ready" as const,
+        query: "card news",
+        packs: 4,
+        items: Array.from({ length: count }, () => item),
+      },
+    });
+    const route = matchRoute("/search/card%20news", "");
+    const listed = buildHead(route, "en", ORIGIN, results(SEARCH_INDEX_MIN_RESULTS));
+    expect(listed.indexable).toBe(true);
+    expect(listed.canonical).toBe("https://skills.example/search/card%20news");
+    expect(listed.title).toBe(t.meta.search.resultsTitle("card news"));
+    expect(listed.description).toBe(t.meta.search.resultsDescription("card news", 3, 4));
+    expect(listed.alternates.map((alternate) => alternate.href)).toEqual([
+      "https://skills.example/search/card%20news",
+      "https://skills.example/search/card%20news?lang=ko",
+      "https://skills.example/search/card%20news",
+    ]);
+    expect(listed.jsonLd.map((data) => data["@type"])).toEqual(["SearchResultsPage"]);
+    // Fewer, none, or not there yet: a page, with its title, that search engines leave alone.
+    for (const data of [results(SEARCH_INDEX_MIN_RESULTS - 1), results(0), undefined]) {
+      const head = buildHead(route, "en", ORIGIN, data);
+      expect(head.indexable).toBe(false);
+      expect(head.canonical).toBeUndefined();
+      expect(head.title).toBe(t.meta.search.resultsTitle("card news"));
+      expect(head.jsonLd).toEqual([]);
+    }
+    const bare = buildHead(matchRoute("/search", "?lang=ko"), "ko", ORIGIN);
+    expect(bare.indexable).toBe(true);
+    expect(bare.canonical).toBe("https://skills.example/search?lang=ko");
+    expect(bare.title).toBe(messagesFor("ko").meta.search.title);
+    expect(renderHead(bare)).toContain('content="index,follow"');
   });
 
   it("describes the operator's showcase instead, and previews it with the entry's own picture", () => {
@@ -201,6 +247,11 @@ describe("buildHead", () => {
     expect(
       buildHead(matchRoute("/", ""), "en", ORIGIN, { showcase: { items: [] } }).image.url,
     ).toBe(`${ORIGIN}/og/og-en.png`);
+    expect(
+      buildHead(matchRoute("/", ""), "en", ORIGIN, { showcase: { items: [] } }).jsonLd.map(
+        (data) => data["@type"],
+      ),
+    ).toEqual(["WebSite", "SoftwareApplication", "FAQPage"]);
   });
 
   it("offers the documentation to search engines as pages in English, each with a card drawn for it", () => {
@@ -452,7 +503,7 @@ describe("renderHead", () => {
       '<meta property="og:image" content="https://skills.example/og/og-ko.png"',
     );
     expect(html).toContain('<meta name="twitter:card" content="summary_large_image"');
-    expect(html.match(/application\/ld\+json/g)).toHaveLength(4);
+    expect(html.match(/application\/ld\+json/g)).toHaveLength(3);
 
     const hidden = renderHead(buildHead(matchRoute("/gh/acme/skills", ""), "en", ORIGIN));
     expect(hidden).toContain('<meta name="robots" content="noindex,follow"');

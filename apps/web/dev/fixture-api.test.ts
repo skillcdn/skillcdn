@@ -19,6 +19,7 @@ import {
   restNewRepoTokenSchema,
   restOwnerSchema,
   restRepoTokensSchema,
+  restSearchSchema,
   restShowcaseSchema,
   restSkillSchema,
 } from "@skillcdn/core";
@@ -74,6 +75,11 @@ describe("the fixture API", () => {
     }
     expect(restFeaturedSchema.safeParse(ask("/api/v1/featured").body).success).toBe(true);
     expect(restShowcaseSchema.safeParse(ask("/api/v1/showcase").body).success).toBe(true);
+    // The search across the packs: what the fixture repositories hold, each in its pack.
+    const search = restSearchSchema.parse(ask("/api/v1/search?query=review&limit=20", 10_000).body);
+    expect(search.items.length).toBeGreaterThan(0);
+    expect(search.items.every((item) => item.pack !== undefined)).toBe(true);
+    expect(ask("/api/v1/search?query=").status).toBe(400);
     // One page of the deployment's own is written, the other is not.
     expect(restLegalDocumentSchema.safeParse(ask("/api/v1/legal/terms").body).success).toBe(true);
     expect(ask("/api/v1/legal/privacy").status).toBe(404);

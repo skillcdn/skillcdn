@@ -5,6 +5,7 @@ import {
   type RestLegalDocument,
   type RestMount,
   type RestOwner,
+  type RestSearch,
   type RestShowcase,
   type RestSkill,
 } from "@skillcdn/core";
@@ -25,13 +26,15 @@ import {
   renderLlmsTxt,
   renderNotFound,
   renderPage,
+  renderSearchPage,
   renderShell,
+  renderSitePage,
   STATIC_PAGES,
   TEMPLATE_MARKERS,
 } from "./entry-server.js";
 import { messagesFor } from "./i18n/index.js";
 import { defaultShowcase } from "./showcase.js";
-import { DEFAULT_SHOWCASE_MEDIA } from "./site.js";
+import { CONSOLE_PACK_ADDRESS, DEFAULT_SHOWCASE_MEDIA, LINKS } from "./site.js";
 
 const TEMPLATE = `<!doctype html>\n${TEMPLATE_MARKERS.htmlLang}<head>${TEMPLATE_MARKERS.head}</head><body>${TEMPLATE_MARKERS.root}</body></html>`;
 
@@ -157,6 +160,8 @@ const SHOWCASE: RestShowcase = {
     {
       id: "spring-ad",
       address: "/gh/acme/skills",
+      link: "https://acme.example/spring",
+      origin: "builder",
       position: 0,
       width: 640,
       height: 480,
@@ -203,6 +208,15 @@ const SHOWCASE: RestShowcase = {
           demo: null,
         },
       },
+    },
+  ],
+  organizations: [
+    {
+      id: "acme",
+      name: "Acme",
+      url: "https://acme.example",
+      logo: { url: MEDIA_URL("e"), type: "image/png" },
+      position: 0,
     },
   ],
 };
@@ -255,38 +269,45 @@ describe("prerendered pages", () => {
     expect(body).toContain('href="/gh/skillcdn/skills@v1"');
   });
 
-  it("leads the front page with the build's own showcase, before repository setup", () => {
+  it("leads the front page with the search box and the build's own showcase, every entry a real result", () => {
     for (const language of LANGUAGES) {
       const t = messagesFor(language);
-      const { body } = renderPage("/", language);
-      expect(body).toContain(`href="${REFERENCE_REPOSITORY_ADDRESS}"`);
-      expect(body).toContain(t.landing.featured.video.title);
-      expect(body.indexOf(t.landing.featured.video.title)).toBeLessThan(
-        body.indexOf('inputMode="url"'),
-      );
-      expect(body).not.toMatch(/href="\/gh\/skillcdn\/skillcdn/);
-      // The clip is local, waits to be seen before it loads, and plays without sound.
-      expect(body).toMatch(/<video[^>]+src="\/showcase\/[^"]+\.mp4"/);
-      expect(body).toContain(`src="${DEFAULT_SHOWCASE_MEDIA.clip}"`);
-      expect(body).toContain(`poster="${DEFAULT_SHOWCASE_MEDIA.poster}"`);
-      expect(body).toMatch(/<video[^>]+preload="none"/);
-      expect(body).toMatch(/<video[^>]+muted=""/);
-      expect(body).not.toMatch(/<video[^>]+autoplay/i);
-      expect(body).toContain(t.landing.featured.video.clip);
+      const { body, head } = renderPage("/", language);
+      // The box first, the showcase after it, and the address field far down the page.
+      expect(body).toContain('name="q"');
+      expect(body.indexOf('name="q"')).toBeLessThan(body.indexOf('inputMode="url"'));
+      for (const id of ["cards", "deck", "looks"] as const) {
+        const entry = DEFAULT_SHOWCASE_MEDIA.entries[id];
+        const words = t.landing.showcase.entries[id];
+        expect(body, id).toContain(words.title);
+        expect(body, id).toContain(`href="${entry.address}"`);
+        expect(body, id).toContain(`href="${entry.link}"`);
+        expect(body, id).toContain(`src="${entry.poster}"`);
+      }
+      expect(body).toContain(t.landing.showcase.origins.pack);
+      // No clip in the build's own showcase: nothing plays, nothing is loaded from elsewhere,
+      // and no style is written into the page.
+      expect(body).not.toContain("<video");
       expect(body).not.toMatch(/style="|<(?:img|video)[^>]+src="https?:/);
-      // The animated image is for a browser that refuses the video, so it is not in the page
-      // until one does, and nothing is laid over the clip.
-      expect(body).not.toContain(DEFAULT_SHOWCASE_MEDIA.animation);
-      const card = body.slice(body.indexOf("<article"), body.indexOf("</article>"));
-      expect(card).not.toContain("<button");
-      // The explorer has its own list and no showcase card (ADR-0028).
+      // The organizations of the build, the console's board in the visitor's words, the way to
+      // the console pack, the steps, the builders and the questions.
+      expect(body).toContain('src="/organizations/kdxlabs.png"');
+      expect(body).toContain(t.landing.console.window.columns.in_progress);
+      expect(body).toContain(t.landing.console.window.tasks[0]?.title ?? "missing");
+      expect(body).toContain(t.landing.console.window.description);
+      expect(body).toContain(`href="${CONSOLE_PACK_ADDRESS}"`);
+      expect(body).toContain(t.landing.steps.items[0]?.title ?? "missing");
+      expect(body).toContain(t.landing.builders.title);
+      expect(body).toContain(`href="${LINKS.builders}"`);
+      for (const item of t.landing.faq.items) expect(head).toContain(item.question);
+      // The explorer has the box too, and its own list without the showcase (ADR-0028).
       const explore = renderPage("/explore", language).body;
-      expect(explore).not.toContain("<video");
-      expect(explore).not.toContain(t.landing.featured.video.title);
+      expect(explore).toContain('name="q"');
+      expect(explore).not.toContain(t.landing.showcase.entries.cards.title);
     }
   });
 
-  it("shows the operator's showcase on the front page instead of the build's own", () => {
+  it("shows the operator's showcase and organizations on the front page instead of the build's own", () => {
     const t = messagesFor("ko");
     const { html, indexable } = renderLandingPage(TEMPLATE, {
       language: "ko",
@@ -298,35 +319,25 @@ describe("prerendered pages", () => {
     expect(indexable).toBe(true);
     expect(html).toContain('<html lang="ko">');
     expect(html).toContain('data-prerendered="landing" data-lang="ko"');
-    // The entry's words in the visitor's language, its media, and its address; not the build's.
+    // The entry's words in the visitor's language, its clip, its result, whose work it is, and
+    // its address; not the build's.
     expect(html).toContain("사진 한 장으로 만드는 봄 광고");
     expect(html).toContain(`src="${MEDIA_URL("a")}"`);
     expect(html).toContain(`poster="${MEDIA_URL("b")}"`);
+    expect(html).toContain('href="https://acme.example/spring"');
+    expect(html).toContain(t.landing.showcase.origins.builder);
     expect(html).toContain('href="/gh/acme/skills"');
-    expect(html).not.toContain(DEFAULT_SHOWCASE_MEDIA.clip);
-    expect(html).not.toContain(t.landing.featured.video.title);
-    // No example conversation in Korean: the build's own stands in, with its own media.
-    expect(html).toContain(t.landing.demo.prompt);
-    expect(html).toContain(DEFAULT_SHOWCASE_MEDIA.poster);
-    // The browser continues from the same answer, and the head describes the entry's clip.
+    expect(html).not.toContain(DEFAULT_SHOWCASE_MEDIA.entries.cards.poster);
+    expect(html).not.toContain(t.landing.showcase.entries.cards.title);
+    // The operator's organizations stand in the strip in place of the build's own.
+    expect(html).toContain(`src="${MEDIA_URL("e")}"`);
+    expect(html).toContain('href="https://acme.example"');
+    expect(html).not.toContain("/organizations/kdxlabs.png");
+    // The browser continues from the same answer, and the head describes the entry's clip and
+    // previews the page with the entry's own picture.
     expect(html).toContain('<script type="application/json" id="skillcdn-data">');
     expect(html).toContain(`"contentUrl":"https://skills.example${MEDIA_URL("a")}"`);
     expect(html).toContain(`content="https://skills.example${MEDIA_URL("d")}"`);
-
-    // In English the entry brings its own conversation, played with the entry's own media.
-    const english = renderLandingPage(TEMPLATE, {
-      language: "en",
-      origin: "https://skills.example",
-      pathname: "/",
-      search: "",
-      data: { showcase: { ready: SHOWCASE } },
-    }).html;
-    expect(english).toContain("Make a spring ad from this picture.");
-    // What the person attaches is what the entry has: a reference here, and no picture.
-    expect(english).toContain("(Reference picture)");
-    expect(english).not.toContain("(Product picture)");
-    expect(english).not.toContain(messagesFor("en").landing.demo.prompt);
-    expect(english).not.toContain(DEFAULT_SHOWCASE_MEDIA.poster);
 
     // An empty showcase is the build's own, as the prerendered page has it.
     const empty = renderLandingPage(TEMPLATE, {
@@ -334,39 +345,54 @@ describe("prerendered pages", () => {
       origin: "https://skills.example",
       pathname: "/",
       search: "",
-      data: { showcase: { ready: { items: [] } } },
+      data: { showcase: { ready: { items: [], organizations: [] } } },
     }).html;
-    expect(empty).toContain(`src="${DEFAULT_SHOWCASE_MEDIA.clip}"`);
-    expect(empty).toContain(defaultShowcase().texts.en?.title ?? "missing");
+    expect(empty).toContain(`src="${DEFAULT_SHOWCASE_MEDIA.entries.cards.poster}"`);
+    expect(empty).toContain(defaultShowcase()[0]?.texts.en?.title ?? "missing");
+    expect(empty).toContain('src="/organizations/kdxlabs.png"');
   });
 
-  it("shows the spending consent without animation, and keeps the whole conversation for assistive technology", () => {
-    for (const language of LANGUAGES) {
-      const t = messagesFor(language);
-      const { body, head } = renderPage("/", language);
-      // Without a script the last scene stands: the consent and the result, with nothing over
-      // the result and no title bar or stage list around the conversation.
-      expect(body).toContain('data-demo-phase="2"');
-      expect(body).toContain(t.landing.demo.approval);
-      expect(body).toContain(t.landing.demo.consent);
-      expect(body).toContain(`poster="${DEFAULT_SHOWCASE_MEDIA.poster}"`);
-      expect(body).not.toContain(t.landing.demo.working);
-      // Nothing to click through, but every line is there to be read.
-      expect(body).toContain(`<ol class="visually-hidden" aria-label="${t.landing.demo.label}">`);
-      for (const message of [
-        t.landing.demo.prompt,
-        t.landing.demo.question,
-        t.landing.demo.answer,
-        t.landing.demo.plan,
-        t.landing.demo.result,
-      ])
-        expect(body).toContain(message);
-      // The person brings the character: the picture is attached, and there is no reference.
-      expect(body).toContain(`(${t.landing.demo.picture})`);
-      expect(body).not.toContain(t.landing.demo.reference);
-      expect(t.landing.faq.items).toHaveLength(3);
-      for (const item of t.landing.faq.items) expect(head).toContain(item.question);
-    }
+  it("shows the sections the deployment lists, and the search box only where the deployment searches", () => {
+    const t = messagesFor("en");
+    const trimmed = renderLandingPage(TEMPLATE, {
+      language: "en",
+      origin: "https://skills.example",
+      pathname: "/",
+      search: "",
+      features: { landingSections: ["packs", "faq"], search: false },
+      data: {},
+    }).html;
+    expect(trimmed).not.toContain('name="q"');
+    expect(trimmed).not.toContain('href="/search"');
+    expect(trimmed).not.toContain(t.landing.showcase.title);
+    expect(trimmed).not.toContain(t.landing.console.title);
+    expect(trimmed).not.toContain(t.landing.builders.title);
+    expect(trimmed).toContain(t.landing.packs.title);
+    expect(trimmed).toContain(t.landing.faq.title);
+    expect(trimmed).toContain(t.landing.title);
+    // A section the deployment names that is no section is nothing, and the rest stand.
+    const odd = renderLandingPage(TEMPLATE, {
+      language: "en",
+      origin: "https://skills.example",
+      pathname: "/",
+      search: "",
+      features: { landingSections: ["packs", "hero"] },
+      data: {},
+    }).html;
+    expect(odd).toContain(t.landing.showcase.title);
+    // A page of the build rendered with the same: the explorer without the box, in the language asked.
+    const explore = renderSitePage(TEMPLATE, {
+      language: "ko",
+      origin: "https://skills.example",
+      pathname: "/explore",
+      search: "?lang=ko",
+      features: { search: false },
+    });
+    expect(explore.indexable).toBe(true);
+    expect(explore.html).toContain('<html lang="ko">');
+    expect(explore.html).toContain('data-prerendered="explore" data-lang="ko"');
+    expect(explore.html).toContain(messagesFor("ko").explore.title);
+    expect(explore.html).not.toContain('name="q"');
   });
 
   it("exist once per language, with their content in the HTML itself", () => {
@@ -379,8 +405,7 @@ describe("prerendered pages", () => {
       for (const item of t.landing.faq.items) {
         expect(landing.body, item.question).toContain(item.question);
       }
-      // Selecting a step changes the clip beside it, never what is on the page.
-      for (const step of t.landing.how.steps) {
+      for (const step of t.landing.steps.items) {
         expect(landing.body, step.title).toContain(step.title);
         expect(landing.body, step.title).toContain(step.body);
       }
@@ -390,7 +415,7 @@ describe("prerendered pages", () => {
       expect(explore.routeName).toBe("explore");
       expect(explore.body).toContain(t.explore.title);
     }
-    expect(STATIC_PAGES.map((page) => page.path)).toEqual(["/", "/explore"]);
+    expect(STATIC_PAGES.map((page) => page.path)).toEqual(["/", "/explore", "/search"]);
   });
 
   it("link to each other without a language, and to the other languages", () => {
@@ -1234,6 +1259,124 @@ describe("the documentation", () => {
   });
 });
 
+describe("the page of a search across the packs", () => {
+  const found: RestSearch = {
+    status: "ready",
+    query: "release notes",
+    packs: 3,
+    items: [
+      {
+        address: "/gh/acme/skills",
+        repository: "Acme/skills",
+        pack: { kind: "skills", verified: true, skills: 2 },
+        item: {
+          kind: "skill",
+          path: "skills/release-notes/SKILL.md",
+          name: "release-notes",
+          directory: "skills/release-notes",
+          description: "Writes the notes of a release.",
+          translations: { ko: { title: "릴리스 노트", description: "릴리스의 노트를 씁니다." } },
+          files: [],
+          moreFiles: 0,
+        },
+      },
+      {
+        address: "/gh/acme/handbook",
+        repository: "Acme/handbook",
+        pack: { kind: "documents", verified: false, skills: 0 },
+        item: {
+          kind: "document",
+          path: "docs/releases.md",
+          title: "Releases",
+          summary: null,
+          skillDirectory: null,
+          sections: [
+            { heading: ["Releases", "2.0"], offset: 120, length: 400, excerpt: "The 2.0 release." },
+          ],
+        },
+      },
+      {
+        address: "/gh/other/repo",
+        repository: "other/repo",
+        item: {
+          kind: "document",
+          path: "README.md",
+          title: null,
+          summary: "A readme.",
+          skillDirectory: null,
+        },
+      },
+    ],
+    ranking: { meaning: true, reranked: false },
+  };
+  const render = (results: RestSearch, language: "en" | "ko" = "en") =>
+    renderSearchPage(TEMPLATE, {
+      language,
+      origin: "https://skills.example",
+      pathname: "/search/release%20notes",
+      search: language === "ko" ? "?lang=ko" : "",
+      data: { results: { ready: results } },
+    });
+
+  it("renders the results, each in its pack, and is indexable once it has enough to show", () => {
+    const t = messagesFor("en");
+    const { html, indexable } = render(found);
+    expect(indexable).toBe(true);
+    expect(html).toContain('data-prerendered="search"');
+    expect(html).toContain(
+      `<title data-head="">${t.meta.search.resultsTitle("release notes")}</title>`,
+    );
+    expect(html).toContain('rel="canonical" href="https://skills.example/search/release%20notes"');
+    expect(html).toContain('"@type":"SearchResultsPage"');
+    expect(html).toContain('<script type="application/json" id="skillcdn-data">');
+    // The skill, the document at its section, the readme of a bare repository: what each is,
+    // where it is, and the ways on.
+    expect(html).toContain("release-notes");
+    expect(html).toContain("Acme/skills");
+    expect(html).toContain(t.packKinds.skills);
+    expect(html).toContain(t.packKinds.documents);
+    expect(html).toContain(t.packKinds.repository);
+    expect(html).toContain("skill=skills%2Frelease-notes%2FSKILL.md");
+    expect(html).toContain("file=docs%2Freleases.md&amp;at=120");
+    expect(html).toContain("Releases › 2.0");
+    expect(html).toContain('href="/gh/acme/skills?q=release+notes"');
+    expect(html).toContain(t.search.actions.moreRepository);
+    expect(html).toContain(t.search.found(3, 3));
+    expect(html).toContain(t.search.ranking.meaning);
+    // The skill in the visitor's language, as the explorer shows it.
+    expect(render(found, "ko").html).toContain("릴리스 노트");
+    // Fewer than a page needs: a page like any search, not one to list; none: said so.
+    const few = render({ ...found, items: found.items.slice(0, 2) });
+    expect(few.indexable).toBe(false);
+    expect(few.html).toContain('content="noindex,follow"');
+    expect(few.html).not.toContain('rel="canonical"');
+    const none = render({ ...found, items: [] });
+    expect(none.html).toContain(t.search.none);
+    expect(none.html).toContain(
+      `<title data-head="">${t.meta.search.resultsTitle("release notes")}</title>`,
+    );
+  });
+
+  it("is the page of the box alone without a term, and says what went wrong with the search", () => {
+    const t = messagesFor("ko");
+    const bare = renderPage("/search", "ko");
+    expect(bare.routeName).toBe("search");
+    expect(bare.body).toContain('name="q"');
+    expect(bare.body).toContain(t.search.bare.title);
+    expect(bare.head).toContain(`<title data-head="">${t.meta.search.title}</title>`);
+    expect(bare.head).toContain(`rel="canonical" href="${ORIGIN_PLACEHOLDER}/search?lang=ko"`);
+    const busy = renderSearchPage(TEMPLATE, {
+      language: "en",
+      origin: "https://skills.example",
+      pathname: "/search/release%20notes",
+      search: "",
+      data: { results: { error: { status: 503, code: "search.busy", message: "Busy." } } },
+    });
+    expect(busy.indexable).toBe(false);
+    expect(busy.html).toContain(messagesFor("en").errors.codes["search.busy"].title);
+  });
+});
+
 describe("llms.txt", () => {
   it("describes the site in plain Markdown, per language", () => {
     for (const language of LANGUAGES) {
@@ -1247,7 +1390,11 @@ describe("llms.txt", () => {
       // What the site is, in one plain sentence, and what there is to make, with its address.
       expect(text).toContain(t.meta.landing.about);
       expect(text).toContain(`${ORIGIN_PLACEHOLDER}${REFERENCE_REPOSITORY_ADDRESS}`);
-      expect(text).toContain(t.landing.featured.video.title);
+      expect(text).toContain(t.landing.showcase.entries.cards.title);
+      expect(text).toContain(`${ORIGIN_PLACEHOLDER}${DEFAULT_SHOWCASE_MEDIA.entries.deck.link}`);
+      expect(text).toContain(`${ORIGIN_PLACEHOLDER}${CONSOLE_PACK_ADDRESS}`);
+      expect(text).toContain(`${ORIGIN_PLACEHOLDER}/search`);
+      expect(text).toContain(LINKS.builders);
       // The documentation, each page as Markdown, and all of it in one file.
       expect(text).toContain(`](${ORIGIN_PLACEHOLDER}/docs/format.md): `);
       expect(text).toContain(
@@ -1263,6 +1410,7 @@ describe("llms.txt", () => {
       `- [A spring ad from one picture](${ORIGIN_PLACEHOLDER}/gh/acme/skills): Show it a picture`,
     );
     expect(text).toContain("Uses a video tool.");
-    expect(text).not.toContain(messagesFor("en").landing.featured.video.title);
+    expect(text).toContain("[Make one](https://acme.example/spring)");
+    expect(text).not.toContain(messagesFor("en").landing.showcase.entries.cards.title);
   });
 });

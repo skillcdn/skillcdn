@@ -1,6 +1,11 @@
 import { createPrivateKey } from "node:crypto";
 import { readFileSync } from "node:fs";
-import type { IndexLimits } from "@skillcdn/core";
+import {
+  type IndexLimits,
+  type LandingSection,
+  normalizeSearchTerm,
+  parseLandingSections,
+} from "@skillcdn/core";
 import { readIndexLimits } from "@skillcdn/indexer";
 import * as z from "zod";
 import { type Cidr, parseCidr } from "../http/client-address.js";
@@ -97,8 +102,47 @@ const cidrList = z
     return networks;
   });
 
-/** The search across packs as it runs with nothing configured: on, and bounded in time. */
-export const HUB_DEFAULTS: HubConfig = { enabled: true, timeoutMs: 2000, candidates: 50 };
+/**
+ * The search across packs as it runs with nothing configured: on, bounded in time, its answers
+ * kept five minutes, eight searches at once per process, and no results page in the sitemap.
+ */
+export const HUB_DEFAULTS: HubConfig = {
+  enabled: true,
+  timeoutMs: 2000,
+  candidates: 50,
+  cacheMs: 300_000,
+  cacheEntries: 1000,
+  concurrency: 8,
+  sitemapTerms: [],
+};
+
+/** Terms, comma-separated, each written as the search page writes it; the empty ones dropped. */
+const searchTerms = z
+  .string()
+  .default("")
+  .transform((value) =>
+    [...new Set(value.split(",").map(normalizeSearchTerm))].filter((term) => term !== ""),
+  );
+
+/** The sections of the front page, named; unset, every section; `none` for the first screen alone. */
+const landingSections = z
+  .string()
+  .optional()
+  .transform((value, context): readonly LandingSection[] | undefined => {
+    if (value === undefined) {
+      return undefined;
+    }
+    const parsed = value.trim() === "none" ? [] : parseLandingSections(value);
+    if (parsed === undefined) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "must be none or a list of sections: organizations, showcase, console, steps, packs, builders, faq, cta",
+      });
+      return z.NEVER;
+    }
+    return parsed;
+  });
 
 const environmentSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("production"),
@@ -222,6 +266,11 @@ const environmentSchema = z.object({
   HUB_SEARCH: flag(HUB_DEFAULTS.enabled),
   HUB_SEARCH_TIMEOUT_MS: integer(HUB_DEFAULTS.timeoutMs, 100, 60_000),
   HUB_SEARCH_CANDIDATES: integer(HUB_DEFAULTS.candidates, 5, 200),
+  SEARCH_CACHE_SECONDS: integer(HUB_DEFAULTS.cacheMs / 1000, 0, 86_400),
+  SEARCH_CACHE_ENTRIES: integer(HUB_DEFAULTS.cacheEntries, 0, 100_000),
+  SEARCH_CONCURRENCY: integer(HUB_DEFAULTS.concurrency, 1, 1000),
+  SEARCH_SITEMAP_TERMS: searchTerms,
+  LANDING_SECTIONS: landingSections,
 });
 
 export interface WebTags {
@@ -240,6 +289,11 @@ export interface WebTags {
   readonly privacyUrl: string | undefined;
   /** Whom to write to about content, takedown requests included; shown only when set. */
   readonly contactEmail: string | undefined;
+  /**
+   * The sections the front page shows after its first screen (ADR-0075), in the page's order;
+   * unset, every section. The pages read it from the head of every page.
+   */
+  readonly landingSections: readonly LandingSection[] | undefined;
 }
 
 export interface AuthConfig {
@@ -414,6 +468,17 @@ export interface HubConfig {
   readonly timeoutMs: number;
   /** How many entries the words, and the meaning, each bring to the fusion of a search. */
   readonly candidates: number;
+  /**
+   * How long the answer to a search is kept (ADR-0075): in this process, and as what the pages
+   * and the REST route tell a cache in front of the deployment. 0 keeps nothing.
+   */
+  readonly cacheMs: number;
+  /** How many answers this process keeps at most. */
+  readonly cacheEntries: number;
+  /** How many searches this process runs at once; past that, one is refused with a retry. */
+  readonly concurrency: number;
+  /** The terms whose results pages the sitemap lists. */
+  readonly sitemapTerms: readonly string[];
 }
 
 export class ConfigError extends Error {
@@ -643,6 +708,7 @@ export function loadConfig(
         termsUrl: env.TERMS_URL,
         privacyUrl: env.PRIVACY_URL,
         contactEmail: env.CONTACT_EMAIL,
+        landingSections: env.LANDING_SECTIONS,
       },
     },
     admin: { token: env.ADMIN_TOKEN },
@@ -666,6 +732,10 @@ export function loadConfig(
       enabled: env.HUB_SEARCH,
       timeoutMs: env.HUB_SEARCH_TIMEOUT_MS,
       candidates: env.HUB_SEARCH_CANDIDATES,
+      cacheMs: env.SEARCH_CACHE_SECONDS * 1000,
+      cacheEntries: env.SEARCH_CACHE_ENTRIES,
+      concurrency: env.SEARCH_CONCURRENCY,
+      sitemapTerms: env.SEARCH_SITEMAP_TERMS,
     },
     packs: env.PACKS_DIR === undefined ? undefined : { root: env.PACKS_DIR },
   };

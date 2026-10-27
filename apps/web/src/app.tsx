@@ -14,6 +14,7 @@ import { SessionProvider, useSession } from "./auth/session.js";
 import { Layout } from "./components/layout.js";
 import { SignInDialogProvider } from "./components/sign-in-dialog.js";
 import { Container, Skeleton } from "./components/ui.js";
+import { DEFAULT_FEATURES, FeaturesContext, type SiteFeatures } from "./features.js";
 import { I18nContext, LanguagePreferenceContext, messagesFor } from "./i18n/index.js";
 import { LANGUAGE_PENDING_ATTRIBUTE, type Language, resolveLanguage } from "./i18n/languages.js";
 import { LegalLinksProvider } from "./legal-links.js";
@@ -27,6 +28,7 @@ import { LandingPage } from "./pages/landing.js";
 import type { LegalPageProps } from "./pages/legal.js";
 import type { MountPageProps } from "./pages/mount.js";
 import type { OwnerPageProps } from "./pages/owner.js";
+import type { SearchPageProps } from "./pages/search.js";
 import { BadAddressPage, NotFoundPage } from "./pages/simple.js";
 import { matchRoute, type Route } from "./router.js";
 import { applyHead, buildHead } from "./seo/head.js";
@@ -40,6 +42,8 @@ import { applyHead, buildHead } from "./seo/head.js";
  */
 export interface PageComponents {
   readonly mount: ComponentType<MountPageProps>;
+  /** The page of a search across the packs (ADR-0075). */
+  readonly search: ComponentType<SearchPageProps>;
   readonly legal: ComponentType<LegalPageProps>;
   readonly docs: ComponentType<DocsPageProps>;
   readonly owner: ComponentType<OwnerPageProps>;
@@ -50,6 +54,9 @@ export interface PageComponents {
 
 const LAZY_PAGES: PageComponents = {
   mount: lazy(() => import("./pages/mount.js").then((module) => ({ default: module.MountPage }))),
+  search: lazy(() =>
+    import("./pages/search.js").then((module) => ({ default: module.SearchPage })),
+  ),
   legal: lazy(() => import("./pages/legal.js").then((module) => ({ default: module.LegalPage }))),
   docs: lazy(() => import("./pages/docs.js").then((module) => ({ default: module.DocsPage }))),
   owner: lazy(() => import("./pages/owner.js").then((module) => ({ default: module.OwnerPage }))),
@@ -92,6 +99,12 @@ export interface AppProps {
    * request asked for (ADR-0021); prerendering leaves it out and renders the default.
    */
   readonly preferredLanguage?: Language;
+  /**
+   * What the deployment has (ADR-0075): the sections of the front page and whether the search
+   * is there. The server passes what it was configured with; the browser reads the head; the
+   * prerenderer leaves it out and renders everything.
+   */
+  readonly features?: SiteFeatures;
 }
 
 function pageOf(route: Route, origin: string, pages: PageComponents): ReactNode {
@@ -100,6 +113,8 @@ function pageOf(route: Route, origin: string, pages: PageComponents): ReactNode 
       return <LandingPage origin={origin} />;
     case "explore":
       return <ExplorePage origin={origin} />;
+    case "search":
+      return <pages.search origin={origin} term={route.term} />;
     case "mount":
       return <pages.mount origin={origin} address={route.address} view={route.view} />;
     case "owner":
@@ -129,6 +144,7 @@ function pageOf(route: Route, origin: string, pages: PageComponents): ReactNode 
 const OWN_HEAD: ReadonlySet<Route["name"]> = new Set([
   "mount",
   "landing",
+  "search",
   "legal",
   "owner",
   "account",
@@ -218,24 +234,26 @@ export function App(props: AppProps) {
   const pages = useMemo(() => ({ ...LAZY_PAGES, ...props.pages }), [props.pages]);
   return (
     <InitialDataContext.Provider value={props.initialData ?? {}}>
-      <LanguagePreferenceContext.Provider value={preference}>
-        <LocationProvider initial={props.initialLocation}>
-          {/* Who is signed in is one fact for the whole page: the header, and whatever page
+      <FeaturesContext.Provider value={props.features ?? DEFAULT_FEATURES}>
+        <LanguagePreferenceContext.Provider value={preference}>
+          <LocationProvider initial={props.initialLocation}>
+            {/* Who is signed in is one fact for the whole page: the header, and whatever page
               shows something that is a person's, read it from here. */}
-          <SessionProvider>
-            {/* And so are the deployment's terms and privacy policy: the footer links to them,
+            <SessionProvider>
+              {/* And so are the deployment's terms and privacy policy: the footer links to them,
                 and whoever signs in is told that they agree to them. */}
-            <LegalLinksProvider>
-              <Routed
-                origin={props.origin}
-                shell={props.shell === true}
-                pages={pages}
-                preferredLanguage={preferred}
-              />
-            </LegalLinksProvider>
-          </SessionProvider>
-        </LocationProvider>
-      </LanguagePreferenceContext.Provider>
+              <LegalLinksProvider>
+                <Routed
+                  origin={props.origin}
+                  shell={props.shell === true}
+                  pages={pages}
+                  preferredLanguage={preferred}
+                />
+              </LegalLinksProvider>
+            </SessionProvider>
+          </LocationProvider>
+        </LanguagePreferenceContext.Provider>
+      </FeaturesContext.Provider>
     </InitialDataContext.Provider>
   );
 }

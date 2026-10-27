@@ -2,6 +2,7 @@ import type { Client } from "@modelcontextprotocol/client";
 import { restSearchSchema } from "@skillcdn/core";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { HUB_DEFAULTS } from "./config/config.js";
 import { createFixtureHost } from "./testing/fixture-host.js";
 import { createHarness, type Harness, type HarnessOptions } from "./testing/harness.js";
 
@@ -17,10 +18,18 @@ afterAll(async () => {
   await testDatabase?.drop();
 });
 
-/** A harness on a clock the test moves: the packs a search covers are read again after a moment. */
+/**
+ * A harness on a clock the test moves: the packs a search covers are read again after a moment.
+ * Without the cache of answers (ADR-0075), unless a test asks for it: an answer kept would hide
+ * the packs that arrived since.
+ */
 function harness(options: HarnessOptions = {}) {
   let now = Date.parse("2026-02-01T00:00:00Z");
-  const h = createHarness(testDatabase, { clock: { now: () => new Date(now) }, ...options });
+  const h = createHarness(testDatabase, {
+    clock: { now: () => new Date(now) },
+    hub: { ...HUB_DEFAULTS, cacheMs: 0 },
+    ...options,
+  });
   const later = (): void => {
     now += 20_000;
   };
@@ -125,6 +134,45 @@ describe("the search across every pack", () => {
     expect(await page.json()).toMatchObject({ error: { code: "not_found" } });
   });
 
+  it("keeps an answer for as long as it is told, says so to the caches, and refuses more searches than it runs at once", async () => {
+    const host = createFixtureHost("hub-cache");
+    const h = harness({ host, hub: { ...HUB_DEFAULTS, cacheMs: 60_000, concurrency: 1 } });
+    await indexed(h, "/gh/acme/multi-skill");
+    await indexed(h, "/gh/acme/document-pack");
+    h.later();
+    const first = await h.request("/api/v1/search?query=release+notes");
+    expect(first.status).toBe(200);
+    expect(first.headers.get("cache-control")).toBe(
+      "public, max-age=60, s-maxage=60, stale-while-revalidate=60",
+    );
+    const inPack = (found: { items: { address: string }[] }) =>
+      found.items.some((item) => item.address === "/gh/acme/document-pack");
+    expect(inPack(restSearchSchema.parse(await first.json()))).toBe(true);
+    // A pack the operator blocks since stays in the answer kept, however spaced the question;
+    // it is gone once the answer has been let go of.
+    await h.lists.add("blocked", "/gh/acme/document-pack");
+    h.later();
+    const kept = await h.request("/api/v1/search?query=release++notes");
+    expect(inPack(restSearchSchema.parse(await kept.json()))).toBe(true);
+    h.later();
+    h.later();
+    h.later();
+    const fresh = await h.request("/api/v1/search?query=release+notes");
+    expect(inPack(restSearchSchema.parse(await fresh.json()))).toBe(false);
+    await h.lists.remove("blocked", "/gh/acme/document-pack");
+    // Two different questions at once, one search at a time: the second is told to come back.
+    const [one, two] = await Promise.all([
+      h.request("/api/v1/search?query=skills+one"),
+      h.request("/api/v1/search?query=skills+two"),
+    ]);
+    const statuses = [one.status, two.status].sort();
+    expect(statuses).toEqual([200, 503]);
+    const refused = one.status === 503 ? one : two;
+    expect(refused.headers.get("retry-after")).toBe("2");
+    expect(refused.headers.get("cache-control")).toBe("no-store");
+    expect(await refused.json()).toMatchObject({ error: { code: "search.busy" } });
+  });
+
   it("leaves out a pack the operator blocked, once it reads the packs again", async () => {
     const host = createFixtureHost("hub-blocked");
     const h = harness({ host });
@@ -143,7 +191,7 @@ describe("the search across every pack", () => {
 
   it("is not there when the operator turns it off", async () => {
     const host = createFixtureHost("hub-off");
-    const h = harness({ host, hub: { enabled: false, timeoutMs: 2000, candidates: 50 } });
+    const h = harness({ host, hub: { ...HUB_DEFAULTS, enabled: false } });
     expect((await h.request("/api/v1/search?query=release")).status).toBe(404);
     const posted = await h.request("/", {
       method: "POST",

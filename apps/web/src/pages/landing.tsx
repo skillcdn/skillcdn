@@ -1,19 +1,36 @@
+import type { LandingSection } from "@skillcdn/core";
 import { useEffect } from "react";
 import { track } from "../analytics.js";
 import { api } from "../api/client.js";
 import { resourceKeys } from "../api/keys.js";
 import { useResource } from "../api/use-resource.js";
-import { AuthorsInvite } from "../components/authors-invite.js";
+import { AddressForm } from "../components/address-form.js";
 import { BrandSymbol } from "../components/brand.js";
-import { CreationDemo } from "../components/creation-demo.js";
-import { ArrowIcon, FeaturedSkill } from "../components/featured-skill.js";
-import { Container } from "../components/ui.js";
+import { CopyButton } from "../components/code-block.js";
+import { ConsoleDemo } from "../components/console-demo.js";
+import glass from "../components/glass.module.css";
+import { OrganizationsStrip } from "../components/organizations-strip.js";
+import { SearchForm } from "../components/search-form.js";
+import { ShowcaseGrid } from "../components/showcase-card.js";
+import { ArrowIcon, Container, cx, ExternalIcon, VerifiedMark } from "../components/ui.js";
+import { AUTHORS_GUIDE_SLUG, USE_GUIDE_SLUG } from "../docs/catalog.js";
+import { useFeatures } from "../features.js";
 import { useI18n } from "../i18n/index.js";
 import { Link } from "../navigation.js";
-import { PATHS } from "../router.js";
+import { docsHref, PATHS, searchHref } from "../router.js";
 import { applyHead, buildHead } from "../seo/head.js";
-import { showcaseDemo, showcaseEntries, showcaseTexts } from "../showcase.js";
+import { showcaseEntries, showcaseOrganizations } from "../showcase.js";
+import { CONSOLE_PACK_ADDRESS, hostOf, LINKS } from "../site.js";
 import styles from "./landing.module.css";
+
+/** The clients named under the search box, each with its mark from `public/clients/`. */
+const CLIENTS = [
+  { client: "chatgpt", icon: "openai" },
+  { client: "claude", icon: "claude" },
+  { client: "cursor", icon: "cursor" },
+  { client: "codex", icon: "codex" },
+  { client: "gemini", icon: "gemini" },
+] as const;
 
 /** The caret at the end of a question: down while the answer is folded, up once it is open. */
 function FaqCaret() {
@@ -33,15 +50,74 @@ function FaqCaret() {
   );
 }
 
+function SectionHead(props: {
+  readonly kicker: string;
+  readonly title: string;
+  readonly lead?: string;
+  readonly centered?: boolean;
+}) {
+  return (
+    <div
+      className={cx(styles.sectionHead, props.centered === true && styles.centered, glass.reveal)}
+    >
+      <p className={styles.kicker}>{props.kicker}</p>
+      <h2>{props.title}</h2>
+      {props.lead !== undefined && <p className={styles.sectionLead}>{props.lead}</p>}
+    </div>
+  );
+}
+
+/**
+ * The well-known packs, as the explorer features them, in a loose cloud rather than a grid: a
+ * glance at what is there, and the way to all of it. The list is the operator's; a failure to
+ * load it leaves the address field to speak for the section.
+ */
+function PackCloud() {
+  const { t } = useI18n();
+  const featured = useResource("featured", (signal) => api.featured(signal));
+  if (featured.state !== "ready") {
+    return null;
+  }
+  const seen = new Set<string>();
+  const items = featured.value.items.filter((item) => {
+    const key = `${item.repository.owner}/${item.repository.name}`.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return item.status === "ready";
+  });
+  if (items.length === 0) {
+    return null;
+  }
+  return (
+    <ul className={styles.cloud}>
+      {items.slice(0, 9).map((item) => (
+        <li key={item.address}>
+          <Link className={styles.pill} href={item.address}>
+            <span className={styles.pillOwner}>{item.repository.owner}/</span>
+            <span className={styles.pillName}>{item.repository.name}</span>
+            {item.verified && <VerifiedMark label={t.mount.verified} hint={t.mount.verifiedHint} />}
+            {item.skillCount !== null && item.skillCount > 0 && (
+              <span className={styles.pillCount}>{t.landing.packs.skills(item.skillCount)}</span>
+            )}
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function LandingPage(props: { readonly origin: string }) {
   const { t, language } = useI18n();
   const copy = t.landing;
-  // The operator's showcase (ADR-0028), which the server hands to a rendered page; while it is
-  // not there, and when there is none, the build's own entry stands.
+  const features = useFeatures();
+  const host = hostOf(props.origin);
+  // The operator's showcase and organizations (ADR-0028), which the server hands to a rendered
+  // page; while they are not there, and when there are none, the build's own stand.
   const showcase = useResource(resourceKeys.showcase(), (signal) => api.showcase(signal));
   const loaded = showcase.state === "ready" ? showcase.value : undefined;
   const entries = showcaseEntries(loaded);
-  const demo = showcaseDemo(entries, language);
+  const organizations = showcaseOrganizations(loaded);
+  const shows = (section: LandingSection) => features.landingSections.includes(section);
 
   // The head describes the showcase the page shows: the same head the server writes.
   useEffect(() => {
@@ -61,118 +137,264 @@ export function LandingPage(props: { readonly origin: string }) {
             <span>{copy.titleAccent}</span>
           </h1>
           <p className={styles.lead}>{copy.lead}</p>
-          <div className={styles.actions}>
-            <Link
-              className={styles.primary}
-              href={PATHS.explore}
-              onClick={() => track("cta_click", { id: "hero" })}
-            >
-              {copy.primary}
-              <ArrowIcon />
-            </Link>
-          </div>
-          <div className={styles.compatibility}>
-            <span>{copy.compatibility}</span>
+          {features.search ? (
+            <SearchForm
+              className={styles.search}
+              large
+              from="hero"
+              placeholder={copy.search.placeholder}
+              chips={copy.search.chips}
+            />
+          ) : (
+            <div className={styles.actions}>
+              <Link
+                className={styles.primary}
+                href={PATHS.explore}
+                onClick={() => track("cta_click", { id: "hero" })}
+              >
+                {t.explore.title}
+                <ArrowIcon />
+              </Link>
+            </div>
+          )}
+          <div className={styles.clients}>
+            <span>{copy.clients}</span>
             <div>
-              {(["chatgpt", "claude", "cursor"] as const).map((client) => (
+              {CLIENTS.map(({ client, icon }) => (
                 <span key={client}>
-                  <img
-                    src={`/clients/${client === "chatgpt" ? "openai" : client}.svg`}
-                    alt=""
-                    width="20"
-                    height="20"
-                  />
+                  <img src={`/clients/${icon}.svg`} alt="" width="20" height="20" />
                   {t.connect.clients[client].label}
                 </span>
               ))}
-              <span className={styles.moreApps}>{copy.moreApps}</span>
             </div>
           </div>
         </Container>
       </section>
-      <section id="featured" className={styles.featured}>
-        <Container>
-          <div className={styles.sectionHeading}>
-            <div>
-              <p className={styles.kicker}>{copy.featured.eyebrow}</p>
-              <h2>{copy.featured.title}</h2>
+
+      {shows("organizations") && <OrganizationsStrip organizations={organizations} />}
+
+      {shows("showcase") && (
+        <section id="showcase" className={styles.showcase}>
+          <Container>
+            <SectionHead
+              kicker={copy.showcase.eyebrow}
+              title={copy.showcase.title}
+              lead={copy.showcase.lead}
+            />
+            <ShowcaseGrid entries={entries} language={language} />
+          </Container>
+        </section>
+      )}
+
+      {shows("console") && (
+        <section id="console" className={styles.console}>
+          <Container>
+            <SectionHead
+              kicker={copy.console.eyebrow}
+              title={copy.console.title}
+              lead={copy.console.lead}
+              centered
+            />
+            <div className={cx(styles.consoleStage, glass.reveal)}>
+              {/* Remounted per language, since the board's words become its state. */}
+              <ConsoleDemo key={language} />
+              <p className={styles.caption}>{copy.console.window.caption}</p>
             </div>
-            <Link href={PATHS.explore} onClick={() => track("cta_click", { id: "featured_all" })}>
-              {copy.featured.all}
-              <ArrowIcon />
-            </Link>
-          </div>
-          <div className={styles.cards}>
-            {entries.map((entry) => (
-              <FeaturedSkill key={entry.id} entry={entry} texts={showcaseTexts(entry, language)} />
-            ))}
-          </div>
-        </Container>
-      </section>
-      <section id="how" className={styles.how}>
-        <Container className={styles.howGrid}>
-          <div className={styles.howCopy}>
-            <p className={styles.kicker}>{copy.how.eyebrow}</p>
-            <h2>{copy.how.title}</h2>
-            <p className={styles.sectionLead}>{copy.how.lead}</p>
-            <ol className={styles.steps}>
-              {copy.how.steps.map((step, index) => (
-                <li key={step.title}>
-                  <span aria-hidden="true">0{index + 1}</span>
-                  <div>
-                    <h3>{step.title}</h3>
-                    <p>{step.body}</p>
-                  </div>
+            <ul className={styles.points}>
+              {copy.console.points.map((point, index) => (
+                <li
+                  key={point.title}
+                  className={cx(
+                    glass.reveal,
+                    index === 1 && glass.late,
+                    index === 2 && glass.later,
+                  )}
+                >
+                  <h3>{point.title}</h3>
+                  <p>{point.body}</p>
                 </li>
               ))}
+            </ul>
+            <div className={cx(glass.pane, styles.packBar, glass.reveal)}>
+              <p>
+                {copy.console.pack.lead}
+                <code>{`${host}${CONSOLE_PACK_ADDRESS}`}</code>
+              </p>
+              <div className={styles.packBarActions}>
+                <Link
+                  className={styles.primary}
+                  href={CONSOLE_PACK_ADDRESS}
+                  onClick={() => track("cta_click", { id: "console_pack" })}
+                >
+                  {copy.console.pack.open}
+                  <ArrowIcon />
+                </Link>
+                <Link className={styles.ghost} href={CONSOLE_PACK_ADDRESS}>
+                  {copy.console.pack.guide}
+                </Link>
+              </div>
+            </div>
+          </Container>
+        </section>
+      )}
+
+      {shows("steps") && (
+        <section id="steps" className={styles.steps}>
+          <Container>
+            <SectionHead kicker={copy.steps.eyebrow} title={copy.steps.title} />
+            <ol className={styles.timeline}>
+              {copy.steps.items.map((step, index) => {
+                const message = step.message(host);
+                const href =
+                  index === 0
+                    ? `/gh/skillcdn/skills`
+                    : index === 1
+                      ? CONSOLE_PACK_ADDRESS
+                      : docsHref(USE_GUIDE_SLUG);
+                return (
+                  <li
+                    key={step.title}
+                    className={cx(
+                      glass.reveal,
+                      index === 1 && glass.late,
+                      index === 2 && glass.later,
+                    )}
+                  >
+                    <span className={styles.stepNumber} aria-hidden="true">
+                      {index + 1}
+                    </span>
+                    <h3>{step.title}</h3>
+                    <p>{step.body}</p>
+                    {index < 2 ? (
+                      <div className={styles.message}>
+                        <code>{message}</code>
+                        <CopyButton text={message} label={copy.steps.copy} />
+                      </div>
+                    ) : null}
+                    <Link className={styles.stepLink} href={href}>
+                      {index < 2 ? step.link : message}
+                      <ArrowIcon />
+                    </Link>
+                  </li>
+                );
+              })}
             </ol>
-          </div>
-          <CreationDemo key={`${language}:${demo.entry.id}`} entry={demo.entry} demo={demo.demo} />
-        </Container>
-      </section>
-      <section className={styles.start}>
-        <Container>
-          <BrandSymbol className={styles.startSymbol} />
-          <p className={styles.kicker}>{copy.start.eyebrow}</p>
-          <h2>{copy.start.title}</h2>
-          <p className={styles.sectionLead}>{copy.start.body}</p>
-          <ol className={styles.startSteps}>
-            {copy.start.steps.map((step, index) => (
-              <li key={step}>
-                <span>{index + 1}</span>
-                {step}
-              </li>
-            ))}
-          </ol>
-          <Link
-            className={styles.primary}
-            href={PATHS.explore}
-            onClick={() => track("cta_click", { id: "start" })}
-          >
-            {copy.start.action}
-            <ArrowIcon />
-          </Link>
-        </Container>
-      </section>
-      <section id="faq" className={styles.faqSection}>
-        <Container className={styles.faqGrid}>
-          <h2>{copy.faq.title}</h2>
-          <div>
-            {copy.faq.items.map((item) => (
-              <details key={item.question} className={styles.faqItem}>
-                <summary>
-                  {item.question}
-                  <FaqCaret />
-                </summary>
-                <p>{item.answer}</p>
-              </details>
-            ))}
-          </div>
-        </Container>
-      </section>
-      <Container>
-        <AuthorsInvite origin={props.origin} className={styles.repository} />
-      </Container>
+          </Container>
+        </section>
+      )}
+
+      {shows("packs") && (
+        <section id="packs" className={styles.packs}>
+          <Container className={styles.packsGrid}>
+            <div className={glass.reveal}>
+              <SectionHead
+                kicker={copy.packs.eyebrow}
+                title={copy.packs.title}
+                lead={copy.packs.lead}
+              />
+              <AddressForm origin={props.origin} label={copy.authors.check} />
+              <p className={styles.packsAll}>
+                <Link
+                  href={PATHS.explore}
+                  onClick={() => track("cta_click", { id: "featured_all" })}
+                >
+                  {copy.packs.all}
+                  <ArrowIcon />
+                </Link>
+              </p>
+            </div>
+            <div className={cx(styles.cloudSide, glass.reveal, glass.late)}>
+              <PackCloud />
+            </div>
+          </Container>
+        </section>
+      )}
+
+      {shows("builders") && (
+        <section id="builders" className={styles.builders}>
+          <Container>
+            <div className={cx(glass.pane, styles.buildersPanel, glass.reveal)}>
+              <p className={styles.kicker}>{copy.builders.eyebrow}</p>
+              <h2>{copy.builders.title}</h2>
+              <p className={styles.sectionLead}>{copy.builders.lead}</p>
+              <ul className={styles.features}>
+                {copy.builders.features.map((feature) => (
+                  <li key={feature.title}>
+                    <h3>{feature.title}</h3>
+                    <p>{feature.body}</p>
+                  </li>
+                ))}
+              </ul>
+              <p className={styles.many}>{copy.builders.many}</p>
+              <div className={styles.actions}>
+                <a
+                  className={cx(styles.primary, styles.large)}
+                  href={LINKS.builders}
+                  rel="noopener"
+                  onClick={() => track("cta_click", { id: "builders_join" })}
+                >
+                  {copy.builders.join}
+                  <ExternalIcon />
+                </a>
+                <a className={cx(styles.ghost, styles.large)} href={LINKS.builders} rel="noopener">
+                  {copy.builders.organization}
+                  <span className={styles.ghostNote}>{hostOf(LINKS.builders)}</span>
+                </a>
+              </div>
+            </div>
+          </Container>
+        </section>
+      )}
+
+      {shows("faq") && (
+        <section id="faq" className={styles.faqSection}>
+          <Container className={styles.faqGrid}>
+            <h2 className={glass.reveal}>{copy.faq.title}</h2>
+            <div className={glass.reveal}>
+              {copy.faq.items.map((item) => (
+                <details key={item.question} className={styles.faqItem}>
+                  <summary>
+                    {item.question}
+                    <FaqCaret />
+                  </summary>
+                  <p>{item.answer}</p>
+                </details>
+              ))}
+            </div>
+          </Container>
+        </section>
+      )}
+
+      {shows("cta") && (
+        <section className={styles.cta}>
+          <Container className={glass.reveal}>
+            <BrandSymbol className={styles.ctaSymbol} />
+            <h2>{copy.cta.title}</h2>
+            <div className={cx(styles.actions, styles.centered)}>
+              <Link
+                className={cx(styles.primary, styles.large)}
+                href={features.search ? searchHref() : PATHS.explore}
+                onClick={() => track("cta_click", { id: "start" })}
+              >
+                {copy.cta.search}
+                <ArrowIcon />
+              </Link>
+              {shows("builders") && (
+                <a className={cx(styles.ghost, styles.large)} href={LINKS.builders} rel="noopener">
+                  {copy.cta.join}
+                  <ExternalIcon />
+                </a>
+              )}
+            </div>
+            <p className={styles.share}>
+              <Link href={docsHref(AUTHORS_GUIDE_SLUG)}>
+                {copy.cta.share}
+                <ArrowIcon />
+              </Link>
+            </p>
+          </Container>
+        </section>
+      )}
     </div>
   );
 }

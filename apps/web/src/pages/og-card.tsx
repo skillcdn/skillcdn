@@ -4,18 +4,19 @@ import { DEFAULT_SHOWCASE_MEDIA } from "../site.js";
 import styles from "./og-card.module.css";
 
 // Development-only source for the 1200 x 630 social-preview images in public/og/. It shows the
-// build's own showcase; an operator's entry can bring its own picture for link previews.
+// first result of the build's own showcase; an operator's entry can bring its own picture for
+// link previews.
 export function OgCard() {
   const { t } = useI18n();
   return (
     <div className={styles.card}>
-      <img className={styles.art} src={DEFAULT_SHOWCASE_MEDIA.poster} alt="" />
+      <img className={styles.art} src={DEFAULT_SHOWCASE_MEDIA.entries.cards.poster} alt="" />
       <BrandLogo className={styles.brand} />
       <p className={styles.title}>
         {t.landing.title}
         <span>{t.landing.titleAccent}</span>
       </p>
-      <p className={styles.tagline}>{t.landing.lead}</p>
+      <p className={styles.tagline}>{t.landing.eyebrow}</p>
       <p className={styles.address}>skillcdn.ai</p>
     </div>
   );

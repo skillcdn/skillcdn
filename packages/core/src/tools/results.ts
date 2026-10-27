@@ -179,11 +179,26 @@ export interface FindRanking {
 }
 
 /** One result of a search across the packs a deployment serves (ADR-0070): an item, and the pack it is in. */
+/**
+ * What the pack of a result is: a pack of skills (a manifest and skills), a pack of documents (a
+ * manifest and no skill), or a repository read without a manifest; whether the operator vouches
+ * for it; and how many skills it holds.
+ */
+export interface HubPack {
+  readonly kind: "skills" | "documents" | "repository";
+  readonly verified: boolean;
+  readonly skills: number;
+  /** The owner's picture as the git host serves it; empty for a pack at no git host. */
+  readonly avatar?: string | undefined;
+}
+
 export interface HubItem {
   /** The address of the pack, `/gh/<owner>/<repo>`, which an agent connects to for the rest. */
   readonly address: Address;
   /** `owner/name` as the host spells it. */
   readonly repository: string;
+  /** What the pack is, where the deployment says. */
+  readonly pack?: HubPack | undefined;
   readonly item: FindItem;
 }
 

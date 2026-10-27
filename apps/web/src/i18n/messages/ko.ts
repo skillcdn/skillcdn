@@ -10,16 +10,26 @@ export const ko: Messages = {
   meta: {
     siteName: "SkillCDN",
     landing: {
-      title: "SkillCDN: 쓰던 AI에 더하는 스킬",
+      title: "SkillCDN: AI 에이전트로 운영하는 1인 회사",
       description:
-        "ChatGPT, Claude 등 MCP로 연결되는 AI 앱에 스킬을 더하세요. 프롬프트를 몰라도, 내 말로 이야기하면 전문가의 손길이 닿은 결과물이 완성됩니다.",
+        "전문가의 방식을 스킬로 받으면 늘 쓰던 AI가 마케터, 디자이너, 개발자가 됩니다. 만들고 싶은 것을 검색하고, 일은 보드에 올리고, 에이전트에 맡기세요. 빌더에 합류하세요.",
       about:
-        "SkillCDN은 스킬과 문서를 담은 GitHub 저장소, 곧 팩을 MCP 서버로 ChatGPT나 Claude 같은 AI 앱에 제공해, 앱이 그 안의 스킬을 불러와 대화 속에서 따르게 합니다.",
+        "SkillCDN은 스킬과 문서를 담은 git 저장소, 곧 팩을 MCP 서버로 ChatGPT나 Claude 같은 AI 앱에 제공해, 앱이 그 안의 스킬을 불러와 대화 속에서 따르게 합니다. 한 배포는 제공하는 모든 팩을 한 번에 검색하고, 콘솔 팩은 회사의 일을 에이전트와 함께 보드에서 돌립니다.",
     },
     explore: {
       title: "만들고 싶은 것 찾기 | SkillCDN",
       description:
-        "AI와의 대화를 완성된 결과물로 바꾸는 스킬을 만나보세요. 늘 쓰던 AI로, 좋아하는 영상과 사진 한 장으로 만드는 짧은 광고 영상부터 만들어 볼까요?",
+        "모든 공개 팩의 스킬과 문서를 검색하거나, 검증된 팩에서 고르거나, 저장소 주소를 열어 보세요. 팩마다 늘 쓰던 AI를 연결하는 단계가 함께 있습니다.",
+    },
+    search: {
+      title: "스킬과 문서 검색 | SkillCDN",
+      description:
+        "모든 공개 팩에서 스킬과 문서를 단어와 의미로 찾고, 결과가 속한 팩을 늘 쓰던 AI에 연결하세요.",
+      resultsTitle: (term: string) => `${term} | SkillCDN`,
+      resultsDescription: (term: string, count: number, packs: number) =>
+        count === 0
+          ? `SkillCDN의 공개 팩 ${packs}개에서 “${term}”에 맞는 스킬이나 문서를 찾지 못했습니다.`
+          : `SkillCDN의 공개 팩 ${packs}개에서 찾은 “${term}” 관련 스킬과 문서 ${count}건. 각 결과가 속한 팩을 늘 쓰던 AI에 바로 연결할 수 있습니다.`,
     },
     mount: {
       title: (repository: string) => `${repository} | SkillCDN`,
@@ -38,12 +48,13 @@ export const ko: Messages = {
       title: "페이지를 찾을 수 없습니다 | SkillCDN",
       description: "이 주소에는 아무것도 없습니다.",
     },
-    ogImageAlt: "SkillCDN: 늘 쓰던 AI로, 한 차원 다른 결과물을",
+    ogImageAlt: "SkillCDN: 혼자 시작하세요, 팀은 이미 있습니다",
   },
 
   nav: {
     home: "SkillCDN 홈",
-    explore: "살펴보기",
+    explore: "둘러보기",
+    search: "검색",
     docs: "문서",
     github: "GitHub",
     skipToContent: "본문으로 건너뛰기",
@@ -95,12 +106,14 @@ export const ko: Messages = {
   landing: landingKo,
 
   explore: {
-    title: "다음엔 무엇을 만들어 볼까요?",
-    lead: "작은 영감 하나, 유용한 스킬 하나. 다음 아이디어가 여기서 시작돼요.",
-    featured: "먼저 써 볼 스킬",
-    featuredLead:
-      "이 사이트가 고른 스킬 모음이에요. 열어서 무엇을 만들 수 있는지 보고, 쓰던 AI에 연결하세요.",
+    kicker: "둘러보기",
+    title: "만들고 싶은 것을 찾아보세요.",
+    lead: "검색하거나, 검증된 팩에서 고르거나, 주소를 붙이거나.",
+    featuredKicker: "추천 팩",
+    featured: "검증된 팩, 바로 연결됩니다.",
+    featuredLead: "팩을 열면 쓰는 AI별 연결 안내가 있습니다.",
     featuredSkills: (count: number) => `스킬 ${count}개`,
+    featuredDocuments: (count: number) => `문서 ${count}개`,
     moreSkills: (count: number) => `외 ${count}개`,
     featuredIndexing: "색인 중…",
     featuredFailed: "색인하지 못했습니다",
@@ -108,6 +121,50 @@ export const ko: Messages = {
     page: (current: number, total: number) => `${total}쪽 중 ${current}쪽`,
     previous: "이전",
     next: "다음",
+  },
+
+  packKinds: {
+    skills: "스킬 팩",
+    documents: "문서 팩",
+    repository: "저장소",
+    legend: {
+      title: "종류 읽는 법",
+      skills: "스킬을 담은 저장소",
+      documents: "문서만 담은 저장소",
+      repository: "매니페스트 없이 읽힌 저장소",
+    },
+  },
+
+  search: {
+    label: "스킬과 문서 검색",
+    placeholder: "무엇을 만들까요? 카드뉴스, 쇼츠 광고, 결제 되는 웹사이트…",
+    submit: "검색",
+    heading: (term: string) => `“${term}” 검색 결과`,
+    bare: {
+      title: "무엇을 만들까요?",
+      lead: "모든 공개 팩의 스킬과 문서를 단어와 의미로 찾습니다.",
+    },
+    found: (count: number, packs: number) => `공개 팩 ${packs}개에서 ${count}건`,
+    ranking: { words: "단어로 순위를 매김", meaning: "단어와 의미로 순위를 매김" },
+    none: "일치하는 것을 찾지 못했습니다. 다른 말로, 또는 팩이 쓰인 언어의 말로 찾아보세요.",
+    kinds: { skill: "스킬", document: "문서" },
+    verified: "검증됨",
+    filters: { all: "전체", skill: "스킬", document: "문서" },
+    actions: {
+      skill: "스킬 열기",
+      document: "문서 열기",
+      section: "이 섹션에서 열기",
+      pack: "팩 열기",
+      repository: "저장소 열기",
+      more: "이 팩 안에서 더 찾기",
+      moreRepository: "이 저장소 안에서 더 찾기",
+    },
+    partOf: (directory: string) => `${directory} 스킬에 속한 파일`,
+    aside: {
+      address: { title: "주소를 아세요?", body: "저장소 주소를 열면 바로 그 팩으로 갑니다." },
+      suggestions: "이런 검색도",
+    },
+    suggestions: ["쇼츠 광고", "회의 자료 덱", "카드 결제", "문서 팩 만들기", "경쟁사 광고 조사"],
   },
 
   docs: {
@@ -376,6 +433,14 @@ export const ko: Messages = {
       "file.not_text": {
         title: "텍스트 파일이 아닙니다",
         body: "여기서는 UTF-8 텍스트 파일만 읽을 수 있습니다.",
+      },
+      "search.busy": {
+        title: "지금 검색이 몰려 있습니다",
+        body: "검색 요청이 한꺼번에 많이 들어오고 있습니다. 잠시 후 다시 시도해 주세요.",
+      },
+      "search.timeout": {
+        title: "검색이 제한 시간을 넘겼습니다",
+        body: "더 짧은 말로, 또는 잠시 후 다시 찾아보세요.",
       },
     },
   },

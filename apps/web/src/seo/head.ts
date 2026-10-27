@@ -4,8 +4,10 @@ import {
   type RestLegalDocument,
   type RestMount,
   type RestOwner,
+  type RestSearch,
   type RestShowcase,
   type RestSkill,
+  SEARCH_QUERY_PARAM,
   SOCIAL_ROUTE,
 } from "@skillcdn/core";
 import { docsPage, docsSectionLabel } from "../docs/catalog.js";
@@ -25,7 +27,15 @@ import {
   skillTitle,
 } from "../i18n/repository-text.js";
 import { firstParagraph, legalTexts } from "../legal.js";
-import { docsHref, docsSectionHref, mountHref, ownerHref, PATHS, type Route } from "../router.js";
+import {
+  docsHref,
+  docsSectionHref,
+  mountHref,
+  ownerHref,
+  PATHS,
+  type Route,
+  searchHref,
+} from "../router.js";
 import { showcaseEntries, showcaseTexts } from "../showcase.js";
 import { LINKS } from "../site.js";
 
@@ -58,7 +68,15 @@ export interface PageData {
   readonly legal?: RestLegalDocument | undefined;
   /** The account the page of an account is about. */
   readonly owner?: RestOwner["owner"] | undefined;
+  /** What a search found, for the page of a term (ADR-0075). */
+  readonly search?: RestSearch | undefined;
 }
+
+/**
+ * How many results the page of a term needs to be one for search engines to list: fewer, and
+ * the page is a search like any other, not a page about something (ADR-0075).
+ */
+export const SEARCH_INDEX_MIN_RESULTS = 3;
 
 export const OG_IMAGE_SIZE = { width: 1200, height: 630 } as const;
 
@@ -86,6 +104,14 @@ function indexablePathOf(route: Route, data: PageData | undefined): string | und
       return PATHS.landing;
     case "explore":
       return PATHS.explore;
+    case "search":
+      // The page of the box alone is a page of the site; the page of a term is one to find once
+      // it has enough to show, as its results were there to render.
+      return route.term === undefined
+        ? PATHS.search
+        : data?.search !== undefined && data.search.items.length >= SEARCH_INDEX_MIN_RESULTS
+          ? searchHref(route.term)
+          : undefined;
     case "legal":
       // Written into the deployment, the page is one to find; not written, there is none.
       return data?.legal === undefined ? undefined : PATHS[route.kind];
@@ -230,29 +256,43 @@ export function buildHead(
       ? t.meta.landing
       : route.name === "explore"
         ? t.meta.explore
-        : route.name === "mount"
-          ? mountText(route, language, data)
-          : route.name === "legal"
-            ? legalText(route, language, data)
-            : route.name === "docs"
-              ? docsText(route, language)
-              : route.name === "owner"
-                ? {
-                    // Named as the host spells it once that is known, as its path writes it before.
-                    title: t.owner.metaTitle(data?.owner?.login ?? route.owner.owner),
-                    description: t.owner.metaDescription(data?.owner?.login ?? route.owner.owner),
-                  }
-                : route.name === "account"
-                  ? { title: t.account.metaTitle, description: "" }
-                  : route.name === "consent"
-                    ? { title: t.authorize.metaTitle, description: "" }
-                    : route.name === "connect"
-                      ? { title: t.connectCommand.metaTitle, description: "" }
-                      : route.name === "states" || route.name === "og-card"
-                        ? { title: t.meta.siteName, description: "" }
-                        : route.name === "bad-address"
-                          ? { title: `${t.address.invalid} | ${t.meta.siteName}`, description: "" }
-                          : t.meta.notFound;
+        : route.name === "search"
+          ? route.term === undefined
+            ? t.meta.search
+            : {
+                title: t.meta.search.resultsTitle(route.term),
+                description: t.meta.search.resultsDescription(
+                  route.term,
+                  data?.search?.items.length ?? 0,
+                  data?.search?.packs ?? 0,
+                ),
+              }
+          : route.name === "mount"
+            ? mountText(route, language, data)
+            : route.name === "legal"
+              ? legalText(route, language, data)
+              : route.name === "docs"
+                ? docsText(route, language)
+                : route.name === "owner"
+                  ? {
+                      // Named as the host spells it once that is known, as its path writes it before.
+                      title: t.owner.metaTitle(data?.owner?.login ?? route.owner.owner),
+                      description: t.owner.metaDescription(data?.owner?.login ?? route.owner.owner),
+                    }
+                  : route.name === "account"
+                    ? { title: t.account.metaTitle, description: "" }
+                    : route.name === "consent"
+                      ? { title: t.authorize.metaTitle, description: "" }
+                      : route.name === "connect"
+                        ? { title: t.connectCommand.metaTitle, description: "" }
+                        : route.name === "states" || route.name === "og-card"
+                          ? { title: t.meta.siteName, description: "" }
+                          : route.name === "bad-address"
+                            ? {
+                                title: `${t.address.invalid} | ${t.meta.siteName}`,
+                                description: "",
+                              }
+                            : t.meta.notFound;
 
   const jsonLd: Record<string, unknown>[] = [];
   // The front page shows the operator's showcase, else the build's own (ADR-0028).
@@ -275,6 +315,16 @@ export function buildHead(
         description: t.meta.landing.description,
         inLanguage,
         publisher,
+        // The search across the packs, for a search engine to offer a box of its own (ADR-0075):
+        // the server turns the query into the page of the term.
+        potentialAction: {
+          "@type": "SearchAction",
+          target: {
+            "@type": "EntryPoint",
+            urlTemplate: `${origin}${PATHS.search}?${SEARCH_QUERY_PARAM}={search_term_string}`,
+          },
+          "query-input": "required name=search_term_string",
+        },
       },
       {
         "@context": "https://schema.org",
@@ -316,6 +366,18 @@ export function buildHead(
         name: item.question,
         acceptedAnswer: { "@type": "Answer", text: item.answer },
       })),
+    });
+  }
+  if (route.name === "search" && route.term !== undefined && canonical !== undefined) {
+    // The page of a term is a page of results, part of the site, with the term it is about.
+    jsonLd.push({
+      "@context": "https://schema.org",
+      "@type": "SearchResultsPage",
+      name: text.title,
+      url: canonical,
+      description: text.description,
+      inLanguage,
+      isPartOf: { "@type": "WebSite", name: t.meta.siteName, url: `${origin}${PATHS.landing}` },
     });
   }
   if (route.name === "docs" && canonical !== undefined) {

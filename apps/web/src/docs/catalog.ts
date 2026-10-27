@@ -15,6 +15,8 @@ const BY_SLUG: ReadonlyMap<string, DocsPage> = new Map(DOCS_PAGES.map((page) => 
 
 /** The page that says how to write a repository: where the pages send an author. */
 export const AUTHORS_GUIDE_SLUG = "write-a-repository";
+/** The guide for whoever uses a pack from their agent: where the front page sends them to connect. */
+export const USE_GUIDE_SLUG = "use-skills";
 
 export function docsPage(slug: string): DocsPage | undefined {
   return BY_SLUG.get(slug);

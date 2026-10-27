@@ -3,6 +3,7 @@ import type {
   RestLegalDocument,
   RestMount,
   RestOwner,
+  RestSearch,
   RestShowcase,
   RestSkill,
   SocialCard,
@@ -13,6 +14,7 @@ import { type InitialData, type InitialResource, renderInitialData } from "./api
 import { resourceKeys } from "./api/keys.js";
 import { App } from "./app.js";
 import { DOCS_PAGES, docsPage, docsSectionLabel } from "./docs/catalog.js";
+import { type FeaturesInput, featuresOf } from "./features.js";
 import { messagesFor } from "./i18n/index.js";
 import {
   DEFAULT_LANGUAGE,
@@ -30,10 +32,11 @@ import { DocsPage } from "./pages/docs.js";
 import { LegalPage } from "./pages/legal.js";
 import { MountPage } from "./pages/mount.js";
 import { OwnerPage } from "./pages/owner.js";
-import { docsHref, matchRoute, PATHS } from "./router.js";
+import { SearchPage } from "./pages/search.js";
+import { docsHref, matchRoute, PATHS, searchHref } from "./router.js";
 import { buildHead, type PageData, renderHead } from "./seo/head.js";
 import { showcaseEntries, showcaseTexts } from "./showcase.js";
-import { LINKS, ORIGIN_PLACEHOLDER } from "./site.js";
+import { CONSOLE_PACK_ADDRESS, LINKS, ORIGIN_PLACEHOLDER } from "./site.js";
 import { socialCard } from "./social.js";
 
 // Rendering to HTML, without a browser. scripts/prerender.mjs imports the bundle made from this
@@ -49,6 +52,8 @@ export { DEFAULT_LANGUAGE, LANGUAGE_PARAM, LANGUAGES, ORIGIN_PLACEHOLDER, social
 export const STATIC_PAGES = [
   { name: "landing", path: PATHS.landing, file: "index", indexable: true },
   { name: "explore", path: PATHS.explore, file: "explore/index", indexable: true },
+  // The page of the search box alone (ADR-0075); the page of a term is rendered per request.
+  { name: "search", path: PATHS.search, file: "search/index", indexable: true },
 ] as const;
 
 /**
@@ -98,6 +103,7 @@ export interface RenderedPage {
  */
 const SERVER_PAGES = {
   mount: MountPage,
+  search: SearchPage,
   legal: LegalPage,
   docs: DocsPage,
   owner: OwnerPage,
@@ -183,6 +189,8 @@ export interface AddressPageInput {
   readonly pathname: string;
   /** The query string, `?` included, or empty. */
   readonly search: string;
+  /** What the deployment has (ADR-0075); left out, everything. */
+  readonly features?: FeaturesInput | undefined;
   /**
    * The answers the page would ask the REST API for: what the address serves and one skill, or
    * for the page of an account, its first page.
@@ -254,6 +262,7 @@ export function renderAddressPage(template: string, input: AddressPageInput): Ad
         initialData={initialData}
         pages={SERVER_PAGES}
         preferredLanguage={language}
+        features={featuresOf(input.features)}
       />
     </StrictMode>,
   );
@@ -273,7 +282,8 @@ export interface LandingPageInput {
   readonly origin: string;
   readonly pathname: string;
   readonly search: string;
-  /** The operator's showcase, as the REST API would answer. */
+  readonly features?: FeaturesInput | undefined;
+  /** The operator's showcase, as the REST API would answer; left out, the browser asks. */
   readonly data: {
     readonly showcase?: InitialResource | undefined;
   };
@@ -303,6 +313,7 @@ export function renderLandingPage(template: string, input: LandingPageInput): Ad
         origin={input.origin}
         initialData={initialData}
         preferredLanguage={language}
+        features={featuresOf(input.features)}
       />
     </StrictMode>,
   );
@@ -316,6 +327,96 @@ export function renderLandingPage(template: string, input: LandingPageInput): Ad
   return { html, indexable: head.indexable };
 }
 
+/** What the server knows when it renders the page of a search (ADR-0075). */
+export interface SearchPageInput {
+  readonly language: string;
+  readonly origin: string;
+  /** `/search`, or `/search/<term>` as the server made it canonical. */
+  readonly pathname: string;
+  readonly search: string;
+  readonly features?: FeaturesInput | undefined;
+  /** What the search found, as the REST API would answer; nothing for the page of the box alone. */
+  readonly data: {
+    readonly results?: InitialResource | undefined;
+  };
+}
+
+/**
+ * The page of a search across the packs, rendered with its results so that a crawler reads
+ * what a person sees, and indexable once it has enough to show (`SEARCH_INDEX_MIN_RESULTS`);
+ * the browser takes over where the server left off. Without a term it is the page of the box.
+ */
+export function renderSearchPage(template: string, input: SearchPageInput): AddressPageOutput {
+  const language = isLanguage(input.language) ? input.language : DEFAULT_LANGUAGE;
+  const route = matchRoute(input.pathname, input.search);
+  const initialData: Record<string, InitialResource> = {};
+  const pageData: { search?: RestSearch } = {};
+  if (route.name === "search" && route.term !== undefined && input.data.results !== undefined) {
+    initialData[resourceKeys.search(route.term)] = input.data.results;
+    if (input.data.results.ready !== undefined) {
+      pageData.search = input.data.results.ready as RestSearch;
+    }
+  }
+  const head = buildHead(route, language, input.origin, pageData satisfies PageData);
+  const body = renderToString(
+    <StrictMode>
+      <App
+        initialLocation={{ pathname: input.pathname, search: input.search }}
+        origin={input.origin}
+        initialData={initialData}
+        pages={SERVER_PAGES}
+        preferredLanguage={language}
+        features={featuresOf(input.features)}
+      />
+    </StrictMode>,
+  );
+  const html = renderDocument(template, {
+    htmlLang: LANGUAGE_INFO[language].htmlLang,
+    head: renderHead(head),
+    body,
+    routeName: route.name,
+    initialData,
+  });
+  return { html, indexable: head.indexable };
+}
+
+/** What the server knows when it renders a page of the build that depends only on the deployment. */
+export interface SitePageInput {
+  readonly language: string;
+  readonly origin: string;
+  readonly pathname: string;
+  readonly search: string;
+  readonly features?: FeaturesInput | undefined;
+}
+
+/**
+ * A page of the build rendered per request with what the deployment has (ADR-0075), where that
+ * differs from what the build prerendered: the explorer without a search box, say.
+ */
+export function renderSitePage(template: string, input: SitePageInput): AddressPageOutput {
+  const language = isLanguage(input.language) ? input.language : DEFAULT_LANGUAGE;
+  const route = matchRoute(input.pathname, input.search);
+  const head = buildHead(route, language, input.origin);
+  const body = renderToString(
+    <StrictMode>
+      <App
+        initialLocation={{ pathname: input.pathname, search: input.search }}
+        origin={input.origin}
+        pages={SERVER_PAGES}
+        preferredLanguage={language}
+        features={featuresOf(input.features)}
+      />
+    </StrictMode>,
+  );
+  const html = renderDocument(template, {
+    htmlLang: LANGUAGE_INFO[language].htmlLang,
+    head: renderHead(head),
+    body,
+    routeName: route.name,
+  });
+  return { html, indexable: head.indexable };
+}
+
 /** What the server knows when it renders a page of the deployment's own. */
 export interface LegalPageInput {
   readonly language: string;
@@ -323,6 +424,7 @@ export interface LegalPageInput {
   /** `/terms` or `/privacy`. */
   readonly pathname: string;
   readonly search: string;
+  readonly features?: FeaturesInput | undefined;
   /** The document, or why there is none, as the REST API would answer. */
   readonly data: {
     readonly legal?: InitialResource | undefined;
@@ -353,6 +455,7 @@ export function renderLegalPage(template: string, input: LegalPageInput): Addres
         initialData={initialData}
         pages={SERVER_PAGES}
         preferredLanguage={language}
+        features={featuresOf(input.features)}
       />
     </StrictMode>,
   );
@@ -446,23 +549,46 @@ export function renderLlmsTxt(language: Language, showcase?: RestShowcase): stri
     "",
     t.meta.landing.about,
     "",
-    t.landing.lead,
+    t.landing.lead.replaceAll("\n", " "),
     "",
-    `## ${t.landing.featured.title}`,
+    `## ${t.landing.showcase.title}`,
+    "",
+    t.landing.showcase.lead,
     "",
     ...showcaseEntries(showcase).map((entry) => {
       const words = showcaseTexts(entry, language);
       const requirement = words.requirement === null ? "" : ` ${words.requirement}.`;
-      return `- [${words.title}](${origin}${entry.address}): ${words.body}${requirement}`;
+      const link = entry.link ?? null;
+      const result =
+        link === null
+          ? ""
+          : ` [${words.action}](${link.startsWith("/") ? `${origin}${link}` : link})`;
+      return `- [${words.title}](${origin}${entry.address}): ${words.body}${requirement}${result}`;
     }),
     "",
-    `## ${t.landing.how.title}`,
+    `## ${t.landing.console.title}`,
     "",
-    ...t.landing.how.steps.map((step, index) => `${index + 1}. **${step.title}** ${step.body}`),
+    t.landing.console.lead,
     "",
-    `## ${t.landing.start.title}`,
+    ...t.landing.console.points.map((point) => `- **${point.title}** ${point.body}`),
     "",
-    ...t.landing.start.steps.map((step, index) => `${index + 1}. ${step}`),
+    `${t.landing.console.pack.lead} [${t.landing.console.pack.open}](${origin}${CONSOLE_PACK_ADDRESS})`,
+    "",
+    `## ${t.landing.steps.title}`,
+    "",
+    ...t.landing.steps.items.map((step, index) => `${index + 1}. **${step.title}** ${step.body}`),
+    "",
+    `## ${t.landing.builders.title}`,
+    "",
+    t.landing.builders.lead,
+    "",
+    ...t.landing.builders.features.map((feature) => `- **${feature.title}** ${feature.body}`),
+    "",
+    `[${t.landing.builders.join}](${LINKS.builders})`,
+    "",
+    `## ${t.search.bare.title}`,
+    "",
+    `- [${t.nav.search}](${origin}${withLanguage(searchHref(), language)}): ${t.search.bare.lead}`,
     "",
     `## ${t.address.label}`,
     "",

@@ -32,8 +32,22 @@ import * as z from "zod";
 import type { Logger } from "../logger.js";
 import type { Mount } from "../mounts/mount-service.js";
 import { OwnerNotFoundError, type OwnerService } from "../owners/owner-service.js";
+import { SearchBusyError } from "../search/cache.js";
 import type { HubSearch } from "../search/hub.js";
 import type { AppEnv } from "./request-context.js";
+
+/**
+ * What a search's answer tells the caches (ADR-0075): a cache in front of the deployment may
+ * keep it for the time configured and serve it stale while it asks again, a browser for a
+ * minute; or nothing at all, where the deployment keeps nothing.
+ */
+export function searchCacheControl(cacheMs: number): string {
+  if (cacheMs <= 0) {
+    return "no-store";
+  }
+  const seconds = Math.round(cacheMs / 1000);
+  return `public, max-age=60, s-maxage=${seconds}, stale-while-revalidate=${seconds}`;
+}
 
 export interface RestDependencies {
   readonly reader: Reader<Mount>;
@@ -52,6 +66,11 @@ export interface RestDependencies {
   readonly owners: OwnerService | undefined;
   /** The search across every pack (ADR-0070). Left out, the route is not there. */
   readonly hub: HubSearch | undefined;
+  /**
+   * How long a cache in front of the deployment may keep the answer of a search (ADR-0075), in
+   * milliseconds; 0 or left out, the answer is not to be kept.
+   */
+  readonly searchCacheMs?: number | undefined;
   /** Milliseconds from a clock that never goes backwards. */
   readonly now: () => number;
   /** What the deployment counts of the reads, as it counts the tools' (ADR-0050). */
@@ -265,10 +284,15 @@ export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies):
       if (query instanceof Response) {
         return query;
       }
-      c.header("cache-control", "no-store");
+      c.header("cache-control", searchCacheControl(dependencies.searchCacheMs ?? 0));
       try {
         return c.json(hubBody(await hub.search(query.query, query.limit ?? HUB_DEFAULT_LIMIT)));
       } catch (error) {
+        if (error instanceof SearchBusyError) {
+          c.header("cache-control", "no-store");
+          c.header("retry-after", String(error.retryAfterSeconds));
+          return c.json(errorBody(error.code, error.message), 503);
+        }
         if (isStatementTimeout(error)) {
           return c.json(
             errorBody(

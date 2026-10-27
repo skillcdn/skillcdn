@@ -9,17 +9,28 @@ export const en = {
   meta: {
     siteName: "SkillCDN",
     landing: {
-      title: "SkillCDN: skills for the AI you already use",
+      title: "SkillCDN: a one-person company, run with AI agents",
       description:
-        "Give ChatGPT, Claude or any AI app that connects over MCP a ready-made skill. Say what you want in your own words and get results with a professional finish, no prompt engineering needed.",
+        "Take the way experts work as skills, and the AI you already use becomes your marketer, designer and developer. Search for what to make, put the work on a board, and let the agents work. Join the builders.",
       /** What SkillCDN is, in one plain sentence, for readers that are machines. */
       about:
-        "SkillCDN serves a pack, a GitHub repository of skills and documents, to an AI app such as ChatGPT or Claude as an MCP server, so that the app can load the skills it holds and follow them in a conversation.",
+        "SkillCDN serves a pack, a git repository of skills and documents, to an AI app such as ChatGPT or Claude as an MCP server, so that the app can load the skills it holds and follow them in a conversation; a deployment is searched across every pack it serves, and a console pack runs a company's work on a board with agents.",
     },
     explore: {
-      title: "Find your next creation | SkillCDN",
+      title: "Find what to make | SkillCDN",
       description:
-        "Skills that turn a conversation with your AI into finished work. Start with a short ad made from a video you like and a picture of yours, with the AI you already use.",
+        "Search the skills and documents of every public pack, pick a verified pack, or open a repository by its address. Every pack comes with the steps to connect the AI you already use.",
+    },
+    /** The page of a search across the packs (ADR-0075). */
+    search: {
+      title: "Search skills and documents | SkillCDN",
+      description:
+        "Search every public pack for skills and documents, by words and by meaning, and connect the pack a result is in to the AI you already use.",
+      resultsTitle: (term: string) => `${term} | SkillCDN`,
+      resultsDescription: (term: string, count: number, packs: number) =>
+        count === 0
+          ? `No skills or documents for “${term}” across ${packs} public packs on SkillCDN.`
+          : `${count} skills and documents for “${term}” across ${packs} public packs on SkillCDN, each in the pack it comes from, ready to connect to the AI you already use.`,
     },
     mount: {
       title: (repository: string) => `${repository} | SkillCDN`,
@@ -48,12 +59,13 @@ export const en = {
       title: "Page not found | SkillCDN",
       description: "There is nothing at this address.",
     },
-    ogImageAlt: "SkillCDN: your everyday AI, extraordinary results",
+    ogImageAlt: "SkillCDN: start alone, the team is already here",
   },
 
   nav: {
     home: "SkillCDN home",
     explore: "Explore",
+    search: "Search",
     docs: "Docs",
     github: "GitHub",
     skipToContent: "Skip to content",
@@ -105,12 +117,14 @@ export const en = {
   landing: landingEn,
 
   explore: {
-    title: "What will you create next?",
-    lead: "A little inspiration. A useful skill. Your next idea starts here.",
-    featured: "Skills to start with",
-    featuredLead:
-      "Collections picked for this site. Open one to see what you can make, then connect your AI.",
+    kicker: "Explore",
+    title: "Find what you want to make.",
+    lead: "Search, pick a verified pack, or paste an address.",
+    featuredKicker: "Featured packs",
+    featured: "Verified packs, ready to connect.",
+    featuredLead: "Open a pack and the steps to connect each AI app are there.",
     featuredSkills: (count: number) => (count === 1 ? "1 skill" : `${count} skills`),
+    featuredDocuments: (count: number) => (count === 1 ? "1 document" : `${count} documents`),
     /** After the first few skill names of a repository: how many more it has. */
     moreSkills: (count: number) => `+${count} more`,
     featuredIndexing: "Indexing…",
@@ -119,6 +133,63 @@ export const en = {
     page: (current: number, total: number) => `Page ${current} of ${total}`,
     previous: "Previous",
     next: "Next",
+  },
+
+  /** What a pack is, said in a pill on its card and beside a search result. */
+  packKinds: {
+    skills: "Skill pack",
+    documents: "Document pack",
+    repository: "Repository",
+    /** For whoever reads the pills for the first time. */
+    legend: {
+      title: "What the kinds mean",
+      skills: "a repository holding skills",
+      documents: "a repository holding documents alone",
+      repository: "a repository read without a manifest",
+    },
+  },
+
+  /** The page of a search across the packs (ADR-0075). */
+  search: {
+    label: "Search skills and documents",
+    placeholder: "What will you make? Card news, a short ad, a website that takes payments…",
+    submit: "Search",
+    heading: (term: string) => `Results for “${term}”`,
+    bare: {
+      title: "What will you make?",
+      lead: "Search the skills and documents of every public pack, by words and by meaning.",
+    },
+    found: (count: number, packs: number) =>
+      `${count === 1 ? "1 result" : `${count} results`} across ${packs === 1 ? "1 public pack" : `${packs} public packs`}`,
+    ranking: { words: "ranked by words", meaning: "ranked by words and meaning" },
+    none: "Nothing matched. Try other words, or the words a pack is written in.",
+    kinds: { skill: "Skill", document: "Document" },
+    verified: "Verified",
+    filters: { all: "All", skill: "Skills", document: "Documents" },
+    actions: {
+      skill: "Open the skill",
+      document: "Open the document",
+      section: "Open at this section",
+      pack: "Open the pack",
+      repository: "Open the repository",
+      more: "Search within this pack",
+      moreRepository: "Search within this repository",
+    },
+    partOf: (directory: string) => `Part of the skill at ${directory}`,
+    aside: {
+      address: {
+        title: "Know the address?",
+        body: "Open a repository's address and you are in its pack.",
+      },
+      suggestions: "Searches to try",
+    },
+    suggestions: [
+      "Short video ad",
+      "Meeting deck",
+      "Card payments",
+      "Make a document pack",
+      "Competitor ad research",
+    ],
   },
 
   /** The documentation (ADR-0049): the frame around pages written in English. */
@@ -401,6 +472,14 @@ export const en = {
       "file.not_text": {
         title: "Not a text file",
         body: "Only UTF-8 text files can be read here.",
+      },
+      "search.busy": {
+        title: "Too many searches right now",
+        body: "The search is being asked a lot at the moment. Try again in a moment.",
+      },
+      "search.timeout": {
+        title: "The search ran out of time",
+        body: "Try fewer words, or again in a moment.",
       },
     },
   },

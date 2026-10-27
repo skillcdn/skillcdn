@@ -169,6 +169,13 @@
       "when": 1792749365732,
       "tag": "0023_repo-refs-previous-commit",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793077131048,
+      "tag": "0024_showcase-links-and-organizations",
+      "breakpoints": true
     }
   ]
 }

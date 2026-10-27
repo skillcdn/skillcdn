@@ -18,10 +18,16 @@ export interface SearchablePack {
   readonly host: string;
   /** The owner's login, as the host spells it. */
   readonly owner: string;
+  /** The owner's id at the host, which its picture is served under. */
+  readonly hostAccountId: string;
   /** The repository's name, as the host spells it. */
   readonly name: string;
   /** The license that governs the repository outside its skills (ADR-0026); null before indexed. */
   readonly license: LicenseFact | null;
+  /** Whether the snapshot has a root manifest: what makes a repository a pack of its own saying. */
+  readonly hasManifest: boolean;
+  /** How many skills the snapshot lists. */
+  readonly skillCount: number;
 }
 
 /**
@@ -33,6 +39,8 @@ export interface SearchablePack {
 export async function listSearchablePacks(database: Database): Promise<SearchablePack[]> {
   const served = sql`case when exists (select 1 from ${snapshots} n where n.repo_id = ${repos.id} and n.commit_sha = ${repoRefs.commitSha} and n.index_version > 0) then ${repoRefs.commitSha} else ${repoRefs.previousCommitSha} end`;
   const optedOut = sql`exists (select 1 from ${indexEntries} m where m.snapshot_id = ${snapshots.id} and m.path = 'SKILLCDN.md' and m.kind = 'manifest' and (m.front_matter -> 'search' ->> 'hub') = 'false')`;
+  const hasManifest = sql<boolean>`exists (select 1 from ${indexEntries} m where m.snapshot_id = ${snapshots.id} and m.path = 'SKILLCDN.md' and m.kind = 'manifest')`;
+  const skillCount = sql<number>`(select count(*)::int from ${indexEntries} k where k.snapshot_id = ${snapshots.id} and k.kind = 'skill' and k.visible)`;
   return drizzleOf(database)
     .select({
       snapshotId: snapshots.id,
@@ -40,8 +48,11 @@ export async function listSearchablePacks(database: Database): Promise<Searchabl
       repoId: repos.id,
       host: repos.host,
       owner: accounts.login,
+      hostAccountId: accounts.hostAccountId,
       name: repos.name,
       license: snapshots.license,
+      hasManifest,
+      skillCount,
     })
     .from(repos)
     .innerJoin(accounts, eq(accounts.id, repos.accountId))

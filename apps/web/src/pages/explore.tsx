@@ -4,7 +4,9 @@ import { api } from "../api/client.js";
 import { useResource } from "../api/use-resource.js";
 import { AuthorsInvite } from "../components/authors-invite.js";
 import { RepositoryGrid } from "../components/repository-card.js";
+import { SearchForm } from "../components/search-form.js";
 import { Button, Container, Skeleton } from "../components/ui.js";
+import { useFeatures } from "../features.js";
 import { useI18n } from "../i18n/index.js";
 import styles from "./explore.module.css";
 
@@ -30,11 +32,17 @@ function Featured() {
   if (featured.state === "error") {
     return null;
   }
+  const head = (
+    <div className={styles.featuredHead}>
+      <p className={styles.kicker}>{t.explore.featuredKicker}</p>
+      <h2 className={styles.heading}>{t.explore.featured}</h2>
+      <p className={styles.featuredLead}>{t.explore.featuredLead}</p>
+    </div>
+  );
   if (featured.state === "loading") {
     return (
       <section className={styles.featured}>
-        <h2 className={styles.heading}>{t.explore.featured}</h2>
-        <p className={styles.featuredLead}>{t.explore.featuredLead}</p>
+        {head}
         <Skeleton label={t.common.loading} />
       </section>
     );
@@ -64,8 +72,7 @@ function Featured() {
   const shown = items.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
   return (
     <section className={styles.featured} ref={top}>
-      <h2 className={styles.heading}>{t.explore.featured}</h2>
-      <p className={styles.featuredLead}>{t.explore.featuredLead}</p>
+      {head}
       <RepositoryGrid items={shown} />
       {pageCount > 1 && (
         <nav className={styles.pagination} aria-label={t.explore.pages}>
@@ -84,10 +91,17 @@ function Featured() {
 
 export function ExplorePage(props: { readonly origin: string }) {
   const { t } = useI18n();
+  const features = useFeatures();
   return (
     <Container className={styles.page}>
-      <h1 className={styles.title}>{t.explore.title}</h1>
-      <p className={styles.lead}>{t.explore.lead}</p>
+      <div className={styles.head}>
+        <p className={styles.kicker}>{t.explore.kicker}</p>
+        <h1 className={styles.title}>{t.explore.title}</h1>
+        <p className={styles.lead}>{t.explore.lead}</p>
+        {features.search && (
+          <SearchForm className={styles.search} from="explore" chips={t.landing.search.chips} />
+        )}
+      </div>
       <Featured />
       <AuthorsInvite origin={props.origin} className={styles.invite} footnote />
     </Container>

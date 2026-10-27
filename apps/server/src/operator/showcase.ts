@@ -8,24 +8,31 @@ import {
   mediaUrl,
   type RestShowcase,
   type RestShowcaseEntry,
+  type RestShowcaseOrganization,
   restShowcaseEntrySchema,
+  restShowcaseOrganizationSchema,
   SHOWCASE_ID_PATTERN,
   SHOWCASE_MEDIA_SLOTS,
   type ShowcaseMediaSlot,
   type ShowcaseTexts,
   showcaseInputSchema,
+  showcaseOrganizationInputSchema,
 } from "@skillcdn/core";
 import {
   type Database,
   getOperatorMedia,
   listOperatorMedia,
   listShowcaseEntries,
+  listShowcaseOrganizations,
   type OperatorMediaRecord,
   putOperatorMedia,
   putShowcaseEntry,
+  putShowcaseOrganization,
   removeOperatorMedia,
   removeShowcaseEntry,
+  removeShowcaseOrganization,
   type ShowcaseEntryRecord,
+  type ShowcaseOrganizationRecord,
   type StoredOperatorMedia,
 } from "@skillcdn/db";
 import type { Logger } from "../logger.js";
@@ -42,6 +49,10 @@ export type ShowcaseErrorCode =
   | "showcase.invalid"
   | "showcase.media_missing"
   | "showcase.media_wrong_kind"
+  | "organization.invalid_id"
+  | "organization.invalid"
+  | "organization.media_missing"
+  | "organization.media_wrong_kind"
   | "media.empty"
   | "media.unsupported_type";
 
@@ -67,18 +78,24 @@ export interface UploadedMedia {
 
 const SLOTS = Object.keys(SHOWCASE_MEDIA_SLOTS) as readonly ShowcaseMediaSlot[];
 
+/** What a process read of the showcase lately: its entries and its organizations. */
+interface Loaded {
+  readonly until: number;
+  readonly entries: Promise<readonly ShowcaseEntryRecord[]>;
+  readonly organizations: Promise<readonly ShowcaseOrganizationRecord[]>;
+}
+
 /**
- * The landing showcase (ADR-0028): the entries the front page leads with and the uploads they
- * are made of, read from the database and kept for a short while. Writes go through here too,
- * so that this process sees them at once. The uploads it serves are kept in memory, bounded.
+ * The landing showcase (ADR-0028): the entries the front page leads with, the organizations
+ * named beside them, and the uploads they are made of, read from the database and kept for a
+ * short while. Writes go through here too, so that this process sees them at once. The uploads
+ * it serves are kept in memory, bounded.
  */
 export class Showcase {
   readonly #database: Database;
   readonly #clock: Clock;
   readonly #logger: Logger;
-  #loaded:
-    | { readonly until: number; readonly entries: Promise<readonly ShowcaseEntryRecord[]> }
-    | undefined;
+  #loaded: Loaded | undefined;
   readonly #media = new Map<string, StoredOperatorMedia>();
   #mediaBytes = 0;
 
@@ -92,7 +109,10 @@ export class Showcase {
     this.#logger = options.logger;
   }
 
-  /** The entries as the pages read them, in order. An entry that does not parse is left out. */
+  /**
+   * The entries and the organizations as the pages read them, each in order. What does not
+   * parse is left out.
+   */
   async list(): Promise<RestShowcase> {
     const items: RestShowcaseEntry[] = [];
     for (const entry of await this.#entries()) {
@@ -101,7 +121,14 @@ export class Showcase {
         items.push(rest);
       }
     }
-    return { items };
+    const organizations: RestShowcaseOrganization[] = [];
+    for (const organization of await this.#organizations()) {
+      const rest = this.#organizationToRest(organization);
+      if (rest !== undefined) {
+        organizations.push(rest);
+      }
+    }
+    return { items, organizations };
   }
 
   /**
@@ -160,6 +187,8 @@ export class Showcase {
       slug,
       position: input.position ?? 0,
       address,
+      link: input.link ?? null,
+      origin: input.origin ?? "pack",
       width: input.width,
       height: input.height,
       durationMs: input.durationMs ?? null,
@@ -186,6 +215,71 @@ export class Showcase {
   /** True when the entry was there. */
   async remove(slug: string): Promise<boolean> {
     const removed = await removeShowcaseEntry(this.#database, slug);
+    this.#loaded = undefined;
+    return removed;
+  }
+
+  /**
+   * Writes an organization under `slug`, replacing what was there: its name, its site and the
+   * upload that is its mark, which must exist and be a picture.
+   */
+  async putOrganization(slug: string, body: unknown): Promise<RestShowcaseOrganization> {
+    if (!SHOWCASE_ID_PATTERN.test(slug)) {
+      throw new ShowcaseError(
+        "organization.invalid_id",
+        "An organization is named by a lowercase slug of letters, digits and hyphens.",
+      );
+    }
+    const parsed = showcaseOrganizationInputSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new ShowcaseError(
+        "organization.invalid",
+        "The organization is not valid.",
+        parsed.error.issues.map((issue) => `${issue.path.join(".") || "body"}: ${issue.message}`),
+      );
+    }
+    const input = parsed.data;
+    const known = (await listOperatorMedia(this.#database)).find((m) => m.sha === input.logo);
+    if (known === undefined) {
+      throw new ShowcaseError(
+        "organization.media_missing",
+        "The organization names an upload that does not exist.",
+        [input.logo],
+      );
+    }
+    if (!mediaFitsSlot("poster", known.contentType)) {
+      throw new ShowcaseError(
+        "organization.media_wrong_kind",
+        "The mark of an organization is a picture.",
+        [`logo: ${known.contentType}`],
+      );
+    }
+    const result = await putShowcaseOrganization(this.#database, {
+      slug,
+      name: input.name,
+      url: input.url,
+      logo: input.logo,
+      position: input.position ?? 0,
+    });
+    if (result.outcome === "media_missing") {
+      throw new ShowcaseError(
+        "organization.media_missing",
+        "The organization names an upload that does not exist.",
+        result.missing,
+      );
+    }
+    this.#loaded = undefined;
+    const written = (await this.#organizations()).find((found) => found.slug === slug);
+    const rest = written === undefined ? undefined : this.#organizationToRest(written);
+    if (rest === undefined) {
+      throw new Error("the organization was written but cannot be read back");
+    }
+    return rest;
+  }
+
+  /** True when the organization was there. */
+  async removeOrganization(slug: string): Promise<boolean> {
+    const removed = await removeShowcaseOrganization(this.#database, slug);
     this.#loaded = undefined;
     return removed;
   }
@@ -279,6 +373,8 @@ export class Showcase {
     const parsed = restShowcaseEntrySchema.safeParse({
       id: entry.slug,
       address: entry.address,
+      link: entry.link,
+      origin: entry.origin,
       position: entry.position,
       width: entry.width,
       height: entry.height,
@@ -301,15 +397,46 @@ export class Showcase {
     return parsed.data;
   }
 
+  #organizationToRest(
+    organization: ShowcaseOrganizationRecord,
+  ): RestShowcaseOrganization | undefined {
+    const parsed = restShowcaseOrganizationSchema.safeParse({
+      id: organization.slug,
+      name: organization.name,
+      url: organization.url,
+      logo: { url: mediaUrl(organization.logo.sha), type: organization.logo.contentType },
+      position: organization.position,
+    });
+    if (!parsed.success) {
+      this.#logger.warn(
+        { organization: organization.slug },
+        "organization is not valid and is not shown",
+      );
+      return undefined;
+    }
+    return parsed.data;
+  }
+
   #entries(): Promise<readonly ShowcaseEntryRecord[]> {
+    return this.#load().entries;
+  }
+
+  #organizations(): Promise<readonly ShowcaseOrganizationRecord[]> {
+    return this.#load().organizations;
+  }
+
+  #load(): Loaded {
     const now = this.#clock.now().getTime();
     if (this.#loaded === undefined || this.#loaded.until <= now) {
       const entries = listShowcaseEntries(this.#database);
-      this.#loaded = { until: now + SHOWCASE_TTL_MS, entries };
-      entries.catch(() => {
+      const organizations = listShowcaseOrganizations(this.#database);
+      this.#loaded = { until: now + SHOWCASE_TTL_MS, entries, organizations };
+      const forget = (): void => {
         this.#loaded = undefined;
-      });
+      };
+      entries.catch(forget);
+      organizations.catch(forget);
     }
-    return this.#loaded.entries;
+    return this.#loaded;
   }
 }

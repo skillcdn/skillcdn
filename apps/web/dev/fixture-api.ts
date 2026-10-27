@@ -38,6 +38,7 @@ import {
   type RestOwner,
   type RestRepositoryCard,
   type RestRepoTokens,
+  type RestSearch,
   type RestShowcase,
   type RestSkill,
   restConnectClaimSchema,
@@ -639,6 +640,60 @@ function cardOf(key: string, repository: FixtureRepository, now: number): RestRe
   };
 }
 
+/**
+ * The search across every pack (ADR-0070), over the public fixture repositories that are
+ * ready: what each one's own search finds, named with the pack it is in and what that pack is.
+ */
+function searchAnswer(params: URLSearchParams, now: number): FixtureAnswer {
+  const query = params.get("query")?.trim() ?? "";
+  const limit = Number(params.get("limit") ?? "10");
+  if (query === "" || query.length > 500 || !Number.isInteger(limit) || limit < 1 || limit > 20) {
+    return problem(400, "request.invalid", "Missing or malformed query parameters: query.");
+  }
+  const packs = Object.entries(FIXTURE_REPOSITORIES).filter(
+    ([key, repository]) =>
+      repository.private !== true &&
+      FIXTURE_FAILURES[key] === undefined &&
+      stateOf(key, repository, now) === "ready",
+  );
+  const items: RestSearch["items"] = [];
+  for (const [key, repository] of packs) {
+    const parsed = parseAddress(`/gh/${key}`);
+    if (!parsed.ok) continue;
+    const found = findBody(parsed.value, repository, new URLSearchParams({ query, limit: "20" }));
+    if (found.status !== "ready") continue;
+    const pack: RestSearch["items"][number]["pack"] = {
+      kind:
+        repository.manifest === undefined
+          ? "repository"
+          : repository.skills.length > 0
+            ? "skills"
+            : "documents",
+      verified: repository.verified === true,
+      skills: repository.skills.length,
+      avatar: repository.avatar ?? FIXTURE_AVATAR,
+    };
+    for (const item of found.items) {
+      items.push({
+        address: formatAddress(parsed.value),
+        repository: `${repository.owner}/${repository.name}`,
+        pack,
+        item,
+      });
+    }
+  }
+  // A skill before a document, as the server boosts them, the rest in the order found.
+  items.sort((a, b) => (a.item.kind === b.item.kind ? 0 : a.item.kind === "skill" ? -1 : 1));
+  const body: RestSearch = {
+    status: "ready",
+    query,
+    packs: packs.length,
+    items: items.slice(0, limit),
+    ranking: { meaning: true, reranked: false },
+  };
+  return { status: 200, body };
+}
+
 function featuredBody(now: number): RestFeatured {
   return {
     items: FIXTURE_FEATURED.flatMap((key) => {
@@ -1166,8 +1221,11 @@ export function handleFixtureRequest(
   }
   if (url.pathname === REST_ROUTES.showcase) {
     // No operator's showcase: the pages show the build's own, which is what is designed here.
-    const body: RestShowcase = { items: [] };
+    const body: RestShowcase = { items: [], organizations: [] };
     return { status: 200, body };
+  }
+  if (url.pathname === REST_ROUTES.search) {
+    return searchAnswer(url.searchParams, now);
   }
   if (url.pathname.startsWith(`${REST_ROUTES.legal}/`)) {
     const kind = url.pathname.slice(REST_ROUTES.legal.length + 1);

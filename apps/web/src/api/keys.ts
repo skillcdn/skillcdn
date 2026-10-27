@@ -19,6 +19,8 @@ export const resourceKeys = {
   file: (address: Address, path: string): string => `${formatAddress(address)} file ${path}`,
   /** The landing showcase: one for the whole site. */
   showcase: (): string => "showcase",
+  /** The results of a search across the packs, by term. */
+  search: (term: string): string => `search ${term}`,
   /** A page of the deployment's own: its terms or its privacy policy. */
   legal: (kind: LegalDocumentKind): string => `legal ${kind}`,
   /** The page of an account. */

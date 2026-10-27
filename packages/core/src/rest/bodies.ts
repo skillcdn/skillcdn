@@ -197,6 +197,7 @@ export function hubBody(result: HubResult): RestSearch {
     items: result.items.map((found) => ({
       address: formatAddress(found.address),
       repository: found.repository,
+      ...(found.pack === undefined ? {} : { pack: { ...found.pack } }),
       item: restFindItemOf(found.item),
     })),
     ...(result.ranking === undefined ? {} : { ranking: { ...result.ranking } }),

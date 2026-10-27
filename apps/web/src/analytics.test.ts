@@ -30,6 +30,17 @@ describe("pageOfRoute", () => {
   it("names the pages that are the same for everyone, without what was typed", () => {
     expect(pageOfRoute(matchRoute("/", "?lang=ko"))).toEqual({ path: "/", title: "landing" });
     expect(pageOfRoute(matchRoute("/explore", ""))).toEqual({ path: "/explore", title: "explore" });
+    // A search is counted as a search, and never with what was searched for.
+    expect(pageOfRoute(matchRoute("/search/secret%20plans", ""))).toEqual({
+      path: "/search",
+      title: "search",
+      params: { results: true },
+    });
+    expect(pageOfRoute(matchRoute("/search", ""))).toEqual({
+      path: "/search",
+      title: "search",
+      params: { results: false },
+    });
     expect(pageOfRoute(matchRoute("/docs", ""))).toEqual({ path: "/docs", title: "docs" });
     expect(pageOfRoute(matchRoute("/terms", ""))).toEqual({ path: "/terms", title: "terms" });
     expect(pageOfRoute(matchRoute("/account/tokens", "?repository=%2Fgh%2Facme%2Fsecret"))).toEqual(

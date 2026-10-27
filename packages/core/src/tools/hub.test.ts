@@ -29,6 +29,12 @@ const result: HubResult = {
     {
       address: address("/gh/acme/multi-skill"),
       repository: "Acme/multi-skill",
+      pack: {
+        kind: "skills",
+        verified: true,
+        skills: 3,
+        avatar: "https://avatars.example/acme.png",
+      },
       item: {
         kind: "skill",
         path: path("skills/release-notes/SKILL.md"),
@@ -107,6 +113,14 @@ describe("a search across every pack", () => {
       "/gh/acme/multi-skill",
       "/gh/acme/document-pack",
     ]);
+    // What the pack is travels where the deployment says it, and not where it does not.
+    expect(body.items[0]?.pack).toEqual({
+      kind: "skills",
+      verified: true,
+      skills: 3,
+      avatar: "https://avatars.example/acme.png",
+    });
+    expect(body.items[1]?.pack).toBeUndefined();
     expect(body.items[1]?.item).toMatchObject({
       kind: "document",
       path: "docs/release-notes.md",

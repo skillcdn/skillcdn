@@ -1,0 +1,82 @@
+/* A pane of glass (tokens.css): the one material the lit surfaces of the site are made of. A
+   component composes `pane` into its own class, so that every pane on the site is the same and
+   only what is behind each one differs. The border stays transparent until the pointer arrives,
+   so that nothing flat is painted over the lens ring and the outermost line anyone sees is the
+   refracted one; it is still a border at rest, at full width and no colour, so that nothing moves
+   by a pixel when it comes back. */
+.pane {
+  position: relative;
+  isolation: isolate;
+  border: 1px solid transparent;
+  border-radius: var(--radius-xl);
+  background: var(--glass-surface);
+  backdrop-filter: var(--glass-backdrop);
+  box-shadow: var(--glass-sheen), var(--glass-lift);
+  transition:
+    border-color var(--transition),
+    background var(--transition),
+    box-shadow var(--transition);
+}
+
+/* The refracted rim (tokens.css): under the content and over the pane's own face, so the words
+   stay off it; `border-radius: inherit` keeps it on the corners. */
+.pane::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  padding: var(--glass-lens-width);
+  border-radius: inherit;
+  backdrop-filter: var(--glass-lens);
+  background: var(--color-glass-edge);
+  mask: var(--glass-lens-mask);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* A pane that answers the pointer: the accent on its edge, and the lit glow under it. */
+.lit:hover,
+.lit:focus-within {
+  border-color: var(--color-accent);
+  background: var(--glass-surface-hover);
+  box-shadow: var(--glass-sheen), var(--glass-lift), var(--glow);
+}
+
+.lit:focus-within {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Reveals (ADR-0075's page): a block rises a little and fades in as it enters the window, driven
+   by the scroll itself where the browser can, so that it costs nothing on the main thread, and
+   standing where it is everywhere else. Opt in with `reveal`; `late` starts a little after its
+   neighbour, so that a row of three arrives one after another. */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .reveal {
+      animation: reveal linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 42%;
+    }
+
+    .late {
+      animation-range: entry 12% entry 54%;
+    }
+
+    .later {
+      animation-range: entry 24% entry 66%;
+    }
+  }
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    translate: 0 1.25rem;
+  }
+
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}

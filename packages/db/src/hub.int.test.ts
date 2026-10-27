@@ -190,6 +190,11 @@ describe("the packs a search across every pack covers", () => {
     expect(packs.every((pack) => pack.host === "gh")).toBe(true);
     expect(packs.find((pack) => pack.name === "alpha")?.repoId).toBe(indexed.repoId);
     expect(packs.find((pack) => pack.name === "alpha")?.license).toEqual(NO_LICENSE);
+    // What each pack is: a repository read without a manifest, here, holding no skill.
+    expect(packs.find((pack) => pack.name === "alpha")).toMatchObject({
+      hasManifest: false,
+      skillCount: 0,
+    });
   });
 });
 
@@ -222,6 +227,7 @@ describe("the words and the meaning across every pack", () => {
       .filter((pack) => pack.repoId === one.repoId || pack.repoId === two.repoId)
       .map((pack) => pack.snapshotId);
     expect(ids).toHaveLength(2);
+    expect(packs.find((pack) => pack.repoId === two.repoId)?.skillCount).toBe(1);
 
     const lexemes = queryLexemes("VDS 4205");
     const counted = await countHubLexemes(database, ids, lexemes, 5000);

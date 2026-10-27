@@ -577,6 +577,12 @@ export const showcaseEntries = pgTable(
     position: integer().notNull().default(0),
     /** Canonical, as the address grammar prints it; a ref and a path are allowed. */
     address: text().notNull(),
+    /** Where the result itself is: an https URL or a path of the deployment; null for none. */
+    link: text(),
+    /** Whose work the entry shows: a result of the pack, or a builder's own running case. */
+    origin: text({ enum: ["pack", "builder"] })
+      .notNull()
+      .default("pack"),
     /** Pixel size of the clip and its poster. */
     width: integer().notNull(),
     height: integer().notNull(),
@@ -590,6 +596,33 @@ export const showcaseEntries = pgTable(
   (table) => [
     uniqueIndex("showcase_entries_slug_key").on(table.slug),
     index("showcase_entries_position_idx").on(table.position, table.slug),
+    check("showcase_entries_origin_check", sql`${table.origin} in ('pack', 'builder')`),
+  ],
+);
+
+/**
+ * An organization named beside the showcase (ADR-0028): its name, its site and its mark, an
+ * upload of the operator's. Operator data, not tenant data.
+ */
+export const showcaseOrganizations = pgTable(
+  "showcase_organizations",
+  {
+    id: id(),
+    /** The organization's name in the admin API. */
+    slug: text().notNull(),
+    name: text().notNull(),
+    url: text().notNull(),
+    logoSha: text()
+      .notNull()
+      .references(() => operatorMedia.sha, { onDelete: "restrict" }),
+    position: integer().notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: instant().notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("showcase_organizations_slug_key").on(table.slug),
+    index("showcase_organizations_position_idx").on(table.position, table.slug),
+    index("showcase_organizations_logo_idx").on(table.logoSha),
   ],
 );
 

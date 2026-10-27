@@ -678,7 +678,7 @@ describe("GET /api/v1/showcase", () => {
     const h = harness();
     const empty = await h.request("/api/v1/showcase");
     expect(empty.headers.get("cache-control")).toBe("no-store");
-    expect(await empty.json()).toEqual({ items: [] });
+    expect(await empty.json()).toEqual({ items: [], organizations: [] });
 
     const poster = await h.showcase.addMedia(new TextEncoder().encode("poster"), "image/webp");
     await h.showcase.put("spring", {
@@ -692,10 +692,13 @@ describe("GET /api/v1/showcase", () => {
     });
     const body = restShowcaseSchema.parse(await (await h.request("/api/v1/showcase")).json());
     expect(body).toEqual({
+      organizations: [],
       items: [
         {
           id: "spring",
           address: "/gh/acme/skills",
+          link: null,
+          origin: "pack",
           position: 0,
           width: 640,
           height: 480,

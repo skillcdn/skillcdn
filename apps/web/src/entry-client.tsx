@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot, hydrateRoot } from "react-dom/client";
 import { readInitialData } from "./api/initial-data.js";
 import { App } from "./app.js";
+import { readSiteFeatures } from "./features.js";
 import {
   LANGUAGE_INFO,
   languageInSearch,
@@ -45,6 +46,7 @@ const app = (
       origin={readOrigin()}
       initialData={initialData}
       preferredLanguage={preferred}
+      features={readSiteFeatures()}
     />
   </StrictMode>
 );

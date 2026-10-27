@@ -7,33 +7,65 @@ import { ORIGIN_META_NAME, ORIGIN_PLACEHOLDER, REPOSITORY_URL } from "./site-con
 
 export { ORIGIN_META_NAME, ORIGIN_PLACEHOLDER, REPOSITORY_URL };
 
+/**
+ * The reference console (ADR-0047): a pack of its own, which an agent connected to it follows to
+ * set a console up and run one. The front page leads there, since the pack is the way in.
+ */
+export const CONSOLE_PACK_ADDRESS = "/gh/skillcdn/console";
+
+/** The organization on the git host where builders work in the open, and where the front page sends them. */
+export const BUILDERS_URL = "https://github.com/skillcdn-builders";
+
 export const LINKS = {
   repository: REPOSITORY_URL,
   license: `${REPOSITORY_URL}/blob/main/LICENSE.md`,
+  builders: BUILDERS_URL,
 } as const;
 
 /**
  * The media of the build's own showcase (ADR-0028), which the front page leads with until the
- * operator writes a showcase of its own through the admin API. It is bundled with the site: an
- * original AI-generated concept clip of the kind of result the reference repository's skill is
- * for (not a recording of a run of it), the same clip as an animated image for where the video
- * will not play, its first frame as the poster that stands in for both, and the picture of its
- * star, which the example conversation attaches as the character the person brings. The words
- * are in the language packs (`showcase.ts` puts the two together).
+ * operator writes a showcase of its own through the admin API. Each is a real result of a skill
+ * of the reference pack, made by an agent from one sentence and bundled with the site: a poster
+ * of it, the result itself to open, and the address of the skill it came from. The words are in
+ * the language packs (`showcase.ts` puts the two together). Pixel size of every poster.
  */
 export const DEFAULT_SHOWCASE_MEDIA = {
-  clip: "/showcase/puppy-interview.mp4",
-  animation: "/showcase/puppy-interview.avif",
-  poster: "/showcase/puppy-interview.webp",
-  picture: "/showcase/puppy.webp",
-  /** Pixel size of the clip and its poster. */
-  width: 752,
-  height: 560,
-  /** One pass of the loop. The example conversation plays it once through before it restarts. */
-  durationMs: 4_500,
-  /** For the structured data that describes the clip. */
-  published: "2026-09-26",
+  width: 1440,
+  height: 900,
+  entries: {
+    cards: {
+      poster: "/showcase/card-news.webp",
+      link: "/showcase/card-news-sheet.webp",
+      address: `${REFERENCE_REPOSITORY_ADDRESS}/design/skills/html-card-news-from-brief`,
+    },
+    deck: {
+      poster: "/showcase/builders-intro.webp",
+      link: "/showcase/builders-intro.pdf",
+      address: `${REFERENCE_REPOSITORY_ADDRESS}/design/skills/html-deck-from-outline`,
+    },
+    looks: {
+      poster: "/showcase/hero-looks.webp",
+      link: "/showcase/hero-looks-sheet.webp",
+      address: `${REFERENCE_REPOSITORY_ADDRESS}/design/skills/html-design-variations`,
+    },
+  },
 } as const;
+
+export type DefaultShowcaseId = keyof typeof DEFAULT_SHOWCASE_MEDIA.entries;
+
+/**
+ * The organizations the front page names beside the showcase until the operator writes a list
+ * of their own (ADR-0028): the operator of the reference deployment, whose mark ships with
+ * the site with a margin around it, so that it stands the size of the others in a strip.
+ */
+export const DEFAULT_ORGANIZATIONS = [
+  {
+    id: "kdxlabs",
+    name: "KDX Labs",
+    url: "https://kdxlabs.com",
+    logo: "/organizations/kdxlabs.png",
+  },
+] as const;
 
 /**
  * Addresses to try under the field: the reference repository of this project, written in the

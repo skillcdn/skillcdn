@@ -45,6 +45,9 @@ export const api = {
   file: (address: Address, path: string, offset: number, signal: AbortSignal) =>
     client.file(address, { path, offset: offset === 0 ? undefined : offset }, signal),
   featured: (signal: AbortSignal) => client.featured(signal),
+  /** The search across every pack (ADR-0070), for the page of a term. */
+  search: (query: string, limit: number, signal: AbortSignal) =>
+    client.search(query, limit, signal),
   showcase: (signal: AbortSignal) => client.showcase(signal),
   legal: (kind: LegalDocumentKind, signal: AbortSignal) => client.legal(kind, signal),
 };

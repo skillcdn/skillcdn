@@ -19,6 +19,15 @@ describe("matchRoute", () => {
     expect(matchRoute("/", "?lang=ko")).toEqual({ name: "landing" });
     expect(matchRoute("/explore", "")).toEqual({ name: "explore" });
     expect(matchRoute("/explore/", "")).toEqual({ name: "not-found" });
+    // The search across the packs (ADR-0075): the box alone, or the page of a term as written.
+    expect(matchRoute("/search", "")).toEqual({ name: "search", term: undefined });
+    expect(matchRoute("/search", "?q=x")).toEqual({ name: "search", term: undefined });
+    expect(matchRoute("/search/card%20news", "")).toEqual({ name: "search", term: "card news" });
+    expect(matchRoute("/search/%EC%B9%B4%EB%93%9C", "")).toEqual({ name: "search", term: "카드" });
+    expect(matchRoute("/search/", "")).toEqual({ name: "not-found" });
+    expect(matchRoute("/search/a/b", "")).toEqual({ name: "not-found" });
+    expect(matchRoute("/search/%E0%A4%A", "")).toEqual({ name: "not-found" });
+    expect(matchRoute("/searching", "")).toEqual({ name: "not-found" });
     // The deployment's own pages (ADR-0029).
     expect(matchRoute("/terms", "")).toEqual({ name: "legal", kind: "terms" });
     expect(matchRoute("/privacy", "?lang=ko")).toEqual({ name: "legal", kind: "privacy" });

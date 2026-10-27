@@ -1,5 +1,6 @@
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { HUB_DEFAULTS } from "./config/config.js";
 import { loadWebBundle, type WebBundle } from "./http/web.js";
 import { createFixtureHost, fixtureCommits } from "./testing/fixture-host.js";
 import { createFixtureLogin } from "./testing/fixture-login.js";
@@ -47,7 +48,11 @@ describe("a server with a web build", () => {
     expect(front.status).toBe(200);
     expect(front.headers.get("content-type")).toBe("text/html; charset=utf-8");
     expect(front.headers.get("x-request-id")).toBeTruthy();
-    expect(await front.text()).toContain("Front page");
+    // The front page is rendered with what the deployment has, here nothing of the operator's.
+    expect(await inputOf(front)).toMatchObject({
+      pathname: "/",
+      data: { showcase: { ready: { items: [], organizations: [] } } },
+    });
     expect(await (await h.request("/explore?lang=ko")).text()).toContain("Explore in Korean");
     expect((await h.request("/assets/index-abc123.js")).headers.get("cache-control")).toContain(
       "immutable",
@@ -237,7 +242,9 @@ describe("a server with a web build", () => {
 
   it("renders the front page and llms.txt with the operator's showcase, and serves the build's own without one", async () => {
     const h = createHarness(testDatabase, { web });
-    expect(await (await h.request("/", { headers: BROWSER })).text()).toContain("Front page");
+    expect(await inputOf(await h.request("/", { headers: BROWSER }))).toMatchObject({
+      data: { showcase: { ready: { items: [] } } },
+    });
     expect(await (await h.request("/llms.txt")).text()).toContain("# Site");
 
     const poster = await h.showcase.addMedia(new TextEncoder().encode("poster"), "image/webp");
@@ -273,9 +280,12 @@ describe("a server with a web build", () => {
     expect(llms.headers.get("content-type")).toContain("text/plain");
     expect(await llms.text()).toContain('"id":"spring"');
 
-    // Without an entry the prerendered page, with the build's own showcase, is back.
+    // Without an entry the page shows the build's own showcase again, and llms.txt is the
+    // prerendered one.
     await h.showcase.remove("spring");
-    expect(await (await h.request("/", { headers: BROWSER })).text()).toContain("Front page");
+    expect(await inputOf(await h.request("/", { headers: BROWSER }))).toMatchObject({
+      data: { showcase: { ready: { items: [] } } },
+    });
     expect(await (await h.request("/llms.txt")).text()).toContain("# Site\n");
     expect(await h.showcase.removeMedia(poster.sha)).toBe("removed");
   });
@@ -469,6 +479,78 @@ describe("a server with a web build", () => {
     expect(xml.split("<loc>https://skills.example/gh/acme?lang=ko</loc>")).toHaveLength(2);
     expect(xml).not.toContain("<loc>https://skills.example/gh/skillcdn</loc>");
     expect((await h.request("/robots.txt")).status).toBe(200);
+    // The page of the search box is a page of the build; the pages of the terms the operator
+    // lists are added, in every language, and only where the search is there (ADR-0075).
+    expect(xml).toContain("<loc>https://skills.example/search</loc>");
+    expect(xml).not.toContain("/search/");
+    const listed = createHarness(testDatabase, {
+      web,
+      hub: { ...HUB_DEFAULTS, sitemapTerms: ["card news", "decks"] },
+    });
+    const withTerms = await (await listed.request("/sitemap.xml")).text();
+    expect(withTerms).toContain("<loc>https://skills.example/search/card%20news</loc>");
+    expect(withTerms).toContain("<loc>https://skills.example/search/card%20news?lang=ko</loc>");
+    expect(withTerms).toContain("<loc>https://skills.example/search/decks</loc>");
+    const off = createHarness(testDatabase, {
+      web,
+      hub: { ...HUB_DEFAULTS, enabled: false, sitemapTerms: ["card news"] },
+    });
+    const offXml = await (await off.request("/sitemap.xml")).text();
+    expect(offXml).not.toContain("/search/");
+    expect(offXml).not.toContain("<loc>https://skills.example/search</loc>");
+  });
+
+  it("answers a search across the packs as a page of its term, kept as long as the answer is, and sends every other spelling there", async () => {
+    const host = createFixtureHost("web-search");
+    const h = createHarness(testDatabase, { web, host });
+    // The box's own query leads to the page of the term, the term written one way, the
+    // language kept; so does a spelling of the term that is not the one.
+    const typed = await h.request("/search?q=++release%20%20notes+&lang=ko", { headers: BROWSER });
+    expect(typed.status).toBe(301);
+    expect(typed.headers.get("location")).toBe("/search/release%20notes?lang=ko");
+    const spaced = await h.request("/search/release%20%20notes", { headers: BROWSER });
+    expect(spaced.status).toBe(301);
+    expect(spaced.headers.get("location")).toBe("/search/release%20notes");
+    expect(
+      (await h.request("/search?q=%20%20", { headers: BROWSER })).headers.get("location"),
+    ).toBe("/search");
+
+    // The page of a term is rendered with the results, and a cache may keep it as long as the
+    // deployment keeps the answer (ADR-0075).
+    const page = await h.request("/search/release%20notes", { headers: BROWSER });
+    expect(page.status).toBe(200);
+    expect(page.headers.get("content-type")).toBe("text/html; charset=utf-8");
+    expect(page.headers.get("cache-control")).toBe(
+      "public, max-age=60, s-maxage=300, stale-while-revalidate=300",
+    );
+    expect(page.headers.get("vary")).toBe("accept-language");
+    const input = await inputOf(page);
+    expect(input).toMatchObject({
+      pathname: "/search/release%20notes",
+      search: "",
+      features: {},
+      data: { results: { ready: { status: "ready", query: "release notes" } } },
+    });
+    expect(await (await h.request("/search/release%20notes?lang=ko")).text()).toContain(
+      '<html lang="ko">',
+    );
+
+    // The page of the box alone is a page, revalidated like any other; what is no term is nothing.
+    const bare = await h.request("/search", { headers: BROWSER });
+    expect(bare.status).toBe(200);
+    expect(bare.headers.get("cache-control")).toBe("public, max-age=0, must-revalidate");
+    expect(await inputOf(bare)).toMatchObject({ pathname: "/search", data: {} });
+    expect((await h.request("/search/a/b", { headers: BROWSER })).status).toBe(404);
+    expect((await h.request("/search/%E0%A4%A", { headers: BROWSER })).status).toBe(404);
+
+    // Without the search there are no such pages, whatever the build has.
+    const off = createHarness(testDatabase, {
+      web,
+      host,
+      hub: { ...HUB_DEFAULTS, enabled: false },
+    });
+    expect((await off.request("/search", { headers: BROWSER })).status).toBe(404);
+    expect((await off.request("/search/release", { headers: BROWSER })).status).toBe(404);
   });
 
   it("answers what is nothing with a page for browsers and with JSON for everyone else", async () => {

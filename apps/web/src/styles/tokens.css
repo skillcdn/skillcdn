@@ -505,4 +505,77 @@
      letters, as a mark beside a word is drawn. */
   --host-mark-size: 1.25rem;
   --shadow-stage: 0 1.5rem 5rem #00000033;
+
+  /* The front page and the search pages (ADR-0075). The search box is the one white thing on
+     the dark ground, and slim: its corners are a little rounder than a button's and no more. */
+  --radius-search: 14px;
+  --search-width: 46rem;
+  --hero-eyebrow-gap: var(--space-5);
+  /* The strip of organizations: the height every mark is drawn at, and how long one pass of the
+     rolling strip on a phone takes. */
+  --orgs-mark-height: 1.5rem;
+  --orgs-roll: 18s;
+  /* A showcase entry's stage: every poster is drawn at this ratio, whatever it holds. */
+  --showcase-ratio: 16 / 10;
+  --showcase-lead-min: 18rem;
+  /* The numbers of the three steps, and the ring they stand in. */
+  --step-number: 2.75rem;
+  /* The light behind the builders' panel, in the accent, as big as the panel's corner. */
+  --builders-glow: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--color-accent-solid) 40%, transparent),
+    transparent
+  );
+
+  /* The console on the front page: an illustration of the reference console, which keeps its own
+     light ground inside the dark site, as the illustrated client windows keep theirs. Its tokens
+     are the console's own (packages/console/src/styles/console.css of skillcdn/console), so that
+     the board on the front page is the board people then see. */
+  --console-bg: #f7f8fc;
+  --console-field: linear-gradient(160deg, #e3e9f7 0%, #eef1f9 42%, #f9fafd 100%);
+  --console-chrome: #ffffffcc;
+  --console-text: #14141a;
+  --console-text-muted: #4b5563;
+  --console-text-faint: #666c7c;
+  --console-border: #e4e8ef;
+  --console-accent: #2c5bc4;
+  --console-accent-solid: #3b6fd4;
+  --console-accent-subtle: #dbe6ff;
+  --console-point: #c2410c;
+  --console-point-subtle: #fff1e6;
+  --console-success: #146b44;
+  --console-success-subtle: #d4efe1;
+  --console-live: #22a04a;
+  --console-warning-subtle: #fff4cc;
+  --console-warning-text: #44403c;
+  --console-neutral: #dfe3eb;
+  --console-neutral-text: #3f4756;
+  --console-category-marketing: #fbe9b2;
+  --console-category-marketing-text: #44403c;
+  --console-category-design: #fdd2e5;
+  --console-category-design-text: #b2176a;
+  --console-category-engineering: #d2e0ff;
+  --console-category-engineering-text: #1d4fcb;
+  --console-category-product: #e6d8fc;
+  --console-category-product-text: #6434c2;
+  --console-category-operations: #c6edf4;
+  --console-category-operations-text: #08667a;
+  /* The console's glass: a white veil with a highlight falling from the top, on a pale field. */
+  --console-glass:
+    linear-gradient(170deg, #ffffffb3, transparent 38%) padding-box,
+    linear-gradient(#ffffff99, #ffffff99) padding-box;
+  --console-glass-edge: #ffffff;
+  --console-sheet: #ffffffd1;
+  --console-sheet-hover: #ffffff;
+  --console-card-shadow: 0 1px 2px #1f26870f;
+  --console-card-glow: 0 0.125rem 0.5rem -0.25rem #3b6fd466, 0 0.5rem 1.25rem -0.5rem #3b6fd438;
+  --console-pane-shadow: inset 0 1px 0 #ffffff, 0 0.5rem 1.5rem #1f268714;
+  --console-ghost-shadow: 0 1.25rem 3rem #1a2b5566;
+  --console-window-shadow: 0 2rem 5rem #00000080;
+  --console-column-width: 13.5rem;
+  --console-board-height: 24rem;
+  --console-avatar: 1.375rem;
+  --console-arrive: 420ms cubic-bezier(0.2, 0.7, 0.3, 1);
+  --console-text-xs: 0.8125rem;
+  --console-text-sm: 0.9375rem;
 }

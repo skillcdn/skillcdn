@@ -25,11 +25,36 @@ export const IMAGE_CONTENT_TYPES = [
   "image/jpeg",
   "image/gif",
 ] as const;
+/** A document a showcase entry may link to as its result: a deck, say. No slot takes one. */
+export const DOCUMENT_CONTENT_TYPES = ["application/pdf"] as const;
 /** What the operator may upload. Anything else is refused before it is stored. */
 export const MEDIA_CONTENT_TYPES: readonly string[] = [
   ...VIDEO_CONTENT_TYPES,
   ...IMAGE_CONTENT_TYPES,
+  ...DOCUMENT_CONTENT_TYPES,
 ];
+
+/**
+ * Whose work a showcase entry shows: a result made with the pack its address names (`pack`), or
+ * a builder's own case, running on its own site, made with that pack (`builder`).
+ */
+export const SHOWCASE_ORIGINS = ["pack", "builder"] as const;
+export type ShowcaseOrigin = (typeof SHOWCASE_ORIGINS)[number];
+
+/**
+ * Where the result of an entry is: an `https` URL, or an absolute path of the deployment, such as
+ * an upload under `/media/` or a file of the web build. A protocol-relative path is neither.
+ */
+export function isShowcaseLink(value: string): boolean {
+  if (/[\s\p{Cc}]/u.test(value)) {
+    return false;
+  }
+  if (value.startsWith("/")) {
+    return !value.startsWith("//");
+  }
+  // A scheme, a host of at least one character, and whatever follows; `core` has no URL parser.
+  return /^https:\/\/[^/?#]+/.test(value);
+}
 
 /**
  * The places media takes in a showcase entry: the clip and, where a browser will not play it, the
@@ -103,6 +128,13 @@ export const restShowcaseEntrySchema = z.object({
   id: z.string(),
   /** Where the card leads: the address of the skill's repository, with a ref and a path when given. */
   address: z.string(),
+  /**
+   * Where the result itself is: an `https` URL or a path of the deployment, or `null` for an
+   * entry whose result is its media. Absent from an answer of a deployment older than the field.
+   */
+  link: z.optional(z.nullable(z.string())),
+  /** Whose work the entry shows (`SHOWCASE_ORIGINS`); absent from an older deployment: `pack`. */
+  origin: z.optional(z.enum(SHOWCASE_ORIGINS)),
   position: z.int(),
   /** Pixel size of the clip and its poster. */
   width: z.int(),
@@ -124,7 +156,22 @@ export const restShowcaseEntrySchema = z.object({
 });
 export type RestShowcaseEntry = z.infer<typeof restShowcaseEntrySchema>;
 
-export const restShowcaseSchema = z.object({ items: z.array(restShowcaseEntrySchema) });
+/** An organization named beside the showcase, with its mark: a pack's publisher, a builder's company. */
+export const restShowcaseOrganizationSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  /** Its site, where the mark leads. */
+  url: z.string(),
+  logo: showcaseMediaSchema,
+  position: z.int(),
+});
+export type RestShowcaseOrganization = z.infer<typeof restShowcaseOrganizationSchema>;
+
+export const restShowcaseSchema = z.object({
+  items: z.array(restShowcaseEntrySchema),
+  /** The organizations, in order; absent from an answer of a deployment older than the field. */
+  organizations: z.optional(z.array(restShowcaseOrganizationSchema)),
+});
 export type RestShowcase = z.infer<typeof restShowcaseSchema>;
 
 const optionalText = (max: number) => z.optional(z.nullable(text(max)));
@@ -151,9 +198,13 @@ const pixels = z.int().check(z.minimum(1), z.maximum(8192));
  * the server checks that each one exists and is a video or a picture as its slot needs. A clip
  * needs its duration and its publication date, which the structured data of the page requires.
  */
+const link = z.string().check(z.minLength(1), z.maxLength(2048), z.refine(isShowcaseLink));
+
 export const showcaseInputSchema = z
   .object({
     address: z.string().check(z.minLength(1), z.maxLength(512)),
+    link: z.optional(z.nullable(link)),
+    origin: z.optional(z.enum(SHOWCASE_ORIGINS)),
     position: z.optional(z.int().check(z.minimum(-1_000_000), z.maximum(1_000_000))),
     width: pixels,
     height: pixels,
@@ -186,6 +237,19 @@ export const showcaseInputSchema = z
     ),
   );
 export type ShowcaseInput = z.infer<typeof showcaseInputSchema>;
+
+/** An organization as the operator sends it to the admin API; its logo is an uploaded picture. */
+export const showcaseOrganizationInputSchema = z.object({
+  name: text(80),
+  url: z.string().check(
+    z.minLength(1),
+    z.maxLength(2048),
+    z.refine((value) => /^https?:\/\//.test(value)),
+  ),
+  logo: sha256,
+  position: z.optional(z.int().check(z.minimum(-1_000_000), z.maximum(1_000_000))),
+});
+export type ShowcaseOrganizationInput = z.infer<typeof showcaseOrganizationInputSchema>;
 
 /** The texts of an entry as the pages read them: every optional word present, as `null`. */
 export function completeShowcaseTexts(input: ShowcaseTextsInput): ShowcaseTexts {

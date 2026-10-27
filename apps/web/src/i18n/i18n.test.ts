@@ -46,7 +46,8 @@ describe("language packs", () => {
     }
     // Product names, credits and verified menu labels of apps without a localized menu stay native.
     const names = new Set([
-      "SkillCDN · skillcdn/skills",
+      "SkillCDN Builders",
+      "HTML + PDF",
       "Claude Code",
       "VS Code",
       "Codex CLI",

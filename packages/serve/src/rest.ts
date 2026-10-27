@@ -175,9 +175,13 @@ export function registerAddressRoutes<E extends Env, M extends ServedMount>(
       maxAge: CORS_MAX_AGE_SECONDS,
     }),
   );
+  // Nothing of the API is cached, unless a route said how long its answer may be kept: the
+  // search across packs does, on a deployment that keeps its answers (ADR-0075).
   app.use("/api/*", async (c, next) => {
     await next();
-    c.header("cache-control", "no-store");
+    if (!c.res.headers.has("cache-control")) {
+      c.header("cache-control", "no-store");
+    }
   });
 
   app.get(`${REST_ROUTES.mounts}/*`, async (c) => {

@@ -167,6 +167,9 @@ export function pageOfRoute(route: Route): AnalyticsPage | undefined {
       return { path: PATHS.landing, title: "landing" };
     case "explore":
       return { path: PATHS.explore, title: "explore" };
+    // Without the term, which is what somebody typed: a search is counted, never read.
+    case "search":
+      return { path: PATHS.search, title: "search", params: { results: route.term !== undefined } };
     case "docs":
       return { path: docsHref(route.slug), title: "docs" };
     case "legal":

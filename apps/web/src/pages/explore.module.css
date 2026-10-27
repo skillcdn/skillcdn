@@ -2,18 +2,42 @@
   padding-block: var(--space-8);
 }
 
+/* The head of the page: the kicker, the title, the lead and the search box, centred as the
+   first screen of the site is. */
+.head {
+  text-align: center;
+}
+
+.kicker {
+  margin-bottom: var(--space-3);
+  color: var(--color-accent);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .title {
   font-size: var(--text-display-sm);
-  text-align: center;
+  letter-spacing: var(--tracking-display);
 }
 
 .lead {
   max-width: var(--width-prose);
   margin-top: var(--space-3);
   margin-inline: auto;
-  text-align: center;
   color: var(--color-text-muted);
   font-size: var(--text-lg);
+  text-wrap: pretty;
+}
+
+.search {
+  max-width: var(--search-width);
+  margin: var(--space-6) auto 0;
+}
+
+.featuredHead {
+  margin-bottom: var(--space-5);
 }
 
 /* The invitation brings its own box; the page only says where it sits. */
@@ -65,14 +89,14 @@
 }
 
 .heading {
-  margin-bottom: var(--space-2);
-  font-size: var(--text-xl);
+  font-size: var(--text-2xl);
+  letter-spacing: var(--tracking-display);
 }
 
 .featuredLead {
-  margin-bottom: var(--space-5);
+  margin-top: var(--space-2);
   color: var(--color-text-muted);
-  font-size: var(--text-sm);
+  font-size: var(--text-md);
 }
 
 .pagination {

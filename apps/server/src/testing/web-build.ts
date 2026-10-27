@@ -26,6 +26,11 @@ export const WEB_BUILD_MANIFEST = {
       indexable: true,
     },
     {
+      path: "/search",
+      files: { en: "search/index.html", ko: "search/index.ko.html" },
+      indexable: true,
+    },
+    {
       path: "/llms.txt",
       files: { en: "llms.txt" },
       indexable: false,
@@ -77,6 +82,24 @@ export function renderLandingPage(template, input) {
 }
 export function renderLlmsTxt(language, showcase) {
   return "# Site in " + language + "\\n\\n" + JSON.stringify(showcase) + "\\n";
+}
+export function renderSearchPage(template, input) {
+  const json = JSON.stringify(input).replaceAll("<", "\\\\u003c");
+  const results = input.data.results;
+  const found = results !== undefined && results.ready !== undefined ? results.ready.items.length : 0;
+  const html = template
+    .replace('<html lang="en">', '<html lang="' + input.language + '">')
+    .replace("<!--app-html-->", '<pre id="input">' + json + "</pre>")
+    .replace("<!--app-head-->", "<title>Rendered search " + input.pathname + "</title>");
+  return { html, indexable: found >= 3 };
+}
+export function renderSitePage(template, input) {
+  const json = JSON.stringify(input).replaceAll("<", "\\\\u003c");
+  const html = template
+    .replace('<html lang="en">', '<html lang="' + input.language + '">')
+    .replace("<!--app-html-->", '<pre id="input">' + json + "</pre>")
+    .replace("<!--app-head-->", "<title>Rendered site page " + input.pathname + "</title>");
+  return { html, indexable: true };
 }
 export function renderLegalPage(template, input) {
   const json = JSON.stringify(input).replaceAll("<", "\\\\u003c");
@@ -158,6 +181,8 @@ export function createWebBuild(
   write("index.ko.html", page("ko", "Front page in Korean"));
   write("explore/index.html", page("en", "Explore"));
   write("explore/index.ko.html", page("ko", "Explore in Korean"));
+  write("search/index.html", page("en", "Search"));
+  write("search/index.ko.html", page("ko", "Search in Korean"));
   write("shell.html", page("en", "Shell"));
   write("shell.ko.html", page("ko", "Shell in Korean"));
   write("not-found.html", page("en", "Not found"));

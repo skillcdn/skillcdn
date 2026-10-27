@@ -14,6 +14,9 @@ import {
   parseAddress,
   parseOwnerPath,
   ROOT_PATH,
+  SEARCH_PAGE_PATH,
+  searchPagePath,
+  searchTermOfPath,
 } from "@skillcdn/core";
 import { hasDocsPage } from "./docs/catalog.js";
 
@@ -43,6 +46,8 @@ export type AccountSection = (typeof ACCOUNT_SECTIONS)[number];
 export type Route =
   | { readonly name: "landing" }
   | { readonly name: "explore" }
+  /** A search across the packs (ADR-0075): the results of a term, or the page of the box alone. */
+  | { readonly name: "search"; readonly term: string | undefined }
   | { readonly name: "mount"; readonly address: Address; readonly view: MountView }
   /** The page of an account of the git host: one segment short of an address (ADR-0037). */
   | { readonly name: "owner"; readonly owner: OwnerPath }
@@ -66,6 +71,7 @@ export type Route =
 export const PATHS = {
   landing: "/",
   explore: "/explore",
+  search: SEARCH_PAGE_PATH,
   docs: DOCS_PAGE_PATH,
   terms: LEGAL_PAGE_PATHS.terms,
   privacy: LEGAL_PAGE_PATHS.privacy,
@@ -102,6 +108,11 @@ export function ownerHref(owner: OwnerPath): string {
   return formatOwnerPath(owner);
 }
 
+/** The page of the results of a term, or the page of the box alone for none. */
+export function searchHref(term?: string): string {
+  return searchPagePath(term ?? "");
+}
+
 /** The path of a page of the documentation, or of its index. */
 export function docsHref(slug?: string): string {
   return slug === undefined ? PATHS.docs : `${PATHS.docs}/${slug}`;
@@ -123,6 +134,13 @@ export function matchRoute(pathname: string, search: string, development = false
   }
   if (pathname === PATHS.explore) {
     return { name: "explore" };
+  }
+  if (pathname === PATHS.search || pathname.startsWith(`${PATHS.search}/`)) {
+    // The term as written: the server has sent every other spelling to the one page of it.
+    const term = searchTermOfPath(pathname);
+    return term === undefined
+      ? { name: "not-found" }
+      : { name: "search", term: term === "" ? undefined : term };
   }
   if (pathname === PATHS.docs) {
     return { name: "docs", slug: undefined };

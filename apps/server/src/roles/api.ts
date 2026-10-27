@@ -70,6 +70,7 @@ import { LegalDocuments } from "../operator/legal.js";
 import { OperatorLists } from "../operator/lists.js";
 import { Showcase } from "../operator/showcase.js";
 import { OwnerService } from "../owners/owner-service.js";
+import { withSearchCache } from "../search/cache.js";
 import { createHubSearch } from "../search/hub.js";
 import { SocialCards } from "../social/cards.js";
 import { PictureFetcher } from "../social/pictures.js";
@@ -187,18 +188,28 @@ export function createApi(
   const entitlements = createOperatorEntitlements(lists, ports.entitlements);
   // The search across every public pack (ADR-0070), over the same embedder and reranker the
   // mounts search by, where the operator leaves it on.
+  // Behind its cache and its bound (ADR-0075): the same question is answered once for a while,
+  // and only so many at once.
   const hubConfig = config.hub ?? HUB_DEFAULTS;
   const hub = hubConfig.enabled
-    ? createHubSearch({
-        database,
-        blobStore,
-        meaning: ports.meaning,
-        lists,
-        timeoutMs: hubConfig.timeoutMs,
-        candidates: hubConfig.candidates,
-        clock,
-        logger,
-      })
+    ? withSearchCache(
+        createHubSearch({
+          database,
+          blobStore,
+          meaning: ports.meaning,
+          lists,
+          timeoutMs: hubConfig.timeoutMs,
+          candidates: hubConfig.candidates,
+          clock,
+          logger,
+        }),
+        {
+          ttlMs: hubConfig.cacheMs,
+          entries: hubConfig.cacheEntries,
+          concurrency: hubConfig.concurrency,
+          clock,
+        },
+      )
     : undefined;
   // The commits this process indexes, and the snapshots a search asks for that were never
   // embedded, are queued for the worker within the scope and the entitlements (ADR-0064).
@@ -390,6 +401,7 @@ export function createApi(
     database,
     auth,
     hub,
+    search: { cacheMs: hubConfig.cacheMs, sitemapTerms: hubConfig.sitemapTerms },
     webhooks:
       ports.events === undefined
         ? undefined
@@ -457,8 +469,13 @@ export async function runApi(config: Config, logger: Logger): Promise<void> {
     try {
       web = await loadWebBundle(config.web.root, {
         publicUrl: config.web.publicUrl,
-        // The pages offer signing in where the deployment is configured for it.
-        tags: { ...config.web.tags, signIn: config.auth === undefined ? undefined : LOGIN_HOST },
+        // The pages offer signing in where the deployment is configured for it, and a search
+        // where the deployment searches across its packs (ADR-0075).
+        tags: {
+          ...config.web.tags,
+          signIn: config.auth === undefined ? undefined : LOGIN_HOST,
+          search: (config.hub ?? HUB_DEFAULTS).enabled,
+        },
       });
     } catch (error) {
       if (error instanceof WebBundleError) {

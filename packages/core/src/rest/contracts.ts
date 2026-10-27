@@ -331,12 +331,28 @@ export const restFindSchema = z.discriminatedUnion("status", [
   failed,
 ]);
 
+/**
+ * What a pack a search found something in is, for the result to say so: a pack of skills (a
+ * manifest and skills), a pack of documents (a manifest and no skill), or a repository read
+ * without a manifest; whether the operator vouches for it; and how many skills it holds.
+ */
+export const restHubPackSchema = z.object({
+  kind: z.enum(["skills", "documents", "repository"]),
+  verified: z.boolean(),
+  skills: count,
+  /** The owner's picture as the git host serves it; empty for a pack at no git host. */
+  avatar: z.optional(z.string()),
+});
+export type RestHubPack = z.infer<typeof restHubPackSchema>;
+
 /** One result of a search across packs (ADR-0070): the item, and the pack it is in. */
 export const restHubItemSchema = z.object({
   /** The canonical address of the pack, `/gh/<owner>/<repo>`. */
   address: z.string(),
   /** `owner/name` as the host spells it. */
   repository: z.string(),
+  /** What the pack is; absent from an answer of a deployment older than the field. */
+  pack: z.optional(restHubPackSchema),
   item: restFindItemSchema,
 });
 
@@ -351,6 +367,7 @@ export const restSearchSchema = z.object({
   ranking: z.optional(z.object({ meaning: z.boolean(), reranked: z.boolean() })),
 });
 export type RestSearch = z.infer<typeof restSearchSchema>;
+export type RestHubItem = z.infer<typeof restHubItemSchema>;
 
 export const restSkillSchema = z.discriminatedUnion("status", [
   z.object({

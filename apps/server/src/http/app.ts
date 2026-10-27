@@ -15,6 +15,8 @@ import {
   formatOwnerPath,
   type GitHostEventSource,
   type GitHostLogin,
+  HUB_MAX_LIMIT,
+  hubBody,
   ICON_ROUTE,
   ICON_SIZE,
   isGitHostAddress,
@@ -25,6 +27,7 @@ import {
   MAX_QUERY_LENGTH,
   MAX_REPO_PATH_LENGTH,
   MEDIA_ROUTE,
+  normalizeSearchTerm,
   parseAddress,
   parseOwnerPath,
   REPO_TOKEN_PREFIX,
@@ -34,10 +37,14 @@ import {
   type RestShowcase,
   type RestSkill,
   renderBrandBadge,
+  SEARCH_PAGE_PATH,
+  SEARCH_QUERY_PARAM,
   SOCIAL_ROUTE,
+  searchPagePath,
+  searchTermOfPath,
   skillOutcome,
 } from "@skillcdn/core";
-import { type Database, getSchemaStatus, type UserRecord } from "@skillcdn/db";
+import { type Database, getSchemaStatus, isStatementTimeout, type UserRecord } from "@skillcdn/db";
 import { type Reader, ReaderInputError } from "@skillcdn/reader";
 import { createHubServer } from "@skillcdn/serve";
 import { type Context, Hono } from "hono";
@@ -66,6 +73,7 @@ import type { LegalDocuments } from "../operator/legal.js";
 import type { OperatorLists } from "../operator/lists.js";
 import type { Showcase } from "../operator/showcase.js";
 import { OwnerNotFoundError, type OwnerService } from "../owners/owner-service.js";
+import { SearchBusyError } from "../search/cache.js";
 import type { HubSearch } from "../search/hub.js";
 import type { SocialCards } from "../social/cards.js";
 import { type PictureFetcher, rasterImageType } from "../social/pictures.js";
@@ -76,7 +84,13 @@ import { registerAuth } from "./auth.js";
 import type { ClientAddressResolver } from "./client-address.js";
 import { isCrawler } from "./crawlers.js";
 import { type AppEnv, requestContext } from "./request-context.js";
-import { CORS_MAX_AGE_SECONDS, hostFailure, mountBody, registerRest } from "./rest.js";
+import {
+  CORS_MAX_AGE_SECONDS,
+  hostFailure,
+  mountBody,
+  registerRest,
+  searchCacheControl,
+} from "./rest.js";
 import {
   type AddressData,
   bytesResponse,
@@ -113,6 +127,13 @@ export interface AppDependencies {
   readonly auth: AppAuth | undefined;
   /** The search across every pack (ADR-0070), at the root and on the REST API; left out, neither is there. */
   readonly hub: HubSearch | undefined;
+  /**
+   * How the pages and the REST route of that search are kept (ADR-0075): for how long a cache
+   * may hold an answer, and which terms' pages the sitemap lists. Left out, nothing is kept.
+   */
+  readonly search?:
+    | { readonly cacheMs: number; readonly sitemapTerms: readonly string[] }
+    | undefined;
   /**
    * The git host's events and what applies them (ADR-0038). Left out, the deployment receives
    * none, and what it remembers ends when its time is up.
@@ -571,6 +592,7 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
     logger,
     mountAt,
     hub: dependencies.hub,
+    searchCacheMs: dependencies.search?.cacheMs,
     hooks: usageHooksOf(tools),
     mountOf: async (address) => {
       try {
@@ -1207,8 +1229,16 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
       }
       const request = await pageRequestOf(c);
       const { addresses, owners } = await listed.entries;
-      const pages = [...(request.legal ?? []).map((kind) => LEGAL_PAGE_PATHS[kind]), ...owners];
-      return bundle.sitemap(request, addresses, pages);
+      // The pages of the terms the operator lists (ADR-0075), where the search is there.
+      const terms = dependencies.hub === undefined ? [] : (dependencies.search?.sitemapTerms ?? []);
+      const pages = [
+        ...(request.legal ?? []).map((kind) => LEGAL_PAGE_PATHS[kind]),
+        ...owners,
+        ...terms.map(searchPagePath),
+      ];
+      return bundle.sitemap(request, addresses, pages, {
+        without: dependencies.hub === undefined ? [SEARCH_PAGE_PATH] : [],
+      });
     });
 
     // The deployment's own pages (ADR-0029): rendered with the document, or with the absence of
@@ -1235,18 +1265,27 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
     }
 
     /**
-     * The operator's showcase, when there is one (ADR-0028). Without one, and when it cannot be
-     * read, the prerendered front page shows the build's own.
+     * The operator's showcase (ADR-0028), empty when the operator wrote nothing, which the
+     * pages show as the build's own; `undefined` when it cannot be read, which the browser asks
+     * for again.
      */
     const showcaseAnswer = async (): Promise<{ readonly ready: RestShowcase } | undefined> => {
       try {
-        const list = await dependencies.showcase.list();
-        return list.items.length === 0 ? undefined : { ready: list };
+        return { ready: await dependencies.showcase.list() };
       } catch (error) {
         logger.warn({ err: error }, "the showcase could not be read for the front page");
         return undefined;
       }
     };
+    // The front page is rendered per request with what the deployment has, so that it shows
+    // the operator's showcase, their organizations and their sections; a build that cannot
+    // render answers with the prerendered page, which shows the build's own.
+    app.on(["GET", "HEAD"], "/", async (c) => {
+      const request = await pageRequestOf(c);
+      return (
+        bundle.landing(request, await showcaseAnswer()) ?? bundle.respond(request) ?? c.notFound()
+      );
+    });
     const withShowcase = async (
       c: Context<AppEnv>,
       render: (
@@ -1256,12 +1295,80 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
     ): Promise<Response> => {
       const request = await pageRequestOf(c);
       const showcase = await showcaseAnswer();
-      const rendered = showcase === undefined ? undefined : render(request, showcase);
+      const rendered =
+        showcase === undefined || showcase.ready.items.length === 0
+          ? undefined
+          : render(request, showcase);
       return rendered ?? bundle.respond(request) ?? c.notFound();
     };
-    app.on(["GET", "HEAD"], "/", (c) =>
-      withShowcase(c, (request, showcase) => bundle.landing(request, showcase)),
-    );
+
+    // The page of a search across the packs (ADR-0075): `/search?q=` leads to the page of the
+    // term, `/search/<term>` is rendered with the results and kept as long as the deployment
+    // keeps an answer, and `/search` alone is the page of the box. A term is written one way,
+    // and any other spelling of it is sent there.
+    const { hub } = dependencies;
+    if (hub !== undefined) {
+      const cacheControl = searchCacheControl(dependencies.search?.cacheMs ?? 0);
+      const searchPage = async (c: Context<AppEnv>): Promise<Response> => {
+        const request = await pageRequestOf(c);
+        const url = request.url;
+        const written = searchTermOfPath(url.pathname);
+        if (written === undefined) {
+          return bundle.notFound(request);
+        }
+        const typed = url.searchParams.get(SEARCH_QUERY_PARAM);
+        const term = normalizeSearchTerm(typed ?? written);
+        if (typed !== null || term !== written) {
+          const params = new URLSearchParams(url.search);
+          params.delete(SEARCH_QUERY_PARAM);
+          const query = params.toString();
+          return c.redirect(`${searchPagePath(term)}${query === "" ? "" : `?${query}`}`, 301);
+        }
+        if (term === "") {
+          return bundle.search(request, {});
+        }
+        try {
+          const result = await hub.search(term, HUB_MAX_LIMIT);
+          return bundle.search(request, { results: { ready: hubBody(result) } }, 200, {
+            "cache-control": cacheControl,
+          });
+        } catch (error) {
+          if (error instanceof SearchBusyError) {
+            return bundle.search(
+              request,
+              { results: { error: { status: 503, code: error.code, message: error.message } } },
+              503,
+              { "cache-control": "no-store", "retry-after": String(error.retryAfterSeconds) },
+            );
+          }
+          if (isStatementTimeout(error)) {
+            return bundle.search(
+              request,
+              {
+                results: {
+                  error: {
+                    status: 503,
+                    code: "search.timeout",
+                    message:
+                      "The search across packs ran out of time. Try fewer words, or again later.",
+                  },
+                },
+              },
+              503,
+              { "cache-control": "no-store" },
+            );
+          }
+          throw error;
+        }
+      };
+      app.on(["GET", "HEAD"], SEARCH_PAGE_PATH, searchPage);
+      app.on(["GET", "HEAD"], `${SEARCH_PAGE_PATH}/*`, searchPage);
+    } else {
+      // Without the search the pages of it are nothing, whatever the build prerendered.
+      for (const path of [SEARCH_PAGE_PATH, `${SEARCH_PAGE_PATH}/*`]) {
+        app.on(["GET", "HEAD"], path, async (c) => bundle.notFound(await pageRequestOf(c)));
+      }
+    }
     if (auth !== undefined) {
       // The pages of whoever is signed in, and the page that asks them about a client: one
       // document for everyone, which the browser fills in with what the REST API tells it.

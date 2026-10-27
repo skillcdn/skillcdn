@@ -337,6 +337,7 @@ export function hubResultOf(body: RestSearch): HubResult {
       return findItemOf(found.item).map((item) => ({
         address: parsed.value,
         repository: found.repository,
+        ...(found.pack === undefined ? {} : { pack: { ...found.pack } }),
         item,
       }));
     }),

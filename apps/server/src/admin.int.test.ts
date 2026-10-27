@@ -415,13 +415,21 @@ describe("the landing showcase in the admin API (ADR-0028)", () => {
       body: "{",
     });
     expect(notJson.status).toBe(400);
-    expect(await (await h.request("/api/v1/showcase")).json()).toEqual({ items: [] });
+    expect(await (await h.request("/api/v1/showcase")).json()).toEqual({
+      items: [],
+      organizations: [],
+    });
+    expect(await (await put("spring", { ...entry, link: "ftp://x" })).json()).toMatchObject({
+      error: { code: "showcase.invalid", problems: [expect.stringContaining("link")] },
+    });
 
     const written = await put("spring", entry);
     expect(written.status).toBe(200);
     expect(await written.json()).toMatchObject({
       id: "spring",
       address: "/gh/acme/multi-skill@main/skills",
+      link: null,
+      origin: "pack",
       position: 1,
       durationMs: 8000,
       published: "2026-10-01",
@@ -454,15 +462,30 @@ describe("the landing showcase in the admin API (ADR-0028)", () => {
     ).toEqual([["spring"], ["spring"]]);
 
     // Replacing an entry replaces its slots; an upload in use stays; removing the entry frees it.
+    // The result itself may be linked, here a document the operator uploaded, and the entry
+    // may be a builder's own case.
+    const deck = (await (
+      await upload(h, new TextEncoder().encode("%PDF-1.7 not really"), "application/pdf")
+    ).json()) as Uploaded;
+    expect(
+      await (await put("spring", { ...entry, media: { poster: deck.sha } })).json(),
+    ).toMatchObject({
+      error: { code: "showcase.media_wrong_kind", problems: ["poster: application/pdf"] },
+    });
     await put("spring", {
       ...entry,
+      link: deck.url,
+      origin: "builder",
       media: { poster: poster.sha },
       durationMs: null,
       published: null,
     });
     const replaced = restShowcaseSchema.parse(await (await h.request("/api/v1/showcase")).json());
     expect(replaced.items[0]?.media.clip).toBeNull();
+    expect(replaced.items[0]).toMatchObject({ link: deck.url, origin: "builder" });
+    expect((await h.request(deck.url)).headers.get("content-type")).toBe("application/pdf");
     const remove = (path: string) => h.request(path, { method: "DELETE", headers: authorized });
+    expect((await remove(`/admin/v1/media/${deck.sha}`)).status).toBe(200);
     const inUse = await remove(`/admin/v1/media/${poster.sha}`);
     expect(inUse.status).toBe(409);
     expect(await inUse.json()).toMatchObject({ error: { code: "media.in_use" } });
@@ -472,7 +495,66 @@ describe("the landing showcase in the admin API (ADR-0028)", () => {
     expect((await remove("/admin/v1/showcase/spring")).status).toBe(200);
     expect((await remove("/admin/v1/showcase/spring")).status).toBe(404);
     expect((await remove(`/admin/v1/media/${poster.sha}`)).status).toBe(200);
-    expect(await (await h.request("/api/v1/showcase")).json()).toEqual({ items: [] });
+    expect(await (await h.request("/api/v1/showcase")).json()).toEqual({
+      items: [],
+      organizations: [],
+    });
+  });
+
+  it("names organizations beside the showcase, each with an upload as its mark", async () => {
+    const h = createHarness(testDatabase, { adminToken: TOKEN });
+    const mark = (await (
+      await upload(h, new TextEncoder().encode("a mark"), "image/png")
+    ).json()) as Uploaded;
+    const clip = (await (
+      await upload(h, new TextEncoder().encode("a clip"), "video/mp4")
+    ).json()) as Uploaded;
+    const put = (id: string, body: unknown) =>
+      h.request(`/admin/v1/organizations/${id}`, {
+        method: "PUT",
+        headers: asJson,
+        body: JSON.stringify(body),
+      });
+    const organization = { name: "Acme", url: "https://acme.example", logo: mark.sha };
+    expect(await (await put("Acme Corp", organization)).json()).toMatchObject({
+      error: { code: "organization.invalid_id" },
+    });
+    expect(
+      await (await put("acme", { ...organization, url: "acme.example" })).json(),
+    ).toMatchObject({ error: { code: "organization.invalid" } });
+    expect(
+      await (await put("acme", { ...organization, logo: "e".repeat(64) })).json(),
+    ).toMatchObject({ error: { code: "organization.media_missing", problems: ["e".repeat(64)] } });
+    expect(await (await put("acme", { ...organization, logo: clip.sha })).json()).toMatchObject({
+      error: { code: "organization.media_wrong_kind", problems: ["logo: video/mp4"] },
+    });
+    const written = await put("acme", { ...organization, position: 2 });
+    expect(written.status).toBe(200);
+    expect(await written.json()).toEqual({
+      id: "acme",
+      name: "Acme",
+      url: "https://acme.example",
+      logo: { url: mark.url, type: "image/png" },
+      position: 2,
+    });
+    await put("zed", { ...organization, name: "Zed", url: "https://zed.example", position: 1 });
+    const shown = restShowcaseSchema.parse(await (await h.request("/api/v1/showcase")).json());
+    expect(shown.organizations?.map((found) => found.id)).toEqual(["zed", "acme"]);
+    expect(
+      await (await h.request("/admin/v1/organizations", { headers: authorized })).json(),
+    ).toEqual({ items: shown.organizations });
+    // The mark is held while an organization shows it.
+    const remove = (path: string) => h.request(path, { method: "DELETE", headers: authorized });
+    expect((await remove(`/admin/v1/media/${mark.sha}`)).status).toBe(409);
+    expect((await remove("/admin/v1/organizations/zed")).status).toBe(200);
+    expect((await remove("/admin/v1/organizations/zed")).status).toBe(404);
+    expect((await remove("/admin/v1/organizations/acme")).status).toBe(200);
+    expect((await remove(`/admin/v1/media/${mark.sha}`)).status).toBe(200);
+    expect((await remove(`/admin/v1/media/${clip.sha}`)).status).toBe(200);
+    expect(await (await h.request("/api/v1/showcase")).json()).toEqual({
+      items: [],
+      organizations: [],
+    });
   });
 });
 

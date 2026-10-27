@@ -56,6 +56,21 @@ export function RepositoryCard(props: { readonly item: RestRepositoryCard }) {
               {t.explore.featuredSkills(item.skillCount)}
             </Badge>
           )}
+          {/* What the repository is: a pack of skills, a pack of documents, or read without a
+              manifest, said as the search results say it. */}
+          {item.status === "ready" && (
+            <Badge>
+              {
+                t.packKinds[
+                  item.manifest === null
+                    ? "repository"
+                    : (item.skillCount ?? 0) > 0
+                      ? "skills"
+                      : "documents"
+                ]
+              }
+            </Badge>
+          )}
           {item.status === "indexing" && <Badge>{t.explore.featuredIndexing}</Badge>}
           {item.status === "failed" && <Badge tone="warning">{t.explore.featuredFailed}</Badge>}
         </p>

@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useState } from "react";
 import type { AnalyticsState } from "../analytics.js";
+import { useFeatures } from "../features.js";
 import { useI18n } from "../i18n/index.js";
 import { useLegalLinks } from "../legal-links.js";
 import { Link } from "../navigation.js";
@@ -18,6 +19,7 @@ export function Layout(props: {
   readonly wide?: boolean;
 }) {
   const { t } = useI18n();
+  const features = useFeatures();
   // The deployment's own pages are written into the head by the server, so they are known only
   // once the page is up: until then, as in prerendered markup, the footer has none.
   const legal = useLegalLinks() ?? {};
@@ -54,6 +56,7 @@ export function Layout(props: {
           </Link>
           <nav className={styles.nav} aria-label={t.nav.main}>
             <Link href={PATHS.explore}>{t.nav.explore}</Link>
+            {features.search && <Link href={PATHS.search}>{t.nav.search}</Link>}
             <Link href={PATHS.docs}>{t.nav.docs}</Link>
             <a href={LINKS.repository}>{t.nav.github}</a>
           </nav>

@@ -18,8 +18,17 @@ import styles from "./states.module.css";
 // page. The addresses exist in dev/fixtures.ts. This page is not translated and never ships.
 
 const PAGES: readonly (readonly [string, string])[] = [
-  ["/", "Landing"],
-  ["/explore", "Explorer front page, with featured repositories in three states"],
+  [
+    "/",
+    "Landing: the showcase, the console that plays as it comes into view, the packs, the builders",
+  ],
+  [
+    "/explore",
+    "Explorer front page, with the search box and featured repositories in three states",
+  ],
+  ["/search", "The search across the packs, without a term"],
+  ["/search/review", "Search results across the packs: skills and documents, each in its pack"],
+  ["/search/nothing-matches-this", "Search results across the packs, with nothing found"],
   ["/terms", "A page of the deployment's own, written through the admin API"],
   ["/privacy", "A page of the deployment's own that has not been written"],
   [

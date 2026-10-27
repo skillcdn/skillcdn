@@ -217,6 +217,46 @@ describe("loadConfig", () => {
     }
   });
 
+  it("keeps the answers of the search across packs, bounds it, and lists the terms and the sections of the front page", () => {
+    const plain = loadConfig({ DATABASE_URL }, noFiles);
+    expect(plain.hub).toMatchObject({
+      cacheMs: 300_000,
+      cacheEntries: 1000,
+      concurrency: 8,
+      sitemapTerms: [],
+    });
+    expect(plain.web.tags.landingSections).toBeUndefined();
+    const set = loadConfig(
+      {
+        DATABASE_URL,
+        SEARCH_CACHE_SECONDS: "0",
+        SEARCH_CACHE_ENTRIES: "10",
+        SEARCH_CONCURRENCY: "2",
+        SEARCH_SITEMAP_TERMS: " card  news , decks,,decks",
+        LANDING_SECTIONS: "faq, packs",
+      },
+      noFiles,
+    );
+    expect(set.hub).toMatchObject({
+      cacheMs: 0,
+      cacheEntries: 10,
+      concurrency: 2,
+      sitemapTerms: ["card news", "decks"],
+    });
+    expect(set.web.tags.landingSections).toEqual(["packs", "faq"]);
+    expect(
+      loadConfig({ DATABASE_URL, LANDING_SECTIONS: "none" }, noFiles).web.tags.landingSections,
+    ).toEqual([]);
+    expect(
+      problemsOf({ DATABASE_URL, LANDING_SECTIONS: "packs,hero" }).problems.map(
+        (problem) => problem.split(":")[0],
+      ),
+    ).toEqual(["LANDING_SECTIONS"]);
+    expect(() => loadConfig({ DATABASE_URL, SEARCH_CONCURRENCY: "0" }, noFiles)).toThrow(
+      ConfigError,
+    );
+  });
+
   it("reads where a proxy names the visitor's region, and where analytics ask first", () => {
     const plain = loadConfig({ DATABASE_URL }, noFiles);
     expect(plain.http.clientCountryHeader).toBeUndefined();

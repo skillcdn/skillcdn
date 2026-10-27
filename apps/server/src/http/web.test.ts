@@ -155,6 +155,7 @@ describe("the page of an address", () => {
       origin: "https://skills.example",
       pathname: "/gh/acme/skills",
       search: "?skill=review&lang=ko",
+      features: {},
       data: {
         mount: { ready: mount },
         skill: { error: { status: 404, code: "skill.not_found", message: "No such skill." } },
@@ -288,7 +289,7 @@ describe("files", () => {
 describe("what crawlers ask for", () => {
   it("is a sitemap of the indexable pages and the given addresses in every language, each pointing at the others", async () => {
     const xml = await web.sitemap(request("/sitemap.xml"), ["/gh/acme/skills"]).text();
-    expect(xml.match(/<url>/g)).toHaveLength(7);
+    expect(xml.match(/<url>/g)).toHaveLength(9);
     expect(xml).toContain("<loc>https://skills.example/</loc>");
     // A page written in one language is listed in that one, however many frames it has.
     expect(xml).toContain("<loc>https://skills.example/docs/format</loc>");
@@ -449,6 +450,58 @@ describe("the tags an operator configures", () => {
     expect(nowhereHtml).toContain(granted);
     // Without analytics there is nothing to say.
     expect(await consentOf(web, "DE")).toBeUndefined();
+  });
+
+  it("tell the pages which sections the front page shows and whether the search is there, and render what depends on it", async () => {
+    const tagged = await loadWebBundle(build.root, {
+      publicUrl: "https://skills.example",
+      tags: { landingSections: ["packs", "faq"], search: false },
+    });
+    const explore = tagged.respond(request("/explore?lang=ko"));
+    const html = (await explore?.text()) ?? "";
+    // The tags are in the head, and a page that depends on them is rendered rather than served
+    // as the build prerendered it, in the language asked.
+    expect(html).toContain('<meta name="skillcdn-landing" content="packs,faq">');
+    expect(html).toContain('<meta name="skillcdn-search" content="off">');
+    expect(html).toContain("<title>Rendered site page /explore</title>");
+    expect(html).toContain('<html lang="ko">');
+    expect(explore?.headers.get("content-language")).toBe("ko");
+    const input = JSON.parse(/<pre id="input">(.*?)<\/pre>/s.exec(html)?.[1] ?? "{}");
+    expect(input).toEqual({
+      language: "ko",
+      origin: "https://skills.example",
+      pathname: "/explore",
+      search: "?lang=ko",
+      features: { landingSections: ["packs", "faq"], search: false },
+    });
+    // What is not a page of the build is still a file, and a file is still a file.
+    expect(await tagged.respond(request("/llms.txt"))?.text()).toContain("# Site");
+    expect(tagged.respond(request("/favicon.svg"))?.headers.get("content-type")).toBe(
+      "image/svg+xml",
+    );
+    // Every render carries the features: the front page and a search page too.
+    const front = JSON.parse(
+      /<pre id="input">(.*?)<\/pre>/s.exec(
+        (await tagged.landing(request("/"), undefined)?.text()) ?? "",
+      )?.[1] ?? "{}",
+    );
+    expect(front).toMatchObject({ features: { landingSections: ["packs", "faq"] }, data: {} });
+    const searched = tagged.search(
+      request("/search/decks"),
+      { results: { ready: { status: "ready", query: "decks", packs: 1, items: [] } } },
+      200,
+      { "cache-control": "public, max-age=60, s-maxage=300, stale-while-revalidate=300" },
+    );
+    expect(searched.headers.get("cache-control")).toBe(
+      "public, max-age=60, s-maxage=300, stale-while-revalidate=300",
+    );
+    expect(searched.headers.get("vary")).toBe("accept-language");
+    expect(await searched.text()).toContain("<title>Rendered search /search/decks</title>");
+    // Everything as the build assumed: the prerendered pages answer, with nothing in the head.
+    const plain = await answer("/explore").text();
+    expect(plain).toContain("Explore");
+    expect(plain).not.toContain("skillcdn-landing");
+    expect(plain).not.toContain("skillcdn-search");
   });
 
   it("are absent, and so is the widening, when nothing is configured", async () => {

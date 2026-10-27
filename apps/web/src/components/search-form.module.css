@@ -1,0 +1,156 @@
+.wrapper {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* The field is white: the one thing on the page to fill in, as the address field was. The button
+   sits inside it, at its end, so that the pair reads as one control; the glow under it is the
+   light every lit control on the site has. It is slim: one line of text and a button no taller
+   than the line, since a tall white box reads as a banner. */
+.form {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-invert);
+  color: var(--color-text-invert);
+  box-shadow: var(--glow);
+  transition: box-shadow var(--transition);
+}
+
+.form:focus-within {
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--color-accent) 35%, transparent),
+    var(--glow-bright);
+}
+
+.large {
+  padding-inline-start: var(--space-5);
+  border-radius: var(--radius-search);
+  box-shadow: var(--glow-bright);
+}
+
+.mark {
+  flex: none;
+  display: inline-flex;
+  color: var(--color-text-invert-muted);
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-2) var(--space-2);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: var(--text-md);
+}
+
+.large .input {
+  padding-block: var(--space-3);
+  font-size: var(--text-lg);
+}
+
+.input:focus-visible {
+  outline: none;
+}
+
+.input::placeholder {
+  color: var(--color-text-invert-faint);
+}
+
+/* A browser draws its own clear button in a search field; the one it draws is enough. */
+.input::-webkit-search-decoration {
+  display: none;
+}
+
+.submit {
+  flex: none;
+  min-height: var(--control-size);
+  padding-inline: var(--space-4);
+  /* The same lift the badges take: one line centred in a box lands a shade low without it. */
+  padding-block: calc(var(--space-2) - var(--label-optical))
+    calc(var(--space-2) + var(--label-optical));
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-accent-solid);
+  color: var(--color-accent-contrast);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+  transition: background var(--transition);
+}
+
+.submit:hover {
+  background: var(--color-accent-solid-hover);
+}
+
+.large .submit {
+  padding-inline: var(--space-5);
+  font-size: var(--text-md);
+}
+
+/* Terms to try: a row of pills, centred under the box, as many as fit. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.chip {
+  display: inline-flex;
+  padding-inline: var(--space-3);
+  padding-block: calc(var(--space-1) + 1px - var(--label-optical))
+    calc(var(--space-1) + 1px + var(--label-optical));
+  border: var(--border-lit);
+  border-radius: var(--radius-full);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  text-decoration: none;
+  transition:
+    border-color var(--transition),
+    color var(--transition);
+}
+
+.chip:hover {
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+
+@media (max-width: 40rem) {
+  .form,
+  .large {
+    padding-inline-start: var(--space-3);
+    border-radius: var(--radius-lg);
+  }
+
+  .large .input {
+    padding-block: var(--space-2);
+    font-size: var(--text-md);
+  }
+
+  .submit,
+  .large .submit {
+    padding-inline: var(--space-3);
+    font-size: var(--text-sm);
+  }
+
+  /* On a phone the chips are a row to swipe through, bleeding to the edges of the screen. */
+  .chips {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    margin-inline: calc(-1 * var(--space-4));
+    padding-inline: var(--space-4);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .chip {
+    white-space: nowrap;
+  }
+}

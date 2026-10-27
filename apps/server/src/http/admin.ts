@@ -195,6 +195,49 @@ export function registerAdmin(app: Hono<AppEnv>, dependencies: AdminDependencies
       : c.json(errorBody("admin.not_found", "No such entry."), 404);
   });
 
+  // The organizations named beside the showcase: by name, each with an upload as its mark.
+  app.get(`${ADMIN_PREFIX}/organizations`, async (c) =>
+    c.json({ items: (await showcase.list()).organizations ?? [] }),
+  );
+
+  app.put(
+    `${ADMIN_PREFIX}/organizations/:id`,
+    bodyLimit({
+      maxSize: MAX_ENTRY_BYTES,
+      onError: (c) => c.json(errorBody("request.too_large", "The request body is too large."), 413),
+    }),
+    async (c) => {
+      let body: unknown;
+      try {
+        body = await c.req.json();
+      } catch {
+        return c.json(errorBody("organization.invalid", "The body is not JSON."), 400);
+      }
+      try {
+        const organization = await showcase.putOrganization(c.req.param("id"), body);
+        logger.info(
+          { organization: organization.id, requestId: c.get("requestId") },
+          "organization written",
+        );
+        return c.json(organization);
+      } catch (error) {
+        return refused(c, error);
+      }
+    },
+  );
+
+  app.delete(`${ADMIN_PREFIX}/organizations/:id`, async (c) => {
+    const id = c.req.param("id");
+    const removed = await showcase.removeOrganization(id);
+    logger.info(
+      { organization: id, removed, requestId: c.get("requestId") },
+      "organization removed",
+    );
+    return removed
+      ? c.json({ id, removed: true })
+      : c.json(errorBody("admin.not_found", "No such organization."), 404);
+  });
+
   app.get(`${ADMIN_PREFIX}/media`, async (c) =>
     c.json({
       items: (await showcase.listMedia()).map((upload) => ({
@@ -237,7 +280,13 @@ export function registerAdmin(app: Hono<AppEnv>, dependencies: AdminDependencies
       case "removed":
         return c.json({ sha, removed: true });
       case "in_use":
-        return c.json(errorBody("media.in_use", "A showcase entry still shows the upload."), 409);
+        return c.json(
+          errorBody(
+            "media.in_use",
+            "A showcase entry, an organization or the picture of an address still uses the upload.",
+          ),
+          409,
+        );
       default:
         return c.json(errorBody("admin.not_found", "No such upload."), 404);
     }

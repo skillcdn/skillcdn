@@ -1,7 +1,13 @@
-import type { ShowcaseMediaSlot, ShowcaseTexts } from "@skillcdn/core";
+import type { ShowcaseMediaSlot, ShowcaseOrigin, ShowcaseTexts } from "@skillcdn/core";
 import { asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { type Database, drizzleOf } from "../client.js";
-import { operatorImages, operatorMedia, showcaseEntries, showcaseMedia } from "../schema.js";
+import {
+  operatorImages,
+  operatorMedia,
+  showcaseEntries,
+  showcaseMedia,
+  showcaseOrganizations,
+} from "../schema.js";
 
 // The landing showcase and the media it is made of (ADR-0028). Operator data, not tenant data.
 
@@ -11,6 +17,10 @@ export interface ShowcaseEntryRecord {
   readonly position: number;
   /** Canonical, as the address grammar prints it. */
   readonly address: string;
+  /** Where the result itself is, or `null`. */
+  readonly link: string | null;
+  /** Whose work the entry shows. */
+  readonly origin: ShowcaseOrigin;
   readonly width: number;
   readonly height: number;
   readonly durationMs: number | null;
@@ -62,6 +72,8 @@ export async function listShowcaseEntries(database: Database): Promise<ShowcaseE
       slug: row.slug,
       position: row.position,
       address: row.address,
+      link: row.link,
+      origin: row.origin,
       width: row.width,
       height: row.height,
       durationMs: row.durationMs,
@@ -78,6 +90,8 @@ export interface ShowcaseEntryInput {
   readonly slug: string;
   readonly position: number;
   readonly address: string;
+  readonly link: string | null;
+  readonly origin: ShowcaseOrigin;
   readonly width: number;
   readonly height: number;
   readonly durationMs: number | null;
@@ -126,6 +140,8 @@ export async function putShowcaseEntry(
     const values = {
       position: input.position,
       address: input.address,
+      link: input.link,
+      origin: input.origin,
       width: input.width,
       height: input.height,
       durationMs: input.durationMs,
@@ -165,6 +181,100 @@ export async function removeShowcaseEntry(database: Database, slug: string): Pro
     .delete(showcaseEntries)
     .where(eq(showcaseEntries.slug, slug))
     .returning({ id: showcaseEntries.id });
+  return rows.length > 0;
+}
+
+/** An organization named beside the showcase, with the upload that is its mark. */
+export interface ShowcaseOrganizationRecord {
+  readonly slug: string;
+  readonly name: string;
+  readonly url: string;
+  readonly logo: { readonly sha: string; readonly contentType: string };
+  readonly position: number;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}
+
+/** Every organization, in the order the page shows them: by position, then by name. */
+export async function listShowcaseOrganizations(
+  database: Database,
+): Promise<ShowcaseOrganizationRecord[]> {
+  const rows = await drizzleOf(database)
+    .select({
+      slug: showcaseOrganizations.slug,
+      name: showcaseOrganizations.name,
+      url: showcaseOrganizations.url,
+      sha: showcaseOrganizations.logoSha,
+      contentType: operatorMedia.contentType,
+      position: showcaseOrganizations.position,
+      createdAt: showcaseOrganizations.createdAt,
+      updatedAt: showcaseOrganizations.updatedAt,
+    })
+    .from(showcaseOrganizations)
+    .innerJoin(operatorMedia, eq(showcaseOrganizations.logoSha, operatorMedia.sha))
+    .orderBy(asc(showcaseOrganizations.position), asc(showcaseOrganizations.slug));
+  return rows.map(({ sha, contentType, ...row }) => ({ ...row, logo: { sha, contentType } }));
+}
+
+export interface ShowcaseOrganizationInput {
+  readonly slug: string;
+  readonly name: string;
+  readonly url: string;
+  /** The SHA-256 of the upload that is its mark. */
+  readonly logo: string;
+  readonly position: number;
+}
+
+/**
+ * Writes an organization under its name, replacing what was there. `media_missing` when the
+ * upload named as its mark does not exist; nothing is written then.
+ */
+export async function putShowcaseOrganization(
+  database: Database,
+  input: ShowcaseOrganizationInput,
+): Promise<PutShowcaseResult> {
+  const db = drizzleOf(database);
+  return db.transaction(async (tx) => {
+    const [known] = await tx
+      .select({ sha: operatorMedia.sha })
+      .from(operatorMedia)
+      .where(eq(operatorMedia.sha, input.logo))
+      .limit(1);
+    if (known === undefined) {
+      return { outcome: "media_missing", missing: [input.logo] };
+    }
+    const values = {
+      name: input.name,
+      url: input.url,
+      logoSha: input.logo,
+      position: input.position,
+    };
+    const [existing] = await tx
+      .select({ id: showcaseOrganizations.id })
+      .from(showcaseOrganizations)
+      .where(eq(showcaseOrganizations.slug, input.slug))
+      .limit(1);
+    if (existing === undefined) {
+      await tx.insert(showcaseOrganizations).values({ slug: input.slug, ...values });
+      return { outcome: "created" };
+    }
+    await tx
+      .update(showcaseOrganizations)
+      .set({ ...values, updatedAt: sql`now()` })
+      .where(eq(showcaseOrganizations.id, existing.id));
+    return { outcome: "updated" };
+  });
+}
+
+/** True when the organization was there. Its upload stays. */
+export async function removeShowcaseOrganization(
+  database: Database,
+  slug: string,
+): Promise<boolean> {
+  const rows = await drizzleOf(database)
+    .delete(showcaseOrganizations)
+    .where(eq(showcaseOrganizations.slug, slug))
+    .returning({ id: showcaseOrganizations.id });
   return rows.length > 0;
 }
 
@@ -236,8 +346,8 @@ export interface OperatorMediaRecord {
   readonly size: number;
   readonly createdAt: Date;
   /**
-   * What uses the upload: the names of the showcase entries that show it in any slot, and the
-   * addresses whose picture it is (ADR-0031).
+   * What uses the upload: the names of the showcase entries that show it in any slot, the
+   * organizations whose mark it is, and the addresses whose picture it is (ADR-0031).
    */
   readonly usedBy: readonly string[];
 }
@@ -258,6 +368,9 @@ export async function listOperatorMedia(database: Database): Promise<OperatorMed
     .select({ sha: showcaseMedia.sha, name: showcaseEntries.slug })
     .from(showcaseMedia)
     .innerJoin(showcaseEntries, eq(showcaseMedia.entryId, showcaseEntries.id));
+  const marks = await db
+    .select({ sha: showcaseOrganizations.logoSha, name: showcaseOrganizations.slug })
+    .from(showcaseOrganizations);
   const pictures = await db
     .select({ sha: operatorImages.mediaSha, name: operatorImages.address })
     .from(operatorImages)
@@ -266,13 +379,18 @@ export async function listOperatorMedia(database: Database): Promise<OperatorMed
     ...row,
     usedBy: [
       ...new Set(
-        [...uses, ...pictures].filter((use) => use.sha === row.sha).map((use) => use.name),
+        [...uses, ...marks, ...pictures]
+          .filter((use) => use.sha === row.sha)
+          .map((use) => use.name),
       ),
     ].sort(),
   }));
 }
 
-/** `in_use` leaves the upload where it is: an entry still shows it, or an address is pictured by it. */
+/**
+ * `in_use` leaves the upload where it is: an entry still shows it, an organization is marked by
+ * it, or an address is pictured by it.
+ */
 export async function removeOperatorMedia(
   database: Database,
   sha: string,
@@ -284,12 +402,17 @@ export async function removeOperatorMedia(
       .from(showcaseMedia)
       .where(eq(showcaseMedia.sha, sha))
       .limit(1);
+    const [mark] = await tx
+      .select({ id: showcaseOrganizations.id })
+      .from(showcaseOrganizations)
+      .where(eq(showcaseOrganizations.logoSha, sha))
+      .limit(1);
     const [picture] = await tx
       .select({ id: operatorImages.id })
       .from(operatorImages)
       .where(eq(operatorImages.mediaSha, sha))
       .limit(1);
-    if (use !== undefined || picture !== undefined) {
+    if (use !== undefined || mark !== undefined || picture !== undefined) {
       return "in_use";
     }
     const rows = await tx

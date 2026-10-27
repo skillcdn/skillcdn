@@ -6,6 +6,7 @@ import { Readable } from "node:stream";
 import { pathToFileURL } from "node:url";
 import {
   AUTH_META_NAME,
+  FEATURE_META_NAMES,
   type GitHostKey,
   LEGAL_PAGE_PATHS,
   type LegalDocumentKind,
@@ -92,6 +93,7 @@ const CONTENT_TYPES: Readonly<Record<string, string>> = {
   ".txt": "text/plain; charset=utf-8",
   ".xml": "application/xml; charset=utf-8",
   ".webmanifest": "application/manifest+json",
+  ".pdf": "application/pdf",
   ".woff2": "font/woff2",
   ".ttf": "font/ttf",
   ".otf": "font/otf",
@@ -130,6 +132,19 @@ export interface PageTags {
    * (specs/permissions.md). The pages offer signing in only when they are told so.
    */
   readonly signIn?: GitHostKey | undefined;
+  /**
+   * The sections the front page shows after its first screen (ADR-0075), in order; left out,
+   * every section. Written into the head of every page, where the pages read it.
+   */
+  readonly landingSections?: readonly string[] | undefined;
+  /** Whether the search across packs is there; left out, it is. The pages hide the box without it. */
+  readonly search?: boolean | undefined;
+}
+
+/** What the pages are told of the deployment, as the render module takes it with every page. */
+export interface RenderFeatures {
+  readonly landingSections?: readonly string[] | undefined;
+  readonly search?: boolean | undefined;
 }
 
 /** How the legal surface travels into a page: standard link types, and one meta for the contact. */
@@ -207,6 +222,14 @@ function headTags(tags: PageTags): { readonly html: string; readonly inlineScrip
   }
   if (tags.signIn !== undefined) {
     elements.push(`<meta name="${AUTH_META_NAME}" content="${escapeAttribute(tags.signIn)}">`);
+  }
+  if (tags.landingSections !== undefined) {
+    elements.push(
+      `<meta name="${FEATURE_META_NAMES.landingSections}" content="${escapeAttribute(tags.landingSections.join(","))}">`,
+    );
+  }
+  if (tags.search === false) {
+    elements.push(`<meta name="${FEATURE_META_NAMES.search}" content="off">`);
   }
   if (tags.googleAnalyticsId !== undefined) {
     // Consent mode first (ADR-0051): analytics storage is denied by default in the regions that
@@ -343,28 +366,42 @@ export interface AddressData {
   readonly owner?: PageAnswer;
 }
 
+/** What every render of a page is given: where it is, in which language, and what the deployment has. */
+interface RenderInput {
+  readonly language: string;
+  readonly origin: string;
+  readonly pathname: string;
+  readonly search: string;
+  readonly features: RenderFeatures;
+}
+
 /** The contract of the render module in a build, as the UI defines it. */
 interface RenderModule {
   renderAddressPage(
     template: string,
-    input: {
-      readonly language: string;
-      readonly origin: string;
-      readonly pathname: string;
-      readonly search: string;
-      readonly data: AddressData;
-    },
+    input: RenderInput & { readonly data: AddressData },
   ): { readonly html: string; readonly indexable: boolean };
   /** The front page with the operator's showcase (ADR-0028). An older build has no such thing. */
   renderLandingPage?(
     template: string,
-    input: {
-      readonly language: string;
-      readonly origin: string;
-      readonly pathname: string;
-      readonly search: string;
-      readonly data: { readonly showcase: PageAnswer };
-    },
+    input: RenderInput & { readonly data: { readonly showcase?: PageAnswer | undefined } },
+  ): { readonly html: string; readonly indexable: boolean };
+  /**
+   * The page of a search across the packs (ADR-0075), with its results, or without a term.
+   * An older build has no such thing.
+   */
+  renderSearchPage?(
+    template: string,
+    input: RenderInput & { readonly data: { readonly results?: PageAnswer | undefined } },
+  ): { readonly html: string; readonly indexable: boolean };
+  /**
+   * A page of the build that depends on nothing but what the deployment has: rendered per
+   * request where the deployment differs from what the build prerendered. An older build has
+   * no such thing.
+   */
+  renderSitePage?(
+    template: string,
+    input: RenderInput,
   ): { readonly html: string; readonly indexable: boolean };
   renderLlmsTxt?(language: string, showcase: unknown): string;
   /** The words of the social preview of an address (ADR-0032). An older build has no such thing. */
@@ -381,13 +418,7 @@ interface RenderModule {
   /** A page of the deployment's own with its document, or with why there is none (ADR-0029). */
   renderLegalPage?(
     template: string,
-    input: {
-      readonly language: string;
-      readonly origin: string;
-      readonly pathname: string;
-      readonly search: string;
-      readonly data: { readonly legal: PageAnswer };
-    },
+    input: RenderInput & { readonly data: { readonly legal: PageAnswer } },
   ): { readonly html: string; readonly indexable: boolean };
 }
 
@@ -413,10 +444,21 @@ export interface WebBundle {
    */
   view(request: WebRequest): Response;
   /**
-   * The front page rendered with the operator's showcase, or `undefined` when the build cannot
-   * render it: the prerendered page, with the build's own showcase, answers then.
+   * The front page rendered with the operator's showcase, or without one, or `undefined` when
+   * the build cannot render it: the prerendered page, with the build's own showcase, answers then.
    */
-  landing(request: WebRequest, showcase: PageAnswer): Response | undefined;
+  landing(request: WebRequest, showcase: PageAnswer | undefined): Response | undefined;
+  /**
+   * The page of a search across the packs (ADR-0075): with its results, or with nothing for
+   * the page of the box alone, as the build renders it; the frame when it cannot. `extra`
+   * headers say how long the page may be kept.
+   */
+  search(
+    request: WebRequest,
+    data: { readonly results?: PageAnswer | undefined },
+    status?: number,
+    extra?: Record<string, string>,
+  ): Response;
   /** llms.txt written with the operator's showcase, or `undefined` when the build cannot. */
   llmsTxt(request: WebRequest, showcase: unknown): Response | undefined;
   /**
@@ -426,9 +468,15 @@ export interface WebBundle {
   legal(request: WebRequest, kind: string, data: PageAnswer, status?: number): Response;
   /**
    * The sitemap: the indexable pages of the build, these addresses, and these pages of the
-   * deployment's own, in every language.
+   * deployment's own, in every language; `without` names pages of the build the deployment
+   * does not have.
    */
-  sitemap(request: WebRequest, addresses: readonly string[], pages?: readonly string[]): Response;
+  sitemap(
+    request: WebRequest,
+    addresses: readonly string[],
+    pages?: readonly string[],
+    options?: { readonly without?: readonly string[] },
+  ): Response;
   /** The page for a URL that is nothing, with status 404. */
   notFound(request: WebRequest): Response;
   /**
@@ -665,6 +713,13 @@ export async function loadWebBundle(
   const PAGE_HEADERS = pageHeaders(options.tags ?? {}, tags.inlineScripts);
   const analytics = options.tags?.googleAnalyticsId !== undefined;
   const consentRegions = options.tags?.analyticsConsentRegions ?? DEFAULT_CONSENT_REGIONS;
+  // What the pages are told of the deployment (ADR-0075); where that differs from what the
+  // build assumed, every page that depends on it is rendered rather than served prerendered.
+  const features: RenderFeatures = {
+    landingSections: options.tags?.landingSections,
+    search: options.tags?.search,
+  };
+  const customized = features.landingSections !== undefined || features.search === false;
   let manifest: z.infer<typeof manifestSchema>;
   try {
     manifest = manifestSchema.parse(JSON.parse(await readFile(join(root, MANIFEST_FILE), "utf8")));
@@ -901,11 +956,13 @@ export async function loadWebBundle(
     request: WebRequest,
     addresses: readonly string[],
     pages: readonly string[] = [],
+    options: { readonly without?: readonly string[] } = {},
   ): Response => {
     const origin = originOf(request);
+    const without = options.without ?? [];
     const entries = [
       ...manifest.routes
-        .filter((route) => route.indexable)
+        .filter((route) => route.indexable && !without.includes(route.path))
         .flatMap((route) =>
           sitemapEntry(
             origin,
@@ -1014,6 +1071,37 @@ export async function loadWebBundle(
       const path = request.url.pathname;
       const route = routes.get(path);
       if (route !== undefined) {
+        const render = renderer?.module.renderSitePage;
+        if (
+          customized &&
+          renderer !== undefined &&
+          render !== undefined &&
+          (route.contentType ?? HTML) === HTML
+        ) {
+          const origin = originOf(request);
+          const { language, forced } = languageOf(request);
+          const rendered = render.call(renderer.module, renderer.template, {
+            language,
+            origin,
+            pathname: path,
+            search: request.url.search,
+            features,
+          });
+          if (
+            typeof rendered !== "object" ||
+            rendered === null ||
+            typeof rendered.html !== "string"
+          ) {
+            throw new WebBundleError("the render module did not return a page");
+          }
+          return html(
+            request,
+            withOrigin(rendered.html, origin),
+            language,
+            200,
+            varyOn(forced, undefined),
+          );
+        }
         return page(request, route.files, route.contentType ?? HTML);
       }
       // The lookup is by exact URL path in a list made at startup: no path is ever built from
@@ -1038,6 +1126,7 @@ export async function loadWebBundle(
         origin,
         pathname: request.url.pathname,
         search: request.url.search,
+        features,
         data,
       });
       if (typeof rendered !== "object" || rendered === null || typeof rendered.html !== "string") {
@@ -1061,6 +1150,7 @@ export async function loadWebBundle(
         origin,
         pathname: request.url.pathname,
         search: request.url.search,
+        features,
         data: {},
       });
       if (typeof rendered !== "object" || rendered === null || typeof rendered.html !== "string") {
@@ -1086,7 +1176,8 @@ export async function loadWebBundle(
         origin,
         pathname: request.url.pathname,
         search: request.url.search,
-        data: { showcase },
+        features,
+        data: showcase === undefined ? {} : { showcase },
       });
       if (typeof rendered !== "object" || rendered === null || typeof rendered.html !== "string") {
         throw new WebBundleError("the render module did not return a front page");
@@ -1098,6 +1189,29 @@ export async function loadWebBundle(
         200,
         varyOn(forced, undefined),
       );
+    },
+    search(request, data, status = 200, extra = {}) {
+      const render = renderer?.module.renderSearchPage;
+      if (renderer === undefined || render === undefined) {
+        return page(request, manifest.shell, HTML, status, extra);
+      }
+      const origin = originOf(request);
+      const { language, forced } = languageOf(request);
+      const rendered = render.call(renderer.module, renderer.template, {
+        language,
+        origin,
+        pathname: request.url.pathname,
+        search: request.url.search,
+        features,
+        data,
+      });
+      if (typeof rendered !== "object" || rendered === null || typeof rendered.html !== "string") {
+        throw new WebBundleError("the render module did not return a search page");
+      }
+      return html(request, withOrigin(rendered.html, origin), language, status, {
+        ...varyOn(forced, undefined),
+        ...extra,
+      });
     },
     legal(request, kind, data, status = 200) {
       const render = renderer?.module.renderLegalPage;
@@ -1111,6 +1225,7 @@ export async function loadWebBundle(
         origin,
         pathname: request.url.pathname,
         search: request.url.search,
+        features,
         data: { legal: data },
       });
       if (typeof rendered !== "object" || rendered === null || typeof rendered.html !== "string") {
