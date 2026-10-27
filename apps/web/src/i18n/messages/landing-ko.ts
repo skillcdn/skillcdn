@@ -247,23 +247,19 @@ export const landingKo: LandingMessages = {
       {
         title: "팩",
         body: "skillcdn/skills를 포크하세요. 마케팅, 디자인, 개발, 프로덕트, 미디어의 스킬이 내 회사 것이 됩니다.",
-        message: (host: string) => `${host}/gh/skillcdn/skills 를 연결해줘`,
         link: "팩 열기",
       },
       {
         title: "콘솔",
         body: "작업 보드. 혼자여도 조직처럼 돌아갑니다. 콘솔 팩을 연결하면 에이전트가 설치부터 안내합니다.",
-        message: (host: string) => `${host}/gh/skillcdn/console 을 연결해줘`,
         link: "콘솔 팩 열기",
       },
       {
         title: "에이전트",
         body: "쓰던 앱을 콘솔에 연결하면 팩의 스킬은 따라옵니다. ChatGPT, Claude, Cursor, Codex, Gemini CLI.",
-        message: () => "앱별 연결 안내 보기",
         link: "연결 안내",
       },
     ],
-    copy: "메시지 복사",
   },
   packs: {
     eyebrow: "팩",

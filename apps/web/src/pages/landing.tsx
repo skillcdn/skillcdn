@@ -6,7 +6,6 @@ import { resourceKeys } from "../api/keys.js";
 import { useResource } from "../api/use-resource.js";
 import { AddressForm } from "../components/address-form.js";
 import { BrandSymbol } from "../components/brand.js";
-import { CopyButton } from "../components/code-block.js";
 import { ConsoleDemo } from "../components/console-demo.js";
 import glass from "../components/glass.module.css";
 import { OrganizationsStrip } from "../components/organizations-strip.js";
@@ -277,7 +276,6 @@ export function LandingPage(props: { readonly origin: string }) {
             <SectionHead kicker={copy.steps.eyebrow} title={copy.steps.title} />
             <ol className={styles.timeline}>
               {copy.steps.items.map((step, index) => {
-                const message = step.message(host);
                 const href =
                   index === 0
                     ? `/gh/skillcdn/skills`
@@ -298,14 +296,8 @@ export function LandingPage(props: { readonly origin: string }) {
                     </span>
                     <h3>{step.title}</h3>
                     <p>{step.body}</p>
-                    {index < 2 ? (
-                      <div className={styles.message}>
-                        <code>{message}</code>
-                        <CopyButton text={message} label={copy.steps.copy} />
-                      </div>
-                    ) : null}
                     <Link className={styles.stepLink} href={href}>
-                      {index < 2 ? step.link : message}
+                      {step.link}
                       <ArrowIcon />
                     </Link>
                   </li>

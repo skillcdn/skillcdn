@@ -277,23 +277,19 @@ export const landingEn = {
       {
         title: "Pack",
         body: "Fork skillcdn/skills. The skills of marketing, design, engineering, product and media become your company’s own.",
-        message: (host: string) => `Connect ${host}/gh/skillcdn/skills`,
         link: "Open the pack",
       },
       {
         title: "Console",
         body: "A board of work. Alone, it still runs like an organization. Connect the console pack and your agent walks you through the setup.",
-        message: (host: string) => `Connect ${host}/gh/skillcdn/console`,
         link: "Open the console pack",
       },
       {
         title: "Agents",
         body: "Connect the app you already use to the console, and the pack’s skills come with it. ChatGPT, Claude, Cursor, Codex, Gemini CLI.",
-        message: () => "See how to connect each app",
         link: "Connection guide",
       },
     ],
-    copy: "Copy the message",
   },
   packs: {
     eyebrow: "Packs",
