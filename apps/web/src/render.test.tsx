@@ -34,7 +34,7 @@ import {
 } from "./entry-server.js";
 import { messagesFor } from "./i18n/index.js";
 import { defaultShowcase } from "./showcase.js";
-import { CONSOLE_PACK_ADDRESS, DEFAULT_SHOWCASE_MEDIA, LINKS } from "./site.js";
+import { CONSOLE_PACK_ADDRESS, DEFAULT_SHOWCASE_MEDIA, LINKS, localizedPath } from "./site.js";
 
 const TEMPLATE = `<!doctype html>\n${TEMPLATE_MARKERS.htmlLang}<head>${TEMPLATE_MARKERS.head}</head><body>${TEMPLATE_MARKERS.root}</body></html>`;
 
@@ -285,9 +285,16 @@ describe("prerendered pages", () => {
         expect(body, id).toContain(`src="${entry.poster}"`);
       }
       expect(body).toContain(t.landing.showcase.origins.pack);
-      // No clip in the build's own showcase: nothing plays, nothing is loaded from elsewhere,
-      // and no style is written into the page.
-      expect(body).not.toContain("<video");
+      // The ad leads, in the cut of the page's language: its clip is loaded only when played,
+      // nothing is loaded from elsewhere, and no style is written into the page.
+      const ad = DEFAULT_SHOWCASE_MEDIA.entries.ad;
+      expect(body).toContain(t.landing.showcase.entries.ad.title);
+      expect(body).toContain(`src="${localizedPath(ad.clip, language)}"`);
+      expect(body).toContain(`poster="${localizedPath(ad.poster, language)}"`);
+      expect(body).toContain('preload="none"');
+      expect(body.indexOf(t.landing.showcase.entries.ad.title)).toBeLessThan(
+        body.indexOf(t.landing.showcase.entries.cards.title),
+      );
       expect(body).not.toMatch(/style="|<(?:img|video)[^>]+src="https?:/);
       // The organizations of the build, the console's board in the visitor's words, the way to
       // the console pack, the steps, the builders and the questions.

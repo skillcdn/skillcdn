@@ -532,9 +532,16 @@
   /* A showcase entry's stage: every poster is drawn at this ratio, whatever it holds. */
   --showcase-ratio: 16 / 10;
   --showcase-lead-min: 18rem;
+  /* A tall result in the stage: its ratio on a card, the height of the lead's, and how its
+     poster is blurred behind it. */
+  --showcase-portrait-ratio: 4 / 5;
+  --showcase-lead-portrait: 27rem;
+  --showcase-backdrop-blur: 28px;
+  --showcase-backdrop-opacity: 0.55;
   /* A result shown over the page: how wide the viewer may be, the bar across its top, and how
      long it takes to arrive. */
   --viewer-width: 90rem;
+  --viewer-min-width: 24rem;
   --viewer-bar: 3.25rem;
   --viewer-arrive: 180ms;
   /* The cloud of packs, like stars: how far a pill leans after the pointer and how long it

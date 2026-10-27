@@ -148,7 +148,7 @@ export function LandingPage(props: { readonly origin: string }) {
   // page; while they are not there, and when there are none, the build's own stand.
   const showcase = useResource(resourceKeys.showcase(), (signal) => api.showcase(signal));
   const loaded = showcase.state === "ready" ? showcase.value : undefined;
-  const entries = showcaseEntries(loaded);
+  const entries = showcaseEntries(loaded, language);
   const organizations = showcaseOrganizations(loaded);
   const shows = (section: LandingSection) => features.landingSections.includes(section);
 

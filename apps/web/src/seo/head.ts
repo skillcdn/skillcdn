@@ -296,7 +296,7 @@ export function buildHead(
 
   const jsonLd: Record<string, unknown>[] = [];
   // The front page shows the operator's showcase, else the build's own (ADR-0028).
-  const showcase = route.name === "landing" ? showcaseEntries(data?.showcase) : [];
+  const showcase = route.name === "landing" ? showcaseEntries(data?.showcase, language) : [];
   if (route.name === "landing" && canonical !== undefined) {
     // The site as one entity, named the same everywhere, with its logo and its source.
     const publisher = {

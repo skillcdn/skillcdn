@@ -555,7 +555,7 @@ export function renderLlmsTxt(language: Language, showcase?: RestShowcase): stri
     "",
     t.landing.showcase.lead,
     "",
-    ...showcaseEntries(showcase).map((entry) => {
+    ...showcaseEntries(showcase, language).map((entry) => {
       const words = showcaseTexts(entry, language);
       const requirement = words.requirement === null ? "" : ` ${words.requirement}.`;
       const link = entry.link ?? null;

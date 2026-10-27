@@ -12,7 +12,7 @@ import { cx, ExternalIcon } from "./ui.js";
 // it is a step in history, the one way a phone's back button can close anything.
 
 /** What the viewer can show in place. */
-export type Viewable = "picture" | "document";
+export type Viewable = "picture" | "document" | "clip";
 
 /** The mark of the viewer's step in history, so that going back closes it and nothing else. */
 const HISTORY_KEY = "skillcdn:showcase";
@@ -25,17 +25,18 @@ export function viewable(entry: RestShowcaseEntry): Viewable | undefined {
   const type = entry.link === undefined || entry.link === null ? null : (entry.linkType ?? null);
   if (type === null) return undefined;
   if (type.startsWith("image/")) return "picture";
+  if (type.startsWith("video/")) return "clip";
   if (type === "application/pdf") return "document";
   return undefined;
 }
 
 /**
- * Whether the result is shown here rather than opened: a picture always; a document only where
+ * Whether the result is shown here rather than opened: a picture or a clip always; a document only where
  * the browser can draw the whole of it in a frame, which a touch screen's browser does not (it
  * shows the first page and stops), so there the document opens in a tab of its own.
  */
 export function shownInPlace(kind: Viewable): boolean {
-  return kind === "picture" || window.matchMedia("(pointer: fine)").matches;
+  return kind !== "document" || window.matchMedia("(pointer: fine)").matches;
 }
 
 function marked(state: unknown): boolean {
@@ -93,7 +94,7 @@ export function ShowcaseViewer(props: {
     // biome-ignore lint/a11y/useKeyWithClickEvents: a press beside the result closes it, as Escape does by itself
     <dialog
       ref={dialog}
-      className={styles.dialog}
+      className={cx(styles.dialog, props.kind === "clip" && styles.tall)}
       aria-labelledby={title}
       onClose={closed}
       onClick={(event) => {
@@ -142,6 +143,17 @@ export function ShowcaseViewer(props: {
                 onLoad={() => setLoaded(true)}
               />
             </>
+          ) : props.kind === "clip" ? (
+            // biome-ignore lint/a11y/useMediaCaption: nothing is said in the clip; the card's words describe it
+            <video
+              className={styles.clip}
+              src={link}
+              poster={props.entry.media.poster.url}
+              controls
+              autoPlay
+              playsInline
+              aria-label={texts.clip ?? texts.title}
+            />
           ) : (
             <iframe className={styles.frameOf} src={link} title={texts.title} />
           )}

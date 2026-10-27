@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import { messagesFor } from "../i18n/index.js";
 import { LANGUAGES } from "../i18n/languages.js";
 import { matchRoute } from "../router.js";
+import { DEFAULT_SHOWCASE_MEDIA, localizedPath } from "../site.js";
 import { buildHead, renderHead, SEARCH_INDEX_MIN_RESULTS } from "./head.js";
 
 const ORIGIN = "https://skills.example";
@@ -115,12 +116,18 @@ describe("buildHead", () => {
   it("describes the product as structured data on the front page, in the page's language", () => {
     for (const language of LANGUAGES) {
       const head = buildHead(matchRoute("/", ""), language, ORIGIN);
-      // The build's own showcase has no clip: nothing to describe as a video.
+      // The build's own showcase leads with a clip, which is described as a video, in the cut
+      // of the page's language.
       expect(head.jsonLd.map((data) => data["@type"])).toEqual([
         "WebSite",
         "SoftwareApplication",
+        "VideoObject",
         "FAQPage",
       ]);
+      expect(head.jsonLd[2]).toMatchObject({
+        contentUrl: `${ORIGIN}${localizedPath(DEFAULT_SHOWCASE_MEDIA.entries.ad.clip, language)}`,
+        duration: "PT15S",
+      });
       expect(head.jsonLd.every((data) => data.inLanguage === language)).toBe(true);
       // The site is one entity with a logo, and offers its search to search engines (ADR-0075).
       expect(head.jsonLd[0]?.publisher).toMatchObject({
@@ -251,7 +258,7 @@ describe("buildHead", () => {
       buildHead(matchRoute("/", ""), "en", ORIGIN, { showcase: { items: [] } }).jsonLd.map(
         (data) => data["@type"],
       ),
-    ).toEqual(["WebSite", "SoftwareApplication", "FAQPage"]);
+    ).toEqual(["WebSite", "SoftwareApplication", "VideoObject", "FAQPage"]);
   });
 
   it("offers the documentation to search engines as pages in English, each with a card drawn for it", () => {
@@ -503,7 +510,8 @@ describe("renderHead", () => {
       '<meta property="og:image" content="https://skills.example/og/og-ko.png"',
     );
     expect(html).toContain('<meta name="twitter:card" content="summary_large_image"');
-    expect(html.match(/application\/ld\+json/g)).toHaveLength(3);
+    // The site, the application, the ad as a video, and the questions.
+    expect(html.match(/application\/ld\+json/g)).toHaveLength(4);
 
     const hidden = renderHead(buildHead(matchRoute("/gh/acme/skills", ""), "en", ORIGIN));
     expect(hidden).toContain('<meta name="robots" content="noindex,follow"');

@@ -63,12 +63,24 @@ export const landingEn = {
     /** The result shown over the page: the way to it as a file, and the way out. */
     viewer: { open: "Open in a new tab", close: "Close" },
     entries: {
+      ad: {
+        title: "“Make a 15-second short ad for SkillCDN”",
+        body: "A reference picked from the ad library, a founder cast, three frames. The first shot is generated video; the other two are the approved frames set in motion, a draft. Cut in Korean and in English.",
+        tags: ["15 s, 9:16", "Two languages"],
+        action: "Watch the ad",
+        credit: "skillcdn/skills · marketing",
+        /** What the skill needs besides the AI app; `null` for nothing. */
+        requirement: "Needs a Higgsfield connection.",
+        poster:
+          "A 15-second vertical ad. At night in a small office a founder moves a card on her board; then a close-up of the board; then the founder at dawn with a mug; then a SkillCDN card with the address. The lines appear on screen one after another.",
+      },
       cards: {
         title: "“Make Instagram card news from this week’s news”",
         body: "One news story became a sourced brief, then an eight-slide carousel, reviewed at phone size, with a checklist before posting.",
         tags: ["8-slide carousel", "Sources cited"],
         action: "See the result",
         credit: "skillcdn/skills · design",
+        requirement: null,
         poster:
           "The first three slides of a card news carousel, fanned out. The cover reads, in Korean, that the price of AI for repetitive work has halved.",
       },
@@ -78,6 +90,7 @@ export const landingEn = {
         tags: ["12 slides", "HTML + PDF"],
         action: "Open the PDF",
         credit: "skillcdn/skills · design",
+        requirement: null,
         poster: "Twelve slides of a deck on one sheet: large titles and diagrams on a dark ground.",
       },
       looks: {
@@ -86,6 +99,7 @@ export const landingEn = {
         tags: ["4 looks", "Comparison sheet"],
         action: "See the sheet",
         credit: "skillcdn/skills · design",
+        requirement: null,
         poster:
           "The first screen of one landing page in four looks on a two-by-two sheet: dark glass, a paper-like light page, a poster, quiet typography.",
       },

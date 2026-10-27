@@ -32,12 +32,23 @@ export const landingKo: LandingMessages = {
     skill: "스킬 보기",
     viewer: { open: "새 탭에서 열기", close: "닫기" },
     entries: {
+      ad: {
+        title: "“SkillCDN 쇼츠 광고 15초 만들어줘”",
+        body: "광고 라이브러리에서 참고 광고를 고르고, 창업자를 캐스팅해 세 장면을 잡았습니다. 첫 장면은 생성 영상, 나머지 둘은 승인된 프레임에 움직임을 준 초안입니다. 한국어와 영어 편집본.",
+        tags: ["15초 9:16", "한·영 편집본"],
+        action: "영상 보기",
+        credit: "skillcdn/skills · 마케팅",
+        requirement: "Higgsfield 연결이 필요합니다.",
+        poster:
+          "15초 세로 광고. 밤의 작은 사무실에서 창업자가 보드의 카드를 옮기고, 보드 클로즈업, 머그잔을 든 새벽의 창업자, 주소가 적힌 SkillCDN 카드로 이어집니다. 문장들이 화면에 차례로 뜹니다.",
+      },
       cards: {
         title: "“이번 주 이슈로 인스타 카드뉴스 만들어줘”",
         body: "뉴스 하나가 출처 달린 브리프를 거쳐 8장 캐러셀이 됐습니다. 폰 크기 검토와 게시 전 체크리스트까지.",
         tags: ["8장 캐러셀", "출처 표기"],
         action: "결과 보기",
         credit: "skillcdn/skills · 디자인",
+        requirement: null,
         poster:
           "카드뉴스 캐러셀의 첫 세 장이 부채꼴로 펼쳐져 있습니다. 표지에는 “반복 업무 맡길 AI, 값이 절반으로 내렸다”라고 적혀 있습니다.",
       },
@@ -47,6 +58,7 @@ export const landingKo: LandingMessages = {
         tags: ["12장", "HTML + PDF"],
         action: "PDF 보기",
         credit: "skillcdn/skills · 디자인",
+        requirement: null,
         poster:
           "열두 장의 슬라이드가 한 장의 시트에 모여 있습니다. 어두운 바탕에 큰 제목과 도표가 있습니다.",
       },
@@ -56,6 +68,7 @@ export const landingKo: LandingMessages = {
         tags: ["룩 4개", "비교 시트"],
         action: "시트 보기",
         credit: "skillcdn/skills · 디자인",
+        requirement: null,
         poster:
           "한 랜딩 페이지의 첫 화면이 네 가지 룩으로 2×2 시트에 놓여 있습니다. 어두운 글래스, 종이 같은 밝은 판, 포스터, 조용한 타이포그래피.",
       },

@@ -19,6 +19,12 @@
   overscroll-behavior: contain;
 }
 
+/* A clip, taller than wide: the viewer is as wide as the clip and no wider. */
+.tall {
+  width: fit-content;
+  min-width: min(var(--viewer-min-width), calc(100vw - 2 * var(--space-4)));
+}
+
 .dialog::backdrop {
   background: var(--color-scrim);
   backdrop-filter: var(--scrim-backdrop);
@@ -144,6 +150,13 @@
 
 .loaded {
   opacity: 1;
+}
+
+.clip {
+  display: block;
+  max-width: 100%;
+  height: calc(100dvh - 2 * var(--space-4) - var(--viewer-bar) - 2px);
+  background: var(--color-bg);
 }
 
 .document {

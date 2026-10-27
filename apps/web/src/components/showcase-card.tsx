@@ -23,6 +23,8 @@ function Stage(props: { readonly entry: RestShowcaseEntry; readonly description:
   const video = useRef<HTMLVideoElement>(null);
   const [failed, setFailed] = useState(false);
   const { media, width, height } = props.entry;
+  // A tall result, a phone's clip, stands whole in the stage, over itself blurred.
+  const portrait = height > width;
 
   useEffect(() => {
     const node = video.current;
@@ -41,7 +43,10 @@ function Stage(props: { readonly entry: RestShowcaseEntry; readonly description:
   }, [inView]);
 
   return (
-    <div ref={ref} className={styles.stage}>
+    <div ref={ref} className={cx(styles.stage, portrait && styles.portrait)}>
+      {portrait && (
+        <img className={styles.backdrop} src={media.poster.url} alt="" aria-hidden="true" />
+      )}
       {failed || media.clip === null ? (
         <ClipAnimation entry={props.entry} alt={props.description} />
       ) : (

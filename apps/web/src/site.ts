@@ -1,4 +1,5 @@
 import { AUTH_META_NAME, REFERENCE_REPOSITORY_ADDRESS } from "@skillcdn/core";
+import type { Language } from "./i18n/languages.js";
 import { ORIGIN_META_NAME, ORIGIN_PLACEHOLDER, REPOSITORY_URL } from "./site-constants.js";
 
 // Facts about the site that are not copy: where things link to, and how the public origin
@@ -22,33 +23,67 @@ export const LINKS = {
   builders: BUILDERS_URL,
 } as const;
 
+/** A file of the build's own showcase: one for every language, or one cut per language. */
+export type LocalizedPath = string | Readonly<Record<Language, string>>;
+
+/** The path of such a file in a language. */
+export function localizedPath(path: LocalizedPath, language: Language): string {
+  return typeof path === "string" ? path : path[language];
+}
+
 /**
  * The media of the build's own showcase (ADR-0028), which the front page leads with until the
  * operator writes a showcase of its own through the admin API. Each is a real result of a skill
  * of the reference pack, made by an agent from one sentence and bundled with the site: a poster
- * of it, the result itself to open and what it is, and the address of the skill it came from. The words are in
- * the language packs (`showcase.ts` puts the two together). Pixel size of every poster.
+ * of it, the result itself to open and what it is, a clip where the result is one, and the
+ * address of the skill it came from, with the pixel size of the poster and the clip. A result
+ * with words in it is cut per language, and the page shows the cut of its own. The words are
+ * in the language packs (`showcase.ts` puts the two together).
  */
 export const DEFAULT_SHOWCASE_MEDIA = {
-  width: 1440,
-  height: 900,
   entries: {
+    ad: {
+      width: 720,
+      height: 1280,
+      poster: { en: "/showcase/skillcdn-ad-en.webp", ko: "/showcase/skillcdn-ad-ko.webp" },
+      clip: { en: "/showcase/skillcdn-ad-en.mp4", ko: "/showcase/skillcdn-ad-ko.mp4" },
+      link: { en: "/showcase/skillcdn-ad-en.mp4", ko: "/showcase/skillcdn-ad-ko.mp4" },
+      linkType: "video/mp4",
+      durationMs: 15_000,
+      published: "2026-10-27",
+      address: `${REFERENCE_REPOSITORY_ADDRESS}/marketing/skills/higgsfield-shorts-ad`,
+    },
     cards: {
+      width: 1440,
+      height: 900,
       poster: "/showcase/card-news.webp",
+      clip: null,
       link: "/showcase/card-news-sheet.webp",
       linkType: "image/webp",
+      durationMs: null,
+      published: null,
       address: `${REFERENCE_REPOSITORY_ADDRESS}/design/skills/html-card-news-from-brief`,
     },
     deck: {
+      width: 1440,
+      height: 900,
       poster: "/showcase/builders-intro.webp",
+      clip: null,
       link: "/showcase/builders-intro.pdf",
       linkType: "application/pdf",
+      durationMs: null,
+      published: null,
       address: `${REFERENCE_REPOSITORY_ADDRESS}/design/skills/html-deck-from-outline`,
     },
     looks: {
+      width: 1440,
+      height: 900,
       poster: "/showcase/hero-looks.webp",
+      clip: null,
       link: "/showcase/hero-looks-sheet.webp",
       linkType: "image/webp",
+      durationMs: null,
+      published: null,
       address: `${REFERENCE_REPOSITORY_ADDRESS}/design/skills/html-design-variations`,
     },
   },
