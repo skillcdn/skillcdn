@@ -221,7 +221,7 @@ function Card(props: {
   );
 }
 
-/** The hand: pointing on its way to a card and away from it, closed while it holds one. */
+/** The hand: open on its way to a card and away from it, closed while it holds one. */
 function Pointer(props: { readonly grabbing: boolean }) {
   return (
     <svg
@@ -235,7 +235,7 @@ function Pointer(props: { readonly grabbing: boolean }) {
       {props.grabbing ? (
         <path d="M7.4 13.2V11.3C7.4 9.9 9.6 9.9 9.6 11.3V10.6C9.6 9.1 12 9.1 12 10.6V10.9C12 9.4 14.4 9.4 14.4 10.9V11.7C14.4 10.3 16.8 10.3 16.8 11.7V16.4C16.8 19.6 14.5 22 11.4 22H10.5C8.4 22 6.7 21 5.7 19.4L3.5 16.1C2.8 15 3.7 13.6 5 13.9C5.4 14 5.7 14.2 6 14.6L7.4 16.3Z" />
       ) : (
-        <path d="M9.6 3.1C9.6 1.1 12.5 1.1 12.5 3.1V11C13.3 10.6 14.8 10.8 15.1 12.1C15.9 11.7 17.4 11.9 17.7 13.1C18.5 12.7 20.3 13 20.4 14.4V17.2C20.4 20.2 18 22.4 15 22.4H11.6C9.4 22.4 7.8 21.4 6.7 19.8L3.3 15.1C2.5 14 3.6 12.4 4.9 12.9C5.3 13.05 5.6 13.3 5.9 13.7L9.6 18.4Z" />
+        <path d="M4.6 14.2V8.2C4.6 6.6 7 6.6 7 8.2V12.8H7.6V5.2C7.6 3.6 10 3.6 10 5.2V12.8H10.6V4C10.6 2.4 13 2.4 13 4V12.8H13.6V5.4C13.6 3.8 16 3.8 16 5.4V16.8C16 19.8 13.8 22 10.9 22H9.8C7.8 22 6.2 21 5.2 19.5L1.3 14.8C0.4 13.7 1.4 12 2.8 12.3C3.5 12.45 4.1 13.1 4.6 13.9Z" />
       )}
     </svg>
   );

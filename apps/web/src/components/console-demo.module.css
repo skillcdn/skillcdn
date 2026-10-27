@@ -417,7 +417,7 @@
 }
 
 /* The card the hand carries, over the window in the window's own coordinates, and the hand
-   itself, pointing on its way and closed while it holds: both are placed by animations the
+   itself, open on its way and closed while it holds: both are placed by animations the
    browser runs on its own, and neither takes a pointer. */
 .carried {
   position: absolute;
@@ -436,8 +436,8 @@
   z-index: 41;
   width: var(--console-hand);
   height: var(--console-hand);
-  /* The point that moves is a little into the hand, so that it stands on the card where it
-     takes hold, under the fingertip and the palm alike. */
+  /* The point that moves is a little into the hand, under the palm, so that it stands on the
+     card where it takes hold, open or closed. */
   margin: calc(-0.4 * var(--console-hand)) 0 0 calc(-0.45 * var(--console-hand));
   color: var(--console-hand-fill);
   filter: var(--console-hand-shadow);
