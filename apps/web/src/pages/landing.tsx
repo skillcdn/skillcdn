@@ -361,10 +361,6 @@ export function LandingPage(props: { readonly origin: string }) {
                   {copy.builders.join}
                   <ExternalIcon />
                 </a>
-                <a className={cx(styles.ghost, styles.large)} href={LINKS.builders} rel="noopener">
-                  {copy.builders.organization}
-                  <span className={styles.ghostNote}>{hostOf(LINKS.builders)}</span>
-                </a>
               </div>
             </div>
           </Container>

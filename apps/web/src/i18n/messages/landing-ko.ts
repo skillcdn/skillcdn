@@ -280,7 +280,6 @@ export const landingKo: LandingMessages = {
     ],
     many: "수많은 개인 빌더들이 각자의 회사를 만들고 있습니다. GitHub 조직에서 함께하세요.",
     join: "빌더에 합류하세요",
-    organization: "조직 보기",
   },
   faq: {
     title: "시작하기 전, 궁금한 것들.",

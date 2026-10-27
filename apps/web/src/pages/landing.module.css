@@ -167,12 +167,6 @@
   font-size: var(--text-md);
 }
 
-.ghostNote {
-  color: var(--color-text-faint);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-normal);
-}
-
 /* Sections: the head of each, the kicker in the accent above the title. */
 .showcase,
 .console,

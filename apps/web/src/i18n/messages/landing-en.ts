@@ -316,7 +316,6 @@ export const landingEn = {
     ],
     many: "Countless independent builders are each building a company of their own. Join them in the GitHub organization.",
     join: "Join the builders",
-    organization: "See the organization",
   },
   faq: {
     title: "A few things you might be wondering.",
