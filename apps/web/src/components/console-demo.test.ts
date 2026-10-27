@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { messagesFor } from "../i18n/index.js";
 import { LANGUAGES } from "../i18n/languages.js";
 import type { DemoTask } from "../i18n/messages/landing-en.js";
-import { afterMoment, momentDelay } from "./console-demo.js";
+import { afterMoment, landing, momentDelay, moved } from "./console-demo.js";
 
 // The console on the front page plays a few moments of a working day as it comes into view;
 // each is a change of the board that a language pack describes.
@@ -16,8 +16,9 @@ describe("the moments of the console on the front page", () => {
         const before = tasks.length;
         tasks = afterMoment(tasks, moment);
         if (moment.kind === "move") {
-          const moved = tasks.find((task) => task.number === moment.task);
-          expect(moved?.state, `${language}: #${moment.task}`).toBe(moment.to);
+          // A moved task comes first, at the top of its column, where a dropped card lands.
+          expect(tasks[0]?.number, `${language}: #${moment.task}`).toBe(moment.task);
+          expect(tasks[0]?.state).toBe(moment.to);
           expect(tasks).toHaveLength(before);
         } else {
           expect(tasks).toHaveLength(before + 1);
@@ -45,5 +46,19 @@ describe("the moments of the console on the front page", () => {
   it("play the first moment soon after the board is in view, and the rest at a reading pace", () => {
     expect(momentDelay(0)).toBeLessThan(momentDelay(1));
     expect(momentDelay(1)).toBe(momentDelay(2));
+  });
+
+  it("land a carried card at the top of its column, and where the column will be once the board has scrolled to it", () => {
+    const cards = { left: 100, top: 40 };
+    expect(landing(cards, 8)).toEqual({ x: 108, y: 48 });
+    expect(landing(cards, 8, 60)).toEqual({ x: 48, y: 48 });
+  });
+
+  it("put a dropped card first in its column, and leave a board without the card as it was", () => {
+    const words = messagesFor("en").landing.console.window;
+    const dropped = moved(words.tasks, 20, "idea");
+    expect(dropped[0]).toMatchObject({ number: 20, state: "idea" });
+    expect(dropped).toHaveLength(words.tasks.length);
+    expect(moved(words.tasks, 999, "idea")).toBe(words.tasks);
   });
 });

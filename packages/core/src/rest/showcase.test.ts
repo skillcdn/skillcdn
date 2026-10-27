@@ -3,6 +3,7 @@ import {
   isShowcaseLink,
   MEDIA_CONTENT_TYPES,
   mediaFitsSlot,
+  mediaShaOfLink,
   restShowcaseSchema,
   showcaseInputSchema,
   showcaseOrganizationInputSchema,
@@ -51,6 +52,13 @@ describe("a result link", () => {
     expect(MEDIA_CONTENT_TYPES).toContain("application/pdf");
     expect(mediaFitsSlot("poster", "application/pdf")).toBe(false);
     expect(mediaFitsSlot("clip", "application/pdf")).toBe(false);
+  });
+
+  it("names an upload of the deployment by its hash, and nothing else", () => {
+    expect(mediaShaOfLink(`/media/${sha}`)).toBe(sha);
+    expect(mediaShaOfLink("/media/not-a-hash")).toBeUndefined();
+    expect(mediaShaOfLink(`https://example.com/media/${sha}`)).toBeUndefined();
+    expect(mediaShaOfLink("/showcase/deck.pdf")).toBeUndefined();
   });
 });
 

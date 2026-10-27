@@ -26,7 +26,7 @@ export const LINKS = {
  * The media of the build's own showcase (ADR-0028), which the front page leads with until the
  * operator writes a showcase of its own through the admin API. Each is a real result of a skill
  * of the reference pack, made by an agent from one sentence and bundled with the site: a poster
- * of it, the result itself to open, and the address of the skill it came from. The words are in
+ * of it, the result itself to open and what it is, and the address of the skill it came from. The words are in
  * the language packs (`showcase.ts` puts the two together). Pixel size of every poster.
  */
 export const DEFAULT_SHOWCASE_MEDIA = {
@@ -36,16 +36,19 @@ export const DEFAULT_SHOWCASE_MEDIA = {
     cards: {
       poster: "/showcase/card-news.webp",
       link: "/showcase/card-news-sheet.webp",
+      linkType: "image/webp",
       address: `${REFERENCE_REPOSITORY_ADDRESS}/design/skills/html-card-news-from-brief`,
     },
     deck: {
       poster: "/showcase/builders-intro.webp",
       link: "/showcase/builders-intro.pdf",
+      linkType: "application/pdf",
       address: `${REFERENCE_REPOSITORY_ADDRESS}/design/skills/html-deck-from-outline`,
     },
     looks: {
       poster: "/showcase/hero-looks.webp",
       link: "/showcase/hero-looks-sheet.webp",
+      linkType: "image/webp",
       address: `${REFERENCE_REPOSITORY_ADDRESS}/design/skills/html-design-variations`,
     },
   },

@@ -133,6 +133,12 @@ export const restShowcaseEntrySchema = z.object({
    * entry whose result is its media. Absent from an answer of a deployment older than the field.
    */
   link: z.optional(z.nullable(z.string())),
+  /**
+   * What the result at `link` is, when it is an upload of the deployment (`image/webp`,
+   * `application/pdf`, say), so that a page can show it in place; `null` for a result
+   * elsewhere. Absent from an answer of a deployment older than the field.
+   */
+  linkType: z.optional(z.nullable(z.string())),
   /** Whose work the entry shows (`SHOWCASE_ORIGINS`); absent from an older deployment: `pack`. */
   origin: z.optional(z.enum(SHOWCASE_ORIGINS)),
   position: z.int(),
@@ -268,6 +274,12 @@ export function completeShowcaseTexts(input: ShowcaseTextsInput): ShowcaseTexts 
 /** The URL an upload is served at. */
 export function mediaUrl(sha: string): string {
   return `${MEDIA_ROUTE}/${sha}`;
+}
+
+/** The upload a link names, when it is one of the deployment's own: the SHA-256 in `/media/<sha>`. */
+export function mediaShaOfLink(link: string): string | undefined {
+  const sha = link.startsWith(`${MEDIA_ROUTE}/`) ? link.slice(MEDIA_ROUTE.length + 1) : "";
+  return SHA256_PATTERN.test(sha) ? sha : undefined;
 }
 
 /** Whether an upload of this type may take this slot. */

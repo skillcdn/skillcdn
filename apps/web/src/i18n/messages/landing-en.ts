@@ -34,7 +34,7 @@ export const landingEn = {
   eyebrow: "A one-person company, run with AI agents",
   title: "Start alone.",
   titleAccent: "The team is already here.",
-  lead: "Take the way experts work, as skills.\nThe AI you already use becomes your marketer, your designer, your developer. One person, one company.",
+  lead: "Take the way experts work, as skills.\nYour AI becomes your marketer, your designer, your developer. One person, one company.",
   search: {
     label: "What will you make?",
     placeholder: "What will you make? Card news, a short ad, a website that takes payments…",
@@ -48,7 +48,7 @@ export const landingEn = {
       "Competitor ad research",
     ],
   },
-  clients: "In the AI you already use",
+  clients: "In the apps you already use",
   organizations: {
     title: "Working with us",
     join: "Join the builders",
@@ -57,13 +57,15 @@ export const landingEn = {
   showcase: {
     eyebrow: "Showcase",
     title: "What the AI team finished today",
-    lead: "One sentence went in. This is what came back. Every one of them is real.",
+    lead: "Real results, each from one sentence.",
     origins: { pack: "Skill pack", builder: "Builder" },
     skill: "See the skill",
+    /** The result shown over the page: the way to it as a file, and the way out. */
+    viewer: { open: "Open in a new tab", close: "Close" },
     entries: {
       cards: {
         title: "“Make Instagram card news from this week’s news”",
-        body: "A story picked from the news became a sourced brief and came back as an eight-slide carousel, reviewed at phone size, with a checklist before posting.",
+        body: "One news story became a sourced brief, then an eight-slide carousel, reviewed at phone size, with a checklist before posting.",
         tags: ["8-slide carousel", "Sources cited"],
         action: "See the result",
         credit: "skillcdn/skills · design",
@@ -72,7 +74,7 @@ export const landingEn = {
       },
       deck: {
         title: "“Turn this memo into an intro deck”",
-        body: "A one-page memo became a twelve-slide deck, as HTML and as a PDF, with the structure a designer polishes from.",
+        body: "A one-page memo, now twelve slides. HTML and PDF, in the structure a designer polishes from.",
         tags: ["12 slides", "HTML + PDF"],
         action: "Open the PDF",
         credit: "skillcdn/skills · design",
@@ -80,7 +82,7 @@ export const landingEn = {
       },
       looks: {
         title: "“Show me this first screen in four looks”",
-        body: "The same copy, four designs. It came back as a comparison sheet rendered in a browser, with one of the four recommended.",
+        body: "The same copy, four looks. A comparison sheet rendered in a browser, with one of them recommended.",
         tags: ["4 looks", "Comparison sheet"],
         action: "See the sheet",
         credit: "skillcdn/skills · design",
@@ -92,7 +94,7 @@ export const landingEn = {
   console: {
     eyebrow: "Console",
     title: "Put the work on the board. You only decide.",
-    lead: "The agents work. You decide. One board runs the company.",
+    lead: "The agents work, and you decide. One board runs the company.",
     window: {
       name: "My company",
       tabs: ["Board", "Roadmap", "Calendar", "Documents", "Decisions", "Feed", "Skills"],
@@ -255,7 +257,7 @@ export const landingEn = {
       },
       {
         title: "All you are asked is to decide.",
-        body: "Reports, decisions and results pile up a line at a time. You see who is doing what, live.",
+        body: "Reports, decisions and results pile up a line at a time, and you see who is doing what.",
       },
       {
         title: "Your AI, your subscription.",
@@ -263,7 +265,7 @@ export const landingEn = {
       },
     ],
     pack: {
-      lead: "The console is itself a skill pack. Connect the pack and your agent walks you from setup to running it, and an agent connected to the console gets the project’s skills with it.",
+      lead: "The console is a skill pack too. Connect it, and your agent walks you from setup to running it.",
       open: "Open the console pack",
       guide: "Setup guide",
     },
@@ -274,7 +276,7 @@ export const landingEn = {
     items: [
       {
         title: "Pack",
-        body: "Fork skillcdn/skills and the skills of marketing, design, engineering, product and media become your company’s own.",
+        body: "Fork skillcdn/skills. The skills of marketing, design, engineering, product and media become your company’s own.",
         message: (host: string) => `Connect ${host}/gh/skillcdn/skills`,
         link: "Open the pack",
       },
@@ -286,7 +288,7 @@ export const landingEn = {
       },
       {
         title: "Agents",
-        body: "Connect the AI you already use to the console, and the pack’s skills come with it. ChatGPT, Claude, Cursor, Codex, Gemini CLI.",
+        body: "Connect the app you already use to the console, and the pack’s skills come with it. ChatGPT, Claude, Cursor, Codex, Gemini CLI.",
         message: () => "See how to connect each app",
         link: "Connection guide",
       },
@@ -296,7 +298,7 @@ export const landingEn = {
   packs: {
     eyebrow: "Packs",
     title: "The well-known packs, and your own repository, one address each.",
-    lead: "One address makes your repository a pack. Start with the verified ones.",
+    lead: "Start with the verified packs, and open your own repository by its address.",
     all: "Browse every featured pack",
     skills: (count: number) => (count === 1 ? "1 skill" : `${count} skills`),
   },
@@ -324,34 +326,24 @@ export const landingEn = {
     title: "A few things you might be wondering.",
     items: [
       {
-        question: "I have never started a company. Can I do this?",
-        answer:
-          "Yes. The skills know what a company does. Say what you want to make, and the skill knows what to ask and what the finished thing takes.",
-      },
-      {
-        question: "Which AI do I need?",
+        question: "Which AI app do I need?",
         answer:
           "ChatGPT, Claude, Cursor, Codex, Gemini CLI, or any app that connects over MCP. The subscription you already have.",
       },
       {
-        question: "Does it cost anything?",
+        question: "How do I start?",
         answer:
-          "Anyone can connect a public pack. Your AI app’s subscription is your own, and a skill that uses another tool, such as video generation, asks you to approve the estimated cost before it makes anything.",
+          "Search for what you want to make, pick a skill, and connect the address of its pack to your AI app. The pack’s page has the steps for each app.",
       },
       {
-        question: "Where is my data?",
+        question: "Do I have to use the console?",
         answer:
-          "The source is your own git repository. SkillCDN indexes and serves it and owns none of it; a private repository opens only for people who are signed in.",
+          "No. Connect a pack alone and the skills work as they are. Add the console when you want several jobs running on a board, with only the decisions left to you.",
       },
       {
-        question: "Does it work inside a company, or on a closed network?",
+        question: "Can my own repository be a pack?",
         answer:
-          "The same image runs on your own machines. One image and PostgreSQL are all it takes, and it runs where there is no internet.",
-      },
-      {
-        question: "How do I join the builders?",
-        answer:
-          "Apply to join the GitHub organization SkillCDN Builders. One page about your idea is enough to start.",
+          "Yes. A git repository with skills or documents opens by its address. A private one opens after you sign in, for what your account can see.",
       },
     ],
   },

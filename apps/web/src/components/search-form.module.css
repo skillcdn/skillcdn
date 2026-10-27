@@ -6,7 +6,7 @@
 
 /* The field is white: the one thing on the page to fill in, as the address field was. The button
    sits inside it, at its end, so that the pair reads as one control; the glow under it is the
-   light every lit control on the site has. It is slim: one line of text and a button no taller
+   light every lit control on the site has. It is slim: one line of text and a disc no taller
    than the line, since a tall white box reads as a banner. */
 .form {
   display: flex;
@@ -15,7 +15,7 @@
   min-width: 0;
   padding: var(--space-1) var(--space-1) var(--space-1) var(--space-4);
   border: 1px solid transparent;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-search);
   background: var(--color-bg-invert);
   color: var(--color-text-invert);
   box-shadow: var(--glow);
@@ -26,12 +26,6 @@
   box-shadow:
     0 0 0 3px color-mix(in srgb, var(--color-accent) 35%, transparent),
     var(--glow-bright);
-}
-
-.large {
-  padding-inline-start: var(--space-5);
-  border-radius: var(--radius-search);
-  box-shadow: var(--glow-bright);
 }
 
 .mark {
@@ -50,11 +44,6 @@
   font-size: var(--text-md);
 }
 
-.large .input {
-  padding-block: var(--space-3);
-  font-size: var(--text-lg);
-}
-
 .input:focus-visible {
   outline: none;
 }
@@ -68,30 +57,43 @@
   display: none;
 }
 
+/* The button: a disc in the accent, lit along its top edge, with an arrow that leans into the
+   way it goes when the pointer is on it. */
 .submit {
   flex: none;
-  min-height: var(--control-size);
-  padding-inline: var(--space-4);
-  /* The same lift the badges take: one line centred in a box lands a shade low without it. */
-  padding-block: calc(var(--space-2) - var(--label-optical))
-    calc(var(--space-2) + var(--label-optical));
+  display: grid;
+  place-items: center;
+  width: var(--search-go);
+  height: var(--search-go);
+  padding: 0;
   border: 0;
-  border-radius: var(--radius-md);
-  background: var(--color-accent-solid);
+  border-radius: var(--radius-full);
+  background: var(--search-go-fill);
   color: var(--color-accent-contrast);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  white-space: nowrap;
-  transition: background var(--transition);
+  box-shadow: var(--search-go-shadow);
+  transition:
+    background var(--transition),
+    box-shadow var(--transition),
+    scale var(--transition);
+}
+
+.submit svg {
+  width: var(--text-lg);
+  height: var(--text-lg);
+  transition: translate var(--transition);
 }
 
 .submit:hover {
-  background: var(--color-accent-solid-hover);
+  background: var(--search-go-fill-hover);
+  box-shadow: var(--search-go-shadow-hover);
 }
 
-.large .submit {
-  padding-inline: var(--space-5);
-  font-size: var(--text-md);
+.submit:hover svg {
+  translate: 2px 0;
+}
+
+.submit:active {
+  scale: 0.94;
 }
 
 /* Terms to try: a row of pills, centred under the box, as many as fit. */
@@ -123,21 +125,8 @@
 }
 
 @media (max-width: 40rem) {
-  .form,
-  .large {
+  .form {
     padding-inline-start: var(--space-3);
-    border-radius: var(--radius-lg);
-  }
-
-  .large .input {
-    padding-block: var(--space-2);
-    font-size: var(--text-md);
-  }
-
-  .submit,
-  .large .submit {
-    padding-inline: var(--space-3);
-    font-size: var(--text-sm);
   }
 
   /* On a phone the chips are a row to swipe through, bleeding to the edges of the screen. */

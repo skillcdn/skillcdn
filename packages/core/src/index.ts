@@ -379,6 +379,7 @@ export {
   MEDIA_CONTENT_TYPES,
   MEDIA_ROUTE,
   mediaFitsSlot,
+  mediaShaOfLink,
   mediaUrl,
   REFERENCE_REPOSITORY_ADDRESS,
   type RestShowcase,

@@ -387,7 +387,11 @@ describe("the fixture API", () => {
     resetFixtureState();
     const first = restOwnerSchema.parse(ask("/api/v1/owners/gh/acme").body);
     expect(first.owner).toMatchObject({ login: "Acme", kind: "organization" });
-    expect(first.indexed.map((card) => card.address)).toEqual(["/gh/acme/skills"]);
+    expect(first.indexed.map((card) => card.address)).toEqual([
+      "/gh/acme/skills",
+      "/gh/acme/support-playbooks",
+      "/gh/acme/finance",
+    ]);
     expect(first.nextPage).toBe(2);
     const second = restOwnerSchema.parse(ask("/api/v1/owners/gh/acme?page=2").body);
     expect(second.indexed).toEqual([]);

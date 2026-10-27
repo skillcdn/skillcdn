@@ -488,7 +488,28 @@
 }
 
 /* The cloud: pills of the well-known packs, each a little off the line of the one before, so
-   that the side reads as a scatter of names and not as a list. */
+   that the side reads as a scatter of names and not as a list. They are stars, of a kind: they
+   lean after the pointer, the nearer ones further (`--lean-x` and `--lean-y`, which the page
+   writes on the section), drift a little by themselves, and the one under the pointer lights
+   up and grows. All of it is transitions and animations of transforms: nothing runs per frame. */
+.cloudSide {
+  position: relative;
+}
+
+/* Faint stars behind the pills, further away than any of them. */
+.cloudSide::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: -12% -6%;
+  background-image: var(--cloud-stars);
+  opacity: var(--cloud-stars-opacity);
+  translate: calc(var(--lean-x, 0) * var(--cloud-lean) * 0.3)
+    calc(var(--lean-y, 0) * var(--cloud-lean) * 0.3);
+  transition: translate var(--cloud-lean-time) ease-out;
+  pointer-events: none;
+}
+
 .cloud {
   display: flex;
   flex-wrap: wrap;
@@ -496,12 +517,22 @@
   gap: var(--space-3);
 }
 
+.cloud li {
+  --depth: 0.65;
+  --lift: 0px;
+  translate: calc(var(--lean-x, 0) * var(--cloud-lean) * var(--depth))
+    calc(var(--lean-y, 0) * var(--cloud-lean) * var(--depth) + var(--lift));
+  transition: translate var(--cloud-lean-time) ease-out;
+}
+
 .cloud li:nth-child(3n + 1) {
-  translate: 0 var(--space-2);
+  --depth: 1;
+  --lift: var(--space-2);
 }
 
 .cloud li:nth-child(3n) {
-  translate: 0 calc(-1 * var(--space-2));
+  --depth: 0.4;
+  --lift: calc(-1 * var(--space-2));
 }
 
 .cloud li:nth-child(4n + 2) {
@@ -523,13 +554,44 @@
   text-decoration: none;
   transition:
     border-color var(--transition),
-    box-shadow var(--transition);
+    background var(--transition),
+    box-shadow var(--transition),
+    scale var(--transition);
 }
 
-.pill:hover {
+/* Each pill drifts on its own, out of step with its neighbours. */
+@media (prefers-reduced-motion: no-preference) {
+  .pill {
+    animation: drift var(--cloud-drift-time) ease-in-out infinite alternate;
+  }
+
+  .cloud li:nth-child(2n) .pill {
+    animation-duration: calc(var(--cloud-drift-time) * 1.35);
+    animation-delay: calc(var(--cloud-drift-time) / -3);
+  }
+
+  .cloud li:nth-child(3n) .pill {
+    animation-delay: calc(var(--cloud-drift-time) / -1.5);
+  }
+
+  .cloud li:nth-child(5n + 1) .pill {
+    animation-duration: calc(var(--cloud-drift-time) * 0.8);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .packs {
+    --cloud-lean: 0px;
+  }
+}
+
+.pill:hover,
+.pill:focus-visible {
   border-color: var(--color-accent);
+  background: var(--color-glass-hover);
   color: var(--color-text);
-  box-shadow: var(--glow);
+  box-shadow: var(--glow-strong);
+  scale: var(--cloud-grow);
 }
 
 .pillOwner {
@@ -840,6 +902,16 @@
 /* The fade carries the strength as well, because an animated opacity replaces the one on the
    rule rather than scaling it. It stays dark for the first part of the pass, since the pass
    opens a whole window before the section arrives. */
+@keyframes drift {
+  from {
+    transform: translate3d(0, calc(-1 * var(--cloud-drift)), 0);
+  }
+
+  to {
+    transform: translate3d(var(--cloud-drift), var(--cloud-drift), 0);
+  }
+}
+
 @keyframes glow-pass {
   0%,
   42% {

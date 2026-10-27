@@ -4,7 +4,7 @@ export const landingKo: LandingMessages = {
   eyebrow: "AI 에이전트로 운영하는 1인 회사",
   title: "혼자 시작하세요.",
   titleAccent: "팀은 이미 있습니다.",
-  lead: "전문가의 방식을 스킬로 받으세요.\n늘 쓰던 AI가 마케터, 디자이너, 개발자가 됩니다. 혼자서, 회사 하나를.",
+  lead: "전문가의 방식을 스킬로 받으세요.\n내 AI가 마케터, 디자이너, 개발자가 됩니다. 혼자서, 회사 하나를.",
   search: {
     label: "무엇을 만들까요?",
     placeholder: "무엇을 만들까요? 카드뉴스, 쇼츠 광고, 결제 되는 웹사이트…",
@@ -18,7 +18,7 @@ export const landingKo: LandingMessages = {
       "경쟁사 광고 조사",
     ],
   },
-  clients: "늘 쓰던 AI에서 그대로",
+  clients: "쓰던 앱 그대로",
   organizations: {
     title: "함께하는 조직",
     join: "빌더에 합류하세요",
@@ -27,13 +27,14 @@ export const landingKo: LandingMessages = {
   showcase: {
     eyebrow: "쇼케이스",
     title: "오늘 AI 팀이 끝낸 일",
-    lead: "한 문장을 시켰고, 이렇게 돌아왔습니다. 전부 진짜 결과물입니다.",
+    lead: "한 문장으로 시작한 실제 결과물.",
     origins: { pack: "스킬 팩", builder: "빌더" },
     skill: "스킬 보기",
+    viewer: { open: "새 탭에서 열기", close: "닫기" },
     entries: {
       cards: {
         title: "“이번 주 이슈로 인스타 카드뉴스 만들어줘”",
-        body: "뉴스에서 고른 이야기가 출처 붙은 브리프가 되고, 8장 캐러셀로 돌아왔습니다. 폰 크기 검토와 게시 전 체크리스트까지.",
+        body: "뉴스 하나가 출처 달린 브리프를 거쳐 8장 캐러셀이 됐습니다. 폰 크기 검토와 게시 전 체크리스트까지.",
         tags: ["8장 캐러셀", "출처 표기"],
         action: "결과 보기",
         credit: "skillcdn/skills · 디자인",
@@ -42,7 +43,7 @@ export const landingKo: LandingMessages = {
       },
       deck: {
         title: "“이 메모로 소개 덱 만들어줘”",
-        body: "한 페이지 메모가 열두 장의 덱이 되었습니다. HTML과 PDF로, 디자이너가 다듬을 수 있는 구조 그대로.",
+        body: "메모 한 장이 덱 열두 장으로. HTML과 PDF, 디자이너가 이어서 다듬을 수 있는 구조 그대로.",
         tags: ["12장", "HTML + PDF"],
         action: "PDF 보기",
         credit: "skillcdn/skills · 디자인",
@@ -51,7 +52,7 @@ export const landingKo: LandingMessages = {
       },
       looks: {
         title: "“이 첫 화면, 네 가지 룩으로 보여줘”",
-        body: "같은 카피, 네 가지 디자인. 브라우저에서 렌더링한 비교 시트로 돌아와 그중 하나를 추천했습니다.",
+        body: "같은 카피, 네 가지 룩. 브라우저에서 렌더링한 비교 시트에 추천 하나까지.",
         tags: ["룩 4개", "비교 시트"],
         action: "시트 보기",
         credit: "skillcdn/skills · 디자인",
@@ -63,7 +64,7 @@ export const landingKo: LandingMessages = {
   console: {
     eyebrow: "콘솔",
     title: "일은 보드에 올리고, 결정만 하세요.",
-    lead: "에이전트가 일합니다. 당신은 결정합니다. 보드 하나로 회사가 돌아갑니다.",
+    lead: "에이전트가 일하고, 당신은 결정합니다. 보드 하나로 회사가 돌아갑니다.",
     window: {
       name: "내 회사",
       tabs: ["보드", "로드맵", "캘린더", "문서", "결정", "피드", "스킬"],
@@ -226,7 +227,7 @@ export const landingKo: LandingMessages = {
       },
       {
         title: "물어볼 건 결정뿐.",
-        body: "보고, 결정, 결과물이 한 줄씩 쌓입니다. 누가 무엇을 하는지 실시간으로 보입니다.",
+        body: "보고, 결정, 결과물이 한 줄씩 쌓이고, 누가 무엇을 하는지 바로 보입니다.",
       },
       {
         title: "쓰던 AI, 쓰던 구독.",
@@ -234,7 +235,7 @@ export const landingKo: LandingMessages = {
       },
     ],
     pack: {
-      lead: "콘솔은 그 자체로 스킬 팩입니다. 팩을 연결하면 에이전트가 설치부터 운영까지 안내하고, 콘솔에 연결한 에이전트는 프로젝트의 스킬도 함께 받습니다.",
+      lead: "콘솔도 스킬 팩입니다. 연결하면 에이전트가 설치부터 운영까지 안내합니다.",
       open: "콘솔 팩 열기",
       guide: "설치 안내",
     },
@@ -245,7 +246,7 @@ export const landingKo: LandingMessages = {
     items: [
       {
         title: "팩",
-        body: "skillcdn/skills를 포크하면 마케팅, 디자인, 개발, 프로덕트, 미디어의 스킬이 내 회사의 것이 됩니다.",
+        body: "skillcdn/skills를 포크하세요. 마케팅, 디자인, 개발, 프로덕트, 미디어의 스킬이 내 회사 것이 됩니다.",
         message: (host: string) => `${host}/gh/skillcdn/skills 를 연결해줘`,
         link: "팩 열기",
       },
@@ -257,7 +258,7 @@ export const landingKo: LandingMessages = {
       },
       {
         title: "에이전트",
-        body: "쓰던 AI를 콘솔에 연결하면 팩의 스킬은 따라옵니다. ChatGPT, Claude, Cursor, Codex, Gemini CLI.",
+        body: "쓰던 앱을 콘솔에 연결하면 팩의 스킬은 따라옵니다. ChatGPT, Claude, Cursor, Codex, Gemini CLI.",
         message: () => "앱별 연결 안내 보기",
         link: "연결 안내",
       },
@@ -267,7 +268,7 @@ export const landingKo: LandingMessages = {
   packs: {
     eyebrow: "팩",
     title: "유명한 팩도, 내 저장소도, 주소 하나로.",
-    lead: "주소 하나면 내 저장소도 팩이 됩니다. 검증된 팩부터 둘러보세요.",
+    lead: "검증된 팩부터 둘러보고, 내 저장소는 주소로 열어 보세요.",
     all: "모든 추천 팩 둘러보기",
     skills: (count: number) => `스킬 ${count}개`,
   },
@@ -289,34 +290,24 @@ export const landingKo: LandingMessages = {
     title: "시작하기 전, 궁금한 것들.",
     items: [
       {
-        question: "창업이 처음인데, 저도 할 수 있나요?",
+        question: "어떤 AI 앱이면 되나요?",
         answer:
-          "네. 회사가 하는 일은 스킬이 알고 있습니다. 만들고 싶은 것을 말하면 스킬이 무엇을 물어야 하는지, 완성까지 무엇이 필요한지 안내합니다.",
+          "ChatGPT, Claude, Cursor, Codex, Gemini CLI 등 MCP로 연결되는 앱이면 됩니다. 쓰던 구독 그대로.",
       },
       {
-        question: "어떤 AI를 써야 하나요?",
+        question: "어떻게 시작하나요?",
         answer:
-          "ChatGPT, Claude, Cursor, Codex, Gemini CLI 등 MCP로 연결되는 앱이면 됩니다. 쓰던 구독 그대로 씁니다.",
+          "만들고 싶은 것을 검색해 스킬을 고르고, 그 팩의 주소를 AI 앱에 연결하면 됩니다. 앱별 연결 안내는 팩 페이지에 있습니다.",
       },
       {
-        question: "비용이 드나요?",
+        question: "콘솔은 꼭 써야 하나요?",
         answer:
-          "공개 팩은 누구나 연결할 수 있습니다. AI 앱의 구독은 본인의 것이고, 영상 생성처럼 다른 도구를 쓰는 스킬은 만들기 전에 예상 비용을 확인받습니다.",
+          "아니요. 팩만 연결해도 스킬은 그대로 씁니다. 여러 일을 보드에서 돌리고 결정만 하고 싶을 때 콘솔을 더하세요.",
       },
       {
-        question: "내 데이터는 어디에 있나요?",
+        question: "내 저장소도 팩이 되나요?",
         answer:
-          "원본은 내 git 저장소입니다. SkillCDN은 색인해서 서빙할 뿐 내용을 소유하지 않고, 비공개 저장소는 로그인한 사람에게만 열립니다.",
-      },
-      {
-        question: "회사 안이나 폐쇄망에서도 되나요?",
-        answer:
-          "같은 이미지를 직접 띄울 수 있습니다. 이미지 하나와 PostgreSQL이면 되고, 인터넷이 없는 곳에서도 돌아갑니다.",
-      },
-      {
-        question: "빌더스에는 어떻게 들어가나요?",
-        answer:
-          "GitHub 조직 SkillCDN Builders에 합류 신청을 하면 됩니다. 아이템 한 페이지면 시작할 수 있습니다.",
+          "네. 스킬이나 문서를 담은 git 저장소면 주소 하나로 열립니다. 비공개 저장소는 로그인 뒤 내 계정이 볼 수 있는 것만.",
       },
     ],
   },

@@ -12,24 +12,24 @@ export const ko: Messages = {
     landing: {
       title: "SkillCDN: AI 에이전트로 운영하는 1인 회사",
       description:
-        "전문가의 방식을 스킬로 받으면 늘 쓰던 AI가 마케터, 디자이너, 개발자가 됩니다. 만들고 싶은 것을 검색하고, 일은 보드에 올리고, 에이전트에 맡기세요. 빌더에 합류하세요.",
+        "전문가의 방식을 스킬로 받으면 내 AI가 마케터, 디자이너, 개발자가 됩니다. 만들고 싶은 것을 검색하고, 일은 보드에 올리고, 에이전트에 맡기세요. 빌더에 합류하세요.",
       about:
         "SkillCDN은 스킬과 문서를 담은 git 저장소, 곧 팩을 MCP 서버로 ChatGPT나 Claude 같은 AI 앱에 제공해, 앱이 그 안의 스킬을 불러와 대화 속에서 따르게 합니다. 한 배포는 제공하는 모든 팩을 한 번에 검색하고, 콘솔 팩은 회사의 일을 에이전트와 함께 보드에서 돌립니다.",
     },
     explore: {
       title: "만들고 싶은 것 찾기 | SkillCDN",
       description:
-        "모든 공개 팩의 스킬과 문서를 검색하거나, 검증된 팩에서 고르거나, 저장소 주소를 열어 보세요. 팩마다 늘 쓰던 AI를 연결하는 단계가 함께 있습니다.",
+        "모든 공개 팩의 스킬과 문서를 검색하거나, 검증된 팩에서 고르거나, 저장소 주소를 열어 보세요. 팩마다 AI 앱을 연결하는 안내가 함께 있습니다.",
     },
     search: {
       title: "스킬과 문서 검색 | SkillCDN",
       description:
-        "모든 공개 팩에서 스킬과 문서를 단어와 의미로 찾고, 결과가 속한 팩을 늘 쓰던 AI에 연결하세요.",
+        "모든 공개 팩에서 스킬과 문서를 단어와 의미로 찾고, 결과가 속한 팩을 내 AI 앱에 바로 연결하세요.",
       resultsTitle: (term: string) => `${term} | SkillCDN`,
       resultsDescription: (term: string, count: number, packs: number) =>
         count === 0
           ? `SkillCDN의 공개 팩 ${packs}개에서 “${term}”에 맞는 스킬이나 문서를 찾지 못했습니다.`
-          : `SkillCDN의 공개 팩 ${packs}개에서 찾은 “${term}” 관련 스킬과 문서 ${count}건. 각 결과가 속한 팩을 늘 쓰던 AI에 바로 연결할 수 있습니다.`,
+          : `SkillCDN의 공개 팩 ${packs}개에서 찾은 “${term}” 관련 스킬과 문서 ${count}건. 각 결과가 속한 팩을 AI 앱에 바로 연결할 수 있습니다.`,
     },
     mount: {
       title: (repository: string) => `${repository} | SkillCDN`,

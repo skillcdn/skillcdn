@@ -282,7 +282,6 @@ export function SearchPage(props: SearchPageProps) {
           <SearchForm
             className={styles.form}
             initialValue={term}
-            large={term === undefined}
             from="results"
             chips={term === undefined ? t.landing.search.chips : undefined}
           />

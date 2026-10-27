@@ -416,6 +416,42 @@
   }
 }
 
+/* The card the hand carries, over the window in the window's own coordinates, and the hand
+   itself, pointing on its way and closed while it holds: both are placed by animations the
+   browser runs on its own, and neither takes a pointer. */
+.carried {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 40;
+  color: var(--console-text);
+  font-size: var(--console-text-sm);
+  pointer-events: none;
+}
+
+.pointer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 41;
+  width: var(--console-hand);
+  height: var(--console-hand);
+  /* The point that moves is a little into the hand, so that it stands on the card where it
+     takes hold, under the fingertip and the palm alike. */
+  margin: calc(-0.4 * var(--console-hand)) 0 0 calc(-0.45 * var(--console-hand));
+  color: var(--console-hand-fill);
+  filter: var(--console-hand-shadow);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.pointer svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
 /* The card in hand: over everything, a little turned, as wide as where it stands. */
 .ghost {
   position: fixed;
@@ -427,7 +463,8 @@
   pointer-events: none;
 }
 
-.ghost .card {
+.ghost .card,
+.carried .card {
   border-color: var(--console-accent);
   background: var(--console-sheet-hover);
   box-shadow: var(--console-ghost-shadow);

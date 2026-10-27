@@ -482,7 +482,11 @@ describe("the landing showcase in the admin API (ADR-0028)", () => {
     });
     const replaced = restShowcaseSchema.parse(await (await h.request("/api/v1/showcase")).json());
     expect(replaced.items[0]?.media.clip).toBeNull();
-    expect(replaced.items[0]).toMatchObject({ link: deck.url, origin: "builder" });
+    expect(replaced.items[0]).toMatchObject({
+      link: deck.url,
+      linkType: "application/pdf",
+      origin: "builder",
+    });
     expect((await h.request(deck.url)).headers.get("content-type")).toBe("application/pdf");
     const remove = (path: string) => h.request(path, { method: "DELETE", headers: authorized });
     expect((await remove(`/admin/v1/media/${deck.sha}`)).status).toBe(200);

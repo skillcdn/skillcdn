@@ -698,6 +698,7 @@ describe("GET /api/v1/showcase", () => {
           id: "spring",
           address: "/gh/acme/skills",
           link: null,
+          linkType: null,
           origin: "pack",
           position: 0,
           width: 640,

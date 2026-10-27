@@ -1,5 +1,5 @@
 import type { LandingSection } from "@skillcdn/core";
-import { useEffect } from "react";
+import { type PointerEvent as ReactPointerEvent, useEffect, useRef } from "react";
 import { track } from "../analytics.js";
 import { api } from "../api/client.js";
 import { resourceKeys } from "../api/keys.js";
@@ -106,8 +106,42 @@ function PackCloud() {
   );
 }
 
+/**
+ * The cloud of packs leans after the pointer, like stars at their distances: where the pointer
+ * is across the section, -1 to 1 each way, is written on the section for the pills to read, at
+ * most once a frame, and goes back to the middle when the pointer leaves. A finger does not lean
+ * it: a touch moves the page.
+ */
+function useLean() {
+  const frame = useRef(0);
+  const at = useRef({ x: 0, y: 0 });
+  const write = (node: HTMLElement) => {
+    frame.current = 0;
+    node.style.setProperty("--lean-x", at.current.x.toFixed(3));
+    node.style.setProperty("--lean-y", at.current.y.toFixed(3));
+  };
+  return {
+    onPointerMove: (event: ReactPointerEvent<HTMLElement>) => {
+      if (event.pointerType !== "mouse") return;
+      const node = event.currentTarget;
+      const rect = node.getBoundingClientRect();
+      at.current = {
+        x: ((event.clientX - rect.left) / rect.width) * 2 - 1,
+        y: ((event.clientY - rect.top) / rect.height) * 2 - 1,
+      };
+      if (frame.current === 0) frame.current = window.requestAnimationFrame(() => write(node));
+    },
+    onPointerLeave: (event: ReactPointerEvent<HTMLElement>) => {
+      window.cancelAnimationFrame(frame.current);
+      at.current = { x: 0, y: 0 };
+      write(event.currentTarget);
+    },
+  };
+}
+
 export function LandingPage(props: { readonly origin: string }) {
   const { t, language } = useI18n();
+  const lean = useLean();
   const copy = t.landing;
   const features = useFeatures();
   const host = hostOf(props.origin);
@@ -140,7 +174,6 @@ export function LandingPage(props: { readonly origin: string }) {
           {features.search ? (
             <SearchForm
               className={styles.search}
-              large
               from="hero"
               placeholder={copy.search.placeholder}
               chips={copy.search.chips}
@@ -284,7 +317,7 @@ export function LandingPage(props: { readonly origin: string }) {
       )}
 
       {shows("packs") && (
-        <section id="packs" className={styles.packs}>
+        <section id="packs" className={styles.packs} {...lean}>
           <Container className={styles.packsGrid}>
             <div className={glass.reveal}>
               <SectionHead

@@ -5,6 +5,7 @@ import {
   formatAddress,
   MEDIA_CONTENT_TYPES,
   mediaFitsSlot,
+  mediaShaOfLink,
   mediaUrl,
   type RestShowcase,
   type RestShowcaseEntry,
@@ -83,6 +84,7 @@ interface Loaded {
   readonly until: number;
   readonly entries: Promise<readonly ShowcaseEntryRecord[]>;
   readonly organizations: Promise<readonly ShowcaseOrganizationRecord[]>;
+  readonly uploads: Promise<readonly OperatorMediaRecord[]>;
 }
 
 /**
@@ -115,8 +117,9 @@ export class Showcase {
    */
   async list(): Promise<RestShowcase> {
     const items: RestShowcaseEntry[] = [];
+    const types = await this.#types();
     for (const entry of await this.#entries()) {
-      const rest = this.#toRest(entry);
+      const rest = this.#toRest(entry, types);
       if (rest !== undefined) {
         items.push(rest);
       }
@@ -205,7 +208,7 @@ export class Showcase {
     }
     this.#loaded = undefined;
     const written = (await this.#entries()).find((entry) => entry.slug === slug);
-    const rest = written === undefined ? undefined : this.#toRest(written);
+    const rest = written === undefined ? undefined : this.#toRest(written, await this.#types());
     if (rest === undefined) {
       throw new Error("the showcase entry was written but cannot be read back");
     }
@@ -363,8 +366,14 @@ export class Showcase {
     }
   }
 
-  /** The wire shape of an entry, parsed once more: what is in the database is input too. */
-  #toRest(entry: ShowcaseEntryRecord): RestShowcaseEntry | undefined {
+  /**
+   * The wire shape of an entry, parsed once more: what is in the database is input too. A link
+   * to an upload of the deployment says what the upload is, from `types`, by hash.
+   */
+  #toRest(
+    entry: ShowcaseEntryRecord,
+    types: ReadonlyMap<string, string>,
+  ): RestShowcaseEntry | undefined {
     const slot = (name: ShowcaseMediaSlot) => {
       const upload = entry.media[name];
       return upload === undefined ? null : { url: mediaUrl(upload.sha), type: upload.contentType };
@@ -374,6 +383,7 @@ export class Showcase {
       id: entry.slug,
       address: entry.address,
       link: entry.link,
+      linkType: entry.link === null ? null : (types.get(mediaShaOfLink(entry.link) ?? "") ?? null),
       origin: entry.origin,
       position: entry.position,
       width: entry.width,
@@ -425,17 +435,24 @@ export class Showcase {
     return this.#load().organizations;
   }
 
+  /** The content type of every upload, by hash: what a link to one of them is. */
+  async #types(): Promise<ReadonlyMap<string, string>> {
+    return new Map((await this.#load().uploads).map((upload) => [upload.sha, upload.contentType]));
+  }
+
   #load(): Loaded {
     const now = this.#clock.now().getTime();
     if (this.#loaded === undefined || this.#loaded.until <= now) {
       const entries = listShowcaseEntries(this.#database);
       const organizations = listShowcaseOrganizations(this.#database);
-      this.#loaded = { until: now + SHOWCASE_TTL_MS, entries, organizations };
+      const uploads = listOperatorMedia(this.#database);
+      this.#loaded = { until: now + SHOWCASE_TTL_MS, entries, organizations, uploads };
       const forget = (): void => {
         this.#loaded = undefined;
       };
       entries.catch(forget);
       organizations.catch(forget);
+      uploads.catch(forget);
     }
     return this.#loaded;
   }

@@ -251,7 +251,7 @@ const ACME_SKILLS: FixtureRepository = {
   description: "The skills Acme's teams share: release notes, incident reviews and more.",
   verified: true,
   // The bundled poster stands in for a picture the manifest would declare.
-  image: "/showcase/puppy-interview.webp",
+  image: "/showcase/card-news.webp",
   overviews: {
     "": {
       path: "README.md",
@@ -414,6 +414,36 @@ const DEMO_LONG: FixtureRepository = {
   files: {},
 };
 
+/**
+ * A ready pack of a few skills, each with the one reference the skill helper names, so that the
+ * lists of the pages have several to show: the cloud of the front page, the explorer's cards.
+ */
+const pack = (
+  owner: string,
+  name: string,
+  description: string,
+  commit: string,
+  skills: readonly (readonly [directory: string, name: string, description: string])[],
+  extra: Partial<FixtureRepository> = {},
+): FixtureRepository => ({
+  owner,
+  name,
+  defaultBranch: "main",
+  description,
+  commit,
+  state: "ready",
+  skills: skills.map(([directory, skillName, text]) => skill(directory, skillName, text)),
+  documents: [],
+  diagnostics: [],
+  files: Object.fromEntries(
+    skills.map(([directory]) => [
+      `${directory}/references/style.md`,
+      "# Style\n\nShort, plain, and in the reader's words.\n",
+    ]),
+  ),
+  ...extra,
+});
+
 export const FIXTURE_REPOSITORIES: Readonly<Record<string, FixtureRepository>> = {
   "acme/skills": ACME_SKILLS,
   "acme/private-skills": {
@@ -530,9 +560,166 @@ export const FIXTURE_REPOSITORIES: Readonly<Record<string, FixtureRepository>> =
     diagnostics: [],
     files: { "review/reference.md": "# Required context\n\nRequired file received in full." },
   },
+  "acme/support-playbooks": pack(
+    "Acme",
+    "support-playbooks",
+    "How Acme answers its customers: triage, refunds, escalation.",
+    "c0ffee0000000000000000000000000000000001",
+    [
+      [
+        "skills/ticket-triage",
+        "ticket-triage",
+        "Sort a support ticket by what it needs: an answer, a fix or an escalation.",
+      ],
+      [
+        "skills/refund-answer",
+        "refund-answer",
+        "Answer a refund request by the policy, with the next step for the customer.",
+      ],
+      [
+        "skills/escalation-note",
+        "escalation-note",
+        "Write the note an engineer needs to pick up an escalated ticket.",
+      ],
+    ],
+    {
+      verified: true,
+      manifest: {
+        path: "SKILLCDN.md",
+        name: "Acme support playbooks",
+        description: "How Acme answers its customers: triage, refunds, escalation.",
+        language: "en",
+        rules: "# Rules\n\nNever promise a date the team has not given.",
+      },
+    },
+  ),
+  "acme/finance": pack(
+    "Acme",
+    "finance",
+    "Invoices, expense reports and the monthly close.",
+    "c0ffee0000000000000000000000000000000002",
+    [
+      ["skills/invoice", "invoice", "Write an invoice from a quote and the hours logged."],
+      [
+        "skills/monthly-close",
+        "monthly-close",
+        "Walk the monthly close: what to reconcile, in what order, and what to report.",
+      ],
+    ],
+  ),
+  "northwind/marketing": pack(
+    "northwind",
+    "marketing",
+    "Launch briefs, newsletters and ad copy for a small team.",
+    "c0ffee0000000000000000000000000000000003",
+    [
+      ["skills/launch-brief", "launch-brief", "Turn a feature into a one-page launch brief."],
+      [
+        "skills/newsletter-issue",
+        "newsletter-issue",
+        "Write an issue of the newsletter from the month's changes and one story.",
+      ],
+      [
+        "skills/ad-copy-variants",
+        "ad-copy-variants",
+        "Write five variants of an ad's copy, each on a different hook.",
+      ],
+      [
+        "skills/social-calendar",
+        "social-calendar",
+        "Plan a month of posts around two launches and one event.",
+      ],
+    ],
+    {
+      manifest: {
+        path: "SKILLCDN.md",
+        name: "Northwind marketing",
+        description: "Launch briefs, newsletters and ad copy for a small team.",
+        language: "en",
+        rules: "# Rules\n\nName the audience before writing a word.",
+      },
+    },
+  ),
+  "orbit-studio/design-kit": pack(
+    "orbit-studio",
+    "design-kit",
+    "Decks, card news and landing looks in the studio's style.",
+    "c0ffee0000000000000000000000000000000004",
+    [
+      ["skills/brand-check", "brand-check", "Check a design against the studio's brand rules."],
+      ["skills/deck", "deck", "Build a deck from an outline in the studio's style."],
+      ["skills/card-news", "card-news", "Build a card news carousel from a brief."],
+      [
+        "skills/landing-looks",
+        "landing-looks",
+        "Show the first screen of a page in four looks, on one sheet.",
+      ],
+      ["skills/icon-set", "icon-set", "Draw a set of icons in one stroke weight and one grid."],
+    ],
+    {
+      verified: true,
+      manifest: {
+        path: "SKILLCDN.md",
+        name: "Orbit design kit",
+        description: "Decks, card news and landing looks in the studio's style.",
+        language: "en",
+        rules: "# Rules\n\nOne typeface, one accent, and air around everything.",
+      },
+    },
+  ),
+  "mona/writing": pack(
+    "mona",
+    "writing",
+    "One person's writing skills: posts, threads and release announcements.",
+    "c0ffee0000000000000000000000000000000005",
+    [
+      ["skills/post", "post", "Write a post from notes, in the author's own voice."],
+      [
+        "skills/release-announcement",
+        "release-announcement",
+        "Announce a release in three lengths: a line, a paragraph, a page.",
+      ],
+    ],
+  ),
+  "demo/manual": {
+    owner: "demo",
+    name: "manual",
+    defaultBranch: "main",
+    description: "A product manual, as plain documents.",
+    overviews: {
+      "": { path: "README.md", title: "The manual", description: "Everything the product does." },
+    },
+    commit: "c0ffee0000000000000000000000000000000006",
+    state: "ready",
+    skills: [],
+    documents: [
+      { path: "docs/setup.md", title: "Setup", summary: "From the box to the first run." },
+      { path: "docs/daily-use.md", title: "Daily use", summary: "What to do every day." },
+      { path: "docs/troubleshooting.md", title: "Troubleshooting", summary: "When it does not." },
+    ],
+    diagnostics: [],
+    files: {
+      "README.md": "# The manual\n\nEverything the product does.\n",
+      "docs/setup.md": "# Setup\n\nFrom the box to the first run.\n",
+      "docs/daily-use.md": "# Daily use\n\nWhat to do every day.\n",
+      "docs/troubleshooting.md": "# Troubleshooting\n\nWhen it does not.\n",
+    },
+  },
 };
 
-export const FIXTURE_FEATURED = ["acme/skills", "acme/handbook", "demo/indexing", "demo/failed"];
+/** What the explorer features, in order: packs of every kind and state, more than one page's worth of ready ones for the cloud. */
+export const FIXTURE_FEATURED = [
+  "acme/skills",
+  "orbit-studio/design-kit",
+  "acme/handbook",
+  "northwind/marketing",
+  "acme/support-playbooks",
+  "demo/indexing",
+  "mona/writing",
+  "acme/finance",
+  "demo/manual",
+  "demo/failed",
+];
 
 /** The picture of the fixture accounts, as the host would serve one (ADR-0031). */
 export const FIXTURE_AVATAR = "https://avatars.githubusercontent.com/u/583231?s=160&v=4";
@@ -564,8 +751,9 @@ export interface FixtureOwner {
 /**
  * The accounts that have a page (ADR-0037), by the name an address writes them with: an
  * organization with indexed skills and more repositories than one page lists, a person whose
- * repositories are in every state, and the fixture person, who has nothing public. Any other
- * name is an account that does not exist.
+ * repositories are in every state, the fixture person, who has nothing public, and three more
+ * publishers with a pack each, so that the lists have several. Any other name is an account that
+ * does not exist.
  */
 export const FIXTURE_OWNERS: Readonly<Record<string, FixtureOwner>> = {
   acme: {
@@ -576,6 +764,27 @@ export const FIXTURE_OWNERS: Readonly<Record<string, FixtureOwner>> = {
     listed: 45,
   },
   demo: { login: "demo", name: null, kind: "user", bio: null, listed: 0 },
+  northwind: {
+    login: "northwind",
+    name: "Northwind Traders",
+    kind: "organization",
+    bio: "A small team with one marketing pack. Made up, for the fixtures.",
+    listed: 0,
+  },
+  "orbit-studio": {
+    login: "orbit-studio",
+    name: "Orbit Studio",
+    kind: "organization",
+    bio: "A design studio with a kit of its own. Made up, for the fixtures.",
+    listed: 0,
+  },
+  mona: {
+    login: "mona",
+    name: "Mona Lisa Octocat",
+    kind: "user",
+    bio: "One person with a pack of her own writing skills. Made up, for the fixtures.",
+    listed: 0,
+  },
   "octo-dev": {
     login: FIXTURE_USER.login,
     name: FIXTURE_USER.name,

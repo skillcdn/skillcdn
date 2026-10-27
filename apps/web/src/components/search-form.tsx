@@ -5,18 +5,17 @@ import { useI18n } from "../i18n/index.js";
 import { appHref, navigate } from "../navigation.js";
 import { searchHref } from "../router.js";
 import styles from "./search-form.module.css";
-import { cx, SearchIcon } from "./ui.js";
+import { ArrowIcon, cx, SearchIcon } from "./ui.js";
 
 /**
  * The search box (ADR-0075): one field and one button, which lead to the page of the term. The
  * form has a real action, so that it works without a script, where the server turns the query
- * into the page of the term; with one, the page is navigated to at once. The chips under it are
+ * into the page of the term; with one, the page is navigated to at once. The box is the same
+ * wherever it stands, on the first screen and in the explorer alike. The chips under it are
  * terms to try, each a link to its page.
  */
 export function SearchForm(props: {
   readonly initialValue?: string | undefined;
-  /** The box as the first thing on the page: taller and lit. */
-  readonly large?: boolean;
   readonly placeholder?: string;
   readonly chips?: readonly string[];
   readonly className?: string;
@@ -37,17 +36,12 @@ export function SearchForm(props: {
 
   return (
     <div className={cx(styles.wrapper, props.className)}>
-      <form
-        className={cx(styles.form, props.large === true && styles.large)}
-        action={searchHref()}
-        method="get"
-        onSubmit={onSubmit}
-      >
+      <form className={styles.form} action={searchHref()} method="get" onSubmit={onSubmit}>
         <label className="visually-hidden" htmlFor={inputId}>
           {t.search.label}
         </label>
         <span className={styles.mark} aria-hidden="true">
-          <SearchIcon size={props.large === true ? 22 : 18} />
+          <SearchIcon size={18} />
         </span>
         <input
           id={inputId}
@@ -59,8 +53,10 @@ export function SearchForm(props: {
           value={value}
           onChange={(event) => setValue(event.target.value)}
         />
+        {/* The button is a disc with an arrow, named for whoever cannot see it. */}
         <button type="submit" className={styles.submit}>
-          {t.search.submit}
+          <span className="visually-hidden">{t.search.submit}</span>
+          <ArrowIcon />
         </button>
       </form>
       {props.chips !== undefined && props.chips.length > 0 && (

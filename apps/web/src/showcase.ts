@@ -43,6 +43,7 @@ export function defaultShowcase(): readonly RestShowcaseEntry[] {
       id,
       address: media.address,
       link: media.link,
+      linkType: media.linkType,
       origin: "pack",
       position,
       width,
