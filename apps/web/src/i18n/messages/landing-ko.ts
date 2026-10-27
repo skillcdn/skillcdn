@@ -287,7 +287,7 @@ export const landingKo: LandingMessages = {
       {
         question: "어떤 AI 앱이면 되나요?",
         answer:
-          "ChatGPT, Claude, Cursor, Codex, Gemini CLI 등 MCP로 연결되는 앱이면 됩니다. 쓰던 구독 그대로.",
+          "ChatGPT, Claude, Cursor, Codex, Gemini CLI 등 MCP로 연결되는 앱이면 됩니다. 쓰던 구독을 그대로 쓸 수 있습니다.",
       },
       {
         question: "어떻게 시작하나요?",
@@ -295,14 +295,14 @@ export const landingKo: LandingMessages = {
           "만들고 싶은 것을 검색해 스킬을 고르고, 그 팩의 주소를 AI 앱에 연결하면 됩니다. 앱별 연결 안내는 팩 페이지에 있습니다.",
       },
       {
-        question: "콘솔은 꼭 써야 하나요?",
+        question: "무엇부터 시작하면 될까요?",
         answer:
-          "아니요. 팩만 연결해도 스킬은 그대로 씁니다. 여러 일을 보드에서 돌리고 결정만 하고 싶을 때 콘솔을 더하세요.",
+          "지금 필요한 일 하나부터 시작하세요. 카드뉴스나 소개 덱처럼 한 문장으로 시킬 수 있는 일을 검색해 결과를 받아 보고, 일이 여러 개가 되면 콘솔 팩을 연결해 보드에서 돌리면 됩니다.",
       },
       {
-        question: "내 저장소도 팩이 되나요?",
+        question: "빌더란 무엇인가요?",
         answer:
-          "네. 스킬이나 문서를 담은 git 저장소면 주소 하나로 열립니다. 비공개 저장소는 로그인 뒤 내 계정이 볼 수 있는 것만.",
+          "AI 에이전트로 회사를 운영하는 1인 창업자들의 조직입니다. GitHub 조직 SkillCDN Builders에 합류하면 공용 콘솔의 내 자리와 스킬 팩으로 시작하고, 진행은 매주 리뷰로 기록됩니다.",
       },
     ],
   },

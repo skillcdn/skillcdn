@@ -323,7 +323,7 @@ export const landingEn = {
       {
         question: "Which AI app do I need?",
         answer:
-          "ChatGPT, Claude, Cursor, Codex, Gemini CLI, or any app that connects over MCP. The subscription you already have.",
+          "ChatGPT, Claude, Cursor, Codex, Gemini CLI, or any app that connects over MCP. The subscription you already have is all it takes.",
       },
       {
         question: "How do I start?",
@@ -331,14 +331,14 @@ export const landingEn = {
           "Search for what you want to make, pick a skill, and connect the address of its pack to your AI app. The pack’s page has the steps for each app.",
       },
       {
-        question: "Do I have to use the console?",
+        question: "What should I start with?",
         answer:
-          "No. Connect a pack alone and the skills work as they are. Add the console when you want several jobs running on a board, with only the decisions left to you.",
+          "Start with one job you need done now. Search for something one sentence can ask for, card news or an intro deck, say, and see what comes back; once there are several jobs, connect the console pack and run them on a board.",
       },
       {
-        question: "Can my own repository be a pack?",
+        question: "What are the builders?",
         answer:
-          "Yes. A git repository with skills or documents opens by its address. A private one opens after you sign in, for what your account can see.",
+          "The solo founders who run their companies with AI agents. Join the GitHub organization SkillCDN Builders to start with a seat on the shared console and the skill pack, with progress recorded in a review every week.",
       },
     ],
   },
