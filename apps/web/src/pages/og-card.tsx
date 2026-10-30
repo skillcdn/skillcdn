@@ -12,7 +12,7 @@ export function OgCard() {
     <div className={styles.card}>
       <img
         className={styles.art}
-        src={localizedPath(DEFAULT_SHOWCASE_MEDIA.entries.cards.poster, language)}
+        src={localizedPath(DEFAULT_SHOWCASE_MEDIA.entries.ad.poster, language)}
         alt=""
       />
       <BrandLogo className={styles.brand} />

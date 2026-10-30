@@ -35,10 +35,13 @@ export function localizedPath(path: LocalizedPath, language: Language): string {
  * The media of the build's own showcase (ADR-0028), which the front page leads with until the
  * operator writes a showcase of its own through the admin API. Each is a real result of a skill
  * of the reference pack, made by an agent from one sentence and bundled with the site: a poster
- * of it, the result itself to open and what it is, a clip where the result is one, and the
- * address of the skill it came from, with the pixel size of the poster and the clip. A result
- * with words in it is cut per language, and the page shows the cut of its own. The words are
- * in the language packs (`showcase.ts` puts the two together).
+ * of it, the result itself to open and what it is, a clip where the result is one with the same
+ * clip as an animated image for a browser that will not play it, and the address of the skill
+ * it came from, with the pixel size of the poster and the clip. A result with words in it may be
+ * cut per language, and the page then shows the cut of its own. Only results about fictional
+ * subjects are bundled, since the repository and the image are public; a result that shows a
+ * real company's product or pictures is an entry the operator writes. The words are in the
+ * language packs (`showcase.ts` puts the two together).
  */
 export const DEFAULT_SHOWCASE_MEDIA = {
   entries: {
@@ -47,31 +50,19 @@ export const DEFAULT_SHOWCASE_MEDIA = {
       height: 1280,
       poster: "/showcase/fruitpop-ad.webp",
       clip: "/showcase/fruitpop-ad.mp4",
+      animation: "/showcase/fruitpop-ad-animated.webp",
       link: "/showcase/fruitpop-ad.mp4",
       linkType: "video/mp4",
       durationMs: 15_000,
       published: "2026-10-29",
       address: `${REFERENCE_REPOSITORY_ADDRESS}/marketing/skills/higgsfield-shorts-ad`,
     },
-    cards: {
-      width: 720,
-      height: 1280,
-      poster: {
-        en: "/showcase/card-news-reel-en-poster.webp",
-        ko: "/showcase/card-news-reel-poster.webp",
-      },
-      clip: { en: "/showcase/card-news-reel-en.mp4", ko: "/showcase/card-news-reel.mp4" },
-      link: { en: "/showcase/card-news-reel-en.mp4", ko: "/showcase/card-news-reel.mp4" },
-      linkType: "video/mp4",
-      durationMs: 17_600,
-      published: "2026-10-29",
-      address: `${REFERENCE_REPOSITORY_ADDRESS}/design/skills/html-card-news-from-brief`,
-    },
     deck: {
       width: 1440,
       height: 810,
       poster: "/showcase/pitch-deck.webp",
       clip: "/showcase/pitch-deck.mp4",
+      animation: "/showcase/pitch-deck-animated.webp",
       link: "/showcase/pitch-deck.pdf",
       linkType: "application/pdf",
       durationMs: 17_700,
@@ -83,6 +74,7 @@ export const DEFAULT_SHOWCASE_MEDIA = {
       height: 900,
       poster: "/showcase/bakery-site.webp",
       clip: "/showcase/bakery-site.mp4",
+      animation: "/showcase/bakery-site-animated.webp",
       link: "/showcase/bakery-site-page.webp",
       linkType: "image/webp",
       durationMs: 13_000,

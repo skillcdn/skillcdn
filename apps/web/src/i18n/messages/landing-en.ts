@@ -73,16 +73,6 @@ export const landingEn = {
         poster:
           "A 15-second vertical ad with a film look. A wet strawberry lands on a wooden board by a kitchen window, and a strawberry-shaped lollipop lands in the same place. At a morning fruit market a hand lifts a peach lollipop out of a paper bag into the sun, then holds a strawberry lollipop against the light; on a linen table a hand sets a lollipop beside a bowl of fruit; a jar of fruit lollipops by the window and the brand name close it. One caption per shot.",
       },
-      cards: {
-        title: "“Pick a recent issue and make card news about it”",
-        body: "It picked the Tesla Roadster reveal from this week's news, took its format from a news magazine's Instagram, and kept only the facts it could source in eleven articles.",
-        tags: ["8 slides", "Format studied", "20 sourced facts"],
-        action: "See the result",
-        credit: "skillcdn/skills · design",
-        requirement: null,
-        poster:
-          "An 18-second vertical clip of the post as a phone shows it: the magazine's feed with the eight slides swiped through one by one. The cover reads 'The Tesla Roadster is here' and 'A flying car you can buy?' in two orange boxes over a photograph of the white car in the air on jets of gas; each slide after it asks a question in a white box and answers it in orange.",
-      },
       deck: {
         title: "“Turn this idea into a business plan for investors”",
         body: "A one-page idea for a running-crew app became a twelve-slide plan that opens with the problem and closes with the ask, exported to PDF as well. The video is the plan being pitched.",

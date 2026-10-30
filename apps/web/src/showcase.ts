@@ -18,7 +18,7 @@ import {
 // through the REST API; until there are any, the build's own stand, made of the language packs
 // and the media in public/showcase/ and public/organizations/.
 
-const DEFAULT_IDS: readonly DefaultShowcaseId[] = ["ad", "cards", "deck", "site"];
+const DEFAULT_IDS: readonly DefaultShowcaseId[] = ["ad", "deck", "site"];
 
 const own = new Map<Language, readonly RestShowcaseEntry[]>();
 
@@ -65,7 +65,10 @@ export function defaultShowcase(
           media.clip === null
             ? null
             : { url: localizedPath(media.clip, language), type: "video/mp4" },
-        animation: null,
+        animation:
+          media.animation === null
+            ? null
+            : { url: localizedPath(media.animation, language), type: "image/webp" },
         poster: { url: localizedPath(media.poster, language), type: "image/webp" },
         reference: null,
         picture: null,

@@ -282,7 +282,7 @@ describe("prerendered pages", () => {
       // The box first, the showcase after it, and the address field far down the page.
       expect(body).toContain('name="q"');
       expect(body.indexOf('name="q"')).toBeLessThan(body.indexOf('inputMode="url"'));
-      for (const id of ["cards", "deck", "site"] as const) {
+      for (const id of ["deck", "site"] as const) {
         const entry = DEFAULT_SHOWCASE_MEDIA.entries[id];
         const words = t.landing.showcase.entries[id];
         expect(body, id).toContain(words.title);
@@ -310,7 +310,7 @@ describe("prerendered pages", () => {
       expect(body).toContain(`poster="${localizedPath(ad.poster, language)}"`);
       expect(body).toContain('preload="none"');
       expect(body.indexOf(t.landing.showcase.entries.ad.title)).toBeLessThan(
-        body.indexOf(t.landing.showcase.entries.cards.title),
+        body.indexOf(t.landing.showcase.entries.deck.title),
       );
       expect(body).not.toMatch(/style="|<(?:img|video)[^>]+src="https?:/);
       // The organizations of the build, the console's board in the visitor's words, the way to
@@ -327,7 +327,7 @@ describe("prerendered pages", () => {
       // The explorer has the box too, and its own list without the showcase (ADR-0028).
       const explore = renderPage("/explore", language).body;
       expect(explore).toContain('name="q"');
-      expect(explore).not.toContain(t.landing.showcase.entries.cards.title);
+      expect(explore).not.toContain(t.landing.showcase.entries.ad.title);
     }
   });
 
@@ -351,8 +351,8 @@ describe("prerendered pages", () => {
     expect(html).not.toContain('href="https://acme.example/spring"');
     expect(html).toContain(t.landing.showcase.origins.builder);
     expect(html).toContain('href="/gh/acme/skills"');
-    expect(html).not.toContain(DEFAULT_SHOWCASE_MEDIA.entries.cards.poster);
-    expect(html).not.toContain(t.landing.showcase.entries.cards.title);
+    expect(html).not.toContain(DEFAULT_SHOWCASE_MEDIA.entries.ad.poster);
+    expect(html).not.toContain(t.landing.showcase.entries.ad.title);
     // The operator's organizations stand in the strip in place of the build's own.
     expect(html).toContain(`src="${MEDIA_URL("e")}"`);
     expect(html).toContain('href="https://acme.example"');
@@ -372,7 +372,7 @@ describe("prerendered pages", () => {
       data: { showcase: { ready: { items: [], organizations: [] } } },
     }).html;
     expect(empty).toContain(
-      `src="${localizedPath(DEFAULT_SHOWCASE_MEDIA.entries.cards.poster, "en")}"`,
+      `poster="${localizedPath(DEFAULT_SHOWCASE_MEDIA.entries.ad.poster, "en")}"`,
     );
     expect(empty).toContain(defaultShowcase()[0]?.texts.en?.title ?? "missing");
     expect(empty).toContain('src="/organizations/kdxlabs.png"');
@@ -1416,7 +1416,7 @@ describe("llms.txt", () => {
       // What the site is, in one plain sentence, and what there is to make, with its address.
       expect(text).toContain(t.meta.landing.about);
       expect(text).toContain(`${ORIGIN_PLACEHOLDER}${REFERENCE_REPOSITORY_ADDRESS}`);
-      expect(text).toContain(t.landing.showcase.entries.cards.title);
+      expect(text).toContain(t.landing.showcase.entries.deck.title);
       expect(text).toContain(`${ORIGIN_PLACEHOLDER}${DEFAULT_SHOWCASE_MEDIA.entries.deck.link}`);
       expect(text).toContain(`${ORIGIN_PLACEHOLDER}${CONSOLE_PACK_ADDRESS}`);
       expect(text).toContain(`${ORIGIN_PLACEHOLDER}/search`);
@@ -1437,6 +1437,6 @@ describe("llms.txt", () => {
     );
     expect(text).toContain("Uses a video tool.");
     expect(text).toContain("[Make one](https://acme.example/spring)");
-    expect(text).not.toContain(messagesFor("en").landing.showcase.entries.cards.title);
+    expect(text).not.toContain(messagesFor("en").landing.showcase.entries.ad.title);
   });
 });

@@ -251,7 +251,7 @@ const ACME_SKILLS: FixtureRepository = {
   description: "The skills Acme's teams share: release notes, incident reviews and more.",
   verified: true,
   // The bundled poster stands in for a picture the manifest would declare.
-  image: "/showcase/card-news.webp",
+  image: "/showcase/bakery-site.webp",
   overviews: {
     "": {
       path: "README.md",
