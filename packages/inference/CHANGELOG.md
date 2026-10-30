@@ -1,5 +1,13 @@
 # @skillcdn/inference
 
+## 0.4.1
+
+### Patch Changes
+
+- [`9797873`](https://github.com/skillcdn/skillcdn/commit/979787324d4367f81539f7fc1c070a4f34f3c2ec) Thanks [@samo-lucid](https://github.com/samo-lucid)! - A call that runs out of time fails saying that the inference server did not answer within the call's timeout, and a call that never reached the server says that it could not be reached; both said that the server could not be reached in time, which sent an operator looking for a server that was there and busy. The code of both stays `inference_unreachable`. A timeout while the answer is being read fails the same way, where it was thrown as the body reader gave it.
+- Updated dependencies [[`0f51e91`](https://github.com/skillcdn/skillcdn/commit/0f51e912a1e5da13c97464f708f122fac9444254), [`ca556d3`](https://github.com/skillcdn/skillcdn/commit/ca556d371a24d07895b4c2c6b80f652a9632564f), [`14e1d39`](https://github.com/skillcdn/skillcdn/commit/14e1d39b30ebacaa0e16c78b9c3c31e27befd63b), [`ca556d3`](https://github.com/skillcdn/skillcdn/commit/ca556d371a24d07895b4c2c6b80f652a9632564f)]:
+  - @skillcdn/core@0.4.1
+
 ## 0.4.0
 
 ### Patch Changes

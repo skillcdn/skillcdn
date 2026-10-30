@@ -1,6 +1,6 @@
 {
   "name": "@skillcdn/reader",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "The reads of SkillCDN: what the MCP tools, the REST API and the skillcdn command answer from an index, wherever the index is kept.",
   "license": "FSL-1.1-ALv2",
   "homepage": "https://skillcdn.ai",
