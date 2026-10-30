@@ -16,10 +16,13 @@ export {
   readIndexLimits,
 } from "./limits.js";
 export {
+  bytesOf,
   type LocalFile,
+  openWorkingTreeFile,
   type ReadDirectory,
   type ReadDirectoryOptions,
   readDirectory,
   readWorkingTree,
   WORKING_TREE_COMMIT,
+  type WorkingTreeFile,
 } from "./read-directory.js";

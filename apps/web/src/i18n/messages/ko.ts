@@ -349,6 +349,7 @@ export const ko: Messages = {
     directory: "디렉터리",
     bytes: (count: number) => `${count.toLocaleString("ko")}바이트`,
     directoryTruncated: "앞쪽 항목만 표시됩니다.",
+    openAtSource: "파일이 있는 곳에서 열기",
   },
 
   errors: {

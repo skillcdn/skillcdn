@@ -8,7 +8,10 @@ import {
   type CatalogState,
   classifyRepoFile,
   contextPage,
+  type DocumentImage,
+  type DocumentSource,
   decodeText,
+  documentSources,
   type Embedder,
   embeddingTextOf,
   FIND_DEFAULT_LIMIT,
@@ -34,10 +37,14 @@ import {
   type IndexLimits,
   type IndexNotReady,
   type IndexOutcome,
+  inspectMarkdownLinks,
+  isBinaryPath,
+  isReadmePath,
   isWithinRepoPath,
   joinRepoPath,
   type LicenseFact,
   licenseOfPath,
+  MAX_LFS_POINTER_LENGTH,
   MAX_MATCHED_SECTIONS,
   type MatchedSection,
   type MeaningMatch,
@@ -53,6 +60,7 @@ import {
   pageOfText,
   parentDirectory,
   parseFrontMatter,
+  parseLfsPointer,
   parseRepoPath,
   parseSkillUri,
   queryLexemes,
@@ -64,6 +72,7 @@ import {
   type Reranker,
   ROOT_PATH,
   repoManifestPath,
+  resolveDocumentSource,
   SKILL_PAGE_BYTES,
   SKILL_RANK_BOOST,
   type SkillLookup,
@@ -232,6 +241,10 @@ const MAX_CACHED_TREES = 8;
 const MAX_CACHED_CATALOGS = 64;
 const MAX_CACHED_MANIFESTS = 64;
 const MAX_DIRECTORY_ENTRIES = 200;
+/** How many bodies the reader remembers as not text, so that none is fetched twice to learn it. */
+const MAX_REMEMBERED_NOT_TEXT = 4096;
+/** How many of a document's pictures an outline names. */
+const MAX_OUTLINE_IMAGES = 50;
 
 /** Keeps a bounded number of promises by key; the oldest goes first. */
 function remember<T>(
@@ -439,6 +452,9 @@ function toFindItem(mount: MountContext, row: IndexEntry): FindItem | undefined 
         title: row.title ?? undefined,
         summary: row.description ?? undefined,
         skillDirectory: belowMount(mount, row.skillDir),
+        // The README of a folder is its map, which says a little of everything in it: a result
+        // says so, and a model goes on to the documents the map names.
+        ...(isReadmePath(path) ? { overview: true } : {}),
       };
 }
 
@@ -449,6 +465,11 @@ function toFindItem(mount: MountContext, row: IndexEntry): FindItem | undefined 
 export class Reader<M extends MountContext = MountContext> {
   readonly #dependencies: ReaderDependencies<M>;
   readonly #entries = new Map<string, Promise<readonly IndexEntry[]>>();
+  /**
+   * The bodies fetched and found not to be text, by hash: their bytes are not kept (ADR-0077),
+   * so this is what keeps the next read of one from fetching it again.
+   */
+  readonly #notText = new Set<string>();
   /**
    * What each mount holds, by index and mounted path, for every connection to read. An index
    * never changes, so neither does this; the map is small and only saves reads.
@@ -597,10 +618,18 @@ export class Reader<M extends MountContext = MountContext> {
     const limit = input.limit ?? BROWSE_DEFAULT_LIMIT;
     const overview = await this.#overviewOf(index, path);
     const diagnostics = await this.#diagnosticsOf(mount, index);
+    // The manifest of the folder is no entry of it: the result names it, so that a model told
+    // to read the pack's metadata knows where it is.
+    const manifest = getEntry(await this.#entriesOf(index), repoManifestPath(path));
+    const manifestPath =
+      manifest?.kind === "manifest" && manifest.visible
+        ? belowMount(mount, manifest.path)
+        : undefined;
     const make = (count: number): BrowseResult => ({
       mount: this.summary(mount, index),
       path,
       overview,
+      ...(manifestPath === undefined ? {} : { manifestPath }),
       entries: entries.slice(offset, offset + count),
       nextCursor:
         offset + count < entries.length ? nextContinuation(key, offset + count) : undefined,
@@ -613,8 +642,11 @@ export class Reader<M extends MountContext = MountContext> {
   }
 
   /**
-   * The text of a file the index names: from the store, else fetched from the source and kept,
-   * when something can fetch it. `undefined` for bytes that are not UTF-8 text.
+   * The text of a file the index names: from the store, else fetched from the source, when
+   * something can fetch it. `undefined` for a file that is not UTF-8 text (ADR-0077): one whose
+   * name says so is never fetched, unless it is small enough to be a Git LFS pointer, which is
+   * text; one the store holds the bytes of is not fetched again; and one fetched and found not
+   * to be text is remembered, since its bytes are not kept.
    */
   async #textOf(
     mount: M,
@@ -622,9 +654,20 @@ export class Reader<M extends MountContext = MountContext> {
     entry: IndexEntry,
     limits: IndexLimits,
   ): Promise<string | undefined> {
+    if (
+      (isBinaryPath(entry.path as RepoPath) && entry.size > MAX_LFS_POINTER_LENGTH) ||
+      this.#notText.has(entry.blobSha)
+    ) {
+      return undefined;
+    }
     const text = await index.blobs.read(entry.blobSha);
     if (text !== undefined) {
       return text;
+    }
+    // The store holds the bytes of a listed skill's files whatever they are: a body it holds
+    // and does not read as text is not text, and there is nothing to fetch.
+    if ((await index.blobs.readBytes(entry.blobSha)) !== undefined) {
+      return undefined;
     }
     const bytes = await this.#dependencies.fetchBody?.(
       mount,
@@ -632,9 +675,69 @@ export class Reader<M extends MountContext = MountContext> {
       limits.maxReadableFileBytes,
     );
     if (bytes === undefined) {
+      // A small picture nobody can fetch is still a picture: the reader is sent to the source.
+      if (isBinaryPath(entry.path as RepoPath)) {
+        return undefined;
+      }
       throw new BodyUnavailableError(entry.path);
     }
-    return decodeText(bytes);
+    const decoded = decodeText(bytes);
+    if (decoded === undefined) {
+      if (this.#notText.size >= MAX_REMEMBERED_NOT_TEXT) {
+        this.#notText.clear();
+      }
+      this.#notText.add(entry.blobSha);
+    }
+    return decoded;
+  }
+
+  /**
+   * What a Markdown document says of itself for whoever reads it (ADR-0076): the originals it
+   * names, each with where its bytes are when it is a file of the mount, and the pictures it
+   * links to with their words.
+   */
+  async #documentFacts(
+    mount: M,
+    index: ReadableIndex,
+    path: RepoPath,
+    text: string,
+  ): Promise<{ readonly sources: DocumentSource[]; readonly images: DocumentImage[] }> {
+    const entries = await this.#entriesOf(index);
+    const sources = documentSources(text).map((source): DocumentSource => {
+      const resolved = resolveDocumentSource(path, source);
+      const entry = resolved === undefined ? undefined : getEntry(entries, resolved);
+      const below = entry?.visible === true ? belowMount(mount, entry.path) : undefined;
+      return below === undefined
+        ? { text: source }
+        : { text: source, path: below, url: mount.rawUrl(below) };
+    });
+    const images = inspectMarkdownLinks(path, text)
+      .images.slice(0, MAX_OUTLINE_IMAGES)
+      .map((image): DocumentImage => ({ path: image.path, alt: image.alt ?? "" }));
+    return { sources, images };
+  }
+
+  /**
+   * What a read answers for a file whose text is not what the reader wants (ADR-0077): not text,
+   * with where the bytes are; or, where the mount's host serves the files kept in Git LFS, a
+   * pointer to one, with where the host serves it. Where nothing serves them, a pointer is the
+   * text it is, and the reader sees for itself.
+   */
+  #notReadable(
+    mount: M,
+    path: RepoPath,
+    text: string | undefined,
+  ): { readonly sourceUrl: string; readonly lfs?: { readonly size: number } } | undefined {
+    if (text === undefined) {
+      return { sourceUrl: mount.rawUrl(path) };
+    }
+    if (mount.lfsUrl === undefined) {
+      return undefined;
+    }
+    const pointer = parseLfsPointer(text);
+    return pointer === undefined
+      ? undefined
+      : { sourceUrl: mount.lfsUrl(path), lfs: { size: pointer.size } };
   }
 
   /**
@@ -685,12 +788,22 @@ export class Reader<M extends MountContext = MountContext> {
       outline = { ...none, unavailable: "too_large", sourceUrl: mount.rawUrl(path) };
     } else {
       const text = await this.#textOf(mount, index, entry, limits);
-      if (text === undefined) {
-        outline = { ...none, unavailable: "not_text", sourceUrl: mount.rawUrl(path) };
+      const unreadable = this.#notReadable(mount, path, text);
+      if (text === undefined || unreadable !== undefined) {
+        outline = { ...none, unavailable: "not_text", ...unreadable };
       } else {
         const whole = outlineMarkdown(text);
         headings = whole.headings;
-        outline = { ...none, totalLength: whole.totalLength, truncated: whole.truncated };
+        // What the document says of itself goes on the first page, with the start of the outline.
+        const facts =
+          offset === 0 ? await this.#documentFacts(mount, index, path, text) : undefined;
+        outline = {
+          ...none,
+          totalLength: whole.totalLength,
+          truncated: whole.truncated,
+          ...(facts === undefined || facts.sources.length === 0 ? {} : { sources: facts.sources }),
+          ...(facts === undefined ? {} : { images: facts.images }),
+        };
       }
     }
     const make = (count: number): BrowseResult => ({
@@ -1846,10 +1959,20 @@ export class Reader<M extends MountContext = MountContext> {
     }
 
     const text = await this.#textOf(mount, index, entry, limits);
-    if (text === undefined) {
-      return { kind: "not_text", path: below, sourceUrl: mount.rawUrl(path) };
+    const unreadable = this.#notReadable(mount, path, text);
+    if (text === undefined || unreadable !== undefined) {
+      return {
+        kind: "not_text",
+        path: below,
+        ...(unreadable ?? { sourceUrl: mount.rawUrl(path) }),
+      };
     }
     const references = await this.#references(mount, index, entry.frontMatter?.references ?? []);
+    // The originals a document was made from are named on its first page (ADR-0076).
+    const sources =
+      (input.offset ?? 0) === 0 && entry.kind === "markdown"
+        ? (await this.#documentFacts(mount, index, path, text)).sources
+        : [];
     const make = (length: number): FileResult => {
       const page = pageOfText(text, input.offset ?? 0, length);
       return {
@@ -1858,6 +1981,7 @@ export class Reader<M extends MountContext = MountContext> {
           page.content.length === text.length
             ? references
             : references.filter((reference) => page.content.includes(reference.href)),
+        ...(sources.length === 0 ? {} : { sources }),
         mount: this.summary(mount, index),
         path: below,
         ...page,
@@ -1869,6 +1993,44 @@ export class Reader<M extends MountContext = MountContext> {
       throw new ReaderInputError("This file page cannot advance. Use a larger page limit.");
     }
     return { kind: "found", file: page, indexed: indexedOf(entry) };
+  }
+
+  /**
+   * Whether a file of the mount is served, for whoever sends its bytes as they are (ADR-0077):
+   * the file the index lists at `path`, visible and served in full under its license, or why
+   * not. Never waits for the index, and reads no body.
+   */
+  async rawFile(
+    asked: M,
+    wanted: string,
+  ): Promise<
+    | { readonly kind: "served"; readonly path: RepoPath; readonly size: number }
+    | { readonly kind: "not_ready"; readonly outcome: IndexNotReady }
+    | { readonly kind: "invalid_path"; readonly reason: string }
+    | { readonly kind: "not_found"; readonly path: string }
+    | { readonly kind: "not_served"; readonly path: RepoPath; readonly license: LicenseFact }
+  > {
+    const parsed = parseRepoPath(wanted);
+    if (!parsed.ok || parsed.value.length === 0) {
+      return {
+        kind: "invalid_path",
+        reason: parsed.ok ? "the path is empty" : parsed.error.message,
+      };
+    }
+    const path = parsed.value;
+    if (!isWithinRepoPath(asked.address.path, path)) return { kind: "not_found", path };
+    const outcome = await this.#index(asked, 0);
+    if (outcome.status !== "ready") return { kind: "not_ready", outcome };
+    const { index, mount } = outcome;
+    const entry = getEntry(await this.#entriesOf(index), path);
+    if (entry === undefined || !entry.visible || entry.frontMatter?.manifestError !== undefined) {
+      return { kind: "not_found", path };
+    }
+    const license = await this.#licenseAt(index, path);
+    if (!servesInFull(license, mount.verified)) {
+      return { kind: "not_served", path, license };
+    }
+    return { kind: "served", path, size: entry.size };
   }
 
   /** Everything the mount offers, up to `listLimit` skills and as many documents. Never waits. */

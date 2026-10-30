@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   extractMarkdownReferences,
+  inspectMarkdownLinks,
   inspectMarkdownReferences,
   MAX_LINK_MARKDOWN_LENGTH,
   MAX_MARKDOWN_REFERENCES,
+  resolveLocalLink,
   resolveMarkdownReference,
 } from "./markdown-links.js";
 import { parseRepoPath, type RepoPath } from "./repo-path.js";
@@ -189,5 +191,65 @@ describe("Markdown references", () => {
       references: [],
       truncated: false,
     });
+  });
+});
+
+describe("Markdown links by what they name", () => {
+  const source = path("docs/manual/chapter-3.md");
+
+  it("sorts the local links into references, pictures with their words, and other files", () => {
+    const inspected = inspectMarkdownLinks(
+      source,
+      [
+        "See [the next chapter](chapter-4.md) and [the original](sources/manual.pdf#page=12).",
+        "![Block diagram of the interface](images/interface.png)",
+        "![](images/placeholder.png)",
+        "![  Spaced   words  ][fig]",
+        "[fig]: images/figure-2.svg",
+        "![remote](https://example.com/a.png) and [remote](https://example.com/a.pdf).",
+        "`![code](images/code.png)` is not a picture, and \\![escaped](images/e.png) is a link.",
+        "![Block diagram of the interface](images/interface.png) again.",
+      ].join("\n"),
+    );
+    expect(inspected.references).toEqual([
+      { href: "chapter-4.md", path: "docs/manual/chapter-4.md" },
+    ]);
+    expect(inspected.files).toEqual([
+      { href: "sources/manual.pdf#page=12", path: "docs/manual/sources/manual.pdf" },
+      { href: "images/e.png", path: "docs/manual/images/e.png" },
+    ]);
+    expect(inspected.images).toEqual([
+      {
+        href: "images/interface.png",
+        path: "docs/manual/images/interface.png",
+        alt: "Block diagram of the interface",
+      },
+      { href: "images/placeholder.png", path: "docs/manual/images/placeholder.png", alt: "" },
+      { href: "images/figure-2.svg", path: "docs/manual/images/figure-2.svg", alt: "Spaced words" },
+    ]);
+    expect(inspected.truncated).toBe(false);
+  });
+
+  it("resolves a local destination to any file of the repository, and nothing outside it", () => {
+    expect(resolveLocalLink(source, "sources/a%20b.pdf")).toBe("docs/manual/sources/a b.pdf");
+    expect(resolveLocalLink(source, "/images/x.png")).toBe("images/x.png");
+    expect(resolveLocalLink(source, "../../../x.png")).toBe(undefined);
+    expect(resolveLocalLink(source, "https://example.com/x.png")).toBe(undefined);
+    expect(resolveLocalLink(source, "#top")).toBe(undefined);
+  });
+
+  it("bounds each list on its own", () => {
+    const many = Array.from({ length: MAX_MARKDOWN_REFERENCES + 5 }, (_, index) => index);
+    const inspected = inspectMarkdownLinks(
+      source,
+      [
+        ...many.map((index) => `![p${index}](images/${index}.png)`),
+        "[one](one.md) [two](sources/two.pdf)",
+      ].join("\n"),
+    );
+    expect(inspected.images.length).toBe(MAX_MARKDOWN_REFERENCES);
+    expect(inspected.references.length).toBe(1);
+    expect(inspected.files.length).toBe(1);
+    expect(inspected.truncated).toBe(true);
   });
 });

@@ -211,3 +211,36 @@ describe("the reads of a directory", () => {
     expect(help.out).toContain("usage: skillcdn skill [<pack>] <path>");
   });
 });
+
+describe("the files a pack carries that are not text (ADR-0077)", () => {
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13]);
+
+  it("answers a picture or an original with where it is on this machine, whatever its size", async () => {
+    const root = await repository({
+      ...PACK,
+      "docs/ch3.md":
+        "---\nsource: sources/manual.pdf\n---\n# Chapter 3\n\n![A figure](images/a.png)\n",
+    });
+    await mkdir(join(root, "docs", "images"), { recursive: true });
+    await mkdir(join(root, "docs", "sources"), { recursive: true });
+    await writeFile(join(root, "docs", "images", "a.png"), PNG);
+    await writeFile(join(root, "docs", "sources", "manual.pdf"), "%PDF-1.7 not really");
+    // A file whose name does not say what it is: its bytes are read from disk to find out.
+    await writeFile(join(root, "docs", "sources", "table.dat"), new Uint8Array([0xff, 0xfe, 0, 1]));
+    const picture = await run(["file", root, "docs/images/a.png"]);
+    expect(picture.code).toBe(EXIT_MISSING);
+    expect(picture.err).toContain("The file is not UTF-8 text, which is all this command carries.");
+    expect(picture.err).toMatch(/Read it at its source: file:\/\/\/.*docs\/images\/a\.png/);
+    const data = await run(["file", root, "docs/sources/table.dat"]);
+    expect(data.code).toBe(EXIT_MISSING);
+    expect(data.err).toMatch(/Read it at its source: file:\/\/\/.*docs\/sources\/table\.dat/);
+    // The chapter names its original, with where it is, and its picture.
+    const chapter = await run(["file", root, "docs/ch3.md"]);
+    expect(chapter.code).toBe(0);
+    expect(chapter.out).toMatch(
+      /Original: docs\/sources\/manual\.pdf \(file:\/\/\/.*docs\/sources\/manual\.pdf\)/,
+    );
+    const outline = await run(["browse", root, "docs/ch3.md"]);
+    expect(outline.out).toContain("- docs/images/a.png: A figure");
+  });
+});

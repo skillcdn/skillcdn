@@ -11,6 +11,7 @@ import {
 } from "@skillcdn/core";
 import {
   claimSnapshot,
+  createBlobStore,
   createDatabase,
   ensureSnapshot,
   findCachedRef,
@@ -19,11 +20,12 @@ import {
   writeSnapshotIndex,
 } from "@skillcdn/db";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
-import { INDEX_VERSION } from "@skillcdn/indexer";
+import { gitBlobHash, INDEX_VERSION } from "@skillcdn/indexer";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as z from "zod";
 import { MountService } from "./mounts/mount-service.js";
 import { createFixtureHost, fixtureCommits } from "./testing/fixture-host.js";
+import { createFixtureLogin } from "./testing/fixture-login.js";
 import { CURRENT_REVISION, createHarness, type HarnessOptions } from "./testing/harness.js";
 import { listedPaths } from "./testing/tool-text.js";
 
@@ -1358,5 +1360,118 @@ describe("content policy (ADR-0026)", () => {
     } finally {
       await h.lists.remove("verified", "/gh/acme/licensed");
     }
+  });
+});
+
+describe("the files that are not text (ADR-0077)", () => {
+  const OID = "4d7a214614ab2935c943f9e0ff69d22eadbb8f32b1258daaa5e2ca24d17e2393";
+  const pointer = new TextEncoder().encode(
+    `version https://git-lfs.github.com/spec/v1\noid sha256:${OID}\nsize 7340032\n`,
+  );
+  /** The mount once its index is ready, as the REST API answers it. */
+  const indexed = async (
+    h: ReturnType<typeof harness>,
+    address: string,
+    init?: RequestInit,
+  ): Promise<void> => {
+    await expect
+      .poll(
+        async () => {
+          const response = await h.request(`/api/v1/mounts${address}`, init);
+          const body = (await response.json()) as { index?: { status?: string } };
+          return body.index?.status;
+        },
+        { timeout: 15_000, interval: 50 },
+      )
+      .toBe("ready");
+  };
+
+  it("keeps no bytes of a file that is not text, and fetches it from the host once", async () => {
+    const host = createFixtureHost("not-text");
+    // A name that says nothing of what the file is: the bytes decide. Outside every skill, so
+    // that the index has no reason of its own to fetch it.
+    const data = new Uint8Array([0xff, 0xfe, 0x00, 0x01, 0x80, 0x81]);
+    host.addFile("docs/data/table.dat", data);
+    const commit = fixtureCommits("not-text").main;
+    const client = await harness({ host }).connect(`/gh/acme/multi-skill@${commit}`);
+    await call(client, "browse_repo");
+    const before = host.calls.readBlob;
+    const first = await call(client, "read_repo_file", { path: "docs/data/table.dat" });
+    expect(first.isError).toBe(true);
+    expect(first.text).toContain("not a UTF-8 text file");
+    expect(first.text).toContain(
+      `https://raw.githubusercontent.com/Acme/multi-skill/${commit}/docs/data/table.dat`,
+    );
+    expect(host.calls.readBlob).toBe(before + 1);
+    const second = await call(client, "read_repo_file", { path: "docs/data/table.dat" });
+    expect(second.isError).toBe(true);
+    expect(host.calls.readBlob).toBe(before + 1);
+    expect(await createBlobStore(testDatabase.database).readBytes(gitBlobHash(data))).toBe(
+      undefined,
+    );
+    // A picture is known by its name: it is never fetched.
+    host.addFile("docs/images/figure.png", new Uint8Array(2048).fill(0x89));
+    const pushed = host.push();
+    const later = await harness({ host }).connect(`/gh/acme/multi-skill@${pushed}`);
+    await call(later, "browse_repo");
+    const fetched = host.calls.readBlob;
+    const picture = await call(later, "read_repo_file", { path: "docs/images/figure.png" });
+    expect(picture.isError).toBe(true);
+    expect(picture.text).toContain("Fetch it from the source");
+    expect(host.calls.readBlob).toBe(fetched);
+    await client.close();
+    await later.close();
+  });
+
+  it("sends a reader of a Git LFS pointer to where the host serves the file", async () => {
+    const host = createFixtureHost("lfs");
+    host.addFile("docs/sources/manual.pdf", pointer);
+    const commit = fixtureCommits("lfs").main;
+    const client = await harness({ host }).connect(`/gh/acme/multi-skill@${commit}`);
+    await call(client, "browse_repo");
+    const read = await call(client, "read_repo_file", { path: "docs/sources/manual.pdf" });
+    expect(read.isError).toBe(true);
+    expect(read.text).toContain(
+      `The repository holds a Git LFS pointer to it; the file itself (7340032 bytes) is served by the host: https://github.com/Acme/multi-skill/raw/${commit}/docs/sources/manual.pdf`,
+    );
+    await client.close();
+  });
+
+  it("sends the reader of its own raw route on to the host for a repository of one", async () => {
+    const host = createFixtureHost("raw-route");
+    host.addFile("docs/images/figure.png", new Uint8Array(2048).fill(0x89));
+    const commit = fixtureCommits("raw-route").main;
+    const h = harness({ host });
+    await indexed(h, `/gh/acme/multi-skill@${commit}`);
+    const sent = await h.request(
+      `/api/v1/raw/gh/acme/multi-skill@${commit}?path=docs%2Fimages%2Ffigure.png`,
+      { redirect: "manual" },
+    );
+    expect(sent.status).toBe(302);
+    expect(sent.headers.get("location")).toBe(
+      `https://raw.githubusercontent.com/Acme/multi-skill/${commit}/docs/images/figure.png`,
+    );
+    expect(
+      (await h.request(`/api/v1/raw/gh/acme/multi-skill@${commit}?path=nothing.png`)).status,
+    ).toBe(404);
+  });
+
+  it("tells a reader of a private repository's file how to fetch it", async () => {
+    const host = createFixtureHost("private-hint");
+    host.addFile("docs/images/figure.png", new Uint8Array(2048).fill(0x89));
+    const h = harness({ host, login: createFixtureLogin() });
+    const cookie = await h.signIn("alice");
+    await indexed(h, "/gh/acme/secret-skills", { headers: { cookie } });
+    const refused = await h.request(
+      "/api/v1/files/gh/acme/secret-skills?path=docs%2Fimages%2Ffigure.png",
+      {
+        headers: { cookie },
+      },
+    );
+    expect(refused.status).toBe(415);
+    const body = (await refused.json()) as { error: { message: string } };
+    expect(body.error.message).toContain(
+      "The repository Acme/secret-skills is private: fetch it with a GitHub credential that may read it",
+    );
   });
 });

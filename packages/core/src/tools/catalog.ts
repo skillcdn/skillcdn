@@ -127,15 +127,23 @@ export function renderInstructions(state: CatalogState, words: ToolWords = MCP_T
         ];
   const ending = `${words.browse} returns the full folder contents with continuation.\n${howTo(words, catalog.search?.meaning === true)}\n${extensionLine(mount)}`;
   let result = `${compactSummary(summary, INSTRUCTIONS_MAX_LENGTH - ending.length - 1)}\n`;
-  const overview =
+  // The manifest is not an entry of any folder: a model that is told to read the pack's
+  // metadata, its conversion date for one, is told here where it is.
+  const lines = [
     catalog.overview === undefined
       ? undefined
-      : `Optional overview: ${words.read} ${catalog.overview.path}.`;
-  if (
-    overview !== undefined &&
-    result.length + overview.length + ending.length + 1 <= INSTRUCTIONS_MAX_LENGTH
-  ) {
-    result += `${overview}\n`;
+      : `Optional overview: ${words.read} ${catalog.overview.path}.`,
+    manifest?.path === undefined
+      ? undefined
+      : `Manifest: ${words.read} ${manifest.path} for the pack's metadata and rules.`,
+  ];
+  for (const line of lines) {
+    if (
+      line !== undefined &&
+      result.length + line.length + ending.length + 1 <= INSTRUCTIONS_MAX_LENGTH
+    ) {
+      result += `${line}\n`;
+    }
   }
   for (const row of rows) {
     if (result.length + row.length + ending.length + 1 > INSTRUCTIONS_MAX_LENGTH) break;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { accountAvatarUrl, accountPageUrl, rawFileUrl } from "./host-urls.js";
+import { accountAvatarUrl, accountPageUrl, lfsFileUrl, rawFileUrl } from "./host-urls.js";
 import { parseRepoPath, type RepoPath } from "./repo-path.js";
 
 const path = (value: string): RepoPath => {
@@ -23,9 +23,26 @@ describe("the URLs at a host", () => {
     );
   });
 
-  it("names the page of the file for a pack served from a directory, which has no bytes at any host", () => {
+  it("names the deployment's own route for a pack served from a directory, which has no bytes at any host (ADR-0077)", () => {
     expect(
-      rawFileUrl({ host: "local", owner: "acme", name: "handbook" }, "b".repeat(40), path("a.png")),
-    ).toBe("/local/acme/handbook?file=a.png");
+      rawFileUrl(
+        { host: "local", owner: "acme", name: "handbook" },
+        "b".repeat(40),
+        path("docs/sources/a b.pdf"),
+      ),
+    ).toBe("/api/v1/raw/local/acme/handbook?path=docs%2Fsources%2Fa%20b.pdf");
+  });
+
+  it("names GitHub's own raw route for a file kept in Git LFS, which the raw host does not serve", () => {
+    expect(
+      lfsFileUrl(
+        { host: "gh", owner: "Acme", name: "skills" },
+        "a".repeat(40),
+        path("docs/sources/manual.pdf"),
+      ),
+    ).toBe(`https://github.com/Acme/skills/raw/${"a".repeat(40)}/docs/sources/manual.pdf`);
+    expect(
+      lfsFileUrl({ host: "local", owner: "acme", name: "handbook" }, "b".repeat(40), path("a.pdf")),
+    ).toBe("/api/v1/raw/local/acme/handbook?path=a.pdf");
   });
 });

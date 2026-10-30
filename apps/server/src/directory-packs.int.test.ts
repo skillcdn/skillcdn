@@ -26,6 +26,7 @@ const INDEXED_WITHIN = { timeout: 15_000, interval: 50 };
 const HANDBOOK = "/local/acme/handbook";
 const NOTES = "/local/acme/notes";
 const BROWSER = { accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" };
+const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13]);
 
 let testDatabase: TestDatabase;
 let root: string;
@@ -44,7 +45,19 @@ beforeAll(async () => {
     "---\nname: Notes\ndescription: Notes about kettles, as a pack of documents.\ndocuments:\n  - docs\nlicense: MIT\n---\n",
   );
   writeFileSync(join(root, "acme", "notes", "README.md"), "# Notes\n\nNotes about kettles.\n");
-  writeFileSync(join(root, "acme", "notes", "docs", "README.md"), "# The notes\n\n- big.md\n");
+  writeFileSync(
+    join(root, "acme", "notes", "docs", "README.md"),
+    "# The notes\n\n- big.md\n- kettle.md\n",
+  );
+  // A chapter with its picture and its original beside it (ADR-0076).
+  mkdirSync(join(root, "acme", "notes", "docs", "images"), { recursive: true });
+  mkdirSync(join(root, "acme", "notes", "docs", "sources"), { recursive: true });
+  writeFileSync(
+    join(root, "acme", "notes", "docs", "kettle.md"),
+    "---\ntitle: The kettle\nsource: sources/kettle.pdf\n---\n# The kettle\n\n![A kettle on a stove](images/kettle.png)\n\nIt boils.\n",
+  );
+  writeFileSync(join(root, "acme", "notes", "docs", "images", "kettle.png"), PNG);
+  writeFileSync(join(root, "acme", "notes", "docs", "sources", "kettle.pdf"), "%PDF-1.7 pretend");
   // Over the read limit of the harness: indexed, never read, so that its source is named.
   writeFileSync(
     join(root, "acme", "notes", "docs", "big.md"),
@@ -170,7 +183,7 @@ describe("a deployment with a directory of packs", () => {
     expect(local.body).toEqual(unknown.body);
   });
 
-  it("names the page of the address at the file as the source of what it does not carry", async () => {
+  it("names its own route as the source of what it does not carry, and sends the bytes from there as an attachment (ADR-0077)", async () => {
     const h = harness();
     await ready(h, NOTES);
     const response = await h.request(`/api/v1/browse${NOTES}?path=docs/big.md`);
@@ -178,7 +191,48 @@ describe("a deployment with a directory of packs", () => {
     const browse = restBrowseSchema.parse(await response.json());
     if (browse.status !== "ready") throw new Error(`not ready: ${browse.status}`);
     expect(browse.outline?.unavailable).toBe("too_large");
-    expect(browse.outline?.sourceUrl).toBe("/local/acme/notes?file=docs%2Fbig.md");
+    expect(browse.outline?.sourceUrl).toBe("/api/v1/raw/local/acme/notes?path=docs%2Fbig.md");
+    // The file over the read limit, whole, from the disk, with no size limit of the route's own.
+    const big = await h.request("/api/v1/raw/local/acme/notes?path=docs%2Fbig.md");
+    expect(big.status).toBe(200);
+    expect(big.headers.get("content-type")).toBe("application/octet-stream");
+    expect(big.headers.get("content-disposition")).toBe(
+      `attachment; filename="big.md"; filename*=UTF-8''big.md`,
+    );
+    expect(big.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(big.headers.get("content-security-policy")).toBe("default-src 'none'; sandbox");
+    expect(big.headers.get("cache-control")).toBe("no-store");
+    expect((await big.text()).startsWith("# Big\n")).toBe(true);
+    // A picture: a read names the route, the outline of the chapter names the picture.
+    const refused = await h.request(`/api/v1/files${NOTES}?path=docs%2Fimages%2Fkettle.png`);
+    expect(refused.status).toBe(415);
+    expect(await refused.json()).toMatchObject({
+      error: {
+        code: "file.not_text",
+        sourceUrl: "/api/v1/raw/local/acme/notes?path=docs%2Fimages%2Fkettle.png",
+      },
+    });
+    const picture = await h.request("/api/v1/raw/local/acme/notes?path=docs%2Fimages%2Fkettle.png");
+    expect(picture.status).toBe(200);
+    expect(new Uint8Array(await picture.arrayBuffer())).toEqual(PNG);
+    const outlined = restBrowseSchema.parse(
+      await (await h.request(`/api/v1/browse${NOTES}?path=docs/kettle.md`)).json(),
+    );
+    if (outlined.status !== "ready") throw new Error(`not ready: ${outlined.status}`);
+    expect(outlined.outline?.images).toEqual([
+      { path: "docs/images/kettle.png", alt: "A kettle on a stove" },
+    ]);
+    expect(outlined.outline?.sources).toEqual([
+      {
+        text: "sources/kettle.pdf",
+        path: "docs/sources/kettle.pdf",
+        url: "/api/v1/raw/local/acme/notes?path=docs%2Fsources%2Fkettle.pdf",
+      },
+    ]);
+    // Nothing outside the index is sent, and nothing of another name.
+    expect((await h.request("/api/v1/raw/local/acme/notes?path=README.md")).status).toBe(200);
+    expect((await h.request("/api/v1/raw/local/acme/notes?path=nothing.png")).status).toBe(404);
+    expect((await h.request("/api/v1/raw/local/acme/nothing?path=README.md")).status).toBe(404);
   });
 
   it("sees a changed file as a new commit once the ref's time is up, and lists what changed", async () => {

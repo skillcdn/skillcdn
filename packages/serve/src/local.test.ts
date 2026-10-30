@@ -13,7 +13,7 @@ import {
   restMountSchema,
   restSkillSchema,
 } from "@skillcdn/core";
-import { INDEX_LIMIT_DEFAULTS, readDirectory } from "@skillcdn/indexer";
+import { INDEX_LIMIT_DEFAULTS, openWorkingTreeFile, readDirectory } from "@skillcdn/indexer";
 import { createMemoryIndex, Reader } from "@skillcdn/reader";
 import { Hono } from "hono";
 import { describe, expect, it } from "vitest";
@@ -46,15 +46,18 @@ function outlineDocument(): string {
   return ["# Outline", "", "A guide with many headings.", "", ...sections].join("\n");
 }
 
-async function pack(): Promise<{ readonly root: string; readonly mount: LocalMount }> {
+async function pack(
+  extra: Record<string, string | Uint8Array> = {},
+): Promise<{ readonly root: string; readonly mount: LocalMount }> {
   const parent = await mkdtemp(join(tmpdir(), "skillcdn-serve-"));
   const root = join(parent, "acme");
-  const files: Record<string, string> = {
+  const files: Record<string, string | Uint8Array> = {
     "SKILLCDN.md": "---\nname: Acme skills\ndescription: The skills of Acme.\n---\nBe brief.\n",
     "marketing/ads/SKILL.md":
       "---\nname: ads\ndescription: Writes ad copy for a product page.\n---\n# Ads\n\nWrite three variants.\n",
     "docs/guide.md": "# Guide\n\nHow the skills are used.\n",
     "docs/outline.md": outlineDocument(),
+    ...extra,
   };
   for (const [file, contents] of Object.entries(files)) {
     const parts = file.split("/");
@@ -369,5 +372,93 @@ describe("a directory served from a machine", () => {
     expect(clientAppOf("curl/8.5.0")).toBe("curl");
     expect(clientAppOf("node")).toBe("node");
     expect(clientAppOf("  ")).toBeUndefined();
+  });
+});
+
+describe("the bytes of a file served from a machine (ADR-0077)", () => {
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13]);
+  const pictured = () =>
+    pack({
+      "docs/ch3.md": "# Chapter 3\n\n![A figure](images/a.png)\n",
+      "docs/images/a.png": PNG,
+    });
+
+  it("sends a served file as an attachment from its own route, and names that route over HTTP", async () => {
+    const { root, mount } = await pictured();
+    const app = createLocalApp({
+      mounts: [mount],
+      ...options(),
+      rawFile: (_mount, path) => openWorkingTreeFile(root, path),
+    });
+    const sent = await app.request(
+      "http://local.test/api/v1/raw/local/packs/acme?path=docs%2Fimages%2Fa.png",
+    );
+    expect(sent.status).toBe(200);
+    expect(sent.headers.get("content-type")).toBe("application/octet-stream");
+    expect(sent.headers.get("content-disposition")).toBe(
+      `attachment; filename="a.png"; filename*=UTF-8''a.png`,
+    );
+    expect(sent.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(sent.headers.get("content-security-policy")).toBe("default-src 'none'; sandbox");
+    expect(sent.headers.get("content-length")).toBe(String(PNG.byteLength));
+    expect(new Uint8Array(await sent.arrayBuffer())).toEqual(PNG);
+    // What is not a file of the pack is not sent, whatever is on the disk beside the pack.
+    expect(
+      (await app.request("http://local.test/api/v1/raw/local/packs/acme?path=nothing.png")).status,
+    ).toBe(404);
+    expect(
+      (
+        await app.request(
+          "http://local.test/api/v1/raw/local/packs/acme?path=..%2Facme%2FSKILLCDN.md",
+        )
+      ).status,
+    ).toBe(400);
+    // A read of the picture sends the reader to that route, at the origin it asked at.
+    const refused = await app.request(
+      "http://local.test/api/v1/files/local/packs/acme?path=docs%2Fimages%2Fa.png",
+    );
+    expect(refused.status).toBe(415);
+    expect(await refused.json()).toMatchObject({
+      error: {
+        code: "file.not_text",
+        sourceUrl: "http://local.test/api/v1/raw/local/packs/acme?path=docs%2Fimages%2Fa.png",
+      },
+    });
+    const client = new Client({ name: "skillcdn-test", version: "0.0.0" });
+    await client.connect(
+      new StreamableHTTPClientTransport(new URL("http://local.test/local/packs/acme"), {
+        fetch: async (input, init) => app.fetch(new Request(input, init)),
+      }),
+    );
+    const read = await client.callTool({
+      name: "read_repo_file",
+      arguments: { path: "docs/images/a.png" },
+    });
+    expect(read.isError).toBe(true);
+    expect(text(read)).toContain(
+      "Fetch it from the source: http://local.test/api/v1/raw/local/packs/acme?path=docs%2Fimages%2Fa.png",
+    );
+    // The outline of the chapter names its picture with its words.
+    const outlined = await client.callTool({
+      name: "browse_repo",
+      arguments: { path: "docs/ch3.md" },
+    });
+    expect(text(outlined)).toContain(
+      "1 image, read as text where the document describes them:\n- docs/images/a.png: A figure",
+    );
+    await client.close();
+  });
+
+  it("sends the reader to the source where it has no bytes to send", async () => {
+    const { mount } = await pictured();
+    const app = appOf(mount);
+    const sent = await app.request(
+      "http://local.test/api/v1/raw/local/packs/acme?path=docs%2Fimages%2Fa.png",
+      { redirect: "manual" },
+    );
+    expect(sent.status).toBe(302);
+    expect(sent.headers.get("location")).toBe(
+      "http://local.test/api/v1/raw/local/packs/acme?path=docs%2Fimages%2Fa.png",
+    );
   });
 });

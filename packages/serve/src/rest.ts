@@ -1,7 +1,9 @@
 import {
   BROWSE_MAX_LIMIT,
+  baseName,
   browseBody,
   describeLicense,
+  describeSource,
   FIND_MAX_LIMIT,
   fileBody,
   findBody,
@@ -13,6 +15,7 @@ import {
   READ_FILE_MAX_LIMIT,
   REST_MOUNT_LIST_LIMIT,
   REST_ROUTES,
+  type RepoPath,
   type RestFailure,
   type RestMount,
   skillOutcome,
@@ -52,6 +55,34 @@ const fileQuery = z.object({
   offset: z.coerce.number().int().min(0).optional(),
   limit: z.coerce.number().int().min(1).max(READ_FILE_MAX_LIMIT).optional(),
 });
+const rawQuery = z.object({ path: z.string().min(1).max(MAX_REPO_PATH_LENGTH) });
+
+/** A file of a mount opened for its bytes to be sent as they are (ADR-0077). */
+export interface RawFile {
+  readonly size: number;
+  /** The bytes, streamed. */
+  readonly body: () => ReadableStream<Uint8Array>;
+}
+
+/**
+ * The headers the bytes of a file are sent with (ADR-0077): an attachment, of no type a browser
+ * would render, with nothing in it allowed to run, so that a repository's HTML or SVG never
+ * executes on this origin; the same headers a git host's raw host sends.
+ */
+export function rawFileHeaders(path: RepoPath, size: number): Record<string, string> {
+  const name = baseName(path);
+  // The plain parameter for old clients, with every character outside printable ASCII replaced;
+  // the encoded one for everyone else.
+  const plain = name.replace(/[^\x20-\x7e]|["\\]/g, "_");
+  return {
+    "content-type": "application/octet-stream",
+    "content-length": String(size),
+    "content-disposition": `attachment; filename="${plain}"; filename*=UTF-8''${encodeURIComponent(name)}`,
+    "x-content-type-options": "nosniff",
+    "content-security-policy": "default-src 'none'; sandbox",
+    "cache-control": "no-store",
+  };
+}
 
 export function errorBody(code: string, message: string, extra: Record<string, unknown> = {}) {
   return { error: { code, message, ...extra } };
@@ -114,6 +145,13 @@ export interface AddressRouteDependencies<E extends Env, M extends ServedMount> 
    * count of distinct clients; counted, never kept. Left out, no client is counted.
    */
   readonly clientAddress?: ((c: Context<E>) => string | undefined) | undefined;
+  /**
+   * The bytes of a file of a mount the app serves itself, as they are (ADR-0077): a deployment
+   * opens the files of the packs of its own directory, the command those of the directories it
+   * serves. Left out, or answering nothing for a mount, the `raw` route sends the reader to the
+   * file at its source instead.
+   */
+  readonly rawFile?: ((mount: M, path: RepoPath) => Promise<RawFile | undefined>) | undefined;
 }
 
 /** Registers the routes that read an address on the app, with CORS for any origin and no caching. */
@@ -286,7 +324,7 @@ export function registerAddressRoutes<E extends Env, M extends ServedMount>(
           return c.json(
             errorBody(
               "file.too_large",
-              `The file is too large to read here (${lookup.size} bytes; the limit is ${lookup.limit}). Fetch it from the source: ${lookup.sourceUrl}`,
+              `The file is too large to read here (${lookup.size} bytes; the limit is ${lookup.limit}). ${describeSource(mount, lookup.sourceUrl)}`,
               { sourceUrl: lookup.sourceUrl },
             ),
             413,
@@ -295,7 +333,9 @@ export function registerAddressRoutes<E extends Env, M extends ServedMount>(
           return c.json(
             errorBody(
               "file.not_text",
-              `The file is not UTF-8 text, which is all this endpoint carries. Fetch it from the source: ${lookup.sourceUrl}`,
+              lookup.lfs === undefined
+                ? `The file is not UTF-8 text, which is all this endpoint carries. ${describeSource(mount, lookup.sourceUrl)}`
+                : `The file is not readable here. ${describeSource(mount, lookup.sourceUrl, lookup.lfs)}`,
               { sourceUrl: lookup.sourceUrl },
             ),
             415,
@@ -331,6 +371,56 @@ export function registerAddressRoutes<E extends Env, M extends ServedMount>(
     record(c, mount, "browse");
     try {
       return c.json(browseBody(await reader.browse(mount, query, 0)));
+    } catch (error) {
+      return failure(c, error);
+    }
+  });
+
+  // The bytes of a served file as they are (ADR-0077): sent as an attachment where the app has
+  // them, which is where a result sends a reader for a file that is not text; for a repository
+  // of a git host, the reader is sent on to the host, which has them.
+  app.get(`${REST_ROUTES.raw}/*`, async (c) => {
+    const query = queryOf(c, rawQuery);
+    if (query instanceof Response) return query;
+    const mount = await mountAt(c, REST_ROUTES.raw);
+    if (mount instanceof Response) return mount;
+    record(c, mount, "raw");
+    try {
+      const lookup = await reader.rawFile(mount, query.path);
+      switch (lookup.kind) {
+        case "not_ready":
+          return c.json(
+            errorBody(
+              lookup.outcome.status === "indexing" ? "index.indexing" : "index.failed",
+              lookup.outcome.status === "indexing"
+                ? "The repository is being indexed. Try again shortly."
+                : "The repository could not be indexed. Try again later.",
+            ),
+            503,
+            { "retry-after": "2" },
+          );
+        case "invalid_path":
+          return c.json(errorBody("request.invalid", `Not a valid path: ${lookup.reason}.`), 400);
+        case "not_found":
+          return c.json(errorBody("file.not_found", "No file at that path in this mount."), 404);
+        case "not_served":
+          return c.json(
+            errorBody(
+              "file.not_served",
+              `The file is described, not served: its license (${describeLicense(lookup.license)}) allows SkillCDN to say that it exists, not to pass its content on. Read it at its source: ${mount.sourceUrl(lookup.path)}`,
+              { sourceUrl: mount.sourceUrl(lookup.path) },
+            ),
+            403,
+          );
+        case "served": {
+          const file = await dependencies.rawFile?.(mount, lookup.path);
+          if (file === undefined) {
+            return c.redirect(mount.rawUrl(lookup.path), 302);
+          }
+          hooks.fileRead?.(mount, lookup.path);
+          return c.body(file.body(), 200, rawFileHeaders(lookup.path, file.size));
+        }
+      }
     } catch (error) {
       return failure(c, error);
     }

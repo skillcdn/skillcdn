@@ -6,6 +6,7 @@ import type { IndexNotReady, MountOverview, SkillLookup } from "../tools/reads.j
 import type {
   BrowseResult,
   DirectoryResult,
+  DocumentSource,
   FileResult,
   FindItem,
   FindResult,
@@ -16,6 +17,7 @@ import type {
 import type {
   RestBrowse,
   RestDiagnostic,
+  RestDocumentSource,
   RestFile,
   RestFind,
   RestFindItem,
@@ -99,6 +101,9 @@ export function browseBody(
                 title: answer.result.overview.title ?? null,
                 description: answer.result.overview.description ?? null,
               },
+        ...(answer.result.manifestPath === undefined
+          ? {}
+          : { manifestPath: answer.result.manifestPath }),
         diagnostics: restDiagnostics(answer.result.diagnostics ?? []),
         ...(answer.result.outline === undefined
           ? {}
@@ -123,6 +128,20 @@ export function browseBody(
                 ...(answer.result.outline.sourceUrl === undefined
                   ? {}
                   : { sourceUrl: answer.result.outline.sourceUrl }),
+                ...(answer.result.outline.lfs === undefined
+                  ? {}
+                  : { lfs: { size: answer.result.outline.lfs.size } }),
+                ...(answer.result.outline.images === undefined
+                  ? {}
+                  : {
+                      images: answer.result.outline.images.map((image) => ({
+                        path: image.path,
+                        alt: image.alt,
+                      })),
+                    }),
+                ...(answer.result.outline.sources === undefined
+                  ? {}
+                  : { sources: answer.result.outline.sources.map(restSourceOf) }),
               },
             }),
         entries: answer.result.entries.map(({ license, describedOnly, ...entry }) => ({
@@ -185,7 +204,17 @@ function restFindItemOf(item: FindItem): RestFindItem {
                 excerpt: section.excerpt ?? null,
               })),
             }),
+        ...(item.overview === true ? { overview: true } : {}),
       };
+}
+
+/** What a document says it was made from, as the API says it (ADR-0076). */
+function restSourceOf(source: DocumentSource): RestDocumentSource {
+  return {
+    text: source.text,
+    ...(source.path === undefined ? {} : { path: source.path }),
+    ...(source.url === undefined ? {} : { url: source.url }),
+  };
 }
 
 /** What a search across the packs of a deployment answers, as the API says it (ADR-0070). */
@@ -408,6 +437,7 @@ export function fileBody(file: FileResult): RestFile {
     kind: "file",
     commit: file.mount.commit,
     references: [...(file.references ?? [])],
+    ...(file.sources === undefined ? {} : { sources: file.sources.map(restSourceOf) }),
     path: file.path,
     content: file.content,
     offset: file.offset,

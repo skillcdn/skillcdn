@@ -65,8 +65,17 @@ export type FileLookup =
       readonly limit: number;
       readonly sourceUrl: string;
     }
-  /** Not text, so not what a read carries: the bytes are at the source, at `sourceUrl`. */
-  | { readonly kind: "not_text"; readonly path: RepoPath; readonly sourceUrl: string }
+  /**
+   * Not text, so not what a read carries: the bytes are at the source, at `sourceUrl`. With
+   * `lfs`, the file is a Git LFS pointer, and `sourceUrl` is where the host serves the file it
+   * stands for, of that size (ADR-0077).
+   */
+  | {
+      readonly kind: "not_text";
+      readonly path: RepoPath;
+      readonly sourceUrl: string;
+      readonly lfs?: { readonly size: number };
+    }
   /** The license allows a description of the file's skill or repository, not a copy (ADR-0026). */
   | {
       readonly kind: "not_served";

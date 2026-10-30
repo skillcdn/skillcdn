@@ -43,7 +43,13 @@ export {
   splitFrontMatter,
 } from "./front-matter.js";
 export { isFullCommitHash, isValidRefName, MAX_REF_LENGTH } from "./git-ref.js";
-export { accountAvatarUrl, accountPageUrl, rawFileUrl } from "./host-urls.js";
+export {
+  accountAvatarUrl,
+  accountPageUrl,
+  lfsFileUrl,
+  localRawFileUrl,
+  rawFileUrl,
+} from "./host-urls.js";
 export { isImageUrl, MAX_IMAGE_URL_LENGTH } from "./image-source.js";
 export type {
   IndexEntry,
@@ -52,6 +58,7 @@ export type {
   SnapshotIndex,
   StoredTranslation,
 } from "./index-entry.js";
+export { type LfsPointer, MAX_LFS_POINTER_LENGTH, parseLfsPointer } from "./lfs.js";
 export {
   classifyLicenseField,
   classifyLicenseFile,
@@ -72,14 +79,23 @@ export {
   sourceFileUrl,
 } from "./license.js";
 export { isLanguageTag, MAX_TRANSLATIONS } from "./manifest-fields.js";
-export { type MarkdownSummary, summarizeMarkdown } from "./markdown.js";
+export {
+  documentSources,
+  type MarkdownSummary,
+  resolveDocumentSource,
+  summarizeMarkdown,
+} from "./markdown.js";
 export {
   extractMarkdownReferences,
+  inspectMarkdownLinks,
   inspectMarkdownReferences,
   MAX_LINK_MARKDOWN_LENGTH,
   MAX_MARKDOWN_REFERENCES,
+  type MarkdownLink,
+  type MarkdownLinkInspection,
   type MarkdownReference,
   type MarkdownReferenceInspection,
+  resolveLocalLink,
   resolveMarkdownReference,
 } from "./markdown-links.js";
 export type { BlobStore } from "./ports/blob-store.js";
@@ -145,8 +161,11 @@ export { discardUsage, type UsageEvent, type UsageSink } from "./ports/usage-sin
 export {
   baseName,
   classifyRepoFile,
+  extensionOf,
+  isBinaryPath,
   isExcludedPath,
   isHiddenPath,
+  isImagePath,
   isReadmePath,
   isServedPath,
   isSharedIncludePath,
@@ -279,6 +298,8 @@ export {
   type RestBrowseEntry,
   type RestDiagnostic,
   type RestDirectoryEntry,
+  type RestDocumentImage,
+  type RestDocumentSource,
   type RestDocumentSummary,
   type RestError,
   type RestFeatured,
@@ -306,6 +327,8 @@ export {
   restBrowseSchema,
   restDiagnosticSchema,
   restDirectoryEntrySchema,
+  restDocumentImageSchema,
+  restDocumentSourceSchema,
   restDocumentSummarySchema,
   restErrorSchema,
   restFeaturedSchema,
@@ -582,6 +605,8 @@ export type {
   SkillLookup,
 } from "./tools/reads.js";
 export {
+  accessHint,
+  describeSource,
   INDEXING_NOTICE,
   MCP_TOOL_WORDS,
   PROVENANCE_NOTICE,
@@ -605,6 +630,8 @@ export {
 export type {
   BrowseEntry,
   BrowseResult,
+  DocumentImage,
+  DocumentSource,
   FileOutline,
   FileOutlineUnavailable,
   FileReference,

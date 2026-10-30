@@ -20,15 +20,15 @@ pnpm --filter @skillcdn/server run eval:search
 pnpm --filter @skillcdn/server run eval:search fixtures/.repositories/multilingual-pack fixtures/retrieval/multilingual-questions.json
 ```
 
-The lexical baseline of the first set (2026-10-23, reading rules version 12, each word weighed by its rarity among the entries searched, [ADR-0069](../../../docs/adr/0069-a-word-of-a-query-weighs-by-its-rarity-among-the-entries-searched.md)):
+The lexical baseline of the first set (2026-10-30, reading rules version 13, each word weighed by its rarity among the entries searched, [ADR-0069](../../../docs/adr/0069-a-word-of-a-query-weighs-by-its-rarity-among-the-entries-searched.md), and the headings of a document weighed above its body):
 
 | | n | file@1 | file@5 | section@1 | section@2 |
 |---|---|---|---|---|---|
-| en | 34 | 91% | 100% | 97% | 100% |
+| en | 35 | 91% | 100% | 97% | 100% |
 | ko | 25 | 100% | 100% | 88% | 100% |
-| all | 59 | 95% | 100% | 93% | 100% |
+| all | 60 | 95% | 100% | 93% | 100% |
 
-When the set was written, under version 11 of the rules with every word equal and the server's steep field weights, the words reached the first document for 76% of the English and 88% of the Korean questions; the weighing by rarity and the flatter field weights account for the rest. The first set is small and its questions are written by the same hands as its documents, so the numbers say what search by words alone does on a pack that is written for it; they are the baseline the models of phase B are compared against, not a claim about search in general.
+When the set was written, under version 11 of the rules with every word equal and the server's steep field weights, the words reached the first document for 76% of the English and 88% of the Korean questions; the weighing by rarity and the flatter field weights account for the rest. Version 13 (2026-10-30) weighs the words of a heading between the description and the body, so that a code quoted verbatim finds the section headed by it before a shorter document that lists the code in a table; `en-35` asks for such a code, which a shorter document's release notes also mention once, and the version before answered the release notes first. The numbers of version 12 on the 59 questions before it were the same percentages. The first set is small and its questions are written by the same hands as its documents, so the numbers say what search by words alone does on a pack that is written for it; they are the baseline the models of phase B are compared against, not a claim about search in general.
 
 ### The second set: six languages, two domains
 
@@ -38,22 +38,22 @@ Two domains, four documents of each per language. Research: laboratory access, s
 
 The 180 questions, 30 per language, are of three kinds. A `paraphrase` question (108) is in the language of its document and in other words than the section: an everyday word for the technical term, an abbreviation spelled out or the term abbreviated, the consequence of a rule instead of its words; these are what search by meaning is measured on in each language. An `exact-term` question (36) carries a code, a number, a form or a designation exactly as the document writes it; the words should win these, and the fusion with meaning must not lose them. A `cross` question (36) is written in another language than its document, with no code in it, six per document language and every ordered pair of languages used once; words alone cannot answer them, so what they measure is meaning alone. The documents were written by six runs from one brief, one language each; the questions by other runs that read only the documents, one run per language for the paraphrase and exact-term questions and one per domain for the cross questions; and two further runs checked every question against all 24 documents of its domain for a wrong or a shared answer. No hand that wrote a document wrote a question about it.
 
-The lexical baseline (2026-10-23, reading rules version 12, each word weighed by its rarity among the entries searched and a hyphenated code a word of its own, [ADR-0069](../../../docs/adr/0069-a-word-of-a-query-weighs-by-its-rarity-among-the-entries-searched.md)), by the language of the question, by kind and by domain. When the set was written, under version 11 with every word equal, the words reached the first document for 40% of the questions, the page for 67%, and the first document for 42% of the codes asked verbatim.
+The lexical baseline (2026-10-30, reading rules version 13, each word weighed by its rarity among the entries searched and a hyphenated code a word of its own, [ADR-0069](../../../docs/adr/0069-a-word-of-a-query-weighs-by-its-rarity-among-the-entries-searched.md), and the headings of a document weighed above its body), by the language of the question, by kind and by domain. When the set was written, under version 11 with every word equal, the words reached the first document for 40% of the questions, the page for 67%, and the first document for 42% of the codes asked verbatim; version 12, with the rarity weighing and before the headings weighed, reached the first document for 58% and the page for 77%, and version 13 moves one question in each direction (Chinese up one, German and Russian down one), the page unchanged.
 
 | | n | file@1 | file@5 | section@1 | section@2 |
 |---|---|---|---|---|---|
 | en | 30 | 57% | 77% | 47% | 57% |
 | ko | 30 | 53% | 80% | 60% | 60% |
 | ja | 30 | 63% | 77% | 50% | 60% |
-| zh | 30 | 63% | 77% | 60% | 67% |
-| de | 30 | 43% | 73% | 40% | 43% |
-| ru | 30 | 67% | 77% | 50% | 57% |
-| paraphrase | 108 | 68% | 95% | 53% | 63% |
+| zh | 30 | 67% | 77% | 60% | 67% |
+| de | 30 | 40% | 73% | 40% | 43% |
+| ru | 30 | 63% | 77% | 50% | 57% |
+| paraphrase | 108 | 67% | 95% | 53% | 63% |
 | exact-term | 36 | 86% | 97% | 97% | 97% |
 | cross | 36 | 0% | 0% | 0% | 0% |
 | research | 90 | 58% | 77% | 46% | 52% |
-| defense | 90 | 58% | 77% | 57% | 62% |
-| all | 180 | 58% | 77% | 51% | 57% |
+| defense | 90 | 57% | 77% | 57% | 62% |
+| all | 180 | 57% | 77% | 51% | 57% |
 
 What the words alone say here. Across languages they answer nothing, as expected: a cross question shares no word with its document, and the whole of that row is what meaning has to add. The codes asked verbatim are first for 86% of the questions and on the page for 97%: a code is one word that one document holds, and it decides; under version 11 the parser cut `OIW-PV-120` into `oiw`, `pv` and `-120`, which are common where the code is unique, and the ranking counted occurrences and knew nothing of rarity, so the prefix every defense document repeats outweighed the number next to it. German reaches two questions in five first and three in four on the page, Russian two in three and three in four: these languages are read without a stemmer, so a compound does not match its parts and an inflected form does not match another; their function words no longer lift the maps above the answer, since a word every document repeats weighs next to nothing. Japanese and Chinese are matched by pairs of characters, reach three questions in four on the page and name the answering section first for half to six in ten of them: the common pairs weigh little now, and what remains is the pairs a question shares with several sections of its document. The English questions, written in other words on purpose, are first for six in ten and on the page for three in four. What the words still miss is the paraphrase, by design: the everyday word for the technical term, the abbreviation spelled out, which is what meaning is measured on. The floors in `src/retrieval.test.ts` are a little under these numbers; what the models reached on the same questions, over the words of version 11, is below.
 

@@ -1,5 +1,6 @@
 import {
   type BlobStore,
+  decodeText,
   type Embedder,
   type GitHost,
   type IndexLimits,
@@ -90,10 +91,14 @@ export function createMountReader(options: MountReaderOptions): Reader<Mount> {
         },
       };
     },
-    // A body the index names but the store does not hold yet is fetched from the host and kept.
+    // A body the index names but the store does not hold yet is fetched from the host and kept,
+    // when it is text: the bytes of a picture or an original are not stored (ADR-0077); the
+    // reader remembers that they are not text, and a result sends the reader to the source.
     fetchBody: async (mount, hash, maxBytes) => {
       const bytes = await gitHost.readBlob(mount.coordinates, hash, maxBytes);
-      await blobStore.write(hash, bytes);
+      if (decodeText(bytes) !== undefined) {
+        await blobStore.write(hash, bytes);
+      }
       return bytes;
     },
     ...(meaning === undefined || vectors === undefined

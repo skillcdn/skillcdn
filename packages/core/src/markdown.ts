@@ -7,6 +7,8 @@ import {
   openBlocks,
   plainText,
 } from "./markdown-blocks.js";
+import { parentDirectory } from "./repo-layout.js";
+import { type RepoPath, resolveRepoPath } from "./repo-path.js";
 import { hasForbiddenCodePoint } from "./text-safety.js";
 
 const MAX_TITLE_LENGTH = 200;
@@ -142,4 +144,45 @@ export function summarizeMarkdown(text: string): MarkdownSummary {
       shortText(fields?.get("description"), MAX_SUMMARY_LENGTH) ?? snippet(top.paragraph),
     body: split.body,
   };
+}
+
+/** How many originals a document names in its front-matter `source`, and how long each may be. */
+const MAX_DOCUMENT_SOURCES = 8;
+const MAX_SOURCE_LENGTH = 300;
+
+/**
+ * What a document says it was made from (ADR-0076): the front-matter `source`, one value or a
+ * list of them. A value is the path of the original in the repository, written as a link is,
+ * relative to the document or from the root, or any other text, such as a title or a URL, which
+ * is kept as written. Malformed front-matter, and any other key, names nothing.
+ */
+export function documentSources(text: string): string[] {
+  const split = splitFrontMatter(text);
+  if (split.kind !== "found") {
+    return [];
+  }
+  const parsed = parseFrontMatter(split.source);
+  if (!parsed.ok) {
+    return [];
+  }
+  const value = parsed.value.get("source");
+  const values: unknown[] = Array.isArray(value) ? value : [value];
+  return values
+    .flatMap((item) => {
+      const source = shortText(item, MAX_SOURCE_LENGTH);
+      return source === undefined ? [] : [source];
+    })
+    .slice(0, MAX_DOCUMENT_SOURCES);
+}
+
+/**
+ * The file of the repository a `source` names, when it names one: a path as a link destination
+ * is written, resolved from the document; `undefined` for a URL, an anchor or a path that leaves
+ * the repository, which stay text.
+ */
+export function resolveDocumentSource(document: RepoPath, source: string): RepoPath | undefined {
+  if (source.startsWith("#") || source.startsWith("//") || /^[a-z][a-z0-9+.-]*:/i.test(source)) {
+    return undefined;
+  }
+  return resolveRepoPath(parentDirectory(document), source);
 }

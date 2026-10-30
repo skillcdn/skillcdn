@@ -382,6 +382,7 @@ export const en = {
     directory: "Directory",
     bytes: (count: number) => `${count.toLocaleString("en")} bytes`,
     directoryTruncated: "Only the first entries are listed.",
+    openAtSource: "Open the file where it is kept",
   },
 
   errors: {

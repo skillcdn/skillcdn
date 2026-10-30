@@ -25,6 +25,8 @@ export interface BrowseEntry {
   readonly description: string | null;
   readonly skillCount: number;
   readonly documentCount: number;
+  /** How many pictures the folder holds, when it holds any. */
+  readonly imageCount?: number;
   readonly size: number | null;
   readonly manifestPath: string | null;
   readonly language: string | null;
@@ -34,6 +36,21 @@ export interface FolderOverview {
   readonly path: RepoPath;
   readonly title: string | undefined;
   readonly description: string | undefined;
+}
+/** A picture a document links to, with the words an agent reads it by (ADR-0063). */
+export interface DocumentImage {
+  readonly path: RepoPath;
+  /** The alternative text, trimmed; empty when the document gives none. */
+  readonly alt: string;
+}
+/**
+ * What a document says it was made from (ADR-0076): its front-matter `source`, as written; with
+ * the repository-root `path` and the `url` of the bytes when it names a file of the repository.
+ */
+export interface DocumentSource {
+  readonly text: string;
+  readonly path?: RepoPath;
+  readonly url?: string;
 }
 /** Why a file browsed for its outline has no headings to list. */
 export type FileOutlineUnavailable = "not_markdown" | "not_text" | "too_large" | "described_only";
@@ -58,12 +75,20 @@ export interface FileOutline {
   readonly license?: LicenseFact;
   /** With `too_large`, `not_text` and `described_only`: where the file is at its source. */
   readonly sourceUrl?: string;
+  /** With `not_text`: the file is a Git LFS pointer, and `sourceUrl` is where the host serves the file of this size (ADR-0077). */
+  readonly lfs?: { readonly size: number };
+  /** For a Markdown document: the pictures it links to, in document order, bounded. */
+  readonly images?: readonly DocumentImage[];
+  /** For a Markdown document: what it says it was made from (ADR-0076). */
+  readonly sources?: readonly DocumentSource[];
 }
 
 export interface BrowseResult {
   readonly diagnostics?: readonly IndexDiagnostic[];
   readonly diagnosticsTotal?: number;
   readonly overview?: FolderOverview;
+  /** The repository manifest of the browsed folder, when it has one of its own. */
+  readonly manifestPath?: RepoPath;
   /** When `path` names a file: its outline, and `entries` is empty. */
   readonly outline?: FileOutline;
   readonly mount: MountSummary;
@@ -162,6 +187,8 @@ export type FindItem =
        * document this mount describes without serving, whose text cannot be read here.
        */
       readonly sections?: readonly FindSection[];
+      /** True for the README of a folder: the map of the folder, which says a little of everything in it. */
+      readonly overview?: boolean;
     };
 
 /**
@@ -300,6 +327,8 @@ export interface SkillServing {
 export interface FileResult {
   readonly referencesTruncated?: boolean;
   readonly references?: readonly FileReference[];
+  /** On the first page of a Markdown document: what it says it was made from (ADR-0076). */
+  readonly sources?: readonly DocumentSource[];
   readonly mount: MountSummary;
   readonly path: RepoPath;
   readonly content: string;

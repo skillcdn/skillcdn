@@ -150,8 +150,10 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
   }
 
   // The license decides what a deployment may pass on (ADR-0026); the author sees it as read.
+  // A directory is served in full by whoever chose it (ADR-0053, ADR-0071): what the license
+  // changes is how a deployment serves the same pack as a repository.
   write(
-    `License: ${describeLicense(index.license)}${index.license.kind === "none" ? " (served with its provenance; never featured)" : index.license.kind === "restrictive" ? " (described only, unless the repository is verified)" : ""}\n\n`,
+    `License: ${describeLicense(index.license)}${index.license.kind === "none" ? " (a directory is served in full; a deployment serves a repository without a license with a provenance notice and never features it)" : index.license.kind === "restrictive" ? " (a directory is served in full; a deployment describes a repository under this license only, unless the repository is verified)" : ""}\n\n`,
   );
 
   const listed = skills.filter((skill) => skill.listed === true);

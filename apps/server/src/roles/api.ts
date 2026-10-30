@@ -50,7 +50,7 @@ import {
   type EmbeddingScope,
   HUB_DEFAULTS,
 } from "../config/config.js";
-import { createDirectoryHost, routeGitHosts } from "../directory/directory-host.js";
+import { createDirectoryHost, openPackFile, routeGitHosts } from "../directory/directory-host.js";
 import { HostEvents } from "../events/host-events.js";
 import { type AppAuth, createApp } from "../http/app.js";
 import { createClientAddressResolver } from "../http/client-address.js";
@@ -397,11 +397,21 @@ export function createApi(
       ? undefined
       : new SocialCards({ pictures, clock, logger, fonts: ports.web.fonts });
 
+  // The bytes of a file of a pack of the deployment's own directory are sent from the directory
+  // (ADR-0077); a repository of a git host has them at the host.
+  const packs = config.packs;
   const app = createApp({
     database,
     auth,
     hub,
     search: { cacheMs: hubConfig.cacheMs, sitemapTerms: hubConfig.sitemapTerms },
+    rawFile:
+      packs === undefined
+        ? undefined
+        : (mount, path) =>
+            mount.address.host === "local"
+              ? openPackFile(packs.root, mount.coordinates, path)
+              : Promise.resolve(undefined),
     webhooks:
       ports.events === undefined
         ? undefined

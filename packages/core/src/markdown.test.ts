@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { summarizeMarkdown } from "./markdown.js";
+import { documentSources, resolveDocumentSource, summarizeMarkdown } from "./markdown.js";
+import { parseRepoPath, type RepoPath } from "./repo-path.js";
+
+function path(value: string): RepoPath {
+  const parsed = parseRepoPath(value);
+  if (!parsed.ok) throw new Error("invalid test path");
+  return parsed.value;
+}
 
 describe("summarizeMarkdown", () => {
   it("uses the first level-one heading as the title", () => {
@@ -233,5 +240,40 @@ describe("summarizeMarkdown with hostile input", () => {
     const summary = summarizeMarkdown(`# T\n\n[Guide](guide.md) first. ${"more ".repeat(2000)}\n`);
     expect(summary.description?.startsWith("Guide first. more more")).toBe(true);
     expect(summary.description).toHaveLength(200);
+  });
+});
+
+describe("documentSources", () => {
+  it("reads the front-matter source as one value or a list, and resolves a path from the document", () => {
+    const document = path("docs/manual/chapter-3.md");
+    const one = documentSources(
+      "---\ntitle: Chapter 3\nsource: sources/manual.pdf\n---\n# Chapter 3\n",
+    );
+    expect(one).toEqual(["sources/manual.pdf"]);
+    expect(resolveDocumentSource(document, "sources/manual.pdf")).toBe(
+      "docs/manual/sources/manual.pdf",
+    );
+    expect(
+      documentSources(
+        "---\nsource:\n  - ../sources/a.pdf\n  - /originals/b.docx\n  - 'Vendor manual, rev. 3'\n  - https://example.com/spec\n---\n",
+      ),
+    ).toEqual([
+      "../sources/a.pdf",
+      "/originals/b.docx",
+      "Vendor manual, rev. 3",
+      "https://example.com/spec",
+    ]);
+    expect(resolveDocumentSource(document, "../sources/a.pdf")).toBe("docs/sources/a.pdf");
+    expect(resolveDocumentSource(document, "/originals/b.docx")).toBe("originals/b.docx");
+    expect(resolveDocumentSource(document, "https://example.com/spec")).toBe(undefined);
+    expect(resolveDocumentSource(document, "../../../etc/passwd")).toBe(undefined);
+  });
+
+  it("names nothing without front-matter, for a malformed one, and for a value that is not text", () => {
+    expect(documentSources("# Title\n\nsource: x\n")).toEqual([]);
+    expect(documentSources("---\nsource: [unterminated\n---\n")).toEqual([]);
+    expect(documentSources("---\nsource:\n  a: b\n---\n")).toEqual([]);
+    expect(documentSources(`---\nsource: ${"x".repeat(400)}\n---\n`)[0]?.length).toBe(300);
+    expect(documentSources('---\nsource: "a\u0000b"\n---\n')).toEqual([]);
   });
 });

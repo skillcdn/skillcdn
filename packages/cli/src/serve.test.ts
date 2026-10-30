@@ -201,3 +201,37 @@ describe("skillcdn mcp", () => {
     expect(h.err()).toContain(`as ${addressOf(root)} over standard input and output`);
   });
 });
+
+describe("skillcdn serve and the bytes of a file (ADR-0077)", () => {
+  it("sends a picture of the directory as an attachment from its own route, which a refused read names", async () => {
+    const root = await repository(FILES);
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13]);
+    await mkdir(join(root, "docs", "images"), { recursive: true });
+    await writeFile(join(root, "docs", "images", "a.png"), png);
+    const address = addressOf(root);
+    const seen = { refused: undefined as unknown, status: 0, type: "", bytes: new Uint8Array() };
+    const h = harness({
+      hold: async () => {
+        const url = /at (http:\/\/[^\s]+:\d+):/.exec(h.out())?.[1] ?? "";
+        seen.refused = await (
+          await fetch(`${url}/api/v1/files${address}?path=docs%2Fimages%2Fa.png`)
+        ).json();
+        const sent = await fetch(`${url}/api/v1/raw${address}?path=docs%2Fimages%2Fa.png`);
+        seen.status = sent.status;
+        seen.type = sent.headers.get("content-type") ?? "";
+        seen.bytes = new Uint8Array(await sent.arrayBuffer());
+      },
+    });
+    expect(await runCli(["serve", root, "--port", "0"], h.io)).toBe(0);
+    const url = /at (http:\/\/[^\s]+:\d+):/.exec(h.out())?.[1] ?? "";
+    expect(seen.refused).toMatchObject({
+      error: {
+        code: "file.not_text",
+        sourceUrl: `${url}/api/v1/raw${address}?path=docs%2Fimages%2Fa.png`,
+      },
+    });
+    expect(seen.status).toBe(200);
+    expect(seen.type).toBe("application/octet-stream");
+    expect(seen.bytes).toEqual(png);
+  }, 30_000);
+});

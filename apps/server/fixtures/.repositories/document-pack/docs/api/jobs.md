@@ -26,3 +26,7 @@ A job has an `id`, a `customer_id`, a `technician_id` or null when unassigned, a
 ## Cancelling a job
 
 `POST /v1/jobs/{id}/cancel` cancels a job and keeps it in the customer's history; `POST /v1/jobs/{id}/restore` within thirty days brings it back. A done job cannot be cancelled: void or credit its invoice instead.
+
+## Warning JOB-4090
+
+A job that overlaps another job of the same technician is created all the same, with the warning `JOB-4090` in the response naming the job it overlaps and by how many minutes. It is a warning, not an error: nothing is refused, and the board shows the two jobs with a red outline until one of them moves. A client that must not double-book reads the warning and reschedules.

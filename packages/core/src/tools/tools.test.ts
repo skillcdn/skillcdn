@@ -658,3 +658,147 @@ describe("rendering", () => {
     expect(INDEXING_NOTICE).toContain("publication rules have been checked");
   });
 });
+
+describe("what a result says of originals, pictures, maps and private files (ADR-0076, ADR-0077)", () => {
+  it("names the manifest of a browsed folder and the pictures of its folders", () => {
+    const text = renderBrowseResult({
+      mount,
+      path: path("docs"),
+      manifestPath: path("docs/SKILLCDN.md"),
+      entries: [
+        {
+          kind: "directory",
+          path: path("docs/manual"),
+          name: "The manual",
+          description: null,
+          skillCount: 0,
+          documentCount: 4,
+          imageCount: 12,
+          size: null,
+          manifestPath: null,
+          language: null,
+        },
+      ],
+      nextCursor: undefined,
+      diagnostics: [],
+    });
+    expect(text).toContain(
+      "Manifest: docs/SKILLCDN.md; its front-matter (metadata) and rules are read with read_repo_file.",
+    );
+    expect(text).toContain(
+      "- directory: docs/manual (The manual); 0 skills, 4 documents, 12 images",
+    );
+  });
+
+  it("outlines a document with what it was made from and the pictures it holds", () => {
+    const text = renderBrowseResult({
+      mount,
+      path: path("docs/manual/ch3.md"),
+      entries: [],
+      nextCursor: undefined,
+      outline: {
+        path: path("docs/manual/ch3.md"),
+        size: 900,
+        totalLength: 880,
+        headings: [{ level: 1, text: "Chapter 3", offset: 0, length: 880 }],
+        truncated: false,
+        sources: [
+          {
+            text: "sources/manual.pdf",
+            path: path("docs/manual/sources/manual.pdf"),
+            url: "https://raw.example/manual.pdf",
+          },
+          { text: "Vendor manual, rev. 3" },
+        ],
+        images: [
+          { path: path("docs/manual/images/a.png"), alt: "Block diagram of the interface" },
+          { path: path("docs/manual/images/b.png"), alt: "" },
+        ],
+      },
+    });
+    expect(text).toContain(
+      "Original: docs/manual/sources/manual.pdf (https://raw.example/manual.pdf); Vendor manual, rev. 3",
+    );
+    expect(text).toContain(
+      [
+        "2 images, read as text where the document describes them:",
+        "- docs/manual/images/a.png: Block diagram of the interface",
+        "- docs/manual/images/b.png (no alternative text)",
+      ].join("\n"),
+    );
+  });
+
+  it("names the original on the first page of a document, and the map among search results", () => {
+    const page = renderFileResult({
+      mount,
+      path: path("docs/manual/ch3.md"),
+      sources: [
+        { text: "sources/manual.pdf", path: path("docs/manual/sources/manual.pdf"), url: "u" },
+      ],
+      ...pageOfText("# Chapter 3", 0, 100),
+    });
+    expect(page).toContain(
+      "Source: acme/skills@main (commit 0123456)\nOriginal: docs/manual/sources/manual.pdf (u)",
+    );
+    const found = renderFindResult({
+      mount,
+      query: "items",
+      items: [
+        {
+          kind: "document",
+          path: path("docs/README.md"),
+          title: "The manual",
+          summary: "One line per chapter.",
+          skillDirectory: undefined,
+          overview: true,
+        },
+      ],
+      nextCursor: undefined,
+      totals: undefined,
+      diagnostics: [],
+    });
+    expect(found).toContain("1. document: docs/README.md - The manual (overview of its folder)");
+  });
+
+  it("tells a reader of a private repository how to fetch what a read does not carry", () => {
+    const privately: MountSummary = { ...mount, visibility: "private" };
+    const text = renderBrowseResult({
+      mount: privately,
+      path: path("docs/sources/manual.pdf"),
+      entries: [],
+      nextCursor: undefined,
+      outline: {
+        path: path("docs/sources/manual.pdf"),
+        size: 5_000_000,
+        totalLength: undefined,
+        headings: [],
+        truncated: false,
+        unavailable: "too_large",
+        sourceUrl: "https://raw.example/manual.pdf",
+      },
+    });
+    expect(text).toContain(
+      "Too large to read here. Fetch it from the source: https://raw.example/manual.pdf The repository acme/skills is private: fetch it with a GitHub credential that may read it",
+    );
+    const pointer = renderBrowseResult({
+      mount,
+      path: path("docs/sources/manual.pdf"),
+      entries: [],
+      nextCursor: undefined,
+      outline: {
+        path: path("docs/sources/manual.pdf"),
+        size: 130,
+        totalLength: undefined,
+        headings: [],
+        truncated: false,
+        unavailable: "not_text",
+        sourceUrl: "https://github.example/raw/manual.pdf",
+        lfs: { size: 7_340_032 },
+      },
+    });
+    expect(pointer).toContain(
+      "The repository holds a Git LFS pointer to it; the file itself (7340032 bytes) is served by the host: https://github.example/raw/manual.pdf",
+    );
+    expect(pointer).not.toContain("is private");
+  });
+});

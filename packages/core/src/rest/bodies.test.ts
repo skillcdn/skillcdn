@@ -313,6 +313,77 @@ describe("the browse body", () => {
     expect(browseResultOf(body, mount)).toEqual(result);
   });
 
+  it("round-trips the manifest of a folder, the pictures of its entries, and what an outline says of originals and pictures", () => {
+    const folder: BrowseResult = {
+      mount,
+      path: path("docs"),
+      manifestPath: path("docs/SKILLCDN.md"),
+      entries: [
+        {
+          kind: "directory",
+          path: path("docs/manual"),
+          name: null,
+          description: null,
+          skillCount: 0,
+          documentCount: 3,
+          imageCount: 2,
+          size: null,
+          manifestPath: null,
+          language: null,
+        },
+      ],
+      nextCursor: undefined,
+      diagnostics: [],
+    };
+    const folderBody = browseBody({ status: "ready", result: folder });
+    expect(restBrowseSchema.parse(folderBody)).toEqual(folderBody);
+    if (folderBody.status !== "ready") throw new Error("not ready");
+    expect(browseResultOf(folderBody, mount)).toEqual(folder);
+    const outlined: BrowseResult = {
+      mount,
+      path: path("docs/manual/ch3.md"),
+      entries: [],
+      nextCursor: undefined,
+      diagnostics: [],
+      outline: {
+        path: path("docs/manual/ch3.md"),
+        size: 10,
+        totalLength: 10,
+        headings: [],
+        truncated: false,
+        sources: [
+          {
+            text: "sources/a.pdf",
+            path: path("docs/manual/sources/a.pdf"),
+            url: "https://x/a.pdf",
+          },
+          { text: "A title" },
+        ],
+        images: [{ path: path("docs/manual/images/a.png"), alt: "A figure" }],
+      },
+    };
+    const outlinedBody = browseBody({ status: "ready", result: outlined });
+    expect(restBrowseSchema.parse(outlinedBody)).toEqual(outlinedBody);
+    if (outlinedBody.status !== "ready") throw new Error("not ready");
+    expect(browseResultOf(outlinedBody, mount)).toEqual(outlined);
+    const pointer: BrowseResult = {
+      ...outlined,
+      outline: {
+        path: path("docs/manual/ch3.md"),
+        size: 10,
+        totalLength: undefined,
+        headings: [],
+        truncated: false,
+        unavailable: "not_text",
+        sourceUrl: "https://x/raw",
+        lfs: { size: 12_345 },
+      },
+    };
+    const pointerBody = browseBody({ status: "ready", result: pointer });
+    if (pointerBody.status !== "ready") throw new Error("not ready");
+    expect(browseResultOf(pointerBody, mount)).toEqual(pointer);
+  });
+
   it("drops an entry whose path is not one, and a folder whose path is not one", () => {
     const hostile = restBrowseSchema.parse({
       status: "ready",
@@ -483,6 +554,10 @@ describe("the files body", () => {
       nextOffset: 7,
       totalLength: 100,
       references: [{ href: "./a.md", path: "docs/a.md", status: "missing" }],
+      sources: [
+        { text: "sources/guide.pdf", path: path("docs/sources/guide.pdf"), url: "https://x/g.pdf" },
+        { text: "The guide, third edition" },
+      ],
     };
     const page = fileBody(file);
     expect(restFileSchema.parse(page)).toEqual(page);
@@ -503,5 +578,32 @@ describe("the files body", () => {
     expect(restFileSchema.parse(listing)).toEqual(listing);
     if (listing.kind !== "directory") throw new Error("not a directory");
     expect(directoryResultOf(listing, mount)).toEqual(directory);
+  });
+});
+
+describe("the find body and the maps", () => {
+  it("round-trips the mark of a document that is the map of its folder", () => {
+    const result: FindResult = {
+      mount,
+      query: "items",
+      path: path(""),
+      items: [
+        {
+          kind: "document",
+          path: path("docs/README.md"),
+          title: "The manual",
+          summary: undefined,
+          skillDirectory: undefined,
+          overview: true,
+        },
+      ],
+      nextCursor: undefined,
+      totals: undefined,
+      diagnostics: [],
+    };
+    const body = findBody({ status: "ready", result });
+    expect(restFindSchema.parse(body)).toEqual(body);
+    if (body.status !== "ready") throw new Error("not ready");
+    expect(findResultOf(body, mount).items[0]).toMatchObject({ overview: true });
   });
 });

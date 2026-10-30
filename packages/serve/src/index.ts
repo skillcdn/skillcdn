@@ -8,6 +8,7 @@ export {
   listenOn,
   localMountBody,
   mountOf,
+  mountServedAt,
   type StdioServer,
   serveOverStdio,
 } from "./local.js";
@@ -28,6 +29,8 @@ export {
   clientAppOf,
   errorBody,
   hostFailure,
+  type RawFile,
+  rawFileHeaders,
   registerAddressRoutes,
 } from "./rest.js";
 export {

@@ -6,10 +6,12 @@ import {
   type Address,
   browseBody,
   describeLicense,
+  describeSource,
   directoryBody,
   type Embedder,
   fileBody,
   findBody,
+  GitHostError,
   type IndexLimits,
   LOCAL_HOST_KEY,
   parseAddress,
@@ -43,6 +45,11 @@ export interface LocalMount extends ServedMount {
   readonly root: string;
   /** The index of the directory as its files are now; a reload replaces it. */
   readonly index: () => ReadableIndex;
+  /**
+   * The bytes of a file of the directory by its hash in the index, read from disk when the
+   * tree did not read them (ADR-0077): what the reader asks for a body the index does not hold.
+   */
+  readonly readBlob: (hash: string, maxBytes: number) => Promise<Uint8Array>;
 }
 
 /**
@@ -132,6 +139,7 @@ export async function mountDirectory(options: {
   /** What was read last: the index, and the embedding of its bodies once that is asked for. */
   interface Reading {
     readonly index: ReadableIndex;
+    readonly readBlob: (hash: string, maxBytes: number) => Promise<Uint8Array>;
     readonly embed: () => Promise<EmbeddingOutcome> | undefined;
     embedding: Promise<EmbeddingOutcome> | undefined;
   }
@@ -143,6 +151,7 @@ export async function mountDirectory(options: {
     });
     return {
       index: createMemoryIndex({ index: result.index, blobs: result.blobs, vectors }),
+      readBlob: result.readBlob,
       embed: () => vectors?.update(result.index, result.blobs),
       embedding: undefined,
     };
@@ -175,6 +184,7 @@ export async function mountDirectory(options: {
     trustedUntil: new Date(0),
     visibility: "private",
     index: () => reading.index,
+    readBlob: (hash, maxBytes) => reading.readBlob(hash, maxBytes),
   };
   return {
     mount,
@@ -191,11 +201,23 @@ export async function mountDirectory(options: {
   };
 }
 
-/** The reader of mounted directories: every index is ready, since it is in memory. */
+/**
+ * The reader of mounted directories: every index is ready, since it is in memory, and a body the
+ * index does not hold, a file the tree listed without reading, is read from disk (ADR-0077).
+ */
 export const localReader = (limits: IndexLimits, meaning?: LocalMeaning): Reader<LocalMount> =>
   new Reader<LocalMount>({
     limits,
     index: async (mount) => ({ status: "ready", index: mount.index() }),
+    fetchBody: async (mount, hash, maxBytes) => {
+      try {
+        return await mount.readBlob(hash, maxBytes);
+      } catch (error) {
+        // A file that is not there to read any more has no body: the reader says so.
+        if (error instanceof GitHostError) return undefined;
+        throw error;
+      }
+    },
     meaning: meaning === undefined ? undefined : readerMeaningOf(meaning),
   });
 
@@ -206,6 +228,12 @@ const readerMeaningOf = (meaning: LocalMeaning): ReaderMeaning => ({
 });
 
 const WATCH_DELAY_MS = 250;
+/**
+ * How often a watched directory is looked at besides: one deleted and made anew in the same
+ * place is another directory, which the watcher of the first does not follow, so it is watched
+ * again and read again when that is seen.
+ */
+const WATCH_LIVENESS_MS = 5_000;
 
 /** The directories the indexer does not read, so a change in them is not a change to the pack. */
 const unread = (filename: string | Buffer | null): boolean => {
@@ -216,19 +244,40 @@ const unread = (filename: string | Buffer | null): boolean => {
   return first === ".git" || first === "node_modules";
 };
 
+/** What tells a directory from another made in its place: where it is on disk and when it was made. */
+async function identityOf(root: string): Promise<string | undefined> {
+  try {
+    const info = await stat(root);
+    return info.isDirectory()
+      ? `${info.dev}:${info.ino}:${Math.floor(info.birthtimeMs)}`
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Calls `changed` once per burst of changes to the files under the root, never twice at once:
  * a change during a call is one more call after it. Where the files cannot be watched, `failed`
- * is told and nothing is called. The watcher does not keep the process alive.
+ * is told, and the directory is tried again every few seconds; a directory deleted and made
+ * anew in the same place is watched again and read again then. The watcher does not keep the
+ * process alive.
  */
 export function watchDirectory(
   root: string,
   changed: () => Promise<void>,
-  options: { readonly failed: (error: unknown) => void; readonly delayMs?: number | undefined },
+  options: {
+    readonly failed: (error: unknown) => void;
+    readonly delayMs?: number | undefined;
+    readonly livenessMs?: number | undefined;
+  },
 ): { close(): void } {
   let timer: NodeJS.Timeout | undefined;
   let running: Promise<void> | undefined;
   let again = false;
+  let closed = false;
+  let watcher: FSWatcher | undefined;
+  let identity: string | undefined;
   const run = (): void => {
     if (running !== undefined) {
       again = true;
@@ -244,25 +293,65 @@ export function watchDirectory(
         }
       });
   };
-  let watcher: FSWatcher;
-  try {
-    watcher = watch(root, { recursive: true }, (_event, filename) => {
-      if (unread(filename)) {
+  const schedule = (): void => {
+    clearTimeout(timer);
+    timer = setTimeout(run, options.delayMs ?? WATCH_DELAY_MS);
+  };
+  const disarm = (): void => {
+    watcher?.close();
+    watcher = undefined;
+  };
+  const arm = (): boolean => {
+    try {
+      watcher = watch(root, { recursive: true }, (_event, filename) => {
+        if (unread(filename)) {
+          return;
+        }
+        schedule();
+      });
+    } catch (error) {
+      watcher = undefined;
+      options.failed(error);
+      return false;
+    }
+    // A watcher whose directory went away is done: the liveness check arms another when the
+    // directory is back.
+    watcher.on("error", (error) => {
+      options.failed(error);
+      disarm();
+    });
+    watcher.unref();
+    return true;
+  };
+  const liveness = setInterval(() => {
+    void identityOf(root).then((now) => {
+      if (closed) {
         return;
       }
-      clearTimeout(timer);
-      timer = setTimeout(run, options.delayMs ?? WATCH_DELAY_MS);
+      if (now === undefined) {
+        disarm();
+        return;
+      }
+      if (now !== identity || watcher === undefined) {
+        identity = now;
+        disarm();
+        if (arm()) {
+          schedule();
+        }
+      }
     });
-  } catch (error) {
-    options.failed(error);
-    return { close() {} };
-  }
-  watcher.on("error", options.failed);
-  watcher.unref();
+  }, options.livenessMs ?? WATCH_LIVENESS_MS);
+  liveness.unref();
+  void identityOf(root).then((now) => {
+    identity ??= now;
+  });
+  arm();
   return {
     close() {
+      closed = true;
       clearTimeout(timer);
-      watcher.close();
+      clearInterval(liveness);
+      disarm();
     },
   };
 }
@@ -344,7 +433,9 @@ export async function openDirectory(options: {
           throw new PackError(
             415,
             "file.not_text",
-            `The file is not UTF-8 text, which is all this command carries. Read it at its source: ${lookup.sourceUrl}`,
+            lookup.lfs === undefined
+              ? `The file is not UTF-8 text, which is all this command carries. Read it at its source: ${lookup.sourceUrl}`
+              : `The file is not readable here. ${describeSource(mount, lookup.sourceUrl, lookup.lfs)}`,
             { sourceUrl: lookup.sourceUrl },
           );
         case "not_served":

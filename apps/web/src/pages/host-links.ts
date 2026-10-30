@@ -9,8 +9,9 @@ import {
 
 // Where the things a page shows live at their git host, at the commit the page shows. The pages
 // send a reader there for what they do not serve themselves: the tree, a license file, and the
-// bytes of a picture. A pack served from a machine (ADR-0053) is at no host: there is nowhere
-// to send a reader, and the pages say nothing instead.
+// bytes of a picture. A pack served from a directory of the deployment (ADR-0071) is at no
+// host: the deployment sends the bytes of its files itself, from a route of its own (ADR-0077),
+// and has no tree or file page to send a reader to.
 
 const encodePath = (path: string): string =>
   path
@@ -46,17 +47,28 @@ export function hostFileUrl(mount: RestMount, path: string): string | undefined 
 }
 
 /**
- * The bytes of a file of the commit as the host serves them: where a picture in Markdown is
- * loaded from. A pack at no host has no such place, and the path is left as written.
+ * The bytes of a file of the commit as they are served: by the host for a repository of one,
+ * and by the deployment's own route for a pack of its directory. Where a picture in Markdown is
+ * loaded from, and where a reader fetches a file the pages do not show.
  */
 export function hostRawUrl(mount: RestMount, path: string): string {
+  const { host, owner, name } = mount.repository;
+  const parsed = parseRepoPath(path);
+  if (parsed.ok) {
+    return rawFileUrl({ host, owner, name }, mount.commit, parsed.value);
+  }
   const repository = gitRepository(mount);
   if (repository === undefined) {
     return path;
   }
-  const parsed = parseRepoPath(path);
-  if (parsed.ok) {
-    return rawFileUrl(repository, mount.commit, parsed.value);
-  }
   return `https://raw.githubusercontent.com/${encodeURIComponent(repository.owner)}/${encodeURIComponent(repository.name)}/${mount.commit}/${encodePath(path)}`;
+}
+
+/**
+ * Where a person opens a file the pages cannot show, a picture or an original: the file's page
+ * at its host, which a browser signed in to the host may open for a private repository too, or
+ * the deployment's own route for a pack of its directory.
+ */
+export function hostOpenUrl(mount: RestMount, path: string): string {
+  return hostFileUrl(mount, path) ?? hostRawUrl(mount, path);
 }

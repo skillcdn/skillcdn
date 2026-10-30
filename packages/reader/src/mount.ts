@@ -37,4 +37,9 @@ export interface MountContext {
   sourceUrl(path: RepoPath): string;
   /** Where the bytes of a file are at its source, for a reader that has to fetch them itself. */
   rawUrl(path: RepoPath): string;
+  /**
+   * Where the host serves a file kept in Git LFS, whose bytes at `rawUrl` are the pointer
+   * (ADR-0077); left out, `rawUrl` stands for it, as it does where there is no LFS.
+   */
+  lfsUrl?(path: RepoPath): string;
 }

@@ -42,7 +42,7 @@ import {
   skillResultOf,
   type ToolWords,
 } from "@skillcdn/core";
-import { checkDirectory, readIndexLimits } from "@skillcdn/indexer";
+import { checkDirectory, openWorkingTreeFile, readIndexLimits } from "@skillcdn/indexer";
 import { createEmbeddingsApi, createRerankApi, withQueryCache } from "@skillcdn/inference";
 import { ReaderInputError } from "@skillcdn/reader";
 import { createLocalApp, listenOn, type ServeLogger, serveOverStdio } from "@skillcdn/serve";
@@ -1637,6 +1637,9 @@ async function serveCommand(args: readonly string[], io: CliIo): Promise<number>
     clock: clockOf(io),
     logger,
     server: identity(),
+    // Over HTTP the bytes of a file are sent from here (ADR-0077): a path on this machine means
+    // nothing to a client elsewhere.
+    rawFile: (mount, path) => openWorkingTreeFile(mount.root, path),
   });
   const listening = await listenOn(app, { host, port }).catch((error: unknown) => {
     throw new Error(

@@ -168,9 +168,13 @@ describe("checking a working tree", () => {
     );
     const { code, report } = await check(root);
     expect(code).toBe(1);
-    expect(report).toContain("Index diagnostics: 1");
+    // The dead links are one issue, however many: the limit is the other.
+    expect(report).toContain("Index diagnostics: 2");
     expect(report).toContain("docs/guide.md (reference_limit)");
-    expect(report).toContain("1 index issue(s) found");
+    expect(report).toContain(
+      "docs/guide.md (link_missing): 200 links name no file of the repository (/shared/0.md, /shared/1.md, /shared/2.md, ...)",
+    );
+    expect(report).toContain("2 index issue(s) found");
     expect(report).not.toContain("1 manifest(s) could not be read");
   });
 });

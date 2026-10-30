@@ -10,6 +10,7 @@ What changed, release by release, newest first. Dates are the day the release re
 ## 2026.3
 
 - The board shows travel time between jobs as a hatched block, and warns when a job does not fit between its neighbours.
+- The API answers an overlapping job with the warning JOB-4090 instead of refusing it.
 - Quotes can ask for a deposit, fixed or a percentage, paid when the customer accepts.
 - Webhooks are retried for twenty-four hours and list their failures.
 

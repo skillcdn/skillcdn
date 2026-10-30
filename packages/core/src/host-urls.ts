@@ -1,17 +1,30 @@
-import type { AddressHost, GitHostKey } from "./address.js";
-import { localFileUrl } from "./license.js";
+import { type AddressHost, type GitHostKey, LOCAL_HOST_KEY } from "./address.js";
 import type { RepoPath } from "./repo-path.js";
+import { REST_ROUTES } from "./rest/contracts.js";
 
-// Where a browser fetches what the pages do not serve themselves: the bytes of a file of a
+// Where a reader fetches what the pages and the tools do not carry: the bytes of a file of a
 // repository, and the picture of an account, both from the git host (ADR-0030, ADR-0031). A pack
-// served from a directory of a deployment (ADR-0071) is at no host: what it has of a source is
-// the page of the address at the file, and its owner has no picture.
+// served from a directory of a deployment (ADR-0071) is at no host: the deployment serves the
+// bytes of its files itself, as attachments, from a route of its own (ADR-0077), and its owner
+// has no picture.
 
 const encodePath = (path: string): string =>
   path
     .split("/")
     .map((segment) => encodeURIComponent(segment))
     .join("/");
+
+/**
+ * The bytes of a file of a pack served from a directory, as the deployment that serves the pack
+ * sends them: its own route, relative to its origin, which the deployment prefixes with the
+ * origin visitors use.
+ */
+export function localRawFileUrl(
+  repository: { readonly owner: string; readonly name: string },
+  path: RepoPath,
+): string {
+  return `${REST_ROUTES.raw}/${LOCAL_HOST_KEY}/${encodeURIComponent(repository.owner)}/${encodeURIComponent(repository.name)}?path=${encodeURIComponent(path)}`;
+}
 
 /** The bytes of a file of a commit as the host serves them: where a picture is loaded from. */
 export function rawFileUrl(
@@ -23,9 +36,26 @@ export function rawFileUrl(
     case "gh":
       return `https://raw.githubusercontent.com/${encodeURIComponent(repository.owner)}/${encodeURIComponent(repository.name)}/${commit}/${encodePath(path)}`;
     case "local":
-      // The deployment serves no bytes of a directory pack as they are: the page of the file is
-      // all there is to send a reader to.
-      return localFileUrl(repository, path);
+      return localRawFileUrl(repository, path);
+  }
+}
+
+/**
+ * The bytes of a file kept in Git LFS, which the host's raw host does not serve: GitHub's own
+ * raw route answers the file itself for one, by a redirect to where it keeps LFS objects, and
+ * the raw host's bytes for any other file. A pack served from a directory has the pointer and
+ * nothing else, which is what its route serves.
+ */
+export function lfsFileUrl(
+  repository: { readonly host: AddressHost; readonly owner: string; readonly name: string },
+  commit: string,
+  path: RepoPath,
+): string {
+  switch (repository.host) {
+    case "gh":
+      return `https://github.com/${encodeURIComponent(repository.owner)}/${encodeURIComponent(repository.name)}/raw/${commit}/${encodePath(path)}`;
+    case "local":
+      return localRawFileUrl(repository, path);
   }
 }
 

@@ -11,6 +11,7 @@ import {
   isAnonymouslyReadable,
   isGitHostAddress,
   LOCAL_HOST_KEY,
+  lfsFileUrl,
   type RepoCoordinates,
   type RepoPath,
   ROOT_PATH,
@@ -349,6 +350,15 @@ export class MountService {
       rawUrl(path: RepoPath) {
         return here(rawFileUrl(atHost, this.commit, path));
       },
+      // The git host serves the files kept in Git LFS, whose bytes in the repository are
+      // pointers (ADR-0077); a directory holds what it holds, and is sent as it is.
+      ...(isGitHostAddress(address)
+        ? {
+            lfsUrl(path: RepoPath) {
+              return here(lfsFileUrl(atHost, this.commit, path));
+            },
+          }
+        : {}),
     };
     return mount;
   }

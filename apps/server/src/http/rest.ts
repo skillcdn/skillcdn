@@ -15,6 +15,7 @@ import {
   parseRepoPath,
   REST_FEATURED_SKILL_NAMES,
   REST_ROUTES,
+  type RepoPath,
   type RestFeatured,
   type RestLegalDocument,
   type RestMount,
@@ -26,7 +27,13 @@ import {
 } from "@skillcdn/core";
 import { isStatementTimeout } from "@skillcdn/db";
 import { type Reader, ReaderInputError } from "@skillcdn/reader";
-import { errorBody, hostFailure, registerAddressRoutes, type UsageHooks } from "@skillcdn/serve";
+import {
+  errorBody,
+  hostFailure,
+  type RawFile,
+  registerAddressRoutes,
+  type UsageHooks,
+} from "@skillcdn/serve";
 import type { Context, Hono } from "hono";
 import * as z from "zod";
 import type { Logger } from "../logger.js";
@@ -75,6 +82,11 @@ export interface RestDependencies {
   readonly now: () => number;
   /** What the deployment counts of the reads, as it counts the tools' (ADR-0050). */
   readonly hooks?: UsageHooks<Mount> | undefined;
+  /**
+   * The bytes of a file of a pack the deployment serves from its own directory (ADR-0077), for
+   * the `raw` route; left out, or nothing for a mount, the route sends the reader to the source.
+   */
+  readonly rawFile?: ((mount: Mount, path: RepoPath) => Promise<RawFile | undefined>) | undefined;
 }
 
 /** The featured list is the same for everyone and costs several queries per address. */
@@ -200,6 +212,7 @@ export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies):
     mountAt,
     mountBody,
     requestFields: (c) => ({ requestId: c.get("requestId") }),
+    rawFile: dependencies.rawFile,
   });
 
   let featuredCache: { readonly until: number; readonly body: Promise<RestFeatured> } | undefined;

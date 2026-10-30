@@ -5,6 +5,7 @@ import {
   catalogDescription,
   compactSummary,
   describeLicense,
+  describeSource,
   formatAddress,
   GitHostError,
   getSkillInputSchema,
@@ -296,11 +297,13 @@ export async function createMountServer<M extends ServedMount>(
           );
         case "too_large":
           return problem(
-            `${lookup.path} is too large to read here (${lookup.size} bytes; the limit is ${lookup.limit}). Fetch it from the source: ${lookup.sourceUrl}`,
+            `${lookup.path} is too large to read here (${lookup.size} bytes; the limit is ${lookup.limit}). ${describeSource(mount, lookup.sourceUrl)}`,
           );
         case "not_text":
           return problem(
-            `${lookup.path} is not a UTF-8 text file, which is all this tool carries. Fetch it from the source: ${lookup.sourceUrl}`,
+            lookup.lfs === undefined
+              ? `${lookup.path} is not a UTF-8 text file, which is all this tool carries. ${describeSource(mount, lookup.sourceUrl)}`
+              : `${lookup.path} is not readable here. ${describeSource(mount, lookup.sourceUrl, lookup.lfs)}`,
           );
         case "not_served":
           return problem(

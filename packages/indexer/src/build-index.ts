@@ -8,18 +8,22 @@ import {
   type AddressHost,
   assembleSkillDocument,
   type BlobStore,
+  baseName,
   classifyLicenseFile,
   classifyRepoFile,
   DomainError,
   decodeText,
   describeListingProblem,
   describeOmittedFile,
+  documentSources,
   type GitHost,
   GitHostError,
   type IndexLimits,
-  inspectMarkdownReferences,
+  inspectMarkdownLinks,
+  isBinaryPath,
   isExcludedPath,
   isHiddenSkill,
+  isLicenseFileName,
   isReadmePath,
   isServedPath,
   isSharedIncludePath,
@@ -28,6 +32,7 @@ import {
   type LicenseFact,
   MAX_LICENSE_TEXT_LENGTH,
   type OmittedFile,
+  outlineMarkdown,
   owningSkillDirectory,
   parentDirectory,
   parseRepoManifest,
@@ -40,6 +45,7 @@ import {
   rawFileUrl,
   relativeRepoPath,
   repoManifestPath,
+  resolveDocumentSource,
   resolveLicense,
   type ServedScope,
   type SkillListingProblem,
@@ -65,8 +71,11 @@ import { gitBlobHash, sha256Hex } from "./git-hash.js";
  * 11: the search vector is built here, with the word rules of the pack's language (ADR-0063).
  * 12: a hyphenated code with a digit part, or across scripts, is a word of the vector beside its
  *     parts (ADR-0069).
+ * 13: the headings of a document weigh with the words of its path, above its body; a dead local
+ *     link, a picture without words, a picture or an original that is not there, and a skill's
+ *     reference to a file that is not text are diagnostics (ADR-0076).
  */
-export const INDEX_VERSION = 12;
+export const INDEX_VERSION = 13;
 
 /**
  * The lowest version of the reading rules whose index is still served while the commit is
@@ -78,8 +87,16 @@ export const MIN_SERVABLE_INDEX_VERSION = 11;
 
 const MAX_DIAGNOSTICS = 50;
 const FETCH_CONCURRENCY = 8;
-/** With this many bodies to fetch, one archive request is cheaper than one request per file. */
+/** Under this many bodies to fetch, one request per file is cheaper than an archive. */
 const ARCHIVE_THRESHOLD = 4;
+/**
+ * What one request per file costs, counted in bytes of archive, when the two ways of fetching
+ * the bodies are weighed against each other (ADR-0077): a call spends the host's rate limit and
+ * a round trip, an archive the download of every file of the commit, the originals that are
+ * never read included. The archive is taken when it is not larger than the bodies needed plus
+ * this much per body.
+ */
+const PER_FILE_FETCH_COST_BYTES = 1_048_576;
 /** Follow local Markdown references this many edges beyond an already served file. */
 const MAX_REFERENCE_DEPTH = 8;
 
@@ -258,40 +275,6 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
   };
   const fetchBodies = async (wanted: readonly Candidate[], maxFileBytes: number): Promise<void> => {
     const missing = await blobStore.missing(wanted.map(({ entry }) => entry.hash));
-
-    // The archive is a transport, not a source of truth: it may convert line endings, expand
-    // keywords or leave files out. A body counts only when it hashes to what the tree says;
-    // everything else falls through to the per-file path below.
-    if (gitHost.readArchive !== undefined && missing.size >= ARCHIVE_THRESHOLD) {
-      const awaited = new Map(
-        wanted
-          .filter(({ entry }) => missing.has(entry.hash))
-          .map(({ entry }) => [entry.path, entry]),
-      );
-      try {
-        const archive = gitHost.readArchive(coordinates, commit, {
-          wants: (path, size) => awaited.has(path) && size <= maxFileBytes,
-          maxArchiveBytes: limits.maxArchiveBytes,
-        });
-        for await (const file of archive) {
-          signal.throwIfAborted();
-          const entry = awaited.get(file.path);
-          if (entry === undefined || gitBlobHash(file.bytes) !== entry.hash) {
-            continue;
-          }
-          await blobStore.write(entry.hash, file.bytes);
-          remember(entry.hash, file.bytes);
-        }
-      } catch (error) {
-        // Without the archive the work is the same, only slower. A rate limit is different:
-        // asking again file by file would make it worse.
-        const recoverable = error instanceof GitHostError && error.kind !== "rate_limited";
-        if (signal.aborted || !recoverable) {
-          throw error;
-        }
-      }
-    }
-
     await forEachConcurrently(wanted, FETCH_CONCURRENCY, async ({ entry }) => {
       signal.throwIfAborted();
       if (texts.has(entry.hash)) {
@@ -323,14 +306,93 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
     signal.throwIfAborted();
   };
 
+  // The bodies the rounds below may ask for, as far as the tree tells: the declarations, the
+  // documents and the licenses, and every file of a directory that holds a SKILL.md, up to the
+  // limit each is read under. One archive fetches the ones the store lacks, before the rounds,
+  // when it is not much larger than fetching them one by one (ADR-0077): a pack that carries its
+  // originals is read without downloading them, and a pack of many small files in one request.
+  const declaredSkillDirectories = new Set(
+    candidates
+      .filter(({ kind }) => kind === "skill")
+      .map(({ entry }) => parentDirectory(entry.path)),
+  );
+  const fetchLimitOf = ({ entry, kind }: Candidate): number | undefined => {
+    if (owningSkillDirectory(entry.path, declaredSkillDirectories) !== undefined) {
+      return Math.max(limits.maxIndexedFileBytes, limits.maxReadableFileBytes);
+    }
+    if (kind !== "other") {
+      return limits.maxIndexedFileBytes;
+    }
+    return isLicenseFileName(baseName(entry.path)) ? MAX_LICENSE_TEXT_LENGTH : undefined;
+  };
+  const fetchArchive = async (): Promise<void> => {
+    if (gitHost.readArchive === undefined) {
+      return;
+    }
+    const wanted = candidates.filter(
+      (candidate) =>
+        candidate.entry.type === "file" && candidate.entry.size <= (fetchLimitOf(candidate) ?? -1),
+    );
+    const missing = await blobStore.missing(wanted.map(({ entry }) => entry.hash));
+    const needed = wanted.filter(({ entry }) => missing.has(entry.hash));
+    const neededBytes = needed.reduce((sum, { entry }) => sum + entry.size, 0);
+    const treeBytes = tree.entries
+      .filter((entry) => entry.type === "file")
+      .reduce((sum, entry) => sum + entry.size, 0);
+    if (
+      needed.length < ARCHIVE_THRESHOLD ||
+      treeBytes > limits.maxArchiveBytes ||
+      treeBytes > neededBytes + needed.length * PER_FILE_FETCH_COST_BYTES
+    ) {
+      return;
+    }
+    // The archive is a transport, not a source of truth: it may convert line endings, expand
+    // keywords or leave files out. A body counts only when it hashes to what the tree says;
+    // everything else is fetched file by file when its round comes.
+    const awaited = new Map(needed.map((candidate) => [candidate.entry.path, candidate]));
+    try {
+      const archive = gitHost.readArchive(coordinates, commit, {
+        wants: (path, size) => {
+          const candidate = awaited.get(path);
+          return candidate !== undefined && size <= (fetchLimitOf(candidate) ?? -1);
+        },
+        maxArchiveBytes: limits.maxArchiveBytes,
+      });
+      for await (const file of archive) {
+        signal.throwIfAborted();
+        const entry = awaited.get(file.path)?.entry;
+        if (entry === undefined || gitBlobHash(file.bytes) !== entry.hash) {
+          continue;
+        }
+        await blobStore.write(entry.hash, file.bytes);
+        remember(entry.hash, file.bytes);
+      }
+    } catch (error) {
+      // Without the archive the work is the same, only slower. A rate limit is different:
+      // asking again file by file would make it worse.
+      const recoverable = error instanceof GitHostError && error.kind !== "rate_limited";
+      if (signal.aborted || !recoverable) {
+        throw error;
+      }
+    }
+  };
+  await fetchArchive();
+
   const diagnostics: SnapshotDiagnostic[] = [];
   const report = (path: RepoPath, code: string, message: string): void => {
     if (diagnostics.length < MAX_DIAGNOSTICS) {
       diagnostics.push({ path, code, message });
     }
   };
-  const referencesOf = (path: RepoPath, text: string) => {
-    const inspected = inspectMarkdownReferences(path, text);
+  /**
+   * The local links of a Markdown file, inspected for the author (ADR-0076): the references,
+   * which extend what is readable, are returned; a link to a file the repository does not have, a
+   * picture without words, and a skill's reference to a file that is not text are reported. A
+   * document links to its originals and its pictures by right: only a skill, which works from
+   * text, is told of a reference an agent can only fetch.
+   */
+  const referencesOf = (path: RepoPath, text: string, options: { readonly skill: boolean }) => {
+    const inspected = inspectMarkdownLinks(path, text);
     if (inspected.truncated) {
       truncated = true;
       report(
@@ -339,7 +401,75 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
         "Markdown reference extraction exceeded its input or reference limit; some links were not inspected",
       );
     }
+    // One diagnostic per file and kind, naming the first few: a document of many dead links
+    // would otherwise crowd out everything else the author is told.
+    const named = (hrefs: readonly string[]): string =>
+      `${hrefs.slice(0, 3).join(", ")}${hrefs.length > 3 ? ", ..." : ""}`;
+    const dead: string[] = [];
+    const binary: string[] = [];
+    for (const link of [...inspected.references, ...inspected.files]) {
+      if (!treeFiles.has(link.path)) {
+        dead.push(link.href);
+      } else if (options.skill && isBinaryPath(link.path)) {
+        binary.push(link.href);
+      }
+    }
+    const missingImages: string[] = [];
+    const wordless: string[] = [];
+    for (const image of inspected.images) {
+      if (!treeFiles.has(image.path)) {
+        missingImages.push(image.href);
+      } else if (image.alt === undefined || image.alt.length === 0) {
+        wordless.push(image.href);
+      }
+    }
+    if (dead.length > 0) {
+      report(
+        path,
+        "link_missing",
+        `${dead.length === 1 ? "a link names" : `${dead.length} links name`} no file of the repository (${named(dead)})`,
+      );
+    }
+    if (binary.length > 0) {
+      report(
+        path,
+        "reference_not_text",
+        `${binary.length === 1 ? "a reference is" : `${binary.length} references are`} not to a text file (${named(binary)}): a skill works from Markdown and small JSON, and an agent can only fetch such a file from its source`,
+      );
+    }
+    if (missingImages.length > 0) {
+      report(
+        path,
+        "image_missing",
+        `${missingImages.length === 1 ? "an image names" : `${missingImages.length} images name`} no file of the repository (${named(missingImages)})`,
+      );
+    }
+    if (wordless.length > 0) {
+      report(
+        path,
+        "image_without_alt",
+        `${wordless.length === 1 ? "an image has" : `${wordless.length} images have`} no alternative text (${named(wordless)}): an agent reads a picture by the words the document gives it`,
+      );
+    }
     return inspected.references;
+  };
+  /**
+   * The originals a document names that the repository does not have, for the author. A value
+   * that is written like a path, with a directory or an extension, is meant as one; a title is
+   * text and is left alone.
+   */
+  const checkSources = (path: RepoPath, text: string): void => {
+    for (const source of documentSources(text)) {
+      const resolved = resolveDocumentSource(path, source);
+      const written = source.includes("/") || /\.[a-z0-9]{1,8}$/i.test(source);
+      if (resolved !== undefined && written && !treeFiles.has(resolved)) {
+        report(
+          path,
+          "source_missing",
+          `source names ${source}, which is not a file of the repository`,
+        );
+      }
+    }
   };
 
   // Resolve policies from ancestors downward before fetching their descendants. A rejected
@@ -380,10 +510,20 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
       readonly description?: string | undefined;
     },
     body: string | undefined,
+    /** For Markdown: its headings, which weigh above the body (reading rules version 13). */
+    headings: readonly string[] = [],
   ): string =>
     serializeSearchVector(
-      searchVectorOf(searchFieldsOf(entry, body), languageOf(parentDirectory(entry.path))),
+      searchVectorOf(
+        searchFieldsOf(entry, body, headings),
+        languageOf(parentDirectory(entry.path)),
+      ),
     );
+  /** The headings of a Markdown body, as the search weighs them. */
+  const headingsOf = (body: string): string[] =>
+    outlineMarkdown(body)
+      .headings.map((heading) => heading.text)
+      .filter((text) => text.length > 0);
   /** Skill manifests that could not be read as skills. */
   const unreadSkills = new Set<RepoPath>();
   /** Per manifest directory, the document directories it declares. A broken one declares none. */
@@ -521,7 +661,7 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
             ...(image === undefined ? {} : { image }),
             documents: [...manifest.documents],
             exclude: [...manifest.exclude],
-            references: referencesOf(entry.path, text),
+            references: referencesOf(entry.path, text, { skill: false }),
             ...(manifest.language === undefined ? {} : { language: manifest.language }),
             // Stored only when it says something: the documents under it are searched by words
             // alone, and their text is not embedded (ADR-0064), or the repository stays out of
@@ -565,7 +705,7 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
             ...(manifest.allowedTools === undefined ? {} : { allowedTools: manifest.allowedTools }),
             metadata: { ...manifest.metadata },
             warnings: warnings.map((warning) => warning.message),
-            references: referencesOf(entry.path, text),
+            references: referencesOf(entry.path, text, { skill: true }),
             ...(manifest.include.length === 0 ? {} : { include: [...manifest.include] }),
             ...(storedTranslations(manifest.translations) === undefined
               ? {}
@@ -575,6 +715,7 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
           search: searchOf(
             { path: entry.path, name: manifest.name, description: manifest.description },
             manifest.body,
+            headingsOf(manifest.body),
           ),
         });
         continue;
@@ -595,6 +736,7 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
         search: searchOf(
           { path: entry.path, title: summary.title, description: summary.description },
           summary.body,
+          headingsOf(summary.body),
         ),
       });
     }
@@ -675,6 +817,9 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
     const summary = kind === "json" ? undefined : summarizeSearchableMarkdown(text);
     const overviewOnly = overviewFiles.has(entry.path) && !isServedPath(entry.path, scope);
     const searchable = !linkedOnly && !overviewOnly;
+    if (summary !== undefined) {
+      checkSources(entry.path, text);
+    }
     documents.set(entry.path, {
       path: entry.path,
       size: entry.size,
@@ -687,7 +832,13 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
       frontMatter: {
         metadata: {},
         warnings: [],
-        ...(kind === "json" ? {} : { references: referencesOf(entry.path, text) }),
+        ...(kind === "json"
+          ? {}
+          : {
+              references: referencesOf(entry.path, text, {
+                skill: owningSkillDirectory(entry.path, skillDirectories) !== undefined,
+              }),
+            }),
         ...(linkedOnly ? { linkedOnly: true } : {}),
         ...(overviewOnly ? { overviewOnly: true } : {}),
       },
@@ -699,6 +850,7 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
             search: searchOf(
               { path: entry.path, title: summary?.title, description: summary?.description },
               summary === undefined ? text : summary.body,
+              summary === undefined ? [] : headingsOf(summary.body),
             ),
           }
         : {}),

@@ -227,7 +227,14 @@ describe("repository publication and link indexing", () => {
       ".context/unlinked.md": "# Private\n",
       "README.md": "# Repository overview\n",
     });
-    expect(result.diagnostics).toEqual([]);
+    // A link to nothing is the author's to hear of (ADR-0076); it changes nothing else.
+    expect(result.diagnostics).toEqual([
+      {
+        path: "team/skills/write/SKILL.md",
+        code: "link_missing",
+        message: "a link names no file of the repository (/missing.md)",
+      },
+    ]);
     for (const name of [
       "shared/start.md",
       "shared/next.md",

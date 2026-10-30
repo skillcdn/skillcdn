@@ -15,6 +15,8 @@ export const REST_ROUTES = {
   search: "/api/v1/search",
   skills: "/api/v1/skills",
   files: "/api/v1/files",
+  /** The bytes of a file as the pack has them, as an attachment, where the deployment serves them itself (ADR-0077). */
+  raw: "/api/v1/raw",
   featured: "/api/v1/featured",
   showcase: "/api/v1/showcase",
   legal: "/api/v1/legal",
@@ -36,7 +38,7 @@ export const REST_FEATURED_SKILL_NAMES = 5;
 
 /** The REST path of an operation on an address, without a query string. */
 export function restPath(
-  operation: "mounts" | "browse" | "find" | "skills" | "files",
+  operation: "mounts" | "browse" | "find" | "skills" | "files" | "raw",
   address: Address,
 ): string {
   return `${REST_ROUTES[operation]}${formatAddress(address)}`;
@@ -93,6 +95,8 @@ export const restBrowseEntrySchema = z.object({
   description: z.nullable(z.string()),
   skillCount: count,
   documentCount: count,
+  /** How many pictures the folder holds; absent when none, and from an answer of a deployment older than the field. */
+  imageCount: z.optional(count),
   size: z.nullable(count),
   manifestPath: z.nullable(z.string()),
   language: z.nullable(z.string()),
@@ -101,6 +105,20 @@ export const restFolderOverviewSchema = z.object({
   path: z.string(),
   title: z.nullable(z.string()),
   description: z.nullable(z.string()),
+});
+/** A picture a document links to, with its alternative text, empty when it has none. */
+export const restDocumentImageSchema = z.object({
+  path: z.string(),
+  alt: z.string(),
+});
+/**
+ * What a document says it was made from (ADR-0076): its front-matter `source` as written and,
+ * when it names a file of the repository, the file's `path` and the `url` of its bytes.
+ */
+export const restDocumentSourceSchema = z.object({
+  text: z.string(),
+  path: z.optional(z.string()),
+  url: z.optional(z.string()),
 });
 /** One heading of a file's outline, with the `offset` and `length` that read its section. */
 export const restOutlineHeadingSchema = z.object({
@@ -124,6 +142,12 @@ export const restFileOutlineSchema = z.object({
   unavailable: z.optional(z.enum(["not_markdown", "not_text", "too_large", "described_only"])),
   license: z.optional(restLicenseSchema),
   sourceUrl: z.optional(z.string()),
+  /** With `not_text`: a Git LFS pointer to a file of this size, which `sourceUrl` serves (ADR-0077). */
+  lfs: z.optional(z.object({ size: count })),
+  /** For a Markdown document: the pictures it links to, each with its alternative text. */
+  images: z.optional(z.array(restDocumentImageSchema)),
+  /** For a Markdown document: what it says it was made from (ADR-0076). */
+  sources: z.optional(z.array(restDocumentSourceSchema)),
 });
 export const restBrowseSchema = z.discriminatedUnion("status", [
   z.object({
@@ -131,6 +155,8 @@ export const restBrowseSchema = z.discriminatedUnion("status", [
     commit: z.string(),
     path: z.string(),
     overview: z.optional(restFolderOverviewSchema),
+    /** The repository manifest of the browsed folder, when it has one of its own. */
+    manifestPath: z.optional(z.string()),
     /** When `path` names a file: its outline, and `entries` is empty. */
     outline: z.optional(restFileOutlineSchema),
     entries: z.array(restBrowseEntrySchema),
@@ -146,6 +172,8 @@ export type RestReference = z.infer<typeof restReferenceSchema>;
 export type RestFolderOverview = z.infer<typeof restFolderOverviewSchema>;
 export type RestOutlineHeading = z.infer<typeof restOutlineHeadingSchema>;
 export type RestFileOutline = z.infer<typeof restFileOutlineSchema>;
+export type RestDocumentImage = z.infer<typeof restDocumentImageSchema>;
+export type RestDocumentSource = z.infer<typeof restDocumentSourceSchema>;
 
 export const restRepositorySchema = z.object({
   host: z.enum(ADDRESS_HOST_KEYS),
@@ -306,6 +334,8 @@ export const restFindItemSchema = z.discriminatedUnion("kind", [
     skillDirectory: z.nullable(z.string()),
     /** With a query: the sections that matched, best first; absent for a document described only. */
     sections: z.optional(z.array(restFindSectionSchema)),
+    /** True for the README of a folder, the map that says a little of everything in it. */
+    overview: z.optional(z.boolean()),
   }),
 ]);
 
@@ -444,6 +474,8 @@ export const restFileSchema = z.discriminatedUnion("kind", [
     /** The commit the file was read from; every result names one. */
     commit: z.optional(z.string()),
     references: z.optional(z.array(restReferenceSchema)),
+    /** On the first page of a Markdown document: what it says it was made from (ADR-0076). */
+    sources: z.optional(z.array(restDocumentSourceSchema)),
     path: z.string(),
     content: z.string(),
     offset: count,

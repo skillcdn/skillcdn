@@ -1,5 +1,6 @@
 import type { LicenseFact } from "./license.js";
 import {
+  isImagePath,
   parentDirectory,
   type RepoFileKind,
   SKILL_MANIFEST_FILE,
@@ -45,6 +46,7 @@ interface Child {
   skill: CatalogFile | undefined;
   skillCount: number;
   documentCount: number;
+  imageCount: number;
 }
 
 /** Immediate canonical children, with descendant counts and inherited manifest language. */
@@ -71,10 +73,18 @@ export function browseCatalogFiles(files: readonly CatalogFile[], path: RepoPath
     const childPath = `${prefix}${slash < 0 ? relative : relative.slice(0, slash)}` as RepoPath;
     let child = children.get(childPath);
     if (child === undefined) {
-      child = { direct: undefined, skill: undefined, skillCount: 0, documentCount: 0 };
+      child = {
+        direct: undefined,
+        skill: undefined,
+        skillCount: 0,
+        documentCount: 0,
+        imageCount: 0,
+      };
       children.set(childPath, child);
     }
     if (file.path === childPath) child.direct = file;
+    // The pictures of a folder, so that an agent knows a folder of figures from one of pages.
+    if (file.kind === "other" && isImagePath(file.path)) child.imageCount += 1;
     if (file.kind === "skill") {
       // Counts cover what can be discovered: a hidden copy of a visible skill, or a copy that
       // repeats one, is found by browsing its folder but is not counted (ADR-0024).
@@ -124,6 +134,7 @@ export function browseCatalogFiles(files: readonly CatalogFile[], path: RepoPath
         null,
       skillCount: child.skillCount,
       documentCount: child.documentCount,
+      ...(child.imageCount === 0 ? {} : { imageCount: child.imageCount }),
       size: (skill ?? direct)?.size ?? null,
       manifestPath: ownManifest?.path ?? null,
       language,

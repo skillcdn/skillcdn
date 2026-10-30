@@ -9,6 +9,8 @@ import {
 import type {
   BrowseResult,
   DirectoryResult,
+  DocumentImage,
+  DocumentSource,
   FileOutline,
   FileReference,
   FileResult,
@@ -50,6 +52,61 @@ const headingLabel = (text: string): string =>
 const sectionRange = (section: { readonly offset: number; readonly length: number }): string =>
   `offset ${section.offset}, limit ${section.length}`;
 
+/**
+ * The one line that follows a refused read of a private repository's file (ADR-0077): the URL
+ * names the file at the host, and the host answers it only to a credential that may read the
+ * repository, which is the reader's to have.
+ */
+export function accessHint(mount: Pick<MountSummary, "visibility" | "repository">): string {
+  return mount.visibility === "private"
+    ? ` The repository ${mount.repository} is private: fetch it with a GitHub credential that may read it, sent in the Authorization header, since the host answers a browser session with 404.`
+    : "";
+}
+
+/** The bytes of a file that is not text, at the source (ADR-0033, ADR-0077), with the hint a private repository needs. */
+export function describeSource(
+  mount: Pick<MountSummary, "visibility" | "repository">,
+  sourceUrl: string | undefined,
+  lfs?: { readonly size: number },
+): string {
+  const where = sourceUrl ?? "the host";
+  return lfs === undefined
+    ? `Fetch it from the source: ${where}${accessHint(mount)}`
+    : `The repository holds a Git LFS pointer to it; the file itself (${lfs.size} bytes) is served by the host: ${where}${accessHint(mount)}`;
+}
+
+/** How many pictures an outline names with their words. */
+const MAX_OUTLINE_IMAGES = 12;
+
+/** The pictures of a document, each with the words it is read by, so that an agent knows a figure is there. */
+function imagesLine(images: readonly DocumentImage[] | undefined): string | undefined {
+  if (images === undefined || images.length === 0) {
+    return undefined;
+  }
+  const shown = images
+    .slice(0, MAX_OUTLINE_IMAGES)
+    .map(
+      (image) =>
+        `- ${image.path}${image.alt.length === 0 ? " (no alternative text)" : `: ${compactSummary(image.alt, 100)}`}`,
+    );
+  const more = images.length > shown.length ? `\n- ... (${images.length - shown.length} more)` : "";
+  return `${plural(images.length, "image")}, read as text where the document describes them:\n${shown.join("\n")}${more}`;
+}
+
+/** What a document says it was made from (ADR-0076), with where the bytes are when it is a file of the repository. */
+function originalsLine(sources: readonly DocumentSource[] | undefined): string | undefined {
+  if (sources === undefined || sources.length === 0) {
+    return undefined;
+  }
+  return `Original: ${sources
+    .map((source) =>
+      source.url === undefined
+        ? compactSummary(source.text, 160)
+        : `${source.path ?? source.text} (${source.url})`,
+    )
+    .join("; ")}`;
+}
+
 /** The outline of a file (ADR-0063): its headings, each with what reads its section. */
 function renderOutline(result: BrowseResult, outline: FileOutline, words: ToolWords): string {
   const source = `Source: ${describeMount(result.mount)}`;
@@ -66,11 +123,13 @@ function renderOutline(result: BrowseResult, outline: FileOutline, words: ToolWo
       );
     case "not_text":
       return unavailable(
-        `Not a UTF-8 text file, which is all this server carries. Fetch it from the source: ${outline.sourceUrl ?? "the host"}`,
+        outline.lfs === undefined
+          ? `Not a UTF-8 text file, which is all this server carries. ${describeSource(result.mount, outline.sourceUrl)}`
+          : `Not readable here: ${describeSource(result.mount, outline.sourceUrl, outline.lfs)}`,
       );
     case "too_large":
       return unavailable(
-        `Too large to read here. Fetch it from the source: ${outline.sourceUrl ?? "the host"}`,
+        `Too large to read here. ${describeSource(result.mount, outline.sourceUrl)}`,
       );
     case "described_only":
       return unavailable(
@@ -83,7 +142,13 @@ function renderOutline(result: BrowseResult, outline: FileOutline, words: ToolWo
     outline.headings.length === 0 && result.nextCursor === undefined
       ? "no headings"
       : plural(outline.headings.length, "heading");
-  const header = `File: ${outline.path} (${outline.totalLength ?? outline.size} characters; ${count}${outline.truncated ? ", the first of more" : ""})\n${source}`;
+  const header = [
+    `File: ${outline.path} (${outline.totalLength ?? outline.size} characters; ${count}${outline.truncated ? ", the first of more" : ""})`,
+    source,
+    originalsLine(outline.sources),
+  ]
+    .filter((line) => line !== undefined)
+    .join("\n");
   const headings =
     outline.headings.length === 0
       ? `${words.read} reads it from the start.`
@@ -96,6 +161,8 @@ function renderOutline(result: BrowseResult, outline: FileOutline, words: ToolWo
   return joinSections([
     header,
     headings,
+    // The reader gives the pictures to the first page alone, with the start of the outline.
+    imagesLine(outline.images),
     result.nextCursor === undefined
       ? undefined
       : `nextCursor: ${JSON.stringify(result.nextCursor)}`,
@@ -123,10 +190,14 @@ export function renderBrowseResult(
             : compactSummary(result.overview.description, BROWSE_DESCRIPTION_MAX_LENGTH),
           `Optional overview: ${words.read} ${result.overview.path}.`,
         ]),
+    // The manifest is not an entry: a model that is told to read the pack's metadata finds it here.
+    result.manifestPath === undefined
+      ? undefined
+      : `Manifest: ${result.manifestPath}; its front-matter (metadata) and rules are read with ${words.read}.`,
     result.entries
       .map(
         (entry) =>
-          `- ${entry.kind}: ${entry.path}${entry.name === null ? "" : ` (${compactSummary(entry.name, 120)})`}${entry.kind === "file" ? "" : `; ${plural(entry.skillCount, "skill")}${entry.documentCount === 0 ? "" : `, ${plural(entry.documentCount, "document")}`}`}${entry.overviewPath === undefined ? "" : `; overview: ${entry.overviewPath}`}${describedOnlyNote(entry)}${entry.description === null ? "" : `\n  ${compactSummary(entry.description, BROWSE_DESCRIPTION_MAX_LENGTH)}`}`,
+          `- ${entry.kind}: ${entry.path}${entry.name === null ? "" : ` (${compactSummary(entry.name, 120)})`}${entry.kind === "file" ? "" : `; ${plural(entry.skillCount, "skill")}${entry.documentCount === 0 ? "" : `, ${plural(entry.documentCount, "document")}`}${entry.imageCount === undefined || entry.imageCount === 0 ? "" : `, ${plural(entry.imageCount, "image")}`}`}${entry.overviewPath === undefined ? "" : `; overview: ${entry.overviewPath}`}${describedOnlyNote(entry)}${entry.description === null ? "" : `\n  ${compactSummary(entry.description, BROWSE_DESCRIPTION_MAX_LENGTH)}`}`,
       )
       .join("\n"),
     renderDiagnostics(result.diagnostics ?? [], true, result.diagnosticsTotal, words),
@@ -262,7 +333,10 @@ function findItemLines(item: FindItem): string[] {
     return lines;
   }
   const title = item.title === undefined ? "" : ` - ${compactSummary(item.title, 120)}`;
-  const lines = [`document: ${item.path}${title}`];
+  // A map says a little of everything in its folder, so it is near every question; the model
+  // is told which result is one, and goes to the documents it names.
+  const overview = item.overview === true ? " (overview of its folder)" : "";
+  const lines = [`document: ${item.path}${title}${overview}`];
   if (item.summary !== undefined) {
     lines.push(`   ${compactSummary(item.summary, SEARCH_DESCRIPTION_MAX_LENGTH)}`);
   }
@@ -543,6 +617,7 @@ export function renderFileResult(result: FileResult, words: ToolWords = MCP_TOOL
   const header = [
     `File: ${result.path} (${range})`,
     `Source: ${describeMount(result.mount)}`,
+    originalsLine(result.sources),
     continuationLine(result, words),
   ].filter((line) => line !== undefined);
 

@@ -295,6 +295,12 @@
       "answers": [{ "path": "docs/api/jobs.md", "heading": ["Jobs API", "Listing jobs"] }]
     },
     {
+      "id": "en-35",
+      "language": "en",
+      "query": "JOB-4090",
+      "answers": [{ "path": "docs/api/jobs.md", "heading": ["Jobs API", "Warning JOB-4090"] }]
+    },
+    {
       "id": "ko-01",
       "language": "ko",
       "query": "수습 기간은 얼마나 되나요",

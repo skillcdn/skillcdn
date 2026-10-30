@@ -4,7 +4,9 @@
       "id": "guides",
       "pages": [
         { "file": "docs/guide/use-skills.md", "slug": "use-skills" },
-        { "file": "docs/guide/write-a-repository.md", "slug": "write-a-repository" }
+        { "file": "docs/guide/write-a-repository.md", "slug": "write-a-repository" },
+        { "file": "docs/guide/write-skills.md", "slug": "write-skills" },
+        { "file": "docs/guide/write-documents.md", "slug": "write-documents" }
       ]
     },
     {

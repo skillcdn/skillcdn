@@ -55,7 +55,7 @@ describe("the check role", () => {
     expect(code).toBe(1);
     expect(report).toContain("Repository manifest: none.");
     expect(report).toContain(
-      "License: none declared (served with its provenance; never featured)\n",
+      "License: none declared (a directory is served in full; a deployment serves a repository without a license with a provenance notice and never features it)\n",
     );
     expect(report).toContain("Skills: 3 (2 listed through the MCP skills extension)\n");
     expect(report).toContain("  extension: not listed (name_directory_mismatch)\n");

@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   baseName,
   classifyRepoFile,
+  extensionOf,
+  isBinaryPath,
   isExcludedPath,
   isHiddenPath,
+  isImagePath,
   isServedPath,
   isSharedIncludePath,
   nearestDirectoryAtOrAbove,
@@ -293,5 +296,24 @@ describe("isSharedIncludePath", () => {
   it("keeps a page below a broken manifest out", () => {
     const broken: ServedScope = { ...scope, brokenManifestDirectories: new Set([path("docs")]) };
     expect(isSharedIncludePath(path("docs/tool/models.md"), ad, broken)).toBe(false);
+  });
+});
+
+describe("what a file is by its extension", () => {
+  it("knows a picture, and a file that is never text, from the extension alone", () => {
+    expect(extensionOf(path("docs/Manual.PDF"))).toBe("pdf");
+    expect(extensionOf(path("LICENSE"))).toBe("");
+    expect(extensionOf(path(".env"))).toBe("");
+    expect(isImagePath(path("docs/images/a.PNG"))).toBe(true);
+    expect(isImagePath(path("docs/images/a.svg"))).toBe(true);
+    expect(isImagePath(path("docs/a.pdf"))).toBe(false);
+    expect(isBinaryPath(path("docs/sources/manual.pdf"))).toBe(true);
+    expect(isBinaryPath(path("docs/images/a.png"))).toBe(true);
+    expect(isBinaryPath(path("assets/model.bin"))).toBe(true);
+    // Text, though a picture: its source is readable.
+    expect(isBinaryPath(path("docs/images/a.svg"))).toBe(false);
+    expect(isBinaryPath(path("docs/a.md"))).toBe(false);
+    expect(isBinaryPath(path("data/table.csv"))).toBe(false);
+    expect(isBinaryPath(path("unknown.dat"))).toBe(false);
   });
 });

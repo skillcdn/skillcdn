@@ -59,8 +59,10 @@ const MAX_POSITIONS_PER_LEXEME = 256;
 
 /**
  * The four fields of an index entry, as the deployment weighs them: the name and the title, the
- * description, the words of the path, and the body that is searched, the parsed body of a
- * Markdown document or the text of a JSON file, bounded.
+ * description, the words of the path with the headings of the body, and the body that is
+ * searched, the parsed body of a Markdown document or the text of a JSON file, bounded. A
+ * heading's words weigh between the description's and the body's, so that a code quoted in a
+ * query finds the section headed by it before a table that lists it among many.
  */
 export function searchFieldsOf(
   entry: {
@@ -70,11 +72,12 @@ export function searchFieldsOf(
     readonly description?: string | undefined;
   },
   body: string | undefined,
+  headings: readonly string[] = [],
 ): SearchField[] {
   return [
     { weight: "A", text: `${entry.name ?? ""} ${entry.title ?? ""}` },
     { weight: "B", text: entry.description ?? "" },
-    { weight: "C", text: entry.path.replaceAll(/[/._-]/gu, " ") },
+    { weight: "C", text: [entry.path.replaceAll(/[/._-]/gu, " "), ...headings].join(" ") },
     { weight: "D", text: (body ?? "").slice(0, MAX_SEARCHED_BODY_LENGTH) },
   ];
 }

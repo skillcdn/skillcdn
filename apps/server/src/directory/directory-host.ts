@@ -12,9 +12,16 @@ import {
   type IndexLimits,
   LOCAL_HOST_KEY,
   type RepoCoordinates,
+  type RepoPath,
   type RepoTree,
 } from "@skillcdn/core";
-import { type LocalFile, readWorkingTree } from "@skillcdn/indexer";
+import {
+  bytesOf,
+  type LocalFile,
+  openWorkingTreeFile,
+  readWorkingTree,
+  type WorkingTreeFile,
+} from "@skillcdn/indexer";
 
 // The git-host port over a directory of the deployment's own filesystem (ADR-0071): the packs
 // an installation keeps where no git host can be read from, each a directory `<owner>/<name>`
@@ -22,7 +29,9 @@ import { type LocalFile, readWorkingTree } from "@skillcdn/indexer";
 // tree has no commits, so the hash of its tree stands in for one: the same files are the same
 // commit, and a changed file is a new one, indexed when it is next asked for while the one
 // before answers (ADR-0068). Nothing in a directory is executed, and nothing outside the root is
-// ever read: the names of an address are the grammar's, and the root is resolved once.
+// ever read: the names of an address are the grammar's, and the root is resolved once. The
+// files the reading rules do not read as text are read from disk when something asks for their
+// bytes, and sent as they are by the route of ADR-0077.
 
 export interface DirectoryHostOptions {
   /** The directory whose children are the owners, and their children the packs. */
@@ -51,6 +60,48 @@ function commitOf(files: readonly LocalFile[]): string {
 
 const notFound = (what: string) => new GitHostError("not_found", what);
 
+/**
+ * The directory of a pack under `root`, or nothing, in the words of any name that is nothing:
+ * the names are the grammar's, and the directory is under the root or it is not a pack.
+ */
+async function packDirectoryOf(root: string, coordinates: RepoCoordinates): Promise<string> {
+  const { host, owner, repo } = coordinates;
+  if (host !== LOCAL_HOST_KEY || !NAME.test(owner) || !NAME.test(repo)) {
+    throw notFound("no such pack");
+  }
+  const directory = join(root, owner, repo);
+  if (!directory.startsWith(`${root}${sep}`)) {
+    throw notFound("no such pack");
+  }
+  let isDirectory = false;
+  try {
+    isDirectory = (await stat(directory)).isDirectory();
+  } catch {
+    isDirectory = false;
+  }
+  if (!isDirectory) {
+    throw notFound("no such pack");
+  }
+  return directory;
+}
+
+/**
+ * A file of a pack of the directory, opened for its bytes to be sent as they are (ADR-0077):
+ * under the pack's directory and through no symbolic link, else nothing. Whether the file is
+ * one the pack serves is the caller's to know, from the index.
+ */
+export async function openPackFile(
+  root: string,
+  coordinates: RepoCoordinates,
+  path: RepoPath,
+): Promise<WorkingTreeFile | undefined> {
+  try {
+    return await openWorkingTreeFile(await packDirectoryOf(resolve(root), coordinates), path);
+  } catch {
+    return undefined;
+  }
+}
+
 export function createDirectoryHost(options: DirectoryHostOptions): GitHost {
   const root = resolve(options.root);
   /** The last read of each pack, by `owner/name`: what `getTree` and `readBlob` answer from. */
@@ -58,30 +109,8 @@ export function createDirectoryHost(options: DirectoryHostOptions): GitHost {
   const keyOf = (coordinates: RepoCoordinates): string =>
     `${coordinates.owner}/${coordinates.repo}`;
 
-  /** The directory of a pack, or nothing, in the words of any name that is nothing. */
-  const directoryOf = async (coordinates: RepoCoordinates): Promise<string> => {
-    const { host, owner, repo } = coordinates;
-    if (host !== LOCAL_HOST_KEY || !NAME.test(owner) || !NAME.test(repo)) {
-      throw notFound("no such pack");
-    }
-    const directory = join(root, owner, repo);
-    if (!directory.startsWith(`${root}${sep}`)) {
-      throw notFound("no such pack");
-    }
-    let isDirectory = false;
-    try {
-      isDirectory = (await stat(directory)).isDirectory();
-    } catch {
-      isDirectory = false;
-    }
-    if (!isDirectory) {
-      throw notFound("no such pack");
-    }
-    return directory;
-  };
-
   const read = async (coordinates: RepoCoordinates): Promise<Read> => {
-    const directory = await directoryOf(coordinates);
+    const directory = await packDirectoryOf(root, coordinates);
     let files: LocalFile[];
     try {
       files = (await readWorkingTree(directory, options.limits)).files;
@@ -109,9 +138,20 @@ export function createDirectoryHost(options: DirectoryHostOptions): GitHost {
     return read_;
   };
 
+  /** The bytes of a file of a read: read with the tree, or from disk now; a file that changed meanwhile is a changed directory. */
+  const bytesOfFile = async (file: LocalFile): Promise<Uint8Array | undefined> => {
+    try {
+      return await bytesOf(file);
+    } catch (error) {
+      throw new GitHostError("transient", "the directory changed while it was read", {
+        cause: error,
+      });
+    }
+  };
+
   return {
     async getRepository(coordinates): Promise<HostRepository> {
-      await directoryOf(coordinates);
+      await packDirectoryOf(root, coordinates);
       return {
         hostRepoId: keyOf(coordinates),
         owner: { hostAccountId: coordinates.owner, login: coordinates.owner, kind: "organization" },
@@ -135,27 +175,39 @@ export function createDirectoryHost(options: DirectoryHostOptions): GitHost {
     async readBlob(coordinates, hash, maxBytes): Promise<Uint8Array> {
       const current = reads.get(keyOf(coordinates)) ?? (await read(coordinates));
       const file = current.byHash.get(hash);
-      if (file?.bytes === undefined) {
+      if (file === undefined || (file.bytes === undefined && file.read === undefined)) {
         throw notFound("no such file in the pack");
       }
-      if (file.bytes.byteLength > maxBytes) {
+      if (file.entry.size > maxBytes) {
         throw new GitHostError("invalid", "the file is larger than the limit");
       }
-      return file.bytes;
+      const bytes = await bytesOfFile(file);
+      if (bytes === undefined) {
+        throw notFound("no such file in the pack");
+      }
+      return bytes;
     },
-    // The files were read with the tree: the archive is the same bytes, in one pass.
+    // The files were read with the tree, or are read from disk now: the archive is the same
+    // bytes, in one pass.
     async *readArchive(coordinates, commit, request: ArchiveRequest): AsyncIterable<ArchiveFile> {
       const { files } = await readAt(coordinates, commit);
       let total = 0;
       for (const file of files) {
-        if (file.bytes === undefined || !request.wants(file.entry.path, file.entry.size)) {
+        if (
+          (file.bytes === undefined && file.read === undefined) ||
+          !request.wants(file.entry.path, file.entry.size)
+        ) {
           continue;
         }
-        total += file.bytes.byteLength;
+        const bytes = await bytesOfFile(file);
+        if (bytes === undefined) {
+          continue;
+        }
+        total += bytes.byteLength;
         if (total > request.maxArchiveBytes) {
           return;
         }
-        yield { path: file.entry.path, bytes: file.bytes };
+        yield { path: file.entry.path, bytes };
       }
     },
   };

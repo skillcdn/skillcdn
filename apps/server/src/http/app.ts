@@ -88,6 +88,7 @@ import {
   CORS_MAX_AGE_SECONDS,
   hostFailure,
   mountBody,
+  type RestDependencies,
   registerRest,
   searchCacheControl,
 } from "./rest.js";
@@ -134,6 +135,8 @@ export interface AppDependencies {
   readonly search?:
     | { readonly cacheMs: number; readonly sitemapTerms: readonly string[] }
     | undefined;
+  /** The bytes of a file of a pack of the deployment's own directory, for the `raw` route (ADR-0077). */
+  readonly rawFile?: RestDependencies["rawFile"];
   /**
    * The git host's events and what applies them (ADR-0038). Left out, the deployment receives
    * none, and what it remembers ends when its time is up.
@@ -594,6 +597,7 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
     hub: dependencies.hub,
     searchCacheMs: dependencies.search?.cacheMs,
     hooks: usageHooksOf(tools),
+    rawFile: dependencies.rawFile,
     mountOf: async (address) => {
       try {
         const mount = await mounts.resolve(address);

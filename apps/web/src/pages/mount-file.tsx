@@ -11,7 +11,7 @@ import { Button, Skeleton } from "../components/ui.js";
 import { useI18n } from "../i18n/index.js";
 import { Link } from "../navigation.js";
 import { mountHref } from "../router.js";
-import { hostRawUrl } from "./host-links.js";
+import { hostOpenUrl, hostRawUrl } from "./host-links.js";
 import styles from "./mount.module.css";
 import { contentHref, MountPath, parentDirectory } from "./mount-path.js";
 
@@ -157,10 +157,20 @@ export function MountFile(props: {
     );
   }
   if (first.state === "error") {
+    // A picture, an original or a file over the read limit is not shown here, and is not a dead
+    // end either: it is opened where its bytes are (ADR-0077).
+    const elsewhere = first.error.code === "file.not_text" || first.error.code === "file.too_large";
     return (
       <div className={styles.stack}>
         {back}
         <ErrorCallout error={first.error} onRetry={first.reload} />
+        {elsewhere && (
+          <p>
+            <a href={hostOpenUrl(mount, path)} target="_blank" rel="noopener noreferrer">
+              {t.file.openAtSource}
+            </a>
+          </p>
+        )}
       </div>
     );
   }

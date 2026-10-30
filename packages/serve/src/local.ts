@@ -10,12 +10,14 @@ import {
   type MountOverview,
   mountBody,
   parseAddress,
+  REST_ROUTES,
+  type RepoPath,
   type RestMount,
 } from "@skillcdn/core";
 import type { Reader } from "@skillcdn/reader";
 import { type Context, Hono } from "hono";
 import type { ServedMount } from "./mount.js";
-import { errorBody, registerAddressRoutes } from "./rest.js";
+import { errorBody, type RawFile, registerAddressRoutes } from "./rest.js";
 import { createMountServer, type ServeLogger, type ToolDependencies } from "./tools.js";
 
 // A server of a machine's own (ADR-0053, ADR-0057): the mounts it was given, served as a
@@ -29,6 +31,22 @@ export interface LocalServerOptions<M extends ServedMount> {
   readonly clock: Clock;
   readonly logger: ServeLogger;
   readonly server: ToolDependencies<M>["server"];
+  /**
+   * The bytes of a file of a mount, as they are, for the `raw` route (ADR-0077): over HTTP a
+   * file of this machine is sent from here, since its path means nothing to a client elsewhere.
+   */
+  readonly rawFile?: ((mount: M, path: RepoPath) => Promise<RawFile | undefined>) | undefined;
+}
+
+/**
+ * A mount as it is served over HTTP at `origin` (ADR-0077): where a result sends a reader for
+ * the bytes of a file is this server's own route, which sends them as they are, in place of a
+ * path on this machine, which only a client on this machine could open.
+ */
+export function mountServedAt<M extends ServedMount>(mount: M, origin: string): M {
+  const raw = (path: RepoPath): string =>
+    `${origin}${REST_ROUTES.raw}${formatAddress(mount.address)}?path=${encodeURIComponent(path)}`;
+  return { ...mount, sourceUrl: raw, rawUrl: raw };
 }
 
 /** The `mounts` body of a mount served from a machine: what names it, and no picture. */
@@ -89,8 +107,8 @@ const toolDependencies = <M extends ServedMount>(
 export function createLocalApp<M extends ServedMount>(options: LocalServerOptions<M>): Hono {
   const app = new Hono();
   const { mounts, logger } = options;
-  const resolve = (pathname: string): M | Response => {
-    const parsed = parseAddress(pathname);
+  const resolve = (url: URL, prefix: string): M | Response => {
+    const parsed = parseAddress(url.pathname.slice(prefix.length));
     if (!parsed.ok) {
       return new Response(
         JSON.stringify(errorBody(`address.${parsed.error.code}`, parsed.error.message)),
@@ -101,22 +119,22 @@ export function createLocalApp<M extends ServedMount>(options: LocalServerOption
       );
     }
     const mount = mountOf(mounts, parsed.value);
-    return (
-      mount ??
-      new Response(
-        JSON.stringify(errorBody("mount.repo_not_found", "The repository was not found.")),
-        { status: 404, headers: { "content-type": "application/json" } },
-      )
-    );
+    return mount === undefined
+      ? new Response(
+          JSON.stringify(errorBody("mount.repo_not_found", "The repository was not found.")),
+          { status: 404, headers: { "content-type": "application/json" } },
+        )
+      : mountServedAt(mount, url.origin);
   };
   const mountAt = async (c: Context, prefix: string): Promise<M | Response> =>
-    resolve(new URL(c.req.url).pathname.slice(prefix.length));
+    resolve(new URL(c.req.url), prefix);
 
   registerAddressRoutes(app, {
     reader: options.reader,
     logger,
     mountAt,
     mountBody: localMountBody,
+    rawFile: options.rawFile,
   });
 
   app.get("/", (c) =>
@@ -134,14 +152,12 @@ export function createLocalApp<M extends ServedMount>(options: LocalServerOption
   const mcp = createMcpHandler(
     async (context) => {
       const request = context.requestInfo;
-      const pathname = request === undefined ? "" : new URL(request.url).pathname;
-      const mount = resolve(pathname);
-      if (mount instanceof Response) {
+      const url = request === undefined ? undefined : new URL(request.url);
+      const mount = url === undefined ? undefined : resolve(url, "");
+      if (mount === undefined || mount instanceof Response) {
         throw new Error("no mount was resolved for this request");
       }
-      return await createMountServer(mount, toolDependencies(options), {
-        origin: request === undefined ? undefined : new URL(request.url).origin,
-      });
+      return await createMountServer(mount, toolDependencies(options), { origin: url?.origin });
     },
     { onerror: (error) => logger.warn({ err: error }, "mcp handler error") },
   );

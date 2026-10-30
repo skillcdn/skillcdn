@@ -82,6 +82,10 @@ describe("repository instructions", () => {
     const text = renderInstructions({ status: "ready", catalog });
     expect(text).toContain("Author title: Author description.");
     expect(text).toContain("read_repo_file README.md");
+    // The manifest is in no folder listing: the model is told where the pack's metadata is.
+    expect(text).toContain(
+      "Manifest: read_repo_file SKILLCDN.md for the pack's metadata and rules.",
+    );
     expect(text).not.toContain("README summary");
     expect(describeFindTool({ status: "ready", catalog })).toContain("Author description.");
   });

@@ -58,6 +58,102 @@ export function classifyRepoFile(path: RepoPath): RepoFileKind {
   return lowerName.endsWith(".json") ? "json" : "other";
 }
 
+/** The extension of a file's name, lower-case and without the dot; empty when it has none. */
+export function extensionOf(path: RepoPath): string {
+  const name = baseName(path);
+  const dot = name.lastIndexOf(".");
+  return dot <= 0 ? "" : name.slice(dot + 1).toLowerCase();
+}
+
+/** The extensions of pictures, as a document links to them; an SVG is one, though it is text. */
+const IMAGE_EXTENSIONS: ReadonlySet<string> = new Set([
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "webp",
+  "avif",
+  "bmp",
+  "tif",
+  "tiff",
+  "ico",
+  "heic",
+  "heif",
+  "svg",
+]);
+
+/**
+ * The extensions of files that are never text: pictures, the originals documents are converted
+ * from, archives, media, fonts and programs. A read answers such a file with where its bytes are
+ * without fetching them (ADR-0077); an extension not named here is judged by the bytes.
+ */
+const BINARY_EXTENSIONS: ReadonlySet<string> = new Set([
+  ...[...IMAGE_EXTENSIONS].filter((extension) => extension !== "svg"),
+  "psd",
+  "ai",
+  "pdf",
+  "doc",
+  "docx",
+  "xls",
+  "xlsx",
+  "ppt",
+  "pptx",
+  "odt",
+  "ods",
+  "odp",
+  "hwp",
+  "hwpx",
+  "epub",
+  "zip",
+  "gz",
+  "tgz",
+  "bz2",
+  "xz",
+  "zst",
+  "7z",
+  "rar",
+  "tar",
+  "jar",
+  "mp3",
+  "mp4",
+  "m4a",
+  "m4v",
+  "mov",
+  "avi",
+  "mkv",
+  "webm",
+  "wav",
+  "flac",
+  "ogg",
+  "opus",
+  "woff",
+  "woff2",
+  "ttf",
+  "otf",
+  "eot",
+  "exe",
+  "dll",
+  "so",
+  "dylib",
+  "bin",
+  "wasm",
+  "class",
+  "pyc",
+  "sqlite",
+  "db",
+  "parquet",
+]);
+
+/** Whether a path names a picture, by its extension. */
+export function isImagePath(path: RepoPath): boolean {
+  return IMAGE_EXTENSIONS.has(extensionOf(path));
+}
+
+/** Whether a path names a file that is known never to be text, by its extension. */
+export function isBinaryPath(path: RepoPath): boolean {
+  return BINARY_EXTENSIONS.has(extensionOf(path));
+}
+
 /**
  * The skill a file belongs to: the nearest directory, walking up from the file, that is in
  * `skillDirectories`. A nested skill owns its own files; the outer skill does not.

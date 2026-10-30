@@ -19,8 +19,29 @@ export interface MarkdownReferenceInspection {
   readonly truncated: boolean;
 }
 
-/** Resolve one local Markdown destination, decoding it once and never escaping the repository. */
-export function resolveMarkdownReference(source: RepoPath, href: string): RepoPath | undefined {
+/** One local link of a document that is not a reference: a picture, or a file that is not Markdown. */
+export interface MarkdownLink {
+  /** The author's destination, including any fragment. */
+  readonly href: string;
+  /** The resolved path from the repository root, with no fragment. */
+  readonly path: RepoPath;
+  /** For a picture: its alternative text, trimmed; empty when it has none. */
+  readonly alt?: string;
+}
+
+/** Every local link of a document, by what it names. */
+export interface MarkdownLinkInspection extends MarkdownReferenceInspection {
+  /** The pictures, `![alt](...)`, with their alternative text. */
+  readonly images: readonly MarkdownLink[];
+  /** The links to files that are neither Markdown nor pictures: originals, data, scripts. */
+  readonly files: readonly MarkdownLink[];
+}
+
+/**
+ * Resolve one local destination to a file of the repository, whatever the file is, decoding it
+ * once and never escaping the repository; `undefined` for a URL, an anchor or a path that leaves.
+ */
+export function resolveLocalLink(source: RepoPath, href: string): RepoPath | undefined {
   if (href.length === 0 || href.length > MAX_REPO_PATH_LENGTH || href.startsWith("#")) {
     return undefined;
   }
@@ -33,12 +54,17 @@ export function resolveMarkdownReference(source: RepoPath, href: string): RepoPa
   if (
     destination.length === 0 ||
     destination.startsWith("//") ||
-    /^[a-z][a-z0-9+.-]*:/i.test(destination) ||
-    !destination.toLowerCase().endsWith(".md")
+    /^[a-z][a-z0-9+.-]*:/i.test(destination)
   ) {
     return undefined;
   }
   return resolveRepoPath(parentDirectory(source), destination);
+}
+
+/** Resolve one local Markdown destination, decoding it once and never escaping the repository. */
+export function resolveMarkdownReference(source: RepoPath, href: string): RepoPath | undefined {
+  const path = resolveLocalLink(source, href);
+  return path?.toLowerCase().endsWith(".md") ? path : undefined;
 }
 
 /** Remove code and front-matter before interpreting link syntax. */
@@ -146,7 +172,7 @@ const labelKey = (label: string): string => label.trim().replace(/\s+/g, " ").to
 const MAX_LABEL_LENGTH = 999;
 
 /**
- * Every `[label]` whose label has one to {@link MAX_LABEL_LENGTH} characters and no closing
+ * Every `[label]` whose label has up to {@link MAX_LABEL_LENGTH} characters and no closing
  * bracket or line break inside, left to right and without overlap: what the pattern
  * `\[([^\]\n]{1,999})\]` finds, in linear time. The pattern itself rescans up to the length bound
  * from every opening bracket, which a text of brackets that never close turns into a quadratic
@@ -168,7 +194,8 @@ function* bracketedLabels(
     if (closing === text.length) return;
     if (lineBreak < at) lineBreak = nextOrEnd("\n", at + 1);
     const length = closing - at - 1;
-    if (length >= 1 && length <= MAX_LABEL_LENGTH && lineBreak > closing) {
+    // An empty label is a link with no text, or a picture with no words: the latter is reported.
+    if (length <= MAX_LABEL_LENGTH && lineBreak > closing) {
       yield { index: at, end: closing + 1, label: text.slice(at + 1, closing) };
       at = text.indexOf("[", closing + 1);
     } else {
@@ -194,7 +221,21 @@ export function inspectMarkdownReferences(
   source: RepoPath,
   markdown: string,
 ): MarkdownReferenceInspection {
-  if (markdown.length > MAX_LINK_MARKDOWN_LENGTH) return { references: [], truncated: true };
+  const { references, truncated } = inspectMarkdownLinks(source, markdown);
+  return { references, truncated };
+}
+
+/**
+ * Every local link in prose, by what it names: the Markdown files, which are the references
+ * that extend what is readable; the pictures, with their alternative text; and the other files.
+ * Inline, full, collapsed and shortcut forms, for links and pictures alike. Code, external URLs,
+ * malformed encodings and paths outside the repository are ignored, and each list stops at
+ * {@link MAX_MARKDOWN_REFERENCES}, which `truncated` says.
+ */
+export function inspectMarkdownLinks(source: RepoPath, markdown: string): MarkdownLinkInspection {
+  if (markdown.length > MAX_LINK_MARKDOWN_LENGTH) {
+    return { references: [], images: [], files: [], truncated: true };
+  }
   const text = prose(markdown);
   const definitions = new Map<string, string>();
   const withoutDefinitions = text.replace(
@@ -207,15 +248,15 @@ export function inspectMarkdownReferences(
     },
   );
   const references: MarkdownReference[] = [];
+  const images: MarkdownLink[] = [];
+  const files: MarkdownLink[] = [];
   const seen = new Set<string>();
+  let truncated = false;
   for (const match of bracketedLabels(withoutDefinitions)) {
     const at = match.index;
-    if (
-      escaped(withoutDefinitions, at) ||
-      withoutDefinitions[at - 1] === "!" ||
-      withoutDefinitions[at - 1] === "]"
-    )
-      continue;
+    // The second bracket of a full reference link is the label of the first, not a link.
+    if (escaped(withoutDefinitions, at) || withoutDefinitions[at - 1] === "]") continue;
+    const image = withoutDefinitions[at - 1] === "!" && !escaped(withoutDefinitions, at - 1);
     const after = match.end;
     let href: string | undefined;
     if (withoutDefinitions[after] === "(") {
@@ -234,13 +275,24 @@ export function inspectMarkdownReferences(
     } else {
       href = definitions.get(labelKey(match.label));
     }
-    if (href === undefined || seen.has(href)) continue;
-    const path = resolveMarkdownReference(source, href);
-    if (path !== undefined) {
-      if (references.length >= MAX_MARKDOWN_REFERENCES) return { references, truncated: true };
-      seen.add(href);
+    if (href === undefined) continue;
+    const key = `${image ? "!" : ""}${href}`;
+    if (seen.has(key)) continue;
+    const path = resolveLocalLink(source, href);
+    if (path === undefined) continue;
+    const list = image ? images : path.toLowerCase().endsWith(".md") ? references : files;
+    if (list.length >= MAX_MARKDOWN_REFERENCES) {
+      truncated = true;
+      continue;
+    }
+    seen.add(key);
+    if (image) {
+      images.push({ href, path, alt: match.label.trim().replace(/\s+/g, " ") });
+    } else if (list === references) {
       references.push({ href, path });
+    } else {
+      files.push({ href, path });
     }
   }
-  return { references, truncated: false };
+  return { references, images, files, truncated };
 }

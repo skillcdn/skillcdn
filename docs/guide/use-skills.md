@@ -1,6 +1,6 @@
 # Use skills from your AI
 
-A skill is a set of instructions an AI app follows to do one kind of work well: write release notes in the house style, turn a product picture into a short ad, review a change for the things a linter cannot see. A git repository that holds skills is a pack, and SkillCDN serves the pack to the AI you already use, through one address. This page is for the person using the skills; writing them is [its own page](write-a-repository.md).
+A skill is a set of instructions an AI app follows to do one kind of work well: write release notes in the house style, turn a product picture into a short ad, review a change for the things a linter cannot see. A git repository that holds skills is a pack, and SkillCDN serves the pack to the AI you already use, through one address. This page is for the person using the skills; writing them is [its own page](write-skills.md), and a pack in general [another](write-a-repository.md).
 
 ## What you need
 

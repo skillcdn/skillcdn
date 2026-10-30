@@ -8,6 +8,7 @@ import type {
   BrowseEntry,
   BrowseResult,
   DirectoryResult,
+  DocumentSource,
   FileOutline,
   FileResult,
   FindItem,
@@ -25,6 +26,7 @@ import type {
   RestBrowse,
   RestBrowseEntry,
   RestDiagnostic,
+  RestDocumentSource,
   RestFile,
   RestFileOutline,
   RestFind,
@@ -197,6 +199,7 @@ function entriesOf(entries: readonly RestBrowseEntry[]): BrowseEntry[] {
         description: entry.description,
         skillCount: entry.skillCount,
         documentCount: entry.documentCount,
+        ...(entry.imageCount === undefined ? {} : { imageCount: entry.imageCount }),
         size: entry.size,
         manifestPath: entry.manifestPath,
         language: entry.language,
@@ -225,7 +228,29 @@ function outlineOf(outline: RestFileOutline | undefined): FileOutline | undefine
     ...(outline.unavailable === undefined ? {} : { unavailable: outline.unavailable }),
     ...(outline.license === undefined ? {} : { license: licenseOf(outline.license) }),
     ...(outline.sourceUrl === undefined ? {} : { sourceUrl: outline.sourceUrl }),
+    ...(outline.lfs === undefined ? {} : { lfs: { size: outline.lfs.size } }),
+    ...(outline.images === undefined
+      ? {}
+      : {
+          images: outline.images.flatMap((image) => {
+            const imagePath = pathOf(image.path);
+            return imagePath === undefined ? [] : [{ path: imagePath, alt: image.alt }];
+          }),
+        }),
+    ...(outline.sources === undefined ? {} : { sources: sourcesOf(outline.sources) }),
   };
+}
+
+/** What a document says it was made from, as the result has it; a path that is not one is dropped. */
+function sourcesOf(sources: readonly RestDocumentSource[]): DocumentSource[] {
+  return sources.map((source) => {
+    const path = source.path === undefined ? undefined : pathOf(source.path);
+    return {
+      text: source.text,
+      ...(path === undefined ? {} : { path }),
+      ...(source.url === undefined ? {} : { url: source.url }),
+    };
+  });
 }
 
 /** A `browse` answer as the result it was made from; `undefined` when its path is not one. */
@@ -238,10 +263,12 @@ export function browseResultOf(
     return undefined;
   }
   const outline = outlineOf(body.outline);
+  const manifestPath = body.manifestPath === undefined ? undefined : pathOf(body.manifestPath);
   return {
     mount: summaryAt(mount, body.commit),
     path,
     overview: overviewOf(body.overview),
+    ...(manifestPath === undefined ? {} : { manifestPath }),
     ...(outline === undefined ? {} : { outline }),
     entries: entriesOf(body.entries),
     nextCursor: orUndefined(body.nextCursor),
@@ -320,6 +347,7 @@ function findItemOf(item: RestFindItem): FindItem[] {
                   excerpt: orUndefined(section.excerpt),
                 })),
               }),
+          ...(item.overview === true ? { overview: true } : {}),
         },
       ];
 }
@@ -429,6 +457,7 @@ export function fileResultOf(
     nextOffset: orUndefined(body.nextOffset),
     totalLength: body.totalLength,
     references: [...(body.references ?? [])],
+    ...(body.sources === undefined ? {} : { sources: sourcesOf(body.sources) }),
   };
 }
 
