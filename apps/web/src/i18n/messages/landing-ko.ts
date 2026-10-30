@@ -264,7 +264,7 @@ export const landingKo: LandingMessages = {
   },
   packs: {
     eyebrow: "스킬 팩",
-    title: "남이 만든 스킬 팩도, 내 저장소도 주소 하나로 엽니다.",
+    title: "다양한 전문가 스킬 팩을 주소 하나로 만나보세요.",
     lead: "검증된 팩부터 둘러보세요. 내 GitHub 저장소는 주소를 넣으면 바로 팩으로 열립니다.",
     all: "추천 팩 모두 보기",
     skills: (count: number) => `스킬 ${count}개`,

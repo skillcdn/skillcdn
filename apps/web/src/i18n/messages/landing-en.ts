@@ -296,7 +296,7 @@ export const landingEn = {
   },
   packs: {
     eyebrow: "Skill packs",
-    title: "Open any skill pack, or your own repository, by its address.",
+    title: "Meet expert skill packs of every kind, each by one address.",
     lead: "Start with the verified packs. Enter the address of your own GitHub repository, and it opens as a pack.",
     all: "See all featured packs",
     skills: (count: number) => (count === 1 ? "1 skill" : `${count} skills`),
