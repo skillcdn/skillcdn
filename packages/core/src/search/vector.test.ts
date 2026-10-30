@@ -48,21 +48,22 @@ describe("searchFieldsOf", () => {
   });
 
   it("weighs the headings of the body with the words of the path, above the body", () => {
-    const fields = searchFieldsOf({ path: "docs/items.md", title: "Items" }, "# Items\n\nText.", [
-      "Items",
-      "Data Item I048/020",
-    ]);
-    expect(fields[2]).toEqual({ weight: "C", text: "docs items md Items Data Item I048/020" });
+    const fields = searchFieldsOf(
+      { path: "docs/faults.md", title: "Faults" },
+      "# Faults\n\nText.",
+      ["Faults", "Fault code E214/070"],
+    );
+    expect(fields[2]).toEqual({ weight: "C", text: "docs faults md Faults Fault code E214/070" });
     // The code in a heading outranks the same code in a table of a document as short.
     const headed = searchVectorOf(
-      searchFieldsOf({ path: "docs/a.md" }, "## Data Item I048/020\n\nThe item.", [
-        "Data Item I048/020",
+      searchFieldsOf({ path: "docs/a.md" }, "## Fault code E214/070\n\nThe fault.", [
+        "Fault code E214/070",
       ]),
     );
     const listed = searchVectorOf(
-      searchFieldsOf({ path: "docs/b.md" }, "| I048/020 | changed |\n\nThe item.", []),
+      searchFieldsOf({ path: "docs/b.md" }, "| E214/070 | cleared |\n\nThe fault.", []),
     );
-    const query = ["i048/020"];
+    const query = ["e214/070"];
     expect(rankSearchVector(headed, query)).toBeGreaterThan(rankSearchVector(listed, query));
   });
 

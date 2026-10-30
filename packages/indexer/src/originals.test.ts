@@ -213,16 +213,16 @@ describe("what the reading rules say of a document's links, pictures and origina
       hostOf(
         {
           "SKILLCDN.md": MANIFEST,
-          "docs/items.md":
-            "# Items\n\nAn introduction.\n\n## Data Item I048/020\n\nThe target report descriptor.\n",
+          "docs/faults.md":
+            "# Faults\n\nAn introduction.\n\n## Fault code E214/070\n\nThe heater stays cold.\n",
         },
         false,
       ),
     );
-    const vector = parseSearchVector(result.byPath.get("docs/items.md")?.search ?? "");
-    const code = vector.get("i048/020");
+    const vector = parseSearchVector(result.byPath.get("docs/faults.md")?.search ?? "");
+    const code = vector.get("e214/070");
     expect(code?.map((position) => position.weight)).toEqual(["C", "D"]);
-    expect(vector.get("descriptor")?.map((position) => position.weight)).toEqual(["D"]);
+    expect(vector.get("cold")?.map((position) => position.weight)).toEqual(["D"]);
   });
 });
 
