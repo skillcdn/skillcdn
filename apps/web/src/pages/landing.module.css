@@ -460,7 +460,9 @@
 /* The cloud: pills of the well-known packs, each a little off the line of the one before, so
    that the side reads as a scatter of names and not as a list. They are stars, of a kind: they
    drift a little by themselves, and the one under the pointer lights up and grows. All of it is
-   animations of transforms: nothing runs per frame. */
+   animations of transforms: nothing runs per frame. One can also be taken hold of and pulled
+   about (`use-cloud-drag.ts`): it follows the pointer, the others move out of its way, and they
+   all drift back once it is let go, by a transition of the place each is given. */
 .cloudSide {
   position: relative;
 }
@@ -491,8 +493,12 @@
   --lift: 0px;
   --shift: 0px;
   --tilt: 0deg;
-  translate: var(--shift) var(--lift);
+  /* Where a pull has put it, written on the element while one is held, and 0 again after. */
+  --dx: 0px;
+  --dy: 0px;
+  translate: calc(var(--shift) + var(--dx)) calc(var(--lift) + var(--dy));
   rotate: var(--tilt);
+  transition: translate var(--cloud-settle);
 }
 
 .cloud li:nth-child(1) {
@@ -1237,5 +1243,38 @@
   to {
     opacity: 1;
     translate: 0 0;
+  }
+}
+
+/* A pill of the cloud in hand (`use-cloud-drag.ts`): while one is held, the others step aside
+   quickly, and the held one follows at once. It keeps the lit look of the pointer being over
+   it, which on a touch screen it is not, and holds still in its own drift so that it stays
+   where the finger has it. Last in the sheet, since these outrank every rule on a pill. */
+.cloud[data-dragging] li {
+  transition: translate var(--cloud-push);
+}
+
+.cloud li[data-held] {
+  z-index: 1;
+  transition: none;
+}
+
+.cloud li[data-held],
+.cloud li[data-held] .pill {
+  animation-play-state: paused;
+}
+
+.cloud li[data-held] .pill {
+  border-color: var(--color-accent);
+  background: var(--color-glass-hover);
+  box-shadow: var(--glow-strong);
+  scale: var(--cloud-grow);
+  cursor: grabbing;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cloud li,
+  .cloud[data-dragging] li {
+    transition: none;
   }
 }

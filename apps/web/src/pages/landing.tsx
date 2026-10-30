@@ -1,4 +1,4 @@
-import type { LandingSection } from "@skillcdn/core";
+import type { LandingSection, RestFeatured } from "@skillcdn/core";
 import { useEffect, useRef } from "react";
 import { track } from "../analytics.js";
 import { api } from "../api/client.js";
@@ -12,6 +12,7 @@ import { OrganizationsStrip } from "../components/organizations-strip.js";
 import { SearchForm } from "../components/search-form.js";
 import { ShowcaseGrid } from "../components/showcase-card.js";
 import { ArrowIcon, Container, cx, ExternalIcon, VerifiedMark } from "../components/ui.js";
+import { useCloudDrag } from "../components/use-cloud-drag.js";
 import { AUTHORS_GUIDE_SLUG, USE_GUIDE_SLUG } from "../docs/catalog.js";
 import { useFeatures } from "../features.js";
 import { useI18n } from "../i18n/index.js";
@@ -182,7 +183,6 @@ function SectionHead(props: {
  * load it leaves the address field to speak for the section.
  */
 function PackCloud() {
-  const { t } = useI18n();
   const featured = useResource("featured", (signal) => api.featured(signal));
   if (featured.state !== "ready") {
     return null;
@@ -197,9 +197,16 @@ function PackCloud() {
   if (items.length === 0) {
     return null;
   }
+  return <Cloud items={items.slice(0, 9)} />;
+}
+
+/** The cloud itself: the pills, which can be pulled about with the pointer. */
+function Cloud(props: { readonly items: RestFeatured["items"] }) {
+  const { t } = useI18n();
+  const cloud = useCloudDrag<HTMLUListElement>();
   return (
-    <ul className={styles.cloud}>
-      {items.slice(0, 9).map((item) => (
+    <ul ref={cloud} className={styles.cloud}>
+      {props.items.map((item) => (
         <li key={item.address}>
           <Link className={styles.pill} href={item.address}>
             <span className={styles.pillOwner}>{item.repository.owner}/</span>
