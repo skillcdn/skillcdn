@@ -640,12 +640,11 @@
   font-size: var(--text-xs);
 }
 
-/* The builders: one pane across the page, lit from its corner. */
-/* The invitation on the left, what a builder gets as four numbered tiles on the right. */
+/* The builders: one pane across the page, lit from its corner, read top to bottom: the promise
+   and what it means side by side, what a builder gets in one row of four, and the way in along
+   the foot. */
 .buildersPanel {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
-  align-items: center;
   gap: var(--space-8);
   overflow: hidden;
   padding: var(--space-8);
@@ -663,35 +662,44 @@
   pointer-events: none;
 }
 
-/* A second, softer light behind the invitation, answering the one in the far corner. */
-.buildersIntro {
+/* The title on the left, the lead beside it on the line of its last row; a softer light behind
+   the title answers the one in the far corner. */
+.buildersHead {
   position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: end;
+  gap: var(--space-5) var(--space-8);
 }
 
-.buildersIntro::before {
+.buildersHead::before {
   content: "";
   position: absolute;
   z-index: -1;
-  top: -40%;
-  left: -30%;
-  width: 90%;
+  top: -120%;
+  left: -20%;
+  width: 60%;
   aspect-ratio: 1;
   background: var(--builders-glow);
   opacity: 0.55;
   pointer-events: none;
 }
 
-.buildersIntro .sectionLead {
-  max-width: var(--width-prose);
+.buildersHead h2 {
+  text-wrap: balance;
 }
 
-/* The four tiles stand staggered, the right column a step lower, so that they read as cards
-   laid down rather than a table. Each is a sheet of glass on the glass, lit along its top edge,
-   with its number set as code. */
+.buildersHead .sectionLead {
+  margin-top: 0;
+  text-wrap: pretty;
+}
+
+/* What a builder gets: four columns under one rule, a hairline between them, each with its
+   number large and set as code and a stroke of the accent where its column meets the rule. */
 .features {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-4);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid var(--color-glass-edge);
   counter-reset: feature;
 }
 
@@ -700,26 +708,25 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: var(--space-5);
-  border: 1px solid var(--color-glass-edge);
-  border-radius: var(--radius-lg);
-  background: linear-gradient(160deg, var(--color-glass-hover), transparent 70%), var(--glass-tint);
-  box-shadow: var(--glass-lift);
+  padding: var(--space-6) var(--space-5) 0;
+  border-left: 1px solid var(--color-glass-edge);
   counter-increment: feature;
 }
 
-.features li:nth-child(even) {
-  translate: 0 var(--space-6);
+.features li:first-child {
+  padding-left: 0;
+  border-left: 0;
 }
 
 .features li::before {
   content: counter(feature, decimal-leading-zero);
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-3);
   color: var(--color-accent);
   font-family: var(--font-mono);
-  font-size: var(--text-sm);
+  font-size: var(--text-2xl);
   font-weight: var(--weight-medium);
   font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 .features li::after {
@@ -734,6 +741,10 @@
   box-shadow: var(--glow);
 }
 
+.features li:first-child::after {
+  left: 0;
+}
+
 .features h3 {
   font-size: var(--text-md);
 }
@@ -744,10 +755,21 @@
   text-wrap: pretty;
 }
 
+/* The foot: who is already in, and the way to join them. */
+.buildersFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4) var(--space-6);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--color-glass-edge);
+}
+
 .many {
-  margin-top: var(--space-5);
-  padding-left: var(--space-4);
-  border-left: 2px solid var(--color-accent);
+  flex: 1;
+  min-width: min(100%, 20rem);
+  max-width: var(--width-prose);
   color: var(--color-text-muted);
   text-wrap: pretty;
 }
@@ -852,9 +874,31 @@
   }
 
   .buildersPanel {
-    grid-template-columns: 1fr;
     gap: var(--space-7);
     padding: var(--space-6);
+  }
+
+  .buildersHead {
+    grid-template-columns: 1fr;
+  }
+
+  /* Two by two: the hairline stays between the two of a row, and a rule over the second. */
+  .features {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: var(--space-6);
+  }
+
+  .features li:nth-child(odd) {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .features li:nth-child(odd)::after {
+    left: 0;
+  }
+
+  .features li:nth-child(n + 3) {
+    border-top: 1px solid var(--color-glass-edge);
   }
 }
 
@@ -940,13 +984,59 @@
     font-size: var(--text-sm);
   }
 
-  .features {
-    grid-template-columns: 1fr;
-    gap: var(--space-4);
+  /* On a phone the column is too narrow to scatter the pills sideways: each takes a row of its
+     own, set to the left, the right or the middle in turn, so that they still read as a
+     scatter down the whole column and none leaves the screen. */
+  .cloud {
+    flex-direction: column;
+    gap: var(--space-5);
+    margin-top: var(--space-6);
   }
 
-  .features li:nth-child(even) {
-    translate: none;
+  .cloud li:nth-child(n) {
+    --lift: 0px;
+    --shift: 0px;
+    --tilt: 1.5deg;
+    display: flex;
+    justify-content: center;
+  }
+
+  .cloud li:nth-child(3n + 1) {
+    --tilt: -1.5deg;
+    justify-content: flex-start;
+    padding-left: var(--space-2);
+  }
+
+  .cloud li:nth-child(3n + 2) {
+    --tilt: 2deg;
+    justify-content: flex-end;
+    padding-right: var(--space-2);
+  }
+
+  .pill {
+    padding-inline: var(--space-3);
+  }
+
+  /* One under another, each under its own rule. */
+  .features {
+    grid-template-columns: 1fr;
+    row-gap: var(--space-5);
+    border-top: 0;
+  }
+
+  .features li,
+  .features li:nth-child(odd) {
+    padding: var(--space-5) 0 0;
+    border-top: 1px solid var(--color-glass-edge);
+    border-left: 0;
+  }
+
+  .features li::after {
+    left: 0;
+  }
+
+  .features li::before {
+    font-size: var(--text-xl);
   }
 
   .buildersPanel {
@@ -1059,12 +1149,13 @@
   }
 }
 
-/* The steps light up in order as they scroll into view: a line of the accent runs along the
-   hairline, each number lights its ring as the line reaches it, and the step's words rise in
-   under it. The numbers themselves never move, so that the line always runs through them. All
-   of it is driven by the scroll, through the timeline's own pass, and stands as the page is
-   without it where the browser cannot or the visitor asks for less motion. On a phone the steps
-   stand one under another and the line is gone, so each step lights as it comes in. */
+/* The steps light up in order: a line of the accent runs along the hairline, each number lights
+   its ring as the line reaches it, and the step's words rise in under it. The numbers
+   themselves never move, so that the line always runs through them. On a wide screen the page
+   holds its scroll for the moment the play takes, each time the steps come up to the middle of
+   the window (the page sets `data-hold` and plays it with `Element.animate`); the section keeps
+   its place and its size. Elsewhere each step lights as it scrolls in, and under reduced motion, or where the
+   browser cannot, the steps stand as they are. */
 .stepNumber::after {
   content: "";
   position: absolute;
@@ -1080,10 +1171,6 @@
 
 @media (prefers-reduced-motion: no-preference) {
   @supports (animation-timeline: view()) {
-    .timeline {
-      view-timeline-name: --steps-pass;
-    }
-
     .stepNumber::after {
       animation: step-light linear both;
       animation-timeline: view();
@@ -1095,64 +1182,38 @@
       animation-timeline: view();
       animation-range: entry 0% entry 80%;
     }
-
-    @media (min-width: 52.01rem) {
-      .timeline::after {
-        content: "";
-        position: absolute;
-        top: calc(var(--step-number) / 2);
-        right: 0;
-        left: 0;
-        z-index: -1;
-        height: 2px;
-        margin-top: -0.5px;
-        background: linear-gradient(90deg, var(--color-accent-solid), var(--color-accent));
-        box-shadow: var(--glow-strong);
-        transform-origin: left center;
-        animation: step-line linear both;
-        animation-timeline: --steps-pass;
-        animation-range: cover 10% cover 40%;
-      }
-
-      /* Each ring lights where the line passes its number: a third and two thirds of the way. */
-      .stepNumber::after {
-        animation-timeline: --steps-pass;
-        animation-range: cover 10% cover 14%;
-      }
-
-      .timeline li:nth-child(2) .stepNumber::after {
-        animation-range: cover 20% cover 24%;
-      }
-
-      .timeline li:nth-child(3) .stepNumber::after {
-        animation-range: cover 31% cover 35%;
-      }
-
-      /* The words of a step follow its ring, a little behind it. */
-      .timeline li > :not(.stepNumber) {
-        animation-timeline: --steps-pass;
-        animation-range: cover 11% cover 19%;
-      }
-
-      .timeline li:nth-child(2) > :not(.stepNumber) {
-        animation-range: cover 21% cover 29%;
-      }
-
-      .timeline li:nth-child(3) > :not(.stepNumber) {
-        animation-range: cover 32% cover 40%;
-      }
-    }
   }
 }
 
-@keyframes step-line {
-  from {
-    scale: 0 1;
-  }
+.timeline[data-hold]::after {
+  content: "";
+  position: absolute;
+  top: calc(var(--step-number) / 2);
+  right: 0;
+  left: 0;
+  z-index: -1;
+  height: 2px;
+  margin-top: -0.5px;
+  background: linear-gradient(90deg, var(--color-accent-solid), var(--color-accent));
+  box-shadow: var(--glow-strong);
+  transform-origin: left center;
+}
 
-  to {
-    scale: 1 1;
-  }
+.timeline[data-hold] .stepNumber::after,
+.timeline[data-hold] li > :not(.stepNumber) {
+  animation: none;
+}
+
+.timeline[data-hold="waiting"]::after {
+  scale: 0 1;
+}
+
+.timeline[data-hold="waiting"] li > :not(.stepNumber) {
+  opacity: 0;
+}
+
+.timeline[data-hold="done"] .stepNumber::after {
+  opacity: 1;
 }
 
 @keyframes step-light {

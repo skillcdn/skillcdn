@@ -30,6 +30,13 @@ body {
   overflow-wrap: anywhere;
 }
 
+/* The front page holds the document's scroll while its steps play (landing.tsx); the gutter
+   stays, so that nothing shifts sideways as the scroll bar goes. */
+html[data-scroll-held] {
+  overflow: hidden;
+  scrollbar-gutter: stable;
+}
+
 /* A page prerendered in the default language waits, unseen, to be rendered in the visitor's
    language (public/boot.js sets the attribute, the app removes it). */
 html[data-language-pending] #root {
