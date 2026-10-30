@@ -176,6 +176,13 @@
       "when": 1793077131048,
       "tag": "0024_showcase-links-and-organizations",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1793354065502,
+      "tag": "0025_showcase-cuts",
+      "breakpoints": true
     }
   ]
 }

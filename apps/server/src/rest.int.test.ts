@@ -725,6 +725,7 @@ describe("GET /api/v1/showcase", () => {
               demo: null,
             },
           },
+          cuts: {},
         },
       ],
     });

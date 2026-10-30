@@ -590,6 +590,11 @@ export const showcaseEntries = pgTable(
     published: date({ mode: "string" }),
     /** By language tag: the words of the card and of the example conversation. */
     texts: jsonb().$type<Record<string, ShowcaseTexts>>().notNull(),
+    /**
+     * By language tag, the result cut in that language: its own link, or null for the entry's.
+     * The cut's uploads are the rows of `showcase_media` in that language.
+     */
+    cuts: jsonb().$type<Record<string, { link: string | null }>>().notNull().default({}),
     createdAt: createdAt(),
     updatedAt: instant().notNull().defaultNow(),
   },
@@ -627,8 +632,9 @@ export const showcaseOrganizations = pgTable(
 );
 
 /**
- * The upload in each slot of a showcase entry. An entry takes its rows with it; an upload that
- * an entry still shows cannot be deleted.
+ * The upload in each slot of a showcase entry: the entry's own in the empty language, and a
+ * cut's in its language tag. An entry takes its rows with it; an upload that an entry still
+ * shows cannot be deleted.
  */
 export const showcaseMedia = pgTable(
   "showcase_media",
@@ -636,6 +642,8 @@ export const showcaseMedia = pgTable(
     entryId: uuid()
       .notNull()
       .references(() => showcaseEntries.id, { onDelete: "cascade" }),
+    /** The language tag of the cut the upload belongs to; empty for the entry's own. */
+    language: text().notNull().default(""),
     slot: text({
       enum: ["clip", "animation", "poster", "reference", "picture", "social"],
     }).notNull(),
@@ -645,7 +653,7 @@ export const showcaseMedia = pgTable(
     createdAt: createdAt(),
   },
   (table) => [
-    primaryKey({ columns: [table.entryId, table.slot] }),
+    primaryKey({ columns: [table.entryId, table.language, table.slot] }),
     index("showcase_media_sha_idx").on(table.sha),
     check(
       "showcase_media_slot_check",

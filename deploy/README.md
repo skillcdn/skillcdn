@@ -218,13 +218,14 @@ curl -X PUT -H "Authorization: Bearer $ADMIN_TOKEN" -H "content-type: applicatio
 
 An entry is a JSON document:
 
-- `address`: where the card leads, any address such as `/gh/owner/repo` or `/gh/owner/repo@main/skills/ad`: the skill the result was made with.
+- `address`: the skill the result was made with, any address such as `/gh/owner/repo` or `/gh/owner/repo@main/skills/ad`. The card leads to its pack: the address without its path.
 - `link`: where the result itself is: an `https` URL, or a path of the deployment such as an upload (`/media/<sha>`). The card leads to the address, not here; `llms.txt` names the result beside the entry.
 - `origin`: whose work the entry shows: `pack`, a result made with the pack at the address (the default), or `builder`, a builder's own case running on their site, made with that pack.
 - `position`: its place in the list, lowest first; `0` when left out.
 - `width` and `height`: the pixel size of the clip and its poster.
 - `media`: uploads by hash. `poster` is required, a picture of the result at 16:10; `clip` (a video of it), `animation` (the clip as an animated image, for browsers that will not play video) and `social` (a 1200 x 630 picture for link previews) are optional; `reference` and `picture` are kept for an entry written before the pages stopped showing the example conversation. A `clip` needs `durationMs`, one pass of it, and `published`, its date as `YYYY-MM-DD`. An upload may also be a PDF (`application/pdf`), which no slot takes and `link` points at.
 - `texts`: the words by language tag (`en`, `ko`), at least one language. Each has `title` (what was asked, in quotes, is what the cards of the build say), `body` (what came back) and `action` (the words of the way to the result, or to the address without a `link`), and optionally `tags` (up to four), `requirement` (what the skill needs besides the AI app), `clip` (what the poster or the clip shows, for whoever cannot see it), `credit` (what the result came from, said beside whose work it is) and `demo`, an example conversation the pages no longer show. A visitor is shown their language, else the default language of the pages.
+- `cuts`: optional, by language tag: the result cut in that language, for a result with words in it. Each cut has a `link` and `media` with any of `poster`, `clip`, `animation` and `social`, uploads by hash as above; a page in that language shows them in place of the entry's own, and what a cut leaves out is the entry's own. A clip in a cut is the same length as the entry's: `durationMs` and `published` are the entry's.
 
 ```json
 {
@@ -236,6 +237,12 @@ An entry is a JSON document:
   "durationMs": 9500,
   "published": "2026-10-01",
   "media": { "poster": "<sha of poster.webp>", "clip": "<sha of clip.mp4>" },
+  "cuts": {
+    "ko": {
+      "link": "https://example.com/ads/spring-ko",
+      "media": { "poster": "<sha of poster-ko.webp>", "clip": "<sha of clip-ko.mp4>" }
+    }
+  },
   "texts": {
     "en": {
       "title": "“Make a 15-second ad for this product”",

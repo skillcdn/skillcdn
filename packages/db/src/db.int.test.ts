@@ -975,6 +975,7 @@ describe("the landing showcase", () => {
     durationMs: null,
     published: null,
     texts: { en: words },
+    cuts: {},
   };
 
   it("keeps entries by name with the upload in each slot, and refuses uploads that are not there", async () => {
@@ -1036,6 +1037,60 @@ describe("the landing showcase", () => {
     const stored = await getOperatorMedia(database, poster);
     expect(stored).toMatchObject({ contentType: "image/webp", size: 3 });
     expect(Array.from(stored?.bytes ?? [])).toEqual([1, 2, 3]);
+
+    // A cut of the result in another language has uploads of its own in the same slots, and
+    // may have a link of its own; a cut names only uploads that exist, like the entry.
+    const koClip = "k".repeat(64);
+    expect(
+      await putShowcaseEntry(database, {
+        ...base,
+        media: { poster, clip },
+        cuts: { ko: { link: null, media: { clip: koClip } } },
+      }),
+    ).toEqual({ outcome: "media_missing", missing: [koClip] });
+    await putOperatorMedia(database, {
+      sha: koClip,
+      contentType: "video/mp4",
+      bytes: new Uint8Array([6]),
+    });
+    expect(
+      await putShowcaseEntry(database, {
+        ...base,
+        durationMs: 8000,
+        published: "2026-10-01",
+        media: { poster, clip },
+        cuts: {
+          ko: { link: `/media/${koClip}`, media: { clip: koClip, poster } },
+          fr: { link: "https://example.com/fr", media: {} },
+        },
+      }),
+    ).toEqual({ outcome: "updated" });
+    const [cut] = await listShowcaseEntries(database);
+    expect(cut?.media).toEqual({
+      poster: { sha: poster, contentType: "image/webp" },
+      clip: { sha: clip, contentType: "video/mp4" },
+    });
+    expect(cut?.cuts).toEqual({
+      ko: {
+        link: `/media/${koClip}`,
+        media: {
+          clip: { sha: koClip, contentType: "video/mp4" },
+          poster: { sha: poster, contentType: "image/webp" },
+        },
+      },
+      fr: { link: "https://example.com/fr", media: {} },
+    });
+    // An upload a cut shows is in use; replacing the entry without the cut frees it. The entry
+    // is left as the test after this one expects it: with its poster and its clip.
+    expect(await removeOperatorMedia(database, koClip)).toBe("in_use");
+    await putShowcaseEntry(database, {
+      ...base,
+      durationMs: 8000,
+      published: "2026-10-01",
+      media: { poster, clip },
+    });
+    expect((await listShowcaseEntries(database))[0]?.cuts).toEqual({});
+    expect(await removeOperatorMedia(database, koClip)).toBe("removed");
   });
 
   it("keeps organizations by name with the upload that is their mark", async () => {

@@ -505,6 +505,78 @@ describe("the landing showcase in the admin API (ADR-0028)", () => {
     });
   });
 
+  it("cuts an entry's result per language, each cut from uploads of its own", async () => {
+    const h = createHarness(testDatabase, { adminToken: TOKEN });
+    const bytes = (text: string) => new TextEncoder().encode(text);
+    const poster = (await (await upload(h, bytes("poster"), "image/webp")).json()) as Uploaded;
+    const clip = (await (await upload(h, bytes("clip"), "video/mp4")).json()) as Uploaded;
+    const koClip = (await (await upload(h, bytes("clip ko"), "video/mp4")).json()) as Uploaded;
+    const koPoster = (await (await upload(h, bytes("poster ko"), "image/webp")).json()) as Uploaded;
+    const entry = {
+      address: "/gh/acme/skills",
+      width: 720,
+      height: 1280,
+      durationMs: 17_600,
+      published: "2026-10-29",
+      link: clip.url,
+      media: { poster: poster.sha, clip: clip.sha },
+      texts: { en: { title: "Card news", body: "Eight slides.", action: "See the result" } },
+      cuts: { ko: { link: koClip.url, media: { clip: koClip.sha, poster: koPoster.sha } } },
+    };
+    const put = (body: unknown) =>
+      h.request("/admin/v1/showcase/cards", {
+        method: "PUT",
+        headers: asJson,
+        body: JSON.stringify(body),
+      });
+
+    // A cut is checked as the entry is: its uploads must exist and fit their slots, and it is
+    // named by a language tag.
+    expect(
+      await (await put({ ...entry, cuts: { ko: { media: { clip: "f".repeat(64) } } } })).json(),
+    ).toMatchObject({ error: { code: "showcase.media_missing", problems: ["f".repeat(64)] } });
+    expect(
+      await (await put({ ...entry, cuts: { ko: { media: { clip: koPoster.sha } } } })).json(),
+    ).toMatchObject({
+      error: { code: "showcase.media_wrong_kind", problems: ["cuts.ko.clip: image/webp"] },
+    });
+    expect(await (await put({ ...entry, cuts: { Korean: entry.cuts.ko } })).json()).toMatchObject({
+      error: { code: "showcase.invalid", problems: [expect.stringContaining("cuts")] },
+    });
+
+    const written = await put(entry);
+    expect(written.status).toBe(200);
+    expect(await written.json()).toMatchObject({
+      id: "cards",
+      link: clip.url,
+      media: { clip: { url: clip.url }, poster: { url: poster.url }, animation: null },
+      cuts: {
+        ko: {
+          link: koClip.url,
+          media: {
+            clip: { url: koClip.url, type: "video/mp4" },
+            poster: { url: koPoster.url, type: "image/webp" },
+            animation: null,
+            social: null,
+          },
+        },
+      },
+    });
+    const shown = restShowcaseSchema.parse(await (await h.request("/api/v1/showcase")).json());
+    expect(shown.items[0]?.cuts?.ko?.media.clip?.url).toBe(koClip.url);
+    // The cut's uploads are in use as the entry's own are, and are freed with the entry.
+    const uploads = (await (
+      await h.request("/admin/v1/media", { headers: authorized })
+    ).json()) as { items: { sha: string; usedBy: string[] }[] };
+    expect(uploads.items.find((item) => item.sha === koClip.sha)?.usedBy).toEqual(["cards"]);
+    const remove = (path: string) => h.request(path, { method: "DELETE", headers: authorized });
+    expect((await remove(`/admin/v1/media/${koClip.sha}`)).status).toBe(409);
+    expect((await remove("/admin/v1/showcase/cards")).status).toBe(200);
+    for (const file of [koClip, koPoster, clip, poster]) {
+      expect((await remove(`/admin/v1/media/${file.sha}`)).status).toBe(200);
+    }
+  });
+
   it("names organizations beside the showcase, each with an upload as its mark", async () => {
     const h = createHarness(testDatabase, { adminToken: TOKEN });
     const mark = (await (

@@ -9,6 +9,7 @@ import {
   type RestSkill,
   SEARCH_QUERY_PARAM,
   SOCIAL_ROUTE,
+  showcaseCut,
 } from "@skillcdn/core";
 import { docsPage, docsSectionLabel } from "../docs/catalog.js";
 import { messagesFor } from "../i18n/index.js";
@@ -339,17 +340,19 @@ export function buildHead(
         author: publisher,
       },
     );
-    // The first clip of the showcase, described where it is served from.
-    const lead = showcase.find((entry) => entry.media.clip !== null);
-    if (lead?.media.clip) {
+    // The first clip of the showcase, in the cut of this language, described where it is
+    // served from.
+    const lead = showcase.find((entry) => showcaseCut(entry, language).media.clip !== null);
+    const clipMedia = lead === undefined ? undefined : showcaseCut(lead, language).media;
+    if (lead !== undefined && clipMedia?.clip) {
       const words = showcaseTexts(lead, language);
       jsonLd.push({
         "@context": "https://schema.org",
         "@type": "VideoObject",
         name: `${t.meta.siteName}: ${words.title}`,
         description: words.clip ?? words.title,
-        thumbnailUrl: [`${origin}${lead.media.poster.url}`],
-        contentUrl: `${origin}${lead.media.clip.url}`,
+        thumbnailUrl: [`${origin}${clipMedia.poster.url}`],
+        contentUrl: `${origin}${clipMedia.clip.url}`,
         ...(lead.published === null ? {} : { uploadDate: lead.published }),
         ...(lead.durationMs === null
           ? {}
@@ -440,8 +443,10 @@ export function buildHead(
     });
   }
 
-  // A showcase entry may bring its own picture for link previews; the build's card otherwise.
-  const social = showcase[0]?.media.social ?? null;
+  // A showcase entry may bring its own picture for link previews, in the cut of this language;
+  // the build's card otherwise.
+  const first = showcase[0];
+  const social = first === undefined ? null : showcaseCut(first, language).media.social;
   // The page of an address unfurls with a card the server draws for it, in this language, with
   // the skill's words when the page shows one (ADR-0032); the language is in the URL so that a
   // crawler gets the card of the page it read, whatever language it asks for itself. A private

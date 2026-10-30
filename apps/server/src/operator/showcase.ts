@@ -12,8 +12,10 @@ import {
   type RestShowcaseOrganization,
   restShowcaseEntrySchema,
   restShowcaseOrganizationSchema,
+  SHOWCASE_CUT_SLOTS,
   SHOWCASE_ID_PATTERN,
   SHOWCASE_MEDIA_SLOTS,
+  type ShowcaseCutSlot,
   type ShowcaseMediaSlot,
   type ShowcaseTexts,
   showcaseInputSchema,
@@ -136,7 +138,8 @@ export class Showcase {
 
   /**
    * Writes an entry under `slug`, replacing what was there. The body is what the admin API was
-   * sent; every upload it names must exist and be a video or a picture as its slot needs.
+   * sent; every upload it names, the entry's own and each cut's, must exist and be a video or
+   * a picture as its slot needs.
    */
   async put(slug: string, body: unknown): Promise<RestShowcaseEntry> {
     if (!SHOWCASE_ID_PATTERN.test(slug)) {
@@ -156,14 +159,36 @@ export class Showcase {
     const input = parsed.data;
     const address = formatAddress(OperatorLists.addressOf("featured", input.address));
     const media: Partial<Record<ShowcaseMediaSlot, string>> = {};
+    /** Every upload the entry names, with the slot it takes, as the problems name it. */
+    const named: {
+      readonly label: string;
+      readonly slot: ShowcaseMediaSlot;
+      readonly sha: string;
+    }[] = [];
     for (const slot of SLOTS) {
       const sha = input.media[slot];
       if (typeof sha === "string") {
         media[slot] = sha;
+        named.push({ label: slot, slot, sha });
       }
     }
+    const cuts: Record<
+      string,
+      { link: string | null; media: Partial<Record<ShowcaseCutSlot, string>> }
+    > = {};
+    for (const [language, cut] of Object.entries(input.cuts ?? {})) {
+      const files: Partial<Record<ShowcaseCutSlot, string>> = {};
+      for (const slot of SHOWCASE_CUT_SLOTS) {
+        const sha = cut.media?.[slot];
+        if (typeof sha === "string") {
+          files[slot] = sha;
+          named.push({ label: `cuts.${language}.${slot}`, slot, sha });
+        }
+      }
+      cuts[language] = { link: cut.link ?? null, media: files };
+    }
     const known = new Map((await listOperatorMedia(this.#database)).map((m) => [m.sha, m]));
-    const missing = [...new Set(Object.values(media))].filter((sha) => !known.has(sha));
+    const missing = [...new Set(named.map(({ sha }) => sha))].filter((sha) => !known.has(sha));
     if (missing.length > 0) {
       throw new ShowcaseError(
         "showcase.media_missing",
@@ -171,9 +196,9 @@ export class Showcase {
         missing,
       );
     }
-    const wrong = Object.entries(media).flatMap(([slot, sha]) => {
+    const wrong = named.flatMap(({ label, slot, sha }) => {
       const type = known.get(sha)?.contentType ?? "";
-      return mediaFitsSlot(slot as ShowcaseMediaSlot, type) ? [] : [`${slot}: ${type}`];
+      return mediaFitsSlot(slot, type) ? [] : [`${label}: ${type}`];
     });
     if (wrong.length > 0) {
       throw new ShowcaseError(
@@ -198,6 +223,7 @@ export class Showcase {
       published: input.published ?? null,
       texts,
       media,
+      cuts,
     });
     if (result.outcome === "media_missing") {
       throw new ShowcaseError(
@@ -374,11 +400,24 @@ export class Showcase {
     entry: ShowcaseEntryRecord,
     types: ReadonlyMap<string, string>,
   ): RestShowcaseEntry | undefined {
-    const slot = (name: ShowcaseMediaSlot) => {
-      const upload = entry.media[name];
-      return upload === undefined ? null : { url: mediaUrl(upload.sha), type: upload.contentType };
-    };
+    const file = (upload: { readonly sha: string; readonly contentType: string } | undefined) =>
+      upload === undefined ? null : { url: mediaUrl(upload.sha), type: upload.contentType };
+    const slot = (name: ShowcaseMediaSlot) => file(entry.media[name]);
     const poster = slot("poster");
+    const cuts = Object.fromEntries(
+      Object.entries(entry.cuts).map(([language, cut]) => [
+        language,
+        {
+          link: cut.link,
+          media: {
+            clip: file(cut.media.clip),
+            animation: file(cut.media.animation),
+            poster: file(cut.media.poster),
+            social: file(cut.media.social),
+          },
+        },
+      ]),
+    );
     const parsed = restShowcaseEntrySchema.safeParse({
       id: entry.slug,
       address: entry.address,
@@ -399,6 +438,7 @@ export class Showcase {
         social: slot("social"),
       },
       texts: entry.texts,
+      cuts,
     });
     if (!parsed.success) {
       this.#logger.warn({ entry: entry.slug }, "showcase entry is not valid and is not shown");

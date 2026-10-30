@@ -124,6 +124,28 @@ export type ShowcaseTexts = z.infer<typeof showcaseTextsSchema>;
 export const showcaseMediaSchema = z.object({ url: z.string(), type: z.string() });
 export type ShowcaseMedia = z.infer<typeof showcaseMediaSchema>;
 
+/**
+ * The slots a cut of the result may bring its own file for: the clip, its animated stand-in,
+ * the poster and the link-preview picture. The two slots of the example conversation are not cut.
+ */
+export const SHOWCASE_CUT_SLOTS = ["clip", "animation", "poster", "social"] as const;
+export type ShowcaseCutSlot = (typeof SHOWCASE_CUT_SLOTS)[number];
+
+/**
+ * The result cut in one language, as the pages reach it: what differs from the entry's own in
+ * that language. A slot that is `null` is the entry's own, and so is a `link` that is `null`.
+ */
+export const restShowcaseCutSchema = z.object({
+  link: z.nullable(z.string()),
+  media: z.object({
+    clip: z.nullable(showcaseMediaSchema),
+    animation: z.nullable(showcaseMediaSchema),
+    poster: z.nullable(showcaseMediaSchema),
+    social: z.nullable(showcaseMediaSchema),
+  }),
+});
+export type RestShowcaseCut = z.infer<typeof restShowcaseCutSchema>;
+
 export const restShowcaseEntrySchema = z.object({
   id: z.string(),
   /** Where the card leads: the address of the skill's repository, with a ref and a path when given. */
@@ -159,8 +181,38 @@ export const restShowcaseEntrySchema = z.object({
   }),
   /** By language tag. The pages fall back to the default language, then to any language. */
   texts: z.record(z.string(), showcaseTextsSchema),
+  /**
+   * The result cut per language, by language tag: the files and the link that differ in that
+   * language, which a page in it shows in place of `media` and `link` (`showcaseCut`). Absent
+   * from an answer of a deployment older than the field; empty for a result with one cut.
+   */
+  cuts: z.optional(z.record(z.string(), restShowcaseCutSchema)),
 });
 export type RestShowcaseEntry = z.infer<typeof restShowcaseEntrySchema>;
+
+/**
+ * An entry as a visitor of `language` gets it: the files and the link of its cut in that
+ * language where there is one, and the entry's own for whatever the cut leaves out.
+ */
+export function showcaseCut(
+  entry: RestShowcaseEntry,
+  language: string,
+): { readonly link: string | null; readonly media: RestShowcaseEntry["media"] } {
+  const cut = entry.cuts?.[language];
+  if (cut === undefined) {
+    return { link: entry.link ?? null, media: entry.media };
+  }
+  return {
+    link: cut.link ?? entry.link ?? null,
+    media: {
+      ...entry.media,
+      clip: cut.media.clip ?? entry.media.clip,
+      animation: cut.media.animation ?? entry.media.animation,
+      poster: cut.media.poster ?? entry.media.poster,
+      social: cut.media.social ?? entry.media.social,
+    },
+  };
+}
 
 /** An organization named beside the showcase, with its mark: a pack's publisher, a builder's company. */
 export const restShowcaseOrganizationSchema = z.object({
@@ -205,6 +257,24 @@ const pixels = z.int().check(z.minimum(1), z.maximum(8192));
  * needs its duration and its publication date, which the structured data of the page requires.
  */
 const link = z.string().check(z.minLength(1), z.maxLength(2048), z.refine(isShowcaseLink));
+const languageTag = z.string().check(z.regex(SHOWCASE_LANGUAGE_PATTERN));
+
+/**
+ * A cut of the result in one language, as the operator sends it: the uploads that differ in
+ * that language, by hash, and its link. What is left out is the entry's own.
+ */
+export const showcaseCutInputSchema = z.object({
+  link: z.optional(z.nullable(link)),
+  media: z.optional(
+    z.object({
+      poster: optionalSha,
+      clip: optionalSha,
+      animation: optionalSha,
+      social: optionalSha,
+    }),
+  ),
+});
+export type ShowcaseCutInput = z.infer<typeof showcaseCutInputSchema>;
 
 export const showcaseInputSchema = z
   .object({
@@ -224,7 +294,8 @@ export const showcaseInputSchema = z
       picture: optionalSha,
       social: optionalSha,
     }),
-    texts: z.record(z.string().check(z.regex(SHOWCASE_LANGUAGE_PATTERN)), showcaseTextsInputSchema),
+    texts: z.record(languageTag, showcaseTextsInputSchema),
+    cuts: z.optional(z.record(languageTag, showcaseCutInputSchema)),
   })
   .check(
     z.refine((entry) => Object.keys(entry.texts).length > 0, {
@@ -233,8 +304,8 @@ export const showcaseInputSchema = z
     }),
     z.refine(
       (entry) =>
-        entry.media.clip === undefined ||
-        entry.media.clip === null ||
+        (typeof entry.media.clip !== "string" &&
+          !Object.values(entry.cuts ?? {}).some((cut) => typeof cut.media?.clip === "string")) ||
         (typeof entry.durationMs === "number" && typeof entry.published === "string"),
       {
         message: "a clip needs durationMs and published",

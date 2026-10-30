@@ -8,6 +8,7 @@ import type {
   RestSkill,
   SocialCard,
 } from "@skillcdn/core";
+import { showcaseCut } from "@skillcdn/core";
 import { StrictMode } from "react";
 import { renderToString } from "react-dom/server";
 import { type InitialData, type InitialResource, renderInitialData } from "./api/initial-data.js";
@@ -558,7 +559,7 @@ export function renderLlmsTxt(language: Language, showcase?: RestShowcase): stri
     ...showcaseEntries(showcase, language).map((entry) => {
       const words = showcaseTexts(entry, language);
       const requirement = words.requirement === null ? "" : ` ${words.requirement}.`;
-      const link = entry.link ?? null;
+      const link = showcaseCut(entry, language).link;
       const result =
         link === null
           ? ""

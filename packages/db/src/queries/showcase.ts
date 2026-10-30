@@ -1,4 +1,9 @@
-import type { ShowcaseMediaSlot, ShowcaseOrigin, ShowcaseTexts } from "@skillcdn/core";
+import type {
+  ShowcaseCutSlot,
+  ShowcaseMediaSlot,
+  ShowcaseOrigin,
+  ShowcaseTexts,
+} from "@skillcdn/core";
 import { asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { type Database, drizzleOf } from "../client.js";
 import {
@@ -32,8 +37,18 @@ export interface ShowcaseEntryRecord {
   readonly media: Partial<
     Record<ShowcaseMediaSlot, { readonly sha: string; readonly contentType: string }>
   >;
+  /** By language tag, the result cut in that language: its link and its own uploads. */
+  readonly cuts: Record<string, ShowcaseCutRecord>;
   readonly createdAt: Date;
   readonly updatedAt: Date;
+}
+
+export interface ShowcaseCutRecord {
+  /** The cut's own link to the result, or `null` for the entry's. */
+  readonly link: string | null;
+  readonly media: Partial<
+    Record<ShowcaseCutSlot, { readonly sha: string; readonly contentType: string }>
+  >;
 }
 
 /** Every entry, in the order the page shows them: by position, then by name. */
@@ -49,6 +64,7 @@ export async function listShowcaseEntries(database: Database): Promise<ShowcaseE
   const uploads = await db
     .select({
       entryId: showcaseMedia.entryId,
+      language: showcaseMedia.language,
       slot: showcaseMedia.slot,
       sha: showcaseMedia.sha,
       contentType: operatorMedia.contentType,
@@ -63,9 +79,25 @@ export async function listShowcaseEntries(database: Database): Promise<ShowcaseE
     );
   return rows.map((row) => {
     const media: Record<string, { sha: string; contentType: string }> = {};
+    const cuts: Record<
+      string,
+      { link: string | null; media: Record<string, { sha: string; contentType: string }> }
+    > = {};
+    for (const [language, cut] of Object.entries(row.cuts)) {
+      cuts[language] = { link: cut.link, media: {} };
+    }
     for (const upload of uploads) {
-      if (upload.entryId === row.id) {
-        media[upload.slot] = { sha: upload.sha, contentType: upload.contentType };
+      if (upload.entryId !== row.id) continue;
+      const file = { sha: upload.sha, contentType: upload.contentType };
+      if (upload.language === "") {
+        media[upload.slot] = file;
+      } else {
+        let cut = cuts[upload.language];
+        if (cut === undefined) {
+          cut = { link: null, media: {} };
+          cuts[upload.language] = cut;
+        }
+        cut.media[upload.slot] = file;
       }
     }
     return {
@@ -80,6 +112,7 @@ export async function listShowcaseEntries(database: Database): Promise<ShowcaseE
       published: row.published,
       texts: row.texts,
       media,
+      cuts,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
@@ -99,6 +132,11 @@ export interface ShowcaseEntryInput {
   readonly texts: Record<string, ShowcaseTexts>;
   /** The SHA-256 of the upload in each slot that has one. */
   readonly media: Partial<Record<ShowcaseMediaSlot, string>>;
+  /** By language tag, the result cut in that language: its link and the uploads of its own. */
+  readonly cuts: Record<
+    string,
+    { readonly link: string | null; readonly media: Partial<Record<ShowcaseCutSlot, string>> }
+  >;
 }
 
 export type PutShowcaseResult =
@@ -107,19 +145,28 @@ export type PutShowcaseResult =
   | { readonly outcome: "media_missing"; readonly missing: readonly string[] };
 
 /**
- * Writes an entry as a whole: the row by its name, then the upload in each of its slots. An
- * entry that is already there is replaced, slots included, in one transaction.
+ * Writes an entry as a whole: the row by its name, then the upload in each of its slots, the
+ * entry's own and each cut's. An entry that is already there is replaced, slots included, in
+ * one transaction.
  */
 export async function putShowcaseEntry(
   database: Database,
   input: ShowcaseEntryInput,
 ): Promise<PutShowcaseResult> {
   const db = drizzleOf(database);
-  const slots = Object.entries(input.media).filter(
-    (pair): pair is [ShowcaseMediaSlot, string] => typeof pair[1] === "string",
-  );
+  const slots: { language: string; slot: ShowcaseMediaSlot; sha: string }[] = [];
+  for (const [slot, sha] of Object.entries(input.media)) {
+    if (typeof sha === "string") slots.push({ language: "", slot: slot as ShowcaseMediaSlot, sha });
+  }
+  const cutLinks: Record<string, { link: string | null }> = {};
+  for (const [language, cut] of Object.entries(input.cuts)) {
+    cutLinks[language] = { link: cut.link };
+    for (const [slot, sha] of Object.entries(cut.media)) {
+      if (typeof sha === "string") slots.push({ language, slot: slot as ShowcaseCutSlot, sha });
+    }
+  }
   return db.transaction(async (tx) => {
-    const wanted = [...new Set(slots.map(([, sha]) => sha))];
+    const wanted = [...new Set(slots.map(({ sha }) => sha))];
     const known =
       wanted.length === 0
         ? []
@@ -147,6 +194,7 @@ export async function putShowcaseEntry(
       durationMs: input.durationMs,
       published: input.published,
       texts: input.texts,
+      cuts: cutLinks,
     };
     let id: string;
     if (existing === undefined) {
@@ -169,7 +217,7 @@ export async function putShowcaseEntry(
     if (slots.length > 0) {
       await tx
         .insert(showcaseMedia)
-        .values(slots.map(([slot, sha]) => ({ entryId: id, slot, sha })));
+        .values(slots.map(({ language, slot, sha }) => ({ entryId: id, language, slot, sha })));
     }
     return { outcome: existing === undefined ? "created" : "updated" };
   });
