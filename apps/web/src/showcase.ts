@@ -18,7 +18,7 @@ import {
 // through the REST API; until there are any, the build's own stand, made of the language packs
 // and the media in public/showcase/ and public/organizations/.
 
-const DEFAULT_IDS: readonly DefaultShowcaseId[] = ["ad", "cards", "deck", "looks"];
+const DEFAULT_IDS: readonly DefaultShowcaseId[] = ["ad", "cards", "deck", "site"];
 
 const own = new Map<Language, readonly RestShowcaseEntry[]>();
 

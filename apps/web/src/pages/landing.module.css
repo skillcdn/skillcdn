@@ -208,7 +208,7 @@
   margin-top: var(--space-4);
   color: var(--color-text-muted);
   font-size: var(--text-lg);
-  text-wrap: pretty;
+  text-wrap: balance;
 }
 
 /* The lights along the page, one to a section, pinned to the window and faded by each section's
@@ -304,13 +304,6 @@
   margin-top: var(--space-2);
 }
 
-.caption {
-  margin-top: var(--space-4);
-  color: var(--color-text-faint);
-  font-size: var(--text-sm);
-  text-align: center;
-}
-
 /* Three statements under the window: no boxes, a hairline over each, the title large. */
 .points {
   display: grid;
@@ -351,7 +344,7 @@
   min-width: min(100%, 18rem);
   color: var(--color-text-muted);
   font-size: var(--text-sm);
-  text-wrap: pretty;
+  text-wrap: balance;
 }
 
 .packBar code {
@@ -393,6 +386,8 @@
 }
 
 .stepNumber {
+  position: relative;
+  isolation: isolate;
   display: grid;
   place-items: center;
   width: var(--step-number);
@@ -417,7 +412,7 @@
 .timeline p {
   color: var(--color-text-muted);
   font-size: var(--text-sm);
-  text-wrap: pretty;
+  text-wrap: balance;
 }
 
 .stepLink {
@@ -464,9 +459,8 @@
 
 /* The cloud: pills of the well-known packs, each a little off the line of the one before, so
    that the side reads as a scatter of names and not as a list. They are stars, of a kind: they
-   lean after the pointer, the nearer ones further (`--lean-x` and `--lean-y`, which the page
-   writes on the section), drift a little by themselves, and the one under the pointer lights
-   up and grows. All of it is transitions and animations of transforms: nothing runs per frame. */
+   drift a little by themselves, and the one under the pointer lights up and grows. All of it is
+   animations of transforms: nothing runs per frame. */
 .cloudSide {
   position: relative;
 }
@@ -479,9 +473,6 @@
   inset: -12% -6%;
   background-image: var(--cloud-stars);
   opacity: var(--cloud-stars-opacity);
-  translate: calc(var(--lean-x, 0) * var(--cloud-lean) * 0.3)
-    calc(var(--lean-y, 0) * var(--cloud-lean) * 0.3);
-  transition: translate var(--cloud-lean-time) ease-out;
   pointer-events: none;
 }
 
@@ -489,29 +480,73 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: var(--space-3);
+  gap: calc(var(--space-6) + var(--space-1)) var(--space-3);
 }
 
+/* No two neighbours at the same height or tilt: each of the nine has its own place and its own
+   bearing, scattered off the rows until no row reads, all of them one size. The
+   scatter is all translate, so it costs the rows nothing and two still share one. The rows are
+   spaced for the scatter and the float, so that none touches another. */
 .cloud li {
-  --depth: 0.65;
   --lift: 0px;
-  translate: calc(var(--lean-x, 0) * var(--cloud-lean) * var(--depth))
-    calc(var(--lean-y, 0) * var(--cloud-lean) * var(--depth) + var(--lift));
-  transition: translate var(--cloud-lean-time) ease-out;
+  --shift: 0px;
+  --tilt: 0deg;
+  translate: var(--shift) var(--lift);
+  rotate: var(--tilt);
 }
 
-.cloud li:nth-child(3n + 1) {
-  --depth: 1;
+.cloud li:nth-child(1) {
   --lift: var(--space-2);
+  --shift: calc(-1 * var(--space-5));
+  --tilt: -2deg;
 }
 
-.cloud li:nth-child(3n) {
-  --depth: 0.4;
-  --lift: calc(-1 * var(--space-2));
+.cloud li:nth-child(2) {
+  --lift: calc(-1 * var(--space-4));
+  --shift: var(--space-6);
+  --tilt: 1.5deg;
 }
 
-.cloud li:nth-child(4n + 2) {
-  margin-inline-start: var(--space-4);
+.cloud li:nth-child(3) {
+  --lift: var(--space-2);
+  --shift: calc(-1 * var(--space-5));
+  --tilt: 2.5deg;
+}
+
+.cloud li:nth-child(4) {
+  --lift: calc(-1 * var(--space-4) * 1.1);
+  --shift: calc(-1 * var(--space-1));
+  --tilt: -1deg;
+}
+
+.cloud li:nth-child(5) {
+  --lift: var(--space-4);
+  --shift: 0px;
+  --tilt: 1deg;
+}
+
+.cloud li:nth-child(6) {
+  --lift: calc(-1 * var(--space-3));
+  --shift: var(--space-3);
+  --tilt: -2.5deg;
+}
+
+.cloud li:nth-child(7) {
+  --lift: calc(var(--space-4) * 1.1);
+  --shift: var(--space-4);
+  --tilt: 1.8deg;
+}
+
+.cloud li:nth-child(8) {
+  --lift: calc(-1 * var(--space-4) * 1.2);
+  --shift: var(--space-6);
+  --tilt: -1.5deg;
+}
+
+.cloud li:nth-child(9) {
+  --lift: var(--space-3);
+  --shift: var(--space-5);
+  --tilt: 3deg;
 }
 
 .pill {
@@ -534,29 +569,51 @@
     scale var(--transition);
 }
 
-/* Each pill drifts on its own, out of step with its neighbours. */
+/* Each pill floats on its own, two slow loops laid over each other: the row rises and sinks
+   (`bob`) while the pill sways across and tips (`drift`), each at a pace and a phase of its own,
+   so that no path repeats soon and no two move together. */
 @media (prefers-reduced-motion: no-preference) {
+  .cloud li {
+    animation: bob calc(var(--cloud-drift-time) * 1.7) ease-in-out infinite;
+  }
+
   .pill {
-    animation: drift var(--cloud-drift-time) ease-in-out infinite alternate;
+    --sway: var(--cloud-drift);
+    animation: drift var(--cloud-drift-time) ease-in-out infinite;
+  }
+
+  .cloud li:nth-child(2n) {
+    animation-duration: calc(var(--cloud-drift-time) * 2.3);
+    animation-delay: calc(var(--cloud-drift-time) / -2);
+  }
+
+  .cloud li:nth-child(3n + 1) {
+    animation-delay: calc(var(--cloud-drift-time) / -1.3);
+    animation-direction: reverse;
+  }
+
+  .cloud li:nth-child(4n + 3) {
+    animation-duration: calc(var(--cloud-drift-time) * 1.4);
   }
 
   .cloud li:nth-child(2n) .pill {
-    animation-duration: calc(var(--cloud-drift-time) * 1.35);
+    animation-duration: calc(var(--cloud-drift-time) * 1.45);
     animation-delay: calc(var(--cloud-drift-time) / -3);
+    animation-direction: reverse;
   }
 
   .cloud li:nth-child(3n) .pill {
-    animation-delay: calc(var(--cloud-drift-time) / -1.5);
+    animation-duration: calc(var(--cloud-drift-time) * 1.2);
+    animation-delay: calc(var(--cloud-drift-time) / -1.6);
   }
 
-  .cloud li:nth-child(5n + 1) .pill {
-    animation-duration: calc(var(--cloud-drift-time) * 0.8);
+  .cloud li:nth-child(4n + 1) .pill {
+    animation-duration: calc(var(--cloud-drift-time) * 0.85);
+    animation-delay: calc(var(--cloud-drift-time) / -4.5);
   }
-}
 
-@media (prefers-reduced-motion: reduce) {
-  .packs {
-    --cloud-lean: 0px;
+  .cloud li:nth-child(5n + 2) .pill {
+    animation-delay: calc(var(--cloud-drift-time) / -1.1);
   }
 }
 
@@ -584,7 +641,12 @@
 }
 
 /* The builders: one pane across the page, lit from its corner. */
+/* The invitation on the left, what a builder gets as four numbered tiles on the right. */
 .buildersPanel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+  align-items: center;
+  gap: var(--space-8);
   overflow: hidden;
   padding: var(--space-8);
 }
@@ -601,20 +663,75 @@
   pointer-events: none;
 }
 
-.buildersPanel .sectionLead {
+/* A second, softer light behind the invitation, answering the one in the far corner. */
+.buildersIntro {
+  position: relative;
+}
+
+.buildersIntro::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: -40%;
+  left: -30%;
+  width: 90%;
+  aspect-ratio: 1;
+  background: var(--builders-glow);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.buildersIntro .sectionLead {
   max-width: var(--width-prose);
 }
 
+/* The four tiles stand staggered, the right column a step lower, so that they read as cards
+   laid down rather than a table. Each is a sheet of glass on the glass, lit along its top edge,
+   with its number set as code. */
 .features {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-5);
-  margin-block: var(--space-7) var(--space-6);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  counter-reset: feature;
 }
 
 .features li {
-  padding-top: var(--space-4);
-  border-top: var(--border-lit);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-5);
+  border: 1px solid var(--color-glass-edge);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(160deg, var(--color-glass-hover), transparent 70%), var(--glass-tint);
+  box-shadow: var(--glass-lift);
+  counter-increment: feature;
+}
+
+.features li:nth-child(even) {
+  translate: 0 var(--space-6);
+}
+
+.features li::before {
+  content: counter(feature, decimal-leading-zero);
+  margin-bottom: var(--space-4);
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  font-variant-numeric: tabular-nums;
+}
+
+.features li::after {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: var(--space-5);
+  width: var(--space-7);
+  height: 2px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(90deg, var(--color-accent), transparent);
+  box-shadow: var(--glow);
 }
 
 .features h3 {
@@ -622,13 +739,15 @@
 }
 
 .features p {
-  margin-top: var(--space-1);
   color: var(--color-text-muted);
   font-size: var(--text-sm);
+  text-wrap: pretty;
 }
 
 .many {
-  margin-bottom: var(--space-5);
+  margin-top: var(--space-5);
+  padding-left: var(--space-4);
+  border-left: 2px solid var(--color-accent);
   color: var(--color-text-muted);
   text-wrap: pretty;
 }
@@ -685,6 +804,7 @@
   padding-bottom: var(--space-5);
   color: var(--color-text-muted);
   font-size: var(--text-sm);
+  text-wrap: balance;
 }
 
 /* The last word: the symbol, one line, and the two ways on. */
@@ -731,11 +851,9 @@
     gap: var(--space-6);
   }
 
-  .features {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .buildersPanel {
+    grid-template-columns: 1fr;
+    gap: var(--space-7);
     padding: var(--space-6);
   }
 }
@@ -817,9 +935,18 @@
     padding: var(--space-5);
   }
 
+  /* The address stays on one line on a phone rather than losing its last letter to the next. */
+  .packBar code {
+    font-size: var(--text-sm);
+  }
+
   .features {
     grid-template-columns: 1fr;
     gap: var(--space-4);
+  }
+
+  .features li:nth-child(even) {
+    translate: none;
   }
 
   .buildersPanel {
@@ -877,13 +1004,41 @@
 /* The fade carries the strength as well, because an animated opacity replaces the one on the
    rule rather than scaling it. It stays dark for the first part of the pass, since the pass
    opens a whole window before the section arrives. */
-@keyframes drift {
-  from {
-    transform: translate3d(0, calc(-1 * var(--cloud-drift)), 0);
+/* The row's own rise and fall, on `transform`, beside its place on `translate` and the tilt on
+   `rotate`: the three compose, and none of them lays out. */
+@keyframes bob {
+  0% {
+    transform: translate3d(0, 0, 0);
   }
 
-  to {
-    transform: translate3d(var(--cloud-drift), var(--cloud-drift), 0);
+  45% {
+    transform: translate3d(0, calc(var(--cloud-drift) * -1.2), 0);
+  }
+
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes drift {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+
+  28% {
+    transform: translate3d(calc(var(--sway) * 0.55), calc(var(--sway) * -1), 0) rotate(0.5deg);
+  }
+
+  52% {
+    transform: translate3d(calc(var(--sway) * -0.85), calc(var(--sway) * -0.25), 0) rotate(-0.35deg);
+  }
+
+  78% {
+    transform: translate3d(calc(var(--sway) * 0.3), calc(var(--sway) * 0.9), 0) rotate(0.3deg);
+  }
+
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
   }
 }
 
@@ -901,5 +1056,125 @@
   90%,
   100% {
     opacity: 0;
+  }
+}
+
+/* The steps light up in order as they scroll into view: a line of the accent runs along the
+   hairline, each number lights its ring as the line reaches it, and the step's words rise in
+   under it. The numbers themselves never move, so that the line always runs through them. All
+   of it is driven by the scroll, through the timeline's own pass, and stands as the page is
+   without it where the browser cannot or the visitor asks for less motion. On a phone the steps
+   stand one under another and the line is gone, so each step lights as it comes in. */
+.stepNumber::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border: 2px solid var(--color-accent);
+  border-radius: inherit;
+  background: var(--color-accent-subtle);
+  box-shadow: var(--glow-strong);
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .timeline {
+      view-timeline-name: --steps-pass;
+    }
+
+    .stepNumber::after {
+      animation: step-light linear both;
+      animation-timeline: view();
+      animation-range: entry 40% entry 90%;
+    }
+
+    .timeline li > :not(.stepNumber) {
+      animation: step-words linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 80%;
+    }
+
+    @media (min-width: 52.01rem) {
+      .timeline::after {
+        content: "";
+        position: absolute;
+        top: calc(var(--step-number) / 2);
+        right: 0;
+        left: 0;
+        z-index: -1;
+        height: 2px;
+        margin-top: -0.5px;
+        background: linear-gradient(90deg, var(--color-accent-solid), var(--color-accent));
+        box-shadow: var(--glow-strong);
+        transform-origin: left center;
+        animation: step-line linear both;
+        animation-timeline: --steps-pass;
+        animation-range: cover 10% cover 40%;
+      }
+
+      /* Each ring lights where the line passes its number: a third and two thirds of the way. */
+      .stepNumber::after {
+        animation-timeline: --steps-pass;
+        animation-range: cover 10% cover 14%;
+      }
+
+      .timeline li:nth-child(2) .stepNumber::after {
+        animation-range: cover 20% cover 24%;
+      }
+
+      .timeline li:nth-child(3) .stepNumber::after {
+        animation-range: cover 31% cover 35%;
+      }
+
+      /* The words of a step follow its ring, a little behind it. */
+      .timeline li > :not(.stepNumber) {
+        animation-timeline: --steps-pass;
+        animation-range: cover 11% cover 19%;
+      }
+
+      .timeline li:nth-child(2) > :not(.stepNumber) {
+        animation-range: cover 21% cover 29%;
+      }
+
+      .timeline li:nth-child(3) > :not(.stepNumber) {
+        animation-range: cover 32% cover 40%;
+      }
+    }
+  }
+}
+
+@keyframes step-line {
+  from {
+    scale: 0 1;
+  }
+
+  to {
+    scale: 1 1;
+  }
+}
+
+@keyframes step-light {
+  from {
+    opacity: 0;
+    scale: 0.85;
+  }
+
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+@keyframes step-words {
+  from {
+    opacity: 0;
+    translate: 0 0.75rem;
+  }
+
+  to {
+    opacity: 1;
+    translate: 0 0;
   }
 }

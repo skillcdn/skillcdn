@@ -90,7 +90,7 @@ export const en = {
     prefixHint: "GitHub",
     placeholder: "owner/repo",
     submit: "Open",
-    hint: "Optional: @branch, @tag or @commit, then a /sub/path.",
+    hint: "If you need to, add @branch (or a tag or a commit) and a /folder path after it.",
     examples: "Examples",
     invalid: "That is not a valid address.",
     errors: {
@@ -181,15 +181,7 @@ export const en = {
         title: "Know the address?",
         body: "Open a repository's address and you are in its pack.",
       },
-      suggestions: "Searches to try",
     },
-    suggestions: [
-      "Short video ad",
-      "Meeting deck",
-      "Card payments",
-      "Make a document pack",
-      "Competitor ad research",
-    ],
   },
 
   /** The documentation (ADR-0049): the frame around pages written in English. */

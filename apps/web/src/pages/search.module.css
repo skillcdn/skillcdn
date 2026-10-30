@@ -274,8 +274,13 @@
   gap: var(--space-4);
 }
 
+/* Under the box alone, the ways on keep to the box's width, centred under it like the terms to
+   try: the address, which holds a field, wider than the legend beside it. */
 .layoutBare .aside {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  width: 100%;
+  max-width: var(--search-width);
+  margin-inline: auto;
 }
 
 .box {
@@ -291,30 +296,6 @@
   margin-bottom: var(--space-3);
   color: var(--color-text-muted);
   font-size: var(--text-sm);
-}
-
-.suggestions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-top: var(--space-3);
-}
-
-.suggestions a {
-  display: inline-flex;
-  padding-inline: var(--space-3);
-  padding-block: calc(var(--space-1) - var(--label-optical))
-    calc(var(--space-1) + var(--label-optical));
-  border: var(--border-lit);
-  border-radius: var(--radius-full);
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-  text-decoration: none;
-}
-
-.suggestions a:hover {
-  border-color: var(--color-accent);
-  color: var(--color-text);
 }
 
 .legend {

@@ -34,7 +34,7 @@ export const landingEn = {
   eyebrow: "A one-person company, run with AI agents",
   title: "Start alone.",
   titleAccent: "The team is already here.",
-  lead: "Take the way experts work, as skills.\nYour AI becomes your marketer, your designer, your developer. One person, one company.",
+  lead: "Take the way experts work, as skills.\nThe AI you already use works as your marketer, your designer and your developer.\nOne person can run a whole company.",
   search: {
     label: "What will you make?",
     placeholder: "What will you make? Card news, a short ad, a website that takes payments…",
@@ -48,67 +48,68 @@ export const landingEn = {
       "Competitor ad research",
     ],
   },
-  clients: "In the apps you already use",
+  clients: "Right in the AI apps you already use",
   organizations: {
     title: "Working with us",
     join: "Join the builders",
-    more: "+ countless independent builders",
+    more: "+ solo builders working with us",
   },
   showcase: {
     eyebrow: "Showcase",
-    title: "What the AI team finished today",
-    lead: "Real results, each from one sentence.",
+    title: "Real work, made by AI",
+    lead: "Each one started from a one-sentence request, and AI saw it through by the skill.",
     origins: { pack: "Skill pack", builder: "Builder" },
     skill: "See the skill",
     /** The result shown over the page: the way to it as a file, and the way out. */
     viewer: { open: "Open in a new tab", close: "Close" },
     entries: {
       ad: {
-        title: "“Make a 15-second short ad for SkillCDN”",
-        body: "A reference picked from the ad library, a founder cast, three frames. The first shot is generated video; the other two are the approved frames set in motion, a draft. Cut in Korean and in English.",
-        tags: ["15 s, 9:16", "Two languages"],
+        title: "“Make a 15-second short ad for a fruit lollipop”",
+        body: "The AI found a candy ad that has run for over a year in the ad library, studied it, and chose a different idea: a fruit falls, and a lollipop of the same shape falls in the same spot. It made a first frame for each shot, generated the motion, and added captions and on-set sound for a 15-second vertical video. An English ad for a fictional brand.",
+        tags: ["15 s · 9:16", "5 shots", "English"],
         action: "Watch the ad",
         credit: "skillcdn/skills · marketing",
         /** What the skill needs besides the AI app; `null` for nothing. */
-        requirement: "Needs a Higgsfield connection.",
+        requirement: "This skill needs a Higgsfield account connected.",
         poster:
-          "A 15-second vertical ad. At night in a small office a founder moves a card on her board; then a close-up of the board; then the founder at dawn with a mug; then a SkillCDN card with the address. The lines appear on screen one after another.",
+          "A 15-second vertical ad with a film look. A wet strawberry lands on a wooden board by a kitchen window, and a strawberry-shaped lollipop lands in the same place. At a morning fruit market a hand lifts a peach lollipop out of a paper bag into the sun, then holds a strawberry lollipop against the light; on a linen table a hand sets a lollipop beside a bowl of fruit; a jar of fruit lollipops by the window and the brand name close it. One caption per shot.",
       },
       cards: {
-        title: "“Make Instagram card news from this week’s news”",
-        body: "One news story became a sourced brief, then an eight-slide carousel, reviewed at phone size, with a checklist before posting.",
-        tags: ["8-slide carousel", "Sources cited"],
+        title: "“Pick a recent issue and make card news about it”",
+        body: "The AI picked the Tesla Roadster reveal from this week's news. It studied a well-known news magazine's Instagram posts to set the format, drew twenty facts with checked sources from eleven articles, and made eight slides: a cover, a reader's question and its answer on each slide, and a closing. Checked on a phone screen.",
+        tags: ["8 slides", "Format studied", "20 sourced facts"],
         action: "See the result",
         credit: "skillcdn/skills · design",
         requirement: null,
         poster:
-          "The first three slides of a card news carousel, fanned out. The cover reads, in Korean, that the price of AI for repetitive work has halved.",
+          "An 18-second vertical clip of the post as a phone shows it: the magazine's feed with the eight slides swiped through one by one. The cover reads 'The Tesla Roadster is here' and 'A flying car you can buy?' in two orange boxes over a photograph of the white car in the air on jets of gas; each slide after it asks a question in a white box and answers it in orange.",
       },
       deck: {
-        title: "“Turn this memo into an intro deck”",
-        body: "A one-page memo, now twelve slides. HTML and PDF, in the structure a designer polishes from.",
-        tags: ["12 slides", "HTML + PDF"],
+        title: "“Turn this idea into a business plan for investors”",
+        body: "A one-page idea for a morning running-crew app became a twelve-slide business plan: the problem, the solution, the revenue model, the schedule and the ask. The skill laid out the structure and exported HTML and PDF, and the video shows the plan being pitched to investors.",
+        tags: ["12 slides", "HTML + PDF", "18 s pitch video"],
         action: "Open the PDF",
         credit: "skillcdn/skills · design",
         requirement: null,
-        poster: "Twelve slides of a deck on one sheet: large titles and diagrams on a dark ground.",
+        poster:
+          "An 18-second video of a presenter pitching the plan to an audience, the white slides of the deck changing on the screen behind her.",
       },
-      looks: {
-        title: "“Show me this first screen in four looks”",
-        body: "The same copy, four looks. A comparison sheet rendered in a browser, with one of them recommended.",
-        tags: ["4 looks", "Comparison sheet"],
-        action: "See the sheet",
-        credit: "skillcdn/skills · design",
+      site: {
+        title: "“Make a web page for our bakery”",
+        body: "The reservation page of Mildo, a fictional bakery open on Thursdays only, laid out like a magazine with a large title over a full-width photograph of bread. This week's breads and how many are left, how to reserve, opening hours and common questions are all on one page. The photographs were made with AI, and the page was checked on phone and desktop screens.",
+        tags: ["One page", "Phone + desktop", "Fictional shop"],
+        action: "Open the page",
+        credit: "skillcdn/skills · engineering",
         requirement: null,
         poster:
-          "The first screen of one landing page in four looks on a two-by-two sheet: dark glass, a paper-like light page, a poster, quiet typography.",
+          "A bakery web page scrolled slowly at desktop width: a large serif title over a full-width photograph of rye loaves, a rye-brown band, four bread photographs of different sizes, a photograph of hands shaping dough beside the three steps of a reservation, the shop at dawn and a week with only Thursday marked.",
       },
     },
   },
   console: {
     eyebrow: "Console",
-    title: "Put the work on the board. You only decide.",
-    lead: "The agents work, and you decide. One board runs the company.",
+    title: "Put the work on the board, and just decide.",
+    lead: "AI agents do the work, and you only make the calls. The whole company runs on one board.",
     window: {
       name: "My company",
       tabs: ["Board", "Roadmap", "Calendar", "Documents", "Decisions", "Feed", "Skills"],
@@ -213,7 +214,7 @@ export const landingEn = {
       done: 12,
       decision: {
         title: "Waiting for your answer",
-        question: "#24 15-second short ad, v2 · Which of the two hooks?",
+        question: "#24 15-second short ad, v2 · Which of the two openings should we use?",
         options: [
           "A. Show the problem first, then solve it with the product",
           "B. Show the result first, then rewind through the making",
@@ -260,107 +261,112 @@ export const landingEn = {
           feed: "#22 Intro deck, first draft moved to In review.",
         },
       ] satisfies readonly DemoMoment[],
-      caption: "Drag a card to another column.",
       description:
         "The console’s board: task cards in the columns Ideas, Ready, In progress, In review and Done, the ones an agent has taken marked as such. Beside it, one decision waiting for your answer, and a feed of who did what.",
     },
     points: [
       {
-        title: "Post it, and it is taken.",
-        body: "Put one task on the board; an agent takes it, and it comes back for review when it is done.",
+        title: "Post a task, and AI does it",
+        body: "Put a task on the board as a card. A connected AI takes it, does the work, and leaves it in Review when it is done.",
       },
       {
-        title: "All you are asked is to decide.",
-        body: "Reports, decisions and results pile up a line at a time, and you see who is doing what.",
+        title: "You check and choose",
+        body: "Progress reports and results collect in the feed. A question comes only when a direction needs choosing, and the work goes on once you answer.",
       },
       {
-        title: "Your AI, your subscription.",
-        body: "An agent connected to the console gets the project’s skills with it. Any agent with a shell.",
+        title: "The AI you already use",
+        body: "Connect the AI you already use, such as Claude Code or Codex. It gets the skills made for this project along with it.",
       },
     ],
     pack: {
-      lead: "The console is a skill pack too. Connect it, and your agent walks you from setup to running it.",
+      lead: "The console comes as a skill pack too. Connect this address to your AI app, and the AI guides you from setup to everyday use.",
       open: "Open the console pack",
       guide: "Setup guide",
     },
   },
   steps: {
-    eyebrow: "Three words",
-    title: "Fork the pack, put it on the console, hand it to the agents.",
+    eyebrow: "How to start",
+    title: "Three steps, and your AI team gets to work.",
     items: [
       {
-        title: "Pack",
-        body: "Fork skillcdn/skills. The skills of marketing, design, engineering, product and media become your company’s own.",
+        title: "Get the skill pack",
+        body: "Copy skillcdn/skills to your own GitHub (fork it). Skills for marketing, design, engineering, product and video work become your company’s own.",
         link: "Open the pack",
       },
       {
-        title: "Console",
-        body: "A board of work. Alone, it still runs like an organization. Connect the console pack and your agent walks you through the setup.",
+        title: "Open the console",
+        body: "The board where you post work and watch it move. Connect the console pack to your AI, and it walks you through the setup from the start.",
         link: "Open the console pack",
       },
       {
-        title: "Agents",
-        body: "Connect the app you already use to the console, and the pack’s skills come with it. ChatGPT, Claude, Cursor, Codex, Gemini CLI.",
+        title: "Connect your AI",
+        body: "Connect the pack’s address to the AI app you already use, such as ChatGPT, Claude, Cursor, Codex or Gemini CLI. It then works by the pack’s skills.",
         link: "Connection guide",
       },
     ],
   },
   packs: {
-    eyebrow: "Packs",
-    title: "The well-known packs, and your own repository, one address each.",
-    lead: "Start with the verified packs, and open your own repository by its address.",
-    all: "Browse every featured pack",
+    eyebrow: "Skill packs",
+    title: "Open any skill pack, or your own repository, by its address.",
+    lead: "Start with the verified packs. Enter the address of your own GitHub repository, and it opens as a pack.",
+    all: "See all featured packs",
     skills: (count: number) => (count === 1 ? "1 skill" : `${count} skills`),
   },
   builders: {
     eyebrow: "SkillCDN Builders",
-    title: "2027: one hundred solo founders.",
-    lead: "In 2027 we put up one hundred solo founders who run their companies with AI agents. A one-person unicorn built on AI agents is coming. Be the one.",
+    title: "One hundred solo founders by 2027.",
+    lead: "By 2027 we are bringing together one hundred solo founders who run their companies with AI agents. A one-person unicorn built on AI agents is coming. Be the one.",
     features: [
-      { title: "Your seat on the shared console", body: "A board and a pack for every project." },
+      {
+        title: "Your seat on the shared console",
+        body: "A work board and a skill pack for every project.",
+      },
       {
         title: "The skill pack and the setup",
-        body: "Start with the company’s skills, then add your own.",
+        body: "Start right away with ready skills, and add the ones you need yourself.",
       },
       {
         title: "A review every week",
-        body: "Progress is recorded, and the process is in the open.",
+        body: "Progress is recorded every week, and the making is done in the open.",
       },
-      { title: "For the builders selected", body: "Tools, and support at each milestone." },
+      {
+        title: "For the builders selected",
+        body: "Tools, and support each time you reach a milestone.",
+      },
     ],
-    many: "Countless independent builders are each building a company of their own. Join them in the GitHub organization.",
+    many: "Many solo builders are each building a company of their own. Join them in the GitHub organization.",
     join: "Join the builders",
   },
   faq: {
-    title: "A few things you might be wondering.",
+    title: "Common questions before you start",
     items: [
       {
         question: "Which AI app do I need?",
         answer:
-          "ChatGPT, Claude, Cursor, Codex, Gemini CLI, or any app that connects over MCP. The subscription you already have is all it takes.",
+          "Any app that supports MCP, the standard for connecting outside tools to an AI app, such as ChatGPT, Claude, Cursor, Codex or Gemini CLI. The subscription you already have is all it takes.",
       },
       {
         question: "How do I start?",
         answer:
-          "Search for what you want to make, pick a skill, and connect the address of its pack to your AI app. The pack’s page has the steps for each app.",
+          "Search for what you want to make, pick a skill, and connect the address of the pack it is in to your AI app. The pack’s page shows how to connect each app.",
       },
       {
         question: "What should I start with?",
         answer:
-          "Start with one job you need done now. Search for something one sentence can ask for, card news or an intro deck, say, and see what comes back; once there are several jobs, connect the console pack and run them on a board.",
+          "Start with one job you need done now. Search for something you can ask for in one sentence, such as card news or an intro deck, and see the result. Once you have several jobs, connect the console pack and manage them on a board.",
       },
       {
-        question: "What are the builders?",
+        question: "Who are the builders?",
         answer:
-          "The solo founders who run their companies with AI agents. Join the GitHub organization SkillCDN Builders to start with a seat on the shared console and the skill pack, with progress recorded in a review every week.",
+          "A community of solo founders who run their companies with AI agents. Join the GitHub organization SkillCDN Builders to start with a seat on the shared console and the skill pack, with progress recorded in a weekly review.",
       },
     ],
   },
   cta: {
-    title: "Start your AI organization today.",
+    title: "Start your AI team today.",
     search: "Search for what to make",
     join: "Join the builders",
-    share: "Share a pack of your own",
+    share: "Share a pack you made",
   },
   authors: {
     title: "Your repository is a pack too, by its address.",

@@ -23,7 +23,8 @@ function Stage(props: { readonly entry: RestShowcaseEntry; readonly description:
   const video = useRef<HTMLVideoElement>(null);
   const [failed, setFailed] = useState(false);
   const { media, width, height } = props.entry;
-  // A tall result, a phone's clip, stands whole in the stage, over itself blurred.
+  // A tall result, a phone's clip, stands whole in the stage, over itself blurred; as the lead
+  // of a wide screen it stands as a column of its own, at its own shape.
   const portrait = height > width;
 
   useEffect(() => {
@@ -75,18 +76,19 @@ function isPlainClick(event: MouseEvent): boolean {
 }
 
 /**
- * One showcase entry (ADR-0028): what was asked, in quotes, as the title; whose work it is and
- * what it came from; the stage with the result; and two ways out, to the result itself and to
+ * One showcase entry (ADR-0028), read in the order the work happened: what was asked, in quotes,
+ * with whose work it is and what it came from above it; then the stage with the result; then
+ * what came of it, the facts of the deliverable, and two ways out, to the result itself and to
  * the skill that made it. The result is the card's click target when the entry links one,
- * stretched over the card: shown over the page where the deployment knows it for a picture or a
- * document, opened in a tab of its own otherwise; the skill stays a link of its own above it.
+ * stretched over the card: shown over the page where the deployment knows it for a picture, a
+ * clip or a document, opened in a tab of its own otherwise; the skill stays a link of its own.
  * Media comes from the build or from the operator's uploads; repository content never supplies
  * a media URL.
  */
 export function ShowcaseCard(props: {
   readonly entry: RestShowcaseEntry;
   readonly language: Language;
-  /** The first entry: the stage beside the words, wide, rather than above them. */
+  /** The first entry: wide across the row, or a column of its own when its result is tall. */
   readonly lead?: boolean;
   readonly className?: string;
   /** Shows the result over the page, when it can be shown there. */
@@ -109,8 +111,7 @@ export function ShowcaseCard(props: {
         props.className,
       )}
     >
-      <Stage entry={entry} description={texts.clip ?? texts.title} />
-      <div className={styles.words}>
+      <div className={styles.head}>
         <p className={styles.meta}>
           <span className={cx(styles.origin, origin === "builder" && styles.builder)}>
             {copy.origins[origin]}
@@ -150,9 +151,12 @@ export function ShowcaseCard(props: {
             </a>
           )}
         </h3>
+      </div>
+      <Stage entry={entry} description={texts.clip ?? texts.title} />
+      <div className={styles.foot}>
         <p className={styles.body}>{texts.body}</p>
         {texts.tags.length > 0 && (
-          <ul className={styles.tags}>
+          <ul className={styles.facts}>
             {texts.tags.map((tag) => (
               <li key={tag}>{tag}</li>
             ))}
@@ -181,9 +185,12 @@ export function ShowcaseCard(props: {
 }
 
 /**
- * The entries as the front page lays them out: the first one wide, the stage beside the words,
- * and the rest as cards in as many columns as fit; on a phone, a row to swipe through. One
- * viewer serves them all, for the result a card opens over the page.
+ * The entries as the front page lays them out. The first one leads: a tall result, a phone's
+ * clip, stands as a column of its own beside the rest, which lie in two columns with the first
+ * of them wide, so that every result is shown at its own shape; a wide result lies across the
+ * row instead, its stage beside its words, with the rest in as many columns as fit. On a phone
+ * they are a row to swipe through. One viewer serves them all, for the result a card opens
+ * over the page.
  */
 export function ShowcaseGrid(props: {
   readonly entries: readonly RestShowcaseEntry[];
@@ -193,22 +200,38 @@ export function ShowcaseGrid(props: {
     readonly entry: RestShowcaseEntry;
     readonly kind: Viewable;
   } | null>(null);
+  const [lead, ...rest] = props.entries;
+  const tall = lead !== undefined && lead.height > lead.width;
+  const onOpen = (opened: RestShowcaseEntry, kind: Viewable) => setOpen({ entry: opened, kind });
   return (
-    <div className={styles.grid}>
-      {props.entries.map((entry, index) => (
+    <div className={cx(styles.grid, tall && styles.tall)}>
+      {lead !== undefined && (
         <ShowcaseCard
-          key={entry.id}
-          entry={entry}
+          entry={lead}
           language={props.language}
-          lead={index === 0}
-          className={cx(
-            glass.reveal,
-            index % 3 === 1 && glass.late,
-            index % 3 === 2 && glass.later,
-          )}
-          onOpen={(opened, kind) => setOpen({ entry: opened, kind })}
+          lead
+          className={glass.reveal}
+          onOpen={onOpen}
         />
-      ))}
+      )}
+      {rest.length > 0 && (
+        <div className={styles.rest}>
+          {rest.map((entry, index) => (
+            <ShowcaseCard
+              key={entry.id}
+              entry={entry}
+              language={props.language}
+              className={cx(
+                glass.reveal,
+                index === 0 && styles.wide,
+                index % 3 === 0 && glass.late,
+                index % 3 === 1 && glass.later,
+              )}
+              onOpen={onOpen}
+            />
+          ))}
+        </div>
+      )}
       {open !== null && (
         <ShowcaseViewer
           key={open.entry.id}

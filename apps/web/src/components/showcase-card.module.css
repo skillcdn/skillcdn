@@ -1,58 +1,62 @@
-/* A showcase entry (ADR-0028): the stage with the result, the words under it, and the two ways
-   out. The first entry lies across the row, the stage beside the words; the rest are cards. */
+/* A showcase entry (ADR-0028), read in the order the work happened: what was asked above, the
+   stage with the result, and what came of it below. The entries lie by the shape of their
+   results: a tall lead stands as a column beside the rest, which lie in two columns with the
+   first of them wide; a wide lead lies across the row, its stage beside its words. */
 .grid {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.rest {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
   gap: var(--space-5);
 }
 
 .card {
-  display: grid;
-  grid-template-rows: auto 1fr;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
 }
 
-/* The lead takes the whole row, and lays its stage beside its words once there is room. */
-.lead {
-  grid-column: 1 / -1;
+/* The ask: whose work it is, and the sentence that started it. */
+.head {
+  padding: var(--space-5) var(--space-5) var(--space-4);
 }
 
-@media (min-width: 52.01rem) {
-  .lead {
-    grid-template-columns: 1.3fr 1fr;
-    grid-template-rows: none;
-  }
-
-  .lead .stage {
-    aspect-ratio: auto;
-    min-height: var(--showcase-lead-min);
-  }
-
-  .lead .portrait {
-    min-height: var(--showcase-lead-portrait);
-  }
-
-  .lead .words {
-    justify-content: center;
-    padding: var(--space-7) var(--space-7) var(--space-7) var(--space-6);
-  }
-
-  .lead .title {
-    font-size: var(--text-2xl);
-  }
-
-  .lead .body {
-    font-size: var(--text-md);
-  }
+/* What came of it: the words, the facts of the deliverable, and the ways out at the foot. */
+.foot {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: var(--space-4) var(--space-5) var(--space-5);
 }
 
-/* The stage: every poster at one ratio, the picture filling it; the clip the same. */
+/* The stage: every poster at one ratio, the picture filling it; the clip the same. Its four
+   edges dissolve into the pane, one mask each way and the two intersected, so that the result
+   lies on the glass and no box is drawn round it: whatever ground a poster brings, it fades
+   into the pane's before it reaches the edge. */
 .stage {
   position: relative;
   min-width: 0;
   aspect-ratio: var(--showcase-ratio);
   overflow: hidden;
-  background: var(--color-bg);
+  mask:
+    linear-gradient(
+      90deg,
+      transparent,
+      #000 var(--showcase-feather),
+      #000 calc(100% - var(--showcase-feather)),
+      transparent
+    ),
+    linear-gradient(
+      transparent,
+      #000 var(--showcase-feather),
+      #000 calc(100% - var(--showcase-feather)),
+      transparent
+    );
+  mask-composite: intersect;
 }
 
 .stage video,
@@ -64,8 +68,8 @@
   object-fit: cover;
 }
 
-/* A tall result, a phone's clip: taller than wide, whole in the stage, with itself blurred
-   behind it for a ground. */
+/* A tall result, a phone's clip, on a card: taller than wide, whole in the stage, with itself
+   blurred behind it for a ground. */
 .portrait {
   aspect-ratio: var(--showcase-portrait-ratio);
 }
@@ -82,11 +86,124 @@
   opacity: var(--showcase-backdrop-opacity);
 }
 
-.words {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  padding: var(--space-5);
+/* Wide enough for a row: a card that lies across one, the lead and, beside a tall lead, the
+   first of the rest, lays its stage beside its words, which sit together in the middle of the
+   other column. */
+@media (min-width: 40.01rem) {
+  .lead,
+  .tall .wide {
+    display: grid;
+    grid-template-columns: 1.3fr 1fr;
+    grid-template-rows: 1fr auto auto 1fr;
+    grid-template-areas:
+      "stage ."
+      "stage head"
+      "stage foot"
+      "stage .";
+  }
+
+  .tall .wide {
+    grid-column: 1 / -1;
+  }
+
+  .lead .stage,
+  .tall .wide .stage {
+    grid-area: stage;
+    aspect-ratio: auto;
+    min-height: var(--showcase-lead-min);
+  }
+
+  .lead .portrait,
+  .tall .wide .portrait {
+    min-height: var(--showcase-lead-portrait);
+  }
+
+  .lead .head,
+  .tall .wide .head {
+    grid-area: head;
+    padding: var(--space-7) var(--space-7) 0 var(--space-6);
+  }
+
+  .lead .foot,
+  .tall .wide .foot {
+    grid-area: foot;
+    flex: none;
+    padding: var(--space-3) var(--space-7) var(--space-7) var(--space-6);
+  }
+
+  .lead .title,
+  .tall .wide .title {
+    font-size: var(--text-2xl);
+  }
+
+  .lead .body,
+  .tall .wide .body {
+    font-size: var(--text-md);
+  }
+}
+
+/* Wide enough for the column: a tall lead stands as a column beside the rest, the clip filling
+   its width, and the rest stand together no taller than it: the first of them lies across
+   their two columns, its stage beside its words, and the other two under it. The stage takes
+   the column's height and never less than the clip's own shape, so that nothing of the clip is
+   cut off the top or the bottom; what the column has to spare is cut from the sides. */
+@media (min-width: 52.01rem) {
+  .tall {
+    grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
+  }
+
+  .tall .lead {
+    display: flex;
+    flex-direction: column;
+    container-type: inline-size;
+  }
+
+  .tall .lead .stage {
+    flex: 1;
+    aspect-ratio: auto;
+    min-height: calc(100cqw * 16 / 9);
+  }
+
+  .tall .lead .portrait video,
+  .tall .lead .portrait img {
+    object-fit: cover;
+  }
+
+  .tall .lead .backdrop {
+    display: none;
+  }
+
+  .tall .lead .head {
+    padding: var(--space-5) var(--space-5) var(--space-4);
+  }
+
+  .tall .lead .foot {
+    flex: none;
+    padding: var(--space-4) var(--space-5) var(--space-5);
+  }
+
+  .tall .lead .title,
+  .tall .wide .title {
+    font-size: var(--text-xl);
+  }
+
+  .tall .lead .body,
+  .tall .wide .body {
+    font-size: var(--text-sm);
+  }
+
+  /* The wide card is narrower than a row of its own, so its words sit a little closer. */
+  .tall .wide .head {
+    padding: var(--space-6) var(--space-6) 0 var(--space-5);
+  }
+
+  .tall .wide .foot {
+    padding: var(--space-3) var(--space-6) var(--space-6) var(--space-5);
+  }
+
+  .tall .rest {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* Whose work it is, in a pill, and what it came from beside it. */
@@ -119,9 +236,9 @@
 }
 
 .title {
-  font-size: var(--text-xl);
+  font-size: var(--text-lg);
   line-height: var(--leading-tight);
-  text-wrap: pretty;
+  text-wrap: balance;
 }
 
 /* The way in: the title's link, stretched over the whole card. Its focus ring is the card's. */
@@ -146,27 +263,27 @@
 }
 
 .body {
-  margin-top: var(--space-3);
   color: var(--color-text-muted);
   font-size: var(--text-sm);
   text-wrap: pretty;
 }
 
-.tags {
+/* The facts of the deliverable, one line, a dot between them: what was received, not a label
+   of what it is. */
+.facts {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-top: var(--space-4);
+  margin-top: var(--space-3);
+  color: var(--color-text);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.01em;
 }
 
-.tags li {
-  padding-inline: var(--space-3);
-  padding-block: calc(var(--space-1) - var(--label-optical))
-    calc(var(--space-1) + var(--label-optical));
-  border: var(--border-lit);
-  border-radius: var(--radius-full);
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
+.facts li + li::before {
+  content: "·";
+  margin-inline: var(--space-2);
+  color: var(--color-text-faint);
 }
 
 /* The two ways out, at the foot: the result, which the stretched link opens, and the skill,
@@ -224,7 +341,8 @@
 @media (max-width: 40rem) {
   /* On a phone the entries are a row to swipe through, one card at a time with the next one
      showing at the edge, instead of a column of tall cards. The row bleeds to the edges of the
-     screen and snaps card by card; the lead is a card like the others. */
+     screen and snaps card by card; the lead is a card like the others, and the rest are cards
+     of the row, not a grid of their own. */
   .grid {
     grid-auto-flow: column;
     grid-auto-columns: 86%;
@@ -238,19 +356,23 @@
     scrollbar-width: none;
   }
 
-  .grid > * {
+  .rest {
+    display: contents;
+  }
+
+  .card {
     scroll-snap-align: start;
   }
 
-  .lead {
-    grid-column: auto;
-  }
-
-  .grid:has(> :only-child) {
+  .grid:not(:has(.rest)) {
     grid-auto-columns: 100%;
   }
 
-  .words {
-    padding: var(--space-4);
+  .head {
+    padding: var(--space-4) var(--space-4) var(--space-3);
+  }
+
+  .foot {
+    padding: var(--space-3) var(--space-4) var(--space-4);
   }
 }

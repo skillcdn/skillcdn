@@ -1,9 +1,10 @@
 /* The strip of organizations: a rule above and below, the label and the way to join on one line,
-   the marks on the next. */
+   the marks on the next. It is a pane of glass over the lit room, not a slab of its own: the
+   room's light shows through, and the rules are white let through, so they hold over it. */
 .strip {
   padding-block: var(--space-4) var(--space-5);
-  border-block: var(--border);
-  background: var(--color-bg-subtle);
+  border-block: var(--border-lit);
+  background: var(--color-glass);
 }
 
 .head {

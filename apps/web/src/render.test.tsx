@@ -34,7 +34,13 @@ import {
 } from "./entry-server.js";
 import { messagesFor } from "./i18n/index.js";
 import { defaultShowcase } from "./showcase.js";
-import { CONSOLE_PACK_ADDRESS, DEFAULT_SHOWCASE_MEDIA, LINKS, localizedPath } from "./site.js";
+import {
+  CONSOLE_PACK_ADDRESS,
+  DEFAULT_SHOWCASE_MEDIA,
+  LINKS,
+  type LocalizedPath,
+  localizedPath,
+} from "./site.js";
 
 const TEMPLATE = `<!doctype html>\n${TEMPLATE_MARKERS.htmlLang}<head>${TEMPLATE_MARKERS.head}</head><body>${TEMPLATE_MARKERS.root}</body></html>`;
 
@@ -276,13 +282,23 @@ describe("prerendered pages", () => {
       // The box first, the showcase after it, and the address field far down the page.
       expect(body).toContain('name="q"');
       expect(body.indexOf('name="q"')).toBeLessThan(body.indexOf('inputMode="url"'));
-      for (const id of ["cards", "deck", "looks"] as const) {
+      for (const id of ["cards", "deck", "site"] as const) {
         const entry = DEFAULT_SHOWCASE_MEDIA.entries[id];
         const words = t.landing.showcase.entries[id];
         expect(body, id).toContain(words.title);
         expect(body, id).toContain(`href="${entry.address}"`);
-        expect(body, id).toContain(`href="${entry.link}"`);
-        expect(body, id).toContain(`src="${entry.poster}"`);
+        expect(body, id).toContain(`href="${localizedPath(entry.link, language)}"`);
+        // A clip stands in a video with its poster, in the cut of the page's language; a result
+        // without one is its poster. (Widened, since the build's entries all carry a clip today
+        // and the other branch would narrow away.)
+        const media: { readonly clip: LocalizedPath | null; readonly poster: LocalizedPath } =
+          entry;
+        const poster = localizedPath(media.poster, language);
+        if (media.clip === null) expect(body, id).toContain(`src="${poster}"`);
+        else {
+          expect(body, id).toContain(`src="${localizedPath(media.clip, language)}"`);
+          expect(body, id).toContain(`poster="${poster}"`);
+        }
       }
       expect(body).toContain(t.landing.showcase.origins.pack);
       // The ad leads, in the cut of the page's language: its clip is loaded only when played,
@@ -354,7 +370,9 @@ describe("prerendered pages", () => {
       search: "",
       data: { showcase: { ready: { items: [], organizations: [] } } },
     }).html;
-    expect(empty).toContain(`src="${DEFAULT_SHOWCASE_MEDIA.entries.cards.poster}"`);
+    expect(empty).toContain(
+      `src="${localizedPath(DEFAULT_SHOWCASE_MEDIA.entries.cards.poster, "en")}"`,
+    );
     expect(empty).toContain(defaultShowcase()[0]?.texts.en?.title ?? "missing");
     expect(empty).toContain('src="/organizations/kdxlabs.png"');
   });

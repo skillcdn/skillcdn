@@ -548,14 +548,20 @@ export function ConsoleDemo() {
   /** The drag under way, once the card has come loose; nothing while a card is merely pressed. */
   const dragging = drag?.moving === true ? drag : null;
   // The card in hand follows the pointer by its transform, set on the element itself: the
-  // pages carry no inline styles, and a transform costs no layout.
+  // pages carry no inline styles, and a transform costs no layout. It stands in the root, as the
+  // hand does, and is placed from there: a fixed position would be measured from the nearest
+  // transformed ancestor instead, which the section's scroll-driven motion is.
   useLayoutEffect(() => {
     const node = ghost.current;
-    if (node === null || dragging === null) {
+    const rootNode = node?.parentElement ?? null;
+    if (node === null || rootNode === null || dragging === null) {
       return;
     }
+    const rootRect = rootNode.getBoundingClientRect();
+    const x = dragging.x - dragging.grip.x - rootRect.left;
+    const y = dragging.y - dragging.grip.y - rootRect.top;
     node.style.width = `${dragging.width}px`;
-    node.style.transform = `translate(${dragging.x - dragging.grip.x}px, ${dragging.y - dragging.grip.y}px)`;
+    node.style.transform = `translate(${x}px, ${y}px)`;
   }, [dragging]);
 
   /** The card the hand has, while it holds or carries it. */

@@ -99,12 +99,14 @@
   background: var(--console-field);
 }
 
-/* The board: one pane per state, side by side, scrolling sideways where they do not fit. */
+/* The board: one pane per state, side by side, scrolling sideways where they do not fit. Its
+   height is fixed, tall enough for the most cards a column holds while the board plays, so that
+   the window does not grow and shrink as cards move; a column given more scrolls inside. */
 .board {
   display: flex;
   align-items: stretch;
   gap: var(--space-3);
-  min-height: var(--console-board-height);
+  height: var(--console-board-height);
   padding-bottom: var(--space-1);
   overflow-x: auto;
   scrollbar-width: thin;
@@ -115,6 +117,7 @@
   flex: 1 0 var(--console-column-width);
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
   border: 1px solid transparent;
   border-radius: var(--radius-xl);
   background: var(--console-glass);
@@ -177,10 +180,13 @@
 
 .cards {
   display: grid;
+  flex: 1;
   align-content: start;
   gap: var(--space-2);
-  min-height: 7rem;
+  min-height: 0;
   padding: var(--space-2) var(--space-2) var(--space-6);
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 
 /* A card: the number, the title and one row of badges, with the agent at its end. */
@@ -338,6 +344,7 @@
 
 .question {
   font-weight: var(--weight-bold);
+  text-wrap: balance;
 }
 
 .options {
@@ -370,9 +377,15 @@
   font-weight: var(--weight-medium);
 }
 
+/* The feed holds five lines whatever it has, so that the window keeps its height when the
+   first moment adds a line to the four it starts with; the newest is on top, and where a line
+   wraps on a narrow screen the oldest falls off the bottom. */
 .feed {
   display: grid;
+  align-content: start;
   gap: var(--space-1);
+  height: calc(5 * (1.45em + 2 * var(--space-1) + 1px) + 4 * var(--space-1));
+  overflow: hidden;
 }
 
 .feedItem {
@@ -452,9 +465,10 @@
   overflow: visible;
 }
 
-/* The card in hand: over everything, a little turned, as wide as where it stands. */
+/* The card in hand: over everything, a little turned, as wide as where it stands; placed in the
+   root like the hand, since a fixed position would answer to a transformed ancestor. */
 .ghost {
-  position: fixed;
+  position: absolute;
   top: 0;
   left: 0;
   z-index: 50;

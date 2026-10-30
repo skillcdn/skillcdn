@@ -79,7 +79,7 @@ export const ko: Messages = {
     prefixHint: "GitHub",
     placeholder: "owner/repo",
     submit: "열기",
-    hint: "선택 사항: @브랜치, @태그 또는 @커밋, 그 뒤에 /하위/경로.",
+    hint: "필요하면 뒤에 @브랜치(또는 태그, 커밋)와 /폴더 경로를 붙일 수 있습니다.",
     examples: "예시",
     invalid: "올바른 주소가 아닙니다.",
     errors: {
@@ -162,9 +162,7 @@ export const ko: Messages = {
     partOf: (directory: string) => `${directory} 스킬에 속한 파일`,
     aside: {
       address: { title: "주소를 아세요?", body: "저장소 주소를 열면 바로 그 팩으로 갑니다." },
-      suggestions: "이런 검색도",
     },
-    suggestions: ["쇼츠 광고", "회의 자료 덱", "카드 결제", "문서 팩 만들기", "경쟁사 광고 조사"],
   },
 
   docs: {

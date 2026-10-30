@@ -27,7 +27,7 @@ import {
 import { useI18n } from "../i18n/index.js";
 import { skillDescription, skillTitle } from "../i18n/repository-text.js";
 import { Link } from "../navigation.js";
-import { mountHref, searchHref } from "../router.js";
+import { mountHref } from "../router.js";
 import { applyHead, buildHead } from "../seo/head.js";
 import styles from "./search.module.css";
 
@@ -299,16 +299,6 @@ export function SearchPage(props: SearchPageProps) {
             <h2>{t.search.aside.address.title}</h2>
             <p>{t.search.aside.address.body}</p>
             <AddressForm origin={props.origin} />
-          </div>
-          <div className={cx(glass.pane, styles.box)}>
-            <h2>{t.search.aside.suggestions}</h2>
-            <ul className={styles.suggestions}>
-              {t.search.suggestions.map((suggestion) => (
-                <li key={suggestion}>
-                  <Link href={searchHref(suggestion)}>{suggestion}</Link>
-                </li>
-              ))}
-            </ul>
           </div>
           <div className={cx(glass.pane, styles.box)}>
             <h2>{t.packKinds.legend.title}</h2>

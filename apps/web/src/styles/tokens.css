@@ -532,6 +532,9 @@
   /* A showcase entry's stage: every poster is drawn at this ratio, whatever it holds. */
   --showcase-ratio: 16 / 10;
   --showcase-lead-min: 18rem;
+  /* How far in from each edge the stage dissolves into the pane, so that a result lies on the
+     glass with no box drawn round it. */
+  --showcase-feather: 1.75rem;
   /* A tall result in the stage: its ratio on a card, the height of the lead's, and how its
      poster is blurred behind it. */
   --showcase-portrait-ratio: 4 / 5;
@@ -544,13 +547,10 @@
   --viewer-min-width: 24rem;
   --viewer-bar: 3.25rem;
   --viewer-arrive: 180ms;
-  /* The cloud of packs, like stars: how far a pill leans after the pointer and how long it
-     takes to settle, how far it drifts by itself and how long one drift takes, how much one
-     grows under the pointer, and the faint stars behind them all. */
-  --cloud-lean: 14px;
-  --cloud-lean-time: 700ms;
-  --cloud-drift: 5px;
-  --cloud-drift-time: 7s;
+  /* The cloud of packs, like stars: how far a pill drifts by itself and how long one drift
+     takes, how much one grows under the pointer, and the faint stars behind them all. */
+  --cloud-drift: 9px;
+  --cloud-drift-time: 9s;
   --cloud-grow: 1.06;
   --cloud-stars-opacity: 0.55;
   --cloud-stars:
@@ -621,7 +621,8 @@
   --console-ghost-shadow: 0 1.25rem 3rem #1a2b5566;
   --console-window-shadow: 0 2rem 5rem #00000080;
   --console-column-width: 12.5rem;
-  --console-board-height: 21rem;
+  /* A head, four cards and their padding: the most a column holds while the board plays. */
+  --console-board-height: 28rem;
   --console-avatar: 1.25rem;
   --console-arrive: 420ms cubic-bezier(0.2, 0.7, 0.3, 1);
   --console-text-xs: 0.75rem;

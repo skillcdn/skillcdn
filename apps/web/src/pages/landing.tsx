@@ -1,5 +1,5 @@
 import type { LandingSection } from "@skillcdn/core";
-import { type PointerEvent as ReactPointerEvent, useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { track } from "../analytics.js";
 import { api } from "../api/client.js";
 import { resourceKeys } from "../api/keys.js";
@@ -105,42 +105,8 @@ function PackCloud() {
   );
 }
 
-/**
- * The cloud of packs leans after the pointer, like stars at their distances: where the pointer
- * is across the section, -1 to 1 each way, is written on the section for the pills to read, at
- * most once a frame, and goes back to the middle when the pointer leaves. A finger does not lean
- * it: a touch moves the page.
- */
-function useLean() {
-  const frame = useRef(0);
-  const at = useRef({ x: 0, y: 0 });
-  const write = (node: HTMLElement) => {
-    frame.current = 0;
-    node.style.setProperty("--lean-x", at.current.x.toFixed(3));
-    node.style.setProperty("--lean-y", at.current.y.toFixed(3));
-  };
-  return {
-    onPointerMove: (event: ReactPointerEvent<HTMLElement>) => {
-      if (event.pointerType !== "mouse") return;
-      const node = event.currentTarget;
-      const rect = node.getBoundingClientRect();
-      at.current = {
-        x: ((event.clientX - rect.left) / rect.width) * 2 - 1,
-        y: ((event.clientY - rect.top) / rect.height) * 2 - 1,
-      };
-      if (frame.current === 0) frame.current = window.requestAnimationFrame(() => write(node));
-    },
-    onPointerLeave: (event: ReactPointerEvent<HTMLElement>) => {
-      window.cancelAnimationFrame(frame.current);
-      at.current = { x: 0, y: 0 };
-      write(event.currentTarget);
-    },
-  };
-}
-
 export function LandingPage(props: { readonly origin: string }) {
   const { t, language } = useI18n();
-  const lean = useLean();
   const copy = t.landing;
   const features = useFeatures();
   const host = hostOf(props.origin);
@@ -230,7 +196,6 @@ export function LandingPage(props: { readonly origin: string }) {
             <div className={cx(styles.consoleStage, glass.reveal)}>
               {/* Remounted per language, since the board's words become its state. */}
               <ConsoleDemo key={language} />
-              <p className={styles.caption}>{copy.console.window.caption}</p>
             </div>
             <ul className={styles.points}>
               {copy.console.points.map((point, index) => (
@@ -283,14 +248,7 @@ export function LandingPage(props: { readonly origin: string }) {
                       ? CONSOLE_PACK_ADDRESS
                       : docsHref(USE_GUIDE_SLUG);
                 return (
-                  <li
-                    key={step.title}
-                    className={cx(
-                      glass.reveal,
-                      index === 1 && glass.late,
-                      index === 2 && glass.later,
-                    )}
-                  >
+                  <li key={step.title}>
                     <span className={styles.stepNumber} aria-hidden="true">
                       {index + 1}
                     </span>
@@ -309,7 +267,7 @@ export function LandingPage(props: { readonly origin: string }) {
       )}
 
       {shows("packs") && (
-        <section id="packs" className={styles.packs} {...lean}>
+        <section id="packs" className={styles.packs}>
           <Container className={styles.packsGrid}>
             <div className={glass.reveal}>
               <SectionHead
@@ -339,9 +297,24 @@ export function LandingPage(props: { readonly origin: string }) {
         <section id="builders" className={styles.builders}>
           <Container>
             <div className={cx(glass.pane, styles.buildersPanel, glass.reveal)}>
-              <p className={styles.kicker}>{copy.builders.eyebrow}</p>
-              <h2>{copy.builders.title}</h2>
-              <p className={styles.sectionLead}>{copy.builders.lead}</p>
+              <div className={styles.buildersIntro}>
+                <p className={styles.kicker}>{copy.builders.eyebrow}</p>
+                <h2>{copy.builders.title}</h2>
+                <p className={styles.sectionLead}>{copy.builders.lead}</p>
+                <p className={styles.many}>{copy.builders.many}</p>
+                <div className={styles.actions}>
+                  <a
+                    className={cx(styles.primary, styles.large)}
+                    href={LINKS.builders}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => track("cta_click", { id: "builders_join" })}
+                  >
+                    {copy.builders.join}
+                    <ExternalIcon />
+                  </a>
+                </div>
+              </div>
               <ul className={styles.features}>
                 {copy.builders.features.map((feature) => (
                   <li key={feature.title}>
@@ -350,19 +323,6 @@ export function LandingPage(props: { readonly origin: string }) {
                   </li>
                 ))}
               </ul>
-              <p className={styles.many}>{copy.builders.many}</p>
-              <div className={styles.actions}>
-                <a
-                  className={cx(styles.primary, styles.large)}
-                  href={LINKS.builders}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => track("cta_click", { id: "builders_join" })}
-                >
-                  {copy.builders.join}
-                  <ExternalIcon />
-                </a>
-              </div>
             </div>
           </Container>
         </section>
