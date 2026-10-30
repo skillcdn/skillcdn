@@ -1,8 +1,11 @@
-import type {
-  RestShowcase,
-  RestShowcaseEntry,
-  RestShowcaseOrganization,
-  ShowcaseTexts,
+import {
+  formatAddress,
+  parseAddress,
+  type RestShowcase,
+  type RestShowcaseEntry,
+  type RestShowcaseOrganization,
+  ROOT_PATH,
+  type ShowcaseTexts,
 } from "@skillcdn/core";
 import { messagesFor } from "./i18n/index.js";
 import { DEFAULT_LANGUAGE, LANGUAGES, type Language } from "./i18n/languages.js";
@@ -68,7 +71,7 @@ export function defaultShowcase(
         animation:
           media.animation === null
             ? null
-            : { url: localizedPath(media.animation, language), type: "image/webp" },
+            : { url: localizedPath(media.animation, language), type: "image/avif" },
         poster: { url: localizedPath(media.poster, language), type: "image/webp" },
         reference: null,
         picture: null,
@@ -121,6 +124,15 @@ const NO_WORDS: ShowcaseTexts = {
   credit: null,
   demo: null,
 };
+
+/**
+ * Where a card leads: the pack of the skill that made the result, which is the entry's address
+ * without its path, ref included. An address that does not parse leads where it says.
+ */
+export function showcasePackAddress(address: string): string {
+  const parsed = parseAddress(address);
+  return parsed.ok ? formatAddress({ ...parsed.value, path: ROOT_PATH }) : address;
+}
 
 /** The words of an entry in a language: the visitor's, else the default language's, else any. */
 export function showcaseTexts(entry: RestShowcaseEntry, language: Language): ShowcaseTexts {

@@ -1,10 +1,10 @@
-import type { RestShowcaseEntry, ShowcaseTexts } from "@skillcdn/core";
+import { type RestShowcaseEntry, type ShowcaseTexts, showcaseCut } from "@skillcdn/core";
 import { useEffect, useRef, useState } from "react";
 import { track } from "../analytics.js";
 import { useI18n } from "../i18n/index.js";
 import type { Language } from "../i18n/languages.js";
 import { Link } from "../navigation.js";
-import { showcaseTexts } from "../showcase.js";
+import { showcasePackAddress, showcaseTexts } from "../showcase.js";
 import { ClipAnimation, isRefusal } from "./clip-animation.js";
 import glass from "./glass.module.css";
 import styles from "./showcase-card.module.css";
@@ -13,15 +13,21 @@ import { useInView } from "./use-in-view.js";
 
 /**
  * The stage of an entry: its clip, fetched once it is on screen and played muted and looped
- * while it is there, or its poster. Where the browser will not start the clip by itself, the
- * same clip as an animated image takes its place, as it does for an entry without a clip.
- * Under reduced motion it does not start, and the poster stands.
+ * while it is there, or its poster, each in the cut of the page's language. Where the browser
+ * will not start the clip by itself, the same clip as an animated image takes its place, as it
+ * does for an entry without a clip. Under reduced motion it does not start, and the poster
+ * stands.
  */
-function Stage(props: { readonly entry: RestShowcaseEntry; readonly description: string }) {
+function Stage(props: {
+  readonly entry: RestShowcaseEntry;
+  readonly media: RestShowcaseEntry["media"];
+  readonly description: string;
+}) {
   const { ref, inView } = useInView<HTMLDivElement>(0.3);
   const video = useRef<HTMLVideoElement>(null);
   const [failed, setFailed] = useState(false);
-  const { media, width, height } = props.entry;
+  const { media } = props;
+  const { width, height } = props.entry;
   // A tall result, a phone's clip, stands whole in the stage, over itself blurred; as the lead
   // of a wide screen it stands as a column of its own, at its own shape.
   const portrait = height > width;
@@ -48,7 +54,7 @@ function Stage(props: { readonly entry: RestShowcaseEntry; readonly description:
         <img className={styles.backdrop} src={media.poster.url} alt="" aria-hidden="true" />
       )}
       {failed || media.clip === null ? (
-        <ClipAnimation entry={props.entry} alt={props.description} />
+        <ClipAnimation media={media} width={width} height={height} alt={props.description} />
       ) : (
         <video
           ref={video}
@@ -73,9 +79,9 @@ function Stage(props: { readonly entry: RestShowcaseEntry; readonly description:
 /**
  * One showcase entry (ADR-0028), read in the order the work happened: what was asked, in quotes,
  * with whose work it is and what it came from above it; then the stage with the result; then
- * what came of it and the facts of the deliverable. The whole card leads to the skill that made
- * it, through the title's link stretched over the card. Media comes from the build or from the
- * operator's uploads; repository content never supplies a media URL.
+ * what came of it and the facts of the deliverable. The whole card leads to the pack of the
+ * skill that made it, through the title's link stretched over the card. Media comes from the
+ * build or from the operator's uploads; repository content never supplies a media URL.
  */
 export function ShowcaseCard(props: {
   readonly entry: RestShowcaseEntry;
@@ -87,6 +93,8 @@ export function ShowcaseCard(props: {
   const { t } = useI18n();
   const { entry } = props;
   const texts: ShowcaseTexts = showcaseTexts(entry, props.language);
+  // The result in the cut of the page's language, where the entry has one.
+  const cut = showcaseCut(entry, props.language);
   const copy = t.landing.showcase;
   const origin = entry.origin ?? "pack";
   return (
@@ -108,15 +116,15 @@ export function ShowcaseCard(props: {
         </p>
         <h3 className={styles.title}>
           <Link
-            href={entry.address}
+            href={showcasePackAddress(entry.address)}
             className={styles.stretched}
-            onClick={() => track("showcase_click", { target: "skill" })}
+            onClick={() => track("showcase_click", { target: "pack" })}
           >
             {texts.title}
           </Link>
         </h3>
       </div>
-      <Stage entry={entry} description={texts.clip ?? texts.title} />
+      <Stage entry={entry} media={cut.media} description={texts.clip ?? texts.title} />
       <div className={styles.foot}>
         <p className={styles.body}>{texts.body}</p>
         {texts.tags.length > 0 && (

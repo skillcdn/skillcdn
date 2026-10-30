@@ -10,7 +10,7 @@ export const landingKo: LandingMessages = {
     placeholder: "무엇을 만들까요? 카드뉴스, 쇼츠 광고, 결제 되는 웹사이트…",
     submit: "검색",
     chips: [
-      "인스타 카드뉴스",
+      "카드뉴스",
       "쇼츠 광고",
       "회의 자료 덱",
       "웹앱 만들고 배포",
@@ -26,15 +26,15 @@ export const landingKo: LandingMessages = {
   },
   showcase: {
     eyebrow: "쇼케이스",
-    title: "AI가 실제로 만든 결과물",
-    lead: "모두 한 문장 요청에서 시작해, AI가 스킬대로 끝까지 만들었습니다.",
+    title: "AI가 전문가가 됩니다",
+    lead: "AI에 스킬을 더해 전문가 에이전트 집단을 보유하세요.",
     origins: { pack: "스킬 팩", builder: "빌더" },
-    skill: "스킬 보기",
+    skill: "스킬 팩 보기",
     entries: {
       ad: {
         title: "“과일 롤리팝 쇼츠 광고 15초 만들어줘”",
-        body: "광고 라이브러리에서 1년 넘게 돌고 있는 사탕 광고를 찾아보고, 일부러 다른 연출로 갔습니다. 과일이 떨어진 자리에 똑같이 생긴 롤리팝이 떨어지며 시작하고, 장면마다 자막과 현장음을 넣었습니다.",
-        tags: ["15초 · 9:16", "장면 5개", "영어"],
+        body: "실시간 광고 트렌드 조사를 시작으로, 영상 제작부터 편집까지 전문가 에이전트가 모두 직접 수행합니다. 오늘 바로 광고를 시작해 보세요.",
+        tags: ["15초 · 9:16", "장면 5개"],
         action: "영상 보기",
         credit: "skillcdn/skills · 마케팅",
         requirement: "이 스킬은 Higgsfield 계정 연결이 필요합니다.",
@@ -43,7 +43,7 @@ export const landingKo: LandingMessages = {
       },
       deck: {
         title: "“이 아이디어로 투자용 사업 기획안 만들어줘”",
-        body: "러닝 크루 앱 아이디어 한 장이 투자용 기획안 12장이 됐습니다. 문제에서 시작해 투자 요청으로 끝나고, PDF로도 뽑았습니다. 영상은 이 기획안으로 발표하는 장면입니다.",
+        body: "아이디어 한 장이 투자자 앞에 설 기획안 12장이 됩니다. 문제에서 시작해 투자 요청으로 끝나고, 보낼 PDF까지 준비됩니다. 완벽한 발표를 준비하세요.",
         tags: ["12장", "HTML + PDF", "발표 영상 18초"],
         action: "PDF 보기",
         credit: "skillcdn/skills · 디자인",
@@ -53,7 +53,7 @@ export const landingKo: LandingMessages = {
       },
       site: {
         title: "“우리 빵집 웹페이지 하나 만들어줘”",
-        body: "목요일에만 문을 여는 빵집 ‘밀도’의 예약 페이지입니다. 빵 사진을 크게 깔고, 이번 주 빵과 남은 수량, 예약 방법을 한 페이지에 넣었습니다. 사진도 AI가 만들었습니다.",
+        body: "목요일에만 여는 빵집 ‘밀도’의 예약 페이지. 큼직한 빵 사진 아래 이번 주 빵과 남은 수량, 예약 방법이 한 장에 담겼습니다. 개발자를 구하는 대신, 에이전트를 개발자로 쓰세요.",
         tags: ["한 페이지", "폰 + 데스크톱", "예약 안내"],
         action: "페이지 보기",
         credit: "skillcdn/skills · 엔지니어링",
@@ -66,7 +66,7 @@ export const landingKo: LandingMessages = {
   console: {
     eyebrow: "콘솔",
     title: "할 일은 보드에 올리고, 결정만 하세요.",
-    lead: "AI 에이전트가 일하고, 당신은 결정만 합니다. 회사 일이 보드 하나에서 돌아갑니다.",
+    lead: "AI 에이전트가 일하고, 당신은 결정만 합니다. 전문가 에이전트 조직을 관리하세요.",
     window: {
       name: "내 회사",
       tabs: ["보드", "로드맵", "캘린더", "문서", "결정", "피드", "스킬"],
@@ -236,7 +236,7 @@ export const landingKo: LandingMessages = {
       },
     ],
     pack: {
-      lead: "콘솔도 스킬 팩으로 받습니다. AI 앱에 이 주소를 연결하면 설치부터 쓰는 법까지 AI가 안내합니다.",
+      lead: "콘솔 스킬 팩으로 시작하세요. AI 앱에 이 주소를 연결하면 설치부터 쓰는 법까지 AI가 안내합니다.",
       open: "콘솔 팩 열기",
       guide: "설치 안내",
     },
@@ -247,7 +247,7 @@ export const landingKo: LandingMessages = {
     items: [
       {
         title: "스킬 팩 가져오기",
-        body: "skillcdn/skills를 내 GitHub로 복사(포크)하세요. 마케팅, 디자인, 개발, 기획, 영상 일을 하는 방법이 담긴 스킬이 내 회사 것이 됩니다.",
+        body: "skillcdn/skills를 내 GitHub로 포크하세요. 마케팅, 디자인, 개발, 기획, 영상 제작을 하는 방법이 담긴 스킬이 내 회사 것이 됩니다.",
         link: "팩 열기",
       },
       {
@@ -257,7 +257,7 @@ export const landingKo: LandingMessages = {
       },
       {
         title: "AI 연결하기",
-        body: "ChatGPT, Claude, Cursor, Codex, Gemini CLI처럼 쓰던 AI 앱에 팩 주소를 연결하세요. 그 AI가 팩의 스킬대로 일합니다.",
+        body: "ChatGPT, Claude, Cursor, Codex, Gemini CLI처럼 쓰던 AI 앱에 팩 주소를 연결하세요. AI가 즉시 전문가가 됩니다.",
         link: "연결 안내",
       },
     ],
@@ -272,14 +272,14 @@ export const landingKo: LandingMessages = {
   builders: {
     eyebrow: "SkillCDN Builders",
     title: "2027년까지 1인 창업자 100명.",
-    lead: "AI 에이전트로 회사를 운영하는 1인 창업자 100명을 2027년까지 모읍니다. AI 에이전트로 일하는 1인 유니콘은 반드시 나옵니다. 그 주인공이 되세요.",
+    lead: "AI 에이전트로 회사를 운영하는 1인 창업자 100명을 2027년까지 모읍니다. AI 에이전트 전문가와 함께 1인 유니콘 기업의 주인공이 되세요.",
     features: [
-      { title: "공용 콘솔에 내 자리", body: "프로젝트마다 작업 보드와 스킬 팩을 하나씩 받습니다." },
+      { title: "공용 콘솔 지원", body: "공용 콘솔에서 나만의 프로젝트와 스킬팩을 가져보세요." },
       {
-        title: "스킬 팩과 초기 설정",
-        body: "준비된 스킬로 바로 시작하고, 필요한 스킬은 직접 더합니다.",
+        title: "나와 함께하는 스킬 팩",
+        body: "준비된 스킬을 시작으로 내 작업에 맞춰 스킬이 발전합니다.",
       },
-      { title: "매주 리뷰", body: "매주 진행 상황을 기록하고, 만드는 과정을 공개합니다." },
+      { title: "매주 리뷰", body: "매주 노하우를 공유하며 발전 과정을 함께하세요." },
       {
         title: "선정된 빌더에게",
         body: "도구를 지원하고, 단계별 목표를 이룰 때마다 함께 돕습니다.",

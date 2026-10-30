@@ -181,6 +181,18 @@ const SHOWCASE: RestShowcase = {
         picture: null,
         social: { url: MEDIA_URL("d"), type: "image/png" },
       },
+      // The Korean cut: its own clip, poster and result; the entry's own preview picture.
+      cuts: {
+        ko: {
+          link: "https://acme.example/spring-ko",
+          media: {
+            clip: { url: MEDIA_URL("f"), type: "video/mp4" },
+            animation: null,
+            poster: { url: MEDIA_URL("g"), type: "image/webp" },
+            social: null,
+          },
+        },
+      },
       texts: {
         en: {
           title: "A spring ad from one picture",
@@ -286,8 +298,10 @@ describe("prerendered pages", () => {
         const entry = DEFAULT_SHOWCASE_MEDIA.entries[id];
         const words = t.landing.showcase.entries[id];
         expect(body, id).toContain(words.title);
-        // The card leads to the skill that made the result, not to the result.
-        expect(body, id).toContain(`href="${entry.address}"`);
+        // The card leads to the pack of the skill that made the result, not to the skill and
+        // not to the result.
+        expect(body, id).toContain('href="/gh/skillcdn/skills"');
+        expect(body, id).not.toContain(`href="${entry.address}"`);
         expect(body, id).not.toContain(`href="${localizedPath(entry.link, language)}"`);
         // A clip stands in a video with its poster, in the cut of the page's language; a result
         // without one is its poster. (Widened, since the build's entries all carry a clip today
@@ -343,12 +357,15 @@ describe("prerendered pages", () => {
     expect(indexable).toBe(true);
     expect(html).toContain('<html lang="ko">');
     expect(html).toContain('data-prerendered="landing" data-lang="ko"');
-    // The entry's words in the visitor's language, its clip, whose work it is, and its address,
-    // where the card leads rather than to its result; not the build's.
+    // The entry's words in the visitor's language, its clip and poster in that language's cut,
+    // whose work it is, and its address, where the card leads rather than to its result; not
+    // the build's.
     expect(html).toContain("사진 한 장으로 만드는 봄 광고");
-    expect(html).toContain(`src="${MEDIA_URL("a")}"`);
-    expect(html).toContain(`poster="${MEDIA_URL("b")}"`);
+    expect(html).toContain(`src="${MEDIA_URL("f")}"`);
+    expect(html).toContain(`poster="${MEDIA_URL("g")}"`);
+    expect(html).not.toContain(`src="${MEDIA_URL("a")}"`);
     expect(html).not.toContain('href="https://acme.example/spring"');
+    expect(html).not.toContain('href="https://acme.example/spring-ko"');
     expect(html).toContain(t.landing.showcase.origins.builder);
     expect(html).toContain('href="/gh/acme/skills"');
     expect(html).not.toContain(DEFAULT_SHOWCASE_MEDIA.entries.ad.poster);
@@ -360,8 +377,19 @@ describe("prerendered pages", () => {
     // The browser continues from the same answer, and the head describes the entry's clip and
     // previews the page with the entry's own picture.
     expect(html).toContain('<script type="application/json" id="skillcdn-data">');
-    expect(html).toContain(`"contentUrl":"https://skills.example${MEDIA_URL("a")}"`);
+    expect(html).toContain(`"contentUrl":"https://skills.example${MEDIA_URL("f")}"`);
     expect(html).toContain(`content="https://skills.example${MEDIA_URL("d")}"`);
+    // The English page shows the entry's own files, since the cut is Korean.
+    const english = renderLandingPage(TEMPLATE, {
+      language: "en",
+      origin: "https://skills.example",
+      pathname: "/",
+      search: "",
+      data: { showcase: { ready: SHOWCASE } },
+    }).html;
+    expect(english).toContain(`src="${MEDIA_URL("a")}"`);
+    expect(english).toContain(`poster="${MEDIA_URL("b")}"`);
+    expect(english).not.toContain(`src="${MEDIA_URL("f")}"`);
 
     // An empty showcase is the build's own, as the prerendered page has it.
     const empty = renderLandingPage(TEMPLATE, {
@@ -1438,5 +1466,7 @@ describe("llms.txt", () => {
     expect(text).toContain("Uses a video tool.");
     expect(text).toContain("[Make one](https://acme.example/spring)");
     expect(text).not.toContain(messagesFor("en").landing.showcase.entries.ad.title);
+    // In Korean the result is the Korean cut's.
+    expect(renderLlmsTxt("ko", SHOWCASE)).toContain("](https://acme.example/spring-ko)");
   });
 });

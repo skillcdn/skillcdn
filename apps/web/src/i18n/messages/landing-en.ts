@@ -40,7 +40,7 @@ export const landingEn = {
     placeholder: "What will you make? Card news, a short ad, a website that takes payments…",
     submit: "Search",
     chips: [
-      "Instagram card news",
+      "Card news",
       "Short video ad",
       "Meeting deck",
       "Build and deploy a web app",
@@ -56,16 +56,16 @@ export const landingEn = {
   },
   showcase: {
     eyebrow: "Showcase",
-    title: "Real work, made by AI",
-    lead: "Each one started from a one-sentence request, and AI saw it through by the skill.",
+    title: "AI becomes the expert",
+    lead: "Add skills to your AI, and you have a team of expert agents.",
     origins: { pack: "Skill pack", builder: "Builder" },
-    skill: "See the skill",
+    skill: "See the skill pack",
     /** The result shown over the page: the way to it as a file, and the way out. */
     entries: {
       ad: {
         title: "“Make a 15-second short ad for a fruit lollipop”",
-        body: "It looked up a candy ad that has been running for over a year, then went another way: a fruit drops, and a lollipop of the same shape lands in its place. Every shot has a caption and the sound of the room.",
-        tags: ["15 s · 9:16", "5 shots", "English"],
+        body: "From live ad-trend research to shooting and editing the video, expert agents do all of it themselves. Start advertising today.",
+        tags: ["15 s · 9:16", "5 shots"],
         action: "Watch the ad",
         credit: "skillcdn/skills · marketing",
         /** What the skill needs besides the AI app; `null` for nothing. */
@@ -75,7 +75,7 @@ export const landingEn = {
       },
       deck: {
         title: "“Turn this idea into a business plan for investors”",
-        body: "A one-page idea for a running-crew app became a twelve-slide plan that opens with the problem and closes with the ask, exported to PDF as well. The video is the plan being pitched.",
+        body: "One page of an idea becomes a twelve-slide plan for investors, from the problem to the ask, with the PDF ready to send. Walk in with the perfect pitch.",
         tags: ["12 slides", "HTML + PDF", "18 s pitch video"],
         action: "Open the PDF",
         credit: "skillcdn/skills · design",
@@ -85,7 +85,7 @@ export const landingEn = {
       },
       site: {
         title: "“Make a web page for our bakery”",
-        body: "A reservation page for Mildo, a bakery that opens on Thursdays only. Big photographs of bread up top, then this week's loaves, how many are left and how to reserve. The photographs are AI-made too.",
+        body: "A reservation page for Mildo, a bakery open on Thursdays only: big bread photographs, this week's loaves, how many are left and how to reserve, on one page. Skip the hiring: make your agent the developer.",
         tags: ["One page", "Phone + desktop", "Reservations"],
         action: "Open the page",
         credit: "skillcdn/skills · engineering",
@@ -98,7 +98,7 @@ export const landingEn = {
   console: {
     eyebrow: "Console",
     title: "Put the work on the board, and just decide.",
-    lead: "AI agents do the work, and you only make the calls. The whole company runs on one board.",
+    lead: "AI agents do the work, and you only make the calls. Manage your organization of expert agents.",
     window: {
       name: "My company",
       tabs: ["Board", "Roadmap", "Calendar", "Documents", "Decisions", "Feed", "Skills"],
@@ -268,7 +268,7 @@ export const landingEn = {
       },
     ],
     pack: {
-      lead: "The console comes as a skill pack too. Connect this address to your AI app, and the AI guides you from setup to everyday use.",
+      lead: "Start with the console's skill pack. Connect this address to your AI app, and the AI guides you from setup to everyday use.",
       open: "Open the console pack",
       guide: "Setup guide",
     },
@@ -279,7 +279,7 @@ export const landingEn = {
     items: [
       {
         title: "Get the skill pack",
-        body: "Copy skillcdn/skills to your own GitHub (fork it). Skills for marketing, design, engineering, product and video work become your company’s own.",
+        body: "Fork skillcdn/skills to your own GitHub. Skills for marketing, design, engineering, product and video production become your company’s own.",
         link: "Open the pack",
       },
       {
@@ -289,7 +289,7 @@ export const landingEn = {
       },
       {
         title: "Connect your AI",
-        body: "Connect the pack’s address to the AI app you already use, such as ChatGPT, Claude, Cursor, Codex or Gemini CLI. It then works by the pack’s skills.",
+        body: "Connect the pack’s address to the AI app you already use, such as ChatGPT, Claude, Cursor, Codex or Gemini CLI. Your AI becomes an expert at once.",
         link: "Connection guide",
       },
     ],
@@ -304,19 +304,19 @@ export const landingEn = {
   builders: {
     eyebrow: "SkillCDN Builders",
     title: "One hundred solo founders by 2027.",
-    lead: "By 2027 we are bringing together one hundred solo founders who run their companies with AI agents. A one-person unicorn built on AI agents is coming. Be the one.",
+    lead: "By 2027 we are bringing together one hundred solo founders who run their companies with AI agents. With expert AI agents at your side, be the founder of the one-person unicorn.",
     features: [
       {
-        title: "Your seat on the shared console",
-        body: "A work board and a skill pack for every project.",
+        title: "The shared console",
+        body: "Have a project and a skill pack of your own on the shared console.",
       },
       {
-        title: "The skill pack and the setup",
-        body: "Start right away with ready skills, and add the ones you need yourself.",
+        title: "A skill pack that grows with you",
+        body: "Start with ready skills, and they grow to fit your work.",
       },
       {
         title: "A review every week",
-        body: "Progress is recorded every week, and the making is done in the open.",
+        body: "Share know-how every week, and grow along with the others.",
       },
       {
         title: "For the builders selected",
