@@ -50,8 +50,8 @@ function FaqCaret() {
   );
 }
 
-/** Where the steps play: a wide screen, where they stand in a row along the line, and motion. */
-const PLAY_QUERY = "(min-width: 52.01rem) and (prefers-reduced-motion: no-preference)";
+/** Where the steps play: wherever motion is welcome; the line runs across or down as they stand. */
+const PLAY_QUERY = "(prefers-reduced-motion: no-preference)";
 /** How long the line takes across, and how long a ring and a step's words take to come up. */
 const LINE_MS = 1600;
 const RING_MS = 400;
@@ -60,11 +60,12 @@ const WORDS_MS = 600;
 const PLAY_LINE = 80;
 
 /**
- * The steps play on each pass down, once they have come a little way up into the window: the
- * line runs along them and each lights in turn, while the page scrolls on as it would. The play
- * is `Element.animate`, timed by where each number stands on the line. Once the steps are below
- * the window again, the next pass plays again; a page that lands past them leaves them lit.
- * Where the query does not match, the stylesheet's own reveal stands.
+ * The steps play once a page is loaded, the first time they are on screen: the line runs along
+ * them and each lights in turn, while the page scrolls on as it would. A page that opens with
+ * them already on screen plays them at once; one that opens past them leaves them lit; and
+ * once played, they stay lit however the page scrolls. The play is `Element.animate`, timed by
+ * where each number stands on the line. Where the query does not match, the stylesheet's own
+ * reveal stands.
  */
 function useStepsPlay() {
   const ref = useRef<HTMLOListElement>(null);
@@ -73,26 +74,42 @@ function useStepsPlay() {
     if (timeline === null || !window.matchMedia(PLAY_QUERY).matches) {
       return;
     }
-    const passed = timeline.getBoundingClientRect().top < (window.innerHeight * PLAY_LINE) / 100;
-    timeline.dataset.hold = passed ? "done" : "waiting";
     const animations: Animation[] = [];
     let timer: number | undefined;
+    let starter: IntersectionObserver | undefined;
 
     const play = () => {
+      starter?.disconnect();
       timeline.dataset.hold = "playing";
       animations.length = 0;
       const box = timeline.getBoundingClientRect();
+      const numbers = [...timeline.querySelectorAll<HTMLElement>(`.${styles.stepNumber}`)];
+      const places = numbers.map((number) => number.getBoundingClientRect());
+      const first = places[0];
+      const last = places[places.length - 1];
+      // Across on a wide screen; down a narrow one, where the rings stand one under another and
+      // the line runs from the first ring to the last, as long as the stylesheet is told.
+      const down =
+        first !== undefined && last !== undefined && places.length > 1 && first.left === last.left;
+      const start = down && first ? first.top + first.height / 2 : box.left;
+      const length =
+        down && first && last
+          ? last.top + last.height / 2 - (first.top + first.height / 2)
+          : box.width;
+      if (down) timeline.style.setProperty("--steps-line", `${length}px`);
       animations.push(
-        timeline.animate([{ scale: "0 1" }, { scale: "1 1" }], {
+        timeline.animate([{ scale: down ? "1 0" : "0 1" }, { scale: "1 1" }], {
           duration: LINE_MS,
           fill: "both",
           pseudoElement: "::after",
         }),
       );
       let end = LINE_MS;
-      for (const number of timeline.querySelectorAll<HTMLElement>(`.${styles.stepNumber}`)) {
-        const place = number.getBoundingClientRect();
-        const at = ((place.left + place.width / 2 - box.left) / box.width) * LINE_MS;
+      numbers.forEach((number, index) => {
+        const place = places[index];
+        if (place === undefined) return;
+        const centre = down ? place.top + place.height / 2 : place.left + place.width / 2;
+        const at = length > 0 ? ((centre - start) / length) * LINE_MS : 0;
         animations.push(
           number.animate(
             [
@@ -120,38 +137,40 @@ function useStepsPlay() {
           );
         }
         end = Math.max(end, at + RING_MS / 3 + WORDS_MS);
-      }
+      });
       timer = window.setTimeout(() => {
         timeline.dataset.hold = "done";
         for (const animation of animations) animation.cancel();
       }, end);
     };
 
-    // The steps play when their top comes up past the play line from below; a page that jumps
-    // past them leaves them lit. Once they are below the window again, they wait to play again.
-    const starter = new IntersectionObserver(
-      ([entry]) => {
-        if (entry === undefined || timeline.dataset.hold !== "waiting") return;
-        const top = entry.boundingClientRect.top;
-        if (entry.isIntersecting && top > 0) {
-          play();
-        } else if (top <= 0) {
-          timeline.dataset.hold = "done";
-        }
-      },
-      { rootMargin: `0px 0px -${100 - PLAY_LINE}% 0px` },
-    );
-    const rearm = new IntersectionObserver(([entry]) => {
-      if (entry === undefined || timeline.dataset.hold !== "done") return;
-      if (!entry.isIntersecting && entry.boundingClientRect.top > 0) {
-        timeline.dataset.hold = "waiting";
-      }
-    });
-    starter.observe(timeline);
-    rearm.observe(timeline);
+    // Where the steps stand as the page opens: wholly above the window, they are lit and done
+    // with; on screen, they play now; below it, they play once their top comes up past the play
+    // line, and never again.
+    const rect = timeline.getBoundingClientRect();
+    if (rect.bottom <= 0) {
+      timeline.dataset.hold = "done";
+    } else if (rect.top < (window.innerHeight * PLAY_LINE) / 100) {
+      play();
+    } else {
+      timeline.dataset.hold = "waiting";
+      starter = new IntersectionObserver(
+        ([entry]) => {
+          if (entry === undefined || timeline.dataset.hold !== "waiting") return;
+          if (entry.isIntersecting) {
+            play();
+          } else if (entry.boundingClientRect.bottom <= 0) {
+            // Jumped past: lit without the play.
+            starter?.disconnect();
+            timeline.dataset.hold = "done";
+          }
+        },
+        { rootMargin: `0px 0px -${100 - PLAY_LINE}% 0px` },
+      );
+      starter.observe(timeline);
+    }
     return () => {
-      starter.disconnect();
-      rearm.disconnect();
+      starter?.disconnect();
       window.clearTimeout(timer);
       for (const animation of animations) animation.cancel();
       delete timeline.dataset.hold;
@@ -208,14 +227,20 @@ function Cloud(props: { readonly items: RestFeatured["items"] }) {
     <ul ref={cloud} className={styles.cloud}>
       {props.items.map((item) => (
         <li key={item.address}>
-          <Link className={styles.pill} href={item.address}>
-            <span className={styles.pillOwner}>{item.repository.owner}/</span>
-            <span className={styles.pillName}>{item.repository.name}</span>
-            {item.verified && <VerifiedMark label={t.mount.verified} hint={t.mount.verifiedHint} />}
-            {item.skillCount !== null && item.skillCount > 0 && (
-              <span className={styles.pillCount}>{t.landing.packs.skills(item.skillCount)}</span>
-            )}
-          </Link>
+          {/* The sway is a layer of its own; the pill's tilt is drawn inside it, so that its
+              edges are rasterized at their angle rather than turned afterwards. */}
+          <span className={styles.sway}>
+            <Link className={styles.pill} href={item.address}>
+              <span className={styles.pillOwner}>{item.repository.owner}/</span>
+              <span className={styles.pillName}>{item.repository.name}</span>
+              {item.verified && (
+                <VerifiedMark label={t.mount.verified} hint={t.mount.verifiedHint} />
+              )}
+              {item.skillCount !== null && item.skillCount > 0 && (
+                <span className={styles.pillCount}>{t.landing.packs.skills(item.skillCount)}</span>
+              )}
+            </Link>
+          </span>
         </li>
       ))}
     </ul>
@@ -386,8 +411,9 @@ export function LandingPage(props: { readonly origin: string }) {
 
       {shows("packs") && (
         <section id="packs" className={styles.packs}>
-          <Container className={styles.packsGrid}>
-            <div className={glass.reveal}>
+          {/* The room a pill of the cloud may be pulled about in, less the words beside it. */}
+          <Container className={styles.packsGrid} data-cloud-area="">
+            <div className={glass.reveal} data-cloud-avoid="">
               <SectionHead
                 kicker={copy.packs.eyebrow}
                 title={copy.packs.title}

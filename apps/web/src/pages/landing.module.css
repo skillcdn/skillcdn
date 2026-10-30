@@ -461,8 +461,9 @@
    that the side reads as a scatter of names and not as a list. They are stars, of a kind: they
    drift a little by themselves, and the one under the pointer lights up and grows. All of it is
    animations of transforms: nothing runs per frame. One can also be taken hold of and pulled
-   about (`use-cloud-drag.ts`): it follows the pointer, the others move out of its way, and they
-   all drift back once it is let go, by a transition of the place each is given. */
+   about (`use-cloud-drag.ts`): it follows the pointer within the section's room, the others
+   move out of its way, and once it is let go it glides on a little and comes to rest where it
+   stops, by a transition of the place each is given. */
 .cloudSide {
   position: relative;
 }
@@ -485,20 +486,45 @@
   gap: calc(var(--space-6) + var(--space-1)) var(--space-3);
 }
 
+/* The scatter and the pull are lengths the script reads back in pixels, so they are registered
+   as such: a custom property that is not resolves to the words it was written in. */
+@property --shift {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --lift {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --dx {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --dy {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
 /* No two neighbours at the same height or tilt: each of the nine has its own place and its own
    bearing, scattered off the rows until no row reads, all of them one size. The
    scatter is all translate, so it costs the rows nothing and two still share one. The rows are
-   spaced for the scatter and the float, so that none touches another. */
+   spaced for the scatter and the float, so that none touches another. The tilt is drawn on the
+   pill itself (below), inside the layers that move. */
 .cloud li {
   --lift: 0px;
   --shift: 0px;
   --tilt: 0deg;
-  /* Where a pull has put it, written on the element while one is held, and 0 again after. */
+  /* Where a pull has put it, written on the element as one is pulled about, and kept after. */
   --dx: 0px;
   --dy: 0px;
   translate: calc(var(--shift) + var(--dx)) calc(var(--lift) + var(--dy));
-  rotate: var(--tilt);
-  transition: translate var(--cloud-settle);
 }
 
 .cloud li:nth-child(1) {
@@ -555,6 +581,14 @@
   --tilt: 3deg;
 }
 
+/* The sway is the layer that moves the pill about by itself, and the pill is drawn inside it:
+   a transform that is animated is applied to a finished raster, and a hairline turned that way
+   is resampled unevenly along its length; a tilt set on an element inside the moving layer is
+   drawn into the raster at its angle, smooth. */
+.sway {
+  display: inline-block;
+}
+
 .pill {
   display: inline-flex;
   align-items: center;
@@ -568,6 +602,10 @@
   color: var(--color-text);
   font-size: var(--text-sm);
   text-decoration: none;
+  rotate: var(--tilt);
+  /* A finger that rests on a pill takes hold of it: no callout, no selection meanwhile. */
+  -webkit-touch-callout: none;
+  user-select: none;
   transition:
     border-color var(--transition),
     background var(--transition),
@@ -576,14 +614,14 @@
 }
 
 /* Each pill floats on its own, two slow loops laid over each other: the row rises and sinks
-   (`bob`) while the pill sways across and tips (`drift`), each at a pace and a phase of its own,
-   so that no path repeats soon and no two move together. */
+   (`bob`) while the pill sways across (`drift`), each at a pace and a phase of its own, so that
+   no path repeats soon and no two move together. */
 @media (prefers-reduced-motion: no-preference) {
   .cloud li {
     animation: bob calc(var(--cloud-drift-time) * 1.7) ease-in-out infinite;
   }
 
-  .pill {
+  .sway {
     --sway: var(--cloud-drift);
     animation: drift var(--cloud-drift-time) ease-in-out infinite;
   }
@@ -602,23 +640,23 @@
     animation-duration: calc(var(--cloud-drift-time) * 1.4);
   }
 
-  .cloud li:nth-child(2n) .pill {
+  .cloud li:nth-child(2n) .sway {
     animation-duration: calc(var(--cloud-drift-time) * 1.45);
     animation-delay: calc(var(--cloud-drift-time) / -3);
     animation-direction: reverse;
   }
 
-  .cloud li:nth-child(3n) .pill {
+  .cloud li:nth-child(3n) .sway {
     animation-duration: calc(var(--cloud-drift-time) * 1.2);
     animation-delay: calc(var(--cloud-drift-time) / -1.6);
   }
 
-  .cloud li:nth-child(4n + 1) .pill {
+  .cloud li:nth-child(4n + 1) .sway {
     animation-duration: calc(var(--cloud-drift-time) * 0.85);
     animation-delay: calc(var(--cloud-drift-time) / -4.5);
   }
 
-  .cloud li:nth-child(5n + 2) .pill {
+  .cloud li:nth-child(5n + 2) .sway {
     animation-delay: calc(var(--cloud-drift-time) / -1.1);
   }
 }
@@ -914,8 +952,49 @@
     grid-template-columns: 1fr;
   }
 
+  /* One under another: the ring and the title on one line, the words under the title, and the
+     line running down through the rings. Each step draws its own piece of the hairline, from
+     under its ring to the next step; the whole line across is not drawn. */
+  .timeline {
+    gap: var(--space-6);
+  }
+
   .timeline::before {
     display: none;
+  }
+
+  .timeline li {
+    position: relative;
+    grid-template-columns: var(--step-number) minmax(0, 1fr);
+    column-gap: var(--space-4);
+    row-gap: var(--space-2);
+  }
+
+  .timeline li:not(:last-child)::before {
+    content: "";
+    position: absolute;
+    top: var(--step-number);
+    bottom: calc(-1 * var(--space-6));
+    left: calc(var(--step-number) / 2);
+    z-index: -1;
+    width: 1px;
+    background: var(--color-border-lit);
+  }
+
+  .stepNumber {
+    grid-row: 1;
+    margin-bottom: 0;
+  }
+
+  .timeline h3 {
+    grid-row: 1;
+    grid-column: 2;
+    align-self: center;
+  }
+
+  .timeline p,
+  .stepLink {
+    grid-column: 2;
   }
 
   .faqGrid {
@@ -1118,23 +1197,23 @@
 
 @keyframes drift {
   0% {
-    transform: translate3d(0, 0, 0) rotate(0deg);
+    transform: translate3d(0, 0, 0);
   }
 
   28% {
-    transform: translate3d(calc(var(--sway) * 0.55), calc(var(--sway) * -1), 0) rotate(0.5deg);
+    transform: translate3d(calc(var(--sway) * 0.55), calc(var(--sway) * -1), 0);
   }
 
   52% {
-    transform: translate3d(calc(var(--sway) * -0.85), calc(var(--sway) * -0.25), 0) rotate(-0.35deg);
+    transform: translate3d(calc(var(--sway) * -0.85), calc(var(--sway) * -0.25), 0);
   }
 
   78% {
-    transform: translate3d(calc(var(--sway) * 0.3), calc(var(--sway) * 0.9), 0) rotate(0.3deg);
+    transform: translate3d(calc(var(--sway) * 0.3), calc(var(--sway) * 0.9), 0);
   }
 
   100% {
-    transform: translate3d(0, 0, 0) rotate(0deg);
+    transform: translate3d(0, 0, 0);
   }
 }
 
@@ -1158,10 +1237,10 @@
 /* The steps light up in order: a line of the accent runs along the hairline, each number lights
    its ring as the line reaches it, and the step's words rise in under it. The numbers
    themselves never move, so that the line always runs through them. On a wide screen it plays
-   by itself each time the steps come up into the window (the page sets `data-hold` and plays it
-   with `Element.animate`), and the page scrolls on as it would. Elsewhere each step lights as it
-   scrolls in, and under reduced motion, or where the browser cannot, the steps stand as they
-   are. */
+   by itself once a page is loaded, the first time the steps are on screen (the page sets
+   `data-hold` and plays it with `Element.animate`), and the page scrolls on as it would.
+   Elsewhere each step lights as it scrolls in, and under reduced motion, or where the browser
+   cannot, the steps stand as they are. */
 .stepNumber::after {
   content: "";
   position: absolute;
@@ -1246,21 +1325,17 @@
   }
 }
 
-/* A pill of the cloud in hand (`use-cloud-drag.ts`): while one is held, the others step aside
-   quickly, and the held one follows at once. It keeps the lit look of the pointer being over
-   it, which on a touch screen it is not, and holds still in its own drift so that it stays
-   where the finger has it. Last in the sheet, since these outrank every rule on a pill. */
-.cloud[data-dragging] li {
-  transition: translate var(--cloud-push);
-}
-
+/* A pill of the cloud in hand (`use-cloud-drag.ts`): the script places every pill a frame at
+   a time while any moves, so none of them transitions. The held one keeps the lit look of the
+   pointer being over it, which on a touch screen it is not, and holds still in its own drift so
+   that it stays where the finger has it. Last in the sheet, since these outrank every rule on
+   a pill. */
 .cloud li[data-held] {
   z-index: 1;
-  transition: none;
 }
 
 .cloud li[data-held],
-.cloud li[data-held] .pill {
+.cloud li[data-held] .sway {
   animation-play-state: paused;
 }
 
@@ -1272,9 +1347,17 @@
   cursor: grabbing;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .cloud li,
-  .cloud[data-dragging] li {
-    transition: none;
+/* On a narrow screen the lit line of the steps runs down, from the first ring to the last, as
+   long as the page measured it (`--steps-line`); until it has, as far as the last step. */
+@media (max-width: 52rem) {
+  .timeline[data-hold]::after {
+    top: calc(var(--step-number) / 2);
+    right: auto;
+    left: calc(var(--step-number) / 2 - 1px);
+    width: 2px;
+    height: var(--steps-line, calc(100% - var(--step-number)));
+    margin-top: 0;
+    background: linear-gradient(180deg, var(--color-accent-solid), var(--color-accent));
+    transform-origin: center top;
   }
 }

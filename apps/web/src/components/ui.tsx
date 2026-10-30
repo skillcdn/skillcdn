@@ -1,4 +1,4 @@
-import { type ButtonHTMLAttributes, type ReactNode, useState } from "react";
+import { type ButtonHTMLAttributes, type HTMLAttributes, type ReactNode, useState } from "react";
 import styles from "./ui.module.css";
 
 // Small building blocks. Each one is a class in ui.module.css and nothing more.
@@ -286,6 +286,16 @@ export function Section(props: {
   );
 }
 
-export function Container(props: { readonly children: ReactNode; readonly className?: string }) {
-  return <div className={cx(styles.container, props.className)}>{props.children}</div>;
+export function Container(
+  props: HTMLAttributes<HTMLDivElement> & {
+    readonly children: ReactNode;
+    readonly className?: string;
+  },
+) {
+  const { children, className, ...rest } = props;
+  return (
+    <div {...rest} className={cx(styles.container, className)}>
+      {children}
+    </div>
+  );
 }

@@ -542,13 +542,11 @@
   --showcase-backdrop-blur: 28px;
   --showcase-backdrop-opacity: 0.55;
   /* The cloud of packs, like stars: how far a pill drifts by itself and how long one drift
-     takes, how much one grows under the pointer, how the others step aside while one is pulled
-     about and how they all settle back once it is let go, and the faint stars behind them all. */
+     takes, how much one grows under the pointer (how the pills move about one another is the
+     script's, in use-cloud-drag.ts), and the faint stars behind them all. */
   --cloud-drift: 9px;
   --cloud-drift-time: 9s;
   --cloud-grow: 1.06;
-  --cloud-push: 160ms ease-out;
-  --cloud-settle: 700ms cubic-bezier(0.2, 0.9, 0.3, 1.15);
   --cloud-stars-opacity: 0.55;
   --cloud-stars:
     radial-gradient(circle at 8% 22%, #ffffff 0 1px, transparent 1.6px),
