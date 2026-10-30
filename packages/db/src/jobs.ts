@@ -121,7 +121,10 @@ export interface JobQueue {
    * no longer waits, because it started or is gone; a job that runs is never changed.
    */
   reorder(name: string, id: string, priority: number, data: object): Promise<boolean>;
-  /** The counts of these queues, read fresh. */
+  /**
+   * The counts of these queues. Asked for fresh, but the queue serves a reading it took within
+   * the last minute again, so a count can trail a job's state by that long.
+   */
   counts(names: readonly string[]): Promise<QueueCounts[]>;
   /** The jobs of the queue that failed for good, newest first, at most `limit`. */
   failures(name: string, limit: number): Promise<FailedJob[]>;

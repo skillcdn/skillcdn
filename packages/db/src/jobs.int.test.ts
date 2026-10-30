@@ -132,7 +132,7 @@ describe("the job queue", () => {
   });
 
   it("tries a failed job again within its settings, then counts it as failed", {
-    timeout: 60_000,
+    timeout: 100_000,
   }, async () => {
     await jobs.ensureQueue("retry", { retryLimit: 1, retryDelaySeconds: 1, expireInSeconds: 60 });
     const attempts: number[] = [];
@@ -142,12 +142,20 @@ describe("the job queue", () => {
       throw new Error("not this time");
     });
     await vi.waitFor(() => expect(attempts).toEqual([0, 1]), { timeout: 20_000 });
+    // The job's own state first, read live: failed once the second attempt has thrown. Only then
+    // are the counts asked for, because the queue serves a reading it took within the last minute
+    // again, even when asked for a fresh one, and a reading taken while the second attempt ran
+    // says active until it expires. The long wait is for the reading the queue's own monitor may
+    // have taken in that window.
+    await vi.waitFor(async () => expect(await jobs.failures("retry", 1)).toHaveLength(1), {
+      timeout: 20_000,
+    });
     await vi.waitFor(
       async () => {
         const [counts] = await jobs.counts(["retry"]);
         expect(counts).toMatchObject({ name: "retry", queued: 0, active: 0, failed: 1 });
       },
-      { timeout: 30_000 },
+      { timeout: 75_000 },
     );
   });
 
