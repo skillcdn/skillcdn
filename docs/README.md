@@ -5,7 +5,7 @@ How the docs are organized, and what each one is for. The rules for *when* to up
 | Document | Purpose | Lifecycle |
 |---|---|---|
 | [`../README.md`](../README.md) | What SkillCDN is, for someone who has never seen it. | Overview only. Details live below. |
-| [`../SKILLCDN.md`](../SKILLCDN.md) | This repository as a pack, served at `skillcdn.ai/gh/skillcdn/skillcdn` ([the manifest](specs/skill-repo.md#the-repository-manifest-skillcdnmd)): the name and description an agent is told on connect, that `docs/` is what it serves, and the rule for reading it. | Living. |
+| [`../SKILLCDN.md`](../SKILLCDN.md) | This repository as a pack, served at `skillcdn.ai/gh/skillcdn/skillcdn` ([the manifest](specs/skill-repo.md#the-repository-manifest-skillcdnmd)): the name and description an agent is told on connect, the folders it serves (`docs/`, and the two pages the site publishes from outside it, `deploy/README.md` and `packages/cli/README.md`, with the code and configuration beside them kept out), and the rule for reading it. | Living. |
 | [`architecture.md`](architecture.md) | How the system is built: components, boundaries, data, stack, security model, extension points. | Living. Always describes the intended current design. |
 | [`roadmap.md`](roadmap.md) | What exists, what is being built now, what comes next. | Living. Updated when a milestone item starts, finishes or is dropped. |
 | [`specs/`](specs/) | The public contract: address scheme, the SkillCDN Format (what a pack is, how it is read and written), tools, REST API, people and private repositories. | Living and normative. If the README and a spec disagree, the spec wins and the README gets fixed. |
