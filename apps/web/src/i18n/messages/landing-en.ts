@@ -61,11 +61,10 @@ export const landingEn = {
     origins: { pack: "Skill pack", builder: "Builder" },
     skill: "See the skill",
     /** The result shown over the page: the way to it as a file, and the way out. */
-    viewer: { open: "Open in a new tab", close: "Close" },
     entries: {
       ad: {
         title: "“Make a 15-second short ad for a fruit lollipop”",
-        body: "The AI found a candy ad that has run for over a year in the ad library, studied it, and chose a different idea: a fruit falls, and a lollipop of the same shape falls in the same spot. It made a first frame for each shot, generated the motion, and added captions and on-set sound for a 15-second vertical video. An English ad for a fictional brand.",
+        body: "It looked up a candy ad that has been running for over a year, then went another way: a fruit drops, and a lollipop of the same shape lands in its place. Every shot has a caption and the sound of the room.",
         tags: ["15 s · 9:16", "5 shots", "English"],
         action: "Watch the ad",
         credit: "skillcdn/skills · marketing",
@@ -76,7 +75,7 @@ export const landingEn = {
       },
       cards: {
         title: "“Pick a recent issue and make card news about it”",
-        body: "The AI picked the Tesla Roadster reveal from this week's news. It studied a well-known news magazine's Instagram posts to set the format, drew twenty facts with checked sources from eleven articles, and made eight slides: a cover, a reader's question and its answer on each slide, and a closing. Checked on a phone screen.",
+        body: "It picked the Tesla Roadster reveal from this week's news, took its format from a news magazine's Instagram, and kept only the facts it could source in eleven articles.",
         tags: ["8 slides", "Format studied", "20 sourced facts"],
         action: "See the result",
         credit: "skillcdn/skills · design",
@@ -86,7 +85,7 @@ export const landingEn = {
       },
       deck: {
         title: "“Turn this idea into a business plan for investors”",
-        body: "A one-page idea for a morning running-crew app became a twelve-slide business plan: the problem, the solution, the revenue model, the schedule and the ask. The skill laid out the structure and exported HTML and PDF, and the video shows the plan being pitched to investors.",
+        body: "A one-page idea for a running-crew app became a twelve-slide plan that opens with the problem and closes with the ask, exported to PDF as well. The video is the plan being pitched.",
         tags: ["12 slides", "HTML + PDF", "18 s pitch video"],
         action: "Open the PDF",
         credit: "skillcdn/skills · design",
@@ -96,8 +95,8 @@ export const landingEn = {
       },
       site: {
         title: "“Make a web page for our bakery”",
-        body: "The reservation page of Mildo, a fictional bakery open on Thursdays only, laid out like a magazine with a large title over a full-width photograph of bread. This week's breads and how many are left, how to reserve, opening hours and common questions are all on one page. The photographs were made with AI, and the page was checked on phone and desktop screens.",
-        tags: ["One page", "Phone + desktop", "Fictional shop"],
+        body: "A reservation page for Mildo, a bakery that opens on Thursdays only. Big photographs of bread up top, then this week's loaves, how many are left and how to reserve. The photographs are AI-made too.",
+        tags: ["One page", "Phone + desktop", "Reservations"],
         action: "Open the page",
         credit: "skillcdn/skills · engineering",
         requirement: null,

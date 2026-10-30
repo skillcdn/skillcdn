@@ -541,12 +541,6 @@
   --showcase-lead-portrait: 27rem;
   --showcase-backdrop-blur: 28px;
   --showcase-backdrop-opacity: 0.55;
-  /* A result shown over the page: how wide the viewer may be, the bar across its top, and how
-     long it takes to arrive. */
-  --viewer-width: 90rem;
-  --viewer-min-width: 24rem;
-  --viewer-bar: 3.25rem;
-  --viewer-arrive: 180ms;
   /* The cloud of packs, like stars: how far a pill drifts by itself and how long one drift
      takes, how much one grows under the pointer, and the faint stars behind them all. */
   --cloud-drift: 9px;

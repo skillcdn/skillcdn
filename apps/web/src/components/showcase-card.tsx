@@ -1,5 +1,5 @@
 import type { RestShowcaseEntry, ShowcaseTexts } from "@skillcdn/core";
-import { type MouseEvent, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { track } from "../analytics.js";
 import { useI18n } from "../i18n/index.js";
 import type { Language } from "../i18n/languages.js";
@@ -8,8 +8,7 @@ import { showcaseTexts } from "../showcase.js";
 import { ClipAnimation, isRefusal } from "./clip-animation.js";
 import glass from "./glass.module.css";
 import styles from "./showcase-card.module.css";
-import { ShowcaseViewer, shownInPlace, type Viewable, viewable } from "./showcase-viewer.js";
-import { ArrowIcon, cx, ExpandIcon, ExternalIcon } from "./ui.js";
+import { ArrowIcon, cx } from "./ui.js";
 import { useInView } from "./use-in-view.js";
 
 /**
@@ -71,19 +70,12 @@ function Stage(props: { readonly entry: RestShowcaseEntry; readonly description:
   );
 }
 
-function isPlainClick(event: MouseEvent): boolean {
-  return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
-}
-
 /**
  * One showcase entry (ADR-0028), read in the order the work happened: what was asked, in quotes,
  * with whose work it is and what it came from above it; then the stage with the result; then
- * what came of it, the facts of the deliverable, and two ways out, to the result itself and to
- * the skill that made it. The result is the card's click target when the entry links one,
- * stretched over the card: shown over the page where the deployment knows it for a picture, a
- * clip or a document, opened in a tab of its own otherwise; the skill stays a link of its own.
- * Media comes from the build or from the operator's uploads; repository content never supplies
- * a media URL.
+ * what came of it and the facts of the deliverable. The whole card leads to the skill that made
+ * it, through the title's link stretched over the card. Media comes from the build or from the
+ * operator's uploads; repository content never supplies a media URL.
  */
 export function ShowcaseCard(props: {
   readonly entry: RestShowcaseEntry;
@@ -91,16 +83,12 @@ export function ShowcaseCard(props: {
   /** The first entry: wide across the row, or a column of its own when its result is tall. */
   readonly lead?: boolean;
   readonly className?: string;
-  /** Shows the result over the page, when it can be shown there. */
-  readonly onOpen?: ((entry: RestShowcaseEntry, kind: Viewable) => void) | undefined;
 }) {
   const { t } = useI18n();
   const { entry } = props;
   const texts: ShowcaseTexts = showcaseTexts(entry, props.language);
   const copy = t.landing.showcase;
-  const link = entry.link ?? null;
   const origin = entry.origin ?? "pack";
-  const kind = viewable(entry);
   return (
     <article
       className={cx(
@@ -119,37 +107,13 @@ export function ShowcaseCard(props: {
           {texts.credit !== null && <span className={styles.credit}>{texts.credit}</span>}
         </p>
         <h3 className={styles.title}>
-          {link === null ? (
-            <Link
-              href={entry.address}
-              className={styles.stretched}
-              onClick={() => track("showcase_click", { target: "skill" })}
-            >
-              {texts.title}
-            </Link>
-          ) : (
-            <a
-              href={link}
-              className={styles.stretched}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(event) => {
-                track("showcase_click", { target: "result" });
-                // A plain click shows the result here; a click that asks for a tab gets one.
-                if (
-                  kind !== undefined &&
-                  props.onOpen !== undefined &&
-                  isPlainClick(event) &&
-                  shownInPlace(kind)
-                ) {
-                  event.preventDefault();
-                  props.onOpen(entry, kind);
-                }
-              }}
-            >
-              {texts.title}
-            </a>
-          )}
+          <Link
+            href={entry.address}
+            className={styles.stretched}
+            onClick={() => track("showcase_click", { target: "skill" })}
+          >
+            {texts.title}
+          </Link>
         </h3>
       </div>
       <Stage entry={entry} description={texts.clip ?? texts.title} />
@@ -163,20 +127,10 @@ export function ShowcaseCard(props: {
           </ul>
         )}
         <p className={styles.links}>
-          {link !== null && (
-            <span className={styles.result} aria-hidden="true">
-              {texts.action}
-              {kind === undefined ? <ExternalIcon /> : <ExpandIcon />}
-            </span>
-          )}
-          <Link
-            href={entry.address}
-            className={styles.skill}
-            onClick={() => track("showcase_click", { target: "skill" })}
-          >
-            {link === null ? texts.action : copy.skill}
+          <span className={styles.skill} aria-hidden="true">
+            {copy.skill}
             <ArrowIcon />
-          </Link>
+          </span>
         </p>
         {texts.requirement !== null && <p className={styles.requirement}>{texts.requirement}</p>}
       </div>
@@ -189,30 +143,18 @@ export function ShowcaseCard(props: {
  * clip, stands as a column of its own beside the rest, which lie in two columns with the first
  * of them wide, so that every result is shown at its own shape; a wide result lies across the
  * row instead, its stage beside its words, with the rest in as many columns as fit. On a phone
- * they are a row to swipe through. One viewer serves them all, for the result a card opens
- * over the page.
+ * they are a row to swipe through.
  */
 export function ShowcaseGrid(props: {
   readonly entries: readonly RestShowcaseEntry[];
   readonly language: Language;
 }) {
-  const [open, setOpen] = useState<{
-    readonly entry: RestShowcaseEntry;
-    readonly kind: Viewable;
-  } | null>(null);
   const [lead, ...rest] = props.entries;
   const tall = lead !== undefined && lead.height > lead.width;
-  const onOpen = (opened: RestShowcaseEntry, kind: Viewable) => setOpen({ entry: opened, kind });
   return (
     <div className={cx(styles.grid, tall && styles.tall)}>
       {lead !== undefined && (
-        <ShowcaseCard
-          entry={lead}
-          language={props.language}
-          lead
-          className={glass.reveal}
-          onOpen={onOpen}
-        />
+        <ShowcaseCard entry={lead} language={props.language} lead className={glass.reveal} />
       )}
       {rest.length > 0 && (
         <div className={styles.rest}>
@@ -227,19 +169,9 @@ export function ShowcaseGrid(props: {
                 index % 3 === 0 && glass.late,
                 index % 3 === 1 && glass.later,
               )}
-              onOpen={onOpen}
             />
           ))}
         </div>
-      )}
-      {open !== null && (
-        <ShowcaseViewer
-          key={open.entry.id}
-          entry={open.entry}
-          kind={open.kind}
-          language={props.language}
-          onClose={() => setOpen(null)}
-        />
       )}
     </div>
   );

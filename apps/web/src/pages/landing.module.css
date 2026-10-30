@@ -1151,11 +1151,11 @@
 
 /* The steps light up in order: a line of the accent runs along the hairline, each number lights
    its ring as the line reaches it, and the step's words rise in under it. The numbers
-   themselves never move, so that the line always runs through them. On a wide screen the page
-   holds its scroll for the moment the play takes, each time the steps come up to the middle of
-   the window (the page sets `data-hold` and plays it with `Element.animate`); the section keeps
-   its place and its size. Elsewhere each step lights as it scrolls in, and under reduced motion, or where the
-   browser cannot, the steps stand as they are. */
+   themselves never move, so that the line always runs through them. On a wide screen it plays
+   by itself each time the steps come up into the window (the page sets `data-hold` and plays it
+   with `Element.animate`), and the page scrolls on as it would. Elsewhere each step lights as it
+   scrolls in, and under reduced motion, or where the browser cannot, the steps stand as they
+   are. */
 .stepNumber::after {
   content: "";
   position: absolute;

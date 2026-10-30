@@ -286,8 +286,9 @@ describe("prerendered pages", () => {
         const entry = DEFAULT_SHOWCASE_MEDIA.entries[id];
         const words = t.landing.showcase.entries[id];
         expect(body, id).toContain(words.title);
+        // The card leads to the skill that made the result, not to the result.
         expect(body, id).toContain(`href="${entry.address}"`);
-        expect(body, id).toContain(`href="${localizedPath(entry.link, language)}"`);
+        expect(body, id).not.toContain(`href="${localizedPath(entry.link, language)}"`);
         // A clip stands in a video with its poster, in the cut of the page's language; a result
         // without one is its poster. (Widened, since the build's entries all carry a clip today
         // and the other branch would narrow away.)
@@ -342,12 +343,12 @@ describe("prerendered pages", () => {
     expect(indexable).toBe(true);
     expect(html).toContain('<html lang="ko">');
     expect(html).toContain('data-prerendered="landing" data-lang="ko"');
-    // The entry's words in the visitor's language, its clip, its result, whose work it is, and
-    // its address; not the build's.
+    // The entry's words in the visitor's language, its clip, whose work it is, and its address,
+    // where the card leads rather than to its result; not the build's.
     expect(html).toContain("사진 한 장으로 만드는 봄 광고");
     expect(html).toContain(`src="${MEDIA_URL("a")}"`);
     expect(html).toContain(`poster="${MEDIA_URL("b")}"`);
-    expect(html).toContain('href="https://acme.example/spring"');
+    expect(html).not.toContain('href="https://acme.example/spring"');
     expect(html).toContain(t.landing.showcase.origins.builder);
     expect(html).toContain('href="/gh/acme/skills"');
     expect(html).not.toContain(DEFAULT_SHOWCASE_MEDIA.entries.cards.poster);

@@ -49,88 +49,49 @@ function FaqCaret() {
   );
 }
 
-/** Where the steps hold the scroll: a wide screen, tall enough to show them whole, and motion. */
-const HOLD_QUERY =
-  "(min-width: 52.01rem) and (min-height: 32rem) and (prefers-reduced-motion: no-preference)";
-/** How long the page takes to settle the section in the middle of the window. */
-const SETTLE_MS = 650;
+/** Where the steps play: a wide screen, where they stand in a row along the line, and motion. */
+const PLAY_QUERY = "(min-width: 52.01rem) and (prefers-reduced-motion: no-preference)";
 /** How long the line takes across, and how long a ring and a step's words take to come up. */
-const LINE_MS = 2100;
+const LINE_MS = 1600;
 const RING_MS = 400;
 const WORDS_MS = 600;
-/** How long the three stand lit before the page scrolls again. */
-const REST_MS = 700;
+/** How far down the window, in percent, the steps start to play on their way up it. */
+const PLAY_LINE = 80;
 
 /**
- * How far down the window, in percent, the steps are caught on their way up it: just inside its
- * foot, so that the steps, dark until they play, are seen dark only while the page glides them
- * to the middle.
+ * The steps play on each pass down, once they have come a little way up into the window: the
+ * line runs along them and each lights in turn, while the page scrolls on as it would. The play
+ * is `Element.animate`, timed by where each number stands on the line. Once the steps are below
+ * the window again, the next pass plays again; a page that lands past them leaves them lit.
+ * Where the query does not match, the stylesheet's own reveal stands.
  */
-const CATCH_LINE = 92;
-
-/**
- * The steps hold the page's scroll on each pass down: when they come up into the window, the
- * page settles their section in the middle and stays while the line runs along the steps and
- * each lights in turn, then it scrolls on. The play is `Element.animate`, timed by where each
- * number stands on the line; the section keeps its place and size. Where the query does not
- * match, nothing holds and the stylesheet's own reveal stands.
- */
-function useStepsHold() {
+function useStepsPlay() {
   const ref = useRef<HTMLOListElement>(null);
   useEffect(() => {
     const timeline = ref.current;
-    const section = timeline?.closest("section");
-    if (
-      timeline === null ||
-      section === null ||
-      section === undefined ||
-      !window.matchMedia(HOLD_QUERY).matches
-    ) {
+    if (timeline === null || !window.matchMedia(PLAY_QUERY).matches) {
       return;
     }
-    const caught = timeline.getBoundingClientRect().top < (window.innerHeight * CATCH_LINE) / 100;
-    timeline.dataset.hold = caught ? "done" : "waiting";
+    const passed = timeline.getBoundingClientRect().top < (window.innerHeight * PLAY_LINE) / 100;
+    timeline.dataset.hold = passed ? "done" : "waiting";
     const animations: Animation[] = [];
-    let release: (() => void) | undefined;
     let timer: number | undefined;
-    let settle: number | undefined;
 
     const play = () => {
       timeline.dataset.hold = "playing";
       animations.length = 0;
-      // The document stops scrolling for the hold (base.css): a wheel or a touchpad mid-gesture
-      // cannot be cancelled event by event, and would carry the page on past the middle.
-      const root = document.documentElement;
-      root.dataset.scrollHeld = "";
-      release = () => {
-        delete root.dataset.scrollHeld;
-        release = undefined;
-      };
-
-      // The wheel lands where it lands: the page brings the section's middle to the window's,
-      // and once more after the glide, should anything have moved it on the way.
-      const held = section.getBoundingClientRect();
-      const middle = window.scrollY + held.top + held.height / 2 - window.innerHeight / 2;
-      window.scrollTo({ top: middle, behavior: "smooth" });
-      settle = window.setTimeout(() => {
-        if (Math.abs(window.scrollY - middle) > 1) {
-          window.scrollTo({ top: middle, behavior: "smooth" });
-        }
-      }, SETTLE_MS);
-
       const box = timeline.getBoundingClientRect();
       animations.push(
         timeline.animate([{ scale: "0 1" }, { scale: "1 1" }], {
           duration: LINE_MS,
-          delay: SETTLE_MS,
           fill: "both",
           pseudoElement: "::after",
         }),
       );
-      let end = SETTLE_MS + LINE_MS;
+      let end = LINE_MS;
       for (const number of timeline.querySelectorAll<HTMLElement>(`.${styles.stepNumber}`)) {
         const place = number.getBoundingClientRect();
-        const at = SETTLE_MS + ((place.left + place.width / 2 - box.left) / box.width) * LINE_MS;
+        const at = ((place.left + place.width / 2 - box.left) / box.width) * LINE_MS;
         animations.push(
           number.animate(
             [
@@ -162,15 +123,12 @@ function useStepsHold() {
       timer = window.setTimeout(() => {
         timeline.dataset.hold = "done";
         for (const animation of animations) animation.cancel();
-        release?.();
-      }, end + REST_MS);
+      }, end);
     };
 
-    // The steps are caught when their top comes up past the catch line from below, and the page
-    // then settles their section in the middle; a page that lands past them, as one restored
-    // after a reload may, leaves them lit. Once they are below the window again, the next pass
-    // down holds again.
-    const catcher = new IntersectionObserver(
+    // The steps play when their top comes up past the play line from below; a page that jumps
+    // past them leaves them lit. Once they are below the window again, they wait to play again.
+    const starter = new IntersectionObserver(
       ([entry]) => {
         if (entry === undefined || timeline.dataset.hold !== "waiting") return;
         const top = entry.boundingClientRect.top;
@@ -180,7 +138,7 @@ function useStepsHold() {
           timeline.dataset.hold = "done";
         }
       },
-      { rootMargin: `0px 0px -${100 - CATCH_LINE}% 0px` },
+      { rootMargin: `0px 0px -${100 - PLAY_LINE}% 0px` },
     );
     const rearm = new IntersectionObserver(([entry]) => {
       if (entry === undefined || timeline.dataset.hold !== "done") return;
@@ -188,15 +146,13 @@ function useStepsHold() {
         timeline.dataset.hold = "waiting";
       }
     });
-    catcher.observe(timeline);
+    starter.observe(timeline);
     rearm.observe(timeline);
     return () => {
-      catcher.disconnect();
+      starter.disconnect();
       rearm.disconnect();
       window.clearTimeout(timer);
-      window.clearTimeout(settle);
       for (const animation of animations) animation.cancel();
-      release?.();
       delete timeline.dataset.hold;
     };
   }, []);
@@ -271,7 +227,7 @@ export function LandingPage(props: { readonly origin: string }) {
   const entries = showcaseEntries(loaded, language);
   const organizations = showcaseOrganizations(loaded);
   const shows = (section: LandingSection) => features.landingSections.includes(section);
-  const stepsRef = useStepsHold();
+  const stepsRef = useStepsPlay();
 
   // The head describes the showcase the page shows: the same head the server writes.
   useEffect(() => {

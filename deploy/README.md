@@ -218,8 +218,8 @@ curl -X PUT -H "Authorization: Bearer $ADMIN_TOKEN" -H "content-type: applicatio
 
 An entry is a JSON document:
 
-- `address`: where the card's skill link leads, any address such as `/gh/owner/repo` or `/gh/owner/repo@main/skills/ad`: the skill the result was made with.
-- `link`: where the result itself is, which the card opens: an `https` URL, or a path of the deployment such as an upload (`/media/<sha>`). An uploaded picture or PDF is shown over the page; anything else opens in a tab of its own. Left out, the card opens the address.
+- `address`: where the card leads, any address such as `/gh/owner/repo` or `/gh/owner/repo@main/skills/ad`: the skill the result was made with.
+- `link`: where the result itself is: an `https` URL, or a path of the deployment such as an upload (`/media/<sha>`). The card leads to the address, not here; `llms.txt` names the result beside the entry.
 - `origin`: whose work the entry shows: `pack`, a result made with the pack at the address (the default), or `builder`, a builder's own case running on their site, made with that pack.
 - `position`: its place in the list, lowest first; `0` when left out.
 - `width` and `height`: the pixel size of the clip and its poster.

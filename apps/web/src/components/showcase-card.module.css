@@ -286,49 +286,30 @@
   color: var(--color-text-faint);
 }
 
-/* The two ways out, at the foot: the result, which the stretched link opens, and the skill,
-   which is a link of its own and so stands above the stretched one. */
+/* The way out, at the foot: to the skill, which the stretched link opens, named here so that
+   the card says where it leads. */
 .links {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-5);
   margin-top: auto;
   padding-top: var(--space-5);
   font-size: var(--text-sm);
   font-weight: var(--weight-bold);
 }
 
-.result,
 .skill {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  text-decoration: none;
+  color: var(--color-text);
   transition: color var(--transition);
 }
 
-.result {
-  color: var(--color-text);
-}
-
-.skill {
-  position: relative;
-  z-index: 2;
-  color: var(--color-text-muted);
-  font-weight: var(--weight-medium);
-}
-
-.skill:hover {
-  color: var(--color-accent-hover);
-}
-
-/* The arrows ride on the letters, not on the line box they sit in. */
-.result svg,
+/* The arrow rides on the letters, not on the line box it sits in. */
 .skill svg {
   translate: 0 var(--mark-optical);
 }
 
-.card:hover .result {
+.card:hover .skill {
   color: var(--color-accent-hover);
 }
 

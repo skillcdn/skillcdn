@@ -16,6 +16,21 @@
   box-shadow: var(--console-window-shadow);
   font-size: var(--console-text-sm);
   line-height: var(--leading-normal);
+  /* The site is dark and the browser draws its scroll bars to match; this window is light. */
+  color-scheme: light;
+}
+
+/* A scroll bar in the window: a thin thumb of the console's ink, faint until the pointer is over
+   what it scrolls, on no track. */
+.board,
+.cards {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--console-text-muted) 22%, transparent) transparent;
+}
+
+.board:hover,
+.cards:hover {
+  scrollbar-color: color-mix(in srgb, var(--console-text-muted) 45%, transparent) transparent;
 }
 
 .windowDragging,
@@ -109,7 +124,6 @@
   height: var(--console-board-height);
   padding-bottom: var(--space-1);
   overflow-x: auto;
-  scrollbar-width: thin;
 }
 
 .column {
@@ -125,11 +139,12 @@
   transition: box-shadow var(--transition);
 }
 
-/* The column under a card in hand says so with the accent round it. */
+/* The column under a card in hand says so with the accent round it, drawn inside its edge: the
+   board scrolls sideways, so it clips anything that stands out past a column. */
 .over {
   box-shadow:
     inset 0 1px 0 var(--console-glass-edge),
-    0 0 0 2px var(--console-accent-solid);
+    inset 0 0 0 2px var(--console-accent-solid);
 }
 
 .folded {
@@ -186,7 +201,6 @@
   min-height: 0;
   padding: var(--space-2) var(--space-2) var(--space-6);
   overflow-y: auto;
-  scrollbar-width: thin;
 }
 
 /* A card: the number, the title and one row of badges, with the agent at its end. */
