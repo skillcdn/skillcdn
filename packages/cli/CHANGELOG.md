@@ -1,5 +1,18 @@
 # @skillcdn/cli
 
+## 0.4.2
+
+### Patch Changes
+
+- [`728f791`](https://github.com/skillcdn/skillcdn/commit/728f791d3ec4e1497f0d0d6f2c2b6216ed4cfdcb) Thanks [@samo-lucid](https://github.com/samo-lucid)! - A refused read of a file of a pack served from a directory, over MCP, over REST and by the command, no longer tells the reader to fetch it with a GitHub credential: the line that names the credential follows only for a private repository of a git host, which has one to ask. `MountSummary` may name the `host` of its address, which the reader's summaries and `mountSummaryOf` now do, and `accessHint` and `describeSource` read it; a summary without it is read as a git host's.
+- Updated dependencies [[`b3bb896`](https://github.com/skillcdn/skillcdn/commit/b3bb896785a8e3e8298dd025c816303a36d4c552), [`b8f2413`](https://github.com/skillcdn/skillcdn/commit/b8f241303a02e856dbfd1baac6aa4190635a5a72), [`728f791`](https://github.com/skillcdn/skillcdn/commit/728f791d3ec4e1497f0d0d6f2c2b6216ed4cfdcb), [`8aee133`](https://github.com/skillcdn/skillcdn/commit/8aee13321eb11e4341b11f8542d93e68d911cd70), [`284f15d`](https://github.com/skillcdn/skillcdn/commit/284f15d9833dfb7de2e5c5b60150ded713b17285)]:
+  - @skillcdn/serve@0.4.2
+  - @skillcdn/reader@0.4.2
+  - @skillcdn/core@0.4.2
+  - @skillcdn/client@0.4.2
+  - @skillcdn/indexer@0.4.2
+  - @skillcdn/inference@0.4.2
+
 ## 0.4.1
 
 ### Patch Changes

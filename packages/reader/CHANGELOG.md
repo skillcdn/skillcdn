@@ -1,5 +1,20 @@
 # @skillcdn/reader
 
+## 0.4.2
+
+### Patch Changes
+
+- [`b8f2413`](https://github.com/skillcdn/skillcdn/commit/b8f241303a02e856dbfd1baac6aa4190635a5a72) Thanks [@samo-lucid](https://github.com/samo-lucid)! - A private repository is served in full on every ref, whatever its licenses say (ADR-0062): its restrictive skills are loaded whole, their files read and the skills extension lists them, as for a repository the operator vouches for, since the people it is served to have it at the host already. A public repository nobody vouched for still describes a restrictive skill and keeps its files at the source.
+
+- [`8aee133`](https://github.com/skillcdn/skillcdn/commit/8aee13321eb11e4341b11f8542d93e68d911cd70) Thanks [@samo-lucid](https://github.com/samo-lucid)! - The skills extension is data over REST too: `GET /api/v1/listing/<address>?cursor=` answers the skills a mount lists as `skills/list` lists them, each with its `uri`, its `frontmatter` and its served files with `digest` and `size`, and `?uri=` answers what one URI of the listing names, a skill with its assembled `SKILL.md` and the digest of it, a file as text or base64 bytes with its digest, or a directory's entries. What a program that installs skills into an agent's own folder reads, checking each file against its digest, without speaking MCP.
+  
+  - `@skillcdn/core`: `SkillEntry`, `SkillResource`, `SkillsPage`, `Resource`, `ResourceEntry` and `ListedItem` are the extension's types, moved here from the reader; `restListingSchema`, `restListedSchema`, `restListedItemSchema` and `restListedSkillSchema` are the shapes, `listingBody` and `listedBody` the builders; `REST_ROUTES.listing` and `restPath("listing", address)` name the route.
+  - `@skillcdn/reader`: the types above are re-exported from core; `getSkill`, `readResource` and `readDirectory` answer with the `mount` summary they were read from, as `listSkills` does; and the `digest` of a read resource is spelled as the listing spells it, `sha256:` first, where it lacked the prefix.
+  - `@skillcdn/serve`: the `listing` route, counted as `rest/listing`, a skill asked for by its URI as a load of the skill and a file as a read of it; a URI that names nothing listed answers `404 listing.not_found`.
+  - `@skillcdn/client`: `listing(address, { cursor })` and `listed(address, uri)`.
+- Updated dependencies [[`728f791`](https://github.com/skillcdn/skillcdn/commit/728f791d3ec4e1497f0d0d6f2c2b6216ed4cfdcb), [`8aee133`](https://github.com/skillcdn/skillcdn/commit/8aee13321eb11e4341b11f8542d93e68d911cd70), [`284f15d`](https://github.com/skillcdn/skillcdn/commit/284f15d9833dfb7de2e5c5b60150ded713b17285)]:
+  - @skillcdn/core@0.4.2
+
 ## 0.4.1
 
 ### Patch Changes
