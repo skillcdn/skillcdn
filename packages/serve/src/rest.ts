@@ -24,7 +24,7 @@ import { type Reader, ReaderInputError } from "@skillcdn/reader";
 import type { Context, Env, Hono } from "hono";
 import { cors } from "hono/cors";
 import * as z from "zod";
-import { type ServedMount, sourceAccess } from "./mount.js";
+import { restCacheControl, type ServedMount, sourceAccess } from "./mount.js";
 import { recordRead, type ServeLogger, type UsageHooks } from "./tools.js";
 
 // The routes of the REST API that read an address (docs/specs/rest.md): `mounts`, `browse`,
@@ -154,7 +154,10 @@ export interface AddressRouteDependencies<E extends Env, M extends ServedMount> 
   readonly rawFile?: ((mount: M, path: RepoPath) => Promise<RawFile | undefined>) | undefined;
 }
 
-/** Registers the routes that read an address on the app, with CORS for any origin and no caching. */
+/**
+ * Registers the routes that read an address on the app, with CORS for any origin and no caching,
+ * but of a ready answer of a public address pinned to a commit, kept a day (docs/specs/rest.md).
+ */
 export function registerAddressRoutes<E extends Env, M extends ServedMount>(
   app: Hono<E>,
   dependencies: AddressRouteDependencies<E, M>,
@@ -168,6 +171,12 @@ export function registerAddressRoutes<E extends Env, M extends ServedMount>(
   const record = (c: Context<E>, mount: M, route: string): void => {
     hooks.call?.(mount, `rest/${route}`);
     hooks.client?.(mount, dependencies.clientAddress?.(c), clientAppOf(c.req.header("user-agent")));
+  };
+
+  /** A ready answer of a pinned public address may be kept a day; the rest is `no-store`, below. */
+  const keep = (c: Context<E>, mount: M): void => {
+    const control = restCacheControl(mount);
+    if (control !== undefined) c.header("cache-control", control);
   };
 
   /** Parses the query string, or answers 400 without repeating what was sent. */
@@ -214,7 +223,8 @@ export function registerAddressRoutes<E extends Env, M extends ServedMount>(
     }),
   );
   // Nothing of the API is cached, unless a route said how long its answer may be kept: the
-  // search across packs does, on a deployment that keeps its answers (ADR-0075).
+  // search across packs does, on a deployment that keeps its answers (ADR-0075), and a ready
+  // answer of a public address pinned to a commit does (`keep`, above).
   app.use("/api/*", async (c, next) => {
     await next();
     if (!c.res.headers.has("cache-control")) {
@@ -229,7 +239,9 @@ export function registerAddressRoutes<E extends Env, M extends ServedMount>(
     }
     record(c, mount, "mounts");
     try {
-      return c.json(mountBody(mount, await reader.overview(mount, REST_MOUNT_LIST_LIMIT)));
+      const answer = await reader.overview(mount, REST_MOUNT_LIST_LIMIT);
+      if (answer.status === "ready") keep(c, mount);
+      return c.json(mountBody(mount, answer));
     } catch (error) {
       return failure(c, error);
     }
@@ -246,7 +258,9 @@ export function registerAddressRoutes<E extends Env, M extends ServedMount>(
     }
     record(c, mount, "find");
     try {
-      return c.json(findBody(await reader.find(mount, query, 0)));
+      const result = await reader.find(mount, query, 0);
+      if (result.status === "ready") keep(c, mount);
+      return c.json(findBody(result));
     } catch (error) {
       return failure(c, error);
     }
@@ -280,6 +294,7 @@ export function registerAddressRoutes<E extends Env, M extends ServedMount>(
         ) {
           hooks.skillLoad?.(mount, answer.lookup.skill.directory);
         }
+        if (outcome.body.status === "ready") keep(c, mount);
         return c.json(outcome.body);
       }
       const { status, code, message, directories } = outcome.failure;
@@ -356,6 +371,7 @@ export function registerAddressRoutes<E extends Env, M extends ServedMount>(
           if (query.offset === undefined || query.offset === 0) {
             recordRead(hooks, mount, lookup.indexed);
           }
+          keep(c, mount);
           return c.json(fileBody(lookup.file));
       }
     } catch (error) {
@@ -370,7 +386,9 @@ export function registerAddressRoutes<E extends Env, M extends ServedMount>(
     if (mount instanceof Response) return mount;
     record(c, mount, "browse");
     try {
-      return c.json(browseBody(await reader.browse(mount, query, 0)));
+      const result = await reader.browse(mount, query, 0);
+      if (result.status === "ready") keep(c, mount);
+      return c.json(browseBody(result));
     } catch (error) {
       return failure(c, error);
     }
@@ -415,6 +433,8 @@ export function registerAddressRoutes<E extends Env, M extends ServedMount>(
         case "served": {
           const file = await dependencies.rawFile?.(mount, lookup.path);
           if (file === undefined) {
+            // The host's file of a pinned commit never moves: the redirect is kept as a read is.
+            keep(c, mount);
             return c.redirect(mount.rawUrl(lookup.path), 302);
           }
           hooks.fileRead?.(mount, lookup.path);

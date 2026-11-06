@@ -254,7 +254,7 @@ export function formatOwnerPath(owner: OwnerPath): string {
   return `/${owner.host}/${owner.owner}`;
 }
 
-/** Pinned addresses name a full commit hash and may be cached indefinitely; everything else moves. */
+/** Pinned addresses name a full commit hash, whose content never changes; everything else moves. */
 export function isPinnedAddress(address: Address): boolean {
   return address.ref?.kind === "commit";
 }

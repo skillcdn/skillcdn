@@ -1,4 +1,4 @@
-import type { MountSummary } from "@skillcdn/core";
+import { isPinnedAddress, type MountSummary } from "@skillcdn/core";
 import type { MountContext } from "@skillcdn/reader";
 
 /**
@@ -26,4 +26,24 @@ export function sourceAccess(
   mount: ServedMount,
 ): Pick<MountSummary, "host" | "visibility" | "repository"> {
   return { host: mount.address.host, repository: mount.repository, visibility: mount.visibility };
+}
+
+/**
+ * How long a client may keep what a pinned address serves, in milliseconds: the commit never
+ * changes, and what the deployment serves of it seldom, so a day (docs/specs/tools.md).
+ */
+export const PINNED_TTL_MS = 86_400_000;
+
+/**
+ * What a ready REST answer of the mount tells the caches (docs/specs/rest.md): a public address
+ * pinned to a commit may be kept a day, the bound the skills extension gives it as `ttlMs`,
+ * since the operator's lists, the reading rules and the repository's visibility can still change
+ * what is served of the commit; anything else is nobody's to keep, a moving ref because it
+ * moves and a private repository because a shared cache would answer without the permission
+ * check.
+ */
+export function restCacheControl(mount: ServedMount): string | undefined {
+  return isPinnedAddress(mount.address) && mount.visibility === "public"
+    ? `public, max-age=${PINNED_TTL_MS / 1000}`
+    : undefined;
 }

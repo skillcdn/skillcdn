@@ -25,7 +25,7 @@ import {
 } from "@skillcdn/core";
 import { type Reader, ReaderInputError } from "@skillcdn/reader";
 import * as z from "zod";
-import { type ServedMount, sourceAccess } from "./mount.js";
+import { PINNED_TTL_MS, type ServedMount, sourceAccess } from "./mount.js";
 import {
   browseReply,
   fileReply,
@@ -89,8 +89,6 @@ const READ_ONLY = { readOnlyHint: true, idempotentHint: true, openWorldHint: fal
 
 /** The MCP skills extension this server implements (ADR-0024). */
 export const SKILLS_EXTENSION = "io.modelcontextprotocol/skills";
-/** How long a client may keep what a pinned address serves: the commit never changes. */
-const PINNED_TTL_MS = 86_400_000;
 /** How long a client may keep an answer given while the commit is still being indexed. */
 const INDEXING_TTL_MS = 5_000;
 

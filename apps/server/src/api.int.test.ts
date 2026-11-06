@@ -1541,3 +1541,38 @@ describe("the files that are not text (ADR-0077)", () => {
     );
   });
 });
+
+describe("what a cache may keep (docs/specs/rest.md)", () => {
+  it("keeps a ready answer of a public address pinned to a commit for a day, and nothing else", async () => {
+    const host = createFixtureHost("pinned-cache");
+    host.addFile("docs/images/figure.png", new Uint8Array(2048).fill(0x89));
+    const commit = fixtureCommits("pinned-cache").main;
+    const h = harness({ host, login: createFixtureLogin() });
+    const control = async (path: string, init?: RequestInit): Promise<string | null> =>
+      (await h.request(path, { redirect: "manual", ...init })).headers.get("cache-control");
+    const kept = "public, max-age=86400";
+
+    const pinned = `/gh/acme/multi-skill@${commit}`;
+    await indexed(h, pinned);
+    expect(await control(`/api/v1/mounts${pinned}`)).toBe(kept);
+    expect(await control(`/api/v1/browse${pinned}?path=skills`)).toBe(kept);
+    expect(await control(`/api/v1/find${pinned}?query=release`)).toBe(kept);
+    expect(await control(`/api/v1/skills${pinned}?path=skills/release-notes/SKILL.md`)).toBe(kept);
+    expect(await control(`/api/v1/files${pinned}?path=README.md`)).toBe(kept);
+    expect(await control(`/api/v1/raw${pinned}?path=docs/images/figure.png`)).toBe(kept);
+    // An error is not kept, whatever the address.
+    expect(await control(`/api/v1/files${pinned}?path=nothing.md`)).toBe("no-store");
+    // Nor is what a moving ref answers, since it moves.
+    await indexed(h, "/gh/acme/multi-skill");
+    expect(await control("/api/v1/mounts/gh/acme/multi-skill")).toBe("no-store");
+    expect(await control("/api/v1/files/gh/acme/multi-skill?path=README.md")).toBe("no-store");
+    // Nor a private repository's, whose answers are one person's.
+    const cookie = await h.signIn("alice");
+    const secret = `/gh/acme/secret-skills@${commit}`;
+    await indexed(h, secret, { headers: { cookie } });
+    expect(await control(`/api/v1/mounts${secret}`, { headers: { cookie } })).toBe("no-store");
+    expect(await control(`/api/v1/files${secret}?path=README.md`, { headers: { cookie } })).toBe(
+      "no-store",
+    );
+  });
+});
