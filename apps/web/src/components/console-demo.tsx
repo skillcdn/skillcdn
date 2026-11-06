@@ -55,6 +55,35 @@ const AWAY = { x: 14, y: 18 };
 const EASE = "cubic-bezier(0.3, 0.7, 0.2, 1)";
 /** How far a column is brought into view when the board has to scroll to it. */
 const SCROLL_MARGIN = 12;
+/**
+ * How close to an edge of the board a held card has to be for the board to scroll under it, and
+ * how fast the board goes at the edge, in pixels a frame.
+ */
+const EDGE_ZONE = 48;
+const EDGE_SPEED = 14;
+
+/**
+ * How far the board scrolls in one frame while a held card is near one of its edges: nothing
+ * away from the edges, more the deeper into the zone the pointer is, the full speed at the edge
+ * and beyond it; negative towards the left. On a screen too narrow for the whole board a column
+ * out of view is reached this way with the card in hand, as a phone's home screen turns its
+ * pages for an icon held at the edge.
+ */
+export function edgeScroll(
+  x: number,
+  left: number,
+  right: number,
+  zone = EDGE_ZONE,
+  speed = EDGE_SPEED,
+): number {
+  if (x < left + zone) {
+    return -speed * Math.min(1, (left + zone - x) / zone);
+  }
+  if (x > right - zone) {
+    return speed * Math.min(1, (x - (right - zone)) / zone);
+  }
+  return 0;
+}
 
 interface Point {
   readonly x: number;
@@ -526,6 +555,30 @@ export function ConsoleDemo() {
       }
     };
     const quiet = (event: Event) => event.preventDefault();
+    // Near an edge of the board, a held card pulls the board along under it, frame by frame and
+    // faster towards the edge, so that a column out of view is reached on a narrow screen; the
+    // column under the card is read again once the board has moved.
+    const scroll = () => {
+      const now = current.current;
+      const boardNode = board.current;
+      if (now?.moving && boardNode !== null) {
+        const rect = boardNode.getBoundingClientRect();
+        const by = edgeScroll(now.x, rect.left, rect.right);
+        if (by !== 0) {
+          const before = boardNode.scrollLeft;
+          boardNode.scrollLeft += by;
+          if (boardNode.scrollLeft !== before) {
+            setDrag((drag) => {
+              if (drag === null) return drag;
+              const over = columnUnder(drag.x, drag.y);
+              return over === drag.over ? drag : { ...drag, over };
+            });
+          }
+        }
+      }
+      frame = window.requestAnimationFrame(scroll);
+    };
+    let frame = window.requestAnimationFrame(scroll);
     const timer = current.current?.hold === true ? window.setTimeout(loosen, HOLD_MS) : undefined;
     window.addEventListener("pointermove", follow);
     window.addEventListener("pointerup", release);
@@ -533,6 +586,7 @@ export function ConsoleDemo() {
     document.addEventListener("touchmove", block, { passive: false });
     document.addEventListener("contextmenu", quiet);
     return () => {
+      window.cancelAnimationFrame(frame);
       if (timer !== undefined) {
         window.clearTimeout(timer);
       }
