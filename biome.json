@@ -9,6 +9,9 @@
   "files": {
     "ignoreUnknown": true
   },
+  "markdown": {
+    "formatter": { "enabled": false }
+  },
   "formatter": {
     "indentStyle": "space",
     "indentWidth": 2,
