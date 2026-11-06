@@ -11,6 +11,8 @@ import {
   type RepoPath,
   ROOT_PATH,
   restBrowseSchema,
+  restListedSchema,
+  restListingSchema,
   restMountSchema,
   restSkillSchema,
 } from "@skillcdn/core";
@@ -509,5 +511,66 @@ describe("the bytes of a file served from a machine (ADR-0077)", () => {
     expect(sent.headers.get("location")).toBe(
       "http://local.test/api/v1/raw/local/packs/acme?path=docs%2Fimages%2Fa.png",
     );
+  });
+});
+
+describe("the listing of a directory served from a machine (REST)", () => {
+  it("lists the skills with their digests, and answers one URI as a skill, a file or a directory", async () => {
+    const { mount } = await pack({ "marketing/ads/references/tone.md": "# Tone\n\nFriendly.\n" });
+    const app = appOf(mount);
+    const base = "http://local.test/api/v1/listing/local/packs/acme";
+    const listing = restListingSchema.parse(await (await app.request(base)).json());
+    if (listing.status !== "ready") throw new Error("expected a ready index");
+    expect(listing.total).toBe(1);
+    expect(listing.nextCursor).toBeNull();
+    const [ads] = listing.skills;
+    if (ads === undefined) throw new Error("expected the ads skill");
+    expect(ads.uri).toBe("skill://local/packs/acme/marketing/ads/SKILL.md");
+    expect(ads.frontmatter).toMatchObject({ name: "ads" });
+    expect(ads.resources.map((resource) => resource.uri).sort()).toEqual([
+      "skill://local/packs/acme/marketing/ads/SKILL.md",
+      "skill://local/packs/acme/marketing/ads/references/tone.md",
+    ]);
+    for (const resource of ads.resources) {
+      expect(resource.digest).toMatch(/^sha256:[0-9a-f]{64}$/);
+    }
+
+    const listed = async (uri: string) =>
+      restListedSchema.parse(
+        await (await app.request(base + "?uri=" + encodeURIComponent(uri))).json(),
+      );
+    const skill = await listed(ads.uri);
+    if (skill.status !== "ready" || skill.item.kind !== "skill")
+      throw new Error("expected the skill");
+    expect(skill.item.skill).toEqual(ads);
+    expect(skill.item.document).toContain("# Ads");
+    expect(skill.item.document).toContain("Be brief.");
+    expect(skill.item.digest).toBe(
+      ads.resources.find((resource) => resource.uri === ads.uri)?.digest,
+    );
+    const file = await listed("skill://local/packs/acme/marketing/ads/references/tone.md");
+    if (file.status !== "ready" || file.item.kind !== "file") throw new Error("expected the file");
+    expect(file.item).toMatchObject({
+      mimeType: "text/markdown",
+      text: "# Tone\n\nFriendly.\n",
+      blob: null,
+    });
+    const directory = await listed("skill://local/packs/acme/marketing/ads");
+    if (directory.status !== "ready" || directory.item.kind !== "directory") {
+      throw new Error("expected the directory");
+    }
+    expect(directory.item.resources.map((resource) => resource.name).sort()).toEqual([
+      "SKILL.md",
+      "references",
+    ]);
+    const nothing = await app.request(
+      base + "?uri=" + encodeURIComponent("skill://local/packs/acme/nothing/SKILL.md"),
+    );
+    expect(nothing.status).toBe(404);
+    expect(await nothing.json()).toMatchObject({ error: { code: "listing.not_found" } });
+    // A page and a URI at once is a malformed request.
+    expect((await app.request(base + "?cursor=c&uri=x")).status).toBe(400);
+    // A working tree is one machine's: nothing of it is kept.
+    expect((await app.request(base)).headers.get("cache-control")).toBe("no-store");
   });
 });

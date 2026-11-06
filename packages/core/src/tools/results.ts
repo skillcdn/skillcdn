@@ -366,6 +366,70 @@ export interface DirectoryResult {
   readonly truncated: boolean;
 }
 
+/** A served file of a listed skill, as the skills extension names it: by URI, digest and size. */
+export interface SkillResource {
+  readonly uri: string;
+  /** `sha256:` and 64 hex digits over the bytes a read returns. */
+  readonly digest: string;
+  readonly size: number;
+}
+
+/**
+ * One entry of `skills/list`, as the MCP skills extension defines it (ADR-0024): the skill's
+ * URI, its served front matter as data, and every served file of its directory.
+ */
+export interface SkillEntry {
+  readonly uri: string;
+  readonly frontmatter: Record<string, unknown>;
+  readonly resources: readonly SkillResource[];
+}
+
+/** A page of `skills/list`, and what the REST `listing` route answers without a URI. */
+export interface SkillsPage {
+  readonly skills: readonly SkillEntry[];
+  readonly nextCursor: string | undefined;
+  /** How many skills the mount lists in all. */
+  readonly total: number;
+  /** Where the page was read from: the commit, with the newest one beside it when that is another (ADR-0068). */
+  readonly mount: MountSummary;
+}
+
+/** What `resources/read` answers: text or bytes, and the digest the listing declared. */
+export interface Resource {
+  readonly uri: string;
+  readonly mimeType: string;
+  readonly text?: string;
+  readonly blob?: string;
+  readonly digest: string;
+}
+
+/** One entry of `resources/directory/read`: a file or a directory under a skill's directory. */
+export interface ResourceEntry {
+  readonly uri: string;
+  readonly name: string;
+  readonly mimeType: string;
+}
+
+/**
+ * What one URI of the listing names, as the REST `listing` route answers it (docs/specs/rest.md):
+ * a listed skill with its assembled document, a served file, or a directory of a skill.
+ */
+export type ListedItem =
+  | {
+      readonly kind: "skill";
+      readonly skill: SkillEntry;
+      /** The skill's `SKILL.md` as the extension serves it, assembled from its sources (ADR-0025). */
+      readonly document: string;
+      /** The digest of `document`, as the listing declares it. */
+      readonly digest: string;
+    }
+  | { readonly kind: "file"; readonly resource: Resource }
+  | {
+      readonly kind: "directory";
+      readonly uri: string;
+      readonly entries: readonly ResourceEntry[];
+    };
+
 /** A slice of `content` that never splits a surrogate pair. */
 export function pageOfText(
   content: string,

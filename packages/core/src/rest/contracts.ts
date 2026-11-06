@@ -17,6 +17,8 @@ export const REST_ROUTES = {
   files: "/api/v1/files",
   /** The bytes of a file as the pack has them, as an attachment, where the deployment serves them itself (ADR-0077). */
   raw: "/api/v1/raw",
+  /** The skills the extension lists, with their digests, and what one URI of the listing names. */
+  listing: "/api/v1/listing",
   featured: "/api/v1/featured",
   showcase: "/api/v1/showcase",
   legal: "/api/v1/legal",
@@ -38,7 +40,7 @@ export const REST_FEATURED_SKILL_NAMES = 5;
 
 /** The REST path of an operation on an address, without a query string. */
 export function restPath(
-  operation: "mounts" | "browse" | "find" | "skills" | "files" | "raw",
+  operation: "mounts" | "browse" | "find" | "skills" | "files" | "raw" | "listing",
   address: Address,
 ): string {
   return `${REST_ROUTES[operation]}${formatAddress(address)}`;
@@ -492,6 +494,65 @@ export const restFileSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 
+/**
+ * One skill as the skills extension lists it (ADR-0024): its URI, its front matter as data, and
+ * every served file of its directory with the digest and size a read returns.
+ */
+export const restListedSkillSchema = z.object({
+  uri: z.string(),
+  frontmatter: z.record(z.string(), z.unknown()),
+  resources: z.array(z.object({ uri: z.string(), digest: z.string(), size: count })),
+});
+
+/** A page of the skills a mount lists, as the `listing` route answers it without a URI. */
+export const restListingSchema = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("ready"),
+    /** The commit the page was read from. */
+    commit: z.string(),
+    skills: z.array(restListedSkillSchema),
+    nextCursor: z.nullable(z.string()),
+    /** How many skills the mount lists in all. */
+    total: count,
+  }),
+  indexing,
+  failed,
+]);
+
+/** What one URI of the listing names, as the `listing` route answers it with a URI. */
+export const restListedItemSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("skill"),
+    skill: restListedSkillSchema,
+    /** The skill's `SKILL.md` as the extension serves it, assembled from its sources (ADR-0025). */
+    document: z.string(),
+    /** The digest of `document`, as the listing declares it. */
+    digest: z.string(),
+  }),
+  z.object({
+    kind: z.literal("file"),
+    uri: z.string(),
+    mimeType: z.string(),
+    /** The file as text, or `null` where it is not text. */
+    text: z.nullable(z.string()),
+    /** The bytes of a file that is not text, base64, or `null`. */
+    blob: z.nullable(z.string()),
+    /** The digest the listing declares for the file. */
+    digest: z.string(),
+  }),
+  z.object({
+    kind: z.literal("directory"),
+    uri: z.string(),
+    resources: z.array(z.object({ uri: z.string(), name: z.string(), mimeType: z.string() })),
+  }),
+]);
+
+export const restListedSchema = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("ready"), commit: z.string(), item: restListedItemSchema }),
+  indexing,
+  failed,
+]);
+
 /** A repository on a card: what the explorer features, and what the page of an account leads with. */
 export const restRepositoryCardSchema = z.object({
   address: z.string(),
@@ -545,6 +606,10 @@ export type RestFind = z.infer<typeof restFindSchema>;
 export type RestSkill = z.infer<typeof restSkillSchema>;
 export type RestDirectoryEntry = z.infer<typeof restDirectoryEntrySchema>;
 export type RestFile = z.infer<typeof restFileSchema>;
+export type RestListedSkill = z.infer<typeof restListedSkillSchema>;
+export type RestListing = z.infer<typeof restListingSchema>;
+export type RestListedItem = z.infer<typeof restListedItemSchema>;
+export type RestListed = z.infer<typeof restListedSchema>;
 export type RestRepositoryCard = z.infer<typeof restRepositoryCardSchema>;
 export type RestFeatured = z.infer<typeof restFeaturedSchema>;
 export type RestError = z.infer<typeof restErrorSchema>;

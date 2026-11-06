@@ -16,6 +16,8 @@ import {
   directoryBody,
   fileBody,
   findBody,
+  listedBody,
+  listingBody,
   mountBody,
   skillOutcome,
 } from "./bodies.js";
@@ -23,6 +25,8 @@ import {
   restBrowseSchema,
   restFileSchema,
   restFindSchema,
+  restListedSchema,
+  restListingSchema,
   restMountSchema,
   restSkillSchema,
 } from "./contracts.js";
@@ -606,5 +610,78 @@ describe("the find body and the maps", () => {
     expect(restFindSchema.parse(body)).toEqual(body);
     if (body.status !== "ready") throw new Error("not ready");
     expect(findResultOf(body, mount).items[0]).toMatchObject({ overview: true });
+  });
+});
+
+describe("the listing body", () => {
+  const SKILL_URI = "skill://gh/acme/skills/marketing/ads/SKILL.md";
+  const NOTE_URI = "skill://gh/acme/skills/marketing/ads/references/tone.md";
+  const digestOf = (letter: string) => "sha256:" + letter.repeat(64);
+  const entry = {
+    uri: SKILL_URI,
+    frontmatter: { name: "ads", description: "Writes ad copy.", metadata: { version: "2" } },
+    resources: [
+      { uri: SKILL_URI, digest: digestOf("a"), size: 120 },
+      { uri: NOTE_URI, digest: digestOf("b"), size: 40 },
+    ],
+  };
+
+  it("parses a page of listed skills with the schema, and names the commit it was read from", () => {
+    const page = listingBody({
+      status: "ready",
+      result: { skills: [entry], nextCursor: "next", total: 7, mount },
+    });
+    expect(restListingSchema.parse(page)).toEqual(page);
+    expect(page).toMatchObject({ status: "ready", commit: COMMIT, nextCursor: "next", total: 7 });
+    expect(listingBody({ status: "indexing" })).toEqual({ status: "indexing" });
+  });
+
+  it("answers a skill with its document, a file with its text or bytes, and a directory with its entries", () => {
+    const skill = listedBody(COMMIT, {
+      kind: "skill",
+      skill: entry,
+      document: "---\nname: ads\n---\n# Ads\n",
+      digest: digestOf("a"),
+    });
+    expect(restListedSchema.parse(skill)).toEqual(skill);
+    expect(skill).toMatchObject({ status: "ready", commit: COMMIT, item: { kind: "skill" } });
+
+    const file = listedBody(COMMIT, {
+      kind: "file",
+      resource: {
+        uri: NOTE_URI,
+        mimeType: "text/markdown",
+        text: "# Tone\n",
+        digest: digestOf("b"),
+      },
+    });
+    expect(restListedSchema.parse(file)).toEqual(file);
+    if (file.status !== "ready" || file.item.kind !== "file") throw new Error("not a file");
+    expect(file.item.blob).toBeNull();
+    expect(file.item.text).toBe("# Tone\n");
+
+    const picture = listedBody(COMMIT, {
+      kind: "file",
+      resource: {
+        uri: "skill://gh/acme/skills/marketing/ads/a.png",
+        mimeType: "image/png",
+        blob: "iVBORw0KGgo=",
+        digest: digestOf("c"),
+      },
+    });
+    expect(restListedSchema.parse(picture)).toEqual(picture);
+    if (picture.status !== "ready" || picture.item.kind !== "file") throw new Error("not a file");
+    expect(picture.item.text).toBeNull();
+
+    const directory = listedBody(COMMIT, {
+      kind: "directory",
+      uri: "skill://gh/acme/skills/marketing/ads",
+      entries: [{ uri: SKILL_URI, name: "SKILL.md", mimeType: "text/markdown" }],
+    });
+    expect(restListedSchema.parse(directory)).toEqual(directory);
+    if (directory.status !== "ready" || directory.item.kind !== "directory") {
+      throw new Error("not a directory");
+    }
+    expect(directory.item.resources).toHaveLength(1);
   });
 });

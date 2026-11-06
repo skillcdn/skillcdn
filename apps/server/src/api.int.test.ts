@@ -9,6 +9,8 @@ import {
   PROVENANCE_NOTICE,
   parseAddress,
   restFindSchema,
+  restListedSchema,
+  restListingSchema,
   restSkillSchema,
 } from "@skillcdn/core";
 import {
@@ -1573,6 +1575,75 @@ describe("what a cache may keep (docs/specs/rest.md)", () => {
     expect(await control(`/api/v1/mounts${secret}`, { headers: { cookie } })).toBe("no-store");
     expect(await control(`/api/v1/files${secret}?path=README.md`, { headers: { cookie } })).toBe(
       "no-store",
+    );
+  });
+});
+
+describe("the listing of a repository over REST (docs/specs/rest.md)", () => {
+  it("lists what the extension lists, keeps a described skill out, and is kept for a pinned commit", async () => {
+    const host = createFixtureHost("listing");
+    const commit = fixtureCommits("listing").main;
+    const h = harness({ host });
+    const pinned = "/gh/acme/licensed@" + commit;
+    await indexed(h, pinned);
+    const page = await h.request("/api/v1/listing" + pinned);
+    expect(page.headers.get("cache-control")).toBe("public, max-age=86400");
+    const listing = restListingSchema.parse(await page.json());
+    if (listing.status !== "ready") throw new Error("expected a ready index");
+    expect(listing.commit).toBe(commit);
+    // The open skill is listed; the ones their licenses keep at the source are not.
+    expect(listing.skills.map((skill) => skill.uri)).toEqual([
+      "skill://gh/acme/licensed/skills/open/SKILL.md",
+    ]);
+    expect(listing.total).toBe(1);
+    const reserved = await h.request(
+      "/api/v1/listing" +
+        pinned +
+        "?uri=" +
+        encodeURIComponent("skill://gh/acme/licensed/skills/reserved/SKILL.md"),
+    );
+    expect(reserved.status).toBe(404);
+    expect(reserved.headers.get("cache-control")).toBe("no-store");
+
+    // The digests are the ones the extension declares over MCP.
+    const client = await h.connect(pinned, { revision: "current" });
+    const over = await client.request(
+      { method: "skills/list", params: {} },
+      z.object({
+        skills: z.array(
+          z.object({
+            uri: z.string(),
+            resources: z.array(z.object({ uri: z.string(), digest: z.string() })),
+          }),
+        ),
+      }),
+    );
+    await client.close();
+    expect(over.skills).toEqual(
+      listing.skills.map((skill) => ({
+        uri: skill.uri,
+        resources: skill.resources.map(({ uri, digest }) => ({ uri, digest })),
+      })),
+    );
+
+    // The open skill by its URI: the assembled document, with the digest the listing declared.
+    const open = restListedSchema.parse(
+      await (
+        await h.request(
+          "/api/v1/listing" +
+            pinned +
+            "?uri=" +
+            encodeURIComponent("skill://gh/acme/licensed/skills/open/SKILL.md"),
+        )
+      ).json(),
+    );
+    if (open.status !== "ready" || open.item.kind !== "skill")
+      throw new Error("expected the skill");
+    expect(open.item.document).toContain("# Open");
+    expect(open.item.digest).toBe(
+      listing.skills[0]?.resources.find(
+        (resource) => resource.uri === "skill://gh/acme/licensed/skills/open/SKILL.md",
+      )?.digest,
     );
   });
 });

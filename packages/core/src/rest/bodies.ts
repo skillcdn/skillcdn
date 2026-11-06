@@ -12,7 +12,10 @@ import type {
   FindResult,
   HubResult,
   IndexDiagnostic,
+  ListedItem,
   NewestCommit,
+  SkillEntry,
+  SkillsPage,
 } from "../tools/results.js";
 import type {
   RestBrowse,
@@ -22,6 +25,9 @@ import type {
   RestFind,
   RestFindItem,
   RestLicense,
+  RestListed,
+  RestListedSkill,
+  RestListing,
   RestMount,
   RestMountSearch,
   RestRepository,
@@ -459,4 +465,76 @@ export function directoryBody(directory: DirectoryResult): RestFile {
     })),
     truncated: directory.truncated,
   };
+}
+
+/** One listed skill, as the `listing` route answers it: the entry of `skills/list` as JSON. */
+function restListedSkillOf(skill: SkillEntry): RestListedSkill {
+  return {
+    uri: skill.uri,
+    frontmatter: { ...skill.frontmatter },
+    resources: skill.resources.map((resource) => ({
+      uri: resource.uri,
+      digest: resource.digest,
+      size: resource.size,
+    })),
+  };
+}
+
+/** A page of the skills the extension lists, as the `listing` route answers it without a URI. */
+export function listingBody(
+  answer: IndexNotReady | { readonly status: "ready"; readonly result: SkillsPage },
+): RestListing {
+  if (answer.status !== "ready") return notReadyBody(answer);
+  const { result } = answer;
+  return {
+    status: "ready",
+    commit: result.mount.commit,
+    skills: result.skills.map(restListedSkillOf),
+    nextCursor: result.nextCursor ?? null,
+    total: result.total,
+  };
+}
+
+/** What one URI of the listing names, as the `listing` route answers it with a URI. */
+export function listedBody(commit: string, item: ListedItem): RestListed {
+  switch (item.kind) {
+    case "skill":
+      return {
+        status: "ready",
+        commit,
+        item: {
+          kind: "skill",
+          skill: restListedSkillOf(item.skill),
+          document: item.document,
+          digest: item.digest,
+        },
+      };
+    case "file":
+      return {
+        status: "ready",
+        commit,
+        item: {
+          kind: "file",
+          uri: item.resource.uri,
+          mimeType: item.resource.mimeType,
+          text: item.resource.text ?? null,
+          blob: item.resource.blob ?? null,
+          digest: item.resource.digest,
+        },
+      };
+    case "directory":
+      return {
+        status: "ready",
+        commit,
+        item: {
+          kind: "directory",
+          uri: item.uri,
+          resources: item.entries.map((entry) => ({
+            uri: entry.uri,
+            name: entry.name,
+            mimeType: entry.mimeType,
+          })),
+        },
+      };
+  }
 }

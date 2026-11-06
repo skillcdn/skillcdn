@@ -25,8 +25,6 @@ What exists, what is being built, what comes next. Update this file in the same 
 5. `intake`: a skill's inputs, declared under the `skillcdn` key and rendered as the inputs of the skill's text, so that any agent asks for them and nothing new travels on the wire; built when a pack needs it. Composed tools declared in Markdown or YAML; `run` is defined against the rule that repository code never executes.
 6. What a signed-in person gets beyond private repositories. The account pages take a new section per feature; nothing is decided about which.
 
-Decided, not yet built, each small: the listed skills of the MCP skills extension, their digests and the assembled document become routes of the REST API, for a program that installs skills into an agent's own folder and for the console ([REST](specs/rest.md)).
-
 ## Later, undecided
 
 The work board for parallel agents is no longer here: it is being built as the console, in a repository of its own ([ADR-0047](adr/0047-the-console-is-a-separate-repository-built-on-the-published-packages.md)). Rankings fed by the usage statistics, next to the operator's featured list: this repository keeps the counts and the reads they are made from, and nothing more; what to rank or to recommend is for whoever consumes them. Aliases for verified publishers, held back for now. Distribution through a small plugin that points at an address, and import by hosts that snapshot a server's skills when a plugin is submitted, for the beta.

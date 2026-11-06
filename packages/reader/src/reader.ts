@@ -70,15 +70,19 @@ import {
   type RepoPath,
   type RepoTranslation,
   type Reranker,
+  type Resource,
+  type ResourceEntry,
   ROOT_PATH,
   repoManifestPath,
   resolveDocumentSource,
   SKILL_PAGE_BYTES,
   SKILL_RANK_BOOST,
+  type SkillEntry,
   type SkillLookup,
   type SkillResult,
   type SkillRules,
   type SkillServing,
+  type SkillsPage,
   type SkillTranslation,
   type StoredTranslation,
   sectionExcerpt,
@@ -165,39 +169,9 @@ export class BodyUnavailableError extends Error {
   }
 }
 
-/** One entry of `skills/list`, as the MCP skills extension defines it. */
-export interface SkillEntry {
-  readonly uri: string;
-  readonly frontmatter: Record<string, unknown>;
-  readonly resources: readonly {
-    readonly uri: string;
-    readonly digest: string;
-    readonly size: number;
-  }[];
-}
-
-export interface SkillsPage {
-  readonly skills: readonly SkillEntry[];
-  readonly nextCursor: string | undefined;
-  readonly total: number;
-  /** Where the page was read from: the commit, with the newest one beside it when that is another (ADR-0068). */
-  readonly mount: MountSummary;
-}
-
-/** What `resources/read` answers: text or bytes, and the digest the listing declared. */
-export interface Resource {
-  readonly uri: string;
-  readonly mimeType: string;
-  readonly text?: string;
-  readonly blob?: string;
-  readonly digest: string;
-}
-
-export interface ResourceEntry {
-  readonly uri: string;
-  readonly name: string;
-  readonly mimeType: string;
-}
+// The types of the skills extension's answers are core's, which the REST bodies are made from;
+// they stay on this entry point for whoever imports them from here.
+export type { Resource, ResourceEntry, SkillEntry, SkillsPage } from "@skillcdn/core";
 
 /** Skills per page of `skills/list`; a page is a whole number of entries. */
 const SKILLS_PAGE_SIZE = 20;
@@ -1261,6 +1235,8 @@ export class Reader<M extends MountContext = MountContext> {
         readonly status: "ready";
         readonly skill: SkillEntry | undefined;
         readonly directory: string | undefined;
+        /** Where the answer was read from, as every result names it. */
+        readonly mount: MountSummary;
       }
   > {
     const outcome = await this.#index(asked, waitMs);
@@ -1272,16 +1248,27 @@ export class Reader<M extends MountContext = MountContext> {
         ? undefined
         : getEntry(await this.#entriesOf(index), path);
     if (entry?.kind !== "skill" || entry.listed !== true) {
-      return { status: "ready", skill: undefined, directory: undefined };
+      return {
+        status: "ready",
+        skill: undefined,
+        directory: undefined,
+        mount: this.summary(mount, index),
+      };
     }
     // A described skill is not listed here, so its URI names nothing (ADR-0026).
     if (!servesInFull(entry.frontMatter?.licenseFact ?? NO_LICENSE, servedInFull(mount))) {
-      return { status: "ready", skill: undefined, directory: undefined };
+      return {
+        status: "ready",
+        skill: undefined,
+        directory: undefined,
+        mount: this.summary(mount, index),
+      };
     }
     return {
       status: "ready",
       skill: await this.#skillEntry(mount, index, await this.#rootSkill(index), entry),
       directory: entry.skillDir ?? ROOT_PATH,
+      mount: this.summary(mount, index),
     };
   }
 
@@ -1299,6 +1286,8 @@ export class Reader<M extends MountContext = MountContext> {
         readonly status: "ready";
         readonly resource: Resource | undefined;
         readonly indexed: IndexedFile | undefined;
+        /** Where the answer was read from, as every result names it. */
+        readonly mount: MountSummary;
       }
   > {
     const outcome = await this.#index(asked, waitMs);
@@ -1310,33 +1299,51 @@ export class Reader<M extends MountContext = MountContext> {
         ? undefined
         : getEntry(await this.#entriesOf(index), path);
     if (entry === undefined || entry.digest === undefined)
-      return { status: "ready", resource: undefined, indexed: undefined };
+      return {
+        status: "ready",
+        resource: undefined,
+        indexed: undefined,
+        mount: this.summary(mount, index),
+      };
     const license = await this.#licenseAt(index, entry.path as RepoPath);
     if (!servesInFull(license, servedInFull(mount))) {
-      return { status: "ready", resource: undefined, indexed: undefined };
+      return {
+        status: "ready",
+        resource: undefined,
+        indexed: undefined,
+        mount: this.summary(mount, index),
+      };
     }
     const indexed = indexedOf(entry);
     if (entry.kind === "skill") {
       const document = await this.#assembledDocument(mount, index, entry);
       return {
         status: "ready",
+        mount: this.summary(mount, index),
         resource:
           document === undefined
             ? undefined
-            : { uri, mimeType: "text/markdown", text: document, digest: entry.digest },
+            : { uri, mimeType: "text/markdown", text: document, digest: `sha256:${entry.digest}` },
         indexed: document === undefined ? undefined : indexed,
       };
     }
     const bytes = await index.blobs.readBytes(entry.blobSha);
-    if (bytes === undefined) return { status: "ready", resource: undefined, indexed: undefined };
+    if (bytes === undefined)
+      return {
+        status: "ready",
+        resource: undefined,
+        indexed: undefined,
+        mount: this.summary(mount, index),
+      };
     const text = decodeText(bytes);
     return {
       status: "ready",
+      mount: this.summary(mount, index),
       resource: {
         uri,
         mimeType: mimeTypeOf(entry.path as RepoPath, text !== undefined),
         ...(text === undefined ? { blob: Buffer.from(bytes).toString("base64") } : { text }),
-        digest: entry.digest,
+        digest: `sha256:${entry.digest}`,
       },
       indexed,
     };
@@ -1349,7 +1356,12 @@ export class Reader<M extends MountContext = MountContext> {
     waitMs: number,
   ): Promise<
     | IndexNotReady
-    | { readonly status: "ready"; readonly entries: readonly ResourceEntry[] | undefined }
+    | {
+        readonly status: "ready";
+        readonly entries: readonly ResourceEntry[] | undefined;
+        /** Where the answer was read from, as every result names it. */
+        readonly mount: MountSummary;
+      }
   > {
     const outcome = await this.#index(asked, waitMs);
     if (outcome.status !== "ready") return outcome;
@@ -1357,20 +1369,22 @@ export class Reader<M extends MountContext = MountContext> {
     const root = await this.#rootSkill(index);
     const path = await this.#pathOfUri(mount, index, uri);
     if (path === undefined || !isWithinRepoPath(mount.address.path, path)) {
-      return { status: "ready", entries: undefined };
+      return { status: "ready", entries: undefined, mount: this.summary(mount, index) };
     }
     const owned = await this.#skillLicenseAt(index, path);
     if (owned !== undefined && !servesInFull(owned, servedInFull(mount))) {
-      return { status: "ready", entries: undefined };
+      return { status: "ready", entries: undefined, mount: this.summary(mount, index) };
     }
     // What a directory holds here is what the extension serves: a file over the read limit is
     // named in the skill's document instead (ADR-0033).
     const children = listDirectory(await this.#entriesOf(index), path, MAX_DIRECTORY_ENTRIES, {
       servedOnly: true,
     });
-    if (children.length === 0) return { status: "ready", entries: undefined };
+    if (children.length === 0)
+      return { status: "ready", entries: undefined, mount: this.summary(mount, index) };
     return {
       status: "ready",
+      mount: this.summary(mount, index),
       entries: children.map((child) => ({
         uri: this.#uriOf(mount, root, child.path as RepoPath),
         name: child.path.slice(child.path.lastIndexOf("/") + 1),

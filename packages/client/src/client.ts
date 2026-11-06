@@ -22,6 +22,8 @@ import {
   type RestGrants,
   type RestIndexNow,
   type RestLegalDocument,
+  type RestListed,
+  type RestListing,
   type RestMe,
   type RestMount,
   type RestMyIndex,
@@ -47,6 +49,8 @@ import {
   restGrantsSchema,
   restIndexNowSchema,
   restLegalDocumentSchema,
+  restListedSchema,
+  restListingSchema,
   restMeSchema,
   restMountSchema,
   restMyIndexSchema,
@@ -180,6 +184,14 @@ export interface SkillCdnClient {
     },
     signal?: AbortSignal,
   ): Promise<RestFile>;
+  /** The skills the extension lists (`skills/list`), with their files and digests: a page. */
+  listing(
+    address: Address,
+    query?: { readonly cursor?: string | undefined },
+    signal?: AbortSignal,
+  ): Promise<RestListing>;
+  /** What one URI of the listing names: a skill with its document, a file with its digest, or a directory. */
+  listed(address: Address, uri: string, signal?: AbortSignal): Promise<RestListed>;
   featured(signal?: AbortSignal): Promise<RestFeatured>;
   /** A search across every pack the deployment serves (ADR-0070): at most `limit` results. */
   search(query: string, limit?: number, signal?: AbortSignal): Promise<RestSearch>;
@@ -361,6 +373,14 @@ export function createClient(options: ClientOptions): SkillCdnClient {
         restFileSchema,
         signal,
       ),
+    listing: (address, query, signal) =>
+      read(
+        `${restPath("listing", address)}${queryOf({ cursor: query?.cursor })}`,
+        restListingSchema,
+        signal,
+      ),
+    listed: (address, uri, signal) =>
+      read(`${restPath("listing", address)}${queryOf({ uri })}`, restListedSchema, signal),
     featured: (signal) => read(REST_ROUTES.featured, restFeaturedSchema, signal),
     search: (query, limit, signal) =>
       read(`${REST_ROUTES.search}${queryOf({ query, limit })}`, restSearchSchema, signal),

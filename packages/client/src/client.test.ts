@@ -399,3 +399,19 @@ describe("a command connecting with a code", () => {
     });
   });
 });
+
+describe("the listing routes", () => {
+  it("asks for a page of the listing, and for one URI of it", async () => {
+    const { fetch, calls } = fakeFetch(() => json({ status: "indexing" }));
+    const client = createClient({ baseUrl: "https://skillcdn.example", fetch });
+    const at = address("/gh/acme/skills@v1");
+    await client.listing(at);
+    await client.listing(at, { cursor: "c" });
+    await client.listed(at, "skill://gh/acme/skills/marketing/ads/SKILL.md");
+    expect(calls.map((call) => call.url.slice("https://skillcdn.example".length))).toEqual([
+      "/api/v1/listing/gh/acme/skills@v1",
+      "/api/v1/listing/gh/acme/skills@v1?cursor=c",
+      "/api/v1/listing/gh/acme/skills@v1?uri=skill%3A%2F%2Fgh%2Facme%2Fskills%2Fmarketing%2Fads%2FSKILL.md",
+    ]);
+  });
+});

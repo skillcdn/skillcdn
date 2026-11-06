@@ -9,9 +9,12 @@ import {
   findBody,
   GitHostError,
   type IndexNotReady,
+  listedBody,
+  listingBody,
   MAX_QUERY_LENGTH,
   MAX_REPO_PATH_LENGTH,
   type MountOverview,
+  notReadyBody,
   READ_FILE_MAX_LIMIT,
   REST_MOUNT_LIST_LIMIT,
   REST_ROUTES,
@@ -56,6 +59,13 @@ const fileQuery = z.object({
   limit: z.coerce.number().int().min(1).max(READ_FILE_MAX_LIMIT).optional(),
 });
 const rawQuery = z.object({ path: z.string().min(1).max(MAX_REPO_PATH_LENGTH) });
+/** A page of the listing, or one URI of it; never both. */
+const listingQuery = z
+  .object({
+    cursor: z.string().max(4096).optional(),
+    uri: z.string().min(1).max(2048).optional(),
+  })
+  .refine((value) => value.cursor === undefined || value.uri === undefined);
 
 /** A file of a mount opened for its bytes to be sent as they are (ADR-0077). */
 export interface RawFile {
@@ -374,6 +384,72 @@ export function registerAddressRoutes<E extends Env, M extends ServedMount>(
           keep(c, mount);
           return c.json(fileBody(lookup.file));
       }
+    } catch (error) {
+      return failure(c, error);
+    }
+  });
+
+  // The skills extension as data (docs/specs/rest.md): a page of the skills the mount lists,
+  // or what one URI of the listing names, for a program that installs skills into an agent's own
+  // folder. A described skill is not listed, so its URI names nothing, as over MCP.
+  app.get(`${REST_ROUTES.listing}/*`, async (c) => {
+    const query = queryOf(c, listingQuery);
+    if (query instanceof Response) return query;
+    const mount = await mountAt(c, REST_ROUTES.listing);
+    if (mount instanceof Response) return mount;
+    record(c, mount, "listing");
+    try {
+      if (query.uri === undefined) {
+        const answer = await reader.listSkills(mount, { cursor: query.cursor }, 0);
+        if (answer.status === "ready") keep(c, mount);
+        return c.json(listingBody(answer));
+      }
+      const skill = await reader.getSkill(mount, query.uri, 0);
+      if (skill.status !== "ready") return c.json(notReadyBody(skill));
+      if (skill.skill !== undefined) {
+        const read = await reader.readResource(mount, query.uri, 0);
+        const document = read.status === "ready" ? read.resource : undefined;
+        if (document?.text === undefined) {
+          // A listed skill's document is readable by construction; anything else is ours to look at.
+          logger.error(
+            { uri: query.uri, ...dependencies.requestFields?.(c) },
+            "listed skill unreadable",
+          );
+          return c.json(errorBody("internal", "The request could not be served."), 500);
+        }
+        hooks.skillLoad?.(mount, skill.directory ?? "");
+        keep(c, mount);
+        return c.json(
+          listedBody(skill.mount.commit, {
+            kind: "skill",
+            skill: skill.skill,
+            document: document.text,
+            digest: document.digest,
+          }),
+        );
+      }
+      const resource = await reader.readResource(mount, query.uri, 0);
+      if (resource.status !== "ready") return c.json(notReadyBody(resource));
+      if (resource.resource !== undefined) {
+        if (resource.indexed !== undefined) recordRead(hooks, mount, resource.indexed);
+        keep(c, mount);
+        return c.json(
+          listedBody(resource.mount.commit, { kind: "file", resource: resource.resource }),
+        );
+      }
+      const directory = await reader.readDirectory(mount, query.uri, 0);
+      if (directory.status !== "ready") return c.json(notReadyBody(directory));
+      if (directory.entries !== undefined) {
+        keep(c, mount);
+        return c.json(
+          listedBody(directory.mount.commit, {
+            kind: "directory",
+            uri: query.uri,
+            entries: directory.entries,
+          }),
+        );
+      }
+      return c.json(errorBody("listing.not_found", "The URI names nothing this mount lists."), 404);
     } catch (error) {
       return failure(c, error);
     }
