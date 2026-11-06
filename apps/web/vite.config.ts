@@ -1,4 +1,5 @@
 import process from "node:process";
+import { FEATURE_META_NAMES } from "@skillcdn/core";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type HtmlTagDescriptor, loadEnv, type Plugin } from "vite";
 import { brandFiles } from "./dev/brand-files.js";
@@ -51,7 +52,7 @@ function analyticsStub(url: string | undefined): HtmlTagDescriptor[] {
  * Answers the REST API from fixtures, and signs the fixture person in and out, so the UI runs
  * without a server behind it. Only the development server does: a build has no fixtures in it.
  */
-function fixtureApi(): Plugin {
+function fixtureApi(consoleUrl: string): Plugin {
   return {
     name: "skillcdn-fixture-api",
     apply: "serve",
@@ -59,12 +60,19 @@ function fixtureApi(): Plugin {
     // the standard link types the pages read (`LEGAL_TAGS` in src/site.ts): its terms as a page
     // of its own, which the fixtures have written, and its privacy policy as a page kept
     // elsewhere. The footer and the sign-in button show both, and this is where they are seen.
-    // And, when the URL names a country, what its bootstrap leaves about analytics.
+    // The console its builders work on, which the front page links where a deployment names one
+    // (`FEATURE_META_NAMES.console`). And, when the URL names a country, what its bootstrap
+    // leaves about analytics.
     transformIndexHtml: (_html, context) => [
       { tag: "link", attrs: { rel: "terms-of-service", href: "/terms" }, injectTo: "head" },
       {
         tag: "link",
         attrs: { rel: "privacy-policy", href: "https://example.com/privacy" },
+        injectTo: "head",
+      },
+      {
+        tag: "meta",
+        attrs: { name: FEATURE_META_NAMES.console, content: consoleUrl },
         injectTo: "head",
       },
       ...analyticsStub(context.originalUrl),
@@ -134,9 +142,17 @@ export default defineConfig(({ mode, isSsrBuild }) => {
   const env = loadEnv(mode, process.cwd(), "SKILLCDN_");
   const defaultApi = API_BY_MODE[mode];
   const apiUrl = defaultApi === undefined ? undefined : (env.SKILLCDN_API_URL ?? defaultApi);
+  // The console of the fixtures' deployment: an address of the example kind, unless
+  // SKILLCDN_CONSOLE_URL names a real one to click through to.
+  const consoleUrl = env.SKILLCDN_CONSOLE_URL ?? "https://console.example";
 
   return {
-    plugins: [react(), brandFiles(), docsPages(), ...(apiUrl === undefined ? [fixtureApi()] : [])],
+    plugins: [
+      react(),
+      brandFiles(),
+      docsPages(),
+      ...(apiUrl === undefined ? [fixtureApi(consoleUrl)] : []),
+    ],
     server: {
       // Next to the integrated server's 11188, so that every local port of the project is one
       // block; another Vite instance takes the next free one.
