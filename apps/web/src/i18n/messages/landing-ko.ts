@@ -239,7 +239,7 @@ export const landingKo: LandingMessages = {
       lead: "콘솔 스킬 팩으로 시작하세요. AI 앱에 이 주소를 연결하면 설치부터 쓰는 법까지 AI가 안내합니다.",
       open: "콘솔 팩 열기",
       guide: "설치 안내",
-      console: "콘솔 열기",
+      console: "빌더 콘솔",
     },
   },
   steps: {
