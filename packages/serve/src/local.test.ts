@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { pathToFileURL } from "node:url";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
+import { SkillsClient } from "@modelcontextprotocol/client/ext/skills";
 import {
   parseAddress,
   type ReadableIndex,
@@ -198,6 +199,49 @@ describe("a directory served from a machine", () => {
     // A working tree may change at any moment, and is one machine's own.
     expect(skills.ttlMs).toBe(0);
     expect(skills.cacheScope).toBe("private");
+    await client.close();
+  });
+
+  it("lists, gets and reads its skills as the SDK's own skills client verifies them", async () => {
+    // A skill whose metadata holds a value YAML would read as a number: the listing serves the
+    // front matter as data and the document as YAML, and the client parses the one to compare
+    // it with the other, so both have to say the string the author wrote.
+    const { mount } = await pack({
+      "design/decks/SKILL.md":
+        "---\nname: decks\ndescription: Makes a deck from an outline.\nmetadata:\n  version: 2\n  audience: founders\n---\n# Decks\n\nTen slides at most.\n",
+    });
+    const app = appOf(mount);
+    const client = new Client(
+      { name: "skillcdn-test", version: "0.0.0" },
+      // The current revision, where the cache fields are required and the client checks them.
+      { versionNegotiation: { mode: { pin: "2026-07-28" } } },
+    );
+    await client.connect(
+      new StreamableHTTPClientTransport(new URL("http://local.test/local/packs/acme"), {
+        fetch: async (input, init) => app.fetch(new Request(input, init)),
+      }),
+    );
+    const skills = new SkillsClient(client);
+    expect(skills.supported).toBe(true);
+    expect(skills.directoryRead).toBe(true);
+    const listing = await skills.list();
+    expect(listing.invalid).toEqual([]);
+    expect(listing.skills.map((skill) => skill.uri)).toEqual([
+      "skill://local/packs/acme/design/decks/SKILL.md",
+      "skill://local/packs/acme/marketing/ads/SKILL.md",
+    ]);
+    expect(listing).toMatchObject({ ttlMs: 0, cacheScope: "private" });
+    for (const entry of listing.skills) {
+      const got = await skills.get(entry.uri);
+      expect(got.skill).toEqual(entry);
+      // The skill's own document: its size, digest and front matter checked against the entry.
+      const document = await skills.read(entry);
+      expect(document.verified).toBe(true);
+      expect(document.frontmatter).toEqual(entry.frontmatter);
+      expect(document.body).toContain("Be brief.");
+    }
+    const directory = await skills.readDirectory("skill://local/packs/acme/marketing/ads");
+    expect(directory.resources.map((resource) => resource.name)).toEqual(["SKILL.md"]);
     await client.close();
   });
 
