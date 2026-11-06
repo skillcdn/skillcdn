@@ -51,7 +51,7 @@ A pack is served to whoever the git host lets see its repository: everyone, for 
 
 ## A license
 
-Put a license file at the repository root, and choose a permissive one if the content is to be served whole: a license that does not allow copies keeps the content at the source and a skill is only described, and a pack without one is served with a notice and never featured ([licenses](../specs/skill-repo.md#licenses)). A skill may carry a license of its own, as a file in its directory or a `license` field. A directory served from a machine is served in full by whoever chose it, whatever its license says.
+Put a license file at the repository root, and choose a permissive one if the content is to be served whole: a license that does not allow copies keeps the content at the source and a skill is only described, and a pack without one is served with a notice and never featured ([licenses](../specs/skill-repo.md#licenses)). A private repository is served whole to the people the host lets see it, whatever its license says. A skill may carry a license of its own, as a file in its directory or a `license` field. A directory served from a machine is served in full by whoever chose it, whatever its license says.
 
 ## Check it before you push
 

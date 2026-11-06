@@ -43,3 +43,12 @@ export interface MountContext {
    */
   lfsUrl?(path: RepoPath): string;
 }
+
+/**
+ * Whether the mount is served in full whatever its licenses say: somebody vouched for the
+ * repository (ADR-0026), or it is private (ADR-0062), since the people it is served to have it
+ * at the host already. Everywhere else a restrictive license keeps a skill at its source.
+ */
+export function servedInFull(mount: Pick<MountContext, "verified" | "visibility">): boolean {
+  return mount.verified || mount.visibility === "private";
+}

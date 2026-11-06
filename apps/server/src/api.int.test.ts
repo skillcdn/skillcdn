@@ -8,6 +8,8 @@ import {
   NO_LICENSE,
   PROVENANCE_NOTICE,
   parseAddress,
+  restFindSchema,
+  restSkillSchema,
 } from "@skillcdn/core";
 import {
   claimSnapshot,
@@ -50,6 +52,24 @@ async function call(client: Client, name: string, args: Record<string, unknown> 
     text: content.map((block) => block.text ?? "").join("\n"),
     isError: result.isError === true,
   };
+}
+
+/** The mount once its index is ready, as the REST API answers it. */
+async function indexed(
+  h: ReturnType<typeof harness>,
+  address: string,
+  init?: RequestInit,
+): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const response = await h.request(`/api/v1/mounts${address}`, init);
+        const body = (await response.json()) as { index?: { status?: string } };
+        return body.index?.status;
+      },
+      { timeout: 15_000, interval: 50 },
+    )
+    .toBe("ready");
 }
 
 describe("process endpoints", () => {
@@ -1361,6 +1381,70 @@ describe("content policy (ADR-0026)", () => {
       await h.lists.remove("verified", "/gh/acme/licensed");
     }
   });
+
+  it("serves a private repository in full whatever its licenses say (ADR-0062)", async () => {
+    // The same restrictive skill in every repository of the host: described only where the
+    // repository is public and nobody vouched for it, served whole where it is private, since
+    // the people it is served to have it at the host already.
+    const host = createFixtureHost("private-licenses");
+    const encoder = new TextEncoder();
+    host.addFile(
+      "skills/declared/SKILL.md",
+      encoder.encode(
+        "---\nname: declared\ndescription: Declares a non-commercial license.\nlicense: CC-BY-NC-4.0\n---\n# Declared\n\nRead [the note](references/note.md).\n",
+      ),
+    );
+    host.addFile(
+      "skills/declared/references/note.md",
+      encoder.encode("# Note\n\nThe three taps.\n"),
+    );
+    const h = harness({ host, login: createFixtureLogin() });
+    const cookie = await h.signIn("alice");
+    // Pinned to this host's commit: the tests of this file share the repositories, and a ref
+    // resolved for another host's files would be served from that other index.
+    const commit = fixtureCommits("private-licenses").main;
+    const secret = `/gh/acme/secret-skills@${commit}`;
+    const open = `/gh/acme/multi-skill@${commit}`;
+    const skillOf = async (address: string, init?: RequestInit) => {
+      const response = await h.request(
+        `/api/v1/skills${address}?path=skills/declared/SKILL.md`,
+        init,
+      );
+      const answer = restSkillSchema.parse(await response.json());
+      if (answer.status !== "ready") throw new Error("expected a ready index");
+      return answer.skill;
+    };
+
+    await indexed(h, secret, { headers: { cookie } });
+    const privately = await skillOf(secret, { headers: { cookie } });
+    expect(privately.serving).toMatchObject({
+      full: true,
+      license: { kind: "restrictive", name: "CC-BY-NC-4.0" },
+    });
+    expect(privately.body).toContain("# Declared");
+    const note = await h.request(`/api/v1/files${secret}?path=skills/declared/references/note.md`, {
+      headers: { cookie },
+    });
+    expect(note.status).toBe(200);
+    const found = restFindSchema.parse(
+      await (
+        await h.request(`/api/v1/find${secret}?query=declared`, { headers: { cookie } })
+      ).json(),
+    );
+    if (found.status !== "ready") throw new Error("expected a ready index");
+    const declared = found.items.find((item) => item.kind === "skill" && item.name === "declared");
+    expect(declared).toBeDefined();
+    expect(declared).not.toHaveProperty("describedOnly");
+
+    // The public repository with the same files, which nobody vouched for, describes the skill.
+    await indexed(h, open);
+    const publicly = await skillOf(open);
+    expect(publicly.serving?.full).toBe(false);
+    expect(publicly.body).toBe("");
+    expect(
+      (await h.request(`/api/v1/files${open}?path=skills/declared/references/note.md`)).status,
+    ).toBe(403);
+  });
 });
 
 describe("the files that are not text (ADR-0077)", () => {
@@ -1368,24 +1452,6 @@ describe("the files that are not text (ADR-0077)", () => {
   const pointer = new TextEncoder().encode(
     `version https://git-lfs.github.com/spec/v1\noid sha256:${OID}\nsize 7340032\n`,
   );
-  /** The mount once its index is ready, as the REST API answers it. */
-  const indexed = async (
-    h: ReturnType<typeof harness>,
-    address: string,
-    init?: RequestInit,
-  ): Promise<void> => {
-    await expect
-      .poll(
-        async () => {
-          const response = await h.request(`/api/v1/mounts${address}`, init);
-          const body = (await response.json()) as { index?: { status?: string } };
-          return body.index?.status;
-        },
-        { timeout: 15_000, interval: 50 },
-      )
-      .toBe("ready");
-  };
-
   it("keeps no bytes of a file that is not text, and fetches it from the host once", async () => {
     const host = createFixtureHost("not-text");
     // A name that says nothing of what the file is: the bytes decide. Outside every skill, so

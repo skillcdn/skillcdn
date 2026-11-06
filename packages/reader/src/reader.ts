@@ -93,7 +93,7 @@ import {
   nextContinuation,
   ReaderInputError,
 } from "./continuation.js";
-import type { MountContext } from "./mount.js";
+import { type MountContext, servedInFull } from "./mount.js";
 import { compareByteOrder } from "./order.js";
 import {
   countEntries,
@@ -437,7 +437,7 @@ function toFindItem(mount: MountContext, row: IndexEntry): FindItem | undefined 
             ? {}
             : {
                 license: row.frontMatter.licenseFact,
-                ...(servesInFull(row.frontMatter.licenseFact, mount.verified)
+                ...(servesInFull(row.frontMatter.licenseFact, servedInFull(mount))
                   ? {}
                   : { describedOnly: true }),
               }),
@@ -611,7 +611,7 @@ export class Reader<M extends MountContext = MountContext> {
     const key = this.#pageKey(mount, index, "browse", path);
     const offset = continuationOffset(input.cursor, key);
     const entries = (await this.#browseEntries(index, path)).map((entry) =>
-      entry.license !== undefined && !servesInFull(entry.license, mount.verified)
+      entry.license !== undefined && !servesInFull(entry.license, servedInFull(mount))
         ? { ...entry, describedOnly: true }
         : entry,
     );
@@ -771,7 +771,7 @@ export class Reader<M extends MountContext = MountContext> {
     let outline = none;
     let headings: readonly OutlineHeading[] = [];
     const license = await this.#licenseAt(index, path);
-    if (!servesInFull(license, mount.verified)) {
+    if (!servesInFull(license, servedInFull(mount))) {
       outline = {
         ...none,
         unavailable: "described_only",
@@ -906,7 +906,7 @@ export class Reader<M extends MountContext = MountContext> {
     if (entry?.kind !== "markdown") {
       return plain;
     }
-    if (!servesInFull(await this.#licenseAt(index, item.path), mount.verified)) {
+    if (!servesInFull(await this.#licenseAt(index, item.path), servedInFull(mount))) {
       return plain;
     }
     const text = await index.blobs.read(entry.blobSha);
@@ -1228,7 +1228,7 @@ export class Reader<M extends MountContext = MountContext> {
     const entries = await this.#entriesOf(index);
     const root = await this.#rootSkill(index);
     const page = listListedSkills(entries, mount.address.path, offset, limit, {
-      includeRestricted: mount.verified,
+      includeRestricted: servedInFull(mount),
     });
     const skills = (
       await Promise.all(page.skills.map((skill) => this.#skillEntry(mount, index, root, skill)))
@@ -1275,7 +1275,7 @@ export class Reader<M extends MountContext = MountContext> {
       return { status: "ready", skill: undefined, directory: undefined };
     }
     // A described skill is not listed here, so its URI names nothing (ADR-0026).
-    if (!servesInFull(entry.frontMatter?.licenseFact ?? NO_LICENSE, mount.verified)) {
+    if (!servesInFull(entry.frontMatter?.licenseFact ?? NO_LICENSE, servedInFull(mount))) {
       return { status: "ready", skill: undefined, directory: undefined };
     }
     return {
@@ -1312,7 +1312,7 @@ export class Reader<M extends MountContext = MountContext> {
     if (entry === undefined || entry.digest === undefined)
       return { status: "ready", resource: undefined, indexed: undefined };
     const license = await this.#licenseAt(index, entry.path as RepoPath);
-    if (!servesInFull(license, mount.verified)) {
+    if (!servesInFull(license, servedInFull(mount))) {
       return { status: "ready", resource: undefined, indexed: undefined };
     }
     const indexed = indexedOf(entry);
@@ -1360,7 +1360,7 @@ export class Reader<M extends MountContext = MountContext> {
       return { status: "ready", entries: undefined };
     }
     const owned = await this.#skillLicenseAt(index, path);
-    if (owned !== undefined && !servesInFull(owned, mount.verified)) {
+    if (owned !== undefined && !servesInFull(owned, servedInFull(mount))) {
       return { status: "ready", entries: undefined };
     }
     // What a directory holds here is what the extension serves: a file over the read limit is
@@ -1661,7 +1661,7 @@ export class Reader<M extends MountContext = MountContext> {
     const license = skill.frontMatter?.licenseFact ?? NO_LICENSE;
     const serving: SkillServing = {
       license,
-      full: servesInFull(license, mount.verified),
+      full: servesInFull(license, servedInFull(mount)),
       sourceUrl: mount.sourceUrl(skill.path as RepoPath),
     };
     if (!serving.full) {
@@ -1946,7 +1946,7 @@ export class Reader<M extends MountContext = MountContext> {
     }
     const file = { size: entry.size, hash: entry.blobSha };
     const license = await this.#licenseAt(index, path);
-    if (!servesInFull(license, mount.verified)) {
+    if (!servesInFull(license, servedInFull(mount))) {
       return { kind: "not_served", path: below, license, sourceUrl: mount.sourceUrl(path) };
     }
     if (file.size > limits.maxReadableFileBytes) {
@@ -2028,7 +2028,7 @@ export class Reader<M extends MountContext = MountContext> {
       return { kind: "not_found", path };
     }
     const license = await this.#licenseAt(index, path);
-    if (!servesInFull(license, mount.verified)) {
+    if (!servesInFull(license, servedInFull(mount))) {
       return { kind: "not_served", path, license };
     }
     return { kind: "served", path, size: entry.size };

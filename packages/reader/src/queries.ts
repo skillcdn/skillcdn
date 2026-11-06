@@ -132,7 +132,8 @@ export function listListedSkills(
   limit: number,
   options: { readonly includeRestricted: boolean },
 ): { readonly skills: IndexEntry[]; readonly total: number } {
-  // A restrictive skill is listed only where the repository is verified (ADR-0026).
+  // A restrictive skill is listed only where the repository is served in full: vouched for
+  // (ADR-0026) or private (ADR-0062).
   const restricted: LicenseKind = "restrictive";
   const listed = sortedByPath(
     entries.filter(
