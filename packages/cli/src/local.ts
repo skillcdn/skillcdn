@@ -435,7 +435,15 @@ export async function openDirectory(options: {
             "file.not_text",
             lookup.lfs === undefined
               ? `The file is not UTF-8 text, which is all this command carries. Read it at its source: ${lookup.sourceUrl}`
-              : `The file is not readable here. ${describeSource(mount, lookup.sourceUrl, lookup.lfs)}`,
+              : `The file is not readable here. ${describeSource(
+                  {
+                    host: mount.address.host,
+                    repository: mount.repository,
+                    visibility: mount.visibility,
+                  },
+                  lookup.sourceUrl,
+                  lookup.lfs,
+                )}`,
             { sourceUrl: lookup.sourceUrl },
           );
         case "not_served":

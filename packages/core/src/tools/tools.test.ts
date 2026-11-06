@@ -14,6 +14,7 @@ import {
   TOOL_NAMES,
 } from "./contracts.js";
 import {
+  describeSource,
   INDEXING_NOTICE,
   PROVENANCE_NOTICE,
   renderBrowseResult,
@@ -800,5 +801,38 @@ describe("what a result says of originals, pictures, maps and private files (ADR
       "The repository holds a Git LFS pointer to it; the file itself (7340032 bytes) is served by the host: https://github.example/raw/manual.pdf",
     );
     expect(pointer).not.toContain("is private");
+  });
+
+  it("names no credential for a pack served from a directory, which has no host to ask", () => {
+    // A directory served from a machine is private too, and its own route sends the file.
+    const directory: MountSummary = {
+      ...mount,
+      host: "local",
+      repository: "packs/acme",
+      visibility: "private",
+      skillUri: "skill://local/packs/acme",
+    };
+    const text = renderBrowseResult({
+      mount: directory,
+      path: path("docs/sources/manual.pdf"),
+      entries: [],
+      nextCursor: undefined,
+      outline: {
+        path: path("docs/sources/manual.pdf"),
+        size: 5_000_000,
+        totalLength: undefined,
+        headings: [],
+        truncated: false,
+        unavailable: "not_text",
+        sourceUrl: "http://local.test/api/v1/raw/local/packs/acme?path=docs%2Fsources%2Fmanual.pdf",
+      },
+    });
+    expect(text).toContain(
+      "Fetch it from the source: http://local.test/api/v1/raw/local/packs/acme?path=docs%2Fsources%2Fmanual.pdf",
+    );
+    expect(text).not.toContain("credential");
+    // A summary from before hosts were named is read as a git host's, as it always was.
+    const unnamed = { ...mount, host: undefined, visibility: "private" as const };
+    expect(describeSource(unnamed, "https://raw.example/x")).toContain("GitHub credential");
   });
 });

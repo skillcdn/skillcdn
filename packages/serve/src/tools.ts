@@ -25,7 +25,7 @@ import {
 } from "@skillcdn/core";
 import { type Reader, ReaderInputError } from "@skillcdn/reader";
 import * as z from "zod";
-import type { ServedMount } from "./mount.js";
+import { type ServedMount, sourceAccess } from "./mount.js";
 import {
   browseReply,
   fileReply,
@@ -297,13 +297,13 @@ export async function createMountServer<M extends ServedMount>(
           );
         case "too_large":
           return problem(
-            `${lookup.path} is too large to read here (${lookup.size} bytes; the limit is ${lookup.limit}). ${describeSource(mount, lookup.sourceUrl)}`,
+            `${lookup.path} is too large to read here (${lookup.size} bytes; the limit is ${lookup.limit}). ${describeSource(sourceAccess(mount), lookup.sourceUrl)}`,
           );
         case "not_text":
           return problem(
             lookup.lfs === undefined
-              ? `${lookup.path} is not a UTF-8 text file, which is all this tool carries. ${describeSource(mount, lookup.sourceUrl)}`
-              : `${lookup.path} is not readable here. ${describeSource(mount, lookup.sourceUrl, lookup.lfs)}`,
+              ? `${lookup.path} is not a UTF-8 text file, which is all this tool carries. ${describeSource(sourceAccess(mount), lookup.sourceUrl)}`
+              : `${lookup.path} is not readable here. ${describeSource(sourceAccess(mount), lookup.sourceUrl, lookup.lfs)}`,
           );
         case "not_served":
           return problem(

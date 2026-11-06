@@ -1,4 +1,4 @@
-import { formatAddress } from "../address.js";
+import { formatAddress, isGitHostKey } from "../address.js";
 import { describeLicense } from "../license.js";
 import { renderSkillSections } from "../skill-document.js";
 import {
@@ -55,17 +55,22 @@ const sectionRange = (section: { readonly offset: number; readonly length: numbe
 /**
  * The one line that follows a refused read of a private repository's file (ADR-0077): the URL
  * names the file at the host, and the host answers it only to a credential that may read the
- * repository, which is the reader's to have.
+ * repository, which is the reader's to have. A pack served from a directory has no host to ask
+ * and no credential to send: its own route sends the file to whoever may read the pack, so the
+ * line follows only for a repository of a git host, which a summary without a `host` is taken
+ * to be.
  */
-export function accessHint(mount: Pick<MountSummary, "visibility" | "repository">): string {
-  return mount.visibility === "private"
+export function accessHint(
+  mount: Pick<MountSummary, "host" | "visibility" | "repository">,
+): string {
+  return mount.visibility === "private" && (mount.host === undefined || isGitHostKey(mount.host))
     ? ` The repository ${mount.repository} is private: fetch it with a GitHub credential that may read it, sent in the Authorization header, since the host answers a browser session with 404.`
     : "";
 }
 
 /** The bytes of a file that is not text, at the source (ADR-0033, ADR-0077), with the hint a private repository needs. */
 export function describeSource(
-  mount: Pick<MountSummary, "visibility" | "repository">,
+  mount: Pick<MountSummary, "host" | "visibility" | "repository">,
   sourceUrl: string | undefined,
   lfs?: { readonly size: number },
 ): string {

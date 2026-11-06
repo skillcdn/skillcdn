@@ -106,6 +106,7 @@ export function mountSummaryOf(mount: RestMount): MountSummary {
   const address = addressOfMount(mount);
   return {
     repository: `${mount.repository.owner}/${mount.repository.name}`,
+    host: address.host,
     ref: orUndefined(mount.ref),
     commit: mount.commit,
     ...(mount.newest == null

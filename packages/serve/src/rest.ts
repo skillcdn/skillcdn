@@ -24,7 +24,7 @@ import { type Reader, ReaderInputError } from "@skillcdn/reader";
 import type { Context, Env, Hono } from "hono";
 import { cors } from "hono/cors";
 import * as z from "zod";
-import type { ServedMount } from "./mount.js";
+import { type ServedMount, sourceAccess } from "./mount.js";
 import { recordRead, type ServeLogger, type UsageHooks } from "./tools.js";
 
 // The routes of the REST API that read an address (docs/specs/rest.md): `mounts`, `browse`,
@@ -324,7 +324,7 @@ export function registerAddressRoutes<E extends Env, M extends ServedMount>(
           return c.json(
             errorBody(
               "file.too_large",
-              `The file is too large to read here (${lookup.size} bytes; the limit is ${lookup.limit}). ${describeSource(mount, lookup.sourceUrl)}`,
+              `The file is too large to read here (${lookup.size} bytes; the limit is ${lookup.limit}). ${describeSource(sourceAccess(mount), lookup.sourceUrl)}`,
               { sourceUrl: lookup.sourceUrl },
             ),
             413,
@@ -334,8 +334,8 @@ export function registerAddressRoutes<E extends Env, M extends ServedMount>(
             errorBody(
               "file.not_text",
               lookup.lfs === undefined
-                ? `The file is not UTF-8 text, which is all this endpoint carries. ${describeSource(mount, lookup.sourceUrl)}`
-                : `The file is not readable here. ${describeSource(mount, lookup.sourceUrl, lookup.lfs)}`,
+                ? `The file is not UTF-8 text, which is all this endpoint carries. ${describeSource(sourceAccess(mount), lookup.sourceUrl)}`
+                : `The file is not readable here. ${describeSource(sourceAccess(mount), lookup.sourceUrl, lookup.lfs)}`,
               { sourceUrl: lookup.sourceUrl },
             ),
             415,

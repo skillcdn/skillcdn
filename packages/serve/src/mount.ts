@@ -1,3 +1,4 @@
+import type { MountSummary } from "@skillcdn/core";
 import type { MountContext } from "@skillcdn/reader";
 
 /**
@@ -14,4 +15,15 @@ export interface ServedMount extends MountContext {
   readonly trustedUntil: Date | undefined;
   /** Whether everyone can see the repository, or only the people the host lets. */
   readonly visibility: "public" | "private";
+}
+
+/**
+ * What of a mount decides how a reader fetches a file at its source (`describeSource`): the
+ * host, since a pack served from a directory has none to ask, and whether the repository is
+ * private, since a git host serves such a file only to a credential.
+ */
+export function sourceAccess(
+  mount: ServedMount,
+): Pick<MountSummary, "host" | "visibility" | "repository"> {
+  return { host: mount.address.host, repository: mount.repository, visibility: mount.visibility };
 }

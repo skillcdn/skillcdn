@@ -418,12 +418,16 @@ describe("the bytes of a file served from a machine (ADR-0077)", () => {
       "http://local.test/api/v1/files/local/packs/acme?path=docs%2Fimages%2Fa.png",
     );
     expect(refused.status).toBe(415);
-    expect(await refused.json()).toMatchObject({
+    const refusal = (await refused.json()) as { error: { message: string } };
+    expect(refusal).toMatchObject({
       error: {
         code: "file.not_text",
         sourceUrl: "http://local.test/api/v1/raw/local/packs/acme?path=docs%2Fimages%2Fa.png",
       },
     });
+    // The pack is one machine's, so the mount is private, but the route asks for no credential:
+    // the line a private repository of a git host gets would send the reader looking for one.
+    expect(refusal.error.message).not.toContain("credential");
     const client = new Client({ name: "skillcdn-test", version: "0.0.0" });
     await client.connect(
       new StreamableHTTPClientTransport(new URL("http://local.test/local/packs/acme"), {
@@ -438,6 +442,7 @@ describe("the bytes of a file served from a machine (ADR-0077)", () => {
     expect(text(read)).toContain(
       "Fetch it from the source: http://local.test/api/v1/raw/local/packs/acme?path=docs%2Fimages%2Fa.png",
     );
+    expect(text(read)).not.toContain("credential");
     // The outline of the chapter names its picture with its words.
     const outlined = await client.callTool({
       name: "browse_repo",

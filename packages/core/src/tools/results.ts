@@ -1,4 +1,4 @@
-import type { Address } from "../address.js";
+import type { Address, AddressHost } from "../address.js";
 import type { LicenseFact } from "../license.js";
 import type { RepoPath } from "../repo-path.js";
 import type { OutlineHeading } from "../search/outline.js";
@@ -114,6 +114,11 @@ export interface NewestCommit {
 export interface MountSummary {
   /** `owner/name` as the host spells it. */
   readonly repository: string;
+  /**
+   * The host of the address: a git host, or `local` for a pack served from a directory, which
+   * has no host to fetch a file from. A summary that says nothing is taken to be a git host's.
+   */
+  readonly host?: AddressHost;
   /** The ref as written in the address; `undefined` for the default branch. */
   readonly ref: string | undefined;
   /** The commit the result was read from: the ref's newest, or the one served in its place. */

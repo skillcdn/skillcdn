@@ -1087,6 +1087,7 @@ export class Reader<M extends MountContext = MountContext> {
   summary(mount: M, index: ReadableIndex | undefined): MountSummary {
     return {
       repository: mount.repository,
+      host: mount.address.host,
       ref:
         mount.address.ref === undefined
           ? undefined
