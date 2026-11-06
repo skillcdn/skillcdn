@@ -271,6 +271,7 @@ export const landingEn = {
       lead: "Start with the console's skill pack. Connect this address to your AI app, and the AI guides you from setup to everyday use.",
       open: "Open the console pack",
       guide: "Setup guide",
+      console: "Open the console",
     },
   },
   steps: {

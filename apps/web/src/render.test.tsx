@@ -424,6 +424,25 @@ describe("prerendered pages", () => {
     expect(trimmed).toContain(t.landing.packs.title);
     expect(trimmed).toContain(t.landing.faq.title);
     expect(trimmed).toContain(t.landing.title);
+    // The console section links the deployment's console only where the deployment names one.
+    const withConsole = renderLandingPage(TEMPLATE, {
+      language: "en",
+      origin: "https://skills.example",
+      pathname: "/",
+      search: "",
+      features: { consoleUrl: "https://console.example" },
+      data: {},
+    }).html;
+    expect(withConsole).toContain('href="https://console.example"');
+    expect(withConsole).toContain(t.landing.console.pack.console);
+    const withoutConsole = renderLandingPage(TEMPLATE, {
+      language: "en",
+      origin: "https://skills.example",
+      pathname: "/",
+      search: "",
+      data: {},
+    }).html;
+    expect(withoutConsole).not.toContain('href="https://console.example"');
     // A section the deployment names that is no section is nothing, and the rest stand.
     const odd = renderLandingPage(TEMPLATE, {
       language: "en",

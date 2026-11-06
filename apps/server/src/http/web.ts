@@ -139,12 +139,15 @@ export interface PageTags {
   readonly landingSections?: readonly string[] | undefined;
   /** Whether the search across packs is there; left out, it is. The pages hide the box without it. */
   readonly search?: boolean | undefined;
+  /** Where the console of this deployment's builders is, when there is one; the front page links it. */
+  readonly consoleUrl?: string | undefined;
 }
 
 /** What the pages are told of the deployment, as the render module takes it with every page. */
 export interface RenderFeatures {
   readonly landingSections?: readonly string[] | undefined;
   readonly search?: boolean | undefined;
+  readonly consoleUrl?: string | undefined;
 }
 
 /** How the legal surface travels into a page: standard link types, and one meta for the contact. */
@@ -230,6 +233,11 @@ function headTags(tags: PageTags): { readonly html: string; readonly inlineScrip
   }
   if (tags.search === false) {
     elements.push(`<meta name="${FEATURE_META_NAMES.search}" content="off">`);
+  }
+  if (tags.consoleUrl !== undefined) {
+    elements.push(
+      `<meta name="${FEATURE_META_NAMES.console}" content="${escapeAttribute(tags.consoleUrl)}">`,
+    );
   }
   if (tags.googleAnalyticsId !== undefined) {
     // Consent mode first (ADR-0051): analytics storage is denied by default in the regions that
@@ -718,8 +726,12 @@ export async function loadWebBundle(
   const features: RenderFeatures = {
     landingSections: options.tags?.landingSections,
     search: options.tags?.search,
+    consoleUrl: options.tags?.consoleUrl,
   };
-  const customized = features.landingSections !== undefined || features.search === false;
+  const customized =
+    features.landingSections !== undefined ||
+    features.search === false ||
+    features.consoleUrl !== undefined;
   let manifest: z.infer<typeof manifestSchema>;
   try {
     manifest = manifestSchema.parse(JSON.parse(await readFile(join(root, MANIFEST_FILE), "utf8")));

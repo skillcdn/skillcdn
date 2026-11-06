@@ -99,10 +99,12 @@ export function parseLandingSections(text: string): readonly LandingSection[] | 
 
 /**
  * How the server tells the pages what this deployment has, in the head of every page: the
- * sections of the front page, as a comma-separated list, and whether the search across packs
- * is there. The pages take the defaults, everything, where a tag is missing.
+ * sections of the front page, as a comma-separated list, whether the search across packs is
+ * there, and where the console its builders work on is, when there is one (ADR-0047). The pages
+ * take the defaults where a tag is missing: every section, the search, and no console.
  */
 export const FEATURE_META_NAMES = {
   landingSections: "skillcdn-landing",
   search: "skillcdn-search",
+  console: "skillcdn-console",
 } as const;

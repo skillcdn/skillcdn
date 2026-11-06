@@ -372,6 +372,20 @@ export function LandingPage(props: { readonly origin: string }) {
                 <Link className={styles.ghost} href={CONSOLE_PACK_ADDRESS}>
                   {copy.console.pack.guide}
                 </Link>
+                {features.consoleUrl !== undefined && (
+                  // The console itself, for whoever has a seat there; a deployment without one
+                  // says nothing of it.
+                  <a
+                    className={styles.ghost}
+                    href={features.consoleUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => track("cta_click", { id: "console_open" })}
+                  >
+                    {copy.console.pack.console}
+                    <ExternalIcon />
+                  </a>
+                )}
               </div>
             </div>
           </Container>

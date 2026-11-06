@@ -7,22 +7,29 @@ import {
 import { createContext, useContext } from "react";
 
 // What a deployment has, as far as the pages care (ADR-0075): which sections the front page
-// shows after its first screen, and whether the search across packs is there. The server writes
-// both into the head of every page it serves; the render module is given the same with every
+// shows after its first screen, whether the search across packs is there, and where the console
+// of its builders is, when there is one. The server writes them into the head of every page it serves; the render module is given the same with every
 // page it renders, so that the browser hydrates what the server rendered. A page built without a
 // server, and a deployment that says nothing, has everything.
 
 export interface SiteFeatures {
   readonly landingSections: readonly LandingSection[];
   readonly search: boolean;
+  /** Where the console of this deployment's builders is, for the people who have a seat; `undefined` for none. */
+  readonly consoleUrl: string | undefined;
 }
 
-export const DEFAULT_FEATURES: SiteFeatures = { landingSections: LANDING_SECTIONS, search: true };
+export const DEFAULT_FEATURES: SiteFeatures = {
+  landingSections: LANDING_SECTIONS,
+  search: true,
+  consoleUrl: undefined,
+};
 
 /** The features as the render module is given them: whatever the server knows, else nothing. */
 export interface FeaturesInput {
   readonly landingSections?: readonly string[] | undefined;
   readonly search?: boolean | undefined;
+  readonly consoleUrl?: string | undefined;
 }
 
 /** The features of a render input, the defaults where it says nothing or something that is no section. */
@@ -34,6 +41,7 @@ export function featuresOf(input: FeaturesInput | undefined): SiteFeatures {
   return {
     landingSections: sections ?? DEFAULT_FEATURES.landingSections,
     search: input?.search ?? DEFAULT_FEATURES.search,
+    consoleUrl: input?.consoleUrl ?? DEFAULT_FEATURES.consoleUrl,
   };
 }
 
@@ -50,6 +58,7 @@ export function readSiteFeatures(): SiteFeatures {
   return featuresOf({
     landingSections: sections === undefined ? undefined : sections.split(","),
     search: content(FEATURE_META_NAMES.search) !== "off",
+    consoleUrl: content(FEATURE_META_NAMES.console),
   });
 }
 

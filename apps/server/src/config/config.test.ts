@@ -226,6 +226,7 @@ describe("loadConfig", () => {
       sitemapTerms: [],
     });
     expect(plain.web.tags.landingSections).toBeUndefined();
+    expect(plain.web.tags.consoleUrl).toBeUndefined();
     const set = loadConfig(
       {
         DATABASE_URL,
@@ -234,6 +235,7 @@ describe("loadConfig", () => {
         SEARCH_CONCURRENCY: "2",
         SEARCH_SITEMAP_TERMS: " card  news , decks,,decks",
         LANDING_SECTIONS: "faq, packs",
+        CONSOLE_URL: "https://console.example",
       },
       noFiles,
     );
@@ -244,6 +246,12 @@ describe("loadConfig", () => {
       sitemapTerms: ["card news", "decks"],
     });
     expect(set.web.tags.landingSections).toEqual(["packs", "faq"]);
+    expect(set.web.tags.consoleUrl).toBe("https://console.example");
+    expect(
+      problemsOf({ DATABASE_URL, CONSOLE_URL: "console.example" }).problems.map(
+        (problem) => problem.split(":")[0],
+      ),
+    ).toEqual(["CONSOLE_URL"]);
     expect(
       loadConfig({ DATABASE_URL, LANDING_SECTIONS: "none" }, noFiles).web.tags.landingSections,
     ).toEqual([]);

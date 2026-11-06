@@ -221,6 +221,7 @@ const environmentSchema = z.object({
   ANALYTICS_CONSENT_REGIONS: consentRegions,
   TERMS_URL: z.url({ protocol: /^https?$/ }).optional(),
   PRIVACY_URL: z.url({ protocol: /^https?$/ }).optional(),
+  CONSOLE_URL: z.url({ protocol: /^https?$/ }).optional(),
   CONTACT_EMAIL: z
     .string()
     .regex(/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/, "must be an email address")
@@ -294,6 +295,11 @@ export interface WebTags {
    * unset, every section. The pages read it from the head of every page.
    */
   readonly landingSections: readonly LandingSection[] | undefined;
+  /**
+   * Where the console this deployment's builders work on is, when there is one (ADR-0047): the
+   * front page links it for the people who have a seat there. Unset, no link.
+   */
+  readonly consoleUrl: string | undefined;
 }
 
 export interface AuthConfig {
@@ -709,6 +715,7 @@ export function loadConfig(
         privacyUrl: env.PRIVACY_URL,
         contactEmail: env.CONTACT_EMAIL,
         landingSections: env.LANDING_SECTIONS,
+        consoleUrl: env.CONSOLE_URL,
       },
     },
     admin: { token: env.ADMIN_TOKEN },

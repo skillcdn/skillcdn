@@ -455,7 +455,11 @@ describe("the tags an operator configures", () => {
   it("tell the pages which sections the front page shows and whether the search is there, and render what depends on it", async () => {
     const tagged = await loadWebBundle(build.root, {
       publicUrl: "https://skills.example",
-      tags: { landingSections: ["packs", "faq"], search: false },
+      tags: {
+        landingSections: ["packs", "faq"],
+        search: false,
+        consoleUrl: "https://console.example",
+      },
     });
     const explore = tagged.respond(request("/explore?lang=ko"));
     const html = (await explore?.text()) ?? "";
@@ -463,6 +467,7 @@ describe("the tags an operator configures", () => {
     // as the build prerendered it, in the language asked.
     expect(html).toContain('<meta name="skillcdn-landing" content="packs,faq">');
     expect(html).toContain('<meta name="skillcdn-search" content="off">');
+    expect(html).toContain('<meta name="skillcdn-console" content="https://console.example">');
     expect(html).toContain("<title>Rendered site page /explore</title>");
     expect(html).toContain('<html lang="ko">');
     expect(explore?.headers.get("content-language")).toBe("ko");
@@ -472,7 +477,11 @@ describe("the tags an operator configures", () => {
       origin: "https://skills.example",
       pathname: "/explore",
       search: "?lang=ko",
-      features: { landingSections: ["packs", "faq"], search: false },
+      features: {
+        landingSections: ["packs", "faq"],
+        search: false,
+        consoleUrl: "https://console.example",
+      },
     });
     // What is not a page of the build is still a file, and a file is still a file.
     expect(await tagged.respond(request("/llms.txt"))?.text()).toContain("# Site");
@@ -502,6 +511,7 @@ describe("the tags an operator configures", () => {
     expect(plain).toContain("Explore");
     expect(plain).not.toContain("skillcdn-landing");
     expect(plain).not.toContain("skillcdn-search");
+    expect(plain).not.toContain("skillcdn-console");
   });
 
   it("are absent, and so is the widening, when nothing is configured", async () => {
