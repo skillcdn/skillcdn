@@ -10,7 +10,7 @@ catalog:
   "@types/node": ^24.19.2
   hono: ^4.13.14
   typescript: ^7.0.2
-  vitest: ^5.0.5
+  vitest: ^5.1.0
   zod: ^4.6.7
 
 # Supply-chain guard: never resolve a version published less than 3 days ago (minutes).
