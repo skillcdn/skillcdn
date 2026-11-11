@@ -52,6 +52,11 @@ export interface DocumentSource {
   readonly path?: RepoPath;
   readonly url?: string;
 }
+/** A heading of an outline, with how many rows the tables of its section hold, when they hold any. */
+export interface FileOutlineHeading extends OutlineHeading {
+  readonly rows?: number;
+}
+
 /** Why a file browsed for its outline has no headings to list. */
 export type FileOutlineUnavailable = "not_markdown" | "not_text" | "too_large" | "described_only";
 
@@ -66,7 +71,7 @@ export interface FileOutline {
   /** Characters of the file as it is read; `undefined` when its text is not at hand. */
   readonly totalLength: number | undefined;
   /** The headings on this page, in document order. */
-  readonly headings: readonly OutlineHeading[];
+  readonly headings: readonly FileOutlineHeading[];
   /** True when the file has more headings than an outline keeps. */
   readonly truncated: boolean;
   /** Why there are no headings to list, when there are none for a reason other than the file's own. */
@@ -81,6 +86,54 @@ export interface FileOutline {
   readonly images?: readonly DocumentImage[];
   /** For a Markdown document: what it says it was made from (ADR-0076). */
   readonly sources?: readonly DocumentSource[];
+  /** For a Markdown document that has tables: how many, and the rows they hold together (ADR-0080). */
+  readonly tables?: { readonly count: number; readonly rows: number };
+  /** For a Markdown document that has fenced code blocks: how many. */
+  readonly codeBlocks?: number;
+  /**
+   * Where the tables and the code blocks of the document are had as data, when the mount says
+   * where: a URL of the REST API, or the command that prints them.
+   */
+  readonly data?: { readonly rows?: string; readonly code?: string };
+}
+
+/** A table of a document as data (ADR-0080): where it stands, the names of its columns, its rows. */
+export interface DataTable {
+  readonly path: RepoPath;
+  /** The heading path of the section the table stands in; empty before the first heading. */
+  readonly heading: readonly string[];
+  readonly columns: readonly string[];
+  /** Each row as many cells as there are columns, as written. */
+  readonly rows: readonly (readonly string[])[];
+}
+
+/** The tables under a path, in reading order: what the `rows` route and command answer. */
+export interface RowsResult {
+  readonly mount: MountSummary;
+  /** The file or the folder asked for. */
+  readonly path: RepoPath;
+  readonly tables: readonly DataTable[];
+  /** How many rows the tables of this page hold together. */
+  readonly rowCount: number;
+  /** Continues with the files after this page's; `undefined` when there are none. */
+  readonly nextCursor: string | undefined;
+}
+
+/** A fenced code block of a document as data (ADR-0080). */
+export interface DataCodeBlock {
+  readonly path: RepoPath;
+  readonly heading: readonly string[];
+  /** What the block says it is written in; empty when it says nothing. */
+  readonly language: string;
+  readonly text: string;
+}
+
+/** The code blocks under a path, in reading order: what the `code` route and command answer. */
+export interface CodeResult {
+  readonly mount: MountSummary;
+  readonly path: RepoPath;
+  readonly blocks: readonly DataCodeBlock[];
+  readonly nextCursor: string | undefined;
 }
 
 export interface BrowseResult {

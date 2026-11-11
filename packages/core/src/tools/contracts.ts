@@ -10,6 +10,16 @@ export const FIND_LIST_SKILLS_MAX = 100;
 /** How many of a skill's own files a search result lists under the skill. */
 export const FIND_MAX_SKILL_FILES = 5;
 export const MAX_QUERY_LENGTH = 500;
+/** Rows a page of the `rows` read holds unless told otherwise, and at most (ADR-0080). */
+export const DATA_ROWS_DEFAULT_LIMIT = 1000;
+export const DATA_ROWS_MAX_LIMIT = 5000;
+/** Code blocks a page of the `code` read holds unless told otherwise, and at most. */
+export const DATA_CODE_DEFAULT_LIMIT = 100;
+export const DATA_CODE_MAX_LIMIT = 500;
+/** Characters of cells or of code after which a page of either ends, with the file it is in. */
+export const DATA_PAGE_MAX_CHARS = 1_000_000;
+/** Files a page of either reads at the most, so that a folder of documents without tables is not read whole in one call. */
+export const DATA_PAGE_MAX_FILES = 200;
 export const READ_FILE_DEFAULT_LIMIT = 40_000;
 export const READ_FILE_MAX_LIMIT = 100_000;
 export const BROWSE_DEFAULT_LIMIT = 50;

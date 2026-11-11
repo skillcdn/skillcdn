@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { stat } from "node:fs/promises";
+import { stat, writeFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
 import type { Readable, Writable } from "node:stream";
 import { parseArgs } from "node:util";
@@ -11,6 +11,8 @@ import {
   browseResultOf,
   type Clock,
   catalogStateOf,
+  DATA_CODE_MAX_LIMIT,
+  DATA_ROWS_MAX_LIMIT,
   directoryResultOf,
   FIND_DEFAULT_LIMIT,
   FIND_MAX_LIMIT,
@@ -37,6 +39,7 @@ import {
   renderFindResult,
   renderInstructions,
   renderSkillResult,
+  rowsCsv,
   type SkillResult,
   skillOutcome,
   skillResultOf,
@@ -67,7 +70,7 @@ import {
   openDirectory,
   watchDirectory,
 } from "./local.js";
-import { type Pack, PackError } from "./pack.js";
+import { type CodePage, type Pack, PackError, type RowsPage } from "./pack.js";
 import { openDeployment } from "./remote.js";
 import { createMemoryVectorCache, type VectorCache } from "./vectors.js";
 
@@ -140,6 +143,8 @@ const COMMANDS = [
   "find",
   "skill",
   "file",
+  "rows",
+  "code",
   "mcp",
   "serve",
   "login",
@@ -178,6 +183,8 @@ Commands:
   find [<pack>] <words...>         What the words find, as search_repo does.
   skill [<pack>] <path>            A skill whole, as load_skill assembles it: rules, instructions, included files.
   file [<pack>] <path>             A page of a file, as read_repo_file reads it, or what a folder holds.
+  rows [<pack>] [<path>]           The tables of a document, or of every document under a folder, as CSV or JSON.
+  code [<pack>] [<path>]           The fenced code blocks of a document, or of every document under a folder.
   mcp <directory>                  Serve the directory to the MCP client that started the command.
   serve <directory>...             Serve directories over HTTP on this machine: MCP and the REST API.
   login --url <origin> [<address>] Connect to a deployment with a code a person approves; the token is kept, never shown.
@@ -273,6 +280,36 @@ ${READ_FILE_DEFAULT_LIMIT} characters unless --limit says otherwise (up to ${REA
 the file does says where the next begins. A path that names a folder answers what the folder
 holds. A file over the read limit, one that is not text, and one a license keeps at its source
 are named with where to read them instead.
+
+${READ_OPTIONS}
+`,
+  rows: `usage: skillcdn rows [<pack>] [<path>] [--heading <words>] [--format csv|json] [--out <file>] [--url <origin>] [--as <address>] [--json]
+
+The tables of a document, or of every document under a folder, as data: every row in reading
+order, with the file and the section it stands in and its cells under the names of its table's
+columns. A table that stands in several sections and files under the same header comes out as
+one. For a table too long to copy out by hand: take it from here into a file, and read the file
+with a program. The pack's root when no path is given.
+
+--heading keeps the tables whose heading path holds every word given, whatever the case.
+--format csv (the default) prints one CSV, with a header of path, heading and every column
+name; --format json prints an array of rows, each with path, heading and cells by column name.
+--out writes to a file instead, and prints how much was written. --json prints the tables as
+the REST API answers them, every page joined.
+
+${READ_OPTIONS}
+`,
+  code: `usage: skillcdn code [<pack>] [<path>] [--heading <words>] [--grep <pattern>] [--out <file>] [--url <origin>] [--as <address>] [--json]
+
+The fenced code blocks of a document, or of every document under a folder, as they are written:
+each under a line that names its file, its section and what the block says it is written in.
+For definitions and listings a program reads: take them from here instead of copying them out.
+The pack's root when no path is given.
+
+--heading keeps the blocks whose heading path holds every word given. --grep keeps the blocks
+whose text matches the pattern, a regular expression as JavaScript reads one, run on this
+machine. --out writes to a file instead, and prints how much was written. --json prints the
+blocks as the REST API answers them, every page joined.
 
 ${READ_OPTIONS}
 `,
@@ -386,6 +423,10 @@ const OPTIONS = {
   host: { type: "string" },
   "token-stdin": { type: "boolean" },
   agent: { type: "string" },
+  heading: { type: "string" },
+  format: { type: "string" },
+  out: { type: "string" },
+  grep: { type: "string" },
 } as const;
 
 type Values = ReturnType<typeof parseArgs<{ options: typeof OPTIONS }>>["values"];
@@ -859,7 +900,89 @@ function skillPathOf(pack: Pack, given: string): string {
   return uri.path;
 }
 
-type ReadCommand = "skills" | "browse" | "find" | "skill" | "file";
+type ReadCommand = "skills" | "browse" | "find" | "skill" | "file" | "rows" | "code";
+
+/** How many pages of a data read are joined before the command stops: far above what a pack holds. */
+const MAX_DATA_PAGES = 10_000;
+
+/** Every page of the tables under a path, joined. */
+async function allRows(
+  pack: Pack,
+  query: { readonly path?: string | undefined; readonly heading?: string | undefined },
+): Promise<RowsPage> {
+  let joined: RowsPage | undefined;
+  let cursor: string | undefined;
+  for (let pages = 0; pages < MAX_DATA_PAGES; pages += 1) {
+    const page = await pack.rows({ ...query, cursor, limit: DATA_ROWS_MAX_LIMIT });
+    joined =
+      joined === undefined
+        ? page
+        : {
+            ...joined,
+            tables: [...joined.tables, ...page.tables],
+            rowCount: joined.rowCount + page.rowCount,
+            nextCursor: page.nextCursor,
+          };
+    if (page.nextCursor === null) {
+      return joined;
+    }
+    cursor = page.nextCursor;
+  }
+  throw new PackError(
+    0,
+    "invalid_response",
+    "The pack answers more pages of tables than one read takes.",
+  );
+}
+
+/** Every page of the code blocks under a path, joined. */
+async function allCode(
+  pack: Pack,
+  query: { readonly path?: string | undefined; readonly heading?: string | undefined },
+): Promise<CodePage> {
+  let joined: CodePage | undefined;
+  let cursor: string | undefined;
+  for (let pages = 0; pages < MAX_DATA_PAGES; pages += 1) {
+    const page = await pack.code({ ...query, cursor, limit: DATA_CODE_MAX_LIMIT });
+    joined =
+      joined === undefined
+        ? page
+        : { ...joined, blocks: [...joined.blocks, ...page.blocks], nextCursor: page.nextCursor };
+    if (page.nextCursor === null) {
+      return joined;
+    }
+    cursor = page.nextCursor;
+  }
+  throw new PackError(
+    0,
+    "invalid_response",
+    "The pack answers more pages of code than one read takes.",
+  );
+}
+
+/** Prints what a data read made, or writes it to the file `--out` names and says how much. */
+async function deliver(
+  io: CliIo,
+  out: string | undefined,
+  text: string,
+  written: string,
+): Promise<void> {
+  if (out === undefined) {
+    io.stdout(text.endsWith("\n") || text.length === 0 ? text : `${text}\n`);
+    return;
+  }
+  const file = resolve(io.cwd ?? ".", out);
+  await writeFile(file, text).catch((error: unknown) => {
+    throw new Unreadable(
+      `${out}: cannot be written (${error instanceof Error ? error.message : String(error)})`,
+      EXIT_FAILURE,
+    );
+  });
+  io.stdout(`Wrote ${written} to ${file}.\n`);
+}
+
+const counted = (count: number, one: string, many = `${one}s`): string =>
+  `${count} ${count === 1 ? one : many}`;
 
 async function readCommand(
   command: ReadCommand,
@@ -980,6 +1103,75 @@ async function readCommand(
       } else {
         print(renderSkillResult(whole, COMMAND_WORDS));
       }
+      return 0;
+    }
+    case "rows": {
+      const [path, ...more] = positionals;
+      if (more.length > 0) {
+        throw new Misuse("rows takes the pack and at most one path.");
+      }
+      const format = parsed.values.format ?? "csv";
+      if (format !== "csv" && format !== "json") {
+        throw new Misuse("--format takes csv or json.");
+      }
+      const body = await allRows(pack, { path, heading: parsed.values.heading });
+      const tables = counted(body.tables.length, "table");
+      const written = `${counted(body.rowCount, "row")} of ${tables}`;
+      if (json) {
+        await deliver(io, parsed.values.out, JSON.stringify(body, null, 2), written);
+        return 0;
+      }
+      if (format === "json") {
+        const rows = body.tables.flatMap((table) =>
+          table.rows.map((row) => ({
+            path: table.path,
+            heading: table.heading.join(" > "),
+            // In the order of the columns; a name a table has twice keeps its first cell.
+            cells: table.columns.reduce<Record<string, string>>((cells, column, at) => {
+              if (!Object.hasOwn(cells, column)) {
+                cells[column] = row[at] ?? "";
+              }
+              return cells;
+            }, {}),
+          })),
+        );
+        await deliver(io, parsed.values.out, JSON.stringify(rows, null, 2), written);
+        return 0;
+      }
+      await deliver(io, parsed.values.out, rowsCsv(body.tables), written);
+      return 0;
+    }
+    case "code": {
+      const [path, ...more] = positionals;
+      if (more.length > 0) {
+        throw new Misuse("code takes the pack and at most one path.");
+      }
+      let pattern: RegExp | undefined;
+      if (parsed.values.grep !== undefined) {
+        try {
+          pattern = new RegExp(parsed.values.grep, "u");
+        } catch (error) {
+          throw new Misuse(
+            `--grep takes a regular expression: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      }
+      const all = await allCode(pack, { path, heading: parsed.values.heading });
+      const kept =
+        pattern === undefined ? all.blocks : all.blocks.filter((block) => pattern.test(block.text));
+      const body = { ...all, blocks: kept };
+      const written = counted(kept.length, "code block");
+      if (json) {
+        await deliver(io, parsed.values.out, JSON.stringify(body, null, 2), written);
+        return 0;
+      }
+      const text = kept
+        .map(
+          (block) =>
+            `--- ${block.path}${block.heading.length === 0 ? "" : ` > ${block.heading.join(" > ")}`}${block.language.length === 0 ? "" : ` (${block.language})`} ---\n${block.text}\n`,
+        )
+        .join("\n");
+      await deliver(io, parsed.values.out, text, written);
       return 0;
     }
     case "file": {

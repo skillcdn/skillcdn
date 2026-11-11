@@ -112,6 +112,26 @@ function originalsLine(sources: readonly DocumentSource[] | undefined): string |
     .join("; ")}`;
 }
 
+/**
+ * What a document holds that is had as data instead of read (ADR-0080): its tables and its code
+ * blocks, with where a program gets them, so that a model that needs a table whole takes it from
+ * there and does not copy it out row by row.
+ */
+function dataLines(outline: FileOutline): string | undefined {
+  const lines: string[] = [];
+  if (outline.tables !== undefined && outline.tables.count > 0) {
+    const where = outline.data?.rows === undefined ? "" : `; as data: ${outline.data.rows}`;
+    lines.push(
+      `Tables: ${outline.tables.count} with ${plural(outline.tables.rows, "row")}${where}`,
+    );
+  }
+  if (outline.codeBlocks !== undefined && outline.codeBlocks > 0) {
+    const where = outline.data?.code === undefined ? "" : `; as data: ${outline.data.code}`;
+    lines.push(`Code blocks: ${outline.codeBlocks}${where}`);
+  }
+  return lines.length === 0 ? undefined : lines.join("\n");
+}
+
 /** The outline of a file (ADR-0063): its headings, each with what reads its section. */
 function renderOutline(result: BrowseResult, outline: FileOutline, words: ToolWords): string {
   const source = `Source: ${describeMount(result.mount)}`;
@@ -151,6 +171,7 @@ function renderOutline(result: BrowseResult, outline: FileOutline, words: ToolWo
     `File: ${outline.path} (${outline.totalLength ?? outline.size} characters; ${count}${outline.truncated ? ", the first of more" : ""})`,
     source,
     originalsLine(outline.sources),
+    dataLines(outline),
   ]
     .filter((line) => line !== undefined)
     .join("\n");
@@ -160,7 +181,7 @@ function renderOutline(result: BrowseResult, outline: FileOutline, words: ToolWo
       : `Outline; a section is read with ${words.read}: the path, its offset and its limit.\n${outline.headings
           .map(
             (heading) =>
-              `${"  ".repeat(Math.max(0, heading.level - 1))}- ${"#".repeat(heading.level)} ${headingLabel(heading.text)} (${sectionRange(heading)})`,
+              `${"  ".repeat(Math.max(0, heading.level - 1))}- ${"#".repeat(heading.level)} ${headingLabel(heading.text)} (${sectionRange(heading)}${heading.rows === undefined ? "" : `; ${plural(heading.rows, "row")}`})`,
           )
           .join("\n")}`;
   return joinSections([

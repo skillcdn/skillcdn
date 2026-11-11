@@ -1,7 +1,13 @@
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { restFindSchema, restMountSchema, restSkillSchema } from "@skillcdn/core";
+import {
+  restCodeSchema,
+  restFindSchema,
+  restMountSchema,
+  restRowsSchema,
+  restSkillSchema,
+} from "@skillcdn/core";
 import { describe, expect, it } from "vitest";
 import { EXIT_MISSING, EXIT_UNREADABLE, EXIT_USAGE, runCli } from "./cli.js";
 
@@ -242,5 +248,113 @@ describe("the files a pack carries that are not text (ADR-0077)", () => {
     );
     const outline = await run(["browse", root, "docs/ch3.md"]);
     expect(outline.out).toContain("- docs/images/a.png: A figure");
+  });
+});
+
+describe("the tables and the code blocks of a directory as data (ADR-0080)", () => {
+  // One table in two files under the same header, a table of another shape, and two definitions.
+  const DATA: Record<string, string> = {
+    ...PACK,
+    "docs/codes/010-a-to-b.md":
+      '# Codes: A to B\n\n| Code | Meaning |\n|---|---|\n| A | open, or "ajar" |\n| B | closed |\n',
+    "docs/codes/020-c-to-d.md":
+      "# Codes: C to D\n\n| Code | Meaning |\n|---|---|\n| C | held |\n| D | lost |\n\n## Units\n\n| Unit | Symbol |\n|---|---|\n| second | s |\n",
+    "docs/definitions.md":
+      "# Definitions\n\n## Code\n\n```tln\nCode ::= ENUMERATED { a, b, c, d }\n```\n\n## Unit\n\n```tln\nUnit ::= ENUMERATED { second }\n```\n",
+  };
+
+  it("prints the rows under a path as one CSV, in reading order, with where each stands", async () => {
+    const root = await repository(DATA);
+    const { code, out, err } = await run(["rows", root, "docs/codes"]);
+    expect(err).toBe("");
+    expect(code).toBe(0);
+    expect(out).toBe(
+      [
+        "path,heading,Code,Meaning,Unit,Symbol",
+        'docs/codes/010-a-to-b.md,Codes: A to B,A,"open, or ""ajar""",,',
+        "docs/codes/010-a-to-b.md,Codes: A to B,B,closed,,",
+        "docs/codes/020-c-to-d.md,Codes: C to D,C,held,,",
+        "docs/codes/020-c-to-d.md,Codes: C to D,D,lost,,",
+        "docs/codes/020-c-to-d.md,Codes: C to D > Units,,,second,s",
+        "",
+      ].join("\r\n"),
+    );
+    // A heading keeps the tables under it; one file is read as a folder is.
+    const kept = await run(["rows", root, "docs/codes", "--heading", "units"]);
+    expect(kept.out).toBe(
+      "path,heading,Unit,Symbol\r\ndocs/codes/020-c-to-d.md,Codes: C to D > Units,second,s\r\n",
+    );
+    const one = await run(["rows", root, "docs/codes/010-a-to-b.md", "--format", "json"]);
+    expect(JSON.parse(one.out)).toEqual([
+      {
+        path: "docs/codes/010-a-to-b.md",
+        heading: "Codes: A to B",
+        cells: { Code: "A", Meaning: 'open, or "ajar"' },
+      },
+      {
+        path: "docs/codes/010-a-to-b.md",
+        heading: "Codes: A to B",
+        cells: { Code: "B", Meaning: "closed" },
+      },
+    ]);
+    // With --json, what the REST API answers, every page joined.
+    const rest = restRowsSchema.parse(
+      JSON.parse((await run(["rows", root, "docs", "--json"])).out),
+    );
+    if (rest.status !== "ready") throw new Error("not ready");
+    expect(rest.rowCount).toBe(5);
+    expect(rest.tables.map((table) => table.rows.length)).toEqual([2, 2, 1]);
+    expect(rest.nextCursor).toBeNull();
+  });
+
+  it("writes to a file when told to, and says how much", async () => {
+    const root = await repository(DATA);
+    const target = join(root, "..", "codes.csv");
+    const { code, out } = await run(["rows", root, "docs/codes", "--out", target]);
+    expect(code).toBe(0);
+    expect(out).toContain("Wrote 5 rows of 3 tables to ");
+    expect(await readFile(target, "utf8")).toContain(
+      "docs/codes/020-c-to-d.md,Codes: C to D,D,lost,,",
+    );
+  });
+
+  it("prints the code blocks under a path as they are written, each under where it stands", async () => {
+    const root = await repository(DATA);
+    const all = await run(["code", root, "docs"]);
+    expect(all.code).toBe(0);
+    expect(all.out).toBe(
+      "--- docs/definitions.md > Definitions > Code (tln) ---\nCode ::= ENUMERATED { a, b, c, d }\n\n--- docs/definitions.md > Definitions > Unit (tln) ---\nUnit ::= ENUMERATED { second }\n",
+    );
+    const found = await run(["code", root, "docs", "--grep", "^Unit ::="]);
+    expect(found.out).toBe(
+      "--- docs/definitions.md > Definitions > Unit (tln) ---\nUnit ::= ENUMERATED { second }\n",
+    );
+    const under = await run(["code", root, "docs/definitions.md", "--heading", "code", "--json"]);
+    const rest = restCodeSchema.parse(JSON.parse(under.out));
+    if (rest.status !== "ready") throw new Error("not ready");
+    expect(rest.blocks.map((block) => block.heading.at(-1))).toEqual(["Code"]);
+  });
+
+  it("refuses what names no document, and what it cannot take", async () => {
+    const root = await repository(DATA);
+    const missing = await run(["rows", root, "docs/nothing"]);
+    expect(missing.code).toBe(EXIT_MISSING);
+    expect(missing.err).toContain("No Markdown document at that path");
+    expect((await run(["rows", root, "docs", "--format", "xml"])).code).toBe(EXIT_USAGE);
+    expect((await run(["code", root, "docs", "--grep", "("])).code).toBe(EXIT_USAGE);
+    expect((await run(["rows", root, "docs", "extra"])).code).toBe(EXIT_USAGE);
+  });
+
+  it("says in the outline of a document what it holds as data, and the command that prints it", async () => {
+    const root = await repository(DATA);
+    const outline = await run(["browse", root, "docs/codes/020-c-to-d.md"]);
+    expect(outline.out).toMatch(
+      /Tables: 2 with 3 rows; as data: skillcdn rows ".*acme-skills" docs\/codes\/020-c-to-d\.md/,
+    );
+    expect(outline.out).toMatch(/- ## Units \(offset \d+, limit \d+; 1 row\)/);
+    const definitions = await run(["browse", root, "docs/definitions.md"]);
+    expect(definitions.out).toMatch(
+      /Code blocks: 2; as data: skillcdn code ".*acme-skills" docs\/definitions\.md/,
+    );
   });
 });

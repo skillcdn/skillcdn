@@ -56,9 +56,10 @@ async function deploymentOf(root: string, indexing = 0): Promise<Deployment> {
       const headers = init.headers as Record<string, string>;
       state.requests.push({ url, authorization: headers.authorization });
       const parsed = new URL(url);
-      const match = /^\/api\/v1\/(mounts|browse|find|skills|files)\/gh\/acme\/skills$/.exec(
-        parsed.pathname,
-      );
+      const match =
+        /^\/api\/v1\/(mounts|browse|find|skills|files|rows|code)\/gh\/acme\/skills$/.exec(
+          parsed.pathname,
+        );
       const json = (body: unknown, status = 200) =>
         new Response(JSON.stringify(body), {
           status,
@@ -109,6 +110,16 @@ async function deploymentOf(root: string, indexing = 0): Promise<Deployment> {
               await pack.file({
                 path: q.get("path") ?? "",
                 offset: number("offset"),
+                limit: number("limit"),
+              }),
+            );
+          case "rows":
+          case "code":
+            return json(
+              await pack[match[1]]({
+                path: q.get("path") ?? undefined,
+                heading: q.get("heading") ?? undefined,
+                cursor: q.get("cursor") ?? undefined,
                 limit: number("limit"),
               }),
             );
@@ -593,5 +604,30 @@ describe("a pack at a deployment", () => {
     expect(unreachable.code).toBe(EXIT_UNREADABLE);
     expect(unreachable.err).toContain("network");
     expect(DEFAULT_ORIGIN).toBe("https://skillcdn.ai");
+  });
+});
+
+describe("the tables and the code blocks of a pack at a deployment (ADR-0080)", () => {
+  const CODES =
+    "# Codes\n\n| Code | Meaning |\n|---|---|\n| A | open |\n| B | closed |\n\n```tln\nCode ::= ENUMERATED { a, b }\n```\n";
+
+  it("answers what the directory answers, through the two routes", async () => {
+    const root = await repository({ ...PACK, "docs/codes.md": CODES });
+    const deployment = await deploymentOf(root);
+    const remote = await run(["rows", "gh/acme/skills", "docs/codes.md"], deployment);
+    expect(remote.err).toBe("");
+    expect(remote.code).toBe(0);
+    expect(remote.out).toBe(
+      "path,heading,Code,Meaning\r\ndocs/codes.md,Codes,A,open\r\ndocs/codes.md,Codes,B,closed\r\n",
+    );
+    expect(deployment.requests.at(-1)?.url).toContain(
+      "/api/v1/rows/gh/acme/skills?path=docs%2Fcodes.md",
+    );
+    const code = await run(["code", "gh/acme/skills", "docs"], deployment);
+    expect(code.code).toBe(0);
+    expect(code.out).toBe("--- docs/codes.md > Codes (tln) ---\nCode ::= ENUMERATED { a, b }\n");
+    const missing = await run(["rows", "gh/acme/skills", "docs/nothing.md"], deployment);
+    expect(missing.code).toBe(EXIT_MISSING);
+    expect(missing.err).toContain("file.not_found");
   });
 });

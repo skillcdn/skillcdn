@@ -1,10 +1,12 @@
 import { type Address, formatAddress, isPinnedAddress } from "../address.js";
 import type { LicenseFact } from "../license.js";
+import { toCsv } from "../markdown-data.js";
 import type { RepoTranslation } from "../repo-manifest.js";
 import type { SkillTranslation } from "../skill-manifest.js";
 import type { IndexNotReady, MountOverview, SkillLookup } from "../tools/reads.js";
 import type {
   BrowseResult,
+  CodeResult,
   DirectoryResult,
   DocumentSource,
   FileResult,
@@ -14,11 +16,14 @@ import type {
   IndexDiagnostic,
   ListedItem,
   NewestCommit,
+  RowsResult,
   SkillEntry,
   SkillsPage,
 } from "../tools/results.js";
 import type {
   RestBrowse,
+  RestCode,
+  RestDataTable,
   RestDiagnostic,
   RestDocumentSource,
   RestFile,
@@ -32,6 +37,7 @@ import type {
   RestMountSearch,
   RestRepository,
   RestRepoTranslation,
+  RestRows,
   RestSearch,
   RestSkill,
   RestSkillTranslation,
@@ -123,8 +129,18 @@ export function browseBody(
                   text: heading.text,
                   offset: heading.offset,
                   length: heading.length,
+                  ...(heading.rows === undefined ? {} : { rows: heading.rows }),
                 })),
                 truncated: answer.result.outline.truncated,
+                ...(answer.result.outline.tables === undefined
+                  ? {}
+                  : { tables: { ...answer.result.outline.tables } }),
+                ...(answer.result.outline.codeBlocks === undefined
+                  ? {}
+                  : { codeBlocks: answer.result.outline.codeBlocks }),
+                ...(answer.result.outline.data === undefined
+                  ? {}
+                  : { data: { ...answer.result.outline.data } }),
                 ...(answer.result.outline.unavailable === undefined
                   ? {}
                   : { unavailable: answer.result.outline.unavailable }),
@@ -438,6 +454,86 @@ export function skillOutcome(
 }
 
 /** A page of a file, as the `files` route answers it. */
+/** The `rows` answer: the tables under a path as data (ADR-0080). */
+export function rowsBody(
+  answer: IndexNotReady | { readonly status: "ready"; readonly result: RowsResult },
+): RestRows {
+  if (answer.status !== "ready") return notReadyBody(answer);
+  const { result } = answer;
+  return {
+    status: "ready",
+    commit: result.mount.commit,
+    path: result.path,
+    tables: result.tables.map((table) => ({
+      path: table.path,
+      heading: [...table.heading],
+      columns: [...table.columns],
+      rows: table.rows.map((row) => [...row]),
+    })),
+    rowCount: result.rowCount,
+    nextCursor: result.nextCursor ?? null,
+  };
+}
+
+/** The `code` answer: the fenced code blocks under a path as data (ADR-0080). */
+export function codeBody(
+  answer: IndexNotReady | { readonly status: "ready"; readonly result: CodeResult },
+): RestCode {
+  if (answer.status !== "ready") return notReadyBody(answer);
+  const { result } = answer;
+  return {
+    status: "ready",
+    commit: result.mount.commit,
+    path: result.path,
+    blocks: result.blocks.map((block) => ({
+      path: block.path,
+      heading: [...block.heading],
+      language: block.language,
+      text: block.text,
+    })),
+    nextCursor: result.nextCursor ?? null,
+  };
+}
+
+/**
+ * The tables of a `rows` answer as one CSV (ADR-0080): a header of `path`, `heading` and every
+ * column name the tables have, in the order they first appear, then a line per row with the
+ * cells under the names of its own table, so that a table that stands in several sections and
+ * files under one header comes out as one.
+ */
+export function rowsCsv(tables: readonly RestDataTable[]): string {
+  const columns: string[] = [];
+  const seen = new Set<string>();
+  for (const table of tables) {
+    for (const column of table.columns) {
+      if (!seen.has(column)) {
+        seen.add(column);
+        columns.push(column);
+      }
+    }
+  }
+  const lines: string[][] = [["path", "heading", ...columns]];
+  for (const table of tables) {
+    // A name a table has twice keeps its first cell; the second is under no name of its own.
+    const at = new Map<string, number>();
+    table.columns.forEach((column, index) => {
+      if (!at.has(column)) at.set(column, index);
+    });
+    const heading = table.heading.join(" > ");
+    for (const row of table.rows) {
+      lines.push([
+        table.path,
+        heading,
+        ...columns.map((column) => {
+          const index = at.get(column);
+          return index === undefined ? "" : (row[index] ?? "");
+        }),
+      ]);
+    }
+  }
+  return toCsv(lines);
+}
+
 export function fileBody(file: FileResult): RestFile {
   return {
     kind: "file",

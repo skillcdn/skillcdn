@@ -11,9 +11,11 @@ import {
   type RepoPath,
   ROOT_PATH,
   restBrowseSchema,
+  restCodeSchema,
   restListedSchema,
   restListingSchema,
   restMountSchema,
+  restRowsSchema,
   restSkillSchema,
 } from "@skillcdn/core";
 import { INDEX_LIMIT_DEFAULTS, openWorkingTreeFile, readDirectory } from "@skillcdn/indexer";
@@ -283,6 +285,157 @@ describe("a directory served from a machine", () => {
     const whole = await call("read_repo_file", { path: "docs/outline.md" });
     expect(whole).toContain("- guide.md -> docs/guide.md (available)");
     expect(whole).toContain("- ../marketing/ads/SKILL.md -> marketing/ads/SKILL.md (available)");
+    await client.close();
+  });
+
+  it("answers the tables and the code blocks of a document as data, and an outline says where (ADR-0080)", async () => {
+    // One table in two sections under the same header, and a definition in a notation of its own.
+    const codes = [
+      "# Codes",
+      "",
+      "## Codes: A to B",
+      "",
+      "| Code | Meaning |",
+      "|---|---|",
+      '| A | open, or "ajar" |',
+      "| B | closed |",
+      "",
+      "## Codes: C to D",
+      "",
+      "| Code | Meaning |",
+      "|---|---|",
+      "| C | held |",
+      "| D | lost |",
+      "",
+      "## Definition",
+      "",
+      "```tln",
+      "Code ::= ENUMERATED { a, b, c, d }",
+      "```",
+      "",
+    ].join("\n");
+    const { mount } = await pack({ "docs/codes.md": codes });
+    const app = appOf(mount);
+    const at = "http://local.test/api/v1";
+    const rows = async (query: string) => app.request(`${at}/rows/local/packs/acme?${query}`);
+
+    const one = restRowsSchema.parse(await (await rows("path=docs%2Fcodes.md")).json());
+    if (one.status !== "ready") throw new Error("not ready");
+    expect(one).toMatchObject({ path: "docs/codes.md", rowCount: 4, nextCursor: null });
+    expect(one.tables).toEqual([
+      {
+        path: "docs/codes.md",
+        heading: ["Codes", "Codes: A to B"],
+        columns: ["Code", "Meaning"],
+        rows: [
+          ["A", 'open, or "ajar"'],
+          ["B", "closed"],
+        ],
+      },
+      {
+        path: "docs/codes.md",
+        heading: ["Codes", "Codes: C to D"],
+        columns: ["Code", "Meaning"],
+        rows: [
+          ["C", "held"],
+          ["D", "lost"],
+        ],
+      },
+    ]);
+    // A heading keeps the tables whose heading path holds its words, whatever the case.
+    const kept = restRowsSchema.parse(await (await rows("path=docs&heading=c+TO+d")).json());
+    if (kept.status !== "ready") throw new Error("not ready");
+    expect(kept.tables.map((table) => table.heading.at(-1))).toEqual(["Codes: C to D"]);
+
+    // As CSV the table that stands in two sections is one, under one header.
+    const csv = await rows("path=docs%2Fcodes.md&format=csv");
+    expect(csv.headers.get("content-type")).toBe("text/csv; charset=utf-8");
+    expect(csv.headers.get("x-next-cursor")).toBeNull();
+    expect(await csv.text()).toBe(
+      [
+        "path,heading,Code,Meaning",
+        'docs/codes.md,Codes > Codes: A to B,A,"open, or ""ajar"""',
+        "docs/codes.md,Codes > Codes: A to B,B,closed",
+        "docs/codes.md,Codes > Codes: C to D,C,held",
+        "docs/codes.md,Codes > Codes: C to D,D,lost",
+        "",
+      ].join("\r\n"),
+    );
+
+    // A folder is read in pages of whole files: the first file with rows fills a page of one.
+    const first = await rows("path=docs&limit=1&format=csv");
+    const cursor = first.headers.get("x-next-cursor");
+    expect(cursor).not.toBeNull();
+    expect((await first.text()).split("\r\n")).toHaveLength(6);
+    const rest = restRowsSchema.parse(
+      await (await rows(`path=docs&limit=1&cursor=${encodeURIComponent(cursor ?? "")}`)).json(),
+    );
+    expect(rest).toMatchObject({ status: "ready", tables: [], rowCount: 0, nextCursor: null });
+
+    // What names no document is refused, as a path that leaves the pack and a page limit past the most.
+    expect((await rows("path=docs%2Fnothing.md")).status).toBe(404);
+    expect((await rows("path=..%2Facme")).status).toBe(400);
+    expect((await rows("path=docs&limit=5001")).status).toBe(400);
+    expect((await rows("path=docs&format=xml")).status).toBe(400);
+
+    const code = restCodeSchema.parse(
+      await (await app.request(`${at}/code/local/packs/acme?path=docs`)).json(),
+    );
+    if (code.status !== "ready") throw new Error("not ready");
+    expect(code.blocks).toEqual([
+      {
+        path: "docs/codes.md",
+        heading: ["Codes", "Definition"],
+        language: "tln",
+        text: "Code ::= ENUMERATED { a, b, c, d }",
+      },
+    ]);
+    expect((await app.request(`${at}/code/local/packs/acme?path=docs%2Fnothing.md`)).status).toBe(
+      404,
+    );
+
+    // The outline of the document says what it holds as data and where a program gets it, the
+    // rows of each section beside what reads the section.
+    const browsed = restBrowseSchema.parse(
+      await (await app.request(`${at}/browse/local/packs/acme?path=docs%2Fcodes.md`)).json(),
+    );
+    if (browsed.status !== "ready") throw new Error("not ready");
+    expect(browsed.outline).toMatchObject({
+      tables: { count: 2, rows: 4 },
+      codeBlocks: 1,
+      data: {
+        rows: "http://local.test/api/v1/rows/local/packs/acme?path=docs%2Fcodes.md",
+        code: "http://local.test/api/v1/code/local/packs/acme?path=docs%2Fcodes.md",
+      },
+    });
+    expect(browsed.outline?.headings.map((heading) => heading.rows)).toEqual([
+      undefined,
+      2,
+      2,
+      undefined,
+    ]);
+    const client = new Client({ name: "skillcdn-test", version: "0.0.0" });
+    await client.connect(
+      new StreamableHTTPClientTransport(new URL("http://local.test/local/packs/acme"), {
+        fetch: async (input, init) => app.fetch(new Request(input, init)),
+      }),
+    );
+    const outline = text(
+      await client.callTool({ name: "browse_repo", arguments: { path: "docs/codes.md" } }),
+    );
+    expect(outline).toContain(
+      "Tables: 2 with 4 rows; as data: http://local.test/api/v1/rows/local/packs/acme?path=docs%2Fcodes.md",
+    );
+    expect(outline).toContain(
+      "Code blocks: 1; as data: http://local.test/api/v1/code/local/packs/acme?path=docs%2Fcodes.md",
+    );
+    expect(outline).toMatch(/- ## Codes: A to B \(offset \d+, limit \d+; 2 rows\)/);
+    expect(outline).toMatch(/- ## Definition \(offset \d+, limit \d+\)/);
+    // A document without either says nothing of it.
+    const plain = text(
+      await client.callTool({ name: "browse_repo", arguments: { path: "docs/guide.md" } }),
+    );
+    expect(plain).not.toContain("as data");
     await client.close();
   });
 

@@ -13,6 +13,7 @@ import {
   REST_ROUTES,
   type RepoPath,
   type RestMount,
+  restPath,
 } from "@skillcdn/core";
 import type { Reader } from "@skillcdn/reader";
 import { type Context, Hono } from "hono";
@@ -46,7 +47,9 @@ export interface LocalServerOptions<M extends ServedMount> {
 export function mountServedAt<M extends ServedMount>(mount: M, origin: string): M {
   const raw = (path: RepoPath): string =>
     `${origin}${REST_ROUTES.raw}${formatAddress(mount.address)}?path=${encodeURIComponent(path)}`;
-  return { ...mount, sourceUrl: raw, rawUrl: raw };
+  const data = (kind: "rows" | "code", path: RepoPath): string =>
+    `${origin}${restPath(kind, mount.address)}?path=${encodeURIComponent(path)}`;
+  return { ...mount, sourceUrl: raw, rawUrl: raw, dataUrl: data };
 }
 
 /** The `mounts` body of a mount served from a machine: what names it, and no picture. */

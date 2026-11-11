@@ -5,6 +5,7 @@ import { pathToFileURL } from "node:url";
 import {
   type Address,
   browseBody,
+  codeBody,
   describeLicense,
   describeSource,
   directoryBody,
@@ -20,6 +21,7 @@ import {
   type RepoPath,
   type Reranker,
   ROOT_PATH,
+  rowsBody,
   skillOutcome,
 } from "@skillcdn/core";
 import { readDirectory, WORKING_TREE_COMMIT } from "@skillcdn/indexer";
@@ -180,6 +182,8 @@ export async function mountDirectory(options: {
     description: undefined,
     sourceUrl: fileUrl,
     rawUrl: fileUrl,
+    // Read on this machine, the tables and the code blocks of a file are had from the command.
+    dataUrl: (kind, path) => `skillcdn ${kind} "${root}" ${path}`,
     // A working tree may change at any moment, and is one machine's own: a client keeps nothing.
     trustedUntil: new Date(0),
     visibility: "private",
@@ -380,6 +384,12 @@ export async function openDirectory(options: {
     }
     return answer as Extract<T, { status: "ready" }>;
   };
+  const noDocument = (): PackError =>
+    new PackError(
+      404,
+      "file.not_found",
+      "No Markdown document at that path in this pack, and none under it.",
+    );
   return {
     address: mount.address,
     source: { kind: "directory", root: mount.root },
@@ -404,6 +414,26 @@ export async function openDirectory(options: {
         throw new PackError(status, code, message, { directories });
       }
       return outcome.body;
+    },
+    async rows(query) {
+      const lookup = await reader.rows(mount, query);
+      if (lookup.kind === "not_found") {
+        throw noDocument();
+      }
+      if (lookup.kind !== "found") {
+        throw new Error("the index of a directory is always ready");
+      }
+      return ready(rowsBody({ status: "ready", result: lookup.result }));
+    },
+    async code(query) {
+      const lookup = await reader.code(mount, query);
+      if (lookup.kind === "not_found") {
+        throw noDocument();
+      }
+      if (lookup.kind !== "found") {
+        throw new Error("the index of a directory is always ready");
+      }
+      return ready(codeBody({ status: "ready", result: lookup.result }));
     },
     async file(query) {
       const lookup = await reader.file(mount, query);

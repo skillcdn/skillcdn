@@ -10,6 +10,7 @@ import {
   REST_ROUTES,
   type RestAuthorization,
   type RestBrowse,
+  type RestCode,
   type RestConnectClaimed,
   type RestConnectDecided,
   type RestConnectDecision,
@@ -32,12 +33,14 @@ import {
   type RestOwner,
   type RestRepoTokenRequest,
   type RestRepoTokens,
+  type RestRows,
   type RestSearch,
   type RestShowcase,
   type RestSkill,
   restAuthorizationDecisionSchema,
   restAuthorizationSchema,
   restBrowseSchema,
+  restCodeSchema,
   restConnectClaimedSchema,
   restConnectDecidedSchema,
   restConnectStartedSchema,
@@ -59,6 +62,7 @@ import {
   restOwnerSchema,
   restPath,
   restRepoTokensSchema,
+  restRowsSchema,
   restSearchSchema,
   restShowcaseSchema,
   restSkillSchema,
@@ -184,6 +188,28 @@ export interface SkillCdnClient {
     },
     signal?: AbortSignal,
   ): Promise<RestFile>;
+  /** The tables of a document, or of every document under a folder, as data: a page, by whole files. */
+  rows(
+    address: Address,
+    query: {
+      readonly path?: string | undefined;
+      readonly heading?: string | undefined;
+      readonly cursor?: string | undefined;
+      readonly limit?: number | undefined;
+    },
+    signal?: AbortSignal,
+  ): Promise<RestRows>;
+  /** The fenced code blocks of a document, or of every document under a folder, as data: a page. */
+  code(
+    address: Address,
+    query: {
+      readonly path?: string | undefined;
+      readonly heading?: string | undefined;
+      readonly cursor?: string | undefined;
+      readonly limit?: number | undefined;
+    },
+    signal?: AbortSignal,
+  ): Promise<RestCode>;
   /** The skills the extension lists (`skills/list`), with their files and digests: a page. */
   listing(
     address: Address,
@@ -371,6 +397,18 @@ export function createClient(options: ClientOptions): SkillCdnClient {
       read(
         `${restPath("files", address)}${queryOf({ path: query.path, offset: query.offset, limit: query.limit })}`,
         restFileSchema,
+        signal,
+      ),
+    rows: (address, query, signal) =>
+      read(
+        `${restPath("rows", address)}${queryOf({ path: query.path, heading: query.heading, cursor: query.cursor, limit: query.limit })}`,
+        restRowsSchema,
+        signal,
+      ),
+    code: (address, query, signal) =>
+      read(
+        `${restPath("code", address)}${queryOf({ path: query.path, heading: query.heading, cursor: query.cursor, limit: query.limit })}`,
+        restCodeSchema,
         signal,
       ),
     listing: (address, query, signal) =>

@@ -287,6 +287,18 @@ export async function memorySearch(
   return (await memorySearchOf(directory, limits, undefined)).find;
 }
 
+/**
+ * A directory read as the command reads it, with the reader over it: for what a test asks of a
+ * pack besides a search, its outlines and its tables and code blocks as data.
+ */
+export async function memoryReader(
+  directory = DOCUMENT_PACK_PATH,
+  limits: IndexLimits = INDEX_LIMIT_DEFAULTS,
+): Promise<{ readonly reader: Reader<MountContext>; readonly mount: MountContext }> {
+  const made = await memorySearchOf(directory, limits, undefined);
+  return { reader: made.reader, mount: made.mount };
+}
+
 export async function memorySearchWithMeaning(
   meaning: MeaningUnderEvaluation,
   directory = DOCUMENT_PACK_PATH,
@@ -303,7 +315,12 @@ async function memorySearchOf(
   directory: string,
   limits: IndexLimits,
   meaning: MeaningUnderEvaluation | undefined,
-): Promise<{ readonly find: MemorySearch; readonly embedded: EmbeddedDirectory | undefined }> {
+): Promise<{
+  readonly find: MemorySearch;
+  readonly embedded: EmbeddedDirectory | undefined;
+  readonly reader: Reader<MountContext>;
+  readonly mount: MountContext;
+}> {
   const read = await readDirectory({
     directory,
     limits,
@@ -396,5 +413,5 @@ async function memorySearchOf(
     }
     return answer.result;
   };
-  return { find, embedded };
+  return { find, embedded, reader, mount };
 }

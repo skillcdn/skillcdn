@@ -89,5 +89,19 @@ export function openDeployment(options: RemoteOptions): Pack {
       await indexed();
       return client.file(address, query).catch(asPackError);
     },
+    async rows(query) {
+      await indexed();
+      const body = await client.rows(address, query).catch(asPackError);
+      return body.status === "ready"
+        ? body
+        : notReady(body.status, body.status === "failed" ? body.errorCode : undefined);
+    },
+    async code(query) {
+      await indexed();
+      const body = await client.code(address, query).catch(asPackError);
+      return body.status === "ready"
+        ? body
+        : notReady(body.status, body.status === "failed" ? body.errorCode : undefined);
+    },
   };
 }

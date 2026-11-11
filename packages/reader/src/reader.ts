@@ -6,10 +6,18 @@ import {
   browseCatalogFiles,
   type CatalogFile,
   type CatalogState,
+  type CodeResult,
   classifyRepoFile,
   contextPage,
+  DATA_CODE_DEFAULT_LIMIT,
+  DATA_PAGE_MAX_CHARS,
+  DATA_PAGE_MAX_FILES,
+  DATA_ROWS_DEFAULT_LIMIT,
+  type DataCodeBlock,
+  type DataTable,
   type DocumentImage,
   type DocumentSource,
+  dataOfMarkdown,
   decodeText,
   documentSources,
   type Embedder,
@@ -19,6 +27,7 @@ import {
   FIND_MAX_SKILL_FILES,
   type FileLookup,
   type FileOutline,
+  type FileOutlineHeading,
   type FileReference,
   type FileResult,
   type FindFile,
@@ -30,6 +39,7 @@ import {
   formatSkillUri,
   frontMatterObject,
   fuseRanks,
+  headingPaths,
   type IncludedFile,
   type IndexDiagnostic,
   type IndexEntry,
@@ -75,6 +85,7 @@ import {
   type Resource,
   type ResourceEntry,
   ROOT_PATH,
+  type RowsResult,
   repoManifestPath,
   resolveDocumentSource,
   SKILL_PAGE_BYTES,
@@ -339,6 +350,50 @@ async function rerankFirst(
       detailed[at] = scored.entry;
     });
   return true;
+}
+
+/**
+ * The heading whose section holds a character offset: the last heading at or before it, by its
+ * place in the outline; `-1` for the text before the first heading.
+ */
+function sectionAt(headings: readonly OutlineHeading[], offset: number): number {
+  let low = 0;
+  let high = headings.length - 1;
+  let found = -1;
+  while (low <= high) {
+    const middle = (low + high) >> 1;
+    if ((headings[middle]?.offset ?? 0) <= offset) {
+      found = middle;
+      low = middle + 1;
+    } else {
+      high = middle - 1;
+    }
+  }
+  return found;
+}
+
+/** The words of a heading or of a filter: what stands between blanks, without the marks around it, in lower case. */
+const wordsOf = (text: string): string[] =>
+  text
+    .toLowerCase()
+    .split(/\s+/u)
+    .map((word) => word.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ""))
+    .filter((word) => word.length > 0);
+
+/**
+ * Whether a heading path holds every word a data read was asked to keep to, as a word of its
+ * own and whatever the case: `c-2` keeps `TABLE C-2: codes` and not `TABLE C-20`. Every path
+ * does when nothing was asked.
+ */
+function headingFilter(wanted: string | undefined): (heading: readonly string[]) => boolean {
+  const words = wordsOf(wanted ?? "");
+  if (words.length === 0) {
+    return () => true;
+  }
+  return (heading) => {
+    const have = new Set(wordsOf(heading.join(" ")));
+    return words.every((word) => have.has(word));
+  };
 }
 
 function boundedPage<T>(
@@ -747,7 +802,7 @@ export class Reader<M extends MountContext = MountContext> {
       truncated: false,
     };
     let outline = none;
-    let headings: readonly OutlineHeading[] = [];
+    let headings: readonly FileOutlineHeading[] = [];
     const license = await this.#licenseAt(index, path);
     if (!servesInFull(license, servedInFull(mount))) {
       outline = {
@@ -771,16 +826,43 @@ export class Reader<M extends MountContext = MountContext> {
         outline = { ...none, unavailable: "not_text", ...unreadable };
       } else {
         const whole = outlineMarkdown(text);
-        headings = whole.headings;
+        // A heading says how many rows the tables of its section hold (ADR-0080): a table is
+        // had as data from where it stands, and a model is told that it is there.
+        const data = dataOfMarkdown(text);
+        const rowsOf = new Map<number, number>();
+        for (const table of data.tables) {
+          const at = sectionAt(whole.headings, table.offset);
+          if (at >= 0) {
+            rowsOf.set(at, (rowsOf.get(at) ?? 0) + table.rows.length);
+          }
+        }
+        headings = whole.headings.map((heading, at) => {
+          const rows = rowsOf.get(at);
+          return rows === undefined ? heading : { ...heading, rows };
+        });
         // What the document says of itself goes on the first page, with the start of the outline.
         const facts =
           offset === 0 ? await this.#documentFacts(mount, index, path, text) : undefined;
+        const tableRows = data.tables.reduce((sum, table) => sum + table.rows.length, 0);
+        const where = {
+          ...(data.tables.length === 0 || mount.dataUrl === undefined
+            ? {}
+            : { rows: mount.dataUrl("rows", path) }),
+          ...(data.code.length === 0 || mount.dataUrl === undefined
+            ? {}
+            : { code: mount.dataUrl("code", path) }),
+        };
         outline = {
           ...none,
           totalLength: whole.totalLength,
           truncated: whole.truncated,
           ...(facts === undefined || facts.sources.length === 0 ? {} : { sources: facts.sources }),
           ...(facts === undefined ? {} : { images: facts.images }),
+          ...(offset !== 0 || data.tables.length === 0
+            ? {}
+            : { tables: { count: data.tables.length, rows: tableRows } }),
+          ...(offset !== 0 || data.code.length === 0 ? {} : { codeBlocks: data.code.length }),
+          ...(offset !== 0 || Object.keys(where).length === 0 ? {} : { data: where }),
         };
       }
     }
@@ -2077,6 +2159,200 @@ export class Reader<M extends MountContext = MountContext> {
       throw new ReaderInputError("This file page cannot advance. Use a larger page limit.");
     }
     return { kind: "found", file: page, indexed: indexedOf(entry) };
+  }
+
+  /**
+   * The Markdown files a data read looks at (ADR-0080): the file the path names, or every
+   * document and skill under the folder it names, in path order, which is the order a set is
+   * read in; with the page of them a cursor begins at. `undefined` when the path names neither.
+   */
+  async #dataFiles(
+    mount: M,
+    index: ReadableIndex,
+    path: RepoPath,
+  ): Promise<readonly IndexEntry[] | undefined> {
+    const entries = await this.#entriesOf(index);
+    const readable = (entry: IndexEntry): boolean =>
+      entry.visible &&
+      (entry.kind === "markdown" || entry.kind === "skill") &&
+      belowMount(mount, entry.path) !== undefined;
+    const file = path.length === 0 ? undefined : getEntry(entries, path);
+    if (file !== undefined) {
+      return readable(file) ? [file] : undefined;
+    }
+    const under = entries.filter(
+      (entry) => readable(entry) && isWithinRepoPath(path, entry.path as RepoPath),
+    );
+    return under.length === 0
+      ? undefined
+      : [...under].sort((a, b) => compareByteOrder(a.path, b.path));
+  }
+
+  /**
+   * A page of what the Markdown files under a path hold as data (ADR-0080), by whole files: the
+   * files from the cursor on are read until `full` says the page holds enough, or as many files
+   * were read as a page reads. A file this mount describes without serving, one over the read
+   * limit and one whose text is not at hand are passed over: what cannot be read here has no
+   * data to give here.
+   */
+  async #dataPage<T>(
+    asked: M,
+    input: { readonly path?: string | undefined; readonly cursor?: string | undefined },
+    operation: string,
+    filter: string,
+    collect: (file: RepoPath, text: string) => readonly T[],
+    full: (collected: readonly T[]) => boolean,
+  ): Promise<
+    | { readonly kind: "not_ready"; readonly outcome: IndexNotReady }
+    | { readonly kind: "not_found"; readonly path: RepoPath }
+    | {
+        readonly kind: "found";
+        readonly mount: MountSummary;
+        readonly path: RepoPath;
+        readonly items: readonly T[];
+        readonly nextCursor: string | undefined;
+      }
+  > {
+    const path = this.#scopePath(asked, input.path);
+    const outcome = await this.#index(asked, 0);
+    if (outcome.status !== "ready") return { kind: "not_ready", outcome };
+    const { index, mount } = outcome;
+    const files = await this.#dataFiles(mount, index, path);
+    if (files === undefined) return { kind: "not_found", path };
+    const limits = { ...this.#dependencies.limits, ...mount.limits };
+    const key = this.#pageKey(mount, index, operation, path, filter);
+    const start = continuationOffset(input.cursor, key);
+    const items: T[] = [];
+    let at = start;
+    while (at < files.length && at - start < DATA_PAGE_MAX_FILES && !full(items)) {
+      const entry = files[at] as IndexEntry;
+      at += 1;
+      const file = entry.path as RepoPath;
+      if (entry.size > limits.maxReadableFileBytes) continue;
+      if (!servesInFull(await this.#licenseAt(index, file), servedInFull(mount))) continue;
+      const text = await this.#textOf(mount, index, entry, limits).catch((error: unknown) => {
+        if (error instanceof BodyUnavailableError) return undefined;
+        throw error;
+      });
+      if (text === undefined) continue;
+      for (const item of collect(file, text)) {
+        items.push(item);
+      }
+    }
+    return {
+      kind: "found",
+      mount: this.summary(mount, index),
+      path,
+      items,
+      nextCursor: at < files.length ? nextContinuation(key, at) : undefined,
+    };
+  }
+
+  /**
+   * The tables of a document, or of every document under a folder, as data (ADR-0080): each
+   * with the file and the section it stands in, the names of its columns and its rows, in
+   * reading order, a page at a time by whole files. `heading` keeps the tables whose heading
+   * path holds every word of it. Never waits for the index.
+   */
+  async rows(
+    asked: M,
+    input: {
+      readonly path?: string | undefined;
+      readonly heading?: string | undefined;
+      readonly cursor?: string | undefined;
+      readonly limit?: number | undefined;
+    },
+  ): Promise<
+    | { readonly kind: "not_ready"; readonly outcome: IndexNotReady }
+    | { readonly kind: "not_found"; readonly path: RepoPath }
+    | { readonly kind: "found"; readonly result: RowsResult }
+  > {
+    const limit = input.limit ?? DATA_ROWS_DEFAULT_LIMIT;
+    const wanted = headingFilter(input.heading);
+    let rows = 0;
+    let chars = 0;
+    const page = await this.#dataPage<DataTable>(
+      asked,
+      input,
+      "rows",
+      input.heading ?? "",
+      (file, text) => {
+        const headings = outlineMarkdown(text).headings;
+        const paths = headingPaths(headings);
+        return dataOfMarkdown(text).tables.flatMap((table): DataTable[] => {
+          const heading = paths[sectionAt(headings, table.offset)] ?? [];
+          if (!wanted(heading)) return [];
+          rows += table.rows.length;
+          for (const row of table.rows) {
+            for (const cell of row) chars += cell.length;
+          }
+          return [{ path: file, heading, columns: table.columns, rows: table.rows }];
+        });
+      },
+      () => rows >= limit || chars >= DATA_PAGE_MAX_CHARS,
+    );
+    if (page.kind !== "found") return page;
+    return {
+      kind: "found",
+      result: {
+        mount: page.mount,
+        path: page.path,
+        tables: page.items,
+        rowCount: rows,
+        nextCursor: page.nextCursor,
+      },
+    };
+  }
+
+  /**
+   * The fenced code blocks of a document, or of every document under a folder, as data
+   * (ADR-0080), as {@link Reader.rows} answers the tables.
+   */
+  async code(
+    asked: M,
+    input: {
+      readonly path?: string | undefined;
+      readonly heading?: string | undefined;
+      readonly cursor?: string | undefined;
+      readonly limit?: number | undefined;
+    },
+  ): Promise<
+    | { readonly kind: "not_ready"; readonly outcome: IndexNotReady }
+    | { readonly kind: "not_found"; readonly path: RepoPath }
+    | { readonly kind: "found"; readonly result: CodeResult }
+  > {
+    const limit = input.limit ?? DATA_CODE_DEFAULT_LIMIT;
+    const wanted = headingFilter(input.heading);
+    let blocks = 0;
+    let chars = 0;
+    const page = await this.#dataPage<DataCodeBlock>(
+      asked,
+      input,
+      "code",
+      input.heading ?? "",
+      (file, text) => {
+        const headings = outlineMarkdown(text).headings;
+        const paths = headingPaths(headings);
+        return dataOfMarkdown(text).code.flatMap((block): DataCodeBlock[] => {
+          const heading = paths[sectionAt(headings, block.offset)] ?? [];
+          if (!wanted(heading)) return [];
+          blocks += 1;
+          chars += block.text.length;
+          return [{ path: file, heading, language: block.language, text: block.text }];
+        });
+      },
+      () => blocks >= limit || chars >= DATA_PAGE_MAX_CHARS,
+    );
+    if (page.kind !== "found") return page;
+    return {
+      kind: "found",
+      result: {
+        mount: page.mount,
+        path: page.path,
+        blocks: page.items,
+        nextCursor: page.nextCursor,
+      },
+    };
   }
 
   /**

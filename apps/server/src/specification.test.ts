@@ -11,6 +11,7 @@ import {
 import { beforeAll, describe, expect, it } from "vitest";
 import {
   type MemorySearch,
+  memoryReader,
   memorySearch,
   memorySearchWithMeaning,
   SPECIFICATION_PACK_PATH,
@@ -206,5 +207,80 @@ describe("the specification pack, searched by words and meaning", () => {
     expect(result.ranking).toEqual({ meaning: true, reranked: false });
     expect(firstOf(result)).toBe(`${SET}/04-link-control/040-4.2.7-to-4.2.8-carrier-loss.md`);
     expect((await words("noticing a vanished signal")).items).toEqual([]);
+  });
+});
+
+describe("the specification pack, had as data (ADR-0080)", () => {
+  const ANNEX = `${SET}/annex-c`;
+  /** The rows the files of a folder write: every line of a table but its header and its rule. */
+  const rowsWritten = (folder: string, heading?: string): string[] =>
+    [...FILES]
+      .filter(([path]) => path.startsWith(`${folder}/`))
+      .flatMap(([, text]) => {
+        const rows: string[] = [];
+        let wanted = heading === undefined;
+        for (const line of text.split("\n")) {
+          if (line.startsWith("#")) {
+            wanted = heading === undefined || line.includes(heading);
+          } else if (wanted && line.startsWith("| ") && !line.startsWith("| Code |")) {
+            rows.push(line);
+          }
+        }
+        return rows;
+      });
+
+  it("answers a table that stands in three files in one read, with every row the files write", async () => {
+    const { reader, mount } = await memoryReader(SPECIFICATION_PACK_PATH);
+    const answer = await reader.rows(mount, { path: ANNEX, heading: "TABLE C-2" });
+    if (answer.kind !== "found") throw new Error(answer.kind);
+    const { result } = answer;
+    const written = rowsWritten(ANNEX, "TABLE C-2");
+    expect(written).toHaveLength(120);
+    expect(result.rowCount).toBe(written.length);
+    expect(result.nextCursor).toBeUndefined();
+    // Six sections of twenty rows in three files, under one header: one table to a program.
+    expect(result.tables).toHaveLength(6);
+    expect(new Set(result.tables.map((table) => table.columns.join("|")))).toEqual(
+      new Set(["Code|Modifier|Applies to|Report"]),
+    );
+    expect(new Set(result.tables.map((table) => table.path)).size).toBe(3);
+    // In the order of the original, each row as the file writes it.
+    const read = result.tables.flatMap((table) =>
+      table.rows.map((row) => `| ${row.join(" | ")} |`),
+    );
+    expect(read).toEqual(written);
+    expect(result.tables[0]?.heading.at(-1)).toBe("TABLE C-2 Modifier codes: AA to BZ");
+
+    // The whole annex is the two tables: the condition codes come first, as the files do.
+    const annex = await reader.rows(mount, { path: ANNEX });
+    if (annex.kind !== "found") throw new Error(annex.kind);
+    expect(annex.result.rowCount).toBe(132);
+    expect(annex.result.tables[0]?.columns).toEqual(["Code", "Condition", "Meaning"]);
+  });
+
+  it("answers the definitions of a chapter as the code they are", async () => {
+    const { reader, mount } = await memoryReader(SPECIFICATION_PACK_PATH);
+    const answer = await reader.code(mount, { path: `${SET}/06-messages` });
+    if (answer.kind !== "found") throw new Error(answer.kind);
+    expect(answer.result.blocks.map((block) => /^(\w+) ::= /.exec(block.text)?.[1])).toEqual(
+      DEFINITIONS,
+    );
+    expect(new Set(answer.result.blocks.map((block) => block.language))).toEqual(new Set(["tln"]));
+    const one = await reader.code(mount, {
+      path: `${SET}/06-messages`,
+      heading: "ResumeGuardTimes",
+    });
+    if (one.kind !== "found") throw new Error(one.kind);
+    expect(one.result.blocks).toHaveLength(1);
+    expect(one.result.blocks[0]?.heading.at(-1)).toBe("6.1.8 ResumeGuardTimes");
+  });
+
+  it("says in the outline of a file of the table how many rows each section holds", async () => {
+    const { reader, mount } = await memoryReader(SPECIFICATION_PACK_PATH);
+    const file = [...FILES.keys()].find((path) => path.includes("table-c-2-modifier-codes-aa"));
+    const answer = await reader.browse(mount, { path: file }, 0);
+    if (answer.status !== "ready") throw new Error(answer.status);
+    expect(answer.result.outline?.tables).toEqual({ count: 2, rows: 40 });
+    expect(answer.result.outline?.headings.map((heading) => heading.rows)).toEqual([20, 20]);
   });
 });

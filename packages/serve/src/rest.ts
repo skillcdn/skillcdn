@@ -2,6 +2,9 @@ import {
   BROWSE_MAX_LIMIT,
   baseName,
   browseBody,
+  codeBody,
+  DATA_CODE_MAX_LIMIT,
+  DATA_ROWS_MAX_LIMIT,
   describeLicense,
   describeSource,
   FIND_MAX_LIMIT,
@@ -21,6 +24,8 @@ import {
   type RepoPath,
   type RestFailure,
   type RestMount,
+  rowsBody,
+  rowsCsv,
   skillOutcome,
 } from "@skillcdn/core";
 import { type Reader, ReaderInputError } from "@skillcdn/reader";
@@ -59,6 +64,20 @@ const fileQuery = z.object({
   limit: z.coerce.number().int().min(1).max(READ_FILE_MAX_LIMIT).optional(),
 });
 const rawQuery = z.object({ path: z.string().min(1).max(MAX_REPO_PATH_LENGTH) });
+/** The tables under a path as data (ADR-0080): a page of them, as JSON or as one CSV. */
+const rowsQuery = z.object({
+  path: z.string().max(MAX_REPO_PATH_LENGTH).optional(),
+  heading: z.string().max(MAX_QUERY_LENGTH).optional(),
+  cursor: z.string().max(4096).optional(),
+  limit: z.coerce.number().int().min(1).max(DATA_ROWS_MAX_LIMIT).optional(),
+  format: z.enum(["json", "csv"]).optional(),
+});
+const codeQuery = z.object({
+  path: z.string().max(MAX_REPO_PATH_LENGTH).optional(),
+  heading: z.string().max(MAX_QUERY_LENGTH).optional(),
+  cursor: z.string().max(4096).optional(),
+  limit: z.coerce.number().int().min(1).max(DATA_CODE_MAX_LIMIT).optional(),
+});
 /** A page of the listing, or one URI of it; never both. */
 const listingQuery = z
   .object({
@@ -228,7 +247,7 @@ export function registerAddressRoutes<E extends Env, M extends ServedMount>(
     cors({
       origin: "*",
       allowMethods: ["GET", "HEAD", "OPTIONS"],
-      exposeHeaders: ["x-request-id", "retry-after", "www-authenticate"],
+      exposeHeaders: ["x-request-id", "retry-after", "www-authenticate", "x-next-cursor"],
       maxAge: CORS_MAX_AGE_SECONDS,
     }),
   );
@@ -465,6 +484,75 @@ export function registerAddressRoutes<E extends Env, M extends ServedMount>(
       const result = await reader.browse(mount, query, 0);
       if (result.status === "ready") keep(c, mount);
       return c.json(browseBody(result));
+    } catch (error) {
+      return failure(c, error);
+    }
+  });
+
+  /** What a data read answers when the index is not there to read, or the path names nothing. */
+  const dataRefusal = (
+    c: Context<E>,
+    lookup:
+      | { readonly kind: "not_ready"; readonly outcome: IndexNotReady }
+      | { readonly kind: "not_found"; readonly path: string },
+  ): Response =>
+    lookup.kind === "not_found"
+      ? c.json(
+          errorBody(
+            "file.not_found",
+            "No Markdown document at that path in this mount, and none under it.",
+          ),
+          404,
+        )
+      : c.json(
+          errorBody(
+            lookup.outcome.status === "indexing" ? "index.indexing" : "index.failed",
+            lookup.outcome.status === "indexing"
+              ? "The repository is being indexed. Try again shortly."
+              : "The repository could not be indexed. Try again later.",
+          ),
+          503,
+          { "retry-after": "2" },
+        );
+
+  // The tables of a document, or of every document under a folder, as data (ADR-0080): what a
+  // program takes whole instead of a model copying it out. JSON by default; `format=csv` answers
+  // the page as one CSV, with the cursor of the next page in a header when there is one.
+  app.get(`${REST_ROUTES.rows}/*`, async (c) => {
+    const query = queryOf(c, rowsQuery);
+    if (query instanceof Response) return query;
+    const mount = await mountAt(c, REST_ROUTES.rows);
+    if (mount instanceof Response) return mount;
+    record(c, mount, "rows");
+    try {
+      const lookup = await reader.rows(mount, query);
+      if (lookup.kind !== "found") return dataRefusal(c, lookup);
+      keep(c, mount);
+      const body = rowsBody({ status: "ready", result: lookup.result });
+      if (query.format !== "csv" || body.status !== "ready") {
+        return c.json(body);
+      }
+      if (body.nextCursor !== null) {
+        c.header("x-next-cursor", body.nextCursor);
+      }
+      return c.body(rowsCsv(body.tables), 200, { "content-type": "text/csv; charset=utf-8" });
+    } catch (error) {
+      return failure(c, error);
+    }
+  });
+
+  // The fenced code blocks of a document, or of every document under a folder, as data.
+  app.get(`${REST_ROUTES.code}/*`, async (c) => {
+    const query = queryOf(c, codeQuery);
+    if (query instanceof Response) return query;
+    const mount = await mountAt(c, REST_ROUTES.code);
+    if (mount instanceof Response) return mount;
+    record(c, mount, "code");
+    try {
+      const lookup = await reader.code(mount, query);
+      if (lookup.kind !== "found") return dataRefusal(c, lookup);
+      keep(c, mount);
+      return c.json(codeBody({ status: "ready", result: lookup.result }));
     } catch (error) {
       return failure(c, error);
     }

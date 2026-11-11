@@ -12,6 +12,7 @@ import {
   isGitHostAddress,
   LOCAL_HOST_KEY,
   lfsFileUrl,
+  REST_ROUTES,
   type RepoCoordinates,
   type RepoPath,
   ROOT_PATH,
@@ -349,6 +350,13 @@ export class MountService {
       },
       rawUrl(path: RepoPath) {
         return here(rawFileUrl(atHost, this.commit, path));
+      },
+      // The tables and the code blocks of a document are had as data at this deployment's own
+      // routes (ADR-0080), whatever the pack is served from.
+      dataUrl(kind: "rows" | "code", path: RepoPath) {
+        return here(
+          `${REST_ROUTES[kind]}${formatAddress(address)}?path=${encodeURIComponent(path)}`,
+        );
       },
       // The git host serves the files kept in Git LFS, whose bytes in the repository are
       // pointers (ADR-0077); a directory holds what it holds, and is sent as it is.

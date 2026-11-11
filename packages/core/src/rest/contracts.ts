@@ -19,6 +19,10 @@ export const REST_ROUTES = {
   raw: "/api/v1/raw",
   /** The skills the extension lists, with their digests, and what one URI of the listing names. */
   listing: "/api/v1/listing",
+  /** The tables of a document, or of every document under a folder, as data (ADR-0080). */
+  rows: "/api/v1/rows",
+  /** The fenced code blocks of a document, or of every document under a folder, as data (ADR-0080). */
+  code: "/api/v1/code",
   featured: "/api/v1/featured",
   showcase: "/api/v1/showcase",
   legal: "/api/v1/legal",
@@ -40,7 +44,16 @@ export const REST_FEATURED_SKILL_NAMES = 5;
 
 /** The REST path of an operation on an address, without a query string. */
 export function restPath(
-  operation: "mounts" | "browse" | "find" | "skills" | "files" | "raw" | "listing",
+  operation:
+    | "mounts"
+    | "browse"
+    | "find"
+    | "skills"
+    | "files"
+    | "raw"
+    | "listing"
+    | "rows"
+    | "code",
   address: Address,
 ): string {
   return `${REST_ROUTES[operation]}${formatAddress(address)}`;
@@ -129,6 +142,8 @@ export const restOutlineHeadingSchema = z.object({
   text: z.string(),
   offset: count,
   length: count,
+  /** How many rows the tables of the section hold, when they hold any (ADR-0080). */
+  rows: z.optional(count),
 });
 /** The outline of a file the browse route was given the path of (ADR-0063). */
 export const restFileOutlineSchema = z.object({
@@ -150,6 +165,12 @@ export const restFileOutlineSchema = z.object({
   images: z.optional(z.array(restDocumentImageSchema)),
   /** For a Markdown document: what it says it was made from (ADR-0076). */
   sources: z.optional(z.array(restDocumentSourceSchema)),
+  /** For a Markdown document that has tables: how many, and the rows they hold together (ADR-0080). */
+  tables: z.optional(z.object({ count, rows: count })),
+  /** For a Markdown document that has fenced code blocks: how many. */
+  codeBlocks: z.optional(count),
+  /** Where the tables and the code blocks are had as data: a URL of this API, or a command. */
+  data: z.optional(z.object({ rows: z.optional(z.string()), code: z.optional(z.string()) })),
 });
 export const restBrowseSchema = z.discriminatedUnion("status", [
   z.object({
@@ -473,6 +494,53 @@ export const restSkillSchema = z.discriminatedUnion("status", [
   indexing,
   failed,
 ]);
+
+/** A table of a document as data (ADR-0080). */
+export const restDataTableSchema = z.object({
+  path: z.string(),
+  /** The heading path of the section the table stands in; empty before the first heading. */
+  heading: z.array(z.string()),
+  columns: z.array(z.string()),
+  /** Each row as many cells as there are columns, as written. */
+  rows: z.array(z.array(z.string())),
+});
+/** The tables under a path, in reading order: a page of them, by whole files. */
+export const restRowsSchema = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("ready"),
+    commit: z.string(),
+    path: z.string(),
+    tables: z.array(restDataTableSchema),
+    rowCount: count,
+    nextCursor: z.nullable(z.string()),
+  }),
+  indexing,
+  failed,
+]);
+/** A fenced code block of a document as data (ADR-0080). */
+export const restDataCodeBlockSchema = z.object({
+  path: z.string(),
+  heading: z.array(z.string()),
+  /** What the block says it is written in; empty when it says nothing. */
+  language: z.string(),
+  text: z.string(),
+});
+/** The code blocks under a path, in reading order: a page of them, by whole files. */
+export const restCodeSchema = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("ready"),
+    commit: z.string(),
+    path: z.string(),
+    blocks: z.array(restDataCodeBlockSchema),
+    nextCursor: z.nullable(z.string()),
+  }),
+  indexing,
+  failed,
+]);
+export type RestDataTable = z.infer<typeof restDataTableSchema>;
+export type RestRows = z.infer<typeof restRowsSchema>;
+export type RestDataCodeBlock = z.infer<typeof restDataCodeBlockSchema>;
+export type RestCode = z.infer<typeof restCodeSchema>;
 
 export const restDirectoryEntrySchema = z.object({
   path: z.string(),

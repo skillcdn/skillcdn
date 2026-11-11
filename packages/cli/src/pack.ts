@@ -1,4 +1,13 @@
-import type { Address, RestBrowse, RestFile, RestFind, RestMount, RestSkill } from "@skillcdn/core";
+import type {
+  Address,
+  RestBrowse,
+  RestCode,
+  RestFile,
+  RestFind,
+  RestMount,
+  RestRows,
+  RestSkill,
+} from "@skillcdn/core";
 
 // A pack as the command reads one, from a directory or from a deployment: the five reads of
 // the REST API, answered in its shapes, so that what is printed comes from the same data
@@ -52,6 +61,18 @@ export interface FileQuery {
   readonly limit?: number | undefined;
 }
 
+export interface DataQuery {
+  readonly path?: string | undefined;
+  readonly heading?: string | undefined;
+  readonly cursor?: string | undefined;
+  readonly limit?: number | undefined;
+}
+
+/** A ready `rows` answer: a page of the tables under a path. */
+export type RowsPage = Extract<RestRows, { status: "ready" }>;
+/** A ready `code` answer: a page of the code blocks under a path. */
+export type CodePage = Extract<RestCode, { status: "ready" }>;
+
 export interface Pack {
   readonly address: Address;
   /** Where the pack is read: a directory on this machine, or the origin of a deployment. */
@@ -63,4 +84,8 @@ export interface Pack {
   find(query: FindQuery): Promise<RestFind>;
   skill(path: string, cursor?: string): Promise<RestSkill>;
   file(query: FileQuery): Promise<RestFile>;
+  /** A page of the tables under a path, as data (ADR-0080). */
+  rows(query: DataQuery): Promise<RowsPage>;
+  /** A page of the fenced code blocks under a path, as data (ADR-0080). */
+  code(query: DataQuery): Promise<CodePage>;
 }

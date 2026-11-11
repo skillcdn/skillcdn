@@ -42,6 +42,12 @@ export interface MountContext {
    * (ADR-0077); left out, `rawUrl` stands for it, as it does where there is no LFS.
    */
   lfsUrl?(path: RepoPath): string;
+  /**
+   * Where the tables or the code blocks of a file are had as data (ADR-0080), for an outline to
+   * say: a URL of the REST API where the mount is served over HTTP, the command that prints
+   * them where it is read on a machine. Left out, an outline says how many there are and no more.
+   */
+  dataUrl?(kind: "rows" | "code", path: RepoPath): string;
 }
 
 /**
