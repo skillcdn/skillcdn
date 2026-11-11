@@ -74,8 +74,10 @@ import { gitBlobHash, sha256Hex } from "./git-hash.js";
  * 13: the headings of a document weigh with the words of its path, above its body; a dead local
  *     link, a picture without words, a picture or an original that is not there, and a skill's
  *     reference to a file that is not text are diagnostics (ADR-0076).
+ * 14: a token joined by slashes or dots is a word of the vector beside the words it joins
+ *     (ADR-0078).
  */
-export const INDEX_VERSION = 13;
+export const INDEX_VERSION = 14;
 
 /**
  * The lowest version of the reading rules whose index is still served while the commit is

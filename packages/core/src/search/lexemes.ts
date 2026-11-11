@@ -8,6 +8,9 @@ import { ENGLISH_STOP_WORDS } from "./stop-words.js";
 // hosts, versions, paths, URLs and addresses; the words of a language with a stemmer are stemmed
 // and its stop words dropped, and the scripts without word stems (Han, Hangul, Hiragana and
 // Katakana) are matched by pairs of characters, so that an inflected word is found by its stem.
+// Two things are added to what the parser makes: a hyphenated code with a digit part is a word
+// beside its parts (ADR-0069), and a token joined by slashes or dots is a word beside the words
+// it joins (ADR-0078), as the parser itself reads a hyphenated word.
 // The integration test of @skillcdn/db holds the stemmer against PostgreSQL's dictionary.
 
 /** One word of a text, at the position the index gives it. */
@@ -111,6 +114,24 @@ function bigramTokens(run: string): Token[] {
   return tokens;
 }
 
+/**
+ * The words a slash or a dot joined into one token, each read as a run of its own, in order
+ * (ADR-0078). A part holds no slash, and a part of a dotted token no dot, so this goes no deeper
+ * than the joints a token has.
+ */
+function partsOf(parts: readonly string[], withoutNumbers: boolean): Token[] {
+  const tokens: Token[] = [];
+  for (const part of parts) {
+    if (part.length === 0 || (withoutNumbers && DIGITS.test(part))) {
+      continue;
+    }
+    for (const token of tokensOfRun(part)) {
+      tokens.push(token);
+    }
+  }
+  return tokens;
+}
+
 /** A dot, a slash or a hyphen: what joins the parts of a run, and is a blank at its ends. */
 const isJoint = (character: string | undefined): boolean =>
   character === "." || character === "/" || character === "-";
@@ -161,10 +182,19 @@ function tokensOfRun(run: string): Token[] {
 
 /** The tokens of a run without the blanks at its ends, and without a version at its head. */
 function tokensOfWord(text: string): Token[] {
-  if (text.includes("/") || text.includes(".")) {
-    // A path, as the parser's file token, or a host with whatever hyphens it has: one word, as
-    // written.
-    return [{ text, stem: false }];
+  if (text.includes("/")) {
+    // A path, as the parser's file token: one word, as written. And the words the slashes join,
+    // each read as a run of its own, as a hyphenated word is a word beside its parts: documents
+    // write alternatives and codes this way (`open/closed/held`), and one of them is asked for
+    // alone (ADR-0078).
+    return [{ text, stem: false }, ...partsOf(text.split("/"), false)];
+  }
+  if (text.includes(".")) {
+    // A host, a file name, a dotted name: one word as written, and the words the dots join
+    // (`ops.intake.queue`, `guide.md`) beside it. A part of digits alone is no word of its own:
+    // a section number or a version (`4.2.6`) names one thing as a whole, and its digits would
+    // match every other number.
+    return [{ text, stem: false }, ...partsOf(text.split("."), true)];
   }
   if (!text.includes("-")) {
     return [wordToken(text)];

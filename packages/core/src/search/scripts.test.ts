@@ -30,7 +30,7 @@ describe("scripts without word stems", () => {
     const particle = word(0xb97c);
     expect(lexemesOf(`MCP${particle}`)).toEqual(["mcp", particle]);
     expect(lexemesOf(`2026${word(0xb144)}`)).toEqual(["2026", word(0xb144)]);
-    expect(lexemesOf(`SKILL.md${particle}`)).toEqual(["skill.md", particle]);
+    expect(lexemesOf(`SKILL.md${particle}`)).toEqual(["skill.md", "skill", "md", particle]);
   });
 
   it("gives every pair its own position, counted with the other tokens", () => {
