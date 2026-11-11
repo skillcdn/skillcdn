@@ -1,6 +1,6 @@
 # deploy/
 
-Everything needed to build the image and hand it to whatever runs it. This repository stops at an image that builds: publishing images, registries, deployment pipelines, infrastructure, DNS, TLS, CDN and rollout live outside it ([ADR-0008](../docs/adr/0008-repository-ends-at-an-image-that-builds.md)).
+Everything needed to build the image, to install it on a host of your own, and to hand it to whatever runs it. This repository stops at an image that builds and at the image of each release, published for everyone ([ADR-0087](../docs/adr/0087-the-image-of-a-release-is-published-and-an-installation-is-made-from-a-bundle.md)): a deployment's registries, pipelines, infrastructure, DNS, TLS, CDN and rollout live outside it ([ADR-0008](../docs/adr/0008-repository-ends-at-an-image-that-builds.md)).
 
 | File | Purpose |
 |---|---|
@@ -8,11 +8,14 @@ Everything needed to build the image and hand it to whatever runs it. This repos
 | [`compose.dev.yaml`](compose.dev.yaml) | Local development dependencies (PostgreSQL 18 with the `vector` extension). Not a production topology. |
 | [`compose.yaml`](compose.yaml) | The self-hosting bundle for one host: PostgreSQL, `migrate`, `api` and `worker` from one image ([Running with compose](#running-with-compose)). |
 | [`compose.meaning.yaml`](compose.meaning.yaml), [`compose.rerank.yaml`](compose.rerank.yaml), [`compose.gpu.yaml`](compose.gpu.yaml) | Overlays on the bundle: the embedding server of the search by meaning, the reranker, and both on an NVIDIA GPU. |
+| [`compose.packs.yaml`](compose.packs.yaml) | An overlay: the packs of a directory of the host, mounted read-only and served at `local` addresses ([packs from a directory](#packs-from-a-directory-of-the-deployment)). |
+| [`install.sh`](install.sh) | Installs the bundle on this host: checks for docker, writes the settings with secrets of its own making, brings the bundle up and waits until it is ready ([Installing with the script](#installing-with-the-script)). |
+| [`bundle.sh`](bundle.sh) | Makes the directory an installation without internet is made from: the images, these files, the model files asked for, and the digest of every file ([An installation without internet](#an-installation-without-internet)). |
 | [`get-models.sh`](get-models.sh) | Fetches the model files of a profile into [`models/`](models/) and checks their digests, pinned in the script: `base` unless named, `quality`, `quality-4bit`, `cpu-reranker` or `kure`, several at once ([the profiles](#the-inference-server-and-the-model-profiles)); the directory stays out of git and of the image. |
 | [`../.github/workflows/ci.yml`](../.github/workflows/ci.yml) | Lint, build, typecheck, tests (integration tests run against a PostgreSQL service container), secret scan, and an image build that is then exercised: exit codes, `migrate`, the `worker` taking the queue up and handing it back, readiness, non-root user, clean shutdown. It needs no secrets. Every commit on `main` keeps its own run, since any of them may be deployed and a deployment pinned to a commit waits for its verdict; on other refs a newer push cancels the run before it. |
-| [`../.github/workflows/release.yml`](../.github/workflows/release.yml) | Versions and publishes the npm packages from the pending changesets: a pull request that bumps versions and changelogs, and, once it is merged, a publish through the registry's trusted publishing, with provenance and no stored secret ([ADR-0046](../docs/adr/0046-packages-are-published-to-npm-through-trusted-publishing.md)). |
+| [`../.github/workflows/release.yml`](../.github/workflows/release.yml) | Versions and publishes the npm packages from the pending changesets: a pull request that bumps versions and changelogs, and, once it is merged, a publish through the registry's trusted publishing, with provenance and no stored secret ([ADR-0046](../docs/adr/0046-packages-are-published-to-npm-through-trusted-publishing.md)). The image of the release follows, from the same commit, to this repository's own container registry ([ADR-0087](../docs/adr/0087-the-image-of-a-release-is-published-and-an-installation-is-made-from-a-bundle.md)). |
 
-The compose bundle for self-hosting is [below](#running-with-compose); an install script and a published image are planned ([roadmap](../docs/roadmap.md)).
+The compose bundle for self-hosting is [below](#running-with-compose), with the script that installs it.
 
 ## Build and run locally
 
@@ -27,9 +30,21 @@ The image runs as a non-root user, contains production dependencies only, and ha
 
 ## Running with compose
 
-[`compose.yaml`](compose.yaml) runs the whole product on one host: PostgreSQL with the `vector` extension, `migrate` once, then `api` and `worker` from one image, and, as overlays, the servers of the search by meaning. It is a topology for one machine behind a reverse proxy of your own ([below](#behind-a-reverse-proxy)), not a cluster.
+[`compose.yaml`](compose.yaml) runs the whole product on one host: PostgreSQL with the `vector` extension, `migrate` once, then `api` and `worker` from one image, and, as overlays, the servers of the search by meaning and the packs of a directory of the host. It is a topology for one machine behind a reverse proxy of your own ([below](#behind-a-reverse-proxy)), not a cluster.
 
-1. Build the image from the repository root, `docker build -f deploy/Dockerfile -t skillcdn:local .`, or name an image you built elsewhere in `SKILLCDN_IMAGE`.
+### Installing with the script
+
+On a host with docker and its compose plugin, from this directory of a checkout at a release:
+
+```sh
+./install.sh --url https://skills.example.com --packs /srv/packs
+```
+
+[`install.sh`](install.sh) writes `deploy/.env` when there is none, with a database password, an admin token and the key of the usage statistics of its own making, readable by its owner alone; names the image of the release these files are of, `ghcr.io/skillcdn/skillcdn:<version>`, which the release workflow publishes for `linux/amd64` and `linux/arm64`; brings the bundle up; and waits until the server is ready at `http://127.0.0.1:11188`. It takes no secret as an argument and prints none. `--packs` serves the packs of a directory ([below](#packs-from-a-directory-of-the-deployment)); `--meaning`, `--rerank` and `--gpu` add the servers of the search by meaning, fetching the model files of the base profile when there are none; `--image` names another image and `--build` builds one from the checkout; `--port` moves the port; `--no-start` writes the settings and stops. Run again, it keeps every setting that is there and brings the bundle up on what it is told: that is also how an installation is updated, with the files of the new release. The overlays it turned on are written into the settings, so `docker compose ps`, `logs` and `down` in this directory mean the installation as it was installed.
+
+### By hand
+
+1. Build the image from the repository root, `docker build -f deploy/Dockerfile -t skillcdn:local .`, or name another in `SKILLCDN_IMAGE`: the image of a release, `ghcr.io/skillcdn/skillcdn:<version>`, or one you built elsewhere.
 2. Settings: `cp .env.example deploy/.env`, then set `POSTGRES_PASSWORD` to a long random value, from which the bundle builds `DATABASE_URL`, and what your installation needs besides, `PUBLIC_URL`, `GITHUB_TOKEN`, the variables of signing in. The containers read the file, and compose reads it for the variables of the bundle itself; git ignores it.
 3. `docker compose -f deploy/compose.yaml up -d`. The API answers at `http://127.0.0.1:11188` (`SKILLCDN_PORT` moves it) once `migrate` has run. `down` stops the bundle; `down -v` drops the database as well. To update, build or pull the new image and `up -d` again: `migrate` runs first, then `api` and `worker` restart on the new image, as the [rollout contract](#rollout-contract) asks.
 
@@ -47,11 +62,11 @@ The overlays set `EMBEDDINGS_URL`, `EMBEDDINGS_MODEL`, `EMBEDDINGS_SCOPE` (`publ
 
 ### An installation without internet
 
-At run time the bundle reaches nothing outside the host but the git host the packs come from, which may be a GitHub Enterprise Server inside the network (`GITHUB_API_URL`). To install where there is no internet:
+At run time the bundle reaches nothing outside the host but the git host the packs come from, which may be a GitHub Enterprise Server inside the network (`GITHUB_API_URL`), or no git host at all, with the packs in a directory of the host ([below](#packs-from-a-directory-of-the-deployment)). To install where there is no internet:
 
-1. Where there is: build or pull the images and save them, `docker save skillcdn:local pgvector/pgvector:pg18 ghcr.io/ggml-org/llama.cpp:server | gzip > skillcdn-images.tar.gz`; run `deploy/get-models.sh` with the profiles the installation will run and keep `deploy/models/`; take this `deploy/` directory along.
-2. On the installation: `docker load < skillcdn-images.tar.gz`; put the model files in `deploy/models/`, or point `MODELS_DIR` at where they are, and check them again with `sha256sum -c` against the digests in `get-models.sh`; write `deploy/.env`; bring the bundle up as above.
-3. Keep the model files with the installation as you keep the images. A change of model is a change of configuration and a backfill ([the worker](#the-worker)), never a file swapped under a running server; the vectors are keyed by the model's name, so a file replaced in place under the same name would be searched by the vectors of another model.
+1. Where there is, from a checkout at the release: `deploy/bundle.sh --platform linux/amd64 --models "base" skillcdn-bundle`. [`bundle.sh`](bundle.sh) pulls the image of the release, the database's and, with `--models`, the inference server's (`--gpu` for the one for NVIDIA GPUs), saves them into one archive, fetches the model files of the profiles named and checks their digests, copies these files, and writes `SHA256SUMS` over everything and `VERSION` with what it took along. `--image` with `--no-pull` takes an image the host built instead. Nothing of an installation goes into it: no settings, no secret, no pack.
+2. Carry the directory over, by whatever the installation admits, and on the host: `./install.sh --offline --packs /srv/packs`, with `--meaning` when the bundle has models. It checks every file against `SHA256SUMS` and installs nothing when one differs, loads the images, and brings the bundle up without pulling anything. The packs are the installation's own: copy them into the directory, `<owner>/<name>` each, and the worker finds and indexes them within a minute or two ([the worker](#the-worker)).
+3. Keep the bundle with the installation, as what it runs: an update is the bundle of the new release and the same command. Keep the model files with the installation as you keep the images. A change of model is a change of configuration and a backfill ([the worker](#the-worker)), never a file swapped under a running server; the vectors are keyed by the model's name, so a file replaced in place under the same name would be searched by the vectors of another model.
 
 ## Environment contract
 
@@ -372,7 +387,7 @@ The access log is one JSON line per request: request id, method, path without it
 
 ## Building a release
 
-This repository does not publish images. Whatever deploys the product builds the image itself:
+The release workflow publishes the image of each release, `ghcr.io/skillcdn/skillcdn:<version>` and `latest`, built from the commit the packages of that version were published from, for `linux/amd64` and `linux/arm64`, with the build's provenance and a list of what it contains attached ([ADR-0087](../docs/adr/0087-the-image-of-a-release-is-published-and-an-installation-is-made-from-a-bundle.md)); `docker buildx imagetools inspect` shows both. A deployment that follows `main` between releases, or keeps its images in a registry of its own, builds the image itself:
 
 1. Pin a commit of this repository, preferably one whose `CI` run is green. `main` is kept releasable, so any green commit is a candidate.
 2. Build `deploy/Dockerfile` from the repository root for the platforms you run (`docker buildx build --platform linux/arm64 -f deploy/Dockerfile .`). The build needs no secrets and no build arguments.
@@ -399,4 +414,5 @@ Set once in GitHub; none of it can be expressed in files here.
 - Enable secret scanning with push protection, Dependabot alerts and private vulnerability reporting.
 - Actions: default `GITHUB_TOKEN` permission read-only; require approval before running workflows from first-time contributors. Allow GitHub Actions to create and approve pull requests (`Actions > General`): the release workflow opens its version pull request with that.
 - On npm, each package under the `@skillcdn` scope has this repository registered as its trusted publisher, and then requires two-factor authentication with tokens disallowed. The publisher is GitHub Actions with organization `skillcdn`, repository `skillcdn`, workflow filename `release.yml` (the file name alone, not its path) and no environment name, and its allowed actions include `publish`. The four fields must match the run exactly: otherwise the registry answers the publish with `404 Not Found`. Without the `publish` action it answers `403 OIDC permission denied for this action`, since only staged publishes are allowed by default. Either way the Publish job fails within a second and nothing is published, so the run can be repeated once the publisher is right. A registration is pending until the workflow publishes through it once, and expires after two days unused: a package that saw no release in that time needs it registered again before its next one. The first version of a new package is published by a maintainer by hand, before the publisher can be registered.
+- The container package `skillcdn` of this repository, which the release workflow pushes the image to with the token of its own job: after the first release that publishes it, set its visibility to public and leave this repository as the one with write access to it (`Package settings > Manage Actions access`). Until it is public, `docker pull` asks for a sign-in and `install.sh` without `--build` fails at the pull.
 - No cloud credentials, environments or deployment secrets belong to this repository. If a workflow here ever asks for one, that is a mistake.

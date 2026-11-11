@@ -134,7 +134,7 @@ On npm, under the `@skillcdn` scope, released together at one version, each with
 
 **Related repositories.** [`skillcdn/skills`](https://github.com/skillcdn/skills) is the reference pack, the one the explorer offers to try. [`skillcdn/console`](https://github.com/skillcdn/console) is the reference console: where an organization runs its work with AI agents, a board of the work, the agents at it, and the decisions that wait for a person, where an agent works as the person whose command it runs or, as an agent account, as a member of its own. Like the reference pack, it is an example that follows the standard and is meant for real use, packaged on npm so that anyone can start from it; it builds on the published packages and the REST API like any other consumer, defines nothing of the specification, and nothing here depends on it ([ADR-0047](docs/adr/0047-the-console-is-a-separate-repository-built-on-the-published-packages.md)).
 
-Hosted and self-hosted run the same image against any PostgreSQL 18, with file bodies in the database; a compose bundle for self-hosting, a published image and a blob store on S3-compatible storage are planned ([docs/roadmap.md](docs/roadmap.md), [ADR-0004](docs/adr/0004-postgresql-only-state.md)).
+Hosted and self-hosted run the same image against any PostgreSQL 18, with file bodies in the database; a compose bundle with an install script runs it on one host, from the image of each release or from a bundle carried to a host without internet ([deploy](deploy/README.md#running-with-compose)); a blob store on S3-compatible storage is planned ([docs/roadmap.md](docs/roadmap.md), [ADR-0004](docs/adr/0004-postgresql-only-state.md)).
 
 ## Development
 

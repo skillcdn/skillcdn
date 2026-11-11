@@ -1,0 +1,16 @@
+# An overlay on compose.yaml: the packs of a directory of this host, served at
+# /local/<owner>/<name> (deploy/README.md, "Packs from a directory of the deployment"). The
+# directory is mounted read-only into the two roles that read it; PACKS_PATH names it, and
+# ./packs beside this file is where an installation keeps its packs unless it says otherwise.
+#
+#   docker compose -f deploy/compose.yaml -f deploy/compose.packs.yaml up -d
+
+services:
+  api:
+    environment: &packs
+      PACKS_DIR: /packs
+    volumes: &mount
+      - ${PACKS_PATH:-./packs}:/packs:ro
+  worker:
+    environment: *packs
+    volumes: *mount

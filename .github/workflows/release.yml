@@ -4,7 +4,9 @@ name: Release
 # updates the pull request that bumps versions and changelogs. Once that is merged and nothing is
 # pending, it publishes the versions the registry does not have yet, through the registry's
 # trusted publishing: no stored token, a short-lived identity the publish job proves, and a
-# provenance attestation on every published version. Images are not published from here.
+# provenance attestation on every published version. The image of the release follows, built
+# from the same commit and pushed to this repository's own container registry with the token of
+# its job (ADR-0087): no stored secret there either, and nothing of any deployment.
 
 on:
   push:
@@ -116,3 +118,63 @@ jobs:
           create-github-releases: true
         env:
           npm_config_provenance: "true"
+
+  image:
+    name: Publish the image
+    needs: [mode, publish]
+    if: needs.mode.outputs.mode == 'publish'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write # the image, in this repository's own container registry
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: The release this commit is
+        id: release
+        run: |
+          version=$(sed -n 's/^  "version": "\(.*\)",$/\1/p' packages/cli/package.json | head -n 1)
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Sign in to the registry with the token of this job
+        env:
+          TOKEN: ${{ github.token }}
+          ACTOR: ${{ github.actor }}
+        run: echo "$TOKEN" | docker login ghcr.io --username "$ACTOR" --password-stdin
+      # A version the registry has is never built again: a tag means one image for good.
+      - name: Whether the registry has this release
+        id: have
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          if docker buildx imagetools inspect "$IMAGE:$VERSION" > /dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        if: steps.have.outputs.exists == 'false'
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        if: steps.have.outputs.exists == 'false'
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        if: steps.have.outputs.exists == 'false'
+        with:
+          context: .
+          file: deploy/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.release.outputs.version }}
+            ${{ env.IMAGE }}:latest
+          labels: |
+            org.opencontainers.image.version=${{ steps.release.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha

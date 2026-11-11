@@ -1,6 +1,6 @@
 # ADR-0008: This repository ends at an image that builds
 
-- Status: Accepted; ADR-0046 lets one workflow publish the npm packages, through the registry's trusted publishing and with no secret
+- Status: Accepted; ADR-0046 lets one workflow publish the npm packages, through the registry's trusted publishing and with no secret, and ADR-0087 lets it publish the image of a release to the repository's own container registry, with the token of its job
 - Date: 2026-09-22
 - Supersedes: [ADR-0005](0005-public-repository-private-operations.md)
 
