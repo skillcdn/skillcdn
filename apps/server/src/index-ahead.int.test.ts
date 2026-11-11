@@ -26,6 +26,7 @@ import {
   INDEX_QUEUE,
   type IndexJob,
   LOOK_QUEUE,
+  PRUNE_QUEUE,
   type QUEUE_SETTINGS,
   SWEEP_QUEUE,
   sendAheadJob,
@@ -116,6 +117,7 @@ function setup(options: {
         concurrency: 2,
         leaseMs: 60_000,
         ahead: { scope: options.scope ?? "listed", intervalMs: INTERVAL_MS, limit: 50 },
+        retentionMs: 0,
         limits: LIMITS,
       },
       embedConcurrency: 1,
@@ -403,6 +405,7 @@ describe("the worker role, with the indexing ahead of requests on", () => {
     [SWEEP_QUEUE]: { retryLimit: 1, retryDelaySeconds: 1, expireInSeconds: 60 },
     [AHEAD_QUEUE]: { retryLimit: 1, retryDelaySeconds: 1, expireInSeconds: 60 },
     [LOOK_QUEUE]: { retryLimit: 0, retryDelaySeconds: 1, expireInSeconds: 60 },
+    [PRUNE_QUEUE]: { retryLimit: 0, retryDelaySeconds: 1, expireInSeconds: 60 },
   } satisfies typeof QUEUE_SETTINGS;
   let own: TestDatabase;
   let jobs: JobQueue;
@@ -424,6 +427,7 @@ describe("the worker role, with the indexing ahead of requests on", () => {
           concurrency: 2,
           leaseMs: 60_000,
           ahead: { scope: "listed", intervalMs: INTERVAL_MS, limit: 50 },
+          retentionMs: 30 * 86_400_000,
           limits: LIMITS,
         },
         embedConcurrency: 1,
@@ -439,7 +443,14 @@ describe("the worker role, with the indexing ahead of requests on", () => {
         pollSeconds: 0.5,
       },
     );
-    expect((await worker.start()).queues).toEqual([INDEX_QUEUE, AHEAD_QUEUE, LOOK_QUEUE]);
+    // The designated indexing always; the looks ahead and the hourly removal of the indexes
+    // nothing keeps, as this deployment configures them; no embedding without an embedder.
+    expect((await worker.start()).queues).toEqual([
+      INDEX_QUEUE,
+      AHEAD_QUEUE,
+      LOOK_QUEUE,
+      PRUNE_QUEUE,
+    ]);
     await ensureJobQueues(jobs, SETTINGS);
   });
   afterAll(async () => {

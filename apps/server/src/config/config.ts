@@ -244,6 +244,7 @@ const environmentSchema = z.object({
   INDEX_AHEAD: z.enum(["none", "listed", "packs"]).default("listed"),
   INDEX_AHEAD_MINUTES: integer(15, 1, 1440),
   INDEX_AHEAD_LIMIT: integer(50, 1, 1000),
+  INDEX_RETENTION_DAYS: integer(30, 0, 3650),
 
   // The search by meaning (ADR-0064, ADR-0065): the inference servers, each read with its URL.
   EMBEDDINGS_URL: z.url({ protocol: /^https?$/ }).optional(),
@@ -456,6 +457,11 @@ export interface Config {
       readonly intervalMs: number;
       readonly limit: number;
     };
+    /**
+     * How long the index of a commit that no ref points at is kept after it was last read
+     * (ADR-0086); 0 keeps every index.
+     */
+    readonly retentionMs: number;
     /**
      * The lowest version of the reading rules served while a commit's index is rebuilt
      * (ADR-0068): the indexer's floor unless a test says otherwise; no variable sets it.
@@ -750,6 +756,7 @@ export function loadConfig(
         intervalMs: env.INDEX_AHEAD_MINUTES * 60_000,
         limit: env.INDEX_AHEAD_LIMIT,
       },
+      retentionMs: env.INDEX_RETENTION_DAYS * 86_400_000,
     },
     meaning,
     hub: {

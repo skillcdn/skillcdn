@@ -215,6 +215,13 @@ export const snapshots = pgTable(
      */
     indexVersion: integer().notNull().default(0),
     indexedAt: instant(),
+    /**
+     * When the index was last read, noted at most once an hour, and before any read when the row
+     * was made: what keeps the index of a commit no ref points at (ADR-0086). The column arrived
+     * with every row of the time at that instant, so that nothing read before the note existed
+     * counts as unread.
+     */
+    readAt: instant().notNull().defaultNow(),
     createdAt: createdAt(),
     updatedAt: instant().notNull().defaultNow(),
   },

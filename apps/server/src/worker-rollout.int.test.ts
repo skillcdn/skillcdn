@@ -18,6 +18,7 @@ import {
   ensureJobQueues,
   INDEX_QUEUE,
   LOOK_QUEUE,
+  PRUNE_QUEUE,
   type QUEUE_SETTINGS,
   SWEEP_QUEUE,
   sendEmbedJob,
@@ -49,6 +50,7 @@ const TEST_SETTINGS = {
   [SWEEP_QUEUE]: { retryLimit: 1, retryDelaySeconds: 1, expireInSeconds: 60 },
   [AHEAD_QUEUE]: { retryLimit: 1, retryDelaySeconds: 1, expireInSeconds: 60 },
   [LOOK_QUEUE]: { retryLimit: 0, retryDelaySeconds: 1, expireInSeconds: 60 },
+  [PRUNE_QUEUE]: { retryLimit: 0, retryDelaySeconds: 1, expireInSeconds: 60 },
 } satisfies typeof QUEUE_SETTINGS;
 
 /** A unit vector made of the text, the same for the same text. */
@@ -233,6 +235,7 @@ describe("a worker beside one of the build before", () => {
           leaseMs: 60_000,
           // Nothing is looked at ahead of requests here: the tests of that have a file of their own.
           ahead: { scope: "none", intervalMs: 900_000, limit: 50 },
+          retentionMs: 0,
           limits: {
             maxTreeEntries: 1000,
             maxIndexedFiles: 100,

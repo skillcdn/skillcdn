@@ -15,7 +15,16 @@ export const SWEEP_QUEUE = "sweep-embeddings";
 export const AHEAD_QUEUE = "index-ahead";
 /** The pass that queues the repositories with a ref that is due. */
 export const LOOK_QUEUE = "look-ahead";
-export const JOB_QUEUES = [EMBED_QUEUE, INDEX_QUEUE, SWEEP_QUEUE, AHEAD_QUEUE, LOOK_QUEUE] as const;
+/** The pass that removes the indexes nothing points at and nobody read (ADR-0086). */
+export const PRUNE_QUEUE = "prune-indexes";
+export const JOB_QUEUES = [
+  EMBED_QUEUE,
+  INDEX_QUEUE,
+  SWEEP_QUEUE,
+  AHEAD_QUEUE,
+  LOOK_QUEUE,
+  PRUNE_QUEUE,
+] as const;
 
 /**
  * Why a snapshot is embedded: somebody asked for the repository by hand (`designated`), a search
@@ -80,6 +89,7 @@ export const QUEUE_SETTINGS: Readonly<Record<(typeof JOB_QUEUES)[number], QueueS
   // then left to a later pass, which finds its ref still due.
   [AHEAD_QUEUE]: { retryLimit: 2, retryDelaySeconds: 60, expireInSeconds: 1800 },
   [LOOK_QUEUE]: { retryLimit: 0, retryDelaySeconds: 60, expireInSeconds: 300 },
+  [PRUNE_QUEUE]: { retryLimit: 1, retryDelaySeconds: 60, expireInSeconds: 600 },
 };
 
 /** Makes sure every queue exists with its settings: run by each process at start. */
@@ -135,6 +145,10 @@ export const sweepJobSchema = z.record(z.string(), z.unknown());
 /** Every minute: the pass is one query, and a push the host announced waits no longer for it. */
 export const LOOK_SCHEDULE = "* * * * *";
 export const LOOK_SCHEDULE_KEY = "every-minute";
+
+/** Hourly, at the half hour: away from the sweep, which starts at the top of it. */
+export const PRUNE_SCHEDULE = "30 * * * *";
+export const PRUNE_SCHEDULE_KEY = "hourly";
 
 /** Hourly, at the top of the hour. */
 export const SWEEP_SCHEDULE = "0 * * * *";

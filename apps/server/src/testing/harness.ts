@@ -167,6 +167,7 @@ export function createHarness(testDatabase: TestDatabase, options: HarnessOption
         concurrency: options.indexConcurrency ?? 2,
         leaseMs: 60_000,
         ahead: { scope: "none", intervalMs: 900_000, limit: 50 },
+        retentionMs: 0,
         minServableIndexVersion: options.minServableIndexVersion,
         limits: {
           maxTreeEntries: 1000,

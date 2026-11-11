@@ -20,6 +20,7 @@ import {
   renewSnapshotLease,
   type SnapshotRecord,
   type SnapshotScope,
+  touchSnapshot,
   writeSnapshotIndex,
 } from "@skillcdn/db";
 import { buildSnapshotIndex, INDEX_VERSION, MIN_SERVABLE_INDEX_VERSION } from "@skillcdn/indexer";
@@ -78,6 +79,8 @@ export interface IndexedSnapshot extends SnapshotScope {
   readonly commitSha: string;
 }
 
+/** How often a read notes on the index it read that it was read (ADR-0086). */
+const READ_NOTE_MS = 3_600_000;
 const FIRST_RETRY_MS = 30_000;
 const MAX_RETRY_MS = 3_600_000;
 
@@ -95,6 +98,8 @@ export class SnapshotService {
   readonly #running = new Map<string, { done: Promise<void>; abort: AbortController }>();
   /** The starts in flight: a snapshot row being made or claimed, before anything runs for it. */
   readonly #starting = new Set<Promise<SnapshotRecord>>();
+  /** The snapshots whose note of a read is being written. */
+  readonly #noting = new Set<string>();
   #closing = false;
 
   constructor(options: SnapshotServiceOptions) {
@@ -122,6 +127,40 @@ export class SnapshotService {
    * A mount that may not start indexing (ADR-0074) is served what is there, without waiting.
    */
   async serving(mount: Mount, budgetMs: number): Promise<ServingOutcome> {
+    const served = await this.#serving(mount, budgetMs);
+    // A look that starts nothing keeps nothing either (ADR-0074).
+    if (served.status === "ready" && mount.startsIndexing !== false) {
+      this.#noteRead(served.snapshot);
+    }
+    return served;
+  }
+
+  /**
+   * Notes on an index that it was read, at most once an hour and without the read waiting for
+   * it: what keeps the index of a commit no ref points at (ADR-0086).
+   */
+  #noteRead(snapshot: SnapshotRecord): void {
+    const { database, clock, logger } = this.#options;
+    const now = clock.now();
+    if (now.getTime() - snapshot.readAt.getTime() < READ_NOTE_MS || this.#noting.has(snapshot.id)) {
+      return;
+    }
+    this.#noting.add(snapshot.id);
+    void touchSnapshot(
+      database,
+      { accountId: snapshot.accountId, snapshotId: snapshot.id },
+      now,
+      READ_NOTE_MS,
+    )
+      .catch((error: unknown) => {
+        logger.warn({ err: error, snapshot: snapshot.id }, "a read could not be noted");
+      })
+      .finally(() => {
+        this.#noting.delete(snapshot.id);
+      });
+  }
+
+  async #serving(mount: Mount, budgetMs: number): Promise<ServingOutcome> {
     const { outcome, snapshot } =
       mount.startsIndexing === false ? await this.#held(mount) : await this.#await(mount, budgetMs);
     if (outcome.status === "ready" || mount.address.ref?.kind === "commit") {

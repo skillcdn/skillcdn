@@ -31,6 +31,7 @@ import { OperatorLists } from "../operator/lists.js";
 import { embedSnapshotSlice } from "./embed-snapshot.js";
 import { createIndexAhead } from "./index-ahead.js";
 import { indexRepositoryJob } from "./index-repository.js";
+import { pruneIndexes } from "./prune.js";
 import {
   AHEAD_QUEUE,
   EMBED_QUEUE,
@@ -41,6 +42,9 @@ import {
   LOOK_QUEUE,
   LOOK_SCHEDULE,
   LOOK_SCHEDULE_KEY,
+  PRUNE_QUEUE,
+  PRUNE_SCHEDULE,
+  PRUNE_SCHEDULE_KEY,
   SWEEP_QUEUE,
   SWEEP_SCHEDULE,
   SWEEP_SCHEDULE_KEY,
@@ -53,8 +57,9 @@ import { createEmbedTriggers } from "./triggers.js";
 // What the worker role does with the queue (ADR-0064, point 3), wired to its ports so that a
 // test runs it against a fixture git host and a fake embedder as the role runs it against the
 // real ones: the designated indexing always; the indexing ahead of requests, a pass every minute
-// and a job per repository, unless the deployment turns it off (ADR-0085); and where an embedder
-// is configured and the database keeps vectors, the slices of embedding and the hourly sweep.
+// and a job per repository, unless the deployment turns it off (ADR-0085); the hourly pass that
+// removes the indexes nothing points at and nobody read (ADR-0086); and where an embedder is
+// configured and the database keeps vectors, the slices of embedding and the hourly sweep.
 
 /** How much older than its TTL a cached fact may be when the git host cannot be asked. */
 const STALE_GRACE_FACTOR = 10;
@@ -232,6 +237,18 @@ export function createWorker(config: WorkerConfig, ports: WorkerPorts): Worker {
         );
         await jobs.schedule(LOOK_QUEUE, LOOK_SCHEDULE, {}, LOOK_SCHEDULE_KEY);
         queues.push(AHEAD_QUEUE, LOOK_QUEUE);
+      }
+      const { retentionMs } = config.indexing;
+      if (retentionMs === 0) {
+        await jobs.unschedule(PRUNE_QUEUE, PRUNE_SCHEDULE_KEY);
+      } else {
+        await jobs.work(
+          PRUNE_QUEUE,
+          { concurrency: 1, pollSeconds },
+          handling(sweepJobSchema, () => pruneIndexes({ database, clock, retentionMs, logger })),
+        );
+        await jobs.schedule(PRUNE_QUEUE, PRUNE_SCHEDULE, {}, PRUNE_SCHEDULE_KEY);
+        queues.push(PRUNE_QUEUE);
       }
       if (!embedding) {
         return { queues };

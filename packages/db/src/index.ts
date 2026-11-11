@@ -189,6 +189,12 @@ export {
   saveRepository,
 } from "./queries/repos.js";
 export {
+  type PruneOptions,
+  type PruneResult,
+  pruneSnapshots,
+  touchSnapshot,
+} from "./queries/retention.js";
+export {
   getOperatorMedia,
   listOperatorMedia,
   listShowcaseEntries,

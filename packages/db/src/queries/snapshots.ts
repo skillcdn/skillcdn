@@ -20,6 +20,8 @@ export interface SnapshotRecord {
   readonly indexVersion: number;
   /** The license that governs the repository outside its skills (ADR-0026); null until indexed. */
   readonly license: LicenseFact | null;
+  /** When the index was last read, as it was last noted (ADR-0086). */
+  readonly readAt: Date;
 }
 
 export interface SnapshotScope {
@@ -39,6 +41,7 @@ const snapshotColumns = {
   errorCode: snapshots.errorCode,
   retryAt: snapshots.retryAt,
   indexVersion: snapshots.indexVersion,
+  readAt: snapshots.readAt,
 };
 
 function scoped(scope: SnapshotScope) {

@@ -52,11 +52,11 @@ src/
   roles/         api.ts (composition root, HTTP server, shutdown), worker.ts (the queue's jobs until told
                  to stop), migrate.ts and purge.ts; the check role is main.ts handing a directory to
                  @skillcdn/indexer
-  jobs/          the queues and their jobs (ADR-0064, ADR-0072, ADR-0073, ADR-0085): what a job carries and in which order
+  jobs/          the queues and their jobs (ADR-0064, ADR-0072, ADR-0073, ADR-0085, ADR-0086): what a job carries and in which order
                  the queue takes them, by the repository's rank (queues.ts), one slice of the embedding
                  of a snapshot (embed-snapshot.ts), the indexing of a repository on request
                  (index-repository.ts) and ahead of requests, a pass and a look per repository
-                 (index-ahead.ts), the sweep that puts what waits in order, backfills the ranked
+                 (index-ahead.ts), the hourly removal of the indexes nothing keeps (prune.ts), the sweep that puts what waits in order, backfills the ranked
                  repositories and drops a replaced model (sweep.ts), what may be embedded under the scope and the
                  entitlements (scope.ts), when the api queues an embedding (triggers.ts), what the operator
                  reads and asks of it through the admin API (reads.ts), and the worker wired to its
@@ -137,5 +137,6 @@ Create directories when they get their first file. Do not add empty scaffolding.
 - `src/hybrid-search.int.test.ts` covers the search by words and by meaning over the document pack, with an embedder and a reranker in the process: a question in other words than the handbook's found by meaning with its section, the fusion of the two lists, the reranking of the first results, each layer left out when it does not answer, and the line and the field that say how a result was ranked.
 - `src/worker.int.test.ts` covers the worker against the fixture host and an embedder in the process: a repository indexed on request and then embedded ahead of the rest, every section of a snapshot embedded once in slices that take turns on the queue, a slice tried again after the embedder failed, the sweep that backfills what is served and drops a replaced model's vectors once nothing is left, the api queueing the commits it indexes and the snapshots a search asks for, and what is not embedded: a repository out of the scope, one the entitlements refuse, the documents a manifest keeps to the words, and what lies past the bounds per repository and per account and day, with the usage events of what was.
 - `src/index-ahead.int.test.ts` covers the worker indexing ahead of requests (ADR-0085), on a clock the tests move: a push the host announced looked at first and indexed without a request, a ref looked at again when its time is up for the repositories the scope names, a commit sent back for a rebuild, a repository that is no pack left to requests, a ref the host no longer has forgotten, the packs of the directory found on disk, a host that gives no answer left alone, and a look run from the real queue.
+- `src/retention.int.test.ts` covers which indexes are kept (ADR-0086): the commit a ref points at and the one before it whatever their age, a commit a ref moved on from and a pinned commit while they are read, the bodies nothing names any more removed with them, an index being built left alone, and a read noted at most once an hour.
 - `src/memory-index.int.test.ts` holds the reader over an index in memory and over the index the database keeps to the same answers from the same fixture (ADR-0053, ADR-0054). `src/stats.int.test.ts` covers the usage statistics: what an MCP session and REST reads count, distinct clients by keyed hash folded when the day is over, the names of client apps, and writes that pile up or fail.
 - `src/testing/harness.ts` wires the app for all of them. Every test file has a database of its own; tests inside a file share it.
