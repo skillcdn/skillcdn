@@ -371,6 +371,8 @@ const rankingSchema = z.object({
   meaning: z.boolean(),
   reranked: z.boolean(),
   identifiers: z.optional(z.boolean()),
+  /** While the embedding of the index goes on: how many of its documents have their vectors so far. */
+  embedding: z.optional(z.object({ embedded: count, total: count })),
 });
 
 export const restFindSchema = z.discriminatedUnion("status", [

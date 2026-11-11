@@ -5,8 +5,8 @@ import { hubBody } from "../rest/bodies.js";
 import { restSearchSchema } from "../rest/contracts.js";
 import { hubResultOf } from "../rest/results.js";
 import { HUB_DEFAULT_LIMIT, HUB_MAX_LIMIT, searchPacksTool } from "./contracts.js";
-import { renderHubInstructions, renderHubResult } from "./render.js";
-import type { HubResult } from "./results.js";
+import { renderFindResult, renderHubInstructions, renderHubResult } from "./render.js";
+import type { FindResult, HubResult } from "./results.js";
 
 // The search across every pack a deployment serves (ADR-0070): what the model is told on connect
 // and in a result, and the REST body that says the same as data and reads back as the result.
@@ -132,5 +132,55 @@ describe("a search across every pack", () => {
       hubResultOf({ ...body, items: [{ ...(body.items[0] ?? {}), address: "nowhere" }] } as never)
         .items,
     ).toEqual([]);
+  });
+});
+
+describe("the line that says how a search was ranked", () => {
+  const found = (ranking: FindResult["ranking"]): string =>
+    renderFindResult({
+      mount: {
+        repository: "acme/docs",
+        ref: undefined,
+        commit: "0".repeat(40),
+        path: "" as RepoPath,
+        verified: true,
+        truncated: false,
+        skillUri: "skill://gh/acme/docs",
+      },
+      query: "late fee",
+      items: [
+        {
+          kind: "document",
+          path: "docs/fees.md" as RepoPath,
+          title: "Fees",
+          summary: undefined,
+          skillDirectory: undefined,
+        },
+      ],
+      totals: undefined,
+      diagnostics: [],
+      ranking,
+    });
+
+  it("says which layers took part, and how far the embedding is while it goes on", () => {
+    expect(found(undefined)).not.toContain("Ranked by");
+    expect(found({ meaning: true, reranked: false })).toContain("Ranked by words and meaning.");
+    expect(found({ meaning: true, reranked: true })).toContain(
+      "Ranked by words and meaning, the first results reranked.",
+    );
+    expect(
+      found({ meaning: true, reranked: false, embedding: { embedded: 123, total: 380 } }),
+    ).toContain("Ranked by words and meaning; 123 of 380 documents embedded so far.");
+    expect(
+      found({ meaning: true, reranked: true, embedding: { embedded: 1, total: 1 } }),
+    ).toContain(
+      "Ranked by words and meaning, the first results reranked; 1 of 1 document embedded so far.",
+    );
+    expect(found({ meaning: false, reranked: false })).toContain(
+      "Ranked by words alone this time: the search by meaning did not answer.",
+    );
+    expect(found({ meaning: false, reranked: false, identifiers: true })).toContain(
+      "Ranked by words alone: a query of numbers and names is matched as written.",
+    );
   });
 });

@@ -227,16 +227,33 @@ export interface VectorSet extends MemoryVectors {
 
 /** Bodies embedded at once: as many calls as the adapter lets run at once unless told otherwise. */
 const BODIES_IN_FLIGHT = 2;
-/** A line of progress every this many bodies, for a directory that takes a while. */
-const PROGRESS_EVERY = 100;
+/** A line of progress at most this often, for a directory that takes a while. */
+export const PROGRESS_INTERVAL_MS = 15_000;
+
+/** What is left of an embedding, from how long the bodies so far took: `about 40 s left`, `about 2 h 10 min left`. */
+export function timeLeft(milliseconds: number): string {
+  const seconds = Math.max(0, Math.round(milliseconds / 1000));
+  if (seconds < 90) {
+    return `about ${seconds} s left`;
+  }
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 90) {
+    return `about ${minutes} min left`;
+  }
+  const rest = minutes % 60;
+  return `about ${Math.floor(minutes / 60)} h${rest === 0 ? "" : ` ${rest} min`} left`;
+}
 
 export function createVectorSet(options: {
   readonly embedder: Embedder;
   readonly cache: VectorCache;
   /** Where a line about the embedding goes: standard error, so that the report and the protocol stay what they are. */
   readonly report: (line: string) => void;
+  /** The time in milliseconds, for how far the embedding is and how long is left; the system's when left out. */
+  readonly now?: (() => number) | undefined;
 }): VectorSet {
   const { embedder, cache, report } = options;
+  const now = options.now ?? (() => Date.now());
   const key = vectorKeyOf(embedder);
   const vectors = new Map<string, CachedSections>();
   /** The bodies a pass is embedding right now, so that a pass begun during another leaves them to it. */
@@ -320,6 +337,8 @@ export function createVectorSet(options: {
           );
         }
         const queue = [...missing];
+        const started = now();
+        let reported = started;
         const embedNext = async (): Promise<void> => {
           for (;;) {
             const next = queue.shift();
@@ -342,12 +361,20 @@ export function createVectorSet(options: {
               vectors.set(next.blobSha, made);
               embedded += 1;
               sections += made.length;
+              // How far it is and how long is left, every little while: on a machine without
+              // a GPU a pack of thousands of sections takes hours, and said nothing meanwhile.
+              // Said before the vectors are kept, which another body may finish during.
+              const at = now();
+              if (at - reported >= PROGRESS_INTERVAL_MS && embedded < missing.length) {
+                reported = at;
+                const left = ((at - started) / embedded) * (missing.length - embedded);
+                report(
+                  `Embedded ${embedded} of ${plural(missing.length, "document")}, ${timeLeft(left)}.`,
+                );
+              }
               await cache.write(key, next.blobSha, made).catch((error: unknown) => {
                 unkept ??= error instanceof Error ? error : new Error(String(error));
               });
-              if (embedded % PROGRESS_EVERY === 0) {
-                report(`Embedded ${embedded} of ${missing.length} documents so far.`);
-              }
             } catch (error) {
               failed ??= error instanceof Error ? error : new Error(String(error));
             } finally {

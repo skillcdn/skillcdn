@@ -147,6 +147,7 @@ const COMMANDS = [
   "code",
   "mcp",
   "serve",
+  "embed",
   "login",
   "logout",
   "logins",
@@ -187,6 +188,7 @@ Commands:
   code [<pack>] [<path>]           The fenced code blocks of a document, or of every document under a folder.
   mcp <directory>                  Serve the directory to the MCP client that started the command.
   serve <directory>...             Serve directories over HTTP on this machine: MCP and the REST API.
+  embed <directory>                Embed the directory's documents ahead of the first search, saying how far it is.
   login --url <origin> [<address>] Connect to a deployment with a code a person approves; the token is kept, never shown.
   logout --url <origin> [<address>] Forget the tokens kept for a deployment, or the one for a repository.
   logins                           The deployments and repositories a token is kept for.
@@ -215,7 +217,8 @@ const READ_OPTIONS = `  --url <origin>  The deployment an address is read at.
 
 /** How a directory is searched by meaning, as the help of the commands that serve one says it. */
 const MEANING_NOTE = `With EMBEDDINGS_URL and EMBEDDINGS_MODEL, the sections of the directory's documents are embedded
-by that server, as a deployment embeds them, and a search ranks by words and meaning; with
+by that server, as a deployment embeds them (skillcdn embed does it ahead of the first search),
+and a search ranks by words and meaning; with
 RERANKER_URL and RERANKER_MODEL beside them, the first results are reranked. The variables are
 the ones a deployment takes, with the same defaults. The vectors are kept in the cache directory
 (~/.cache/skillcdn, or under XDG_CACHE_HOME) by the hash of each file, under the model's name,
@@ -343,6 +346,22 @@ your own. Runs until stopped (Ctrl+C).
 ${MEANING_NOTE}
 
 The INDEX_* and READ_MAX_FILE_BYTES variables set the limits a deployment would apply.
+`,
+  embed: `usage: skillcdn embed <directory> [--as <address>]
+
+Embeds the sections of the directory's documents with the embeddings server that EMBEDDINGS_URL
+and EMBEDDINGS_MODEL name, ahead of the first search, and keeps the vectors in the cache
+directory: a find, an mcp or a serve over the directory afterwards ranks by words and meaning
+at once, where it would otherwise embed first, or answer by words alone meanwhile. On standard
+error it says how many documents there are to embed and, every little while, how many are done
+and about how long is left; on standard output, when it is done, what it embedded. A run that
+is stopped keeps what it embedded, and the next goes on from there; a document that has not
+changed is never embedded twice.
+
+Exit codes: 0 when every document has its vectors, 2 when the server failed before that, 78
+when the variables cannot be read or name no server.
+
+${MEANING_NOTE}
 `,
   login: `usage: skillcdn login --url <origin> [<address>] [--agent <name>]
        skillcdn login --url <origin> [<address>] --token-stdin
@@ -610,6 +629,7 @@ function meaningOf(io: CliIo): LocalMeaning | undefined {
     rerankCandidates,
     cache: io.vectors ?? createMemoryVectorCache(),
     report: (line) => io.stderr(`${line}\n`),
+    now: () => (io.now?.() ?? new Date()).getTime(),
   };
 }
 
@@ -1581,6 +1601,8 @@ export async function runCli(args: readonly string[], io: CliIo): Promise<number
         return await statusCommand(rest, io);
       case "mcp":
         return await mcpCommand(rest, io);
+      case "embed":
+        return await embedCommand(rest, io);
       case "serve":
         return await serveCommand(rest, io);
       default:
@@ -1779,6 +1801,63 @@ async function mcpCommand(args: readonly string[], io: CliIo): Promise<number> {
   watching.close();
   mounted.close();
   await served.close();
+  return 0;
+}
+
+/**
+ * Embeds a directory ahead of the first search (ADR-0064): the vectors are kept by the hash of
+ * each body, so whatever reads the directory next finds them made.
+ */
+async function embedCommand(args: readonly string[], io: CliIo): Promise<number> {
+  const parsed = parseArgs({
+    args: [...args],
+    options: OPTIONS,
+    allowPositionals: true,
+    strict: true,
+  });
+  if (parsed.values.help === true) {
+    io.stdout(HELP.embed);
+    return 0;
+  }
+  const [directory, ...more] = parsed.positionals;
+  if (directory === undefined || more.length > 0) {
+    throw new Misuse("Say which directory to embed, and one only.");
+  }
+  const meaning = meaningOf(io);
+  if (meaning === undefined) {
+    throw new ConfigurationError([
+      {
+        variable: "EMBEDDINGS_URL",
+        rule: "required to embed: the embeddings server, with EMBEDDINGS_MODEL beside it",
+      },
+    ]);
+  }
+  const [mounted] = await mountAll([directory], parsed.values.as, io, meaning);
+  if (mounted === undefined) {
+    throw new Error("one directory mounts as one");
+  }
+  const outcome = await mounted.embedding();
+  mounted.close();
+  if (outcome === undefined) {
+    throw new Error("a directory mounted with a server is embedded");
+  }
+  const { model } = meaning.embedder;
+  const where =
+    meaning.cache.location === undefined
+      ? ""
+      : ` The vectors are kept in ${meaning.cache.location}.`;
+  if (outcome.failed !== undefined) {
+    // What stopped it was said on standard error as it happened; what was embedded is kept.
+    io.stdout(
+      `Stopped: ${counted(outcome.embedded, "document")} of ${mounted.mount.root} embedded with ${model} in this run, ${outcome.cached} before it; run the command again to go on.${where}\n`,
+    );
+    return EXIT_UNREADABLE;
+  }
+  io.stdout(
+    outcome.embedded === 0
+      ? `Nothing to embed: the ${counted(outcome.cached, "document")} of ${mounted.mount.root} have their vectors under ${model}.${where}\n`
+      : `Embedded ${counted(outcome.embedded, "document")} (${counted(outcome.sections, "section")}) of ${mounted.mount.root} with ${model}${outcome.cached === 0 ? "" : `; ${outcome.cached} were embedded before`}.${where}\n`,
+  );
   return 0;
 }
 

@@ -1668,8 +1668,17 @@ export class Reader<M extends MountContext = MountContext> {
         reranker === undefined ? false : await rerankFirst(reranker, query, rest, candidates);
       detailed.splice(fixed, rest.length, ...rest);
       items = [...detailed.map((entry) => entry.item), ...items.slice(detailed.length)];
+      // While the embedding of the index goes on, the result says how far it is.
+      const progress =
+        meaning.nearest === undefined ? undefined : await index.store.embeddingProgress?.();
       ranking = meaning.attempted
-        ? { meaning: meaning.nearest !== undefined, reranked }
+        ? {
+            meaning: meaning.nearest !== undefined,
+            reranked,
+            ...(progress?.status === "in_progress"
+              ? { embedding: { embedded: progress.embedded, total: progress.total } }
+              : {}),
+          }
         : wordsAlone && this.#meaningAtHand(index)
           ? { meaning: false, reranked: false, identifiers: true }
           : undefined;

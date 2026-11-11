@@ -451,9 +451,16 @@ function rankingLine(result: Pick<FindResult, "query" | "ranking">): string | un
   if (!result.ranking.meaning) {
     return "Ranked by words alone this time: the search by meaning did not answer.";
   }
+  // While the embedding goes on, a document without its vectors is found by its words alone:
+  // the line says how far it is, so that a model knows what meaning cannot have found yet.
+  const { embedding } = result.ranking;
+  const progress =
+    embedding === undefined
+      ? "."
+      : `; ${embedding.embedded} of ${plural(embedding.total, "document")} embedded so far.`;
   return result.ranking.reranked
-    ? "Ranked by words and meaning, the first results reranked."
-    : "Ranked by words and meaning.";
+    ? `Ranked by words and meaning, the first results reranked${progress}`
+    : `Ranked by words and meaning${progress}`;
 }
 
 /** Whether an excerpt, as it would be shown, says nothing the document's summary does not. */

@@ -267,6 +267,11 @@ export interface FindRanking {
    * false.
    */
   readonly identifiers?: boolean | undefined;
+  /**
+   * While the embedding of the index goes on: how many of the documents that are to be embedded
+   * have their vectors so far. A document without them is found by its words alone.
+   */
+  readonly embedding?: { readonly embedded: number; readonly total: number } | undefined;
 }
 
 /** One result of a search across the packs a deployment serves (ADR-0070): an item, and the pack it is in. */

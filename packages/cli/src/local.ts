@@ -65,6 +65,8 @@ export interface LocalMeaning {
   readonly cache: VectorCache;
   /** Where a line about the embedding goes: standard error. */
   readonly report: (line: string) => void;
+  /** The time in milliseconds, for how far the embedding is; the system's when left out. */
+  readonly now?: (() => number) | undefined;
 }
 
 export interface MountedDirectory {

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { SECTIONING_VERSION } from "@skillcdn/core";
 import { describe, expect, it } from "vitest";
-import { type CliIo, EXIT_CONFIG, runCli } from "./cli.js";
+import { type CliIo, EXIT_CONFIG, EXIT_UNREADABLE, EXIT_USAGE, runCli } from "./cli.js";
 import {
   type CachedSections,
   createFileVectorCache,
@@ -11,6 +11,7 @@ import {
   keyDirectoryOf,
   parseSections,
   serializeSections,
+  timeLeft,
   type VectorKey,
 } from "./vectors.js";
 
@@ -219,7 +220,9 @@ describe("skillcdn serve, by meaning", () => {
     });
     expect(await runCli(["serve", root, "--port", "0"], h.io)).toBe(0);
     expect(seen.paths).toContain("docs/fees.md");
-    expect(seen.ranking).toEqual({ meaning: true, reranked: false });
+    // By meaning, whether or not the second document was embedded by then: while it goes on,
+    // the answer says how far the embedding is.
+    expect(seen.ranking).toMatchObject({ meaning: true, reranked: false });
     expect(h.err()).toContain(`Embedding 2 documents with ${MODEL}`);
   }, 30_000);
 });
@@ -269,5 +272,92 @@ describe("the vector cache", () => {
   it("names a key's directory after the model, safely", () => {
     expect(keyDirectoryOf(key)).toMatch(/^pretend_words-[0-9a-f]{8}-4-v1$/);
     expect(keyDirectoryOf({ ...key, model: "../x" })).toMatch(/^.._x-[0-9a-f]{8}-4-v1$/);
+  });
+});
+
+describe("skillcdn embed", () => {
+  it("embeds a directory ahead of the first search, and a search then embeds nothing", async () => {
+    const root = await repository(FILES);
+    const cache = createFileVectorCache(
+      await mkdtemp(join(tmpdir(), "skillcdn-cache-")),
+      process.pid,
+    );
+    const server = pretendServer();
+    const first = harness({ environment: ENVIRONMENT, fetch: server.fetch, vectors: cache });
+    expect(await runCli(["embed", root], first.io)).toBe(0);
+    expect(first.out()).toMatch(
+      /^Embedded 2 documents \(\d+ sections\) of .*acme with pretend\/words\. The vectors are kept in /,
+    );
+    expect(first.err()).toContain(`Embedding 2 documents with ${MODEL}`);
+    expect(server.documents.length).toBeGreaterThan(0);
+    expect(server.queries).toEqual([]);
+
+    // Again: nothing is left to embed, and the server is not asked.
+    const again = pretendServer();
+    const second = harness({ environment: ENVIRONMENT, fetch: again.fetch, vectors: cache });
+    expect(await runCli(["embed", root], second.io)).toBe(0);
+    expect(second.out()).toContain("Nothing to embed: the 2 documents of ");
+    expect(again.documents).toEqual([]);
+
+    // A search afterwards asks the server for the query alone, and ranks by meaning at once.
+    const search = pretendServer();
+    const found = harness({ environment: ENVIRONMENT, fetch: search.fetch, vectors: cache });
+    expect(await runCli(["find", root, "overdue", "penalty"], found.io)).toBe(0);
+    expect(found.out()).toContain("docs/fees.md");
+    expect(found.out()).toContain("Ranked by words and meaning.");
+    expect(search.documents).toEqual([]);
+    expect(search.queries).toEqual(["overdue penalty"]);
+  });
+
+  it("says how far it is and about how long is left, every little while", async () => {
+    const root = await repository(FILES);
+    const server = pretendServer();
+    // A clock that moves twenty seconds whenever it is read: once to begin, once per document.
+    let time = Date.parse("2026-11-11T00:00:00Z");
+    const h = harness({
+      environment: ENVIRONMENT,
+      fetch: server.fetch,
+      now: () => {
+        time += 20_000;
+        return new Date(time);
+      },
+    });
+    expect(await runCli(["embed", root], h.io)).toBe(0);
+    expect(h.err()).toContain("Embedded 1 of 2 documents, about 20 s left.");
+  });
+
+  it("needs a server to embed with, and one directory", async () => {
+    const root = await repository(FILES);
+    const none = harness();
+    expect(await runCli(["embed", root], none.io)).toBe(EXIT_CONFIG);
+    expect(none.err()).toContain("EMBEDDINGS_URL: required to embed");
+    const two = harness({ environment: ENVIRONMENT });
+    expect(await runCli(["embed", root, root], two.io)).toBe(EXIT_USAGE);
+    expect(await runCli(["embed"], two.io)).toBe(EXIT_USAGE);
+  });
+
+  it("stops with what it embedded when the server fails, and says to run it again", async () => {
+    const root = await repository(FILES);
+    const down = pretendServer({ down: true });
+    const h = harness({ environment: ENVIRONMENT, fetch: down.fetch });
+    expect(await runCli(["embed", root], h.io)).toBe(EXIT_UNREADABLE);
+    expect(h.out()).toContain("Stopped: 0 documents of ");
+    expect(h.out()).toContain("run the command again to go on");
+    expect(h.err()).toContain("The search by meaning is off for what is not embedded yet");
+  });
+});
+
+describe("timeLeft", () => {
+  it.each([
+    [0, "about 0 s left"],
+    [40_400, "about 40 s left"],
+    [89_000, "about 89 s left"],
+    [90_000, "about 2 min left"],
+    [80 * 60_000, "about 80 min left"],
+    [120 * 60_000, "about 2 h left"],
+    [130 * 60_000, "about 2 h 10 min left"],
+    [-5, "about 0 s left"],
+  ])("says %d ms as %s", (milliseconds, said) => {
+    expect(timeLeft(milliseconds)).toBe(said);
   });
 });

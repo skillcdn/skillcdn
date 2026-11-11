@@ -130,3 +130,51 @@ describe("the words of a query weighed by their rarity", () => {
     ]);
   });
 });
+
+describe("a search while the embedding of the index goes on", () => {
+  const embedder = {
+    embed: async (texts: readonly string[]) => ({
+      vectors: texts.map(() => Float32Array.from([1, 0])),
+      tokens: 0,
+    }),
+  };
+  const section = { heading: [], offset: 0, length: 3, section: 0 };
+  const readerOver = (embedded: readonly string[]) =>
+    new Reader<MountContext>({
+      limits: LIMITS,
+      index: async () => ({
+        status: "ready",
+        index: createMemoryIndex({
+          index,
+          blobs,
+          vectors: {
+            sectionsOf: (blobSha) =>
+              embedded.includes(blobSha)
+                ? [{ ...section, vector: Float32Array.from([1, 0]) }]
+                : undefined,
+          },
+        }),
+      }),
+      meaning: { embedder },
+    });
+
+  it("says how many of the documents have their vectors so far, and nothing once all have", async () => {
+    const partly = await readerOver(["a"]).find(mountOf(), { query: "standard list" }, 0);
+    if (partly.status !== "ready") throw new Error("not ready");
+    expect(partly.result.ranking).toEqual({
+      meaning: true,
+      reranked: false,
+      embedding: { embedded: 1, total: 3 },
+    });
+    const whole = await readerOver(["a", "b", "c"]).find(mountOf(), { query: "standard list" }, 0);
+    if (whole.status !== "ready") throw new Error("not ready");
+    expect(whole.result.ranking).toEqual({ meaning: true, reranked: false });
+  });
+
+  it("ranks a query of identifiers alone by its words, with no word of the embedding (ADR-0079)", async () => {
+    const found = await readerOver(["a"]).find(mountOf(), { query: "4205" }, 0);
+    if (found.status !== "ready") throw new Error("not ready");
+    expect(found.result.ranking).toEqual({ meaning: false, reranked: false, identifiers: true });
+    expect(found.result.items.map((item) => item.path)).toEqual(["docs/b.md"]);
+  });
+});
