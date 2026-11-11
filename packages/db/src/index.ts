@@ -15,6 +15,11 @@ export {
   type WorkOptions,
 } from "./jobs.js";
 export { getSchemaStatus, migrateDatabase, type SchemaStatus } from "./migrate.js";
+export {
+  type IndexAheadOptions,
+  listRepositoriesToIndexAhead,
+  type RepositoryToIndexAhead,
+} from "./queries/ahead.js";
 export { createBlobStore } from "./queries/blobs.js";
 export {
   approveConnectRequest,
@@ -155,7 +160,9 @@ export {
   touchRepoToken,
 } from "./queries/repo-tokens.js";
 export {
+  announceRepoRefs,
   type CachedRef,
+  deleteCachedRef,
   deleteRepoAlias,
   deleteStaleMissingRepos,
   expireRepoAliases,
@@ -167,8 +174,12 @@ export {
   getRepo,
   type HostRepoKey,
   type KnownRepo,
+  listAliasNamesOfHost,
+  listMovingRefs,
   listReposOfHostAccount,
+  type MovingRef,
   markRepositoryNotPublic,
+  PINNED_REF_PREFIX,
   type RepoAlias,
   type RepoAliasRecord,
   type RepoRecord,

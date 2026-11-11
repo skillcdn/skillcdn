@@ -82,7 +82,7 @@ Where the deployment shares a secret with the git host's app (`GITHUB_APP_WEBHOO
 
 | The host says | What ends |
 |---|---|
-| A branch or a tag was pushed, created or deleted (`push`, `create`, `delete`) | The refs of the repository are due: the next request for a moving address asks where its ref points, and indexes the new commit, which costs what changed. Nothing is indexed before somebody asks. |
+| A branch or a tag was pushed, created or deleted (`push`, `create`, `delete`) | The refs of the repository are due: the next request for a moving address asks where its ref points, and indexes the new commit, which costs what changed. The delivery itself indexes nothing; where a worker indexes ahead of requests, it finds the refs due, asks the host and indexes a pack before the next request ([ADR-0085](../adr/0085-the-worker-indexes-a-pack-ahead-of-the-requests-for-it.md)). |
 | A repository was renamed, transferred, edited, archived or made public (`repository`, `public`) | Its names and its refs are due, and the answers about who can see it are forgotten. That it opened is not believed: the host is asked. |
 | A repository was made private or deleted (`repository`) | The same, and it is served as public no longer. The index of a deleted repository is removed. |
 | The app was taken off an account, or off repositories (`installation`, `installation_repositories`) | The answers about those repositories are forgotten, and the index of each that was not public is removed: an owner who takes the app off takes back what it read. What is public was read as anyone reads it, and stays. |

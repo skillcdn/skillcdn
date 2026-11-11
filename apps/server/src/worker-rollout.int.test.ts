@@ -11,11 +11,13 @@ import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillc
 import { pino } from "pino";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
+  AHEAD_QUEUE,
   EMBED_QUEUE,
   type EmbedJob,
   embedJobKey,
   ensureJobQueues,
   INDEX_QUEUE,
+  LOOK_QUEUE,
   type QUEUE_SETTINGS,
   SWEEP_QUEUE,
   sendEmbedJob,
@@ -45,6 +47,8 @@ const TEST_SETTINGS = {
   [EMBED_QUEUE]: { retryLimit: 3, retryDelaySeconds: 1, expireInSeconds: 60 },
   [INDEX_QUEUE]: { retryLimit: 3, retryDelaySeconds: 1, expireInSeconds: 60 },
   [SWEEP_QUEUE]: { retryLimit: 1, retryDelaySeconds: 1, expireInSeconds: 60 },
+  [AHEAD_QUEUE]: { retryLimit: 1, retryDelaySeconds: 1, expireInSeconds: 60 },
+  [LOOK_QUEUE]: { retryLimit: 0, retryDelaySeconds: 1, expireInSeconds: 60 },
 } satisfies typeof QUEUE_SETTINGS;
 
 /** A unit vector made of the text, the same for the same text. */
@@ -227,6 +231,8 @@ describe("a worker beside one of the build before", () => {
           waitMs: 10_000,
           concurrency: 1,
           leaseMs: 60_000,
+          // Nothing is looked at ahead of requests here: the tests of that have a file of their own.
+          ahead: { scope: "none", intervalMs: 900_000, limit: 50 },
           limits: {
             maxTreeEntries: 1000,
             maxIndexedFiles: 100,

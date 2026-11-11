@@ -110,6 +110,8 @@ export interface JobQueue {
    * queued twice. Takes effect only on a process that runs the schedules (the worker).
    */
   schedule(name: string, cron: string, data: object, key: string): Promise<void>;
+  /** Ends the schedule of the queue named by `key`; nothing happens when there was none. */
+  unschedule(name: string, key: string): Promise<void>;
   /**
    * The jobs of the queue that wait to run, a retry among them, oldest first, at most `limit`:
    * what a process that puts the queue in order looks through.
@@ -249,6 +251,9 @@ export async function createJobQueue(
     },
     async schedule(name, cron, data, key) {
       await boss.schedule(name, cron, data, { key, singletonKey: key });
+    },
+    async unschedule(name, key) {
+      await boss.unschedule(name, key);
     },
     async waiting(name, limit) {
       const jobs = await boss.findJobs(name, { queued: true, limit });

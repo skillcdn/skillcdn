@@ -36,7 +36,7 @@ Public repository hygiene
 
 ```
 apps/
-  server/     the single deployable; roles: api | migrate | check | purge, and worker, not yet implemented (Node 24)
+  server/     the single deployable; roles: api | worker | migrate | check | purge (Node 24)
   web/        optional web UI: landing and explorer; REST only, prerendered per language
 packages/
   core/       pure domain logic and ports; no I/O, no Node APIs                 @skillcdn/core on npm

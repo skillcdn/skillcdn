@@ -11,7 +11,11 @@ export const EMBED_QUEUE = "embed-sections";
 export const INDEX_QUEUE = "index-repository";
 /** The pass that queues what is served and not yet embedded under the configured key. */
 export const SWEEP_QUEUE = "sweep-embeddings";
-export const JOB_QUEUES = [EMBED_QUEUE, INDEX_QUEUE, SWEEP_QUEUE] as const;
+/** A repository whose refs the worker asks the host about, and indexes, ahead of requests (ADR-0085). */
+export const AHEAD_QUEUE = "index-ahead";
+/** The pass that queues the repositories with a ref that is due. */
+export const LOOK_QUEUE = "look-ahead";
+export const JOB_QUEUES = [EMBED_QUEUE, INDEX_QUEUE, SWEEP_QUEUE, AHEAD_QUEUE, LOOK_QUEUE] as const;
 
 /**
  * Why a snapshot is embedded: somebody asked for the repository by hand (`designated`), a search
@@ -72,6 +76,10 @@ export const QUEUE_SETTINGS: Readonly<Record<(typeof JOB_QUEUES)[number], QueueS
   },
   [INDEX_QUEUE]: { retryLimit: 5, retryDelaySeconds: 60, expireInSeconds: 1800 },
   [SWEEP_QUEUE]: { retryLimit: 1, retryDelaySeconds: 60, expireInSeconds: 600 },
+  // A repository the host does not answer for is asked again after a minute, then two, and is
+  // then left to a later pass, which finds its ref still due.
+  [AHEAD_QUEUE]: { retryLimit: 2, retryDelaySeconds: 60, expireInSeconds: 1800 },
+  [LOOK_QUEUE]: { retryLimit: 0, retryDelaySeconds: 60, expireInSeconds: 300 },
 };
 
 /** Makes sure every queue exists with its settings: run by each process at start. */
@@ -124,6 +132,10 @@ export type IndexJob = z.infer<typeof indexJobSchema>;
  */
 export const sweepJobSchema = z.record(z.string(), z.unknown());
 
+/** Every minute: the pass is one query, and a push the host announced waits no longer for it. */
+export const LOOK_SCHEDULE = "* * * * *";
+export const LOOK_SCHEDULE_KEY = "every-minute";
+
 /** Hourly, at the top of the hour. */
 export const SWEEP_SCHEDULE = "0 * * * *";
 export const SWEEP_SCHEDULE_KEY = "hourly";
@@ -156,6 +168,25 @@ export async function sendIndexJob(jobs: JobQueue, job: IndexJob): Promise<boole
   const id = await jobs.send(INDEX_QUEUE, job, {
     priority: DESIGNATED_PRIORITY,
     singletonKey: job.address,
+  });
+  return id !== undefined;
+}
+
+/** A push the host announced is looked at before a ref whose time is up. */
+const ANNOUNCED_PRIORITY = 10;
+
+/**
+ * Queues a look at the refs of a repository ahead of requests (ADR-0085). One job per repository
+ * waits and one runs, so that pushes in a burst are one look. False when one waited already.
+ */
+export async function sendAheadJob(
+  jobs: JobQueue,
+  job: IndexJob,
+  announced: boolean,
+): Promise<boolean> {
+  const id = await jobs.send(AHEAD_QUEUE, job, {
+    priority: announced ? ANNOUNCED_PRIORITY : 0,
+    singletonKey: job.repoId ?? job.address,
   });
   return id !== undefined;
 }

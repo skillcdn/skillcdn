@@ -183,6 +183,13 @@
       "when": 1793354065502,
       "tag": "0025_showcase-cuts",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1794387006789,
+      "tag": "0026_ref-announcements",
+      "breakpoints": true
     }
   ]
 }

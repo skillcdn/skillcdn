@@ -167,6 +167,13 @@ describe("the job queue", () => {
       sql`select key from ${sql.identifier(JOB_QUEUE_SCHEMA)}.schedule where name = 'sweep'`,
     );
     expect(result.rows.map((row) => row.key)).toEqual(["hourly"]);
+    // A schedule ends by its key, and ending one that is not there changes nothing.
+    await jobs.unschedule("sweep", "hourly");
+    await jobs.unschedule("sweep", "hourly");
+    const after = await drizzleOf(database).execute<{ key: string }>(
+      sql`select key from ${sql.identifier(JOB_QUEUE_SCHEMA)}.schedule where name = 'sweep'`,
+    );
+    expect(after.rows).toEqual([]);
   });
 
   it("reported nothing wrong on the way", () => {

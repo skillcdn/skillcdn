@@ -18,20 +18,29 @@ import {
 import type * as z from "zod";
 import { vectorKeyOf } from "../adapters/meaning.js";
 import type { Config, EmbeddingScope } from "../config/config.js";
-import { createDirectoryHost, routeGitHosts } from "../directory/directory-host.js";
+import {
+  createDirectoryHost,
+  listDirectoryPacks,
+  routeGitHosts,
+} from "../directory/directory-host.js";
 import { SnapshotService } from "../indexer/snapshot-service.js";
 import type { Logger } from "../logger.js";
 import { MountService } from "../mounts/mount-service.js";
 import { createOperatorEntitlements } from "../operator/entitlements.js";
 import { OperatorLists } from "../operator/lists.js";
 import { embedSnapshotSlice } from "./embed-snapshot.js";
+import { createIndexAhead } from "./index-ahead.js";
 import { indexRepositoryJob } from "./index-repository.js";
 import {
+  AHEAD_QUEUE,
   EMBED_QUEUE,
   embedJobSchema,
   ensureJobQueues,
   INDEX_QUEUE,
   indexJobSchema,
+  LOOK_QUEUE,
+  LOOK_SCHEDULE,
+  LOOK_SCHEDULE_KEY,
   SWEEP_QUEUE,
   SWEEP_SCHEDULE,
   SWEEP_SCHEDULE_KEY,
@@ -39,11 +48,13 @@ import {
   sweepJobSchema,
 } from "./queues.js";
 import { sweepEmbeddings } from "./sweep.js";
+import { createEmbedTriggers } from "./triggers.js";
 
 // What the worker role does with the queue (ADR-0064, point 3), wired to its ports so that a
 // test runs it against a fixture git host and a fake embedder as the role runs it against the
-// real ones: the designated indexing always, and where an embedder is configured and the
-// database keeps vectors, the slices of embedding and the hourly sweep.
+// real ones: the designated indexing always; the indexing ahead of requests, a pass every minute
+// and a job per repository, unless the deployment turns it off (ADR-0085); and where an embedder
+// is configured and the database keeps vectors, the slices of embedding and the hourly sweep.
 
 /** How much older than its TTL a cached fact may be when the git host cannot be asked. */
 const STALE_GRACE_FACTOR = 10;
@@ -73,6 +84,8 @@ export interface WorkerPorts {
   readonly pollSeconds?: number | undefined;
   /** How many sections one slice embeds; for tests. */
   readonly sliceSections?: number | undefined;
+  /** How long a look ahead waits for an index before the queue tries it again; for tests. */
+  readonly aheadWaitMs?: number | undefined;
 }
 
 export interface Worker {
@@ -169,6 +182,7 @@ export function createWorker(config: WorkerConfig, ports: WorkerPorts): Worker {
       const embedding =
         embedder !== undefined && supported && key !== undefined && config.scope !== "none";
       const policy = { scope: config.scope, entitlements };
+      const queues: string[] = [INDEX_QUEUE];
       await jobs.work(
         INDEX_QUEUE,
         { concurrency: 1, pollSeconds },
@@ -179,8 +193,48 @@ export function createWorker(config: WorkerConfig, ports: WorkerPorts): Worker {
           ),
         ),
       );
+      const { ahead } = config.indexing;
+      if (ahead.scope === "none") {
+        // A deployment that turned it off after running it: the schedule goes with it.
+        await jobs.unschedule(LOOK_QUEUE, LOOK_SCHEDULE_KEY);
+      } else {
+        // A commit the worker finds without an index is embedded as one the api indexed is.
+        const triggers = embedding
+          ? createEmbedTriggers({ database, jobs, key, policy, lists, clock, logger })
+          : undefined;
+        const packs = config.packs;
+        const indexAhead = createIndexAhead({
+          database,
+          jobs,
+          mounts,
+          snapshots,
+          lists,
+          config: ahead,
+          directoryPacks:
+            packs === undefined ? undefined : (limit) => listDirectoryPacks(packs.root, limit),
+          onIndexed:
+            triggers === undefined
+              ? undefined
+              : (mount, snapshot) => triggers.onIndexed(mount, snapshot),
+          clock,
+          logger,
+          waitMs: ports.aheadWaitMs,
+        });
+        await jobs.work(
+          AHEAD_QUEUE,
+          { concurrency: 1, pollSeconds },
+          handling(indexJobSchema, (job) => indexAhead.run(job)),
+        );
+        await jobs.work(
+          LOOK_QUEUE,
+          { concurrency: 1, pollSeconds },
+          handling(sweepJobSchema, () => indexAhead.look()),
+        );
+        await jobs.schedule(LOOK_QUEUE, LOOK_SCHEDULE, {}, LOOK_SCHEDULE_KEY);
+        queues.push(AHEAD_QUEUE, LOOK_QUEUE);
+      }
       if (!embedding) {
-        return { queues: [INDEX_QUEUE] };
+        return { queues };
       }
       const sweep = () =>
         sweepEmbeddings({ database, jobs, key, scope: config.scope, lists, logger });
@@ -245,7 +299,8 @@ export function createWorker(config: WorkerConfig, ports: WorkerPorts): Worker {
         handling(sweepJobSchema, sweep),
       );
       await jobs.schedule(SWEEP_QUEUE, SWEEP_SCHEDULE, {}, SWEEP_SCHEDULE_KEY);
-      return { queues: [INDEX_QUEUE, EMBED_QUEUE, SWEEP_QUEUE] };
+      queues.push(EMBED_QUEUE, SWEEP_QUEUE);
+      return { queues };
     },
     async close(graceMs) {
       await jobs.stop({ timeoutMs: graceMs });

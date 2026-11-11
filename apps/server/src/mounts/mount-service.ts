@@ -21,12 +21,14 @@ import {
 } from "@skillcdn/core";
 import {
   type Database,
+  deleteCachedRef,
   deleteRepoAlias,
   findCachedRef,
   findMissingRepo,
   findRepoByAlias,
   getRepo,
   markRepositoryNotPublic,
+  PINNED_REF_PREFIX,
   type RepoAliasRecord,
   type RepoRecord,
   saveCachedRef,
@@ -102,6 +104,12 @@ export interface Mount extends ServedMount {
    */
   readonly trustedUntil: Date | undefined;
   /**
+   * True when the git host could not be asked where the ref points and the answer before stands
+   * in, for as long as one may; left out when the host answered or the answer was still fresh.
+   * What looks at a ref ahead of requests leaves the host alone then (ADR-0085).
+   */
+  readonly borrowed?: boolean | undefined;
+  /**
    * Whether reading the mount may start indexing its commit. False for a crawler's look, which
    * is served what is indexed already, the commit before in place of one not read yet, and
    * starts nothing (ADR-0074). Left out, it may.
@@ -170,14 +178,14 @@ export interface MountServiceOptions {
 }
 
 const MAX_REMEMBERED_MISSING = 10_000;
-/** What the key of a pinned commit begins with among a repository's remembered refs. */
-const PINNED_KEY = "commit:";
 
 interface ResolvedCommit {
   readonly commit: string;
   readonly trustedUntil: Date | undefined;
   /** The ref's previous commit, when it has an index (ADR-0068); never for a pinned commit. */
   readonly previous: string | undefined;
+  /** True when the host could not be asked and the answer before stands in. */
+  readonly borrowed?: true;
 }
 
 function refNotFound(address: Address): MountError {
@@ -306,7 +314,7 @@ export class MountService {
       address.ref === undefined
         ? ""
         : address.ref.kind === "commit"
-          ? `${PINNED_KEY}${address.ref.hash}`
+          ? `${PINNED_REF_PREFIX}${address.ref.hash}`
           : address.ref.name;
     let resolved: ResolvedCommit;
     try {
@@ -340,6 +348,7 @@ export class MountService {
         (address.ref === undefined && (await this.#options.isVerified(repositoryKey(address)))),
       image: await this.#options.imageOf(address),
       trustedUntil: resolved.trustedUntil,
+      ...(resolved.borrowed === true ? { borrowed: true } : {}),
       visibility: repository.visibility,
       repository: `${repository.owner.login}/${repository.name}`,
       description: repository.description,
@@ -727,6 +736,11 @@ export class MountService {
         throw error;
       }
       if (error.kind === "not_found" || error.kind === "invalid") {
+        // A branch or a tag the host no longer has is forgotten, so that nothing looks at it
+        // again and its commits are no ref's any more (ADR-0085).
+        if (cached !== undefined && !pinned) {
+          await deleteCachedRef(database, scope, refKey);
+        }
         throw refNotFound(address);
       }
       if (cached !== undefined && age !== undefined && age < refTtlMs + staleGraceMs) {
@@ -735,6 +749,7 @@ export class MountService {
           commit: cached.commitSha,
           trustedUntil: pinned ? undefined : clock.now(),
           previous: previousOf(cached.previousCommitSha),
+          borrowed: true,
         };
       }
       throw hostUnavailable(error);

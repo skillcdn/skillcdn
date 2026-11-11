@@ -1,5 +1,6 @@
 import type { Clock, GitHostEvent, GitHostKey, HostEventScope } from "@skillcdn/core";
 import {
+  announceRepoRefs,
   type Database,
   deleteRepoPermissionsOf,
   deleteUserCredentials,
@@ -54,6 +55,9 @@ export class HostEvents {
           return 0;
         }
         await expireRepoRefs(database, repo, this.#due(this.#options.refTtlMs));
+        // Where a worker indexes ahead of requests, this is where it looks next (ADR-0085). The
+        // note says that the host announced a push, and nothing about where a ref points.
+        await announceRepoRefs(database, repo, clock.now());
         return 1;
       }
       case "repository_changed": {

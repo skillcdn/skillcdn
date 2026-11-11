@@ -1,5 +1,5 @@
 import type { AddressHost, HostRepository } from "@skillcdn/core";
-import { and, eq, gt, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gt, lt, notLike, sql } from "drizzle-orm";
 import { type Database, drizzleOf } from "../client.js";
 import { accounts, missingRepos, repoAliases, repoRefs, repos, snapshots } from "../schema.js";
 
@@ -337,6 +337,16 @@ export async function deleteStaleMissingRepos(database: Database, before: Date):
   return rows.length;
 }
 
+/**
+ * What the key of a pinned commit begins with among a repository's remembered refs: git allows
+ * no colon in the name of a ref, so no branch or tag is ever kept under such a key. Everything
+ * else in `repo_refs` is a ref that moves.
+ */
+export const PINNED_REF_PREFIX = "commit:";
+
+/** The rows of `repo_refs` that are refs, and no pinned commit. */
+const movingRef = notLike(repoRefs.ref, `${PINNED_REF_PREFIX}%`);
+
 export interface CachedRef {
   readonly commitSha: string;
   /**
@@ -392,10 +402,92 @@ export async function saveCachedRef(
       set: {
         commitSha,
         checkedAt: now,
+        // The host was asked: what it announced before is answered (ADR-0085).
+        announcedAt: null,
         accountId: sql`excluded.account_id`,
         previousCommitSha: sql`case when ${repoRefs.commitSha} <> excluded.commit_sha and ${indexed} then ${repoRefs.commitSha} else ${repoRefs.previousCommitSha} end`,
       },
     })
     .returning({ previousCommitSha: repoRefs.previousCommitSha });
   return { previousCommitSha: row?.previousCommitSha ?? null };
+}
+
+/**
+ * Notes on every moving ref of a repository that the git host announced a push, for the worker
+ * that indexes ahead of requests (ADR-0085). The note establishes nothing (ADR-0038): it says
+ * where to look, and ends when the host is next asked where the ref points.
+ */
+export async function announceRepoRefs(
+  database: Database,
+  scope: RepoScope,
+  now: Date,
+): Promise<void> {
+  await drizzleOf(database)
+    .update(repoRefs)
+    .set({ announcedAt: now })
+    .where(
+      and(eq(repoRefs.accountId, scope.accountId), eq(repoRefs.repoId, scope.repoId), movingRef),
+    );
+}
+
+/** A ref of a repository somebody asked for, as it was last seen. The empty ref is the default branch. */
+export interface MovingRef {
+  readonly ref: string;
+  readonly commitSha: string;
+  readonly checkedAt: Date;
+}
+
+/** The moving refs remembered for a repository, the one asked of the host last first, at most `limit`. */
+export async function listMovingRefs(
+  database: Database,
+  scope: RepoScope,
+  limit: number,
+): Promise<MovingRef[]> {
+  return drizzleOf(database)
+    .select({ ref: repoRefs.ref, commitSha: repoRefs.commitSha, checkedAt: repoRefs.checkedAt })
+    .from(repoRefs)
+    .where(
+      and(eq(repoRefs.accountId, scope.accountId), eq(repoRefs.repoId, scope.repoId), movingRef),
+    )
+    .orderBy(desc(repoRefs.checkedAt), repoRefs.ref)
+    .limit(limit);
+}
+
+/**
+ * Forgets a ref the git host says is gone: a branch or a tag that was deleted. Its commits are
+ * then no ref's, and their indexes go when their time is up. False when it was not remembered.
+ */
+export async function deleteCachedRef(
+  database: Database,
+  scope: RepoScope,
+  ref: string,
+): Promise<boolean> {
+  const rows = await drizzleOf(database)
+    .delete(repoRefs)
+    .where(
+      and(
+        eq(repoRefs.accountId, scope.accountId),
+        eq(repoRefs.repoId, scope.repoId),
+        eq(repoRefs.ref, ref),
+      ),
+    )
+    .returning({ id: repoRefs.id });
+  return rows.length > 0;
+}
+
+/**
+ * The names the deployment knows on a host, `owner/name` as an address writes them, at most
+ * `limit`: what tells the packs of a directory that were never asked for from the rest.
+ */
+export async function listAliasNamesOfHost(
+  database: Database,
+  host: AddressHost,
+  limit: number,
+): Promise<string[]> {
+  const rows = await drizzleOf(database)
+    .select({ owner: repoAliases.owner, name: repoAliases.name })
+    .from(repoAliases)
+    .where(eq(repoAliases.host, host))
+    .limit(limit);
+  return rows.map((row) => `${row.owner}/${row.name}`);
 }

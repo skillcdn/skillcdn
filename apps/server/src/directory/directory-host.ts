@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { stat } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
 import {
   type AddressHost,
@@ -100,6 +100,39 @@ export async function openPackFile(
   } catch {
     return undefined;
   }
+}
+
+/**
+ * The packs on disk under the root, by the names an address gives them, at most `limit`: the
+ * directories `<owner>/<name>` whose names are the grammar's. A symbolic link is no pack, as
+ * none is followed anywhere else, and a root that cannot be listed holds none.
+ */
+export async function listDirectoryPacks(
+  root: string,
+  limit: number,
+): Promise<{ readonly owner: string; readonly name: string }[]> {
+  const directoriesOf = async (directory: string): Promise<string[]> => {
+    try {
+      const children = await readdir(directory, { withFileTypes: true });
+      return children
+        .filter((child) => child.isDirectory() && NAME.test(child.name))
+        .map((child) => child.name)
+        .sort();
+    } catch {
+      return [];
+    }
+  };
+  const base = resolve(root);
+  const packs: { owner: string; name: string }[] = [];
+  for (const owner of await directoriesOf(base)) {
+    for (const name of await directoriesOf(join(base, owner))) {
+      if (packs.length >= limit) {
+        return packs;
+      }
+      packs.push({ owner, name });
+    }
+  }
+  return packs;
 }
 
 export function createDirectoryHost(options: DirectoryHostOptions): GitHost {

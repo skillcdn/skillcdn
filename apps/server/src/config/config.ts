@@ -241,6 +241,9 @@ const environmentSchema = z.object({
   // 0: this process indexes nothing and serves only what another process has indexed.
   INDEX_CONCURRENCY: integer(2, 0, 64),
   INDEX_LEASE_SECONDS: integer(120, 10, 3600),
+  INDEX_AHEAD: z.enum(["none", "listed", "packs"]).default("listed"),
+  INDEX_AHEAD_MINUTES: integer(15, 1, 1440),
+  INDEX_AHEAD_LIMIT: integer(50, 1, 1000),
 
   // The search by meaning (ADR-0064, ADR-0065): the inference servers, each read with its URL.
   EMBEDDINGS_URL: z.url({ protocol: /^https?$/ }).optional(),
@@ -444,6 +447,15 @@ export interface Config {
     readonly concurrency: number;
     readonly leaseMs: number;
     readonly limits: IndexLimits;
+    /**
+     * What the worker indexes ahead of requests (ADR-0085): which repositories it looks at when
+     * their time is up, how long that time is, and how many repositories one pass queues.
+     */
+    readonly ahead: {
+      readonly scope: "none" | "listed" | "packs";
+      readonly intervalMs: number;
+      readonly limit: number;
+    };
     /**
      * The lowest version of the reading rules served while a commit's index is rebuilt
      * (ADR-0068): the indexer's floor unless a test says otherwise; no variable sets it.
@@ -733,6 +745,11 @@ export function loadConfig(
       concurrency: env.INDEX_CONCURRENCY,
       leaseMs: env.INDEX_LEASE_SECONDS * 1000,
       limits: limits.value,
+      ahead: {
+        scope: env.INDEX_AHEAD,
+        intervalMs: env.INDEX_AHEAD_MINUTES * 60_000,
+        limit: env.INDEX_AHEAD_LIMIT,
+      },
     },
     meaning,
     hub: {

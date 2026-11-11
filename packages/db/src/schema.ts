@@ -160,6 +160,12 @@ export const repoRefs = pgTable(
      */
     previousCommitSha: text(),
     checkedAt: instant().notNull(),
+    /**
+     * When the git host last announced that refs of the repository moved, while nobody has asked
+     * it where this one points since (ADR-0085); null otherwise. An event establishes nothing
+     * (ADR-0038): the note says where the worker looks, and ends when the host is asked.
+     */
+    announcedAt: instant(),
     createdAt: createdAt(),
   },
   (table) => [uniqueIndex("repo_refs_repo_ref_key").on(table.repoId, table.ref)],

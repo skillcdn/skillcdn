@@ -21,7 +21,7 @@ import { pino } from "pino";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { vectorKeyOf } from "./adapters/meaning.js";
 import { embedSnapshotSlice } from "./jobs/embed-snapshot.js";
-import { EMBED_QUEUE, ensureJobQueues, INDEX_QUEUE, SWEEP_QUEUE } from "./jobs/queues.js";
+import { EMBED_QUEUE, ensureJobQueues, JOB_QUEUES } from "./jobs/queues.js";
 import { UsageRecorder } from "./stats/usage-recorder.js";
 import { createFixtureHost, fixtureCommits } from "./testing/fixture-host.js";
 import { createHarness } from "./testing/harness.js";
@@ -884,9 +884,7 @@ describe("the search by meaning in the admin API (ADR-0064)", () => {
       const pending = state.pending ?? 0;
       expect(pending).toBeGreaterThanOrEqual(1);
       const queues = state.queues ?? [];
-      expect(queues.map((queue) => queue.name).sort()).toEqual(
-        [EMBED_QUEUE, INDEX_QUEUE, SWEEP_QUEUE].sort(),
-      );
+      expect(queues.map((queue) => queue.name).sort()).toEqual([...JOB_QUEUES].sort());
       expect(queues.find((queue) => queue.name === EMBED_QUEUE)?.queued).toBe(1);
 
       // Designated: queued once, and not again while it waits.

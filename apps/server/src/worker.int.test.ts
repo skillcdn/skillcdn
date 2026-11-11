@@ -36,10 +36,12 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { EmbeddingScope } from "./config/config.js";
 import { embedSnapshotSlice } from "./jobs/embed-snapshot.js";
 import {
+  AHEAD_QUEUE,
   EMBED_QUEUE,
   type EmbedJob,
   ensureJobQueues,
   INDEX_QUEUE,
+  LOOK_QUEUE,
   type QUEUE_SETTINGS,
   SWEEP_QUEUE,
   sendEmbedJob,
@@ -76,6 +78,8 @@ const TEST_SETTINGS = {
   [EMBED_QUEUE]: { retryLimit: 3, retryDelaySeconds: 1, expireInSeconds: 60 },
   [INDEX_QUEUE]: { retryLimit: 3, retryDelaySeconds: 1, expireInSeconds: 60 },
   [SWEEP_QUEUE]: { retryLimit: 1, retryDelaySeconds: 1, expireInSeconds: 60 },
+  [AHEAD_QUEUE]: { retryLimit: 1, retryDelaySeconds: 1, expireInSeconds: 60 },
+  [LOOK_QUEUE]: { retryLimit: 0, retryDelaySeconds: 1, expireInSeconds: 60 },
 } satisfies typeof QUEUE_SETTINGS;
 
 /** A unit vector made of the text, the same for the same text. */
@@ -149,6 +153,8 @@ beforeAll(async () => {
         waitMs: 10_000,
         concurrency: 2,
         leaseMs: 60_000,
+        // Nothing is looked at ahead of requests here: the tests of that have a file of their own.
+        ahead: { scope: "none", intervalMs: 900_000, limit: 50 },
         limits: {
           maxTreeEntries: 1000,
           maxIndexedFiles: 100,
@@ -570,6 +576,7 @@ describe("the worker", () => {
       },
       work: async () => {},
       schedule: async () => {},
+      unschedule: async () => {},
       waiting: async () => [],
       reorder: async () => false,
       counts: async () => [],
@@ -686,6 +693,7 @@ describe("the worker", () => {
       },
       work: async () => {},
       schedule: async () => {},
+      unschedule: async () => {},
       waiting: async () => [],
       reorder: async () => false,
       counts: async () => [],

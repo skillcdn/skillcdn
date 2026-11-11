@@ -1,0 +1,1 @@
+ALTER TABLE "repo_refs" ADD COLUMN "announced_at" timestamp with time zone;
