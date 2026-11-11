@@ -33,6 +33,15 @@ export {
 export { browseCatalogFiles, type CatalogFile, folderOverview } from "./browse-tree.js";
 export { decodeText } from "./bytes.js";
 export { contextPage } from "./context-page.js";
+export {
+  type DocumentDerivation,
+  documentDerivation,
+  foldQuoted,
+  MAX_QUOTATIONS,
+  type Quotation,
+  quotationStandsIn,
+  quotationsOf,
+} from "./derived.js";
 export { DomainError } from "./errors.js";
 export {
   type FrontMatterError,

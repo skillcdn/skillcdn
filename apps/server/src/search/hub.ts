@@ -334,6 +334,7 @@ export function createHubSearch(options: HubSearchOptions): HubSearch {
       title: row.title ?? undefined,
       summary: row.description ?? undefined,
       skillDirectory,
+      ...(row.frontMatter?.derived === undefined ? {} : { derived: true }),
     };
     if (row.kind !== "markdown" || !servesInFull(pack.license ?? NO_LICENSE, verified)) {
       return plain;

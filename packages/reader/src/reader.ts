@@ -488,6 +488,7 @@ function toFindItem(mount: MountContext, row: IndexEntry): FindItem | undefined 
         // The README of a folder is its map, which says a little of everything in it: a result
         // says so, and a model goes on to the documents the map names.
         ...(isReadmePath(path) ? { overview: true } : {}),
+        ...(row.frontMatter?.derived === undefined ? {} : { derived: true }),
       };
 }
 

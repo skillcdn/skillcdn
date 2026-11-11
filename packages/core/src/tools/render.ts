@@ -405,7 +405,11 @@ function findItemLines(item: FindItem): string[] {
   // A map says a little of everything in its folder, so it is near every question; the model
   // is told which result is one, and goes to the documents it names.
   const overview = item.overview === true ? " (overview of its folder)" : "";
-  const lines = [`document: ${item.path}${title}${overview}`];
+  // A note or a glossary made from the pack's documents points to what it was made from: the
+  // model is told which result is one, and quotes the sections it names (ADR-0083).
+  const derived =
+    item.derived === true ? " (made from other documents: quote what it points to)" : "";
+  const lines = [`document: ${item.path}${title}${overview}${derived}`];
   if (item.summary !== undefined) {
     lines.push(`   ${compactSummary(item.summary, SEARCH_DESCRIPTION_MAX_LENGTH)}`);
   }

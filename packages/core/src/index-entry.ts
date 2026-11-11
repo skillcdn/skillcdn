@@ -65,6 +65,11 @@ export interface SkillFrontMatter {
     readonly path: string;
     readonly section?: { readonly offset: number; readonly length: number };
   }[];
+  /**
+   * A document that says it was made from other documents of the pack (ADR-0083), with what it
+   * says it is: a result marks it, so that an agent quotes the sections it points to.
+   */
+  readonly derived?: { readonly kind?: string };
   /** Readable through a link, without becoming an independent catalog/search document. */
   readonly linkedOnly?: boolean;
   /** Readable as a directory introduction, without creating a catalog/search document. */

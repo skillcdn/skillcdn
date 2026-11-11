@@ -9,7 +9,9 @@ import {
   headingSlug,
   outlineMarkdown,
   queryIdentifiers,
+  renderFindResult,
 } from "@skillcdn/core";
+import { INDEX_LIMIT_DEFAULTS, readDirectory } from "@skillcdn/indexer";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
   type MemorySearch,
@@ -337,5 +339,39 @@ describe("the specification pack, followed by its references (ADR-0082)", () => 
       heading.text.startsWith("4.2.6 "),
     );
     expect(section.length).toBeGreaterThan(outline?.length ?? Number.MAX_SAFE_INTEGER);
+  });
+});
+
+describe("the notes of the specification pack (ADR-0083)", () => {
+  it("quote what the clauses say, each under a link to its clause", async () => {
+    const read = await readDirectory({
+      directory: SPECIFICATION_PACK_PATH,
+      limits: INDEX_LIMIT_DEFAULTS,
+    });
+    expect(read.index.diagnostics).toEqual([]);
+    const note = read.index.entries.find((entry) =>
+      entry.path.endsWith("notes/carrier-loss-and-resumption.md"),
+    );
+    expect(note?.frontMatter?.derived).toEqual({ kind: "note" });
+    expect(
+      note?.frontMatter?.references?.every((reference) => reference.section !== undefined),
+    ).toBe(true);
+  });
+
+  it("are marked in a search result, so that an agent quotes the clause and not the note", async () => {
+    const words = await memorySearch(SPECIFICATION_PACK_PATH);
+    const result = await words("what a buoy keeps when it gives up");
+    const note = result.items.find(
+      (item) => item.kind === "document" && item.path.endsWith("carrier-loss-and-resumption.md"),
+    );
+    expect(note).toMatchObject({ kind: "document", derived: true });
+    expect(renderFindResult(result)).toMatch(
+      /document: docs\/notes\/carrier-loss-and-resumption\.md - Carrier loss and resumption \(made from other documents: quote what it points to\)/,
+    );
+    // A chapter is no such document.
+    const chapter = result.items.find(
+      (item) => item.kind === "document" && item.path.includes("/04-link-control/"),
+    );
+    expect(chapter === undefined || !("derived" in chapter)).toBe(true);
   });
 });

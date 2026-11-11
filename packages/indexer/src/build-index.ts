@@ -15,6 +15,7 @@ import {
   decodeText,
   describeListingProblem,
   describeOmittedFile,
+  documentDerivation,
   documentSources,
   fragmentOf,
   fragmentResolver,
@@ -40,6 +41,8 @@ import {
   parseRepoManifest,
   parseSkillManifest,
   preferredLicenseFile,
+  quotationStandsIn,
+  quotationsOf,
   type RepoCoordinates,
   type RepoFileKind,
   type RepoPath,
@@ -49,6 +52,7 @@ import {
   repoManifestPath,
   resolveDocumentSource,
   resolveLicense,
+  resolveLocalLink,
   type SectionRange,
   type ServedScope,
   type SkillListingProblem,
@@ -82,8 +86,10 @@ import { gitBlobHash, sha256Hex } from "./git-hash.js";
  * 15: a link's fragment names a section of the file it points to, kept with the reference as
  *     the offset and the length that read it; a fragment that names no section is a diagnostic;
  *     the references of a file are bounded by the files they name (ADR-0082).
+ * 16: a document that says it is derived from other documents is marked, and each of its block
+ *     quotes is held against the section its last line links to (ADR-0083).
  */
-export const INDEX_VERSION = 15;
+export const INDEX_VERSION = 16;
 
 /**
  * The lowest version of the reading rules whose index is still served while the commit is
@@ -828,6 +834,7 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
     if (summary !== undefined) {
       checkSources(entry.path, text);
     }
+    const derivation = summary === undefined ? undefined : documentDerivation(text);
     documents.set(entry.path, {
       path: entry.path,
       size: entry.size,
@@ -847,6 +854,9 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
                 skill: owningSkillDirectory(entry.path, skillDirectories) !== undefined,
               }),
             }),
+        ...(derivation === undefined
+          ? {}
+          : { derived: derivation.kind === undefined ? {} : { kind: derivation.kind } }),
         ...(linkedOnly ? { linkedOnly: true } : {}),
         ...(overviewOnly ? { overviewOnly: true } : {}),
       },
@@ -1210,6 +1220,85 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
     }
     return { ...indexed, frontMatter: { ...indexed.frontMatter, references: resolved } };
   };
+
+  // A document made from the pack's documents quotes exactly, in a block quote whose last line
+  // links to the section quoted (ADR-0083): each quotation is held against that section here,
+  // where every body is at hand, so that a note that misquotes, or that outlived the text it
+  // quotes, is the author's to hear of. A link that names no file or no section is reported as
+  // such already, and a section that is not served is not looked into.
+  const checkQuotations = (document: IndexEntry): void => {
+    if (document.frontMatter?.derived === undefined || !served(document.path as RepoPath)) {
+      return;
+    }
+    const path = document.path as RepoPath;
+    const text = texts.get(document.blobSha);
+    if (text === undefined) {
+      return;
+    }
+    const from = documentDerivation(text)?.from ?? [];
+    const lost = from.filter((written) => {
+      const resolved = resolveLocalLink(path, written);
+      return (
+        resolved === undefined ||
+        !(
+          treeFiles.has(resolved) ||
+          resolved.length === 0 ||
+          tree.entries.some((entry) => entry.path.startsWith(`${resolved}/`))
+        )
+      );
+    });
+    if (lost.length > 0) {
+      report(
+        path,
+        "derived_from_missing",
+        `derived.from names ${named(lost)}, which is ${lost.length === 1 ? "no file or folder" : "not files or folders"} of the repository`,
+      );
+    }
+    let unsourced = 0;
+    const misquoted: string[] = [];
+    for (const quotation of quotationsOf(text)) {
+      const [link] = inspectMarkdownLinks(path, quotation.source).references;
+      if (link === undefined) {
+        unsourced += 1;
+        continue;
+      }
+      const target = byCandidatePath.get(link.path);
+      const body =
+        target === undefined || !served(link.path) ? undefined : texts.get(target.entry.hash);
+      if (body === undefined) {
+        continue;
+      }
+      let quoted = body;
+      if (link.fragment !== undefined) {
+        const section = resolverOf(link.path)?.(link.fragment);
+        if (section === undefined) {
+          continue;
+        }
+        quoted = body.slice(section.offset, section.offset + section.length);
+      }
+      if (!quotationStandsIn(quotation.text, quoted)) {
+        const words = quotation.text.replaceAll(/\s+/g, " ").trim();
+        misquoted.push(`"${words.length > 40 ? `${words.slice(0, 40)}...` : words}"`);
+      }
+    }
+    if (misquoted.length > 0) {
+      report(
+        path,
+        "quote_not_in_source",
+        `${misquoted.length === 1 ? "a quotation is" : `${misquoted.length} quotations are`} not in the section the link under it names, word for word (${named(misquoted)})`,
+      );
+    }
+    if (unsourced > 0) {
+      report(
+        path,
+        "quote_without_link",
+        `${unsourced === 1 ? "a block quote has" : `${unsourced} block quotes have`} no link to the section quoted in the last line: a document made from the pack's documents says where each quotation is from`,
+      );
+    }
+  };
+  for (const document of documents.values()) {
+    checkQuotations(document);
+  }
 
   const entries: IndexEntry[] = files.map((entry) => {
     const skill = skills.get(parentDirectory(entry.path));

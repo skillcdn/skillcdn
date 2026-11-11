@@ -361,6 +361,8 @@ export const restFindItemSchema = z.discriminatedUnion("kind", [
     sections: z.optional(z.array(restFindSectionSchema)),
     /** True for the README of a folder, the map that says a little of everything in it. */
     overview: z.optional(z.boolean()),
+    /** True for a document that says it was made from other documents of the pack (ADR-0083). */
+    derived: z.optional(z.boolean()),
   }),
 ]);
 

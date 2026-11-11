@@ -88,4 +88,23 @@ A picture is part of the document it belongs to: kept beside it, in `images/` by
 
 ## Working a pack
 
-An agent working a large pack reads the map, searches, reads the sections a result names, and keeps what it learned as notes committed to the repository through its own access to git, as documents in a document set of their own, so that the next run finds them ([document packs](../specs/skill-repo.md#document-packs)). Nothing of this is in the server: SkillCDN indexes what the repository holds and serves it; the understanding of pictures at conversion and the reading at work are the agent's, with the skills of the reference pack or with skills of your own.
+An agent working a large pack reads the map, searches, reads the sections a result names, and keeps what it learned as notes committed to the repository through its own access to git, as documents in a document set of their own, so that the next run finds them ([document packs](../specs/skill-repo.md#document-packs)). A note says that it is one, and quotes exactly ([ADR-0083](../adr/0083-a-document-made-from-the-packs-documents-says-so-and-its-quotations-are-checked.md)): `derived` in its front-matter, with `kind`, `from`, `by` and `at`, and every quotation in a block quote whose last line links to the section quoted:
+
+```markdown
+---
+title: Carrier loss and resumption
+description: When a carrier counts as lost and how long a buoy tries to resume, each point quoted from its clause.
+derived:
+  kind: note
+  from: ../link-protocol
+  by: a run that answered questions about link failures
+  at: 2026-11-11
+---
+## When the carrier counts as lost
+
+> At the count maxSilentWindows the carrier is lost.
+>
+> — [4.2.7](/docs/link-protocol/04-link-control/040-4.2.7-to-4.2.8-carrier-loss.md#4.2.7)
+```
+
+`skillcdn check` holds each quotation against the section its link names and reports one that is not there word for word, a block quote without its link, and a note whose source has changed under it; a search result marks the note, and an agent that finds it quotes the clause. Nothing of this is in the server: SkillCDN indexes what the repository holds and serves it; the understanding of pictures at conversion and the reading at work are the agent's, with the skills of the reference pack or with skills of your own.

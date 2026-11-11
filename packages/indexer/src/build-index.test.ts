@@ -1177,3 +1177,122 @@ describe("the section a link's fragment names (ADR-0082)", () => {
     expect(result.byPath.get("docs/index.md")?.frontMatter?.references).toHaveLength(2);
   });
 });
+
+describe("a document made from the pack's documents (ADR-0083)", () => {
+  const CHAPTER = [
+    "# 4 Link control",
+    "",
+    "## 4.2.7 Detection of carrier loss",
+    "",
+    "At the count maxSilentWindows the carrier is lost. A single window of noise is no loss.",
+    "",
+    "## 4.2.8 Recovery reporting",
+    "",
+    "After a resumption the shore station sends a RecoveryReport to the harbour board.",
+    "",
+  ].join("\n");
+  /** A note with one quotation of the chapter, under a link to the clause it names. */
+  const note = (
+    quotation: string,
+    source = "> — [4.2.7](chapter.md#4.2.7)",
+    front = "derived:\n  kind: note\n  from: chapter.md\n",
+  ): string =>
+    [
+      "---",
+      "title: Notes",
+      front.trimEnd(),
+      "---",
+      "# Notes",
+      "",
+      `> ${quotation}`,
+      ">",
+      source,
+      "",
+    ]
+      .filter((line) => line !== "")
+      .join("\n");
+  const check = async (text: string, chapter = CHAPTER) =>
+    index({ "docs/chapter.md": chapter, "docs/notes.md": text });
+
+  it("marks the document, and finds nothing wrong with a quotation that stands in its section", async () => {
+    const result = await check(note("At the count maxSilentWindows the carrier is lost."));
+    expect(result.diagnostics).toEqual([]);
+    expect(result.byPath.get("docs/notes.md")?.frontMatter?.derived).toEqual({ kind: "note" });
+    expect(result.byPath.get("docs/chapter.md")?.frontMatter?.derived).toBeUndefined();
+    // An elision stands for the words left out.
+    expect((await check(note("At the count … is lost."))).diagnostics).toEqual([]);
+  });
+
+  it.each([
+    ["a word changed", "At the count maxSilentWindows the carrier is found."],
+    ["the words in another order", "The carrier is lost at the count maxSilentWindows."],
+    [
+      "a sentence of another section",
+      "After a resumption the shore station sends a RecoveryReport",
+    ],
+    ["words nothing says", "The carrier is lost after ten seconds."],
+  ])("reports a quotation with %s", async (_what, quotation) => {
+    const result = await check(note(quotation));
+    expect(result.diagnostics).toEqual([
+      {
+        path: "docs/notes.md",
+        code: "quote_not_in_source",
+        message: expect.stringContaining(
+          "a quotation is not in the section the link under it names, word for word",
+        ),
+      },
+    ]);
+  });
+
+  it("reports a quotation the source no longer says, once the source is changed", async () => {
+    const quoted = note("At the count maxSilentWindows the carrier is lost.");
+    expect((await check(quoted)).diagnostics).toEqual([]);
+    const changed = await check(quoted, CHAPTER.replace("maxSilentWindows", "maxQuietWindows"));
+    expect(changed.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      "quote_not_in_source",
+    ]);
+  });
+
+  it("reports a block quote that names no source, and a source the pack does not have", async () => {
+    const unsourced = await check(
+      note(
+        "At the count maxSilentWindows the carrier is lost.",
+        "> A second line of the quotation.",
+      ),
+    );
+    expect(unsourced.diagnostics).toEqual([
+      {
+        path: "docs/notes.md",
+        code: "quote_without_link",
+        message: expect.stringContaining("a block quote has no link to the section quoted"),
+      },
+    ]);
+    const lost = await check(
+      note(
+        "At the count maxSilentWindows the carrier is lost.",
+        undefined,
+        "derived:\n  from: [chapter.md, ../gone]\n",
+      ),
+    );
+    expect(lost.diagnostics).toEqual([
+      {
+        path: "docs/notes.md",
+        code: "derived_from_missing",
+        message: "derived.from names ../gone, which is no file or folder of the repository",
+      },
+    ]);
+  });
+
+  it("holds a quotation against the whole file when its link names no section, and leaves a document that is not derived alone", async () => {
+    const whole = await check(
+      note(
+        "After a resumption the shore station sends a RecoveryReport",
+        "> — [the chapter](chapter.md)",
+      ),
+    );
+    expect(whole.diagnostics).toEqual([]);
+    const plain = await check(note("Nothing the chapter says.", undefined, ""));
+    expect(plain.diagnostics).toEqual([]);
+    expect(plain.byPath.get("docs/notes.md")?.frontMatter?.derived).toBeUndefined();
+  });
+});

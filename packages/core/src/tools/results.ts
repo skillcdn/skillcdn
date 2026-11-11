@@ -252,6 +252,8 @@ export type FindItem =
       readonly sections?: readonly FindSection[];
       /** True for the README of a folder: the map of the folder, which says a little of everything in it. */
       readonly overview?: boolean;
+      /** True for a document that says it was made from other documents of the pack (ADR-0083). */
+      readonly derived?: boolean;
     };
 
 /**

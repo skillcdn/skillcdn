@@ -227,6 +227,7 @@ function restFindItemOf(item: FindItem): RestFindItem {
               })),
             }),
         ...(item.overview === true ? { overview: true } : {}),
+        ...(item.derived === true ? { derived: true } : {}),
       };
 }
 

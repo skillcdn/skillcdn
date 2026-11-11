@@ -353,6 +353,7 @@ function findItemOf(item: RestFindItem): FindItem[] {
                 })),
               }),
           ...(item.overview === true ? { overview: true } : {}),
+          ...(item.derived === true ? { derived: true } : {}),
         },
       ];
 }
