@@ -19,6 +19,13 @@ function vectorText(text: string): string {
 // token joined by slashes or dots (`marketing/ads`, `SKILL.md`) is a word beside the words it
 // joins (ADR-0078), neither of which the server's parser makes. The scripts matched by pairs have
 // their own test.
+/**
+ * What a test of a long input may take: linear work on 200,000 characters is well under a second
+ * here and a few seconds on a loaded runner, which the default five seconds did not allow for; the
+ * quadratic work these tests guard against took minutes.
+ */
+const LONG_INPUT_TIMEOUT_MS = 60_000;
+
 describe("searchLexemes", () => {
   it("cuts words, hyphenated words, hosts, versions, paths and addresses as the parser does", () => {
     expect(
@@ -197,29 +204,33 @@ describe("searchLexemes", () => {
     }
   });
 
-  it("reads a long line of anything in time that grows with its length", () => {
-    // Each of these was read again from every character of it, or by a call for every part: a
-    // file of one such line took minutes to index, or overflowed the stack and failed its pack.
-    const length = 200_000;
-    expect(searchLexemes("_".repeat(length))).toEqual([]);
-    expect(searchLexemes(".".repeat(length))).toEqual([]);
-    expect(searchLexemes("-".repeat(length))).toEqual([]);
-    expect(searchLexemes("b+".repeat(length))).toHaveLength(length);
-    expect(searchLexemes("1.-".repeat(length))).toHaveLength(length);
-    expect(searchLexemes(`b${"-".repeat(length)}c`)).toHaveLength(2);
-    // One word longer than a lexeme may be, which is no word; the words its dots join are.
-    expect(searchLexemes(`${"b.".repeat(length)}@`)).toHaveLength(length);
-    expect(searchLexemes("b/".repeat(length))).toHaveLength(length);
-    // What the bounds leave as it was: an address and a URL of any ordinary length.
-    expect(queryLexemes("first.last_name-2@example.com")).toEqual([
-      "first.last_name-2@example.com",
-    ]);
-    expect(queryLexemes("git+ssh://example.com/repo")).toEqual([
-      "example.com/repo",
-      "example.com",
-      "/repo",
-    ]);
-  });
+  it(
+    "reads a long line of anything in time that grows with its length",
+    () => {
+      // Each of these was read again from every character of it, or by a call for every part: a
+      // file of one such line took minutes to index, or overflowed the stack and failed its pack.
+      const length = 200_000;
+      expect(searchLexemes("_".repeat(length))).toEqual([]);
+      expect(searchLexemes(".".repeat(length))).toEqual([]);
+      expect(searchLexemes("-".repeat(length))).toEqual([]);
+      expect(searchLexemes("b+".repeat(length))).toHaveLength(length);
+      expect(searchLexemes("1.-".repeat(length))).toHaveLength(length);
+      expect(searchLexemes(`b${"-".repeat(length)}c`)).toHaveLength(2);
+      // One word longer than a lexeme may be, which is no word; the words its dots join are.
+      expect(searchLexemes(`${"b.".repeat(length)}@`)).toHaveLength(length);
+      expect(searchLexemes("b/".repeat(length))).toHaveLength(length);
+      // What the bounds leave as it was: an address and a URL of any ordinary length.
+      expect(queryLexemes("first.last_name-2@example.com")).toEqual([
+        "first.last_name-2@example.com",
+      ]);
+      expect(queryLexemes("git+ssh://example.com/repo")).toEqual([
+        "example.com/repo",
+        "example.com",
+        "/repo",
+      ]);
+    },
+    LONG_INPUT_TIMEOUT_MS,
+  );
 
   it("reads a sign before digits wherever it stands, and a version up to its hyphen", () => {
     expect(vectorText("-5 -foo --10 foo--10 - -")).toBe("'-10':3,5 '-5':1 'foo':2,4");

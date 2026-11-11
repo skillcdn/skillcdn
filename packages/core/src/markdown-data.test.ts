@@ -104,7 +104,8 @@ describe("dataOfMarkdown: tables", () => {
       dataOfMarkdown(`| a |${" ".repeat(length)}x\n|---|${" ".repeat(length)}x`).tables,
     ).toEqual([]);
     expect(dataOfMarkdown("\\|".repeat(length)).tables).toEqual([]);
-  });
+    // Linear work is milliseconds here and may be seconds on a loaded runner; quadratic is minutes.
+  }, 60_000);
 });
 
 describe("dataOfMarkdown: code blocks", () => {
