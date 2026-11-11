@@ -461,6 +461,13 @@ export { err, ok, type Result } from "./result.js";
 export { stemEnglish } from "./search/english-stemmer.js";
 export { type FusionOptions, fuseRanks, RRF_K } from "./search/fusion.js";
 export {
+  headingNames,
+  isHeadedBy,
+  MAX_IDENTIFIER_TOKENS,
+  type QueryIdentifiers,
+  queryIdentifiers,
+} from "./search/identifiers.js";
+export {
   type Lexeme,
   MAX_LEXEME_BYTES,
   queryLexemes,

@@ -341,6 +341,17 @@ export const restFindItemSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 
+/**
+ * How a search was ranked where the search by meaning is at hand (ADR-0064): whether meaning took
+ * part, whether the first results were reranked, and, with both false, whether the words ranked
+ * alone because the query was identifiers alone (ADR-0079).
+ */
+const rankingSchema = z.object({
+  meaning: z.boolean(),
+  reranked: z.boolean(),
+  identifiers: z.optional(z.boolean()),
+});
+
 export const restFindSchema = z.discriminatedUnion("status", [
   z.object({
     status: z.literal("ready"),
@@ -355,9 +366,10 @@ export const restFindSchema = z.discriminatedUnion("status", [
     /**
      * With a query, where the search by meaning is at hand (ADR-0064): whether the sections
      * nearest in meaning were fused with the words' results, or the words answered alone this
-     * time, and whether the first results were reranked. Absent where only words rank.
+     * time, or alone because the query was identifiers alone (ADR-0079), and whether the first
+     * results were reranked. Absent where only words rank.
      */
-    ranking: z.optional(z.object({ meaning: z.boolean(), reranked: z.boolean() })),
+    ranking: z.optional(rankingSchema),
   }),
   indexing,
   failed,
@@ -396,7 +408,7 @@ export const restSearchSchema = z.object({
   packs: count,
   items: z.array(restHubItemSchema),
   /** Where the search by meaning is at hand: as the `find` route says it. */
-  ranking: z.optional(z.object({ meaning: z.boolean(), reranked: z.boolean() })),
+  ranking: z.optional(rankingSchema),
 });
 export type RestSearch = z.infer<typeof restSearchSchema>;
 export type RestHubItem = z.infer<typeof restHubItemSchema>;

@@ -27,6 +27,7 @@ const FIXTURE_DESCRIPTIONS: Readonly<Record<string, string>> = {
   licensed: "Skills under different licenses.",
   "document-pack": "A handbook with no skill, in English and in Korean.",
   "multilingual-pack": "A library in six languages, of research and defense documents.",
+  "specification-pack": "An invented specification, laid out as a long original is.",
 };
 
 /**

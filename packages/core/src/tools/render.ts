@@ -416,12 +416,16 @@ export function renderHubInstructions(packs: number, origin?: string): string {
 
 /**
  * One line on how a search was ranked, where the search by meaning is at hand (ADR-0064): that
- * meaning took part, or that the words answered alone this time, so that a model knows what a
- * query in other words than the document's can find. Nothing where only words ever rank.
+ * meaning took part, that the words answered alone this time, or that they answered alone
+ * because the query was numbers and names (ADR-0079), so that a model knows what a query in other
+ * words than the document's can find. Nothing where only words ever rank.
  */
 function rankingLine(result: Pick<FindResult, "query" | "ranking">): string | undefined {
   if (result.query === undefined || result.ranking === undefined) {
     return undefined;
+  }
+  if (result.ranking.identifiers === true) {
+    return "Ranked by words alone: a query of numbers and names is matched as written.";
   }
   if (!result.ranking.meaning) {
     return "Ranked by words alone this time: the search by meaning did not answer.";

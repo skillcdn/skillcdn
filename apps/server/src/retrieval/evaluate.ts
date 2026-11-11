@@ -46,6 +46,15 @@ export const MULTILINGUAL_SET_PATH = fileURLToPath(
 export const MULTILINGUAL_PACK_PATH = fileURLToPath(
   new URL("../../fixtures/.repositories/multilingual-pack/", import.meta.url),
 );
+/**
+ * The specification pack: an invented specification laid out as a long original is, with numbered
+ * clauses, tables of codes in several files, definitions in a notation of its own and an index.
+ * Its questions are made from the pack itself: the numbers, the table names, the definition names
+ * and the words its tables join with slashes and dots (ADR-0078, ADR-0079).
+ */
+export const SPECIFICATION_PACK_PATH = fileURLToPath(
+  new URL("../../fixtures/.repositories/specification-pack/", import.meta.url),
+);
 
 /** A language tag as the sets write one: `en`, `ko`, `pt-BR`. */
 const languageSchema = z.string().regex(/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3}$/);

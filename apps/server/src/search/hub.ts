@@ -11,11 +11,13 @@ import {
   type HubPack,
   type HubResult,
   isGitHostKey,
+  isHeadedBy,
   MAX_MATCHED_SECTIONS,
   matchSections,
   NO_LICENSE,
   parseAddress,
   parseRepoPath,
+  queryIdentifiers,
   queryLexemes,
   queryWeights,
   type RepoPath,
@@ -33,6 +35,7 @@ import {
   searchHubEntries,
   searchHubSectionVectors,
 } from "@skillcdn/db";
+import { HEADED_CANDIDATES } from "@skillcdn/reader";
 import type { Logger } from "../logger.js";
 import { repositoryKey } from "../mounts/mount-service.js";
 import type { MountMeaning } from "../mounts/reader.js";
@@ -136,11 +139,16 @@ export function createHubSearch(options: HubSearchOptions): HubSearch {
         weights = queryWeights(counted.total, counted.counts);
         words = await searchHubEntries(database, ids, lexemes, weights, candidates, timeoutMs);
       }
+      // A query that is identifiers alone is ranked by its words, as inside a mount (ADR-0079).
+      const identifiers = queryIdentifiers(query);
+      const wordsAlone = identifiers.only && words.length > 0;
       // The sections nearest in meaning, where the deployment searches by it; an embedder or a
       // database that does not answer in time leaves the words to answer, which the result says.
       let ranking: FindRanking | undefined;
       let nearest: readonly HubSectionMatch[] | undefined;
-      if (meaning?.key !== undefined) {
+      if (meaning?.key !== undefined && wordsAlone) {
+        ranking = { meaning: false, reranked: false, identifiers: true };
+      } else if (meaning?.key !== undefined) {
         try {
           const { vectors } = await meaning.embedder.embed([query], "query");
           const vector = vectors[0];
@@ -190,12 +198,51 @@ export function createHubSearch(options: HubSearchOptions): HubSearch {
         boost: (key) => (records.get(key)?.row.kind === "skill" ? SKILL_RANK_BOOST : 1),
         compare: (a, b) => (a < b ? -1 : a > b ? 1 : 0),
       });
-      const reranker = meaning?.reranker;
-      const rerankCount = reranker === undefined ? 0 : (meaning?.rerankCandidates ?? 10);
-      const wanted = Math.max(limit, rerankCount);
-      const scored: Scored[] = [];
       const verified = new Map<string, Promise<boolean>>();
-      for (const key of fused.slice(0, wanted)) {
+      const vouchedFor = (pack: SearchablePack, address: Address): Promise<boolean> => {
+        let vouched = verified.get(pack.snapshotId);
+        if (vouched === undefined) {
+          vouched = lists.isVerified(repositoryKey(address));
+          verified.set(pack.snapshotId, vouched);
+        }
+        return vouched;
+      };
+      // The documents one of whose headings names the identifier the query begins with
+      // stand first, in the words' order (ADR-0079); a document the deployment only describes is
+      // not read for it.
+      const headed: string[] = [];
+      const leading = identifiers.leading;
+      if (leading !== undefined) {
+        const first = words.filter((row) => row.kind === "markdown").slice(0, HEADED_CANDIDATES);
+        const found = await Promise.all(
+          first.map(async (row) => {
+            const pack = byId.get(row.snapshotId);
+            const address = pack === undefined ? undefined : addressOf(pack);
+            if (pack === undefined || address === undefined) {
+              return false;
+            }
+            if (!servesInFull(pack.license ?? NO_LICENSE, await vouchedFor(pack, address))) {
+              return false;
+            }
+            const text = await blobStore.read(row.blobSha);
+            return text !== undefined && isHeadedBy(text, leading);
+          }),
+        );
+        first.forEach((row, at) => {
+          if (found[at] === true) {
+            headed.push(keyOf(row.snapshotId, row.path));
+          }
+        });
+      }
+      const ordered =
+        headed.length === 0 ? fused : [...headed, ...fused.filter((key) => !headed.includes(key))];
+      const reranker = wordsAlone ? undefined : meaning?.reranker;
+      const rerankCount = reranker === undefined ? 0 : (meaning?.rerankCandidates ?? 10);
+      const wanted = Math.max(limit, headed.length + rerankCount);
+      const scored: Scored[] = [];
+      /** How many of the scored stand first for their heading, and are not the reranker's to move. */
+      let fixed = 0;
+      for (const key of ordered.slice(0, wanted)) {
         const candidate = records.get(key);
         if (candidate === undefined) {
           continue;
@@ -204,12 +251,7 @@ export function createHubSearch(options: HubSearchOptions): HubSearch {
         if (address === undefined) {
           continue;
         }
-        let vouched = verified.get(candidate.pack.snapshotId);
-        if (vouched === undefined) {
-          vouched = lists.isVerified(repositoryKey(address));
-          verified.set(candidate.pack.snapshotId, vouched);
-        }
-        const isVerified = await vouched;
+        const isVerified = await vouchedFor(candidate.pack, address);
         const item = await itemOf(candidate, isVerified, {
           lexemes,
           weights,
@@ -227,9 +269,15 @@ export function createHubSearch(options: HubSearchOptions): HubSearch {
           },
           candidate: candidateTextOf(item),
         });
+        if (headed.includes(key)) {
+          fixed = scored.length;
+        }
       }
-      if (reranker !== undefined && ranking !== undefined && scored.length > 1) {
-        ranking = { ...ranking, reranked: await rerankFirst(reranker, query, scored, rerankCount) };
+      if (reranker !== undefined && ranking !== undefined && scored.length - fixed > 1) {
+        // The reranker orders what follows the results that stand first for their heading.
+        const rest = scored.slice(fixed);
+        ranking = { ...ranking, reranked: await rerankFirst(reranker, query, rest, rerankCount) };
+        scored.splice(fixed, rest.length, ...rest);
       }
       return {
         query,

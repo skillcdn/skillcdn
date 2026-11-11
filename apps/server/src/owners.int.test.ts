@@ -35,7 +35,7 @@ describe("the page of an account", () => {
       avatar: "https://avatars.githubusercontent.com/u/42?s=320&v=4",
       bio: "Skills for everything Acme makes.",
       url: "https://github.com/Acme",
-      publicRepositories: 7,
+      publicRepositories: 8,
     });
     expect(first.indexed).toEqual([]);
     expect(first.repositories).toEqual([
@@ -61,7 +61,10 @@ describe("the page of an account", () => {
     expect(first.nextPage).toBe(2);
 
     const last = restOwnerSchema.parse(await (await h.request(`${OWNER}?page=4`)).json());
-    expect(last.repositories.map((repository) => repository.name)).toEqual(["with-manifest"]);
+    expect(last.repositories.map((repository) => repository.name)).toEqual([
+      "specification-pack",
+      "with-manifest",
+    ]);
     expect(last.nextPage).toBeNull();
 
     // The listing came from the host's own list: no repository was resolved, none indexed.
@@ -84,7 +87,7 @@ describe("the page of an account", () => {
     await h.snapshots.idle();
 
     const pages = [];
-    for (const page of [1, 2, 3]) {
+    for (const page of [1, 2, 3, 4]) {
       pages.push(restOwnerSchema.parse(await (await h.request(`${OWNER}?page=${page}`)).json()));
     }
     const [first] = pages;
@@ -118,6 +121,7 @@ describe("the page of an account", () => {
       "licensed",
       "multilingual-pack",
       "single-skill",
+      "specification-pack",
     ]);
     // Only the first page leads with it.
     expect(pages[1]?.indexed).toEqual([]);

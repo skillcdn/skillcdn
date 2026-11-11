@@ -208,6 +208,12 @@ export interface FindRanking {
   readonly meaning: boolean;
   /** True when the first results were reranked by the reranker (ADR-0065). */
   readonly reranked: boolean;
+  /**
+   * True when the query was identifiers alone, a number or a name, and was ranked by its words
+   * for that, the search by meaning left unasked (ADR-0079); `meaning` and `reranked` are then
+   * false.
+   */
+  readonly identifiers?: boolean | undefined;
 }
 
 /** One result of a search across the packs a deployment serves (ADR-0070): an item, and the pack it is in. */

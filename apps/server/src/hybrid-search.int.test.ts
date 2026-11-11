@@ -228,6 +228,31 @@ describe("a search by words and by meaning", () => {
     expect(body.items[0]).toMatchObject({ path: "docs/invoicing.md" });
   });
 
+  it("ranks a query of identifiers alone by its words, asking neither model, and says so (ADR-0079)", async () => {
+    const asked = embed.calls.filter((call) => call.as === "query").length;
+    const reranked = rerank.calls.length;
+    const text = await search("JOB-4090");
+    expect(text).toMatch(/^1\. document: docs\/api\/jobs\.md/m);
+    expect(text).toContain(
+      "Ranked by words alone: a query of numbers and names is matched as written.",
+    );
+    const body = await find("JOB-4090");
+    expect(body.ranking).toEqual({ meaning: false, reranked: false, identifiers: true });
+    expect(body.items[0]).toMatchObject({ kind: "document", path: "docs/api/jobs.md" });
+    expect(embed.calls.filter((call) => call.as === "query").length).toBe(asked);
+    expect(rerank.calls.length).toBe(reranked);
+
+    // A question that begins with the identifier is answered by words and meaning, and the
+    // document one of whose headings names the identifier stands first, whatever the reranker
+    // makes of the rest.
+    rerank.prefer("Release notes");
+    const led = await find("JOB-4090 when two visits overlap");
+    rerank.prefer(undefined);
+    expect(led.ranking).toEqual({ meaning: true, reranked: true });
+    expect(led.items[0]).toMatchObject({ kind: "document", path: "docs/api/jobs.md" });
+    expect(led.items.map((item) => item.path)).toContain("docs/release-notes.md");
+  });
+
   it("reranks the first results by the reranker's scores, and keeps the fused order when it does not answer", async () => {
     const fused = await find("reminder");
     const paths = fused.items.map((item) => item.path);

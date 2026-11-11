@@ -39,6 +39,7 @@ import {
   type IndexOutcome,
   inspectMarkdownLinks,
   isBinaryPath,
+  isHeadedBy,
   isReadmePath,
   isWithinRepoPath,
   joinRepoPath,
@@ -63,6 +64,7 @@ import {
   parseLfsPointer,
   parseRepoPath,
   parseSkillUri,
+  queryIdentifiers,
   queryLexemes,
   queryWeights,
   READ_FILE_DEFAULT_LIMIT,
@@ -248,6 +250,8 @@ export const MEANING_SECTION_CANDIDATES = 40;
 const SECTION_CANDIDATES = 5;
 /** What a reranker is given of a result: the heading path and the start of the best section. */
 const RERANK_CANDIDATE_CHARS = 1200;
+/** How many of the words' first results are read for a heading that names the identifier the query begins with. */
+export const HEADED_CANDIDATES = 10;
 
 /** A result with the sections of its page computed, and the text the reranker scores it by. */
 interface Detailed {
@@ -849,6 +853,37 @@ export class Reader<M extends MountContext = MountContext> {
     } catch {
       return { attempted: true, nearest: undefined };
     }
+  }
+
+  /** Whether a search of this index could be answered by meaning as well as by words. */
+  #meaningAtHand(index: ReadableIndex): boolean {
+    return this.#dependencies.meaning !== undefined && index.store.searchByMeaning !== undefined;
+  }
+
+  /**
+   * The documents among the words' first results one of whose headings names the
+   * identifier a query begins with (ADR-0079), in the words' order: the section a number or a
+   * name heads is where it is defined, and every other document only mentions it. A document
+   * this mount describes without serving is not read for it.
+   */
+  async #headedBy(
+    mount: M,
+    index: ReadableIndex,
+    words: readonly IndexEntry[],
+    leading: string,
+  ): Promise<IndexEntry[]> {
+    const candidates = words.filter((row) => row.kind === "markdown").slice(0, HEADED_CANDIDATES);
+    const headed = await Promise.all(
+      candidates.map(async (row) => {
+        const license = await this.#licenseAt(index, row.path as RepoPath);
+        if (!servesInFull(license, servedInFull(mount))) {
+          return false;
+        }
+        const text = await index.blobs.read(row.blobSha);
+        return text !== undefined && isHeadedBy(text, leading);
+      }),
+    );
+    return candidates.filter((_, at) => headed[at] === true);
   }
 
   /**
@@ -1494,34 +1529,68 @@ export class Reader<M extends MountContext = MountContext> {
       // Each word weighs by its rarity among the entries searched (ADR-0069), where the store counts.
       const weights = await this.#weightsOf(index, path, lexemes);
       const words = await index.store.search(path, lexemes, weights);
+      // A query that is identifiers alone, a number or a name, is ranked by its words (ADR-0079):
+      // meaning has nothing to say of it and, fused in, buries the document the words name. It
+      // is asked only when the words found nothing.
+      const identifiers = queryIdentifiers(query);
+      const wordsAlone = identifiers.only && words.length > 0;
       // And the sections nearest in meaning, where the index keeps vectors and an embedder is at
       // hand (ADR-0064): fused with the words' results, or left out when the embedder did not
       // answer, which the result says.
-      const meaning = await this.#meaningOf(index, path, query);
-      const rows =
+      const meaning = wordsAlone
+        ? { attempted: false, nearest: undefined }
+        : await this.#meaningOf(index, path, query);
+      const fused =
         meaning.nearest === undefined ? words : fuseEntries(entries, words, meaning.nearest);
+      // The documents one of whose headings names the identifier the query begins with
+      // stand first, in the words' order, whatever else was found.
+      const headed =
+        identifiers.leading === undefined
+          ? []
+          : await this.#headedBy(mount, index, words, identifiers.leading);
+      const headedPaths = new Set<string>(headed.map((row) => row.path));
+      const rows =
+        headed.length === 0
+          ? fused
+          : [...headed, ...fused.filter((row) => !headedPaths.has(row.path))];
       items = this.#fold({ ...mount, address: { ...mount.address, path } }, entries, rows);
       totals = undefined;
+      // How many results stand first for their heading: the documents themselves, or the skill a
+      // headed file was folded under.
+      const standsFirst = (item: FindItem): boolean =>
+        item.kind === "document"
+          ? headedPaths.has(item.path)
+          : item.files.some((file) => headedPaths.has(file.path));
+      let fixed = 0;
+      for (const item of items) {
+        if (!standsFirst(item)) break;
+        fixed += 1;
+      }
       // The sections that matched, for the documents of this page and for the first results the
       // reranker scores: their texts are read for it.
-      const reranker = this.#dependencies.meaning?.reranker;
+      const reranker = wordsAlone ? undefined : this.#dependencies.meaning?.reranker;
       const candidates =
         reranker === undefined
           ? 0
           : (this.#dependencies.meaning?.rerankCandidates ?? RERANK_CANDIDATES);
       const detailed = await Promise.all(
         items
-          .slice(0, Math.max(offset + limit, candidates))
+          .slice(0, Math.max(offset + limit, fixed + candidates))
           .map((item) =>
             this.#sectionsOf(mount, index, entries, item, { lexemes, weights, language, meaning }),
           ),
       );
+      // The reranker orders what follows the results that stand first for their heading.
+      const rest = detailed.slice(fixed);
       const reranked =
-        reranker === undefined ? false : await rerankFirst(reranker, query, detailed, candidates);
+        reranker === undefined ? false : await rerankFirst(reranker, query, rest, candidates);
+      detailed.splice(fixed, rest.length, ...rest);
       items = [...detailed.map((entry) => entry.item), ...items.slice(detailed.length)];
       ranking = meaning.attempted
         ? { meaning: meaning.nearest !== undefined, reranked }
-        : undefined;
+        : wordsAlone && this.#meaningAtHand(index)
+          ? { meaning: false, reranked: false, identifiers: true }
+          : undefined;
     }
     const diagnostics = await this.#diagnosticsOf(mount, index);
     const make = (count: number): FindResult => ({

@@ -97,6 +97,14 @@ describe("the search across every pack", () => {
     );
     // Without a model, the ranking says nothing of meaning.
     expect(found.ranking).toBeUndefined();
+    // A code asked for by itself: the document one of whose headings names it stands first,
+    // before the release notes that mention it (ADR-0079).
+    const coded = await search(h, "query=JOB-4090");
+    expect(coded.items[0]).toMatchObject({
+      address: "/gh/acme/document-pack",
+      item: { kind: "document", path: "docs/api/jobs.md" },
+    });
+    expect(coded.ranking).toBeUndefined();
 
     expect((await search(h, "query=release+notes&limit=1")).items).toHaveLength(1);
     for (const bad of [
