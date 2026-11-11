@@ -2,8 +2,15 @@ import { splitFrontMatter } from "./front-matter.js";
 import { parentDirectory } from "./repo-layout.js";
 import { MAX_REPO_PATH_LENGTH, type RepoPath, resolveRepoPath } from "./repo-path.js";
 
-/** Work bounds for untrusted Markdown; these are independent of the repository size. */
+/**
+ * Work bounds for untrusted Markdown; these are independent of the repository size. A source
+ * file names at most this many Markdown files, pictures and other files each: the references are
+ * counted by the files they name, so that an index whose every row links another section of the
+ * same chapter counts that chapter once (ADR-0082).
+ */
 export const MAX_MARKDOWN_REFERENCES = 200;
+/** How many links to Markdown files one source file records, whatever number of files they name. */
+export const MAX_MARKDOWN_LINKS = 2000;
 export const MAX_LINK_MARKDOWN_LENGTH = 262_144;
 
 export interface MarkdownReference {
@@ -11,6 +18,8 @@ export interface MarkdownReference {
   readonly href: string;
   /** The resolved path from the repository root, with no fragment. */
   readonly path: RepoPath;
+  /** The fragment of the destination, decoded: the section of the file the link names (ADR-0082). */
+  readonly fragment?: string;
 }
 
 export interface MarkdownReferenceInspection {
@@ -59,6 +68,23 @@ export function resolveLocalLink(source: RepoPath, href: string): RepoPath | und
     return undefined;
   }
   return resolveRepoPath(parentDirectory(source), destination);
+}
+
+/**
+ * The fragment of a link destination, decoded once: what follows its first `#`, or nothing when
+ * it has none or an empty one. A fragment that does not decode is taken as written.
+ */
+export function fragmentOf(href: string): string | undefined {
+  const hash = href.indexOf("#");
+  if (hash < 0 || hash === href.length - 1) {
+    return undefined;
+  }
+  const raw = href.slice(hash + 1);
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
 }
 
 /** Resolve one local Markdown destination, decoding it once and never escaping the repository. */
@@ -229,8 +255,9 @@ export function inspectMarkdownReferences(
  * Every local link in prose, by what it names: the Markdown files, which are the references
  * that extend what is readable; the pictures, with their alternative text; and the other files.
  * Inline, full, collapsed and shortcut forms, for links and pictures alike. Code, external URLs,
- * malformed encodings and paths outside the repository are ignored, and each list stops at
- * {@link MAX_MARKDOWN_REFERENCES}, which `truncated` says.
+ * malformed encodings and paths outside the repository are ignored. The pictures and the other
+ * files stop at {@link MAX_MARKDOWN_REFERENCES} each; the references stop at that many files
+ * named and at {@link MAX_MARKDOWN_LINKS} links to them, which `truncated` says.
  */
 export function inspectMarkdownLinks(source: RepoPath, markdown: string): MarkdownLinkInspection {
   if (markdown.length > MAX_LINK_MARKDOWN_LENGTH) {
@@ -251,6 +278,8 @@ export function inspectMarkdownLinks(source: RepoPath, markdown: string): Markdo
   const images: MarkdownLink[] = [];
   const files: MarkdownLink[] = [];
   const seen = new Set<string>();
+  /** The Markdown files the references name: what their limit counts. */
+  const referenced = new Set<string>();
   let truncated = false;
   for (const match of bracketedLabels(withoutDefinitions)) {
     const at = match.index;
@@ -281,7 +310,12 @@ export function inspectMarkdownLinks(source: RepoPath, markdown: string): Markdo
     const path = resolveLocalLink(source, href);
     if (path === undefined) continue;
     const list = image ? images : path.toLowerCase().endsWith(".md") ? references : files;
-    if (list.length >= MAX_MARKDOWN_REFERENCES) {
+    if (
+      list === references
+        ? references.length >= MAX_MARKDOWN_LINKS ||
+          (!referenced.has(path) && referenced.size >= MAX_MARKDOWN_REFERENCES)
+        : list.length >= MAX_MARKDOWN_REFERENCES
+    ) {
       truncated = true;
       continue;
     }
@@ -289,7 +323,9 @@ export function inspectMarkdownLinks(source: RepoPath, markdown: string): Markdo
     if (image) {
       images.push({ href, path, alt: match.label.trim().replace(/\s+/g, " ") });
     } else if (list === references) {
-      references.push({ href, path });
+      const fragment = fragmentOf(href);
+      referenced.add(path);
+      references.push({ href, path, ...(fragment === undefined ? {} : { fragment }) });
     } else {
       files.push({ href, path });
     }

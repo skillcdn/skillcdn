@@ -55,8 +55,16 @@ export interface SkillFrontMatter {
    * file the tree has, or as an `https` URL.
    */
   readonly image?: string;
-  /** Local Markdown destinations, normalized to repository-root paths. */
-  readonly references?: readonly { readonly href: string; readonly path: string }[];
+  /**
+   * Local Markdown destinations, normalized to repository-root paths; with the `section` a
+   * destination's fragment names in a served file, as the offset and the length that read it
+   * (ADR-0082).
+   */
+  readonly references?: readonly {
+    readonly href: string;
+    readonly path: string;
+    readonly section?: { readonly offset: number; readonly length: number };
+  }[];
   /** Readable through a link, without becoming an independent catalog/search document. */
   readonly linkedOnly?: boolean;
   /** Readable as a directory introduction, without creating a catalog/search document. */

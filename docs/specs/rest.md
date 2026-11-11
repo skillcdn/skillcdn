@@ -128,7 +128,7 @@ Context text is bounded to 16 KiB of UTF-8 per page: root-to-nearest rules first
 
 ### `GET /api/v1/files/<address>?path=&offset=&limit=`
 
-The `read_repo_file` tool. `path` is a canonical file path inside the mount. `offset` and `limit` are character counts (`limit` 1 to 100,000, default 40,000). Reads do not wait for indexing: they return HTTP 503 with `index.indexing` or `index.failed` until the served set, including exclusions, is known. All reading routes enforce ancestor exclusions and failed policy boundaries.
+The `read_repo_file` tool. `path` is a canonical file path inside the mount. `offset` and `limit` are character counts (`limit` 1 to 100,000, default 40,000). Reads do not wait for indexing: they return HTTP 503 with `index.indexing` or `index.failed` until the served set, including exclusions, is known. The `references` of a page are its links to Markdown files, each with the `href` as written, the repository-root `path`, its `status` and, where the link's fragment names a section of a file the mount can read, `section`, the `offset` and the `length` that read it with the sections under it ([ADR-0082](../adr/0082-a-links-fragment-names-a-section-and-a-reference-is-resolved-to-it.md)). All reading routes enforce ancestor exclusions and failed policy boundaries.
 
 ```json
 { "kind": "file", "commit": "<the commit read>", "path": "marketing/docs/guide.md", "content": "...", "offset": 0, "nextOffset": null, "totalLength": 1234 }

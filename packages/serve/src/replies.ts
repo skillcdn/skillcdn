@@ -193,13 +193,24 @@ export function skillReply(result: SkillResult, continuation = false): ToolReply
   return reply(renderSkillResult(data));
 }
 
+/** How many links of a page a file read lists: each a file, or a section of one with what reads it (ADR-0082). */
+const FILE_REFERENCES = 12;
+
 export function fileReply(result: FileResult): ToolReply {
-  const references = uniqueReferences(result.references ?? []);
-  const shownReferences = briefList(references, 5, SKILL_REFERENCES_BYTES);
+  // A link is listed once: the same destination written twice in a page is one thing to follow.
+  const seen = new Set<string>();
+  const references = (result.references ?? []).filter((reference) => {
+    if (seen.has(reference.href)) return false;
+    seen.add(reference.href);
+    return true;
+  });
+  const shownReferences = briefList(references, FILE_REFERENCES, SKILL_REFERENCES_BYTES);
+  const more = references.length - shownReferences.length;
   const data: FileResult = {
     ...result,
     references: shownReferences,
-    referencesTruncated: references.length > shownReferences.length,
+    referencesTruncated: more > 0,
+    ...(more > 0 ? { referencesMore: more } : {}),
   };
   return reply(renderFileResult(data));
 }

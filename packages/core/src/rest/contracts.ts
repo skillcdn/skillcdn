@@ -86,6 +86,8 @@ export const restReferenceSchema = z.object({
   href: z.string(),
   path: z.string(),
   status: z.enum(["available", "outside_mount", "missing", "blocked"]),
+  /** For an available file whose link names a section by its fragment: what reads the section (ADR-0082). */
+  section: z.optional(z.object({ offset: count, length: count })),
 });
 /** The license a skill or a repository carries, as the index classified it (ADR-0026). */
 export const restLicenseSchema = z.object({

@@ -1088,3 +1088,92 @@ describe("licenses (ADR-0026)", () => {
     );
   });
 });
+
+describe("the section a link's fragment names (ADR-0082)", () => {
+  const PROCEDURES = [
+    "# 4 Link control",
+    "",
+    "## 4.2.6 Link resumption",
+    "",
+    "Taken up again.",
+    "",
+    "### 4.2.6.1 Initiation",
+    "",
+    "The buoy asks.",
+    "",
+    "## 4.2.7 Detection of carrier loss",
+    "",
+    "Counted in windows.",
+    "",
+  ].join("\n");
+  const resumption = PROCEDURES.indexOf("## 4.2.6");
+  const loss = PROCEDURES.indexOf("## 4.2.7");
+
+  it("keeps with a reference the offset and the length that read the section it names", async () => {
+    const result = await index({
+      "docs/procedures.md": PROCEDURES,
+      "docs/overview.md":
+        "# Overview\n\nSee [4.2.6](procedures.md#4.2.6), [4.2.7](procedures.md#4.2.7) and [the chapter](procedures.md).\n",
+    });
+    expect(result.byPath.get("docs/overview.md")?.frontMatter?.references).toEqual([
+      {
+        href: "procedures.md#4.2.6",
+        path: "docs/procedures.md",
+        section: { offset: resumption, length: loss - resumption },
+      },
+      {
+        href: "procedures.md#4.2.7",
+        path: "docs/procedures.md",
+        section: { offset: loss, length: PROCEDURES.length - loss },
+      },
+      { href: "procedures.md", path: "docs/procedures.md" },
+    ]);
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it("reports a fragment that names no section, once per file, and names its own file's sections", async () => {
+    const result = await index({
+      "docs/procedures.md": `${PROCEDURES}\nBack to [4.2.6](procedures.md#4.2.6), and on to [5](procedures.md#5) and [6](procedures.md#6).\n`,
+    });
+    const references = result.byPath.get("docs/procedures.md")?.frontMatter?.references;
+    expect(references?.[0]).toMatchObject({ section: { offset: resumption } });
+    expect(references?.[1]).toEqual({ href: "procedures.md#5", path: "docs/procedures.md" });
+    expect(result.diagnostics).toEqual([
+      {
+        path: "docs/procedures.md",
+        code: "fragment_not_found",
+        message:
+          "2 links name sections their files do not have (procedures.md#5, procedures.md#6): a fragment is the words a heading begins with, in lower case and joined by hyphens",
+      },
+    ]);
+  });
+
+  it("says nothing of the sections of a file that is not served", async () => {
+    const result = await index({
+      "SKILLCDN.md": manifest("", "documents: [docs]\nexclude: [private]\n"),
+      "docs/overview.md":
+        "# Overview\n\n[Kept back](/private/notes.md#4.2.6) and [not there](/private/notes.md#nothing).\n",
+      "private/notes.md": PROCEDURES,
+    });
+    expect(result.byPath.get("private/notes.md")?.visible).toBe(false);
+    expect(result.byPath.get("docs/overview.md")?.frontMatter?.references).toEqual([
+      { href: "/private/notes.md#4.2.6", path: "private/notes.md" },
+      { href: "/private/notes.md#nothing", path: "private/notes.md" },
+    ]);
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it("counts the files an index names, not its rows", async () => {
+    const rows = Array.from(
+      { length: MAX_MARKDOWN_REFERENCES + 50 },
+      (_, at) => `- [row ${at}](procedures.md#4.2.${at % 2 === 0 ? 6 : 7})`,
+    ).join("\n");
+    const result = await index({
+      "docs/procedures.md": PROCEDURES,
+      "docs/index.md": `# Index\n\n${rows}\n`,
+    });
+    expect(result.truncated).toBe(false);
+    expect(result.diagnostics).toEqual([]);
+    expect(result.byPath.get("docs/index.md")?.frontMatter?.references).toHaveLength(2);
+  });
+});

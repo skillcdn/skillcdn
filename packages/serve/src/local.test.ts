@@ -278,13 +278,12 @@ describe("a directory served from a machine", () => {
     expect(first).toContain("--- content ---\n## Section 1\n");
     expect(first).toContain("The file continues at offset ");
     expect(first).not.toContain("More follows");
-    expect(first).toContain("- guide.md -> docs/guide.md (available)");
+    expect(first).toContain("Resolved references:\n- docs/guide.md");
     expect(first).not.toContain("marketing/ads/SKILL.md");
     const middle = await call("read_repo_file", { path: "docs/outline.md", ...section(2) });
     expect(middle).not.toContain("Resolved references");
     const whole = await call("read_repo_file", { path: "docs/outline.md" });
-    expect(whole).toContain("- guide.md -> docs/guide.md (available)");
-    expect(whole).toContain("- ../marketing/ads/SKILL.md -> marketing/ads/SKILL.md (available)");
+    expect(whole).toContain("Resolved references:\n- docs/guide.md\n- marketing/ads/SKILL.md");
     await client.close();
   });
 
@@ -436,6 +435,109 @@ describe("a directory served from a machine", () => {
       await client.callTool({ name: "browse_repo", arguments: { path: "docs/guide.md" } }),
     );
     expect(plain).not.toContain("as data");
+    await client.close();
+  });
+
+  it("resolves a link that names a section to what reads the section (ADR-0082)", async () => {
+    const procedures = [
+      "# 4 Link control",
+      "",
+      "## 4.2.6 Link resumption",
+      "",
+      "A lost link is taken up again.",
+      "",
+      "### 4.2.6.1 Initiation",
+      "",
+      "The buoy asks in its next window.",
+      "",
+      "## 4.2.7 Detection of carrier loss",
+      "",
+      "A station counts the windows without carrier.",
+      "",
+    ].join("\n");
+    const clauses = Array.from({ length: 14 }, (_, at) => `## 9.${at + 1} Clause\n\nText.\n`);
+    const { mount } = await pack({
+      "docs/procedures.md": procedures,
+      "docs/clauses.md": ["# 9 Clauses", "", ...clauses].join("\n"),
+      "docs/overview.md": [
+        "# Overview",
+        "",
+        "Resumption is [4.2.6](procedures.md#4.2.6); the loss is [4.2.7](procedures.md#4.2.7).",
+        "The whole chapter is [here](procedures.md), and [the guide](guide.md) says how to read it.",
+        "Nothing is numbered [9.99](procedures.md#9.99).",
+        "",
+      ].join("\n"),
+      "docs/index.md": [
+        "# Index",
+        "",
+        ...Array.from({ length: 14 }, (_, at) => `- [9.${at + 1}](clauses.md#9.${at + 1})`),
+        "",
+      ].join("\n"),
+    });
+    const app = appOf(mount);
+    const client = new Client({ name: "skillcdn-test", version: "0.0.0" });
+    await client.connect(
+      new StreamableHTTPClientTransport(new URL("http://local.test/local/packs/acme"), {
+        fetch: async (input, init) => app.fetch(new Request(input, init)),
+      }),
+    );
+    const call = async (name: string, args: Record<string, unknown>): Promise<string> =>
+      text(await client.callTool({ name, arguments: args }));
+
+    // The links of the page, by the file each names: a file once, with its sections.
+    const overview = await call("read_repo_file", { path: "docs/overview.md" });
+    const start = procedures.indexOf("## 4.2.6");
+    const next = procedures.indexOf("## 4.2.7");
+    expect(overview).toContain(
+      [
+        "Resolved references; a section is read with read_repo_file: the path, its offset and its limit.",
+        `- docs/procedures.md: 4.2.6 (offset ${start}, limit ${next - start}); 4.2.7 (offset ${next}, limit ${procedures.length - next})`,
+        "- docs/guide.md",
+      ].join("\n"),
+    );
+    // The section read by what the reference gave: the clause with the clause under it.
+    const section = await call("read_repo_file", {
+      path: "docs/procedures.md",
+      offset: start,
+      limit: next - start,
+    });
+    expect(section).toContain("--- content ---\n## 4.2.6 Link resumption\n");
+    expect(section).toContain("### 4.2.6.1 Initiation");
+    expect(section).not.toContain("4.2.7 Detection");
+
+    // A dozen links are listed, the rest counted: an index of one chapter names it once.
+    const index = await call("read_repo_file", { path: "docs/index.md" });
+    expect(index).toMatch(/- docs\/clauses\.md: 9\.1 \(offset \d+, limit \d+\); 9\.2 /);
+    expect(index).toContain("; 9.12 (offset ");
+    expect(index).not.toContain("9.13 (offset");
+    expect(index).toContain("- ... (2 more)");
+
+    // Over REST every reference carries its section, and the one that names none says so in the diagnostics.
+    const read = (await (
+      await app.request("/api/v1/files/local/packs/acme?path=docs%2Foverview.md")
+    ).json()) as {
+      references: { href: string; path: string; section?: { offset: number; length: number } }[];
+    };
+    expect(read.references.map((reference) => [reference.href, reference.section])).toEqual([
+      ["procedures.md#4.2.6", { offset: start, length: next - start }],
+      ["procedures.md#4.2.7", { offset: next, length: procedures.length - next }],
+      ["procedures.md", undefined],
+      ["guide.md", undefined],
+      ["procedures.md#9.99", undefined],
+    ]);
+    const browsed = restBrowseSchema.parse(
+      await (await app.request("/api/v1/browse/local/packs/acme?path=docs")).json(),
+    );
+    if (browsed.status !== "ready") throw new Error("not ready");
+    expect(browsed.diagnostics).toEqual([
+      {
+        path: "docs/overview.md",
+        code: "fragment_not_found",
+        message: expect.stringContaining(
+          "a link names a section its file does not have (procedures.md#9.99)",
+        ),
+      },
+    ]);
     await client.close();
   });
 

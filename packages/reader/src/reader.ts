@@ -540,21 +540,29 @@ export class Reader<M extends MountContext = MountContext> {
   async #references(
     mount: M,
     index: ReadableIndex,
-    references: readonly { href: string; path: string }[],
+    references: readonly {
+      readonly href: string;
+      readonly path: string;
+      readonly source?: string;
+      readonly section?: { readonly offset: number; readonly length: number };
+    }[],
   ): Promise<FileReference[]> {
     const entries = await this.#entriesOf(index);
     const available = new Set(entries.map((entry) => entry.path));
-    return references.map((reference) => {
+    return references.map(({ section, ...reference }) => {
       const path = parseRepoPath(reference.path);
+      const status: FileReference["status"] = !path.ok
+        ? "blocked"
+        : !isWithinRepoPath(mount.address.path, path.value)
+          ? "outside_mount"
+          : available.has(reference.path)
+            ? "available"
+            : "missing";
+      // The section a link names is said for a file that can be read here, and no other.
       return {
         ...reference,
-        status: !path.ok
-          ? "blocked"
-          : !isWithinRepoPath(mount.address.path, path.value)
-            ? "outside_mount"
-            : available.has(reference.path)
-              ? "available"
-              : "missing",
+        status,
+        ...(section === undefined || status !== "available" ? {} : { section }),
       };
     });
   }

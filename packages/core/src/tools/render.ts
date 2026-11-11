@@ -1,5 +1,6 @@
 import { formatAddress, isGitHostKey } from "../address.js";
 import { describeLicense } from "../license.js";
+import { fragmentOf } from "../markdown-links.js";
 import { renderSkillSections } from "../skill-document.js";
 import {
   BROWSE_DESCRIPTION_MAX_LENGTH,
@@ -42,6 +43,48 @@ function renderReferences(references: readonly FileReference[] | undefined): str
   return references === undefined || references.length === 0
     ? undefined
     : `Resolved references:\n${references.map((reference) => `- ${reference.source === undefined ? "" : `${reference.source}: `}${reference.href} -> ${reference.path} (${reference.status})`).join("\n")}`;
+}
+
+/**
+ * The links of a page of a file, by the file each names (ADR-0082): a file once, with the
+ * sections the links name in it and what reads each, so that a reference is followed by reading
+ * the section and not the file it stands in. A link that names no section, or one the file does
+ * not have, names the file.
+ */
+function renderFileReferences(
+  references: readonly FileReference[] | undefined,
+  more: number | undefined,
+  words: ToolWords,
+): string | undefined {
+  if (references === undefined || references.length === 0) {
+    return undefined;
+  }
+  const files = new Map<string, { status: FileReference["status"]; sections: string[] }>();
+  let sections = 0;
+  for (const reference of references) {
+    const file = files.get(reference.path) ?? { status: reference.status, sections: [] };
+    files.set(reference.path, file);
+    const fragment = fragmentOf(reference.href);
+    if (reference.section !== undefined && fragment !== undefined) {
+      const named = `${compactSummary(fragment, 60)} (${sectionRange(reference.section)})`;
+      if (!file.sections.includes(named)) {
+        file.sections.push(named);
+        sections += 1;
+      }
+    }
+  }
+  const lines = [...files].map(
+    ([path, file]) =>
+      `- ${path}${file.status === "available" ? "" : ` (${file.status})`}${file.sections.length === 0 ? "" : `: ${file.sections.join("; ")}`}`,
+  );
+  if (more !== undefined && more > 0) {
+    lines.push(`- ... (${more} more)`);
+  }
+  const head =
+    sections === 0
+      ? "Resolved references:"
+      : `Resolved references; a section is read with ${words.read}: the path, its offset and its limit.`;
+  return `${head}\n${lines.join("\n")}`;
 }
 
 /** A heading's text as an outline shows it; a heading without text is still a place in the file. */
@@ -662,7 +705,9 @@ export function renderFileResult(result: FileResult, words: ToolWords = MCP_TOOL
     header.join("\n"),
     notices(result.mount).join("\n"),
     `--- content ---\n${result.content}`,
-    renderReferences(result.references),
-    result.referencesTruncated ? "Reference list abbreviated; consult source links." : undefined,
+    renderFileReferences(result.references, result.referencesMore, words),
+    result.referencesTruncated && result.referencesMore === undefined
+      ? "Reference list abbreviated; consult source links."
+      : undefined,
   ]);
 }

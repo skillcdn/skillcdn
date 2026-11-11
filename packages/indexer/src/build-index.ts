@@ -16,6 +16,8 @@ import {
   describeListingProblem,
   describeOmittedFile,
   documentSources,
+  fragmentOf,
+  fragmentResolver,
   type GitHost,
   GitHostError,
   type IndexLimits,
@@ -47,6 +49,7 @@ import {
   repoManifestPath,
   resolveDocumentSource,
   resolveLicense,
+  type SectionRange,
   type ServedScope,
   type SkillListingProblem,
   searchFieldsOf,
@@ -76,8 +79,11 @@ import { gitBlobHash, sha256Hex } from "./git-hash.js";
  *     reference to a file that is not text are diagnostics (ADR-0076).
  * 14: a token joined by slashes or dots is a word of the vector beside the words it joins
  *     (ADR-0078).
+ * 15: a link's fragment names a section of the file it points to, kept with the reference as
+ *     the offset and the length that read it; a fragment that names no section is a diagnostic;
+ *     the references of a file are bounded by the files they name (ADR-0082).
  */
-export const INDEX_VERSION = 14;
+export const INDEX_VERSION = 15;
 
 /**
  * The lowest version of the reading rules whose index is still served while the commit is
@@ -386,6 +392,10 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
       diagnostics.push({ path, code, message });
     }
   };
+  // One diagnostic per file and kind, naming the first few: a document of many dead links
+  // would otherwise crowd out everything else the author is told.
+  const named = (hrefs: readonly string[]): string =>
+    `${hrefs.slice(0, 3).join(", ")}${hrefs.length > 3 ? ", ..." : ""}`;
   /**
    * The local links of a Markdown file, inspected for the author (ADR-0076): the references,
    * which extend what is readable, are returned; a link to a file the repository does not have, a
@@ -403,10 +413,6 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
         "Markdown reference extraction exceeded its input or reference limit; some links were not inspected",
       );
     }
-    // One diagnostic per file and kind, naming the first few: a document of many dead links
-    // would otherwise crowd out everything else the author is told.
-    const named = (hrefs: readonly string[]): string =>
-      `${hrefs.slice(0, 3).join(", ")}${hrefs.length > 3 ? ", ..." : ""}`;
     const dead: string[] = [];
     const binary: string[] = [];
     for (const link of [...inspected.references, ...inspected.files]) {
@@ -1147,6 +1153,64 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
     });
   }
 
+  // A link's fragment names a section of the file it points to (ADR-0082): kept with the
+  // reference as the offset and the length that read the section, so that a read follows a
+  // reference into a few thousand characters and not into the file. Resolved here, once every
+  // body is at hand, and only for a file that is served: what is withheld gives nothing away
+  // of where its headings stand. A fragment that names no section of a served file is reported.
+  const resolvers = new Map<string, (fragment: string) => SectionRange | undefined>();
+  const resolverOf = (
+    path: RepoPath,
+  ): ((fragment: string) => SectionRange | undefined) | undefined => {
+    const target = byCandidatePath.get(path);
+    if (
+      target === undefined ||
+      target.kind === "json" ||
+      target.kind === "other" ||
+      !served(path)
+    ) {
+      return undefined;
+    }
+    const text = texts.get(target.entry.hash);
+    if (text === undefined) {
+      return undefined;
+    }
+    let resolver = resolvers.get(target.entry.hash);
+    if (resolver === undefined) {
+      resolver = fragmentResolver(text);
+      resolvers.set(target.entry.hash, resolver);
+    }
+    return resolver;
+  };
+  const withSections = (indexed: IndexEntry): IndexEntry => {
+    const references = indexed.frontMatter?.references;
+    if (indexed.frontMatter === undefined || references === undefined || references.length === 0) {
+      return indexed;
+    }
+    const unnamed: string[] = [];
+    const resolved = references.map((reference) => {
+      const fragment = fragmentOf(reference.href);
+      const resolver = fragment === undefined ? undefined : resolverOf(reference.path as RepoPath);
+      const section = fragment === undefined ? undefined : resolver?.(fragment);
+      if (resolver !== undefined && section === undefined) {
+        unnamed.push(reference.href);
+      }
+      return {
+        href: reference.href,
+        path: reference.path,
+        ...(section === undefined ? {} : { section }),
+      };
+    });
+    if (unnamed.length > 0) {
+      report(
+        indexed.path as RepoPath,
+        "fragment_not_found",
+        `${unnamed.length === 1 ? "a link names a section its file does not have" : `${unnamed.length} links name sections their files do not have`} (${named(unnamed)}): a fragment is the words a heading begins with, in lower case and joined by hyphens`,
+      );
+    }
+    return { ...indexed, frontMatter: { ...indexed.frontMatter, references: resolved } };
+  };
+
   const entries: IndexEntry[] = files.map((entry) => {
     const skill = skills.get(parentDirectory(entry.path));
     const indexed =
@@ -1160,7 +1224,9 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
     const body = entry.size > limits.maxReadableFileBytes ? undefined : digests.get(entry.hash);
     const digested = body === undefined ? {} : { digest: body.digest, servedSize: body.size };
     if (indexed !== undefined) {
-      const known = indexed.digest === undefined ? { ...indexed, ...digested } : indexed;
+      const known = withSections(
+        indexed.digest === undefined ? { ...indexed, ...digested } : indexed,
+      );
       // The files of a skill that left search leave it too: a hidden copy of a visible skill
       // would otherwise come back through its reference files (ADR-0024).
       const audible = skillDir === undefined || !silenced.has(skillDir);

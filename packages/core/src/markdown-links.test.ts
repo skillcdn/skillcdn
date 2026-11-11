@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   extractMarkdownReferences,
+  fragmentOf,
   inspectMarkdownLinks,
   inspectMarkdownReferences,
   MAX_LINK_MARKDOWN_LENGTH,
+  MAX_MARKDOWN_LINKS,
   MAX_MARKDOWN_REFERENCES,
   resolveLocalLink,
   resolveMarkdownReference,
@@ -32,7 +34,11 @@ describe("Markdown references", () => {
       "[unused]: /private.md",
     ].join("\n");
     expect(extractMarkdownReferences(source, markdown)).toEqual([
-      { href: "references/style.md#tone", path: "team/skills/write/references/style.md" },
+      {
+        href: "references/style.md#tone",
+        path: "team/skills/write/references/style.md",
+        fragment: "tone",
+      },
       { href: "/shared/guide.md", path: "shared/guide.md" },
       { href: "references/a%20b.md", path: "team/skills/write/references/a b.md" },
       { href: "../../guide.md", path: "team/guide.md" },
@@ -166,6 +172,41 @@ describe("Markdown references", () => {
     expect(exceeded.truncated).toBe(true);
     expect(exceeded.references).toHaveLength(MAX_MARKDOWN_REFERENCES);
     expect(exceeded.references).toEqual(extractMarkdownReferences(source, links));
+  });
+
+  it("keeps the fragment of a link, and counts the references by the files they name (ADR-0082)", () => {
+    expect(fragmentOf("guide.md#4.2.7")).toBe("4.2.7");
+    expect(fragmentOf("guide.md#table%20c-2")).toBe("table c-2");
+    expect(fragmentOf("guide.md#100%")).toBe("100%");
+    expect(fragmentOf("guide.md")).toBeUndefined();
+    expect(fragmentOf("guide.md#")).toBeUndefined();
+    // An index whose every row links another section of one chapter names one file.
+    const rows = Array.from(
+      { length: MAX_MARKDOWN_REFERENCES * 3 },
+      (_, index) => `[6.1.${index}](/docs/definitions.md#6.1.${index})`,
+    ).join("\n");
+    const index = inspectMarkdownReferences(source, rows);
+    expect(index.truncated).toBe(false);
+    expect(index.references).toHaveLength(MAX_MARKDOWN_REFERENCES * 3);
+    expect(index.references[7]).toEqual({
+      href: "/docs/definitions.md#6.1.7",
+      path: "docs/definitions.md",
+      fragment: "6.1.7",
+    });
+    // A file more than the limit of files is left out, whatever sections of the others follow.
+    const files = Array.from(
+      { length: MAX_MARKDOWN_REFERENCES },
+      (_, at) => `[x](/${at}.md#a) [y](/${at}.md#b)`,
+    ).join(" ");
+    const full = inspectMarkdownReferences(source, `${files} [late](/0.md#c)`);
+    expect(full.truncated).toBe(false);
+    expect(full.references).toHaveLength(MAX_MARKDOWN_REFERENCES * 2 + 1);
+    expect(inspectMarkdownReferences(source, `${files} [one more](/more.md)`).truncated).toBe(true);
+    // And the links to them are bounded too.
+    const many = Array.from({ length: MAX_MARKDOWN_LINKS + 5 }, (_, at) => `[x](/a.md#${at})`);
+    const cut = inspectMarkdownReferences(source, many.join(" "));
+    expect(cut.truncated).toBe(true);
+    expect(cut.references).toHaveLength(MAX_MARKDOWN_LINKS);
   });
 
   it("stays fast on brackets that never close, and still finds the link at the end", () => {

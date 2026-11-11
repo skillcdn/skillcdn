@@ -95,9 +95,11 @@ export {
 } from "./markdown-data.js";
 export {
   extractMarkdownReferences,
+  fragmentOf,
   inspectMarkdownLinks,
   inspectMarkdownReferences,
   MAX_LINK_MARKDOWN_LENGTH,
+  MAX_MARKDOWN_LINKS,
   MAX_MARKDOWN_REFERENCES,
   type MarkdownLink,
   type MarkdownLinkInspection,
@@ -478,6 +480,12 @@ export {
 } from "./rest/social.js";
 export { err, ok, type Result } from "./result.js";
 export { stemEnglish } from "./search/english-stemmer.js";
+export {
+  fragmentResolver,
+  headingSlug,
+  type SectionRange,
+  sectionOfFragment,
+} from "./search/fragments.js";
 export { type FusionOptions, fuseRanks, RRF_K } from "./search/fusion.js";
 export {
   headingNames,

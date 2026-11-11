@@ -4,7 +4,9 @@ import { join } from "node:path";
 import {
   type Embedder,
   type FindResult,
+  fragmentOf,
   headingNames,
+  headingSlug,
   outlineMarkdown,
   queryIdentifiers,
 } from "@skillcdn/core";
@@ -282,5 +284,58 @@ describe("the specification pack, had as data (ADR-0080)", () => {
     if (answer.status !== "ready") throw new Error(answer.status);
     expect(answer.result.outline?.tables).toEqual({ count: 2, rows: 40 });
     expect(answer.result.outline?.headings.map((heading) => heading.rows)).toEqual([20, 20]);
+  });
+});
+
+describe("the specification pack, followed by its references (ADR-0082)", () => {
+  it("resolves every link that names a section, to less than half of the file it stands in", async () => {
+    const { reader, mount } = await memoryReader(SPECIFICATION_PACK_PATH);
+    let links = 0;
+    let sectionChars = 0;
+    let fileChars = 0;
+    for (const [path, body] of FILES) {
+      const answer = await reader.file(mount, { path, limit: 100_000 });
+      if (answer.kind !== "found") throw new Error(`${path}: ${answer.kind}`);
+      for (const reference of answer.file.references ?? []) {
+        const fragment = fragmentOf(reference.href);
+        if (fragment === undefined) continue;
+        links += 1;
+        const { section } = reference;
+        expect(section, `${path}: ${reference.href}`).toBeDefined();
+        if (section === undefined) continue;
+        const target = FILES.get(reference.path) ?? "";
+        const read = target.slice(section.offset, section.offset + section.length);
+        // What is read begins with the heading the fragment names.
+        const heading = (read.split("\n", 1)[0] ?? "").replace(/^#+\s*/, "");
+        expect(headingSlug(heading).startsWith(fragment.toLowerCase()), reference.href).toBe(true);
+        sectionChars += read.length;
+        fileChars += target.length;
+      }
+      expect(body.length).toBeGreaterThan(0);
+    }
+    expect(links).toBeGreaterThanOrEqual(25);
+    expect(sectionChars).toBeLessThan(fileChars / 2);
+  });
+
+  it("gives a clause with the clauses under it, and a clause without any as itself", async () => {
+    const { reader, mount } = await memoryReader(SPECIFICATION_PACK_PATH);
+    const general = `${SET}/04-link-control/010-4.1-general.md`;
+    const answer = await reader.file(mount, { path: general });
+    if (answer.kind !== "found") throw new Error(answer.kind);
+    const resumption = answer.file.references?.find((reference) =>
+      reference.href.endsWith("#4.2.6"),
+    );
+    const target = FILES.get(resumption?.path ?? "") ?? "";
+    const section = resumption?.section ?? { offset: 0, length: 0 };
+    const read = target.slice(section.offset, section.offset + section.length);
+    expect(read.startsWith("### 4.2.6 Link resumption")).toBe(true);
+    for (const under of ["4.2.6.1 Initiation", "4.2.6.2 Guard times", "4.2.6.3 Failure"]) {
+      expect(read).toContain(`#### ${under}`);
+    }
+    // The outline's own length for the heading ends at the first clause under it.
+    const outline = outlineMarkdown(target).headings.find((heading) =>
+      heading.text.startsWith("4.2.6 "),
+    );
+    expect(section.length).toBeGreaterThan(outline?.length ?? Number.MAX_SAFE_INTEGER);
   });
 });

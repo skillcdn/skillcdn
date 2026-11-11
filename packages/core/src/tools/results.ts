@@ -11,6 +11,11 @@ export interface FileReference {
   readonly href: string;
   readonly path: string;
   readonly status: "available" | "outside_mount" | "missing" | "blocked";
+  /**
+   * For an available file whose link names a section by its fragment (ADR-0082): the offset and
+   * the length that read the section, with the sections under it.
+   */
+  readonly section?: { readonly offset: number; readonly length: number };
 }
 export interface BrowseEntry {
   readonly browsePath?: RepoPath;
@@ -395,6 +400,8 @@ export interface SkillServing {
 
 export interface FileResult {
   readonly referencesTruncated?: boolean;
+  /** How many links of the page the list of references leaves out, when it leaves any out. */
+  readonly referencesMore?: number;
   readonly references?: readonly FileReference[];
   /** On the first page of a Markdown document: what it says it was made from (ADR-0076). */
   readonly sources?: readonly DocumentSource[];
