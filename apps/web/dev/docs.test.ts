@@ -367,12 +367,18 @@ function turboInputs(task: string): readonly RegExp[] {
 }
 
 describe("the files the navigation publishes", () => {
-  const published = () => [
-    NAV_FILE,
-    ...loadDocs(REPOSITORY_ROOT).catalog.sections.flatMap((section) =>
-      section.pages.map((page) => page.file),
-    ),
-  ];
+  // Read once for the tests below: loading the documentation renders every page of it, and
+  // doing so for each question ran past the time a test has on a loaded machine.
+  let files: string[] | undefined;
+  const published = (): string[] => {
+    files ??= [
+      NAV_FILE,
+      ...loadDocs(REPOSITORY_ROOT).catalog.sections.flatMap((section) =>
+        section.pages.map((page) => page.file),
+      ),
+    ];
+    return files;
+  };
 
   it("survive .dockerignore, so that the image builds the pages", () => {
     // The pages are built inside the image, from a build context that .dockerignore trims down
