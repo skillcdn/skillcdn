@@ -16,9 +16,11 @@ import {
   type MountCatalog,
   outlineMarkdown,
   parseRepoPath,
+  READ_FILE_DEFAULT_LIMIT,
   type RepoPath,
   ROOT_PATH,
   renderInstructions,
+  sectionsOf,
   skillUriPrefix,
   splitFrontMatter,
 } from "@skillcdn/core";
@@ -38,6 +40,8 @@ export interface CheckOptions {
 
 /** How many not-served paths the report names. */
 const NAMED_NOT_SERVED = 12;
+/** How many notes the report lists in full. */
+const NAMED_NOTES = 12;
 
 function pathOf(text: string): RepoPath {
   const parsed = parseRepoPath(text);
@@ -199,14 +203,37 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
   // A document's sections are what a search names and what `browse_repo` outlines (ADR-0063):
   // the author sees how many a document has.
   write(`Documents outside the skills: ${documents.length}\n`);
+  // What an author may want to know and nothing is wrong with: a note never fails the check.
+  const notes: string[] = [];
   for (const document of documents) {
     const text = document.kind === "markdown" ? await blobs.read(document.blobSha) : undefined;
-    const sections = text === undefined ? 0 : outlineMarkdown(text).headings.length;
+    const outline = text === undefined ? undefined : outlineMarkdown(text);
+    const sections = outline?.headings.length ?? 0;
     write(
       `- ${document.path}${document.title === undefined ? "" : ` - ${document.title}`}${sections === 0 ? "" : ` (${sections} ${sections === 1 ? "section" : "sections"})`}\n`,
     );
+    // A section is what an agent reads at once: one longer than a read carries is read in
+    // several calls, and a search that names it names more than was asked for.
+    for (const section of text === undefined ? [] : sectionsOf(text, outline)) {
+      if (section.length > READ_FILE_DEFAULT_LIMIT) {
+        const heading = section.heading.at(-1);
+        notes.push(
+          `${document.path} (section_large): ${heading === undefined ? "the text before the first heading" : `the section ${JSON.stringify(heading)}`} is ${section.length} characters, more than one read carries (${READ_FILE_DEFAULT_LIMIT}); a long table stands in sections of a few dozen rows, a long text under more headings`,
+        );
+      }
+    }
   }
   write("\n");
+  if (notes.length > 0) {
+    write(`Notes: ${notes.length}\n`);
+    for (const note of notes.slice(0, NAMED_NOTES)) {
+      write(`- ${note}\n`);
+    }
+    if (notes.length > NAMED_NOTES) {
+      write(`- ... (${notes.length - NAMED_NOTES} more)\n`);
+    }
+    write("\n");
+  }
 
   // Markdown and JSON over the per-file indexing limit are listed and read, never searched or
   // summarized; the author learns which, since nothing else says so.

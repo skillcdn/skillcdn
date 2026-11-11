@@ -177,4 +177,38 @@ describe("checking a working tree", () => {
     expect(report).toContain("2 index issue(s) found");
     expect(report).not.toContain("1 manifest(s) could not be read");
   });
+
+  it("notes a section longer than one read carries, and fails nothing for it (ADR-0081)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "skillcdn-check-sections-"));
+    await mkdir(join(root, "docs"));
+    // A table of 1,400 rows under one heading: one section, read whole for one row.
+    const table = [
+      "## TABLE C-2 Modifier codes",
+      "",
+      "| Code | Meaning |",
+      "|---|---|",
+      ...Array.from({ length: 1400 }, () => "| AA | a code and what it means |"),
+    ];
+    await writeFile(
+      join(root, "docs", "codes.md"),
+      ["# Codes", "", "A short introduction.", "", ...table, "", "## Notes", "", "Short.", ""].join(
+        "\n",
+      ),
+    );
+    await writeFile(
+      join(root, "docs", "guide.md"),
+      ["# Guide", "", "Short throughout.", ""].join("\n"),
+    );
+    const { code, report } = await check(root);
+    expect(code).toBe(0);
+    expect(report).toContain("Notes: 1");
+    expect(report).toContain(
+      '- docs/codes.md (section_large): the section "TABLE C-2 Modifier codes" is ',
+    );
+    expect(report).toContain(" characters, more than one read carries (40000)");
+    expect(report).toContain("ok: no index diagnostics");
+    // A pack whose sections are all read at once has no notes to show.
+    await writeFile(join(root, "docs", "codes.md"), ["# Codes", "", "Short.", ""].join("\n"));
+    expect((await check(root)).report).not.toContain("Notes:");
+  });
 });

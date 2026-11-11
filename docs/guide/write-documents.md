@@ -31,6 +31,34 @@ handbook/
 - **A map in every document set**: the `README.md` of the folder, one line per document in the order they are read, the title linked to the file with what it holds; for a set cut from one original, the chapters in the order of the original. An agent reads the map before it searches, and a search result marks the map as the overview of its folder, so that the agent goes on to the document it names.
 - **The manifest declares the document roots and the language.** `documents` names the directories that hold documents, `docs` unless said otherwise; `language` tells the agent what language to search in and chooses how the words are matched; a folder written in another language gets a manifest of its own. A repository that declares itself with a manifest is also embedded for the search by meaning ahead of any search, where a deployment searches by meaning; one without is searched by its words until someone searches it ([the worker](../../deploy/README.md#the-worker)).
 
+## A long original
+
+A specification or a manual of hundreds of pages, with numbered clauses, tables of codes and definitions in a notation of its own, is laid out by its own numbers ([ADR-0081](../adr/0081-a-long-original-is-laid-out-by-its-own-numbers-in-sections-read-at-once.md)):
+
+```
+link-protocol/
+  README.md                         the map of the set: the chapters in the order of the original
+  01-scope-and-terms.md             a short chapter: one file
+  04-link-control/                  a chapter too long for one file: a folder with a map of its own
+    README.md                       which sections and which pages each file holds
+    010-4.1-general.md              a number that keeps the order, then the first section the file holds
+    030-4.2.6-link-resumption.md
+  annex-c/
+    README.md                       which rows of a long table each file holds
+    020-table-c-2-modifier-codes-aa-to-dz.md
+  index/                            lookup tables made from the chapters, found by their words alone
+    SKILLCDN.md                     documents: [.]   search: { meaning: false }
+    definitions.md
+```
+
+- **A heading carries the number and the name of the original**, `4.2.7 Detection of carrier loss`, `TABLE C-2 Modifier codes`. An agent asks a specification for a clause by its number and a table by its name; such a query is answered by the file whose heading names it, and a reference in the text is followed by its number.
+- **What the original sets in a fixed-width font is a fenced code block**, with its indentation, one block across a page break. A definition is then read as it was written, and taken as data: `skillcdn code <pack> <folder>` prints every block under a folder.
+- **A section is what an agent reads at once**: a few thousand characters. A table of several hundred rows under one heading is one section, read whole for one row; write it in sections of a few dozen rows, each under a heading that names its first and last row (`TABLE C-2 Modifier codes: AA to BZ`), with the header row repeated. A program still gets it as one table: `skillcdn rows <pack> <folder> --out codes.csv`, or the `rows` route of the REST API, which the outline of a document names. A table too long to copy is never copied out by a model.
+- **Terms written together are found by each of them**: `open/closed/held` by `closed`, `ops.intake.queue` by `intake`. A section number or a version, `4.2.6`, is one word.
+- **An index is a lookup table** from a name to the file and section that hold it, made mechanically, in a folder whose manifest keeps it to the words, so that it does not stand before the text itself in a search by meaning.
+
+`skillcdn check` notes a section longer than one read carries, `section_large`, without failing for it.
+
 ## The originals
 
 The files the documents were made from, the PDF, the office document, the scan, travel in the pack: in `sources/` inside the document set they belong to, committed like any other file ([ADR-0076](../adr/0076-originals-travel-in-the-pack-and-the-repositorys-visibility-decides-who-reads-them.md)). They are listed and never searched; what an agent gets of one is a link that opens, at the git host, at the deployment's own route for a pack served from its directory, or on the machine for a directory the command reads ([reading a file](../specs/tools.md#raw-files)).
