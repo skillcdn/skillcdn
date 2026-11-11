@@ -58,10 +58,18 @@ const SHORT_ENOUGH = Math.floor(MAX_LEXEME_BYTES / 3);
 
 /** A run of what can be in a word: letters, digits, and the dots, hyphens and slashes that join them; a hyphen before digits is their sign. */
 const RUN = /(?:\/|-(?=\p{N}))?[\p{L}\p{N}][\p{L}\p{N}./-]*/u;
-/** `scheme://host/path`: the parser keeps the host with the path, the host, and the path, and drops the scheme. */
-const URL = /[a-z][a-z0-9+.-]*:\/\/([^\s/"'<>()[\]{}]+)(\/[^\s"'<>()[\]{}]*)?/u;
-/** `user@host`, one word to the parser. */
-const EMAIL = /[\p{L}\p{N}._-]+@[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)+/u;
+/**
+ * `scheme://host/path`: the parser keeps the host with the path, the host, and the path, and drops
+ * the scheme. A scheme is short: the bound keeps a text of letters and plus signs, which looks
+ * like the start of a scheme at every letter, from being read again from each of them.
+ */
+const URL = /[a-z][a-z0-9+.-]{0,39}:\/\/([^\s/"'<>()[\]{}]+)(\/[^\s"'<>()[\]{}]*)?/u;
+/**
+ * `user@host`, one word to the parser. The part before the sign is at most the 64 characters a
+ * mailbox has: without the bound a line of underscores, dots or hyphens, which could each begin
+ * one, is read to its end from every character of it.
+ */
+const EMAIL = /[\p{L}\p{N}._-]{1,64}@[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)+/u;
 const TOKENS = new RegExp(`${URL.source}|${EMAIL.source}|${RUN.source}`, "gu");
 
 /**
@@ -103,28 +111,59 @@ function bigramTokens(run: string): Token[] {
   return tokens;
 }
 
-/** The tokens of one run of word characters in the Latin script, in the order the parser emits them. */
+/** A dot, a slash or a hyphen: what joins the parts of a run, and is a blank at its ends. */
+const isJoint = (character: string | undefined): boolean =>
+  character === "." || character === "/" || character === "-";
+
+/**
+ * The tokens of one run of word characters in the Latin script, in the order the parser emits
+ * them. The work is linear in the run, whatever it is made of: a run of a hundred thousand
+ * versions joined by hyphens is read in a loop, not by a call for each.
+ */
 function tokensOfRun(run: string): Token[] {
-  // A leading slash stays only on a path; dots, slashes and hyphens at the ends are blanks.
-  let text = run.replace(/[./-]+$/u, "");
-  if (text.startsWith("/") && !text.slice(1).includes("/")) {
-    text = text.slice(1);
+  // Dots, slashes and hyphens at the end are blanks.
+  let end = run.length;
+  while (end > 0 && isJoint(run[end - 1])) {
+    end -= 1;
   }
-  text = text.replace(/^\.+/u, "");
-  if (text.length === 0) {
-    return [];
-  }
-  if (text.includes("/")) {
-    // A path, as the parser's file token: one word, as written.
-    return [{ text, stem: false }];
-  }
-  if (text.includes(".")) {
-    // A version or a number with a point ends at a hyphen; a host takes the hyphen in. Either
-    // way, one word as written.
-    const hyphen = text.indexOf("-");
-    if (hyphen > 0 && /^[\p{N}.]+$/u.test(text.slice(0, hyphen))) {
-      return [{ text: text.slice(0, hyphen), stem: false }, ...tokensOfRun(text.slice(hyphen + 1))];
+  const whole = end === run.length ? run : run.slice(0, end);
+  const lastSlash = whole.lastIndexOf("/");
+  const lastDot = whole.lastIndexOf(".");
+  const tokens: Token[] = [];
+  let start = 0;
+  for (;;) {
+    // A leading slash stays only on a path; leading dots are blanks.
+    if (whole[start] === "/" && lastSlash <= start) {
+      start += 1;
     }
+    while (whole[start] === ".") {
+      start += 1;
+    }
+    if (start >= whole.length) {
+      return tokens;
+    }
+    if (lastSlash < start && lastDot >= start) {
+      // A version or a number with a point ends at a hyphen, and what follows the hyphen is read
+      // as a run of its own; a host takes the hyphen in.
+      const hyphen = whole.indexOf("-", start);
+      if (hyphen > start && /^[\p{N}.]+$/u.test(whole.slice(start, hyphen))) {
+        tokens.push({ text: whole.slice(start, hyphen), stem: false });
+        start = hyphen + 1;
+        continue;
+      }
+    }
+    for (const token of tokensOfWord(start === 0 ? whole : whole.slice(start))) {
+      tokens.push(token);
+    }
+    return tokens;
+  }
+}
+
+/** The tokens of a run without the blanks at its ends, and without a version at its head. */
+function tokensOfWord(text: string): Token[] {
+  if (text.includes("/") || text.includes(".")) {
+    // A path, as the parser's file token, or a host with whatever hyphens it has: one word, as
+    // written.
     return [{ text, stem: false }];
   }
   if (!text.includes("-")) {

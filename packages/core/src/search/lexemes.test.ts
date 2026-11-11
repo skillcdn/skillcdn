@@ -138,6 +138,29 @@ describe("searchLexemes", () => {
     }
   });
 
+  it("reads a long line of anything in time that grows with its length", () => {
+    // Each of these was read again from every character of it, or by a call for every part: a
+    // file of one such line took minutes to index, or overflowed the stack and failed its pack.
+    const length = 200_000;
+    expect(searchLexemes("_".repeat(length))).toEqual([]);
+    expect(searchLexemes(".".repeat(length))).toEqual([]);
+    expect(searchLexemes("-".repeat(length))).toEqual([]);
+    expect(searchLexemes("b+".repeat(length))).toHaveLength(length);
+    expect(searchLexemes("1.-".repeat(length))).toHaveLength(length);
+    expect(searchLexemes(`b${"-".repeat(length)}c`)).toHaveLength(2);
+    // One word longer than a lexeme may be, which is no word.
+    expect(searchLexemes(`${"b.".repeat(length)}@`)).toEqual([]);
+    // What the bounds leave as it was: an address and a URL of any ordinary length.
+    expect(queryLexemes("first.last_name-2@example.com")).toEqual([
+      "first.last_name-2@example.com",
+    ]);
+    expect(queryLexemes("git+ssh://example.com/repo")).toEqual([
+      "example.com/repo",
+      "example.com",
+      "/repo",
+    ]);
+  });
+
   it("reads a sign before digits wherever it stands, and a version up to its hyphen", () => {
     expect(vectorText("-5 -foo --10 foo--10 - -")).toBe("'-10':3,5 '-5':1 'foo':2,4");
     expect(vectorText("Version 2.0.1-beta.3 of the 3D-viewer (x86_64, arm64)")).toBe(
