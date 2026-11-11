@@ -24,6 +24,7 @@ import {
   LEGAL_DOCUMENT_KINDS,
   LEGAL_PAGE_PATHS,
   type LegalDocumentKind,
+  LOCAL_HOST_KEY,
   MAX_QUERY_LENGTH,
   MAX_REPO_PATH_LENGTH,
   MEDIA_ROUTE,
@@ -60,6 +61,7 @@ import {
   INVALID_TOKEN_DESCRIPTION,
 } from "../auth/oauth/authorization-server.js";
 import type { OAuthClients } from "../auth/oauth/clients.js";
+import type { PackTokens } from "../auth/pack-tokens.js";
 import type { RepoTokens } from "../auth/repo-tokens.js";
 import type { Sessions } from "../auth/sessions.js";
 import type { HostEvents } from "../events/host-events.js";
@@ -160,6 +162,11 @@ export interface AppDependencies {
   readonly legal: LegalDocuments;
   /** The admin API, when a token is configured; without one it does not exist. */
   readonly admin: { readonly token: string; readonly embeddings: EmbeddingReads } | undefined;
+  /**
+   * The tokens that read the packs of the deployment's directory, where it reads them with a
+   * token only (ADR-0088). Left out, a pack of the directory is served to everyone.
+   */
+  readonly packTokens?: PackTokens | undefined;
   /** A build of the web UI to serve. Left out, the server is MCP and REST only. */
   readonly web: WebBundle | undefined;
   /** Draws the social previews of addresses (ADR-0032); nothing to draw without the web UI. */
@@ -479,6 +486,63 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
   };
 
   /**
+   * Resolves a pack of the deployment's directory where it is read with a token only
+   * (docs/specs/permissions.md, ADR-0088). The token decides before anything is looked up, so a
+   * pack that is there and a name that is nothing take the same steps to the same answer: the
+   * challenge over MCP, not-found over REST for a request that presents nothing, and that the
+   * credential is no good for one that presents anything else than a token for this pack.
+   */
+  const guardedPackAt = async (
+    c: Context<AppEnv>,
+    tokens: PackTokens,
+    address: Address,
+    protocol: "mcp" | "rest",
+  ): Promise<Mount | Response> => {
+    const refuse = (
+      code: string,
+      message: string,
+      error?: { readonly code: string; readonly description: string },
+    ): Response => {
+      const quoted = (text: string): string => text.replace(/["\\]/g, "");
+      c.header(
+        "www-authenticate",
+        error === undefined
+          ? 'Bearer realm="packs"'
+          : `Bearer realm="packs", error="${error.code}", error_description="${quoted(error.description)}"`,
+      );
+      c.header("cache-control", "no-store");
+      return c.json(errorBody(code, message), 401);
+    };
+    const header = c.req.header("authorization")?.trim() ?? "";
+    if (header === "") {
+      return protocol === "rest"
+        ? resolutionFailure(
+            c,
+            address,
+            new MountError("repo_not_found", "The repository was not found."),
+          )
+        : refuse(
+            "auth.required",
+            "This address is not public, or does not exist. Present the token the operator of this deployment made for the pack.",
+          );
+    }
+    const presented = /^Bearer\s+(\S+)$/i.exec(header)?.[1];
+    if (presented === undefined || !(await tokens.verify(presented, address))) {
+      return refuse("auth.invalid_token", INVALID_TOKEN_DESCRIPTION, {
+        code: "invalid_token",
+        description: INVALID_TOKEN_DESCRIPTION,
+      });
+    }
+    try {
+      const mount = await mounts.resolveGranted(address);
+      startIndexing(mount);
+      return mount;
+    } catch (error) {
+      return resolutionFailure(c, address, error);
+    }
+  };
+
+  /**
    * Resolves the address in the request path after `prefix`, or answers with the error. Asking
    * about an address is enough to start indexing it, so the next question finds it done or underway.
    * A token presented wins over a session sent with the same request.
@@ -490,6 +554,9 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
       return c.json(errorBody(`address.${parsed.error.code}`, parsed.error.message), 400);
     }
     const address = parsed.value;
+    if (dependencies.packTokens !== undefined && address.host === LOCAL_HOST_KEY) {
+      return guardedPackAt(c, dependencies.packTokens, address, "rest");
+    }
     const header = c.req.header("authorization");
     if (auth !== undefined && header !== undefined && header.trim() !== "") {
       return tokenMountAt(c, auth, address, header);
@@ -516,6 +583,9 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
       return c.json(errorBody(`address.${parsed.error.code}`, parsed.error.message), 400);
     }
     const address = parsed.value;
+    if (dependencies.packTokens !== undefined && address.host === LOCAL_HOST_KEY) {
+      return guardedPackAt(c, dependencies.packTokens, address, "mcp");
+    }
     let user: UserRecord | undefined;
     try {
       if (auth === undefined) {
@@ -654,6 +724,7 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
       purge: purgeByAddress(database),
       usage: new UsageReads({ database, clock: dependencies.tools.clock }),
       embeddings: dependencies.admin.embeddings,
+      packTokens: dependencies.packTokens,
       logger,
     });
   }

@@ -198,6 +198,7 @@ const environmentSchema = z.object({
     .optional(),
   WEB_ROOT: z.string().min(1).optional(),
   PACKS_DIR: z.string().min(1).optional(),
+  PACKS_ACCESS: z.enum(["public", "token"]).default("public"),
   PUBLIC_URL: z
     .url({ protocol: /^https?$/ })
     .refine((value) => {
@@ -482,7 +483,16 @@ export interface Config {
    * The packs the deployment serves from its own filesystem, at `local` addresses (ADR-0071):
    * every directory `<owner>/<name>` under `root`. Unset, such an address is a name that is nothing.
    */
-  readonly packs: { readonly root: string } | undefined;
+  readonly packs:
+    | {
+        readonly root: string;
+        /**
+         * Who reads the packs of the directory (ADR-0088): everyone the deployment serves, or
+         * only a request that presents a token the operator made for the pack.
+         */
+        readonly access: "public" | "token";
+      }
+    | undefined;
 }
 
 export interface HubConfig {
@@ -768,7 +778,8 @@ export function loadConfig(
       concurrency: env.SEARCH_CONCURRENCY,
       sitemapTerms: env.SEARCH_SITEMAP_TERMS,
     },
-    packs: env.PACKS_DIR === undefined ? undefined : { root: env.PACKS_DIR },
+    packs:
+      env.PACKS_DIR === undefined ? undefined : { root: env.PACKS_DIR, access: env.PACKS_ACCESS },
   };
 }
 

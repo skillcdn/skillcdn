@@ -281,6 +281,50 @@ export class MountService {
   }
 
   /**
+   * Resolves a pack of the deployment's own directory for a request the deployment let in
+   * (ADR-0088): one that presented a token its operator made for the pack, or the worker
+   * reading the directory. Whether the pack is public is not asked here, since the caller
+   * answered who reads it; a name that is nothing is nothing, in the same words as any other.
+   */
+  async resolveGranted(address: Address): Promise<Mount> {
+    if (address.host !== LOCAL_HOST_KEY || this.#options.servesLocal !== true) {
+      throw new MountError("repo_not_found", "The repository was not found.");
+    }
+    const name: RepoCoordinates = { host: address.host, owner: address.owner, repo: address.repo };
+    const repo = await this.#singleFlight(`granted ${name.owner}/${name.repo}`, () =>
+      this.#resolveGranted(name),
+    );
+    return this.#mountOf(address, name, repo);
+  }
+
+  async #resolveGranted(coordinates: RepoCoordinates): Promise<RepoRecord> {
+    const { database, gitHost, clock, repoTtlMs, staleGraceMs } = this.#options;
+    const known = await findRepoByAlias(database, coordinates);
+    const age = known === undefined ? undefined : clock.now().getTime() - known.checkedAt.getTime();
+    if (known !== undefined && age !== undefined && age >= 0 && age < repoTtlMs) {
+      return known;
+    }
+    try {
+      const repository = await gitHost.getRepository(coordinates);
+      return await saveRepository(database, coordinates, repository, clock.now());
+    } catch (error) {
+      if (!(error instanceof GitHostError)) {
+        throw error;
+      }
+      if (error.kind === "not_found") {
+        if (known !== undefined) {
+          await deleteRepoAlias(database, coordinates);
+        }
+        throw new MountError("repo_not_found", "The repository was not found.", { cause: error });
+      }
+      if (known !== undefined && age !== undefined && age < repoTtlMs + staleGraceMs) {
+        return known;
+      }
+      throw hostUnavailable(error);
+    }
+  }
+
+  /**
    * Whether an address names something this deployment may serve: a repository of a git host,
    * or a pack of the directory it serves `local` addresses from, when it has one (ADR-0071). A
    * pack served from a machine by the command (ADR-0053) is otherwise a name that is nothing,

@@ -157,9 +157,39 @@ describe("loadConfig", () => {
     expect(loadConfig({ DATABASE_URL }, noFiles).packs).toBeUndefined();
     expect(loadConfig({ DATABASE_URL, PACKS_DIR: "/srv/packs" }, noFiles).packs).toEqual({
       root: "/srv/packs",
+      access: "public",
     });
     // An empty value is no value, as for every variable.
     expect(loadConfig({ DATABASE_URL, PACKS_DIR: "" }, noFiles).packs).toBeUndefined();
+    // Read with a token only where the deployment says so, and by no other word (ADR-0088).
+    expect(
+      loadConfig({ DATABASE_URL, PACKS_DIR: "/srv/packs", PACKS_ACCESS: "token" }, noFiles).packs,
+    ).toEqual({ root: "/srv/packs", access: "token" });
+    expect(() =>
+      loadConfig({ DATABASE_URL, PACKS_DIR: "/srv/packs", PACKS_ACCESS: "private" }, noFiles),
+    ).toThrow(ConfigError);
+  });
+
+  it("looks ahead of requests at what the operator lists, and keeps an unread index a month, unless told otherwise", () => {
+    const { ahead, retentionMs } = loadConfig({ DATABASE_URL }, noFiles).indexing;
+    expect(ahead).toEqual({ scope: "listed", intervalMs: 15 * 60_000, limit: 50 });
+    expect(retentionMs).toBe(30 * 86_400_000);
+    const set = loadConfig(
+      {
+        DATABASE_URL,
+        INDEX_AHEAD: "packs",
+        INDEX_AHEAD_MINUTES: "5",
+        INDEX_AHEAD_LIMIT: "200",
+        INDEX_RETENTION_DAYS: "0",
+      },
+      noFiles,
+    ).indexing;
+    expect(set.ahead).toEqual({ scope: "packs", intervalMs: 5 * 60_000, limit: 200 });
+    // Zero keeps every index.
+    expect(set.retentionMs).toBe(0);
+    expect(() => loadConfig({ DATABASE_URL, INDEX_AHEAD: "everything" }, noFiles)).toThrow(
+      ConfigError,
+    );
   });
 
   it("takes the deployment's own pages and contact, each only when set", () => {

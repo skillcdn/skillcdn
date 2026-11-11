@@ -38,6 +38,11 @@ export interface DirectoryHostOptions {
   readonly root: string;
   /** What is read of a file: the indexer's limits, as a commit is read under them. */
   readonly limits: IndexLimits;
+  /**
+   * What every pack of the directory is to everyone: public unless said. Private, a pack is
+   * served to nobody in particular, and read with a token the operator made (ADR-0088).
+   */
+  readonly visibility?: "public" | "private" | undefined;
 }
 
 interface Read {
@@ -191,7 +196,7 @@ export function createDirectoryHost(options: DirectoryHostOptions): GitHost {
         name: coordinates.repo,
         defaultBranch: "working",
         description: undefined,
-        visibility: "public",
+        visibility: options.visibility ?? "public",
       };
     },
     async resolveRef(coordinates, ref: AddressRef | undefined): Promise<string> {

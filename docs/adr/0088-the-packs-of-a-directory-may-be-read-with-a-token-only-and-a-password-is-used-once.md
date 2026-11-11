@@ -1,0 +1,29 @@
+# ADR-0088: The packs of a directory may be read with a token only, and a password is used once
+
+- Status: Accepted
+- Date: 2026-11-11
+- Supersedes the last sentence of point 2 and of the consequences of [ADR-0071](0071-a-deployment-serves-packs-from-a-directory-of-its-own.md) (a private directory pack is not offered); builds on [ADR-0084](0084-an-encrypted-original-stays-encrypted-and-nothing-that-opens-it-is-in-the-pack-or-the-image.md) (an encrypted original, and who reads its pack), [ADR-0040](0040-a-token-for-an-agent-reads-one-repository-as-its-maker.md) and [ADR-0052](0052-the-rest-api-takes-the-tokens-the-mcp-endpoint-takes.md) (tokens over MCP and REST) and [ADR-0026](0026-serving-follows-the-license-and-the-operators-lists.md) (the admin API).
+
+## Context
+
+ADR-0084 kept the password of a protected original out of everything SkillCDN runs. The maintainer asked the question behind it again: wherever that password is kept, it exists in the clear, and would authentication on the MCP endpoint not be the better protection.
+
+It would, and for a reason the password cannot answer. The password of a PDF is one secret shared by everyone who opens the file: it cannot be taken back from one reader, nobody sees who used it, and it is in the clear in every place and every head that holds it. And it does not protect what an agent reads at all: the chapters are the original opened, as text in the pack. What protects them is who reaches the pack. For a repository of a git host that is decided, by the host, and enforced on every request: people sign in, and agents hold tokens. For a pack of a deployment's own directory it was decided by nothing: such a pack was public to everyone the deployment serves, because there is nobody to ask who may see it. The installations that hold protected documents are the ones without a git host.
+
+## Decision
+
+1. **A deployment may read the packs of its directory with a token only.** `PACKS_ACCESS=token` makes every pack of the directory one that is not public: it is served to nobody in particular, and everything that follows from a repository not being public follows, the responses nobody may keep, the lists and the search across packs that never name it, the pages that do not show it. The default stays `public`, as before.
+2. **The operator is whom to ask, and answers with tokens.** Through the admin API the operator makes a token for one pack, or for every pack of the directory, names whose agent holds it, and gives it an end or none. The token is shown once and stored as its hash; the list says when each was last used; removing one ends it at once. An agent presents it in the `authorization` header, over MCP and over the REST API alike, the route of the originals included.
+3. **The token decides before anything is looked up.** A request that presents nothing is answered for a pack as for a name that is nothing: the challenge over MCP, not-found over REST. One that presents anything but a token of that pack is told that its credential is no good. No answer depends on whether the pack is there.
+4. **The deployment reads its own directory.** The worker finds, indexes and embeds the packs as before; their text goes to the embedding server only where the deployment says that what is not public is embedded.
+5. **A password is used once, by the conversion, and kept nowhere.** Nothing changes in what ADR-0084 decided: no pack, no image and no deployment holds one. What is added is how it is used: the conversion asks for it when it runs, from the person who runs it or from the organization's secret store for that one run, and writes it into no file, no environment file, no history and no conversation. After that nothing SkillCDN runs needs it again.
+6. **With the pack behind tokens, whether the original stays encrypted is the organization's choice.** Kept as received, it is declared as ADR-0084 says, and a person who needs the file itself asks its owner for the key. Kept opened beside its chapters, in a pack that only its readers' tokens read, no reader needs the password at all, and it need not be passed on to anyone. A pack that is served to everyone holds neither.
+
+## Consequences
+
+- What protects a protected document is a credential per agent, which ends without touching the others and shows when it was used, in place of a password everyone shares. What a deployment stores of it is a hash.
+- An installation with no git host can hold documents that not everyone on its network may read. It is one switch for the whole directory: packs for everyone and packs for some are two deployments, or one where the token for every pack is what everyone is given.
+- A browser presents no token, so the pages show no such pack: people read it through their agents. Signing in without a git host, against an identity provider of the installation, is a decision of its own.
+- A client that can only sign in through OAuth cannot read such a pack; a client that sends a header can.
+- Turning the switch on closes at start what the deployment remembered as public, so that no list goes on naming a pack from before. With the search by meaning, the packs are embedded only under `EMBEDDINGS_SCOPE=all`.
+- Rejected: a mark in the pack that says it is private (a pack whose mark is forgotten is served to everyone, and what a pack says of itself is not where access is decided); the deployment opening originals with a mounted key (ADR-0084: reaching the deployment would be holding the key); wrapping the password under a key service (something still holds it in the clear when it is used, and an installation gains a service to run); credentials for the whole deployment at the proxy in front (it cannot tell one pack from another, and an operator may still add it).

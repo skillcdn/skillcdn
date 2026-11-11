@@ -139,6 +139,14 @@ export {
 } from "./queries/operator.js";
 export { type IndexedRepository, listIndexedRepositories } from "./queries/owners.js";
 export {
+  createPackToken,
+  deletePackToken,
+  findPackToken,
+  listPackTokens,
+  type PackTokenRecord,
+  touchPackToken,
+} from "./queries/pack-tokens.js";
+export {
   deleteRepoPermissionsOf,
   deleteStaleRepoPermissions,
   findReadableRepo,
@@ -178,6 +186,7 @@ export {
   listMovingRefs,
   listReposOfHostAccount,
   type MovingRef,
+  markHostRepositoriesNotPublic,
   markRepositoryNotPublic,
   PINNED_REF_PREFIX,
   type RepoAlias,

@@ -1,4 +1,4 @@
-import { type Clock, parseAddress } from "@skillcdn/core";
+import { type Clock, LOCAL_HOST_KEY, parseAddress } from "@skillcdn/core";
 import type { JobQueue, VectorKey } from "@skillcdn/db";
 import type { SnapshotService } from "../indexer/snapshot-service.js";
 import type { Logger } from "../logger.js";
@@ -15,7 +15,7 @@ import { type IndexJob, sendEmbedJob } from "./queues.js";
 export const INDEX_JOB_WAIT_MS = 10 * 60_000;
 
 export interface IndexJobDependencies {
-  readonly mounts: Pick<MountService, "resolve" | "resolveRepository">;
+  readonly mounts: Pick<MountService, "resolve" | "resolveRepository" | "resolveGranted">;
   readonly snapshots: Pick<SnapshotService, "ready">;
   readonly jobs: JobQueue;
   /** The key to embed under; `undefined` where this worker embeds nothing. */
@@ -45,7 +45,10 @@ export async function indexRepositoryJob(
           accountId: job.accountId,
           repoId: job.repoId,
         })
-      : await deps.mounts.resolve(parsed.value);
+      : parsed.value.host === LOCAL_HOST_KEY
+        ? // A pack of the deployment's directory is its own to index, public or not (ADR-0088).
+          await deps.mounts.resolveGranted(parsed.value)
+        : await deps.mounts.resolve(parsed.value);
   const outcome = await deps.snapshots.ready(mount, deps.waitMs ?? INDEX_JOB_WAIT_MS);
   if (outcome.status === "indexing") {
     throw new Error("the commit is still being indexed");

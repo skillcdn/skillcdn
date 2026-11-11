@@ -6,12 +6,14 @@ import {
   type Embedder,
   type Entitlements,
   type GitHost,
+  LOCAL_HOST_KEY,
   type UsageSink,
 } from "@skillcdn/core";
 import {
   createBlobStore,
   type Database,
   type JobQueue,
+  markHostRepositoriesNotPublic,
   type QueuedJob,
   supportsSectionVectors,
 } from "@skillcdn/db";
@@ -113,7 +115,11 @@ export function createWorker(config: WorkerConfig, ports: WorkerPorts): Worker {
       ? ports.gitHost
       : routeGitHosts({
           gh: ports.gitHost,
-          local: createDirectoryHost({ root: config.packs.root, limits: config.indexing.limits }),
+          local: createDirectoryHost({
+            root: config.packs.root,
+            limits: config.indexing.limits,
+            visibility: config.packs.access === "token" ? "private" : "public",
+          }),
         });
   const blobs = createBlobStore(database);
   const lists = new OperatorLists({ database, clock });
@@ -171,6 +177,11 @@ export function createWorker(config: WorkerConfig, ports: WorkerPorts): Worker {
     snapshots,
     async start() {
       await ensureJobQueues(jobs);
+      if (config.packs?.access === "token") {
+        // Packs that were served to everyone before the deployment asked for a token are
+        // written down as public no longer, before anything lists them (ADR-0088).
+        await markHostRepositoriesNotPublic(database, LOCAL_HOST_KEY, clock.now());
+      }
       const supported = embedder === undefined ? false : await supportsSectionVectors(database);
       if (embedder !== undefined && !supported) {
         logger.warn(

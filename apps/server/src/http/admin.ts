@@ -1,9 +1,19 @@
 import { createHash, timingSafeEqual } from "node:crypto";
-import { MAX_MEDIA_BYTES } from "@skillcdn/core";
-import { OPERATOR_LIST_KINDS, type OperatorListKind, purgeRepository } from "@skillcdn/db";
+import { LOCAL_HOST_KEY, MAX_MEDIA_BYTES, parseAddress, ROOT_PATH } from "@skillcdn/core";
+import {
+  OPERATOR_LIST_KINDS,
+  type OperatorListKind,
+  type PackTokenRecord,
+  purgeRepository,
+} from "@skillcdn/db";
 import type { Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import * as z from "zod";
+import {
+  PACK_TOKEN_MAX_DAYS,
+  PACK_TOKEN_MAX_LABEL_LENGTH,
+  type PackTokens,
+} from "../auth/pack-tokens.js";
 import { DEFAULT_REPOSITORIES, type EmbeddingReads, MAX_REPOSITORIES } from "../jobs/reads.js";
 import type { Logger } from "../logger.js";
 import { OperatorImageError, type OperatorImages } from "../operator/images.js";
@@ -38,6 +48,8 @@ export interface AdminDependencies {
   readonly usage: UsageReads;
   /** The search by meaning: its state, where the embedding went, what it took, and what the operator asks of it (ADR-0064). */
   readonly embeddings: EmbeddingReads;
+  /** The tokens of the directory's packs, where the deployment reads them with a token only. */
+  readonly packTokens?: PackTokens | undefined;
   readonly logger: Logger;
 }
 
@@ -336,6 +348,94 @@ export function registerAdmin(app: Hono<AppEnv>, dependencies: AdminDependencies
   });
 
   // The deployment's own pages: its terms of service and its privacy policy (ADR-0029).
+  // The tokens that read the packs of the deployment's own directory (ADR-0088): made here,
+  // shown once, listed without their secret, and ended at once by being removed. The routes are
+  // there only where the deployment reads its packs with a token.
+  const { packTokens } = dependencies;
+  if (packTokens !== undefined) {
+    const input = z.object({
+      address: z.string().min(1).max(300),
+      label: z.string().trim().min(1).max(PACK_TOKEN_MAX_LABEL_LENGTH),
+      expiresInDays: z.number().int().min(1).max(PACK_TOKEN_MAX_DAYS).nullable().optional(),
+    });
+    const shown = (record: PackTokenRecord) => ({
+      id: record.id,
+      // The one pack the token reads, or the host alone for every pack of the directory.
+      address: record.pack === null ? `/${LOCAL_HOST_KEY}` : `/${LOCAL_HOST_KEY}/${record.pack}`,
+      label: record.label,
+      createdAt: record.createdAt.toISOString(),
+      expiresAt: record.expiresAt?.toISOString() ?? null,
+      lastUsedAt: record.lastUsedAt?.toISOString() ?? null,
+    });
+
+    app.get(`${ADMIN_PREFIX}/pack-tokens`, async (c) =>
+      c.json({ items: (await packTokens.list()).map(shown) }),
+    );
+
+    app.post(`${ADMIN_PREFIX}/pack-tokens`, async (c) => {
+      let body: unknown;
+      try {
+        body = await c.req.json();
+      } catch {
+        return c.json(errorBody("token.invalid", "The body is not JSON."), 400);
+      }
+      const parsed = input.safeParse(body);
+      if (!parsed.success) {
+        return c.json(
+          errorBody(
+            "token.invalid",
+            `A token takes an address, a label of up to ${PACK_TOKEN_MAX_LABEL_LENGTH} characters, and optionally expiresInDays, 1 to ${PACK_TOKEN_MAX_DAYS} or null for no end.`,
+          ),
+          400,
+        );
+      }
+      const every = parsed.data.address === `/${LOCAL_HOST_KEY}`;
+      const address = every ? undefined : parseAddress(parsed.data.address);
+      if (
+        address !== undefined &&
+        (!address.ok ||
+          address.value.host !== LOCAL_HOST_KEY ||
+          address.value.ref !== undefined ||
+          address.value.path !== ROOT_PATH)
+      ) {
+        return c.json(
+          errorBody(
+            "token.not_a_pack",
+            `A token reads one pack of the directory, /${LOCAL_HOST_KEY}/<owner>/<name>, or every pack, /${LOCAL_HOST_KEY}.`,
+          ),
+          400,
+        );
+      }
+      const made = await packTokens.create({
+        address: address?.ok === true ? address.value : undefined,
+        label: parsed.data.label,
+        expiresInDays: parsed.data.expiresInDays ?? null,
+      });
+      if (made === undefined) {
+        return c.json(
+          errorBody("token.limit", "The deployment holds as many tokens as it may. Remove one."),
+          409,
+        );
+      }
+      // The secret is in the answer and nowhere else: never in a log line.
+      logger.info(
+        { token: made.record.id, pack: made.record.pack, requestId: c.get("requestId") },
+        "pack token made",
+      );
+      return c.json({ token: made.token, item: shown(made.record) }, 201);
+    });
+
+    app.delete(`${ADMIN_PREFIX}/pack-tokens/:id`, async (c) => {
+      const id = z.uuid().safeParse(c.req.param("id"));
+      const removed = id.success && (await packTokens.remove(id.data));
+      if (!removed) {
+        return c.json(errorBody("token.not_found", "No such token."), 404);
+      }
+      logger.info({ token: id.data, requestId: c.get("requestId") }, "pack token removed");
+      return c.body(null, 204);
+    });
+  }
+
   app.get(`${ADMIN_PREFIX}/legal`, async (c) => c.json({ items: await legal.all() }));
 
   app.put(

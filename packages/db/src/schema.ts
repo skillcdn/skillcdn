@@ -1000,3 +1000,28 @@ export const connectRequests = pgTable(
     index("connect_requests_expires_idx").on(table.expiresAt),
   ],
 );
+
+/**
+ * A token the operator made for the packs of the deployment's own directory (ADR-0088): the
+ * hash of the secret, and the one pack it reads, as `owner/name` in the spelling of an address,
+ * or none for every pack of the directory. Not tenant data: a pack of the directory belongs to
+ * the deployment, and only the admin API writes here.
+ */
+export const packTokens = pgTable(
+  "pack_tokens",
+  {
+    id: id(),
+    pack: text(),
+    /** What the operator calls it: whose agent holds it. */
+    label: text().notNull(),
+    tokenHash: text().notNull(),
+    /** When it ends; null for a token made without an end. */
+    expiresAt: instant(),
+    lastUsedAt: instant(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex("pack_tokens_token_hash_key").on(table.tokenHash),
+    index("pack_tokens_expires_idx").on(table.expiresAt),
+  ],
+);

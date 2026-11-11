@@ -65,7 +65,7 @@ export interface DirectoryPack {
 export interface IndexAheadDependencies {
   readonly database: Database;
   readonly jobs: JobQueue;
-  readonly mounts: Pick<MountService, "resolve" | "resolveRepository">;
+  readonly mounts: Pick<MountService, "resolve" | "resolveRepository" | "resolveGranted">;
   readonly snapshots: Pick<SnapshotService, "ready">;
   /** The operator's lists: what they name is looked at on the schedule. */
   readonly lists: Pick<OperatorLists, "listedKeys">;
@@ -229,10 +229,14 @@ export function createIndexAhead(deps: IndexAheadDependencies): IndexAhead {
         };
         let mount: Mount;
         try {
+          // A pack of the directory nobody resolved yet is the deployment's own to read,
+          // whether or not it is served to everyone (ADR-0088).
           mount =
-            scope === undefined
-              ? await mounts.resolve(address)
-              : await mounts.resolveRepository(address, scope);
+            scope !== undefined
+              ? await mounts.resolveRepository(address, scope)
+              : address.host === LOCAL_HOST_KEY
+                ? await mounts.resolveGranted(address)
+                : await mounts.resolve(address);
         } catch (error) {
           if (!(error instanceof MountError)) {
             throw error;

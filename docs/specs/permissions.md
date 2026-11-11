@@ -23,6 +23,8 @@ Six credentials are involved, and none of them is in two places:
 | An access token of this deployment | The person's AI app | One address, over MCP and the REST API. |
 | A repository token of this deployment | An agent with nobody to sign in, given it by the person who made it | One repository, over MCP and the REST API, as that person. |
 
+A deployment that serves packs from a directory of its own may hold a seventh, which needs no signing in: a [pack token](#packs-of-the-deployments-own-directory), made by its operator for the agents that read those packs.
+
 ## What is served to whom
 
 An address is resolved the same way for the pages, the REST API and MCP. Who the request is for comes from its credential: a session for the pages and the REST API, an access token or a repository token for MCP and for the REST API ([REST](rest.md#authorization)), and nobody without one.
@@ -208,7 +210,25 @@ The `skillcdn` command, and any program a person starts, gets such a repository 
 - **A code is good for one answer.** Declined, claimed or expired, it is not found, whatever is asked of it, so that a refusal says nothing a stranger could use.
 - **The page says what is at stake**: what asks to connect, in its own words, the repository, and that the token reads it as the person; the person compares the code with the one their command showed before approving.
 
+## Packs of the deployment's own directory
+
+A pack of the directory a deployment serves at `local` addresses is public to everyone the deployment serves, unless the deployment reads its directory with a token only (`PACKS_ACCESS=token`, [ADR-0088](../adr/0088-the-packs-of-a-directory-may-be-read-with-a-token-only-and-a-password-is-used-once.md)). There is no git host to ask who may see such a pack: the operator says it, with tokens. This needs no signing in and exists without it.
+
+- **Every pack of the directory is then one that is not public**, and what follows from that [above](#what-is-served-to-whom) follows: responses are `private, no-store`, no list and no search across packs names it, and the pages show it to nobody, since a browser presents no token.
+- **A pack token** is made by the operator through the admin API ([deploy](../../deploy/README.md#the-admin-api)), for one pack or for every pack of the directory, under a label that says whose agent holds it, with an end of up to 366 days or none. It is a random string that begins `scdn_pack_`, shown once and stored as its SHA-256. The operator's list says when each was last used; removing one ends it at once.
+- **An agent presents it** as `Authorization: Bearer <token>`, over MCP and over the REST API, the route that sends a pack's originals included.
+- **The token decides before anything is looked up**, so that a pack and a name that is nothing are one answer:
+
+| Request to a `local` address | Answer |
+|---|---|
+| A token made for that pack, or for every pack | Served, with `visibility: "private"`; `404 mount.repo_not_found` when the directory holds no such pack. |
+| No `authorization` header | Over MCP, `401` with `WWW-Authenticate: Bearer realm="packs"` and `auth.required`; over REST, `404 mount.repo_not_found`. |
+| Anything else: a token that is unknown, ended, removed or another pack's, or another kind of credential | `401` with `error="invalid_token"` and `auth.invalid_token`, over both. |
+
+The challenge names no authorization server: a deployment where nobody signs in has none, and the token is given to the agent by a person. The deployment's own worker reads the directory whatever its packs are to everyone, so they are indexed ahead of requests as before.
+
 ## Not yet
 
 - **Other git hosts.** Signing in goes through GitHub, the one adapter there is.
+- **People, without a git host.** A deployment whose packs are in its own directory knows no people: its packs are read with tokens, by agents. Signing in against an identity provider of the installation is not decided.
 - **Asserted client keys.** A client's metadata document may name `private_key_jwt`; such a client is treated as a public client, protected by PKCE alone. ChatGPT's document names it as what it would rather use and `none` as what it also can, and the server's metadata offers `none`.

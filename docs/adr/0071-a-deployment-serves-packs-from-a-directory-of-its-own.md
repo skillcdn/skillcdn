@@ -1,6 +1,6 @@
 # ADR-0071: A deployment serves packs from a directory of its own
 
-- Status: Accepted
+- Status: Accepted; ADR-0088 lets a deployment read the packs of its directory with a token only, where this record offered no private directory pack
 - Date: 2026-10-23
 - Supersedes point 2 of [ADR-0053](0053-an-address-may-name-a-pack-served-from-a-machine.md); builds on its other points, on [ADR-0045](0045-the-indexer-is-a-package-and-check-is-a-command.md) (the working tree read by the reading rules) and on [ADR-0068](0068-a-mount-serves-the-last-indexed-commit-while-the-newest-is-not-ready.md) (what is served while a commit is indexed). The grammar is in [specs/address.md](../specs/address.md#served-from-a-machine).
 

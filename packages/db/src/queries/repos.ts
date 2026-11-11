@@ -491,3 +491,22 @@ export async function listAliasNamesOfHost(
     .limit(limit);
   return rows.map((row) => `${row.owner}/${row.name}`);
 }
+
+/**
+ * Writes down that no repository of a host is public any more: what a deployment does at start
+ * when the packs of its directory are read with a token only (ADR-0088), so that nothing that
+ * lists what everyone is served goes on naming a pack from the time before. Answers how many
+ * repositories it closed.
+ */
+export async function markHostRepositoriesNotPublic(
+  database: Database,
+  host: AddressHost,
+  now: Date,
+): Promise<number> {
+  const rows = await drizzleOf(database)
+    .update(repos)
+    .set({ visibility: "private", updatedAt: now })
+    .where(and(eq(repos.host, host), eq(repos.visibility, "public")))
+    .returning({ id: repos.id });
+  return rows.length;
+}

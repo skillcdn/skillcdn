@@ -11,6 +11,7 @@ import {
   type GitHostEventSource,
   type GitHostLogin,
   type IndexLimits,
+  LOCAL_HOST_KEY,
   type UsageSink,
 } from "@skillcdn/core";
 import {
@@ -19,6 +20,7 @@ import {
   createJobQueue,
   type Database,
   type JobQueue,
+  markHostRepositoriesNotPublic,
   supportsSectionVectors,
   type VectorKey,
 } from "@skillcdn/db";
@@ -39,6 +41,7 @@ import { LOGIN_HOST, Login } from "../auth/login.js";
 import { AuthorizationServer } from "../auth/oauth/authorization-server.js";
 import { OAuthClients } from "../auth/oauth/clients.js";
 import { type DocumentFetcher, fetchPublicDocument } from "../auth/oauth/document-fetch.js";
+import { PackTokens } from "../auth/pack-tokens.js";
 import { Permissions } from "../auth/permissions.js";
 import { RepoTokens } from "../auth/repo-tokens.js";
 import { createSecrets } from "../auth/secrets.js";
@@ -177,7 +180,11 @@ export function createApi(
       ? ports.gitHost
       : routeGitHosts({
           gh: ports.gitHost,
-          local: createDirectoryHost({ root: config.packs.root, limits }),
+          local: createDirectoryHost({
+            root: config.packs.root,
+            limits,
+            visibility: config.packs.access === "token" ? "private" : "public",
+          }),
         });
 
   // The operator's deny list decides first; whatever the port was given decides the rest.
@@ -435,6 +442,9 @@ export function createApi(
     legal,
     admin:
       config.admin?.token === undefined ? undefined : { token: config.admin.token, embeddings },
+    // Where the packs of the directory are read with a token only (ADR-0088).
+    packTokens:
+      config.packs?.access === "token" ? new PackTokens({ database, clock, logger }) : undefined,
     web: ports.web,
     social,
     pictures,
@@ -542,6 +552,11 @@ export async function runApi(config: Config, logger: Logger): Promise<void> {
           },
           connection,
         );
+  if (config.packs?.access === "token") {
+    // Packs that were served to everyone before the deployment asked for a token are written
+    // down as public no longer, before this process lists or searches anything (ADR-0088).
+    await markHostRepositoriesNotPublic(database, LOCAL_HOST_KEY, systemClock.now());
+  }
   const janitor = new Janitor({ database, clock: systemClock, logger });
   janitor.start(JANITOR_INTERVAL_MS);
 

@@ -11,6 +11,8 @@
 #   --url ORIGIN   the origin people and agents use, such as https://skills.example.com
 #   --port PORT    the port of this host the server listens on, on 127.0.0.1 (11188 unless said)
 #   --packs DIR    serve the packs of this directory at /local/<owner>/<name>
+#   --private      serve those packs only to a request that presents a token made for the pack
+#                  through the admin API (PACKS_ACCESS=token)
 #   --meaning      the search by meaning: the embedding server beside the bundle
 #   --rerank       the reranker as well; implies --meaning
 #   --gpu          both on an NVIDIA GPU; implies --rerank
@@ -31,6 +33,7 @@ build=false
 url=""
 port=""
 packs=""
+private=false
 meaning=false
 rerank=false
 gpu=false
@@ -49,12 +52,13 @@ while [ $# -gt 0 ]; do
     --url) [ $# -ge 2 ] || fail "--url takes an origin"; url=$2; shift 2 ;;
     --port) [ $# -ge 2 ] || fail "--port takes a port"; port=$2; shift 2 ;;
     --packs) [ $# -ge 2 ] || fail "--packs takes a directory"; packs=$2; shift 2 ;;
+    --private) private=true; shift ;;
     --meaning) meaning=true; shift ;;
     --rerank) meaning=true; rerank=true; shift ;;
     --gpu) meaning=true; rerank=true; gpu=true; shift ;;
     --offline) offline=true; shift ;;
     --no-start) start=false; shift ;;
-    -h | --help) sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h | --help) sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) fail "unknown option: $1 (see --help)" ;;
   esac
 done
@@ -168,6 +172,10 @@ fi
 if [ -n "$(setting PACKS_PATH)" ]; then
   files=$files:compose.packs.yaml
 fi
+if $private; then
+  [ -n "$(setting PACKS_PATH)" ] || fail "--private is about the packs of a directory: name one with --packs"
+  set_setting PACKS_ACCESS token
+fi
 # What was turned on before stays on: the overlays are read back from the settings.
 before=$(setting COMPOSE_FILE)
 case ":$before:" in *:compose.meaning.yaml:*) meaning=true ;; esac
@@ -184,6 +192,11 @@ if $meaning; then
     echo "fetching the model files of the base profile"
     "$here/get-models.sh" "$models" base
   fi
+fi
+# Packs read with a token only are not public: they are embedded where the deployment says
+# that what is not public is, and the embedding server here is the installation's own.
+if $meaning && [ "$(setting PACKS_ACCESS)" = token ] && [ -z "$(setting EMBEDDINGS_SCOPE)" ]; then
+  set_setting EMBEDDINGS_SCOPE all
 fi
 if $rerank; then files=$files:compose.rerank.yaml; fi
 if $gpu; then files=$files:compose.gpu.yaml; fi
@@ -221,5 +234,6 @@ $ready || fail "the server did not become ready; see: (cd $here && docker compos
 echo
 echo "SkillCDN ${release:+$release }is running at http://127.0.0.1:$listening (image $image)."
 [ -z "$(setting PACKS_PATH)" ] || echo "Packs: a directory <owner>/<name> under $(setting PACKS_PATH) is served at /local/<owner>/<name>."
+[ "$(setting PACKS_ACCESS)" != token ] || echo "They are read with a token only: make one per agent with POST /admin/v1/pack-tokens (deploy/README.md)."
 echo "Settings and secrets: $env_file. The admin API takes the ADMIN_TOKEN written there."
 echo "Put TLS in front before anything but this host reaches it (deploy/README.md, \"Behind a reverse proxy\")."

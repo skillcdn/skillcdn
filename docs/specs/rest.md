@@ -58,6 +58,8 @@ A public address needs no credential, and what is served does not depend on who 
 - **A session**: the cookie of the deployment's own pages, which a browser sends by itself.
 - **A token of this deployment**, in the `authorization` header with the `Bearer` scheme: an access token a person's app received from the authorization server, good at the one canonical address it was issued for, ref and path included ([tokens](permissions.md#tokens)), or a repository token a person made for an agent with nobody to sign in, good at every address of that one repository ([repository tokens](permissions.md#tokens-for-agents-with-nobody-to-sign-in)). A token presented wins over a session sent with the same request. A header that is not a bearer credential is a credential that is no good.
 
+On a deployment that reads the packs of its own directory with a token only, the same routes and `raw` take a pack token at a `local` address, with or without signing in ([permissions](permissions.md#packs-of-the-deployments-own-directory)).
+
 The answers are those of the MCP endpoint ([permissions](permissions.md#mcp-authorization-is-optional)), with one difference: a request without any credential for anything that is not public is `404` here, never a challenge. The REST API has no discovery step: a program that runs against it is given its token by a person, and the pages read `404` as a repository that may be private, and offer to sign in.
 
 | Request to an address | Answer |

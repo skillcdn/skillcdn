@@ -80,6 +80,8 @@ export interface HarnessOptions {
   readonly hub?: HubConfig;
   /** The directory of packs served at `local` addresses (ADR-0071); left out, there is none. */
   readonly packsRoot?: string;
+  /** Who reads the packs of that directory (ADR-0088): everyone unless said. */
+  readonly packsAccess?: "public" | "token";
   readonly entitlements?: Entitlements;
   readonly host?: FixtureHost;
   readonly trustedProxies?: readonly string[];
@@ -138,7 +140,10 @@ export function createHarness(testDatabase: TestDatabase, options: HarnessOption
     {
       mounts: { repoTtlMs: ttlMs, refTtlMs: ttlMs },
       hub: options.hub,
-      packs: options.packsRoot === undefined ? undefined : { root: options.packsRoot },
+      packs:
+        options.packsRoot === undefined
+          ? undefined
+          : { root: options.packsRoot, access: options.packsAccess ?? "public" },
       ...(options.login === undefined
         ? {}
         : {

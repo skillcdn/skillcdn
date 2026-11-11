@@ -122,7 +122,7 @@ function setup(options: {
       },
       embedConcurrency: 1,
       scope: "none",
-      ...(packsRoot === undefined ? {} : { packs: { root: packsRoot } }),
+      ...(packsRoot === undefined ? {} : { packs: { root: packsRoot, access: "public" } }),
     },
     { database: testDatabase.database, jobs, gitHost: host, embedder: undefined, clock, logger },
   );
