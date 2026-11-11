@@ -1,6 +1,7 @@
 ---
 title: "TABLE C-2 Modifier codes: AA to DZ"
 description: Rows AA to DZ of the modifier codes, which say what a reported condition applies to and how soon it is reported.
+source: ../sources/tidewater-link-protocol-ed3.pdf
 ---
 *Tidewater Link Protocol, third edition > Annex C Code tables > TABLE C-2 Modifier codes*
 

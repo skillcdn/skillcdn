@@ -749,9 +749,20 @@ export class Reader<M extends MountContext = MountContext> {
       const resolved = resolveDocumentSource(path, source);
       const entry = resolved === undefined ? undefined : getEntry(entries, resolved);
       const below = entry?.visible === true ? belowMount(mount, entry.path) : undefined;
-      return below === undefined
-        ? { text: source }
-        : { text: source, path: below, url: mount.rawUrl(below) };
+      if (below === undefined) {
+        return { text: source };
+      }
+      // An original kept encrypted says so, with the name of its key (ADR-0084).
+      const originals = this.#originalsAt(entries, below);
+      return {
+        text: source,
+        path: below,
+        url: mount.rawUrl(below),
+        ...(originals?.encrypted === true ? { encrypted: true } : {}),
+        ...(originals?.encrypted === true && originals.keyName !== undefined
+          ? { keyName: originals.keyName }
+          : {}),
+      };
     });
     const images = inspectMarkdownLinks(path, text)
       .images.slice(0, MAX_OUTLINE_IMAGES)
@@ -901,6 +912,28 @@ export class Reader<M extends MountContext = MountContext> {
       const language = manifest?.kind === "manifest" ? manifest.frontMatter?.language : undefined;
       if (language !== undefined) {
         return language;
+      }
+      if (directory.length === 0) {
+        return undefined;
+      }
+      directory = parentDirectory(directory);
+    }
+  }
+
+  /**
+   * What the nearest manifest at or above a file says of the originals of its scope (ADR-0084),
+   * as `language` inherits: the nearest that says anything.
+   */
+  #originalsAt(
+    entries: readonly IndexEntry[],
+    path: RepoPath,
+  ): { readonly encrypted: boolean; readonly keyName?: string } | undefined {
+    let directory = parentDirectory(path);
+    while (true) {
+      const manifest = getEntry(entries, repoManifestPath(directory));
+      const originals = manifest?.kind === "manifest" ? manifest.frontMatter?.originals : undefined;
+      if (originals !== undefined) {
+        return originals;
       }
       if (directory.length === 0) {
         return undefined;

@@ -14,18 +14,23 @@ import {
   type IndexLimits,
   isWithinRepoPath,
   type MountCatalog,
+  type OriginalsPolicy,
   outlineMarkdown,
+  PDF_ENDS_BYTES,
+  parentDirectory,
   parseRepoPath,
+  pdfEncryption,
   READ_FILE_DEFAULT_LIMIT,
   type RepoPath,
   ROOT_PATH,
   renderInstructions,
+  repoManifestPath,
   sectionsOf,
   skillUriPrefix,
   splitFrontMatter,
 } from "@skillcdn/core";
 import { INDEX_VERSION } from "./build-index.js";
-import { readDirectory } from "./read-directory.js";
+import { readDirectory, readWorkingTreeEnds } from "./read-directory.js";
 
 // The `check` role: a working tree read by the same indexer that reads a commit, and a report
 // of what an agent would get. For repository authors, before they push; it needs no database
@@ -42,6 +47,8 @@ export interface CheckOptions {
 const NAMED_NOT_SERVED = 12;
 /** How many notes the report lists in full. */
 const NAMED_NOTES = 12;
+/** How many PDFs of a directory are opened to see whether they are encrypted. */
+const MAX_CHECKED_ORIGINALS = 1000;
 
 function pathOf(text: string): RepoPath {
   const parsed = parseRepoPath(text);
@@ -224,6 +231,59 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
     }
   }
   write("\n");
+  // The originals a manifest says are kept encrypted are held against the files (ADR-0084): a
+  // working tree has their bytes, which a deployment never fetches. A PDF that is not encrypted
+  // where the manifest says the originals are is a copy without its protection, and fails the
+  // check; one that is encrypted where nothing says so is a note, since no result can say it.
+  const policyAt = (path: string): OriginalsPolicy | undefined => {
+    let directory = parentDirectory(pathOf(path));
+    for (;;) {
+      const governing = index.entries.find(
+        (entry) => entry.kind === "manifest" && entry.path === repoManifestPath(directory),
+      );
+      if (governing?.frontMatter?.originals !== undefined) {
+        return governing.frontMatter.originals;
+      }
+      if (directory.length === 0) {
+        return undefined;
+      }
+      directory = parentDirectory(directory);
+    }
+  };
+  const pdfs = index.entries.filter((entry) => entry.path.toLowerCase().endsWith(".pdf"));
+  const unprotected: string[] = [];
+  let protectedCount = 0;
+  for (const pdf of pdfs.slice(0, MAX_CHECKED_ORIGINALS)) {
+    const policy = policyAt(pdf.path);
+    const ends = await readWorkingTreeEnds(root, pathOf(pdf.path), PDF_ENDS_BYTES);
+    const encrypted = ends === undefined ? undefined : pdfEncryption(ends.head, ends.tail);
+    if (policy?.encrypted === true) {
+      if (encrypted === false) {
+        unprotected.push(
+          `${pdf.path} (original_not_encrypted): the manifest above it says the originals here are kept encrypted, and this PDF is not: a copy without its protection does not travel in the pack`,
+        );
+      } else if (encrypted === true) {
+        protectedCount += 1;
+      } else {
+        notes.push(
+          `${pdf.path} (original_not_read): it could not be read as a PDF, so whether it is encrypted as its manifest says is not known`,
+        );
+      }
+    } else if (encrypted === true) {
+      notes.push(
+        `${pdf.path} (original_encrypted_undeclared): this PDF is encrypted and no manifest above it says so; with "originals: { encrypted: true }" in the manifest of its set, a result tells a reader that it is, and by which key's name`,
+      );
+    }
+  }
+  if (protectedCount > 0 || unprotected.length > 0) {
+    write(
+      `Originals kept encrypted: ${protectedCount} PDF${protectedCount === 1 ? "" : "s"} as their manifest says${unprotected.length === 0 ? "" : `; ${unprotected.length} not`}\n`,
+    );
+    for (const problem of unprotected) {
+      write(`- ${problem}\n`);
+    }
+    write("\n");
+  }
   if (notes.length > 0) {
     write(`Notes: ${notes.length}\n`);
     for (const note of notes.slice(0, NAMED_NOTES)) {
@@ -324,10 +384,13 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
         .join("\n")}\n\n`,
   );
 
+  const issues = diagnostics.length + unprotected.length;
   write(
-    diagnostics.length === 0
+    issues === 0
       ? "ok: no index diagnostics\n"
-      : `${diagnostics.length} index issue(s) found\n`,
+      : diagnostics.length === 0
+        ? `${unprotected.length} original(s) not encrypted as their manifest says\n`
+        : `${diagnostics.length} index issue(s) found${unprotected.length === 0 ? "" : `, and ${unprotected.length} original(s) not encrypted as their manifest says`}\n`,
   );
-  return diagnostics.length === 0 ? 0 : 1;
+  return issues === 0 ? 0 : 1;
 }

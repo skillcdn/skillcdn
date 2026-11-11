@@ -10,6 +10,7 @@ import {
   requiredLine,
   requiredText,
 } from "./manifest-fields.js";
+import { KEY_NAME, type OriginalsPolicy } from "./originals.js";
 import { DEFAULT_DOCUMENT_DIRECTORIES } from "./repo-layout.js";
 import { parseRepoPath, type RepoPath, ROOT_PATH } from "./repo-path.js";
 import { err, ok, type Result } from "./result.js";
@@ -75,6 +76,11 @@ export interface RepoManifest {
   readonly translations: Readonly<Record<string, RepoTranslation>>;
   /** How the documents are searched: by meaning too, unless turned off. */
   readonly search: RepoSearch;
+  /**
+   * What the manifest says of the originals of its scope (ADR-0084): that they are kept encrypted,
+   * and the name of the key that opens them. Absent when it says nothing of them.
+   */
+  readonly originals: OriginalsPolicy | undefined;
   /** The Markdown after the front-matter: the rules that hold for every skill. */
   readonly body: string;
 }
@@ -174,6 +180,7 @@ export function parseRepoManifest(text: string): Result<ParsedRepoManifest, Repo
       language: optionalLanguage(fields, ignored),
       translations: readTranslations(fields.get("translations"), pickRepoTranslation, ignored),
       search: readSearch(fields.get("search"), ignored),
+      originals: readOriginals(fields.get("originals"), ignored),
       body: split.body,
     },
     warnings,
@@ -199,6 +206,48 @@ function readSearch(value: unknown, ignored: (message: string) => void): RepoSea
     meaning: readSearchFlag(value.get("meaning"), "meaning", ignored),
     hub: readSearchFlag(value.get("hub"), "hub", ignored),
   };
+}
+
+/**
+ * The `originals` field (ADR-0084): a mapping whose `encrypted` is `true` says that the originals
+ * the manifest governs are kept as they were received, encrypted, and whose `key-name` is the
+ * name the organization knows the key by. The name is one word and never the key: a value that
+ * is not a name is reported without being repeated, since it may be what it must not be.
+ */
+function readOriginals(
+  value: unknown,
+  ignored: (message: string) => void,
+): OriginalsPolicy | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (!(value instanceof Map)) {
+    ignored('"originals" is ignored: expected a mapping such as "encrypted: true"');
+    return undefined;
+  }
+  const flag: unknown = value.get("encrypted");
+  let encrypted = false;
+  if (flag === true || flag === "true") {
+    encrypted = true;
+  } else if (flag !== undefined && flag !== null && flag !== false && flag !== "false") {
+    ignored('"originals.encrypted" is ignored: expected true or false');
+  }
+  const name: unknown = value.get("key-name");
+  let keyName: string | undefined;
+  if (typeof name === "string" && KEY_NAME.test(name.trim())) {
+    keyName = name.trim();
+  } else if (name !== undefined && name !== null) {
+    ignored(
+      '"originals.key-name" is ignored: expected the name of a key, one word of letters, digits, dots, underscores and hyphens, never the key itself',
+    );
+  }
+  if (!encrypted) {
+    if (keyName !== undefined) {
+      ignored('"originals.key-name" is ignored: it names the key of originals that are encrypted');
+    }
+    return undefined;
+  }
+  return keyName === undefined ? { encrypted } : { encrypted, keyName };
 }
 
 /** One flag of the `search` mapping: on unless written `false`; anything else is reported and on. */

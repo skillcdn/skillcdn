@@ -1296,3 +1296,38 @@ describe("a document made from the pack's documents (ADR-0083)", () => {
     expect(plain.byPath.get("docs/notes.md")?.frontMatter?.derived).toBeUndefined();
   });
 });
+
+describe("what a manifest says of its originals (ADR-0084)", () => {
+  it("is kept with the manifest, for a result to say of an original", async () => {
+    const result = await index({
+      "docs/manuals/SKILLCDN.md": manifest(
+        "",
+        "documents: [.]\noriginals:\n  encrypted: true\n  key-name: workshop-2026\n",
+      ),
+      "docs/manuals/chapter.md": "# Chapter\n",
+      "docs/open/SKILLCDN.md": manifest("", "documents: [.]\n"),
+    });
+    expect(result.byPath.get("docs/manuals/SKILLCDN.md")?.frontMatter?.originals).toEqual({
+      encrypted: true,
+      keyName: "workshop-2026",
+    });
+    expect(result.byPath.get("docs/open/SKILLCDN.md")?.frontMatter?.originals).toBeUndefined();
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it("reports a key written to hold a password, in a manifest, a skill and a document, never its value", async () => {
+    const result = await index({
+      "SKILLCDN.md": manifest("", "documents: [docs]\npassword: opensesame-1\n"),
+      "skills/example/SKILL.md": skill("# Example\n", "passphrase: opensesame-2\n"),
+      "docs/chapter.md": "---\ntitle: Chapter\nsource-password: opensesame-3\n---\n# Chapter\n",
+      "docs/plain.md": "---\ntitle: Resetting a password\n---\n# Resetting a password\n",
+    });
+    expect(result.diagnostics.map((diagnostic) => [diagnostic.path, diagnostic.code])).toEqual([
+      ["SKILLCDN.md", "password_in_front_matter"],
+      ["skills/example/SKILL.md", "password_in_front_matter"],
+      ["docs/chapter.md", "password_in_front_matter"],
+    ]);
+    expect(JSON.stringify(result.diagnostics)).not.toContain("opensesame");
+    expect(result.diagnostics[0]?.message).toContain('the front-matter carries "password"');
+  });
+});

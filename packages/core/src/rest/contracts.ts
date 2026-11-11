@@ -136,6 +136,10 @@ export const restDocumentSourceSchema = z.object({
   text: z.string(),
   path: z.optional(z.string()),
   url: z.optional(z.string()),
+  /** True for an original its manifest says is kept encrypted; the pack holds nothing that opens it (ADR-0084). */
+  encrypted: z.optional(z.boolean()),
+  /** With `encrypted`: the name of the key that opens it, when the manifest names one. */
+  keyName: z.optional(z.string()),
 });
 /** One heading of a file's outline, with the `offset` and `length` that read its section. */
 export const restOutlineHeadingSchema = z.object({

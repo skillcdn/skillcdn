@@ -254,6 +254,8 @@ function sourcesOf(sources: readonly RestDocumentSource[]): DocumentSource[] {
       text: source.text,
       ...(path === undefined ? {} : { path }),
       ...(source.url === undefined ? {} : { url: source.url }),
+      ...(source.encrypted === true ? { encrypted: true } : {}),
+      ...(source.keyName === undefined ? {} : { keyName: source.keyName }),
     };
   });
 }

@@ -1,6 +1,7 @@
 ---
 title: 1 Scope and terms
 description: What the third edition of the Tidewater Link Protocol covers, the terms its clauses use and the abbreviations they are written with.
+source: sources/tidewater-link-protocol-ed3.pdf
 ---
 *Tidewater Link Protocol, third edition > 1 Scope and terms*
 

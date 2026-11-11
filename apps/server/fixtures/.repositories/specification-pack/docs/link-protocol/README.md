@@ -7,3 +7,5 @@ The specification of the link between a marker buoy and the shore station that t
 - [6 Messages](06-messages/README.md): the definition of every message and the description of its fields, clauses 6.1 and 6.2; pages 74 to 96.
 - [Annex C Code tables](annex-c/README.md): the station condition codes and the modifier codes, TABLE C-1 and TABLE C-2; pages 140 to 151.
 - [Index](index/README.md): where each definition and each table stands.
+
+The original the chapters were made from is `sources/tidewater-link-protocol-ed3.pdf`, kept as it was issued, encrypted: the text is in the chapters, and the file is for whoever holds the board's key.

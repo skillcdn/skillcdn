@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { lstat, readdir, readFile, realpath, stat } from "node:fs/promises";
+import { lstat, open, readdir, readFile, realpath, stat } from "node:fs/promises";
 import { basename, join, resolve, sep } from "node:path";
 import { Readable } from "node:stream";
 import { pathToFileURL } from "node:url";
@@ -230,6 +230,40 @@ export async function openWorkingTreeFile(
     };
   } catch {
     return undefined;
+  }
+}
+
+/**
+ * The first and the last `bytes` of a file of a working tree, read without the rest: the file
+ * at `path` under `root`, when it is a regular file reached through no symbolic link, as
+ * {@link openWorkingTreeFile} opens one; `undefined` otherwise. For a check that looks at where
+ * a format says what a file is, such as the trailer of a PDF, whatever the file's size.
+ */
+export async function readWorkingTreeEnds(
+  root: string,
+  path: RepoPath,
+  bytes: number,
+): Promise<
+  { readonly size: number; readonly head: Uint8Array; readonly tail: Uint8Array } | undefined
+> {
+  if ((await openWorkingTreeFile(root, path)) === undefined) {
+    return undefined;
+  }
+  const absolute = join(resolve(root), ...path.split("/"));
+  let handle: Awaited<ReturnType<typeof open>> | undefined;
+  try {
+    handle = await open(absolute, "r");
+    const { size } = await handle.stat();
+    const length = Math.min(bytes, size);
+    const head = new Uint8Array(length);
+    await handle.read(head, 0, length, 0);
+    const tail = new Uint8Array(length);
+    await handle.read(tail, 0, length, size - length);
+    return { size, head, tail };
+  } catch {
+    return undefined;
+  } finally {
+    await handle?.close();
   }
 }
 

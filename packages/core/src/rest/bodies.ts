@@ -237,6 +237,8 @@ function restSourceOf(source: DocumentSource): RestDocumentSource {
     text: source.text,
     ...(source.path === undefined ? {} : { path: source.path }),
     ...(source.url === undefined ? {} : { url: source.url }),
+    ...(source.encrypted === true ? { encrypted: true } : {}),
+    ...(source.keyName === undefined ? {} : { keyName: source.keyName }),
   };
 }
 
