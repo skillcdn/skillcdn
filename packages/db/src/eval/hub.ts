@@ -23,7 +23,7 @@ import {
 } from "../queries/hub.js";
 import { saveCachedRef, saveRepository } from "../queries/repos.js";
 import { claimSnapshot, ensureSnapshot, writeSnapshotIndex } from "../queries/snapshots.js";
-import { supportsSectionVectors, type VectorKey } from "../queries/vectors.js";
+import { fillPartVectors, supportsSectionVectors, type VectorKey } from "../queries/vectors.js";
 
 // `pnpm --filter @skillcdn/db run eval:hub fill --database-url <url> --documents <directory> ...`
 // and `... eval:hub measure --database-url <url>`: a database filled to the shape of a deployment
@@ -37,12 +37,16 @@ import { supportsSectionVectors, type VectorKey } from "../queries/vectors.js";
 // packs that hold nearly all of it, each pack with an older commit beside the one served, as a
 // deployment keeps one. The searchable entries take their words from the Markdown files of the
 // directories given, so that the vectors are as large as a pack's; every section of a pack's
-// entries gets a vector of random numbers, which costs a comparison what a real one does. A
+// entries gets a vector of random numbers, which costs a comparison what a real one does, and
+// the vectors of the parts are made from them as the worker's sweep makes them (ADR-0092). A
 // second `fill` under another `--series` adds as much again.
 //
 // `measure` asks five questions of the three statements, without a time limit, and prints for
 // each how long it ran, how many rows of `index_entries` and how many pages it read and through
-// which indexes. The rows and the pages are the numbers to hold on to: a disk on the machine of
+// which indexes. The meaning is measured both ways: `meaning`, the `--parts` parts nearest the
+// query picked and their sections compared, and `every`, every section compared, as it was
+// before the parts and is with `HUB_SEARCH_PARTS=0`. Random vectors have no neighbours, so what
+// the two find differs here; what they read is what is measured. The rows and the pages are the numbers to hold on to: a disk on the machine of
 // whoever runs this hides in milliseconds what the storage of a deployment shows.
 //
 // The milliseconds mean something once the database is held to what a small deployment has: a
@@ -64,6 +68,7 @@ const { values, positionals } = parseArgs({
     model: { type: "string", default: "eval" },
     dimensions: { type: "string", default: "1024" },
     candidates: { type: "string", default: "50" },
+    parts: { type: "string", default: "200" },
   },
 });
 
@@ -293,6 +298,13 @@ async function fill(database: Database, options: FillOptions): Promise<void> {
   await drizzleOf(database).execute(sql`vacuum (analyze) index_entries`);
   if (vectors) {
     await drizzleOf(database).execute(sql`vacuum (analyze) section_vectors`);
+    let made = 0;
+    for (let filled = await fillPartVectors(database, key, 500); filled > 0; ) {
+      made += filled;
+      filled = await fillPartVectors(database, key, 500);
+    }
+    await drizzleOf(database).execute(sql`vacuum (analyze) part_vectors`);
+    write(`the part vectors of ${made} bodies made`);
   }
   write(
     vectors
@@ -303,7 +315,12 @@ async function fill(database: Database, options: FillOptions): Promise<void> {
 
 const milliseconds = (value: number): string => `${value.toFixed(0)} ms`;
 
-async function measure(database: Database, key: VectorKey, candidates: number): Promise<void> {
+async function measure(
+  database: Database,
+  key: VectorKey,
+  candidates: number,
+  parts: number,
+): Promise<void> {
   const db = drizzleOf(database);
   const ids = (await listSearchablePacks(database)).map((pack) => pack.snapshotId);
   const vectors = key.dimensions > 0 && (await supportsSectionVectors(database));
@@ -353,7 +370,7 @@ async function measure(database: Database, key: VectorKey, candidates: number): 
     const meaningMs = vectors
       ? (
           await timed(() =>
-            searchHubSectionVectors(database, ids, key, query, candidates, unbounded),
+            searchHubSectionVectors(database, ids, key, query, candidates, unbounded, parts),
           )
         )[1]
       : undefined;
@@ -362,7 +379,7 @@ async function measure(database: Database, key: VectorKey, candidates: number): 
       lexemes,
       weights,
       limit: candidates,
-      meaning: vectors ? { key, query } : undefined,
+      meaning: vectors ? { key, query, parts } : undefined,
     });
     write(line("count", countMs, reading.count));
     if (reading.words !== undefined) {
@@ -370,6 +387,21 @@ async function measure(database: Database, key: VectorKey, candidates: number): 
     }
     if (reading.meaning !== undefined && meaningMs !== undefined) {
       write(line("meaning", meaningMs, reading.meaning));
+    }
+    if (vectors && lexemes.length === 0) {
+      // Every section compared, once: the same whatever the words, and the costly one.
+      const [, everyMs] = await timed(() =>
+        searchHubSectionVectors(database, ids, key, query, candidates, unbounded, 0),
+      );
+      const every = await readHubStatements(database, {
+        snapshotIds: ids,
+        lexemes: [],
+        limit: candidates,
+        meaning: { key, query, parts: 0 },
+      });
+      if (every.meaning !== undefined) {
+        write(line("every", everyMs, every.meaning));
+      }
     }
     write(
       `  ${counted.total} entries counted, ${counted.counts.join(" ")} holding the words, ${found.length} found`,
@@ -413,7 +445,7 @@ try {
       bodies: bodiesOf(values.documents ?? []),
     });
   } else {
-    await measure(database, key, Number(values.candidates));
+    await measure(database, key, Number(values.candidates), Number(values.parts));
   }
 } finally {
   await database.close();

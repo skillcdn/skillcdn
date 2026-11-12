@@ -28,7 +28,12 @@ import {
   type VectorKey,
   writeSectionVectors,
 } from "@skillcdn/db";
-import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
+import {
+  createTestDatabase,
+  DEV_DATABASE_URL,
+  dropPartVectors,
+  type TestDatabase,
+} from "@skillcdn/db/testing";
 import { INDEX_VERSION } from "@skillcdn/indexer";
 import { InferenceError } from "@skillcdn/inference";
 import { pino } from "pino";
@@ -407,11 +412,98 @@ describe("the worker", () => {
       reordered: 0,
       tiers: { listed: 0, declared: 0, skills: 0 },
       dropped: { vectors: 1, snapshots: 1 },
+      // Every body was written with the vectors of its parts: none is left to make.
+      parts: 0,
     });
     expect(await blobsWithoutVectors(testDatabase.database, OLD_KEY, [old.blobSha])).toEqual(
       new Set([old.blobSha]),
     );
     expect(await getSnapshotEmbedding(testDatabase.database, scope, OLD_KEY)).toBeUndefined();
+
+    // Sections embedded before there were part vectors: the sweep makes those of every such
+    // body from what is stored, calling no model, and where nothing is embedded any more too.
+    expect(await dropPartVectors(testDatabase.database)).toBeGreaterThan(0);
+    const calls = fake.calls.length;
+    const filling = await sweepEmbeddings({
+      database: testDatabase.database,
+      jobs,
+      key: KEY,
+      scope: "none",
+      lists,
+      logger,
+    });
+    expect(filling.parts).toBeGreaterThanOrEqual(expected.blobs.length);
+    expect(filling).toMatchObject({ pending: 0, queued: 0, dropped: undefined });
+    expect(fake.calls.length).toBe(calls);
+    const again = await sweepEmbeddings({
+      database: testDatabase.database,
+      jobs,
+      key: KEY,
+      scope: "all",
+      lists,
+      logger,
+    });
+    expect(again.parts).toBe(0);
+  });
+
+  it("makes the part vectors at start where nothing is embedded any more (ADR-0092)", async () => {
+    expect(await dropPartVectors(testDatabase.database)).toBeGreaterThan(0);
+    // A worker of a deployment whose scope embeds nothing: what was embedded before is searched.
+    // Its queue takes no job and stops nothing here, so that the worker of this file is alone.
+    const idle: JobQueue = {
+      ...jobs,
+      work: async () => undefined,
+      schedule: async () => undefined,
+      unschedule: async () => undefined,
+      stop: async () => undefined,
+    };
+    const resting = createWorker(
+      {
+        mounts: { repoTtlMs: 60_000, refTtlMs: 60_000 },
+        indexing: {
+          waitMs: 10_000,
+          concurrency: 1,
+          leaseMs: 60_000,
+          ahead: { scope: "none", intervalMs: 900_000, limit: 50 },
+          retentionMs: 0,
+          limits: {
+            maxTreeEntries: 1000,
+            maxIndexedFiles: 100,
+            maxIndexedFileBytes: 262_144,
+            maxIndexedTotalBytes: 1_048_576,
+            maxReadableFileBytes: 262_144,
+            maxArchiveBytes: 10_000_000,
+          },
+        },
+        embedConcurrency: 1,
+        scope: "none",
+      },
+      {
+        database: testDatabase.database,
+        jobs: idle,
+        gitHost: host,
+        embedder: fake.embedder,
+        clock,
+        logger,
+        pollSeconds: 0.5,
+      },
+    );
+    const calls = fake.calls.length;
+    expect((await resting.start()).queues).toEqual([INDEX_QUEUE]);
+    await resting.close(0);
+    expect(fake.calls.length).toBe(calls);
+    // They are there again; and are put back for the tests after this one.
+    expect(await dropPartVectors(testDatabase.database)).toBeGreaterThan(0);
+    const lists = new OperatorLists({ database: testDatabase.database, clock });
+    const back = await sweepEmbeddings({
+      database: testDatabase.database,
+      jobs,
+      key: KEY,
+      scope: "none",
+      lists,
+      logger,
+    });
+    expect(back.parts).toBeGreaterThan(0);
   });
 
   it("is sent the embedding of every commit the api indexes", async () => {

@@ -5,6 +5,7 @@ import {
   accounts,
   embeddingUsageDaily,
   indexEntries,
+  partVectors,
   repoRefs,
   repos,
   sectionVectors,
@@ -14,7 +15,7 @@ import {
 import type { RepoScope } from "./repos.js";
 import type { SnapshotScope } from "./snapshots.js";
 import type { UsageDay } from "./usage.js";
-import type { VectorKey } from "./vectors.js";
+import { partVectorsPresent, type VectorKey } from "./vectors.js";
 
 // How far each snapshot's sections have been embedded under a key (ADR-0064): what the worker
 // writes down as it goes, what tells it which served snapshots are still to be embedded under the
@@ -479,6 +480,18 @@ export async function deleteEmbeddingsOutsideKey(
   );
   let vectors = 0;
   if (present.rows[0]?.present === true) {
+    // The vectors of the parts were made from those of the sections, and go before them.
+    if (await partVectorsPresent(db)) {
+      await db
+        .delete(partVectors)
+        .where(
+          or(
+            ne(partVectors.model, key.model),
+            ne(partVectors.dimensions, key.dimensions),
+            ne(partVectors.sectioningVersion, key.sectioningVersion),
+          ),
+        );
+    }
     const otherKey = or(
       ne(sectionVectors.model, key.model),
       ne(sectionVectors.dimensions, key.dimensions),

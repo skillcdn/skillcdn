@@ -207,6 +207,7 @@ export function createApi(
           lists,
           timeoutMs: hubConfig.timeoutMs,
           candidates: hubConfig.candidates,
+          parts: hubConfig.parts,
           clock,
           logger,
         }),

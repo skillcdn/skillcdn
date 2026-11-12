@@ -2,6 +2,7 @@ import {
   type Database,
   deleteEmbeddingsOutsideKey,
   type EmbedTier,
+  fillPartVectors,
   type JobQueue,
   listSnapshotsToEmbed,
   type SnapshotToEmbed,
@@ -18,12 +19,18 @@ import { EMBED_QUEUE, embedJobSchema, embedPriority, sendEmbedJob } from "./queu
 // search or a request brings in; after a change of model that is every served pack. Before it
 // queues anything, it puts what waits in the order of this build: a job that an older build
 // queued, or that waits since its repository's rank changed, is given the priority the rank gives
-// it now, in place. Once nothing is left to embed, what was embedded under other keys goes.
+// it now, in place. Once nothing is left to embed, what was embedded under other keys goes. And
+// the vectors of the parts of what is embedded are made where they are missing (ADR-0092): a
+// slice writes them with the sections, so this is for the sections written before there were
+// any, and it calls no model.
 
 /** How many snapshots one sweep queues: the rest wait for the next, an hour on. */
 export const SWEEP_LIMIT = 1000;
 /** How many of the jobs that wait one sweep looks through to put in order. */
 export const WAITING_LIMIT = 5000;
+/** How many bodies one statement makes part vectors for, and how many statements one sweep runs. */
+export const PART_FILL_BODIES = 500;
+export const PART_FILL_STEPS = 200;
 
 /** The ranks the sweep queues: every one but the rest. */
 type SweptTier = Exclude<EmbedTier, "other">;
@@ -51,6 +58,8 @@ export interface SweepOutcome {
   readonly tiers: Readonly<Record<SweptTier, number>>;
   /** What went of other keys, when nothing was pending. */
   readonly dropped: { readonly vectors: number; readonly snapshots: number } | undefined;
+  /** How many bodies this sweep made the part vectors of, from their section vectors. */
+  readonly parts: number;
 }
 
 const sameKey = (a: VectorKey, b: VectorKey): boolean =>
@@ -98,11 +107,33 @@ async function reorderWaiting(
   return { waiting, reordered };
 }
 
+/**
+ * Makes the part vectors of the bodies that have section vectors under the key and none of
+ * these, a batch a statement, and says for how many bodies. What one sweep does not reach, the
+ * next goes on with.
+ */
+async function fillParts(deps: SweepDependencies): Promise<number> {
+  let filled = 0;
+  for (let step = 0; step < PART_FILL_STEPS; step += 1) {
+    const made = await fillPartVectors(deps.database, deps.key, PART_FILL_BODIES);
+    filled += made;
+    if (made < PART_FILL_BODIES) {
+      break;
+    }
+  }
+  return filled;
+}
+
 export async function sweepEmbeddings(deps: SweepDependencies): Promise<SweepOutcome> {
   const { database, jobs, key } = deps;
   const tiers: Record<SweptTier, number> = { listed: 0, declared: 0, skills: 0 };
+  // Whatever is embedded now, what was embedded before is searched, and by its parts.
+  const parts = await fillParts(deps);
   if (deps.scope === "none") {
-    return { pending: 0, queued: 0, reordered: 0, tiers, dropped: undefined };
+    if (parts > 0) {
+      deps.logger.info({ model: key.model, parts }, "part vectors made");
+    }
+    return { pending: 0, queued: 0, reordered: 0, tiers, dropped: undefined, parts };
   }
   const pending = await listSnapshotsToEmbed(database, key, deps.limit ?? SWEEP_LIMIT, {
     visibility: deps.scope === "public" ? "public" : undefined,
@@ -131,8 +162,8 @@ export async function sweepEmbeddings(deps: SweepDependencies): Promise<SweepOut
   const dropped =
     pending.length === 0 ? await deleteEmbeddingsOutsideKey(database, key) : undefined;
   deps.logger.info(
-    { model: key.model, pending: pending.length, queued, reordered, ...tiers, dropped },
+    { model: key.model, pending: pending.length, queued, reordered, ...tiers, dropped, parts },
     "embeddings swept",
   );
-  return { pending: pending.length, queued, reordered, tiers, dropped };
+  return { pending: pending.length, queued, reordered, tiers, dropped, parts };
 }

@@ -1,7 +1,7 @@
 import type { DocumentSection } from "@skillcdn/core";
 import { and, eq, inArray, notExists, sql } from "drizzle-orm";
 import { type Database, type Drizzle, drizzleOf } from "../client.js";
-import { indexEntries, sectionVectors } from "../schema.js";
+import { indexEntries, partVectors, sectionVectors } from "../schema.js";
 import { BY_PATH, FINDABLE, inSnapshot, underPath } from "./entries.js";
 import type { SnapshotScope } from "./snapshots.js";
 
@@ -37,6 +37,12 @@ export interface SectionMatch extends DocumentSection {
   readonly similarity: number;
 }
 
+/**
+ * How many consecutive sections of a body one part vector is the mean of (ADR-0092). A change
+ * of it is a migration that empties `part_vectors`, for the sweep to make them again.
+ */
+export const PART_SECTIONS = 8;
+
 const WRITE_BATCH_SIZE = 100;
 const HASH_BATCH_SIZE = 1000;
 
@@ -44,6 +50,18 @@ const HASH_BATCH_SIZE = 1000;
 async function present(db: Drizzle): Promise<boolean> {
   const result = await db.execute<{ present: boolean }>(
     sql`select to_regclass('section_vectors') is not null as present`,
+  );
+  return result.rows[0]?.present === true;
+}
+
+/**
+ * True in a database that keeps the vectors of parts: one with section vectors whose extension
+ * has the half-precision type (0.7.0 on). Where it is not, nothing makes them and a search
+ * across the packs compares every section.
+ */
+export async function partVectorsPresent(db: Pick<Drizzle, "execute">): Promise<boolean> {
+  const result = await db.execute<{ present: boolean }>(
+    sql`select to_regclass('part_vectors') is not null as present`,
   );
   return result.rows[0]?.present === true;
 }
@@ -80,7 +98,8 @@ export function vectorLiteral(vector: Float32Array): string {
  * A section already there is left as it is: the same bytes under the same model and rules give
  * the same vector. A vector of other dimensions than the key's is refused by the table. The
  * caller writes a body's sections together, since a body with any section written counts as
- * done ({@link blobsWithoutVectors}); one transaction keeps that true through an interruption.
+ * done ({@link blobsWithoutVectors}); one transaction keeps that true through an interruption,
+ * and the vectors of the body's parts are made in it from what is then stored (ADR-0092).
  */
 export async function writeSectionVectors(
   database: Database,
@@ -111,8 +130,70 @@ export async function writeSectionVectors(
         .returning({ section: sectionVectors.section });
       written += inserted.length;
     }
+    await writePartVectors(tx, key, [...new Set(items.map((item) => item.blobSha))]);
     return written;
   });
+}
+
+/**
+ * Makes the vectors of the parts of these bodies from the vectors of their sections under the
+ * key, as they are stored: the mean of every {@link PART_SECTIONS} consecutive sections, which
+ * the cosine distance reads as their direction whatever its length. A part already there is
+ * made again, so that a body whose sections were added to has the mean of them all.
+ */
+async function writePartVectors(
+  db: Drizzle,
+  key: VectorKey,
+  blobShas: readonly string[],
+): Promise<void> {
+  if (blobShas.length === 0 || !(await partVectorsPresent(db))) {
+    return;
+  }
+  for (let start = 0; start < blobShas.length; start += HASH_BATCH_SIZE) {
+    await db.execute(sql`
+      insert into ${partVectors} (blob_sha, model, dimensions, sectioning_version, part, sections, vector)
+      select v.blob_sha, v.model, v.dimensions, v.sectioning_version,
+        v.section / ${sql.raw(String(PART_SECTIONS))}, count(*)::integer, avg(v.vector)::halfvec
+      from ${sectionVectors} v
+      where v.blob_sha = any(${sql.param(blobShas.slice(start, start + HASH_BATCH_SIZE))}::text[])
+        and v.model = ${key.model} and v.dimensions = ${key.dimensions}
+        and v.sectioning_version = ${key.sectioningVersion}
+      group by 1, 2, 3, 4, 5
+      on conflict (blob_sha, model, dimensions, sectioning_version, part)
+        do update set sections = excluded.sections, vector = excluded.vector
+    `);
+  }
+}
+
+/**
+ * Makes the part vectors of bodies that have section vectors under the key and none of these,
+ * at most `limit` bodies, and says for how many: what the worker's sweep calls until nothing is
+ * left, on a database whose section vectors were written before part vectors were (ADR-0092).
+ * Nothing to do where the tables are not.
+ */
+export async function fillPartVectors(
+  database: Database,
+  key: VectorKey,
+  limit: number,
+): Promise<number> {
+  const db = drizzleOf(database);
+  if (!(await partVectorsPresent(db))) {
+    return 0;
+  }
+  const without = await db.execute<{ blob_sha: string }>(sql`
+    select distinct v.blob_sha
+    from ${sectionVectors} v
+    where v.model = ${key.model} and v.dimensions = ${key.dimensions}
+      and v.sectioning_version = ${key.sectioningVersion}
+      and not exists (
+        select 1 from ${partVectors} p
+        where p.blob_sha = v.blob_sha and p.model = v.model and p.dimensions = v.dimensions
+          and p.sectioning_version = v.sectioning_version)
+    limit ${limit}
+  `);
+  const blobShas = without.rows.map((row) => row.blob_sha);
+  await writePartVectors(db, key, blobShas);
+  return blobShas.length;
 }
 
 /**
@@ -195,7 +276,7 @@ export async function searchSectionVectors(
 /**
  * Drops the vectors of those of these bodies that no index entry names any more: for the purge
  * of a repository, with the bodies it referred to, once its entries are gone (ADR-0064). Says how
- * many rows went. Nothing to do where the table is not.
+ * many rows went; the vectors of their parts go with them. Nothing to do where the table is not.
  */
 export async function deleteUnreferencedSectionVectors(
   db: Drizzle,
@@ -221,6 +302,22 @@ export async function deleteUnreferencedSectionVectors(
       )
       .returning({ sha: sectionVectors.blobSha });
     removed += rows.length;
+    if (!(await partVectorsPresent(db))) {
+      continue;
+    }
+    await db
+      .delete(partVectors)
+      .where(
+        and(
+          inArray(partVectors.blobSha, blobShas.slice(start, start + HASH_BATCH_SIZE)),
+          notExists(
+            db
+              .select({ sha: indexEntries.blobSha })
+              .from(indexEntries)
+              .where(eq(indexEntries.blobSha, partVectors.blobSha)),
+          ),
+        ),
+      );
   }
   return removed;
 }

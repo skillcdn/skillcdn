@@ -18,8 +18,10 @@ import {
   countHubLexemes,
   createBlobStore,
   ensureSnapshot,
+  fillPartVectors,
   isStatementTimeout,
   listSearchablePacks,
+  PART_SECTIONS,
   type RepoScope,
   saveCachedRef,
   saveRepository,
@@ -307,24 +309,124 @@ describe("the words and the meaning across every pack", () => {
     const ids = (await listSearchablePacks(database))
       .filter((pack) => pack.repoId === near.repoId || pack.repoId === far.repoId)
       .map((pack) => pack.snapshotId);
-    const found = await searchHubSectionVectors(
-      database,
-      ids,
-      KEY,
-      Float32Array.from([1, 0, 0, 0]),
-      10,
-      5000,
-    );
-    expect(
-      found.map((match) => [match.path, match.title, match.heading, match.similarity]),
-    ).toEqual([
-      ["docs/near.md", "Near", ["Near"], 1],
-      ["docs/far.md", "Far", ["Far"], 0],
-    ]);
-    expect(found[0]?.snapshotId).toBe(ids.find((id) => id !== found[1]?.snapshotId));
+    // Through the parts picked first, and with every section compared: the same answer here.
+    for (const parts of [10, 0]) {
+      const found = await searchHubSectionVectors(
+        database,
+        ids,
+        KEY,
+        Float32Array.from([1, 0, 0, 0]),
+        10,
+        5000,
+        parts,
+      );
+      expect(
+        found.map((match) => [match.path, match.title, match.heading, match.similarity]),
+      ).toEqual([
+        ["docs/near.md", "Near", ["Near"], 1],
+        ["docs/far.md", "Far", ["Far"], 0],
+      ]);
+      expect(found[0]?.snapshotId).toBe(ids.find((id) => id !== found[1]?.snapshotId));
+    }
     await expect(
-      searchHubSectionVectors(database, ids, KEY, Float32Array.from([1, 0]), 10, 5000),
+      searchHubSectionVectors(database, ids, KEY, Float32Array.from([1, 0]), 10, 5000, 10),
     ).rejects.toThrow(RangeError);
+  });
+
+  it("picks the parts nearest the query, and compares the sections of those alone (ADR-0092)", async () => {
+    // A long document says one thing in its first sections, another in the next, and what is
+    // asked for in its last: the mean of everything it says is near none of them.
+    const long = await repository(
+      "parts-long",
+      commit("7"),
+      [entry({ path: "docs/long.md", blobSha: "hub-long", title: "Long" })],
+      { "hub-long": "# Long\n\nMany sections.\n" },
+    );
+    const short = await repository(
+      "parts-short",
+      commit("8"),
+      [entry({ path: "docs/short.md", blobSha: "hub-short", title: "Short" })],
+      { "hub-short": "# Short\n\nOne section.\n" },
+    );
+    // The same bytes in a second pack: one body, an entry in each.
+    const copy = await repository(
+      "parts-copy",
+      commit("9"),
+      [entry({ path: "notes/short.md", blobSha: "hub-short", title: "Short" })],
+      { "hub-short": "# Short\n\nOne section.\n" },
+    );
+    const directionOf = (section: number): number[] =>
+      section < PART_SECTIONS
+        ? [0, 1, 0, 0]
+        : section < 2 * PART_SECTIONS
+          ? [0, 0, 1, 0]
+          : [0, 0, 0, 1];
+    await writeSectionVectors(database, KEY, [
+      ...Array.from({ length: 2 * PART_SECTIONS + 1 }, (_, section) => ({
+        blobSha: "hub-long",
+        section,
+        heading: [`Section ${section}`],
+        offset: section * 10,
+        length: 10,
+        vector: Float32Array.from(directionOf(section)),
+      })),
+      {
+        blobSha: "hub-short",
+        section: 0,
+        heading: ["Short"],
+        offset: 0,
+        length: 10,
+        vector: Float32Array.from([0, 0, 0.6, 0.8]),
+      },
+    ]);
+    const ids = (await listSearchablePacks(database))
+      .filter((pack) => [long.repoId, short.repoId, copy.repoId].includes(pack.repoId))
+      .map((pack) => pack.snapshotId);
+    const ask = async (parts: number) =>
+      (
+        await searchHubSectionVectors(
+          database,
+          ids,
+          KEY,
+          Float32Array.from([0, 0, 0, 1]),
+          30,
+          5000,
+          parts,
+        )
+      ).map((match) => `${match.path} ${match.section}`);
+    // One part: the last of the long document, whose one section is what was asked for.
+    expect(await ask(1)).toEqual([`docs/long.md ${2 * PART_SECTIONS}`]);
+    // Two: the short body as well, once for each pack that holds it, and still nothing of the
+    // long document's other parts.
+    expect(await ask(2)).toEqual([
+      `docs/long.md ${2 * PART_SECTIONS}`,
+      "docs/short.md 0",
+      "notes/short.md 0",
+    ]);
+    // With every section compared the long document's other sections follow, as before.
+    expect(await ask(0)).toHaveLength(2 * PART_SECTIONS + 3);
+  });
+
+  it("finds a body by meaning once its part vectors are filled, where its sections came first", async () => {
+    const early = await repository(
+      "parts-early",
+      commit("a"),
+      [entry({ path: "docs/early.md", blobSha: "hub-early", title: "Early" })],
+      { "hub-early": "# Early\n\nWritten before.\n" },
+    );
+    // As the vectors of a deployment are before the sweep has made their parts.
+    await drizzleOf(database).execute(
+      sql`insert into section_vectors (blob_sha, model, dimensions, sectioning_version, section, heading, "offset", length, vector)
+        values ('hub-early', ${KEY.model}, ${KEY.dimensions}, ${KEY.sectioningVersion}, 0, '["Early"]', 0, 10, '[0.8,0,0,0.6]')`,
+    );
+    const ids = (await listSearchablePacks(database))
+      .filter((pack) => pack.repoId === early.repoId)
+      .map((pack) => pack.snapshotId);
+    const query = Float32Array.from([1, 0, 0, 0]);
+    expect(await searchHubSectionVectors(database, ids, KEY, query, 10, 5000, 10)).toEqual([]);
+    expect(await fillPartVectors(database, KEY, 100)).toBe(1);
+    const found = await searchHubSectionVectors(database, ids, KEY, query, 10, 5000, 10);
+    expect(found.map((match) => match.path)).toEqual(["docs/early.md"]);
   });
 
   it("counts the findable entries of the packs searched, and no others", async () => {
@@ -418,7 +520,7 @@ describe("the words and the meaning across every pack", () => {
       lexemes,
       weights: queryWeights(counted.total, counted.counts),
       limit: 10,
-      meaning: { key: KEY, query: Float32Array.from([0, 0, 1, 0]) },
+      meaning: { key: KEY, query: Float32Array.from([0, 0, 1, 0]), parts: 5 },
     });
     // The count reads the twenty once for the total and once more for each word they hold, and
     // nothing of the four thousand files.

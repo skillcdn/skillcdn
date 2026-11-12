@@ -44,9 +44,10 @@ import type { OperatorLists } from "../operator/lists.js";
 
 // The search across every pack this deployment serves (ADR-0070): the words over the snapshots of
 // every public pack at once, weighed by their rarity across them all (ADR-0069), the sections
-// nearest in meaning where the deployment searches by it, fused and reranked as a search inside
-// one mount is (ADR-0063, ADR-0064), each result named with the pack it is in. Nothing here waits
-// for an index: a pack is searched as it is served.
+// nearest in meaning where the deployment searches by it, of the parts of the packs' documents
+// nearest in meaning (ADR-0092), fused and reranked as a search inside one mount is (ADR-0063,
+// ADR-0064), each result named with the pack it is in. Nothing here waits for an index: a pack
+// is searched as it is served.
 
 export interface HubSearchOptions {
   readonly database: Database;
@@ -59,6 +60,8 @@ export interface HubSearchOptions {
   readonly timeoutMs: number;
   /** How many entries each of the words and the meaning bring to the fusion. */
   readonly candidates: number;
+  /** How many parts the meaning picks before it compares their sections; 0, every section. */
+  readonly parts: number;
   readonly clock: Clock;
   readonly logger: Logger;
 }
@@ -86,10 +89,10 @@ export function standsInForFailure(result: HubResult): boolean {
 /** How long the set of searchable packs is kept before it is read again. */
 const PACKS_TTL_MS = 15_000;
 /**
- * How long the search by meaning is left unasked once its statement ran out of its time
- * (ADR-0091). The comparison reads every section vector of the packs, so one that did not end in
- * time is not the one to ask again by the next search: it would wait as long for as little, and
- * take from the words what the database has to read with.
+ * How long the search by meaning is left unasked once its statements ran out of their time
+ * (ADR-0091). A comparison that did not end in time is not the one to ask again by the next
+ * search: it would wait as long for as little, and take from the words what the database has to
+ * read with.
  */
 const MEANING_REST_MS = 60_000;
 /** How many sections of a document the words rank before the meaning's are fused in. */
@@ -109,7 +112,8 @@ interface Scored {
 }
 
 export function createHubSearch(options: HubSearchOptions): HubSearch {
-  const { database, blobStore, meaning, lists, timeoutMs, candidates, clock, logger } = options;
+  const { database, blobStore, meaning, lists, timeoutMs, candidates, parts, clock, logger } =
+    options;
   let cached:
     | { readonly until: number; readonly packs: Promise<readonly SearchablePack[]> }
     | undefined;
@@ -232,7 +236,7 @@ export function createHubSearch(options: HubSearchOptions): HubSearch {
         }
         try {
           return await timed("meaning", () =>
-            searchHubSectionVectors(database, ids, key, vector, candidates, timeoutMs),
+            searchHubSectionVectors(database, ids, key, vector, candidates, timeoutMs, parts),
           );
         } catch (error) {
           if (isStatementTimeout(error)) {

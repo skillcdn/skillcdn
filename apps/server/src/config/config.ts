@@ -110,6 +110,7 @@ export const HUB_DEFAULTS: HubConfig = {
   enabled: true,
   timeoutMs: 2000,
   candidates: 50,
+  parts: 200,
   cacheMs: 300_000,
   cacheEntries: 1000,
   concurrency: 8,
@@ -272,6 +273,7 @@ const environmentSchema = z.object({
   HUB_SEARCH: flag(HUB_DEFAULTS.enabled),
   HUB_SEARCH_TIMEOUT_MS: integer(HUB_DEFAULTS.timeoutMs, 100, 60_000),
   HUB_SEARCH_CANDIDATES: integer(HUB_DEFAULTS.candidates, 5, 200),
+  HUB_SEARCH_PARTS: integer(HUB_DEFAULTS.parts, 0, 10_000),
   SEARCH_CACHE_SECONDS: integer(HUB_DEFAULTS.cacheMs / 1000, 0, 86_400),
   SEARCH_CACHE_ENTRIES: integer(HUB_DEFAULTS.cacheEntries, 0, 100_000),
   SEARCH_CONCURRENCY: integer(HUB_DEFAULTS.concurrency, 1, 1000),
@@ -502,6 +504,11 @@ export interface HubConfig {
   readonly timeoutMs: number;
   /** How many entries the words, and the meaning, each bring to the fusion of a search. */
   readonly candidates: number;
+  /**
+   * How many parts of the packs' documents the search by meaning picks by the vector of each
+   * part before it compares their sections (ADR-0092); 0 compares every section of every pack.
+   */
+  readonly parts: number;
   /**
    * How long the answer to a search is kept (ADR-0075): in this process, and as what the pages
    * and the REST route tell a cache in front of the deployment. 0 keeps nothing.
@@ -773,6 +780,7 @@ export function loadConfig(
       enabled: env.HUB_SEARCH,
       timeoutMs: env.HUB_SEARCH_TIMEOUT_MS,
       candidates: env.HUB_SEARCH_CANDIDATES,
+      parts: env.HUB_SEARCH_PARTS,
       cacheMs: env.SEARCH_CACHE_SECONDS * 1000,
       cacheEntries: env.SEARCH_CACHE_ENTRIES,
       concurrency: env.SEARCH_CONCURRENCY,

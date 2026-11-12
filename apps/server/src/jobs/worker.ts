@@ -262,6 +262,16 @@ export function createWorker(config: WorkerConfig, ports: WorkerPorts): Worker {
         queues.push(PRUNE_QUEUE);
       }
       if (!embedding) {
+        if (embedder !== undefined && supported && key !== undefined) {
+          // Nothing is embedded, and what was embedded before is searched: across the packs by
+          // the vectors of its parts (ADR-0092), which the sweep makes where they are missing.
+          // It queues nothing in this scope, so once at start is all there is to do.
+          try {
+            await sweepEmbeddings({ database, jobs, key, scope: config.scope, lists, logger });
+          } catch (error) {
+            logger.warn({ err: error }, "the part vectors of what was embedded were not made");
+          }
+        }
         return { queues };
       }
       const sweep = () =>

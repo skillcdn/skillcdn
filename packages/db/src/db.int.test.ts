@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import {
   type HostRepository,
   type IndexEntry,
@@ -197,8 +198,15 @@ describe("migrations", () => {
     // what a concurrent build leaves behind when it is cut short: an index by that name which
     // nothing uses. A unique index over two entries of one kind is a build that fails.
     await readySnapshot([entry({ path: "docs/one.md" }), entry({ path: "docs/two.md" })]);
+    // The record of the migration of the index goes, and of those after it, which are written
+    // to run again.
+    const journal = JSON.parse(
+      readFileSync(new URL("../migrations/meta/_journal.json", import.meta.url), "utf8"),
+    ) as { entries: { tag: string; when: number }[] };
+    const indexed = journal.entries.find((item) => item.tag === "0029_findable-entries-index");
+    expect(indexed).toBeDefined();
     await db.execute(
-      sql`delete from drizzle.__drizzle_migrations where created_at = (select max(created_at) from drizzle.__drizzle_migrations)`,
+      sql`delete from drizzle.__drizzle_migrations where created_at >= ${indexed?.when ?? 0}`,
     );
     await db.execute(sql`drop index index_entries_findable_idx`);
     await expect(

@@ -14,7 +14,9 @@ import {
   createIndexStore,
   type Database,
   ensureSnapshot,
+  fillPartVectors,
   migrateDatabase,
+  PART_SECTIONS,
   purgeRepositoryIndex,
   recordSnapshotEmbedding,
   type SectionVector,
@@ -26,7 +28,7 @@ import {
   writeSectionVectors,
   writeSnapshotIndex,
 } from "./index.js";
-import { snapshots } from "./schema.js";
+import { partVectors, snapshots } from "./schema.js";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "./testing.js";
 
 // The vectors of sections (ADR-0064) on a database that has the extension, which the compose
@@ -148,6 +150,32 @@ async function readySnapshot(entries: IndexEntry[]): Promise<SnapshotScope> {
     ),
   ).toBe(true);
   return scope;
+}
+
+/** The part vectors of a body under the key, by part: how many sections each stands for, and its vector. */
+async function partsOf(
+  blobSha: string,
+): Promise<{ part: number; sections: number; vector: number[] }[]> {
+  const rows = await drizzleOf(database)
+    .select({
+      part: partVectors.part,
+      sections: partVectors.sections,
+      vector: partVectors.vector,
+      model: partVectors.model,
+    })
+    .from(partVectors)
+    .where(eq(partVectors.blobSha, blobSha))
+    .orderBy(partVectors.part);
+  return rows
+    .filter((row) => row.model === KEY.model)
+    .map((row) => ({
+      part: row.part,
+      sections: row.sections,
+      vector: Array.from(
+        row.vector as unknown as Iterable<number>,
+        (value) => Math.round(value * 1000) / 1000,
+      ),
+    }));
 }
 
 const search = (scope: SnapshotScope, mountPath: string, query: number[], limit = 10) =>
@@ -325,13 +353,79 @@ describe("section vectors", () => {
     );
   });
 
+  it("have the vectors of the body's parts made with them, the mean of every few sections (ADR-0092)", async () => {
+    // Billing was written above: three sections, so one part, the mean of the three.
+    expect(await partsOf("blob-billing")).toEqual([
+      { part: 0, sections: 3, vector: [0.333, 0.333, 0.333, 0] },
+    ]);
+    // A body of more sections than a part holds has a part for each run of them.
+    const long: SectionVector[] = Array.from({ length: PART_SECTIONS + 2 }, (_, section) => ({
+      blobSha: "blob-long",
+      section,
+      heading: [`Section ${section}`],
+      offset: section * 10,
+      length: 10,
+      vector: Float32Array.from(section < PART_SECTIONS ? [1, 0, 0, 0] : [0, 0, 0, 1]),
+    }));
+    expect(await writeSectionVectors(database, KEY, long)).toBe(PART_SECTIONS + 2);
+    expect(await partsOf("blob-long")).toEqual([
+      { part: 0, sections: PART_SECTIONS, vector: [1, 0, 0, 0] },
+      { part: 1, sections: 2, vector: [0, 0, 0, 1] },
+    ]);
+    // Nothing is left to fill where every body was written with its parts.
+    expect(await fillPartVectors(database, KEY, 100)).toBe(0);
+  });
+
+  it("fills the part vectors of bodies whose sections were written before there were any", async () => {
+    // As a deployment's vectors are on the day it is given the table: sections, and no parts.
+    await drizzleOf(database).delete(partVectors);
+    expect(await partsOf("blob-billing")).toEqual([]);
+    // In steps of as many bodies as it is asked for, until none is left.
+    const first = await fillPartVectors(database, KEY, 1);
+    expect(first).toBe(1);
+    let filled = first;
+    for (let step = await fillPartVectors(database, KEY, 2); step > 0; ) {
+      filled += step;
+      step = await fillPartVectors(database, KEY, 2);
+    }
+    expect(filled).toBeGreaterThanOrEqual(3);
+    expect(await partsOf("blob-billing")).toEqual([
+      { part: 0, sections: 3, vector: [0.333, 0.333, 0.333, 0] },
+    ]);
+    expect((await partsOf("blob-long")).map((part) => part.sections)).toEqual([PART_SECTIONS, 2]);
+    // Another key's sections are not this key's to fill.
+    expect(await fillPartVectors(database, { ...KEY, model: "another-model" }, 100)).toBe(0);
+  });
+
+  it("drops the part vectors with the sections of a body nothing names any more", async () => {
+    const gone = vectorsOf("blob-gone", TOUR, [
+      [0, 0, 0, 1],
+      [0, 0, 1, 0],
+    ]);
+    expect(await writeSectionVectors(database, KEY, gone)).toBe(2);
+    expect(await partsOf("blob-gone")).toHaveLength(1);
+    const scope = await readySnapshot([entry({ path: "gone.md", blobSha: "blob-gone" })]);
+    const [repoId] = await drizzleOf(database)
+      .select({ repoId: snapshots.repoId })
+      .from(snapshots)
+      .where(eq(snapshots.id, scope.snapshotId))
+      .then((rows) => rows.map((row) => row.repoId));
+    expect(await purgeRepositoryIndex(database, repoId ?? "")).toMatchObject({ snapshots: 1 });
+    expect(await partsOf("blob-gone")).toEqual([]);
+    // A body another repository still holds keeps both.
+    expect(await partsOf("blob-billing")).toHaveLength(1);
+  });
+
   it("get their table on the next migrate where it is missing and the extension is there", async () => {
     // As on a database that was migrated before the extension was installed on its server.
+    await drizzleOf(database).execute(sql`drop table part_vectors`);
     await drizzleOf(database).execute(sql`drop table section_vectors`);
     expect(await supportsSectionVectors(database)).toBe(false);
     const { notices } = await migrateDatabase(testDatabase.connectionString);
     expect(notices).toEqual([]);
     expect(await supportsSectionVectors(database)).toBe(true);
     expect(await writeSectionVectors(database, KEY, BILLING_VECTORS)).toBe(3);
+    // The table of the parts came back with it.
+    expect(await partsOf("blob-billing")).toHaveLength(1);
   });
 });

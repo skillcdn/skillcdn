@@ -4,7 +4,9 @@ import {
   NO_LICENSE,
   SECTIONING_VERSION,
 } from "@skillcdn/core";
+import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { drizzleOf } from "./client.js";
 import {
   addEmbeddingUsage,
   blobsWithoutVectors,
@@ -460,6 +462,11 @@ describe("snapshot embeddings", () => {
     );
     expect(await getSnapshotEmbedding(database, scope, KEY)).toMatchObject({ bodies: 1 });
     expect(await getSnapshotEmbedding(database, scope, OLD_KEY)).toBeUndefined();
+    // The vectors of the parts, made from the sections, went with those of the old key alone.
+    const parts = await drizzleOf(database).execute<{ model: string; parts: number }>(
+      sql`select model, count(*)::integer as parts from part_vectors where blob_sha in ('blob-old-1', 'blob-old-2') group by model`,
+    );
+    expect(parts.rows).toEqual([{ model: KEY.model, parts: 1 }]);
     // Nothing left of other keys: nothing more goes.
     expect(await deleteEmbeddingsOutsideKey(database, KEY)).toEqual({ vectors: 0, snapshots: 0 });
   });

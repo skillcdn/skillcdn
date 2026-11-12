@@ -250,6 +250,7 @@ describe("loadConfig", () => {
   it("keeps the answers of the search across packs, bounds it, and lists the terms and the sections of the front page", () => {
     const plain = loadConfig({ DATABASE_URL }, noFiles);
     expect(plain.hub).toMatchObject({
+      parts: 200,
       cacheMs: 300_000,
       cacheEntries: 1000,
       concurrency: 8,
@@ -260,6 +261,7 @@ describe("loadConfig", () => {
     const set = loadConfig(
       {
         DATABASE_URL,
+        HUB_SEARCH_PARTS: "0",
         SEARCH_CACHE_SECONDS: "0",
         SEARCH_CACHE_ENTRIES: "10",
         SEARCH_CONCURRENCY: "2",
@@ -270,6 +272,8 @@ describe("loadConfig", () => {
       noFiles,
     );
     expect(set.hub).toMatchObject({
+      // Every section compared, as before the parts (ADR-0092).
+      parts: 0,
       cacheMs: 0,
       cacheEntries: 10,
       concurrency: 2,
@@ -291,6 +295,9 @@ describe("loadConfig", () => {
       ),
     ).toEqual(["LANDING_SECTIONS"]);
     expect(() => loadConfig({ DATABASE_URL, SEARCH_CONCURRENCY: "0" }, noFiles)).toThrow(
+      ConfigError,
+    );
+    expect(() => loadConfig({ DATABASE_URL, HUB_SEARCH_PARTS: "-1" }, noFiles)).toThrow(
       ConfigError,
     );
   });

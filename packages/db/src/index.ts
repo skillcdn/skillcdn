@@ -280,6 +280,8 @@ export {
 } from "./queries/users.js";
 export {
   blobsWithoutVectors,
+  fillPartVectors,
+  PART_SECTIONS,
   type SectionMatch,
   type SectionVector,
   searchSectionVectors,

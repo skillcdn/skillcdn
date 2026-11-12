@@ -44,6 +44,16 @@ const vector = customType<{ data: Float32Array; driverData: string }>({
   fromDriver: (value) => Float32Array.from(value.slice(1, -1).split(","), Number),
 });
 
+/**
+ * A vector at half precision, two bytes a number, of the same extension from its 0.7.0 on: what
+ * is compared to pick and never to rank is kept so, at half the size.
+ */
+const halfvec = customType<{ data: Float32Array; driverData: string }>({
+  dataType: () => "halfvec",
+  toDriver: (value) => `[${Array.from(value).join(",")}]`,
+  fromDriver: (value) => Float32Array.from(value.slice(1, -1).split(","), Number),
+});
+
 const id = () => uuid().primaryKey().default(sql`uuidv7()`);
 const instant = () => timestamp({ withTimezone: true, mode: "date" });
 const createdAt = () => instant().notNull().defaultNow();
@@ -503,6 +513,41 @@ export const sectionVectors = pgTable(
       "section_vectors_dimensions_check",
       sql`vector_dims(${table.vector}) = ${table.dimensions}`,
     ),
+  ],
+);
+
+/**
+ * The vector of a part of a file body, the mean of the vectors of its sections (ADR-0092): what
+ * a search across the packs compares first, to pick the parts whose sections it then compares.
+ * A part is a run of consecutive sections, `PART_SECTIONS` of them, and `part` its place in the
+ * body, so that a long document is found by the part that says a thing and not by the mean of
+ * everything it says. Made in the database from the rows of `section_vectors` under the same
+ * key and never by a model: whatever writes or replaces section vectors has these made from
+ * them again. Kept at half precision and in the row (`STORAGE MAIN`, set by the migration), not
+ * beside it as a section's vector is: every part is read by every search across the packs, and
+ * read so it costs a third. Content-addressed and reached as `section_vectors` is, and present
+ * only where that table is and the extension has the half-precision type.
+ */
+export const partVectors = pgTable(
+  "part_vectors",
+  {
+    blobSha: text().notNull(),
+    model: text().notNull(),
+    dimensions: integer().notNull(),
+    sectioningVersion: integer().notNull(),
+    /** The part's place in the body, from 0: the sections from `part * PART_SECTIONS` on. */
+    part: integer().notNull(),
+    /** How many sections the vector is the mean of. */
+    sections: integer().notNull(),
+    vector: halfvec().notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    primaryKey({
+      name: "part_vectors_pkey",
+      columns: [table.blobSha, table.model, table.dimensions, table.sectioningVersion, table.part],
+    }),
+    check("part_vectors_dimensions_check", sql`vector_dims(${table.vector}) = ${table.dimensions}`),
   ],
 );
 

@@ -1,14 +1,29 @@
 import { type LexemeFrequencies, type LicenseFact, serializeSearchQuery } from "@skillcdn/core";
 import { and, eq, type SQL, sql } from "drizzle-orm";
 import { type Database, type Drizzle, drizzleOf } from "../client.js";
-import { accounts, indexEntries, repoRefs, repos, sectionVectors, snapshots } from "../schema.js";
+import {
+  accounts,
+  indexEntries,
+  partVectors,
+  repoRefs,
+  repos,
+  sectionVectors,
+  snapshots,
+} from "../schema.js";
 import { BY_PATH, type EntryRecord, entryColumns, FINDABLE, rankOf, VISIBLE } from "./entries.js";
-import { underKey, type VectorKey, vectorLiteral } from "./vectors.js";
+import {
+  PART_SECTIONS,
+  partVectorsPresent,
+  underKey,
+  type VectorKey,
+  vectorLiteral,
+} from "./vectors.js";
 
 // The search across every pack a deployment serves (ADR-0070): which snapshots it covers, the
-// words over all of them at once, and the sections nearest in meaning over all of them. Every
-// statement runs under a time limit of its own, since it reads every pack there is, and the
-// caller decides what a search that ran out of time answers.
+// words over all of them at once, and the sections nearest in meaning, of the parts of their
+// bodies nearest in meaning (ADR-0092). Every statement runs under a time limit of its own,
+// since it reads every pack there is, and the caller decides what a search that ran out of time
+// answers.
 
 /** A pack the search across packs covers: the snapshot it is served from, and how it is addressed. */
 export interface SearchablePack {
@@ -168,14 +183,55 @@ function wordsStatement(
     .limit(limit);
 }
 
+/** A part of a body a search picked: the body, and the part's place in it. */
+interface PickedPart {
+  readonly blobSha: string;
+  readonly part: number;
+}
+
+/**
+ * The parts nearest the query among the bodies of the findable entries searched, at most
+ * `parts` (ADR-0092): an exact comparison with the vector of every such part, an eighth of the
+ * sections and fewer. A body two packs hold is one body here. The bodies searched are handed on
+ * as one array, as the entries that hold a word are (ADR-0090): joined in, the planner looks the
+ * parts of each body up one body at a time, which took three times as long where it was measured.
+ */
+function partsStatement(
+  snapshotIds: readonly string[],
+  key: VectorKey,
+  query: Float32Array,
+  parts: number,
+): SQL {
+  return sql`
+    select p.blob_sha, p.part
+    from ${partVectors} p
+    where p.model = ${key.model} and p.dimensions = ${key.dimensions}
+      and p.sectioning_version = ${key.sectioningVersion}
+      and p.blob_sha = any(array(
+        select distinct e.blob_sha from ${indexEntries} e
+        where e.snapshot_id = any(${sql.param([...snapshotIds])}::uuid[])
+          and e.visible and e.search is not null))
+    order by p.vector <=> ${vectorLiteral(query)}::halfvec, p.blob_sha, p.part
+    limit ${parts}`;
+}
+
+const pickedOf = (rows: readonly { blob_sha: string; part: number }[]): PickedPart[] =>
+  rows.map((row) => ({ blobSha: row.blob_sha, part: Number(row.part) }));
+
 function meaningStatement(
   runner: Runner,
   snapshotIds: readonly string[],
   key: VectorKey,
   query: Float32Array,
   limit: number,
+  /** The parts whose sections are compared; left out, every section of the packs is. */
+  picked?: readonly PickedPart[],
 ) {
   const distance = sql<number>`${sectionVectors.vector} <=> ${vectorLiteral(query)}::vector`;
+  const ofPicked =
+    picked === undefined
+      ? undefined
+      : sql`(${sectionVectors.blobSha}, ${sectionVectors.section} / ${sql.raw(String(PART_SECTIONS))}) in (select * from unnest(${sql.param(picked.map((part) => part.blobSha))}::text[], ${sql.param(picked.map((part) => part.part))}::integer[]))`;
   return runner
     .select({
       ...entryColumns,
@@ -188,7 +244,7 @@ function meaningStatement(
     })
     .from(indexEntries)
     .innerJoin(sectionVectors, eq(sectionVectors.blobSha, indexEntries.blobSha))
-    .where(and(among(snapshotIds), FINDABLE, underKey(key)))
+    .where(and(among(snapshotIds), FINDABLE, underKey(key), ofPicked))
     .orderBy(distance, indexEntries.snapshotId, BY_PATH, sectionVectors.section)
     .limit(limit);
 }
@@ -241,8 +297,12 @@ export async function searchHubEntries(
 
 /**
  * The sections of the packs' findable entries nearest to a query vector, best first and at most
- * `limit`: an exact comparison with every section that has a vector under the key, as
- * `searchSectionVectors` compares inside one mount (ADR-0064), with the entry each belongs to.
+ * `limit`, with the entry each belongs to, in two steps (ADR-0092): the `parts` parts of their
+ * bodies nearest the query are picked by the vector of each part, the mean of its sections',
+ * and the sections of those parts are then compared exactly, as `searchSectionVectors` compares
+ * inside one mount (ADR-0064). The two statements share the one time limit. A body without part
+ * vectors yet is not found, which is the sweep's to end (`fillPartVectors`). With `parts` at 0,
+ * and in a database that keeps no part vectors, every section of the packs is compared.
  */
 export async function searchHubSectionVectors(
   database: Database,
@@ -251,6 +311,7 @@ export async function searchHubSectionVectors(
   query: Float32Array,
   limit: number,
   timeoutMs: number,
+  parts: number,
 ): Promise<HubSectionMatch[]> {
   if (snapshotIds.length === 0) {
     return [];
@@ -262,7 +323,18 @@ export async function searchHubSectionVectors(
   }
   const rows = await drizzleOf(database).transaction(async (tx) => {
     await tx.execute(bounded(timeoutMs));
-    return meaningStatement(tx, snapshotIds, key, query, limit);
+    if (parts <= 0 || !(await partVectorsPresent(tx))) {
+      return meaningStatement(tx, snapshotIds, key, query, limit);
+    }
+    const started = performance.now();
+    const picked = await tx.execute<{ blob_sha: string; part: number }>(
+      partsStatement(snapshotIds, key, query, parts),
+    );
+    if (picked.rows.length === 0) {
+      return [];
+    }
+    await tx.execute(bounded(timeoutMs - (performance.now() - started)));
+    return meaningStatement(tx, snapshotIds, key, query, limit, pickedOf(picked.rows));
   });
   return rows.map(({ distance: away, ...row }) => ({ ...row, similarity: 1 - Number(away) }));
 }
@@ -287,8 +359,13 @@ export interface HubQuestion {
   readonly lexemes: readonly string[];
   readonly weights?: readonly number[] | undefined;
   readonly limit: number;
-  /** The key and the query's vector, where the meaning is measured as well. */
-  readonly meaning?: { readonly key: VectorKey; readonly query: Float32Array } | undefined;
+  /**
+   * The key and the query's vector, where the meaning is measured as well, and how many parts
+   * are picked before their sections are compared; 0 or left out, every section is compared.
+   */
+  readonly meaning?:
+    | { readonly key: VectorKey; readonly query: Float32Array; readonly parts?: number | undefined }
+    | undefined;
 }
 
 interface PlanNode {
@@ -360,17 +437,43 @@ export async function readHubStatements(
       return readingOf(result.rows[0]?.["QUERY PLAN"]);
     });
   const { snapshotIds, lexemes, weights, limit, meaning } = question;
+  /** The two steps of the meaning as one reading, or the one statement that compares everything. */
+  const explainMeaning = async (
+    asked: NonNullable<HubQuestion["meaning"]>,
+  ): Promise<HubStatementReading> => {
+    const parts = asked.parts ?? 0;
+    if (parts <= 0 || !(await partVectorsPresent(drizzleOf(database)))) {
+      return explain((tx) =>
+        meaningStatement(tx, snapshotIds, asked.key, asked.query, limit).getSQL(),
+      );
+    }
+    const statement = partsStatement(snapshotIds, asked.key, asked.query, parts);
+    const picking = await explain(() => statement);
+    const picked = await drizzleOf(database).execute<{ blob_sha: string; part: number }>(statement);
+    const comparing = await explain((tx) =>
+      meaningStatement(
+        tx,
+        snapshotIds,
+        asked.key,
+        asked.query,
+        limit,
+        pickedOf(picked.rows),
+      ).getSQL(),
+    );
+    return {
+      ms: picking.ms + comparing.ms,
+      entries: picking.entries + comparing.entries,
+      pages: picking.pages + comparing.pages,
+      pagesFromDisk: picking.pagesFromDisk + comparing.pagesFromDisk,
+      indexes: [...new Set([...picking.indexes, ...comparing.indexes])].sort(),
+    };
+  };
   return {
     count: await explain(() => countStatement(snapshotIds, lexemes)),
     words:
       lexemes.length === 0
         ? undefined
         : await explain((tx) => wordsStatement(tx, snapshotIds, lexemes, weights, limit).getSQL()),
-    meaning:
-      meaning === undefined
-        ? undefined
-        : await explain((tx) =>
-            meaningStatement(tx, snapshotIds, meaning.key, meaning.query, limit).getSQL(),
-          ),
+    meaning: meaning === undefined ? undefined : await explainMeaning(meaning),
   };
 }

@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { Client } from "pg";
 import { createDatabase, type Database, drizzleOf, poolOf } from "./client.js";
 import { migrateDatabase } from "./migrate.js";
-import { snapshots } from "./schema.js";
+import { partVectors, snapshots } from "./schema.js";
 
 // Support for integration tests, here and in other workspaces: `@skillcdn/db/testing`.
 
@@ -90,6 +90,18 @@ export async function holdIndexEntries(database: Database): Promise<() => Promis
       client.release();
     }
   };
+}
+
+/**
+ * For a test of the sweep that makes them (ADR-0092): leaves the database as one is on the day
+ * it is given the table of the part vectors, with the vectors of the sections and none of the
+ * parts. Says how many rows went.
+ */
+export async function dropPartVectors(database: Database): Promise<number> {
+  const removed = await drizzleOf(database)
+    .delete(partVectors)
+    .returning({ part: partVectors.part });
+  return removed.length;
 }
 
 /**
