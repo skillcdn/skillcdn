@@ -213,7 +213,13 @@ function Results(props: { readonly term: string; readonly origin: string }) {
       <p className={styles.facts}>
         <span>{t.search.found(results.items.length, results.packs)}</span>
         {results.ranking !== undefined && (
-          <span>{results.ranking.meaning ? t.search.ranking.meaning : t.search.ranking.words}</span>
+          <span>
+            {results.ranking.words === false
+              ? t.search.ranking.meaningAlone
+              : results.ranking.meaning
+                ? t.search.ranking.meaning
+                : t.search.ranking.words}
+          </span>
         )}
       </p>
       {results.items.length > 0 && (

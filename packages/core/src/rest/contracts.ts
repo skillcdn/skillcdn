@@ -369,12 +369,15 @@ export const restFindItemSchema = z.discriminatedUnion("kind", [
 /**
  * How a search was ranked where the search by meaning is at hand (ADR-0064): whether meaning took
  * part, whether the first results were reranked, and, with both false, whether the words ranked
- * alone because the query was identifiers alone (ADR-0079).
+ * alone because the query was identifiers alone (ADR-0079). `words` is there, and false, only
+ * when a search across the packs answered by meaning alone because its words ran out of their
+ * time (ADR-0091).
  */
 const rankingSchema = z.object({
   meaning: z.boolean(),
   reranked: z.boolean(),
   identifiers: z.optional(z.boolean()),
+  words: z.optional(z.boolean()),
   /** While the embedding of the index goes on: how many of its documents have their vectors so far. */
   embedding: z.optional(z.object({ embedded: count, total: count })),
 });

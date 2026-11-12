@@ -42,6 +42,19 @@ describe("what a search across packs tells the caches", () => {
     );
   });
 
+  it("lets them keep nothing of an answer by meaning alone, given when the words ran out of time", async () => {
+    const app = appOver(async (query) => ({
+      query,
+      packs: 0,
+      items: [],
+      ranking: { meaning: true, reranked: false, words: false },
+    }));
+    const response = await app.request("/api/v1/search?query=kettle");
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ ranking: { meaning: true, words: false } });
+    expect(response.headers.get("cache-control")).toBe("no-store");
+  });
+
   it("lets them keep nothing of a search that ran out of time", async () => {
     const app = appOver(async () => {
       throw Object.assign(new Error("canceling statement due to statement timeout"), {

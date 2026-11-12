@@ -1,6 +1,6 @@
 # ADR-0090: A search across the packs reads what is searchable, and an index of a table in use is built without holding its writes
 
-- Status: Accepted
+- Status: Accepted; point 3 (the words and the meaning asked at once) is superseded by [ADR-0091](0091-a-search-across-the-packs-answers-with-what-answered-in-time-and-its-comparison-by-meaning-waits-for-the-words.md)
 - Date: 2026-11-12
 - Builds on [ADR-0070](0070-a-deployment-is-searched-across-every-pack-it-serves.md) (the search across packs, its three statements and their time limit; point 5 stands), [ADR-0069](0069-a-word-of-a-query-weighs-by-its-rarity-among-the-entries-searched.md) (the count that weighs the words) and [ADR-0079](0079-a-query-of-identifiers-alone-is-ranked-by-its-words.md) (a query of identifiers alone).
 

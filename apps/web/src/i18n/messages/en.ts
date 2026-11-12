@@ -161,7 +161,11 @@ export const en = {
     },
     found: (count: number, packs: number) =>
       `${count === 1 ? "1 result" : `${count} results`} across ${packs === 1 ? "1 public pack" : `${packs} public packs`}`,
-    ranking: { words: "ranked by words", meaning: "ranked by words and meaning" },
+    ranking: {
+      words: "ranked by words",
+      meaning: "ranked by words and meaning",
+      meaningAlone: "ranked by meaning alone this time; search again for the full results",
+    },
     none: "Nothing matched. Try other words, or the words a pack is written in.",
     kinds: { skill: "Skill", document: "Document" },
     verified: "Verified",

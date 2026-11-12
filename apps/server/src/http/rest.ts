@@ -40,7 +40,7 @@ import type { Logger } from "../logger.js";
 import type { Mount } from "../mounts/mount-service.js";
 import { OwnerNotFoundError, type OwnerService } from "../owners/owner-service.js";
 import { SearchBusyError } from "../search/cache.js";
-import type { HubSearch } from "../search/hub.js";
+import { type HubSearch, standsInForFailure } from "../search/hub.js";
 import type { AppEnv } from "./request-context.js";
 
 /**
@@ -298,9 +298,15 @@ export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies):
         return query;
       }
       try {
-        const body = hubBody(await hub.search(query.query, query.limit ?? HUB_DEFAULT_LIMIT));
-        c.header("cache-control", searchCacheControl(dependencies.searchCacheMs ?? 0));
-        return c.json(body);
+        const result = await hub.search(query.query, query.limit ?? HUB_DEFAULT_LIMIT);
+        // What is left of a search that ran out of time is for whoever asked, and for no cache.
+        c.header(
+          "cache-control",
+          standsInForFailure(result)
+            ? "no-store"
+            : searchCacheControl(dependencies.searchCacheMs ?? 0),
+        );
+        return c.json(hubBody(result));
       } catch (error) {
         // Only an answer is for a cache to keep: a search that was refused, ran out of time or
         // failed may answer the next one who asks.

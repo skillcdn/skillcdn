@@ -275,6 +275,12 @@ export interface FindRanking {
    */
   readonly identifiers?: boolean | undefined;
   /**
+   * False when the words did not answer in time and the results are the nearest in meaning
+   * alone, as a search across the packs then answers (ADR-0091): what only its words would find
+   * is not among them. Left out wherever the words answered.
+   */
+  readonly words?: boolean | undefined;
+  /**
    * While the embedding of the index goes on: how many of the documents that are to be embedded
    * have their vectors so far. A document without them is found by its words alone.
    */

@@ -145,7 +145,11 @@ export const ko: Messages = {
       lead: "모든 공개 팩의 스킬과 문서를 단어와 의미로 찾습니다.",
     },
     found: (count: number, packs: number) => `공개 팩 ${packs}개에서 ${count}건`,
-    ranking: { words: "단어로 순위를 매김", meaning: "단어와 의미로 순위를 매김" },
+    ranking: {
+      words: "단어로 순위를 매김",
+      meaning: "단어와 의미로 순위를 매김",
+      meaningAlone: "이번에는 의미로만 순위를 매김, 다시 검색하면 전체 결과가 나옵니다",
+    },
     none: "일치하는 것을 찾지 못했습니다. 다른 말로, 또는 팩이 쓰인 언어의 말로 찾아보세요.",
     kinds: { skill: "스킬", document: "문서" },
     verified: "검증됨",

@@ -1,5 +1,5 @@
 import { type Clock, normalizeSearchTerm } from "@skillcdn/core";
-import type { HubSearch } from "./hub.js";
+import { type HubSearch, standsInForFailure } from "./hub.js";
 
 // What stands between the search across every pack and whoever asks for it (ADR-0075): the
 // answer to a question is kept for a while and given to the next who asks the same, a question
@@ -38,8 +38,9 @@ interface Kept<T> {
 
 /**
  * A search cached, coalesced and bounded. The same question is the same words, however they
- * were spaced, at the same limit. Only a search that answered is kept; one that failed is asked
- * again by the next who asks. `packs()` goes through as it is: the search keeps its own count.
+ * were spaced, at the same limit. Only a search that answered is kept; one that failed, or whose
+ * answer stands in for a failure (ADR-0091), is asked again by the next who asks. `packs()` goes
+ * through as it is: the search keeps its own count.
  */
 export function withSearchCache(hub: HubSearch, options: SearchCacheOptions): HubSearch {
   const { ttlMs, entries, concurrency, clock } = options;
@@ -52,7 +53,7 @@ export function withSearchCache(hub: HubSearch, options: SearchCacheOptions): Hu
     `${normalizeSearchTerm(query)}\u0000${limit}`;
 
   const remember = (key: string, value: Answer): void => {
-    if (ttlMs <= 0 || entries <= 0) {
+    if (ttlMs <= 0 || entries <= 0 || standsInForFailure(value)) {
       return;
     }
     kept.delete(key);

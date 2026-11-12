@@ -107,10 +107,13 @@ function indexablePathOf(route: Route, data: PageData | undefined): string | und
       return PATHS.explore;
     case "search":
       // The page of the box alone is a page of the site; the page of a term is one to find once
-      // it has enough to show, as its results were there to render.
+      // it has enough to show, as its results were there to render. What is left of a search
+      // whose words ran out of time is shown to whoever asked, and is not the page to list.
       return route.term === undefined
         ? PATHS.search
-        : data?.search !== undefined && data.search.items.length >= SEARCH_INDEX_MIN_RESULTS
+        : data?.search !== undefined &&
+            data.search.items.length >= SEARCH_INDEX_MIN_RESULTS &&
+            data.search.ranking?.words !== false
           ? searchHref(route.term)
           : undefined;
     case "legal":

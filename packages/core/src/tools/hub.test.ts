@@ -84,6 +84,16 @@ describe("a search across every pack", () => {
     expect(text).toContain(
       "Connect to a pack at https://packs.example by its address for browse_repo, search_repo, load_skill and read_repo_file",
     );
+    // Where the words ran out of their time, the one line says whose answer this is (ADR-0091).
+    const byMeaningAlone = { ...result, ranking: { meaning: true, reranked: false, words: false } };
+    expect(renderHubResult(byMeaningAlone, undefined)).toContain(
+      "Ranked by meaning alone this time: the words did not answer in time, so a result only they would find is missing. Ask again for the full answer.",
+    );
+    expect(restSearchSchema.parse(hubBody(byMeaningAlone)).ranking).toEqual({
+      meaning: true,
+      reranked: false,
+      words: false,
+    });
     expect(renderHubResult({ ...result, items: [], ranking: undefined }, undefined)).toBe(
       'No results for "release notes" across 7 packs. Try fewer or different keywords, in the language a pack is written in.',
     );

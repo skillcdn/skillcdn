@@ -64,14 +64,34 @@ export interface HubSearchOptions {
 }
 
 export interface HubSearch {
-  /** The results for a query, at most `limit` of them. Throws when the database refused or ran out of time. */
+  /**
+   * The results for a query, at most `limit` of them. Where the words ran out of their time and
+   * the meaning answered, the answer is the meaning's alone, and says so (`standsInForFailure`).
+   * Throws when the database refused, or when nothing answered in time.
+   */
   search(query: string, limit: number): Promise<HubResult>;
   /** How many packs a search covers right now. */
   packs(): Promise<number>;
 }
 
+/**
+ * Whether an answer is what was left of a search whose words ran out of their time (ADR-0091):
+ * given to whoever asked instead of a failure, and, like a failure, kept by no cache, so that the
+ * next who asks is answered in full.
+ */
+export function standsInForFailure(result: HubResult): boolean {
+  return result.ranking?.words === false;
+}
+
 /** How long the set of searchable packs is kept before it is read again. */
 const PACKS_TTL_MS = 15_000;
+/**
+ * How long the search by meaning is left unasked once its statement ran out of its time
+ * (ADR-0091). The comparison reads every section vector of the packs, so one that did not end in
+ * time is not the one to ask again by the next search: it would wait as long for as little, and
+ * take from the words what the database has to read with.
+ */
+const MEANING_REST_MS = 60_000;
 /** How many sections of a document the words rank before the meaning's are fused in. */
 const SECTION_CANDIDATES = 4;
 /** How much of a result the reranker is given to score it by. */
@@ -93,6 +113,8 @@ export function createHubSearch(options: HubSearchOptions): HubSearch {
   let cached:
     | { readonly until: number; readonly packs: Promise<readonly SearchablePack[]> }
     | undefined;
+  /** Until when the search by meaning rests, on the deployment's clock; 0 while it is asked. */
+  let meaningRestsUntil = 0;
 
   /** The packs searched: every public one with an index, without those the operator blocked. */
   const packsOf = (): Promise<readonly SearchablePack[]> => {
@@ -124,7 +146,18 @@ export function createHubSearch(options: HubSearchOptions): HubSearch {
       return (await packsOf()).length;
     },
     async search(query, limit) {
-      const packs = await packsOf();
+      const started = clock.now().getTime();
+      /** How long each part of this search took, in milliseconds, for the log of a slow one. */
+      const took: Record<string, number> = {};
+      const part = async <T>(name: string, work: () => Promise<T>): Promise<T> => {
+        const from = clock.now().getTime();
+        try {
+          return await work();
+        } finally {
+          took[name] = (took[name] ?? 0) + (clock.now().getTime() - from);
+        }
+      };
+      const packs = await part("packs", packsOf);
       const byId = new Map(packs.map((pack) => [pack.snapshotId, pack]));
       const ids = packs.map((pack) => pack.snapshotId);
       if (ids.length === 0) {
@@ -134,74 +167,108 @@ export function createHubSearch(options: HubSearchOptions): HubSearch {
       // the words are weighed by their rarity across all of them (ADR-0069).
       const lexemes = queryLexemes(query);
       /** A statement over every pack, which says so in the log when it runs out of its time. */
-      const timed = async <T>(statement: string, work: () => Promise<T>): Promise<T> => {
-        try {
-          return await work();
-        } catch (error) {
-          if (isStatementTimeout(error)) {
-            logger.warn(
-              { statement, timeoutMs, packs: ids.length, lexemes: lexemes.length },
-              "a statement of the search across packs ran out of its time",
-            );
+      const timed = <T>(statement: string, work: () => Promise<T>): Promise<T> =>
+        part(statement, async () => {
+          try {
+            return await work();
+          } catch (error) {
+            if (isStatementTimeout(error)) {
+              logger.warn(
+                { statement, timeoutMs, packs: ids.length, lexemes: lexemes.length },
+                "a statement of the search across packs ran out of its time",
+              );
+            }
+            throw error;
           }
-          throw error;
-        }
-      };
+        });
       let weights: readonly number[] | undefined;
-      const byWordsOf = async (): Promise<readonly HubEntryRecord[]> => {
+      /** Why the words did not answer, where they ran out of their time. */
+      let wordsRanOut: unknown;
+      // What the words find; `undefined` where they ran out of their time, which the meaning
+      // may still answer for (ADR-0091). Any other failure is the search's own.
+      const byWordsOf = async (): Promise<readonly HubEntryRecord[] | undefined> => {
         if (lexemes.length === 0) {
           return [];
         }
-        const counted = await timed("count", () =>
-          countHubLexemes(database, ids, lexemes, timeoutMs),
-        );
-        weights = queryWeights(counted.total, counted.counts);
-        return timed("words", () =>
-          searchHubEntries(database, ids, lexemes, weights, candidates, timeoutMs),
-        );
+        try {
+          const counted = await timed("count", () =>
+            countHubLexemes(database, ids, lexemes, timeoutMs),
+          );
+          weights = queryWeights(counted.total, counted.counts);
+          return await timed("words", () =>
+            searchHubEntries(database, ids, lexemes, weights, candidates, timeoutMs),
+          );
+        } catch (error) {
+          if (!isStatementTimeout(error)) {
+            throw error;
+          }
+          wordsRanOut = error;
+          return undefined;
+        }
       };
       // The sections nearest in meaning, where the deployment searches by it; an embedder or a
       // database that does not answer in time leaves the words to answer, which the result says.
+      // A comparison that ran out of its time is not asked again for a while (ADR-0091).
       const key = meaning?.key;
-      const byMeaningOf = async (): Promise<readonly HubSectionMatch[] | undefined> => {
-        if (meaning === undefined || key === undefined) {
+      const meaningRests = (): boolean => clock.now().getTime() < meaningRestsUntil;
+      /** The query as its vector; `undefined`, and never a rejection, where there is none to have. */
+      const embedded = async (): Promise<Float32Array | undefined> => {
+        if (meaning === undefined || key === undefined || meaningRests()) {
           return undefined;
         }
         try {
-          const { vectors } = await meaning.embedder.embed([query], "query");
-          const vector = vectors[0];
-          return vector === undefined
-            ? undefined
-            : await timed("meaning", () =>
-                searchHubSectionVectors(database, ids, key, vector, candidates, timeoutMs),
-              );
+          const { vectors } = await part("embed", () => meaning.embedder.embed([query], "query"));
+          return vectors[0];
         } catch (error) {
+          logger.debug({ err: error }, "the query of a search across packs was not embedded");
+          return undefined;
+        }
+      };
+      const nearestTo = async (
+        vector: Float32Array | undefined,
+      ): Promise<readonly HubSectionMatch[] | undefined> => {
+        if (key === undefined || vector === undefined || meaningRests()) {
+          return undefined;
+        }
+        try {
+          return await timed("meaning", () =>
+            searchHubSectionVectors(database, ids, key, vector, candidates, timeoutMs),
+          );
+        } catch (error) {
+          if (isStatementTimeout(error)) {
+            meaningRestsUntil = clock.now().getTime() + MEANING_REST_MS;
+          }
           logger.debug({ err: error }, "the search by meaning across packs did not answer");
           return undefined;
         }
       };
-      // A query that is identifiers alone is ranked by its words, as inside a mount (ADR-0079),
-      // so its meaning is asked for only once the words have found nothing. Any other query has
-      // both asked at once: the answer takes as long as the slower of the two, not their sum.
+      // The query is embedded while the words are looked up, and the comparison waits for the
+      // words (ADR-0091): it reads every section vector of the packs, and run beside the words
+      // it takes from them what the database has to read with. A query that is identifiers alone
+      // is ranked by its words, as inside a mount (ADR-0079), so its meaning is asked for only
+      // once the words have found nothing, or did not answer.
       const identifiers = queryIdentifiers(query);
-      let words: readonly HubEntryRecord[];
+      const vector = identifiers.only ? undefined : embedded();
+      const found = await byWordsOf();
       let ranking: FindRanking | undefined;
       let nearest: readonly HubSectionMatch[] | undefined;
-      if (identifiers.only) {
-        words = await byWordsOf();
-        if (words.length === 0) {
-          nearest = await byMeaningOf();
-        }
-      } else {
-        const asked = byMeaningOf();
-        words = await byWordsOf();
-        nearest = await asked;
+      if (!identifiers.only || found === undefined || found.length === 0) {
+        nearest = await nearestTo(await (vector ?? embedded()));
       }
+      if (found === undefined && nearest === undefined) {
+        // Nothing answered in time: there is nothing to show but that.
+        throw wordsRanOut;
+      }
+      const words = found ?? [];
       const wordsAlone = identifiers.only && words.length > 0;
       if (key !== undefined) {
         ranking = wordsAlone
           ? { meaning: false, reranked: false, identifiers: true }
-          : { meaning: nearest !== undefined, reranked: false };
+          : {
+              meaning: nearest !== undefined,
+              reranked: false,
+              ...(found === undefined ? { words: false } : {}),
+            };
       }
       // One order of the entries, by reciprocal rank fusion of the two, a skill boosted as inside
       // a mount, ties by pack and path.
@@ -241,6 +308,7 @@ export function createHubSearch(options: HubSearchOptions): HubSearch {
         }
         return vouched;
       };
+      const legsEnded = clock.now().getTime();
       // The documents one of whose headings names the identifier the query begins with
       // stand first, in the words' order (ADR-0079); a document the deployment only describes is
       // not read for it.
@@ -307,11 +375,30 @@ export function createHubSearch(options: HubSearchOptions): HubSearch {
           fixed = scored.length;
         }
       }
+      took.items = clock.now().getTime() - legsEnded;
       if (reranker !== undefined && ranking !== undefined && scored.length - fixed > 1) {
         // The reranker orders what follows the results that stand first for their heading.
         const rest = scored.slice(fixed);
-        ranking = { ...ranking, reranked: await rerankFirst(reranker, query, rest, rerankCount) };
+        const reranked = await part("rerank", () =>
+          rerankFirst(reranker, query, rest, rerankCount),
+        );
+        ranking = { ...ranking, reranked };
         scored.splice(fixed, rest.length, ...rest);
+      }
+      const ms = clock.now().getTime() - started;
+      if (ms > timeoutMs) {
+        // An answer that took longer than one of its statements may: the log says where the time
+        // went, since the limit of a statement is not the limit of the search.
+        logger.info(
+          {
+            ms,
+            took,
+            packs: ids.length,
+            lexemes: lexemes.length,
+            ...(ranking === undefined ? {} : { meaning: ranking.meaning }),
+          },
+          "a search across packs answered slowly",
+        );
       }
       return {
         query,

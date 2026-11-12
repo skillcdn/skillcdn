@@ -55,6 +55,34 @@ describe("withSearchCache", () => {
     expect(asked).toHaveLength(3);
   });
 
+  it("keeps nothing of an answer that stands in for a failure", async () => {
+    // What a search answers when its words ran out of their time (ADR-0091): the meaning's alone.
+    const asked: string[] = [];
+    let whole = false;
+    const hub: HubSearch = {
+      packs: async () => 1,
+      search: async (query) => {
+        asked.push(query);
+        return {
+          ...answer(query),
+          ranking: { meaning: true, reranked: false, ...(whole ? {} : { words: false }) },
+        };
+      },
+    };
+    const cached = withSearchCache(hub, {
+      ttlMs: 1000,
+      entries: 10,
+      concurrency: 4,
+      clock: { now: () => new Date(0) },
+    });
+    expect((await cached.search("card news", 10)).ranking?.words).toBe(false);
+    // The next who asks is asked for again, and what answers in full is kept.
+    whole = true;
+    expect((await cached.search("card news", 10)).ranking?.words).toBeUndefined();
+    await cached.search("card news", 10);
+    expect(asked).toHaveLength(2);
+  });
+
   it("asks once for everyone waiting on the same question", async () => {
     const { hub, asked, release } = slowHub();
     const cached = withSearchCache(hub, {

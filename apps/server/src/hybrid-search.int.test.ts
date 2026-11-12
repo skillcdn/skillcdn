@@ -323,22 +323,31 @@ describe("a search by words and by meaning", () => {
 
 describe("a search across the packs by words and by meaning", () => {
   const TIMED_OUT = "a statement of the search across packs ran out of its time";
+  const SLOW = "a search across packs answered slowly";
   const asked = (): number => embed.calls.filter((call) => call.as === "query").length;
+  const meaning = () => ({
+    embedder: embed.embedder,
+    reranker: rerank.reranker,
+    rerankCandidates: 10,
+    key: KEY,
+  });
+  const searchOf = (harness: Harness) => (query: string) =>
+    harness.request(`/api/v1/search?query=${encodeURIComponent(query)}`);
+  const timedOutOf = (harness: Harness) => (): unknown[] =>
+    harness.logs.filter((line) => line.msg === TIMED_OUT).map((line) => line.statement);
 
-  it("asks the meaning beside the words, and names in the log the statement that ran out of its time", async () => {
+  it("compares by meaning once the words have answered, and rests a comparison that ran out of its time", async () => {
     // No answer is kept, and a statement has a short time, so that the test waits for little.
+    // The harness has a clock the test moves, for the rest of the comparison to end.
+    let ahead = 0;
     const across = createHarness(testDatabase, {
       host,
+      clock: { now: () => new Date(Date.now() + ahead) },
       hub: { ...HUB_DEFAULTS, cacheMs: 0, timeoutMs: 400 },
-      meaning: {
-        embedder: embed.embedder,
-        reranker: rerank.reranker,
-        rerankCandidates: 10,
-        key: KEY,
-      },
+      meaning: meaning(),
     });
-    const search = (query: string) =>
-      across.request(`/api/v1/search?query=${encodeURIComponent(query)}`);
+    const search = searchOf(across);
+    const timedOut = timedOutOf(across);
 
     // A question in other words than the handbook's: found by meaning, across the packs.
     const before = asked();
@@ -346,6 +355,7 @@ describe("a search across the packs by words and by meaning", () => {
     expect(found.status).toBe(200);
     const body = restSearchSchema.parse(await found.json());
     expect(body.ranking).toMatchObject({ meaning: true });
+    expect(body.ranking?.words).toBeUndefined();
     expect(body.items[0]).toMatchObject({
       address: ADDRESS,
       item: { kind: "document", path: "docs/invoicing.md" },
@@ -358,22 +368,16 @@ describe("a search across the packs by words and by meaning", () => {
     expect(coded.items[0]).toMatchObject({ item: { kind: "document", path: "docs/api/jobs.md" } });
     expect(asked()).toBe(before + 1);
 
-    // While nothing can read the entries, the count runs out of its time. The search says so,
-    // and the meaning had been asked for by then: the two do not wait for each other.
+    // While nothing can read the entries, the count runs out of its time, and the comparison,
+    // asked after it, runs out of its own: nothing answered, and the search says so. The log
+    // names the two in the order they were asked.
     const release = await holdIndexEntries(testDatabase.database);
     try {
       const held = await search("waive a late fee");
       expect(held.status).toBe(503);
       expect(await held.json()).toMatchObject({ error: { code: "search.timeout" } });
       expect(asked()).toBe(before + 2);
-      await expect
-        .poll(() =>
-          across.logs
-            .filter((line) => line.msg === TIMED_OUT)
-            .map((line) => line.statement)
-            .sort(),
-        )
-        .toEqual(["count", "meaning"]);
+      expect(timedOut()).toEqual(["count", "meaning"]);
     } finally {
       await release();
     }
@@ -382,6 +386,103 @@ describe("a search across the packs by words and by meaning", () => {
       timeoutMs: 400,
       lexemes: 3,
     });
-    expect((await search("waive a late fee")).status).toBe(200);
+
+    // The comparison rests: the words answer alone, at once, and the model is not asked.
+    const resting = await search("waive a late fee");
+    expect(resting.status).toBe(200);
+    expect(restSearchSchema.parse(await resting.json()).ranking).toMatchObject({ meaning: false });
+    expect(asked()).toBe(before + 2);
+    expect(timedOut()).toEqual(["count", "meaning"]);
+
+    // Its rest over, it is asked again, and answers.
+    ahead = 61_000;
+    const rested = restSearchSchema.parse(await (await search("pardon tardy penalties")).json());
+    expect(rested.ranking).toMatchObject({ meaning: true });
+    expect(asked()).toBe(before + 3);
+  });
+
+  it("answers by meaning alone when the words run out of their time, and lets no cache keep that", async () => {
+    // An embedder that answers when the test lets it: the words run out of their time while
+    // nothing can read the entries, and the comparison is asked once they can be read again.
+    let hold: Promise<void> | undefined;
+    const across = createHarness(testDatabase, {
+      host,
+      hub: { ...HUB_DEFAULTS, cacheMs: 300_000, timeoutMs: 400 },
+      meaning: {
+        ...meaning(),
+        embedder: {
+          ...embed.embedder,
+          async embed(texts, as) {
+            await hold;
+            return embed.embedder.embed(texts, as);
+          },
+        },
+      },
+    });
+    const timedOut = timedOutOf(across);
+    const search = searchOf(across);
+    /** Runs `ask` while the entries cannot be read, and lets them be read once the count ran out. */
+    const withWordsOutOfTime = async <T>(counts: number, ask: () => Promise<T>): Promise<T> => {
+      // The packs are listed before the entries are held: the list reads them as well.
+      await search(`JOB-409${counts}`);
+      let letGo: () => void = () => {};
+      hold = new Promise((resolve) => {
+        letGo = resolve;
+      });
+      const release = await holdIndexEntries(testDatabase.database);
+      let released = false;
+      try {
+        const asking = ask();
+        await expect.poll(timedOut).toEqual(new Array(counts).fill("count"));
+        await release();
+        released = true;
+        letGo();
+        return await asking;
+      } finally {
+        // Whatever failed above, the entries are let go, and the embedder answers again.
+        if (!released) {
+          await release();
+        }
+        letGo();
+        hold = undefined;
+      }
+    };
+
+    const answer = await withWordsOutOfTime(1, () => search("pardon tardy penalties"));
+    // What the meaning found is the answer, said to be the meaning's alone, and for no cache.
+    expect(answer.status).toBe(200);
+    expect(answer.headers.get("cache-control")).toBe("no-store");
+    const partial = restSearchSchema.parse(await answer.json());
+    expect(partial.ranking).toMatchObject({ meaning: true, words: false });
+    expect(partial.items[0]).toMatchObject({
+      address: ADDRESS,
+      item: { kind: "document", path: "docs/invoicing.md" },
+    });
+    // The log says where the time of an answer that took longer than a statement may went.
+    expect(across.logs.find((line) => line.msg === SLOW)).toMatchObject({
+      level: 30,
+      meaning: true,
+      took: { count: expect.any(Number), meaning: expect.any(Number) },
+    });
+
+    // The search itself kept nothing of it either: the next who asks is answered by both, and
+    // that answer is one to keep.
+    const whole = await search("pardon tardy penalties");
+    expect(whole.status).toBe(200);
+    expect(whole.headers.get("cache-control")).toContain("s-maxage=300");
+    const full = restSearchSchema.parse(await whole.json());
+    expect(full.ranking).toMatchObject({ meaning: true });
+    expect(full.ranking?.words).toBeUndefined();
+
+    // The tool of the root says the same in its one line.
+    const root = await across.connect("/");
+    try {
+      const told = await withWordsOutOfTime(2, () =>
+        root.callTool({ name: "search_packs", arguments: { query: "pardon the tardy penalties" } }),
+      );
+      expect(textOf(told)).toContain("Ranked by meaning alone this time");
+    } finally {
+      await root.close();
+    }
   });
 });

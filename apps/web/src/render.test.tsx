@@ -1418,6 +1418,11 @@ describe("the page of a search across the packs", () => {
     expect(html).toContain(t.search.ranking.meaning);
     // The skill in the visitor's language, as the explorer shows it.
     expect(render(found, "ko").html).toContain("릴리스 노트");
+    // What is left of a search whose words ran out of time: shown, said to be that, not listed.
+    const left = render({ ...found, ranking: { meaning: true, reranked: false, words: false } });
+    expect(left.html).toContain(t.search.ranking.meaningAlone);
+    expect(left.html).not.toContain(t.search.ranking.meaning);
+    expect(left.indexable).toBe(false);
     // Fewer than a page needs: a page like any search, not one to list; none: said so.
     const few = render({ ...found, items: found.items.slice(0, 2) });
     expect(few.indexable).toBe(false);

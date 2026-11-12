@@ -495,6 +495,11 @@ function rankingLine(result: Pick<FindResult, "query" | "ranking">): string | un
   if (result.ranking.identifiers === true) {
     return "Ranked by words alone: a query of numbers and names is matched as written.";
   }
+  if (result.ranking.words === false) {
+    // What a search across the packs answers when its words ran out of their time (ADR-0091):
+    // a model is told what is missing, and that asking again is worth it.
+    return "Ranked by meaning alone this time: the words did not answer in time, so a result only they would find is missing. Ask again for the full answer.";
+  }
   if (!result.ranking.meaning) {
     return "Ranked by words alone this time: the search by meaning did not answer.";
   }

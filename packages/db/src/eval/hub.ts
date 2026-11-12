@@ -44,6 +44,11 @@ import { supportsSectionVectors, type VectorKey } from "../queries/vectors.js";
 // each how long it ran, how many rows of `index_entries` and how many pages it read and through
 // which indexes. The rows and the pages are the numbers to hold on to: a disk on the machine of
 // whoever runs this hides in milliseconds what the storage of a deployment shows.
+//
+// The milliseconds mean something once the database is held to what a small deployment has: a
+// container with its processors and memory limited, the reads of its disk as well, and nothing
+// in memory when the first question is asked. That is how the order of the statements in a
+// search was measured, with the server itself asked over such a database (ADR-0091).
 
 const { values, positionals } = parseArgs({
   args: process.argv.slice(2),
