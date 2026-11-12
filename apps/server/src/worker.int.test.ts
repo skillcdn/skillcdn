@@ -140,6 +140,8 @@ const logger = pino(
 const clock = { now: () => new Date() };
 const queueErrors: Error[] = [];
 const usageEvents: UsageEvent[] = [];
+/** Whether each of two requests for one address was queued, before the worker started. */
+let queuedTwice: readonly boolean[] = [];
 
 beforeAll(async () => {
   testDatabase = await createTestDatabase(process.env.TEST_DATABASE_URL ?? DEV_DATABASE_URL);
@@ -182,6 +184,13 @@ beforeAll(async () => {
       sliceSections: 40,
     },
   );
+  // The first test's request, made twice while nothing takes a job: a request that waits keeps
+  // the next one for its address out, and a worker that had taken the first lets the second in.
+  await ensureJobQueues(jobs, TEST_SETTINGS);
+  queuedTwice = [
+    await sendIndexJob(jobs, { address: "/gh/acme/document-pack" }),
+    await sendIndexJob(jobs, { address: "/gh/acme/document-pack" }),
+  ];
   const started = await worker.start();
   expect(started.queues).toEqual([INDEX_QUEUE, EMBED_QUEUE, SWEEP_QUEUE]);
   await ensureJobQueues(jobs, TEST_SETTINGS);
@@ -238,9 +247,8 @@ const completed = async (scope: SnapshotScope, key: VectorKey = KEY) =>
 
 describe("the worker", () => {
   it("indexes a repository on request, then embeds every section of its documents, a body once, in slices", async () => {
-    expect(await sendIndexJob(jobs, { address: "/gh/acme/document-pack" })).toBe(true);
-    // The same request again is not queued twice.
-    expect(await sendIndexJob(jobs, { address: "/gh/acme/document-pack" })).toBe(false);
+    // Asked for twice before the worker started: the same request is not queued twice.
+    expect(queuedTwice).toEqual([true, false]);
 
     await vi.waitFor(
       async () =>
