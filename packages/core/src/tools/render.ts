@@ -141,17 +141,6 @@ function imagesLine(images: readonly DocumentImage[] | undefined): string | unde
   return `${plural(images.length, "image")}, read as text where the document describes them:\n${shown.join("\n")}${more}`;
 }
 
-/**
- * What a result says of an original that is kept encrypted (ADR-0084): that it is, and by which
- * key the organization knows what opens it. The pack holds nothing that opens it, so a reader is
- * told before it fetches the file that the text is in the document and the original is for
- * whoever holds the key.
- */
-const encryptedNote = (source: DocumentSource): string =>
-  source.encrypted === true
-    ? `; encrypted${source.keyName === undefined ? "" : `, key ${source.keyName}`}`
-    : "";
-
 /** What a document says it was made from (ADR-0076), with where the bytes are when it is a file of the repository. */
 function originalsLine(sources: readonly DocumentSource[] | undefined): string | undefined {
   if (sources === undefined || sources.length === 0) {
@@ -161,7 +150,7 @@ function originalsLine(sources: readonly DocumentSource[] | undefined): string |
     .map((source) =>
       source.url === undefined
         ? compactSummary(source.text, 160)
-        : `${source.path ?? source.text} (${source.url}${encryptedNote(source)})`,
+        : `${source.path ?? source.text} (${source.url})`,
     )
     .join("; ")}`;
 }

@@ -117,13 +117,6 @@ export {
   resolveLocalLink,
   resolveMarkdownReference,
 } from "./markdown-links.js";
-export {
-  KEY_NAME,
-  type OriginalsPolicy,
-  PDF_ENDS_BYTES,
-  passwordFieldsOf,
-  pdfEncryption,
-} from "./originals.js";
 export type { BlobStore } from "./ports/blob-store.js";
 export type { Clock } from "./ports/clock.js";
 export type { Embedder, EmbeddingRole, Embeddings } from "./ports/embedder.js";

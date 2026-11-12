@@ -40,7 +40,6 @@ import {
   parentDirectory,
   parseRepoManifest,
   parseSkillManifest,
-  passwordFieldsOf,
   preferredLicenseFile,
   quotationStandsIn,
   quotationsOf,
@@ -89,10 +88,11 @@ import { gitBlobHash, sha256Hex } from "./git-hash.js";
  *     the references of a file are bounded by the files they name (ADR-0082).
  * 16: a document that says it is derived from other documents is marked, and each of its block
  *     quotes is held against the section its last line links to (ADR-0083).
- * 17: a manifest says that the originals of its scope are kept encrypted, and by which key's
- *     name; a front-matter key written to hold a password is a diagnostic (ADR-0084).
+ *
+ * 17 was on `main` alone, for a declaration that was taken out again (ADR-0089), and is not used
+ * again: the next version is 18, so that an index written under that 17 is rebuilt.
  */
-export const INDEX_VERSION = 17;
+export const INDEX_VERSION = 16;
 
 /**
  * The lowest version of the reading rules whose index is still served while the commit is
@@ -489,22 +489,6 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
     }
   };
 
-  /**
-   * A pack never holds what opens an original (ADR-0084): a front-matter key written to hold a
-   * password is reported by its name, never with its value, for the author to take out before
-   * the file is pushed, and to change the password if it was.
-   */
-  const checkSecrets = (path: RepoPath, text: string): void => {
-    const fields = passwordFieldsOf(text);
-    if (fields.length > 0) {
-      report(
-        path,
-        "password_in_front_matter",
-        `the front-matter carries ${fields.map((field) => `"${field}"`).join(", ")}: a pack never holds what opens an original, since all of it is served as text and kept in the repository's history; keep the password where the organization keeps its secrets, and change one that was pushed`,
-      );
-    }
-  };
-
   // Resolve policies from ancestors downward before fetching their descendants. A rejected
   // scope cannot spend the remaining budget or produce diagnostics for its private fixtures.
   const declaring = candidates
@@ -656,7 +640,6 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
           continue;
         }
         const { manifest, warnings } = parsed.value;
-        checkSecrets(entry.path, text);
         for (const excluded of manifest.exclude) {
           excludedPaths.add(joinRepoPath(directory, excluded));
         }
@@ -697,7 +680,6 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
             exclude: [...manifest.exclude],
             references: referencesOf(entry.path, text, { skill: false }),
             ...(manifest.language === undefined ? {} : { language: manifest.language }),
-            ...(manifest.originals === undefined ? {} : { originals: manifest.originals }),
             // Stored only when it says something: the documents under it are searched by words
             // alone, and their text is not embedded (ADR-0064), or the repository stays out of
             // the search across every pack (ADR-0070).
@@ -724,7 +706,6 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
         continue;
       }
       const parsed = parseSkillManifest(text, { directory });
-      checkSecrets(entry.path, text);
       if (parsed.ok) {
         const { manifest, warnings } = parsed.value;
         skills.set(directory, {
@@ -855,7 +836,6 @@ export async function buildSnapshotIndex(options: BuildIndexOptions): Promise<Sn
     const searchable = !linkedOnly && !overviewOnly;
     if (summary !== undefined) {
       checkSources(entry.path, text);
-      checkSecrets(entry.path, text);
     }
     const derivation = summary === undefined ? undefined : documentDerivation(text);
     documents.set(entry.path, {

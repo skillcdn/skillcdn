@@ -1,6 +1,6 @@
 # ADR-0088: The packs of a directory may be read with a token only, and a password is used once
 
-- Status: Accepted
+- Status: Accepted; points 5 and 6 (how a password is used, and whether an original stays encrypted behind tokens) are superseded by ADR-0089
 - Date: 2026-11-11
 - Supersedes the last sentence of point 2 and of the consequences of [ADR-0071](0071-a-deployment-serves-packs-from-a-directory-of-its-own.md) (a private directory pack is not offered); builds on [ADR-0084](0084-an-encrypted-original-stays-encrypted-and-nothing-that-opens-it-is-in-the-pack-or-the-image.md) (an encrypted original, and who reads its pack), [ADR-0040](0040-a-token-for-an-agent-reads-one-repository-as-its-maker.md) and [ADR-0052](0052-the-rest-api-takes-the-tokens-the-mcp-endpoint-takes.md) (tokens over MCP and REST) and [ADR-0026](0026-serving-follows-the-license-and-the-operators-lists.md) (the admin API).
 

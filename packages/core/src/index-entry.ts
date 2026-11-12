@@ -51,11 +51,6 @@ export interface SkillFrontMatter {
    */
   readonly search?: { readonly meaning: boolean; readonly hub?: boolean };
   /**
-   * Repository manifest only: what it says of the originals of its scope (ADR-0084), stored when
-   * it says that they are kept encrypted, with the name of the key that opens them.
-   */
-  readonly originals?: { readonly encrypted: boolean; readonly keyName?: string };
-  /**
    * Repository manifest only: the picture it declares (ADR-0031), as a repository-root path of a
    * file the tree has, or as an `https` URL.
    */

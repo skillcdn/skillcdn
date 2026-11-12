@@ -1,6 +1,6 @@
 # ADR-0084: An encrypted original stays encrypted, and nothing that opens it is in the pack or the image
 
-- Status: Accepted
+- Status: Superseded by [ADR-0089](0089-the-format-says-nothing-of-encryption-and-an-encrypted-original-is-a-file-like-any-other.md)
 - Date: 2026-11-11
 - Builds on [ADR-0076](0076-originals-travel-in-the-pack-and-the-repositorys-visibility-decides-who-reads-them.md), [ADR-0077](0077-the-bytes-of-a-file-that-is-not-text-are-sent-from-where-they-are.md) and [ADR-0071](0071-a-deployment-serves-packs-from-a-directory-of-its-own.md).
 

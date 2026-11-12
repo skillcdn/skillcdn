@@ -76,29 +76,7 @@ source: sources/manual-rev3.pdf
 
 Every result names the original with the document, the outline in its header and a read on its first page, each with where the bytes are, so that an agent checking a figure, a table or a transcription, or a person wanting the file itself, gets there in one step. A page of the original is said in words, "page 12 of the original": the hosts send originals as downloads, and an anchor into a page does nothing there. An original over what the host takes as it is, 100 MB at GitHub, goes through Git LFS; a read of its pointer sends the reader to where the host serves the file. `skillcdn check` reports a `source` that names no file of the repository.
 
-### An original that is encrypted
-
-A PDF that opens with a password travels as it was received, and the pack never holds the password ([ADR-0084](../adr/0084-an-encrypted-original-stays-encrypted-and-nothing-that-opens-it-is-in-the-pack-or-the-image.md)):
-
-```
-manuals/                      a repository of its own, private to the people cleared for the originals
-  SKILLCDN.md
-  docs/
-    workshop/
-      SKILLCDN.md             documents: [.]   originals: { encrypted: true, key-name: workshop-2026 }
-      README.md               the map
-      01-safety.md            source: sources/workshop-manual.pdf
-      sources/
-        workshop-manual.pdf   as received, still encrypted; no copy without its protection
-```
-
-- **The password is not in the pack**: not in a front-matter, a manifest or a note. Everything of a pack is served as text to whoever reads it, into the context of every agent, and stays in the history of its repository. `key-name` is the name your organization knows the key by, so that a person knows which one to ask for; it is one word and never the key.
-- **It is not in the image or the deployment either.** SkillCDN opens no original: it indexes the chapters and sends the file as it is. Nothing takes a password, so there is nothing to configure and nothing to leak; an image in particular is a file that is copied and stored, and whoever holds it reads all of it.
-- **It is used once, and kept nowhere.** The conversion asks for it when it runs, from the person who runs it or from where your organization keeps its secrets for that one run, and writes it into no file, no history and no conversation. Nothing that serves the pack needs it afterwards; the people who open the original itself hold it as they did before.
-- **The chapters are the original opened, so what protects them is who reads the pack.** A password is one secret for everyone and cannot be taken back from one reader; access to a pack is a credential each. The pack goes where only the people cleared for the originals read: a private repository of its own, where the git host says who they are, or the directory of a deployment that reads its packs with a token only, where its operator gives each agent a token of its own ([deploy](../../deploy/README.md#packs-from-a-directory-of-the-deployment), [ADR-0088](../adr/0088-the-packs-of-a-directory-may-be-read-with-a-token-only-and-a-password-is-used-once.md)). Originals for different readers are different packs.
-- **Behind such access, whether the original stays encrypted is your organization's choice.** Kept as received, it is declared as above. Kept opened beside its chapters, without the declaration, no reader needs the password and it need not be passed on to anyone; a pack that everyone may read holds neither.
-
-A result that names such an original says `encrypted, key workshop-2026`, so an agent does not fetch a file it cannot read. `skillcdn check` looks at each PDF under a manifest that says its originals are encrypted and fails on one that is not, notes an encrypted PDF that no manifest speaks of, and reports a front-matter key written to hold a password, `password_in_front_matter`, by its name and never its value. A password that was pushed is changed.
+An original that is encrypted is a file like any other ([ADR-0089](../adr/0089-the-format-says-nothing-of-encryption-and-an-encrypted-original-is-a-file-like-any-other.md)): it is sent as it is, and whoever holds what opens it reads it. SkillCDN opens no original and takes no password, and the format says nothing of encryption; what the chapters say is served as text to whoever may read the pack. How your files are encrypted, and where what opens them is kept, is yours to decide.
 
 Conversion keeps what the original says. Nothing is left out of the text for being personal or secret: who reads the pack is decided by the visibility of its repository ([who may read it](write-a-repository.md#who-may-read-it)), and material that is not for everyone goes in a private repository, originals included. What looks secret or personal is pointed out at conversion, with the repository's visibility, and the person decides whether to keep it, to leave it out of the text, which leaves it in the original, or to make the repository private.
 

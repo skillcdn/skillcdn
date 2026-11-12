@@ -56,10 +56,6 @@ export interface DocumentSource {
   readonly text: string;
   readonly path?: RepoPath;
   readonly url?: string;
-  /** True for a file of the repository that the manifest governing it says is kept encrypted (ADR-0084). */
-  readonly encrypted?: boolean;
-  /** With `encrypted`: the name of the key that opens it, when the manifest names one; never the key. */
-  readonly keyName?: string;
 }
 /** A heading of an outline, with how many rows the tables of its section hold, when they hold any. */
 export interface FileOutlineHeading extends OutlineHeading {

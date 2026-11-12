@@ -23,7 +23,6 @@ export {
   type ReadDirectoryOptions,
   readDirectory,
   readWorkingTree,
-  readWorkingTreeEnds,
   WORKING_TREE_COMMIT,
   type WorkingTreeFile,
 } from "./read-directory.js";

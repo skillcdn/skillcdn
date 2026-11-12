@@ -9,10 +9,9 @@ import {
   headingSlug,
   outlineMarkdown,
   queryIdentifiers,
-  renderBrowseResult,
   renderFindResult,
 } from "@skillcdn/core";
-import { checkDirectory, INDEX_LIMIT_DEFAULTS, readDirectory } from "@skillcdn/indexer";
+import { INDEX_LIMIT_DEFAULTS, readDirectory } from "@skillcdn/indexer";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
   type MemorySearch,
@@ -374,57 +373,5 @@ describe("the notes of the specification pack (ADR-0083)", () => {
       (item) => item.kind === "document" && item.path.includes("/04-link-control/"),
     );
     expect(chapter === undefined || !("derived" in chapter)).toBe(true);
-  });
-});
-
-describe("the original of the specification pack, kept encrypted (ADR-0084)", () => {
-  const ORIGINAL = `${SET}/sources/tidewater-link-protocol-ed3.pdf`;
-
-  it("is said to be encrypted wherever a chapter names it, with the name of its key and no more", async () => {
-    const { reader, mount } = await memoryReader(SPECIFICATION_PACK_PATH);
-    const chapter = `${SET}/04-link-control/030-4.2.6-link-resumption.md`;
-    const outline = await reader.browse(mount, { path: chapter }, 0);
-    if (outline.status !== "ready") throw new Error(outline.status);
-    expect(outline.result.outline?.sources).toEqual([
-      {
-        text: "../sources/tidewater-link-protocol-ed3.pdf",
-        path: ORIGINAL,
-        url: `file:///${ORIGINAL}`,
-        encrypted: true,
-        keyName: "harbour-board-2026",
-      },
-    ]);
-    expect(renderBrowseResult(outline.result)).toContain(
-      `Original: ${ORIGINAL} (file:///${ORIGINAL}; encrypted, key harbour-board-2026)`,
-    );
-    const read = await reader.file(mount, { path: chapter });
-    if (read.kind !== "found") throw new Error(read.kind);
-    expect(read.file.sources?.[0]).toMatchObject({
-      encrypted: true,
-      keyName: "harbour-board-2026",
-    });
-    // A note of another set names no original, and says nothing of one.
-    const note = await reader.browse(
-      mount,
-      { path: "docs/notes/carrier-loss-and-resumption.md" },
-      0,
-    );
-    if (note.status !== "ready") throw new Error(note.status);
-    expect(note.result.outline?.sources).toBeUndefined();
-  });
-
-  it("passes the check: the file is encrypted as its set says, and nothing of the pack holds a password", async () => {
-    let report = "";
-    const code = await checkDirectory({
-      directory: SPECIFICATION_PACK_PATH,
-      limits: INDEX_LIMIT_DEFAULTS,
-      write: (text) => {
-        report += text;
-      },
-    });
-    expect(code).toBe(0);
-    expect(report).toContain("Originals kept encrypted: 1 PDF as their manifest says");
-    expect(report).toContain("Index diagnostics: 0");
-    expect(report).not.toContain("Notes:");
   });
 });

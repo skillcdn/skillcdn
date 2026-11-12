@@ -1,7 +1,6 @@
 ---
 title: TABLE C-1 Station condition codes
 description: The twelve codes a buoy reports its condition with, from nominal to keeper aboard, each with what it means.
-source: ../sources/tidewater-link-protocol-ed3.pdf
 ---
 *Tidewater Link Protocol, third edition > Annex C Code tables*
 
