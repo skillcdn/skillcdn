@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { FetchLike } from "@skillcdn/client";
-import { restMountSchema } from "@skillcdn/core";
+import { hubBody, parseAddress, parseRepoPath, restMountSchema } from "@skillcdn/core";
 import { INDEX_LIMIT_DEFAULTS } from "@skillcdn/indexer";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_ORIGIN, EXIT_MISSING, EXIT_UNREADABLE, EXIT_USAGE, runCli } from "./cli.js";
@@ -629,5 +629,141 @@ describe("the tables and the code blocks of a pack at a deployment (ADR-0080)", 
     const missing = await run(["rows", "gh/acme/skills", "docs/nothing.md"], deployment);
     expect(missing.code).toBe(EXIT_MISSING);
     expect(missing.err).toContain("file.not_found");
+  });
+});
+
+describe("a search across the packs of a deployment (ADR-0070)", () => {
+  const repoPath = (value: string) => {
+    const parsed = parseRepoPath(value);
+    if (!parsed.ok) throw new Error(value);
+    return parsed.value;
+  };
+  const addressOf = (value: string) => {
+    const parsed = parseAddress(value);
+    if (!parsed.ok) throw new Error(value);
+    return parsed.value;
+  };
+  const FOUND = hubBody({
+    query: "release notes",
+    packs: 7,
+    items: [
+      {
+        address: addressOf("/gh/acme/skills"),
+        repository: "acme/skills",
+        item: {
+          kind: "skill",
+          path: repoPath("marketing/release-notes/SKILL.md"),
+          name: "release-notes",
+          directory: repoPath("marketing/release-notes"),
+          description: "Writes the notes of a release.",
+          files: [],
+          moreFiles: 0,
+          translations: {},
+        },
+      },
+    ],
+    ranking: { meaning: true, reranked: false },
+  });
+
+  /** A deployment that answers the search route alone, as its root's search does. */
+  function searching(answer: (query: string) => Response): Deployment {
+    const state: Deployment = {
+      requests: [],
+      indexing: 0,
+      fetch: async (url, init) => {
+        const headers = init.headers as Record<string, string>;
+        state.requests.push({ url, authorization: headers.authorization });
+        const parsed = new URL(url);
+        return parsed.pathname === "/api/v1/search"
+          ? answer(parsed.searchParams.get("query") ?? "")
+          : new Response(JSON.stringify({ error: { code: "not_found", message: "not found" } }), {
+              status: 404,
+              headers: { "content-type": "application/json" },
+            });
+      },
+    };
+    return state;
+  }
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { "content-type": "application/json" },
+    });
+
+  it("prints what the words find, each under the address the reads take", async () => {
+    const deployment = searching(() => json(FOUND));
+    const found = await run(["search", "release", "notes", "--limit", "5"], deployment, {
+      // A token kept for a repository there is not the search's to send.
+      store: createMemoryStore({
+        logins: [{ url: DEFAULT_ORIGIN, token: "scdn_repo_kept", since: undefined }],
+      }),
+    });
+    expect(found.err).toBe("");
+    expect(found.code).toBe(0);
+    expect(found.out).toContain('1 result for "release notes" across 7 packs:');
+    expect(found.out).toContain(
+      "1. /gh/acme/skills\n   skill: release-notes (marketing/release-notes/SKILL.md)",
+    );
+    expect(found.out).toContain(
+      `A pack at ${DEFAULT_ORIGIN} is read by its address, which skillcdn browse, skillcdn find, skillcdn skill and skillcdn file take first`,
+    );
+    expect(found.out).not.toContain("Connect to a pack");
+    expect(deployment.requests).toEqual([
+      {
+        url: `${DEFAULT_ORIGIN}/api/v1/search?query=release+notes&limit=5`,
+        authorization: undefined,
+      },
+    ]);
+  });
+
+  it("searches the deployment named, the environment's, or the one the directory is bound to", async () => {
+    const deployment = searching(() => json(FOUND));
+    await run(["search", "notes", "--url", "https://packs.example"], deployment);
+    await run(["search", "notes"], deployment, {
+      environment: { SKILLCDN_URL: "https://env.example", SKILLCDN_TOKEN: "scdn_repo_env" },
+    });
+    await run(["search", "notes"], deployment, {
+      directory: createMemoryDirectoryStore({
+        pack: "/gh/acme/skills",
+        url: "https://bound.example",
+      }),
+    });
+    expect(deployment.requests.map((request) => new URL(request.url).origin)).toEqual([
+      "https://packs.example",
+      "https://env.example",
+      "https://bound.example",
+    ]);
+    expect(deployment.requests.every((request) => request.authorization === undefined)).toBe(true);
+  });
+
+  it("prints the JSON of the route with --json", async () => {
+    const deployment = searching(() => json(FOUND));
+    const found = await run(["search", "release notes", "--json"], deployment);
+    expect(found.code).toBe(0);
+    expect(JSON.parse(found.out)).toEqual(JSON.parse(JSON.stringify(FOUND)));
+  });
+
+  it("says what is wrong with what it was given, and what the deployment refuses", async () => {
+    const deployment = searching(() => json(FOUND));
+    const wordless = await run(["search"], deployment);
+    expect(wordless.code).toBe(EXIT_USAGE);
+    expect(wordless.err).toContain("Say the words to search for.");
+    expect(wordless.err).toContain("usage: skillcdn search <words...>");
+    const many = await run(["search", "notes", "--limit", "21"], deployment);
+    expect(many.code).toBe(EXIT_USAGE);
+    expect(many.err).toContain("--limit takes an integer between 1 and 20");
+    expect(deployment.requests).toEqual([]);
+
+    const off = searching(() => json({ error: { code: "not_found", message: "Not found." } }, 404));
+    const none = await run(["search", "notes", "--url", "https://packs.example"], off);
+    expect(none.code).toBe(EXIT_MISSING);
+    expect(none.err).toContain("https://packs.example has no search across its packs.");
+
+    const slow = searching(() =>
+      json({ error: { code: "search.timeout", message: "The search took too long." } }, 503),
+    );
+    const late = await run(["search", "notes"], slow);
+    expect(late.code).toBe(EXIT_UNREADABLE);
+    expect(late.err).toContain("search.timeout");
   });
 });

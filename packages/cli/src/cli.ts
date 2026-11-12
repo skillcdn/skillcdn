@@ -21,6 +21,9 @@ import {
   fileResultOf,
   findResultOf,
   formatAddress,
+  HUB_DEFAULT_LIMIT,
+  HUB_MAX_LIMIT,
+  hubResultOf,
   type IndexLimits,
   isGitHostAddress,
   joinSkillPages,
@@ -37,6 +40,7 @@ import {
   renderDirectoryResult,
   renderFileResult,
   renderFindResult,
+  renderHubResult,
   renderInstructions,
   renderSkillResult,
   rowsCsv,
@@ -71,7 +75,7 @@ import {
   watchDirectory,
 } from "./local.js";
 import { type CodePage, type Pack, PackError, type RowsPage } from "./pack.js";
-import { openDeployment } from "./remote.js";
+import { asPackError, openDeployment } from "./remote.js";
 import { createMemoryVectorCache, type VectorCache } from "./vectors.js";
 
 /** What the command reads and writes, handed in so that a test runs it without a process. */
@@ -141,6 +145,7 @@ const COMMANDS = [
   "skills",
   "browse",
   "find",
+  "search",
   "skill",
   "file",
   "rows",
@@ -182,6 +187,7 @@ Commands:
   skills [<pack>]                  What a client is told on connect, then every skill and document.
   browse [<pack>] [<folder>]       What a folder holds, as browse_repo lists it.
   find [<pack>] <words...>         What the words find, as search_repo does.
+  search <words...>                What the words find across every pack of a deployment, each under its address.
   skill [<pack>] <path>            A skill whole, as load_skill assembles it: rules, instructions, included files.
   file [<pack>] <path>             A page of a file, as read_repo_file reads it, or what a folder holds.
   rows [<pack>] [<path>]           The tables of a document, or of every document under a folder, as CSV or JSON.
@@ -264,6 +270,21 @@ results unless --limit says otherwise (up to ${FIND_MAX_LIMIT}); a page that end
 names its nextCursor, which --cursor continues.
 
 ${READ_OPTIONS}
+`,
+  search: `usage: skillcdn search <words...> [--limit <n>] [--url <origin>] [--json]
+
+What the words find across every public pack a deployment serves, as the search_packs tool at
+the root of the deployment answers: skills and documents, each under the address of its pack,
+matched by words, and by meaning where the deployment searches by it. For finding the pack to
+read when none is known; skillcdn find searches inside one. At most ${HUB_DEFAULT_LIMIT} results unless
+--limit says otherwise (up to ${HUB_MAX_LIMIT}). What is found is read by its address, which the reads
+take first: skillcdn skill <address> <path>, skillcdn file <address> <path>.
+
+The deployment is --url, else SKILLCDN_URL, else the one this directory is bound to, else
+${DEFAULT_ORIGIN}. The search covers public packs alone, so no token is sent.
+
+  --url <origin>  The deployment searched.
+  --json          Print the JSON the REST API answers instead of the words a model is given.
 `,
   skill: `usage: skillcdn skill [<pack>] <path> [--url <origin>] [--as <address>] [--json]
 
@@ -707,16 +728,15 @@ async function packSpecOf(given: string, io: CliIo): Promise<PackSpec> {
 }
 
 /**
- * Where an address is read, and with what: the origin first, then the token kept for that origin
- * and the repository read, else for that origin alone, never anything kept for another.
+ * The deployment a command speaks to: the one the flag names, else the one what was given names
+ * itself, else the environment's, else the one the directory is bound to, else the default.
  */
-async function deploymentOf(
+function originFor(
   io: CliIo,
   flagUrl: string | undefined,
   specUrl: string | undefined,
   boundUrl: string | undefined,
-  address: Address,
-): Promise<{ readonly url: string; readonly token: string | undefined }> {
+): string {
   const envUrl = io.environment.SKILLCDN_URL;
   const envToken = io.environment.SKILLCDN_TOKEN;
   if ((envUrl === undefined) !== (envToken === undefined)) {
@@ -731,6 +751,23 @@ async function deploymentOf(
       `Not the origin of a deployment: ${written}. An origin is https://<host>, or http://localhost for this machine.`,
     );
   }
+  return url;
+}
+
+/**
+ * Where an address is read, and with what: the origin first, then the token kept for that origin
+ * and the repository read, else for that origin alone, never anything kept for another.
+ */
+async function deploymentOf(
+  io: CliIo,
+  flagUrl: string | undefined,
+  specUrl: string | undefined,
+  boundUrl: string | undefined,
+  address: Address,
+): Promise<{ readonly url: string; readonly token: string | undefined }> {
+  const url = originFor(io, flagUrl, specUrl, boundUrl);
+  const envUrl = io.environment.SKILLCDN_URL;
+  const envToken = io.environment.SKILLCDN_TOKEN;
   if (envUrl !== undefined && envToken !== undefined && originOf(envUrl) === url) {
     return { url, token: envToken.trim() };
   }
@@ -1561,6 +1598,49 @@ async function statusCommand(args: readonly string[], io: CliIo): Promise<number
   return 0;
 }
 
+/**
+ * The search across every pack of a deployment (ADR-0070), for whoever has a shell and no pack
+ * yet: what the root's one tool answers, with the reads named as the commands that take the
+ * address of a result. Anyone's request: the search covers public packs, so the token kept for a
+ * repository there stays where it is.
+ */
+async function searchCommand(args: readonly string[], io: CliIo): Promise<number> {
+  const parsed = parseArgs({
+    args: [...args],
+    options: OPTIONS,
+    allowPositionals: true,
+    strict: true,
+  });
+  if (parsed.values.help === true) {
+    io.stdout(HELP.search);
+    return 0;
+  }
+  const query = parsed.positionals.join(" ").trim();
+  if (query.length === 0) {
+    throw new Misuse("Say the words to search for.");
+  }
+  const limit = count(parsed.values.limit, "limit", HUB_MAX_LIMIT);
+  const bound = await io.directory?.load();
+  const url = originFor(io, parsed.values.url, undefined, bound?.url);
+  const client = createClient({
+    baseUrl: url,
+    fetch: io.fetch ?? ((input, init) => fetch(input, init)),
+    userAgent: io.userAgent,
+  });
+  const body = await client.search(query, limit).catch((error: unknown) => {
+    if (error instanceof ApiError && error.status === 404) {
+      throw new PackError(404, error.code, `${url} has no search across its packs.`);
+    }
+    return asPackError(error);
+  });
+  if (parsed.values.json === true) {
+    io.stdout(`${JSON.stringify(body, null, 2)}\n`);
+    return 0;
+  }
+  io.stdout(`${renderHubResult(hubResultOf(body), url, COMMAND_WORDS)}\n`);
+  return 0;
+}
+
 /** Runs the command with `args` (without the program name) and returns its exit code. */
 export async function runCli(args: readonly string[], io: CliIo): Promise<number> {
   const [name, ...rest] = args;
@@ -1605,6 +1685,8 @@ export async function runCli(args: readonly string[], io: CliIo): Promise<number
         return await embedCommand(rest, io);
       case "serve":
         return await serveCommand(rest, io);
+      case "search":
+        return await searchCommand(rest, io);
       default:
         return await readCommand(name, rest, io);
     }

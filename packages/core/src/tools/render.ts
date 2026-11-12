@@ -440,9 +440,11 @@ function findItemLines(item: FindItem): string[] {
 
 /**
  * The result of a search across the packs of a deployment, as one text for the model (ADR-0070):
- * every item under the address of its pack, which is where the model goes on from.
+ * every item under the address of its pack, which is where the model goes on from. With `words`
+ * the reads are named as they are run where nothing is connected to, the commands of a shell:
+ * each takes the address of the pack first, so the text says that and not where to connect.
  */
-export function renderHubResult(result: HubResult, origin?: string): string {
+export function renderHubResult(result: HubResult, origin?: string, words?: ToolWords): string {
   const count = result.items.length;
   const query = JSON.stringify(result.query);
   const across = `across ${plural(result.packs, "pack")}`;
@@ -462,14 +464,20 @@ export function renderHubResult(result: HubResult, origin?: string): string {
       item.kind === "document" && item.sections !== undefined && item.sections.length > 0,
   );
   const at = origin === undefined ? "" : ` at ${origin}`;
+  const section =
+    words === undefined
+      ? "A section is read at its pack with read_repo_file: the path, its offset and its limit."
+      : `A section is read with ${words.read}: the address of its pack, the path, its offset and its limit.`;
+  const next =
+    words === undefined
+      ? `Connect to a pack${at} by its address for browse_repo, search_repo, load_skill and read_repo_file, or read it over REST under /api/v1/ there.`
+      : `A pack${at} is read by its address, which ${words.browse}, ${words.search}, ${words.load} and ${words.read} take first: ${words.load} <address> <path of a SKILL.md> loads a skill whole.`;
   return joinSections([
     `${count} result${count === 1 ? "" : "s"} for ${query} ${across}:`,
     items.join("\n"),
-    hasSections
-      ? "A section is read at its pack with read_repo_file: the path, its offset and its limit."
-      : undefined,
+    hasSections ? section : undefined,
     ranking,
-    `Connect to a pack${at} by its address for browse_repo, search_repo, load_skill and read_repo_file, or read it over REST under /api/v1/ there.`,
+    next,
   ]);
 }
 

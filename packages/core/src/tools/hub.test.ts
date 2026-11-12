@@ -99,6 +99,25 @@ describe("a search across every pack", () => {
     );
   });
 
+  it("names the reads as commands that take the address, where nothing is connected to", () => {
+    const words = {
+      browse: "skillcdn browse",
+      search: "skillcdn find",
+      load: "skillcdn skill",
+      read: "skillcdn file",
+    };
+    const text = renderHubResult(result, "https://packs.example", words);
+    expect(text).toContain("1. /gh/acme/multi-skill\n   skill: release-notes");
+    expect(text).toContain(
+      "A section is read with skillcdn file: the address of its pack, the path, its offset and its limit.",
+    );
+    expect(text).toContain(
+      "A pack at https://packs.example is read by its address, which skillcdn browse, skillcdn find, skillcdn skill and skillcdn file take first: skillcdn skill <address> <path of a SKILL.md> loads a skill whole.",
+    );
+    expect(text).not.toContain("Connect to a pack");
+    expect(text).not.toContain("read_repo_file");
+  });
+
   it("tells a client on connect what is here and how a pack it finds is used", () => {
     const text = renderHubInstructions(7, "https://packs.example");
     expect(text).toContain("7 public packs served at https://packs.example");

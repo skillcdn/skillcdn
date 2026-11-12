@@ -48,6 +48,7 @@ From then on an agent in the project reads the pack without naming it, and any p
 skillcdn skills                                 # every skill and document of the pack
 skillcdn skill marketing/ads/SKILL.md           # one skill whole
 skillcdn skills gh/acme/skills                  # any pack, by its address
+skillcdn search make a slide deck               # which pack has a skill for it, among every public pack
 ```
 
 [The command's reference](../../packages/cli/README.md) lists every command with what it prints. An address is read at `skillcdn.ai` unless `--url` or `SKILLCDN_URL` names a deployment of your own. **A private repository** takes one more step, and no token to copy: tell the agent to run `skillcdn login --url <origin>` in the project as well and to tell you the page and the code it shows; open the page signed in, check that it shows the same code, and approve. The command keeps the token it receives and shows it to nobody; your account page lists it under the name you gave it, and removes it. How a job with nobody to approve gets its token, where tokens are kept and what a folder read from the machine is called are in [the reference](../../packages/cli/README.md#a-private-pack-and-a-bound-directory) as well.

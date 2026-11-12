@@ -26,7 +26,8 @@ export interface RemoteOptions {
 /** How long a read waits for the deployment to index a commit it sees for the first time. */
 export const DEFAULT_WAIT_MS = 30_000;
 
-const asPackError = (error: unknown): never => {
+/** What the API refused, as the error a read of a pack throws, with the API's own code. */
+export const asPackError = (error: unknown): never => {
   if (error instanceof ApiError) {
     throw new PackError(error.status, error.code, error.message, {
       directories: error.directories,
