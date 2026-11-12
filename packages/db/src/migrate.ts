@@ -54,12 +54,13 @@ function latestMigration(): { tag: string; when: number } | undefined {
 
 /**
  * Applies again, in order, the migrations that depend on the `vector` extension, on a database
- * that has the extension available and none of their tables: they were skipped when they first
- * ran, before the extension was there.
+ * that has the extension available and not every table of theirs: they were skipped when they
+ * first ran, before the extension was there, or, for the table of the part vectors, while the
+ * extension was older than its half-precision type (ADR-0092).
  */
 async function applyVectorMigrationsAgain(client: Client): Promise<void> {
   const { rows } = await client.query<{ available: boolean; present: boolean }>(
-    "select exists (select 1 from pg_available_extensions where name = 'vector') as available, to_regclass('section_vectors') is not null as present",
+    "select exists (select 1 from pg_available_extensions where name = 'vector') as available, to_regclass('section_vectors') is not null and (to_regtype('halfvec') is null or to_regclass('part_vectors') is not null) as present",
   );
   const state = rows[0];
   if (state === undefined || !state.available || state.present) {

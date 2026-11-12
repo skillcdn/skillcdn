@@ -428,4 +428,14 @@ describe("section vectors", () => {
     // The table of the parts came back with it.
     expect(await partsOf("blob-billing")).toHaveLength(1);
   });
+
+  it("gets the table of the part vectors on the next migrate where the extension was updated since", async () => {
+    // As on a database whose extension had no half-precision type when it was migrated: the
+    // table of the sections, and none of the parts.
+    await drizzleOf(database).execute(sql`drop table part_vectors`);
+    expect(await fillPartVectors(database, KEY, 100)).toBe(0);
+    await migrateDatabase(testDatabase.connectionString);
+    expect(await fillPartVectors(database, KEY, 100)).toBe(1);
+    expect(await partsOf("blob-billing")).toHaveLength(1);
+  });
 });
