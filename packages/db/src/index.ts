@@ -281,10 +281,13 @@ export {
 export {
   blobsWithoutVectors,
   fillPartVectors,
+  HEAD_PART,
+  type HeadlessSkill,
   PART_SECTIONS,
   type SectionMatch,
   type SectionVector,
   searchSectionVectors,
+  skillBodiesWithoutHead,
   supportsSectionVectors,
   type VectorKey,
   vectorsOfTexts,

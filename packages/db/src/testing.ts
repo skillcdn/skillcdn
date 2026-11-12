@@ -1,9 +1,11 @@
 import { randomBytes } from "node:crypto";
+import { HEAD_SECTION } from "@skillcdn/core";
 import { eq } from "drizzle-orm";
 import { Client } from "pg";
 import { createDatabase, type Database, drizzleOf, poolOf } from "./client.js";
 import { migrateDatabase } from "./migrate.js";
-import { partVectors, snapshots } from "./schema.js";
+import { HEAD_PART } from "./queries/vectors.js";
+import { partVectors, sectionVectors, snapshots } from "./schema.js";
 
 // Support for integration tests, here and in other workspaces: `@skillcdn/db/testing`.
 
@@ -101,6 +103,21 @@ export async function dropPartVectors(database: Database): Promise<number> {
   const removed = await drizzleOf(database)
     .delete(partVectors)
     .returning({ part: partVectors.part });
+  return removed.length;
+}
+
+/**
+ * For a test of the sweep that gives them (ADR-0094): leaves the database as one is on the day
+ * a skill is given a head, with the vectors of the sections of its skills and no head. Says how
+ * many heads went; the parts they were go with them.
+ */
+export async function dropHeadVectors(database: Database): Promise<number> {
+  const db = drizzleOf(database);
+  const removed = await db
+    .delete(sectionVectors)
+    .where(eq(sectionVectors.section, HEAD_SECTION))
+    .returning({ blobSha: sectionVectors.blobSha });
+  await db.delete(partVectors).where(eq(partVectors.part, HEAD_PART));
   return removed.length;
 }
 

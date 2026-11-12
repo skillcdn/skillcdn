@@ -3,14 +3,16 @@ import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   type BlobStore,
+  type EmbeddedEntry,
   type Embedder,
   embeddable,
+  embeddedTextsOf,
   embeddingBatches,
-  embeddingTextOf,
+  HEAD_SECTION,
+  headTextOf,
   meaningSearchOf,
   SECTIONING_VERSION,
   type SnapshotIndex,
-  sectionsOf,
 } from "@skillcdn/core";
 import type { MemorySectionVector, MemoryVectors } from "@skillcdn/reader";
 
@@ -36,7 +38,10 @@ export function vectorKeyOf(embedder: Pick<Embedder, "model" | "dimensions">): V
   };
 }
 
-/** The vectors of one body: its sections in order, each with its vector; none for a body without prose. */
+/**
+ * The vectors of one body: a skill's head first (ADR-0094), then its sections in order, each
+ * with its vector; none for a body without prose that is no skill.
+ */
 export type CachedSections = readonly MemorySectionVector[];
 
 export interface VectorCache {
@@ -73,7 +78,11 @@ export function keyDirectoryOf(key: VectorKey): string {
   return `${safe}-${digest}-${key.dimensions}-v${key.sectioningVersion}`;
 }
 
-/** A body's sections as one file: the sections, and their vectors one after another as 32-bit floats. */
+/**
+ * A body's sections as one file: the sections, and their vectors one after another as 32-bit
+ * floats. A skill's head is marked as one, and the sections are numbered without it, so that a
+ * file written before a skill had a head reads as it did.
+ */
 export function serializeSections(key: VectorKey, sections: CachedSections): string {
   const all = new Float32Array(sections.length * key.dimensions);
   sections.forEach((section, at) => {
@@ -82,10 +91,11 @@ export function serializeSections(key: VectorKey, sections: CachedSections): str
   return JSON.stringify({
     version: FILE_VERSION,
     dimensions: key.dimensions,
-    sections: sections.map(({ heading, offset, length }) => ({
+    sections: sections.map(({ heading, offset, length, section }) => ({
       heading: [...heading],
       offset,
       length,
+      ...(section === HEAD_SECTION ? { head: true } : {}),
     })),
     vectors: Buffer.from(all.buffer, all.byteOffset, all.byteLength).toString("base64"),
   });
@@ -114,11 +124,13 @@ export function parseSections(json: unknown, key: VectorKey): CachedSections | u
     bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
   );
   const read: MemorySectionVector[] = [];
+  /** The number of the next section that is no head. */
+  let numbered = 0;
   for (const [at, section] of (sections as readonly unknown[]).entries()) {
     if (typeof section !== "object" || section === null) {
       return undefined;
     }
-    const { heading, offset, length } = section as Record<string, unknown>;
+    const { heading, offset, length, head } = section as Record<string, unknown>;
     if (
       !Array.isArray(heading) ||
       !heading.every((part): part is string => typeof part === "string") ||
@@ -127,7 +139,8 @@ export function parseSections(json: unknown, key: VectorKey): CachedSections | u
       offset < 0 ||
       typeof length !== "number" ||
       !Number.isSafeInteger(length) ||
-      length < 0
+      length < 0 ||
+      (head !== undefined && head !== true)
     ) {
       return undefined;
     }
@@ -135,9 +148,16 @@ export function parseSections(json: unknown, key: VectorKey): CachedSections | u
       heading,
       offset,
       length,
-      section: at,
+      section: head === true ? HEAD_SECTION : numbered,
       vector: floats.subarray(at * key.dimensions, (at + 1) * key.dimensions),
     });
+    if (head !== true) {
+      numbered += 1;
+    }
+  }
+  // One head at most: a file with two is not one of ours.
+  if (read.filter((section) => section.section === HEAD_SECTION).length > 1) {
+    return undefined;
   }
   return read;
 }
@@ -262,14 +282,21 @@ export function createVectorSet(options: {
   /** The bodies the latest index names: what a finished pass keeps, whichever index it began from. */
   let latest: ReadonlySet<string> = new Set();
 
-  /** The vectors of one body, or nothing when the set was stopped before the body was whole. */
+  /**
+   * The vectors of one body, or nothing when the set was stopped before the body was whole:
+   * what is kept of it already stays, and what it lacks is embedded, a skill's head for one
+   * (ADR-0094) where the body was embedded before a skill had one.
+   */
   const embedBody = async (
-    title: string | undefined,
+    entry: EmbeddedEntry,
     text: string,
+    kept: CachedSections | undefined,
   ): Promise<CachedSections | undefined> => {
-    const sections = sectionsOf(text);
-    const texts = sections.map((section) => embeddingTextOf(title, section, text));
-    const made: MemorySectionVector[] = [];
+    const sections = embeddedTextsOf(entry, text).filter(
+      (item) => kept?.some((section) => section.section === item.section) !== true,
+    );
+    const texts = sections.map((section) => section.text);
+    const made: MemorySectionVector[] = [...(kept ?? [])];
     for (const batch of embeddingBatches(texts, embedder)) {
       if (stopped) {
         return undefined;
@@ -282,12 +309,22 @@ export function createVectorSet(options: {
         const section = sections[at];
         const vector = embedded.vectors[position];
         if (section !== undefined && vector !== undefined) {
-          made.push({ ...section, section: at, vector });
+          made.push({
+            heading: section.heading,
+            offset: section.offset,
+            length: section.length,
+            section: section.section,
+            vector,
+          });
         }
       });
     }
-    return made;
+    return made.sort((a, b) => a.section - b.section);
   };
+
+  /** Whether what is kept of a body is all it is embedded as: a skill's is, once it has the head. */
+  const whole = (entry: EmbeddedEntry, kept: CachedSections): boolean =>
+    headTextOf(entry) === undefined || kept.some((section) => section.section === HEAD_SECTION);
 
   const plural = (count: number, word: string): string =>
     `${count} ${count === 1 ? word : `${word}s`}`;
@@ -300,15 +337,16 @@ export function createVectorSet(options: {
     },
     async update(index, blobs) {
       const allowed = meaningSearchOf(index.entries);
-      const wanted = new Map<string, string | undefined>();
+      const wanted = new Map<string, EmbeddedEntry>();
       for (const entry of index.entries) {
+        // A body a skill and a document both hold is embedded as the skill, which has the head.
         if (
           entry.visible &&
           embeddable(entry) &&
           allowed(entry.path) &&
-          !wanted.has(entry.blobSha)
+          (!wanted.has(entry.blobSha) || entry.kind === "skill")
         ) {
-          wanted.set(entry.blobSha, entry.title ?? entry.name);
+          wanted.set(entry.blobSha, entry);
         }
       }
       latest = new Set(wanted.keys());
@@ -317,17 +355,28 @@ export function createVectorSet(options: {
       let sections = 0;
       let unkept: Error | undefined;
       let failed: Error | undefined;
-      const missing: { readonly blobSha: string; readonly title: string | undefined }[] = [];
+      const missing: {
+        readonly blobSha: string;
+        readonly entry: EmbeddedEntry;
+        readonly kept: CachedSections | undefined;
+      }[] = [];
       try {
-        for (const [blobSha, title] of wanted) {
-          if (vectors.has(blobSha) || pending.has(blobSha)) {
+        for (const [blobSha, entry] of wanted) {
+          if (pending.has(blobSha)) {
             continue;
           }
-          const kept = await cache.read(key, blobSha);
-          if (kept === undefined) {
-            missing.push({ blobSha, title });
-          } else {
+          const held = vectors.get(blobSha);
+          if (held !== undefined && whole(entry, held)) {
+            continue;
+          }
+          const kept = held ?? (await cache.read(key, blobSha));
+          if (kept !== undefined && held === undefined) {
+            // What is kept answers searches at once, a skill's sections before its head is there.
             vectors.set(blobSha, kept);
+          }
+          if (kept === undefined || !whole(entry, kept)) {
+            missing.push({ blobSha, entry, kept });
+          } else {
             cached += 1;
           }
         }
@@ -345,7 +394,9 @@ export function createVectorSet(options: {
             if (next === undefined || stopped || failed !== undefined) {
               return;
             }
-            if (pending.has(next.blobSha) || vectors.has(next.blobSha)) {
+            // Another pass may have made the body whole since this one listed it.
+            const held = vectors.get(next.blobSha);
+            if (pending.has(next.blobSha) || (held !== undefined && whole(next.entry, held))) {
               continue;
             }
             pending.add(next.blobSha);
@@ -354,13 +405,14 @@ export function createVectorSet(options: {
               if (text === undefined) {
                 continue;
               }
-              const made = await embedBody(next.title, text);
+              const before = held ?? next.kept;
+              const made = await embedBody(next.entry, text, before);
               if (made === undefined) {
                 return;
               }
               vectors.set(next.blobSha, made);
               embedded += 1;
-              sections += made.length;
+              sections += made.length - (before?.length ?? 0);
               // How far it is and how long is left, every little while: on a machine without
               // a GPU a pack of thousands of sections takes hours, and said nothing meanwhile.
               // Said before the vectors are kept, which another body may finish during.

@@ -1,3 +1,4 @@
+import { type Clock, type Embedder, HEAD_SECTION, headTextOf } from "@skillcdn/core";
 import {
   type Database,
   deleteEmbeddingsOutsideKey,
@@ -6,11 +7,13 @@ import {
   type JobQueue,
   listSnapshotsToEmbed,
   type SnapshotToEmbed,
+  skillBodiesWithoutHead,
   type VectorKey,
 } from "@skillcdn/db";
 import type { EmbeddingScope } from "../config/config.js";
 import type { Logger } from "../logger.js";
 import type { OperatorLists } from "../operator/lists.js";
+import { embedTexts, type TextToEmbed } from "./embed-snapshot.js";
 import { EMBED_QUEUE, embedJobSchema, embedPriority, sendEmbedJob } from "./queues.js";
 
 // The sweep (ADR-0064, ADR-0065, ADR-0072, ADR-0073): what is served and not yet embedded under
@@ -22,7 +25,9 @@ import { EMBED_QUEUE, embedJobSchema, embedPriority, sendEmbedJob } from "./queu
 // it now, in place. Once nothing is left to embed, what was embedded under other keys goes. And
 // the vectors of the parts of what is embedded are made where they are missing (ADR-0092): a
 // slice writes them with the sections, so this is for the sections written before there were
-// any, and it calls no model.
+// any, and it calls no model. Last, where the sweep is given an embedder, the skills embedded
+// before a skill had a head are given theirs (ADR-0094): one short text a skill, for a few
+// minutes a sweep, once whatever is to be embedded was queued.
 
 /** How many snapshots one sweep queues: the rest wait for the next, an hour on. */
 export const SWEEP_LIMIT = 1000;
@@ -31,6 +36,9 @@ export const WAITING_LIMIT = 5000;
 /** How many bodies one statement makes part vectors for, and how many statements one sweep runs. */
 export const PART_FILL_BODIES = 500;
 export const PART_FILL_STEPS = 200;
+/** How many skills the sweep gives a head at once, and for how long one sweep goes on doing it. */
+export const HEAD_FILL_BODIES = 50;
+export const HEAD_FILL_MS = 5 * 60_000;
 
 /** The ranks the sweep queues: every one but the rest. */
 type SweptTier = Exclude<EmbedTier, "other">;
@@ -45,6 +53,18 @@ export interface SweepDependencies {
   readonly lists: Pick<OperatorLists, "listedKeys">;
   readonly logger: Logger;
   readonly limit?: number | undefined;
+  /**
+   * What gives a head to the skills embedded before a skill had one (ADR-0094): the embedder,
+   * the time, which bounds it, and the signal that stops it before its next call. Left out,
+   * the sweep embeds nothing itself, as the one a worker runs while it starts.
+   */
+  readonly heads?:
+    | {
+        readonly embedder: Embedder;
+        readonly clock: Clock;
+        readonly signal?: AbortSignal | undefined;
+      }
+    | undefined;
 }
 
 export interface SweepOutcome {
@@ -60,6 +80,8 @@ export interface SweepOutcome {
   readonly dropped: { readonly vectors: number; readonly snapshots: number } | undefined;
   /** How many bodies this sweep made the part vectors of, from their section vectors. */
   readonly parts: number;
+  /** How many skills embedded before a skill had a head this sweep gave theirs. */
+  readonly heads: number;
 }
 
 const sameKey = (a: VectorKey, b: VectorKey): boolean =>
@@ -124,6 +146,56 @@ async function fillParts(deps: SweepDependencies): Promise<number> {
   return filled;
 }
 
+/**
+ * Gives a head to the skills whose sections have vectors under the key and whose head has none
+ * (ADR-0094), a batch at a time for as long as a sweep gives it, and says to how many. Whether
+ * a body is embedded at all stays the slice's to decide: only what it embedded is given a head
+ * here. An embedder that fails ends the fill for this sweep, and never the sweep; the next goes
+ * on, as it does with what the time did not reach.
+ */
+async function fillHeads(deps: SweepDependencies): Promise<number> {
+  if (deps.heads === undefined) {
+    return 0;
+  }
+  const { embedder, clock, signal } = deps.heads;
+  const started = clock.now().getTime();
+  let filled = 0;
+  try {
+    while (signal?.aborted !== true && clock.now().getTime() - started < HEAD_FILL_MS) {
+      const bodies = await skillBodiesWithoutHead(deps.database, deps.key, HEAD_FILL_BODIES);
+      const heads = bodies.flatMap((body): TextToEmbed[] => {
+        const text = headTextOf({ kind: "skill", ...body });
+        return text === undefined
+          ? []
+          : [
+              {
+                blobSha: body.blobSha,
+                section: HEAD_SECTION,
+                heading: [],
+                offset: 0,
+                length: 0,
+                text,
+              },
+            ];
+      });
+      const written = await embedTexts(
+        { database: deps.database, embedder },
+        deps.key,
+        heads,
+        signal,
+      );
+      filled += written?.sections ?? 0;
+      // A step that wrote nothing would find the same bodies again.
+      if (bodies.length < HEAD_FILL_BODIES || (written?.sections ?? 0) === 0) {
+        break;
+      }
+    }
+  } catch (error) {
+    deps.logger.warn({ err: error, filled }, "the heads of skills were not all embedded");
+  }
+  return filled;
+}
+
 export async function sweepEmbeddings(deps: SweepDependencies): Promise<SweepOutcome> {
   const { database, jobs, key } = deps;
   const tiers: Record<SweptTier, number> = { listed: 0, declared: 0, skills: 0 };
@@ -133,7 +205,7 @@ export async function sweepEmbeddings(deps: SweepDependencies): Promise<SweepOut
     if (parts > 0) {
       deps.logger.info({ model: key.model, parts }, "part vectors made");
     }
-    return { pending: 0, queued: 0, reordered: 0, tiers, dropped: undefined, parts };
+    return { pending: 0, queued: 0, reordered: 0, tiers, dropped: undefined, parts, heads: 0 };
   }
   const pending = await listSnapshotsToEmbed(database, key, deps.limit ?? SWEEP_LIMIT, {
     visibility: deps.scope === "public" ? "public" : undefined,
@@ -161,9 +233,19 @@ export async function sweepEmbeddings(deps: SweepDependencies): Promise<SweepOut
   // so that a search never finds less than it did before the change.
   const dropped =
     pending.length === 0 ? await deleteEmbeddingsOutsideKey(database, key) : undefined;
+  const heads = await fillHeads(deps);
   deps.logger.info(
-    { model: key.model, pending: pending.length, queued, reordered, ...tiers, dropped, parts },
+    {
+      model: key.model,
+      pending: pending.length,
+      queued,
+      reordered,
+      ...tiers,
+      dropped,
+      parts,
+      heads,
+    },
     "embeddings swept",
   );
-  return { pending: pending.length, queued, reordered, tiers, dropped, parts };
+  return { pending: pending.length, queued, reordered, tiers, dropped, parts, heads };
 }

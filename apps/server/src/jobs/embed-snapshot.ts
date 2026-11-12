@@ -2,13 +2,14 @@ import { createHash } from "node:crypto";
 import {
   type BlobStore,
   type Clock,
+  type EmbeddedEntry,
+  type EmbeddedText,
   type Embedder,
   type EmbedLimits,
   embeddable,
+  embeddedTextsOf,
   embeddingBatches,
-  embeddingTextOf,
   meaningSearchOf,
-  sectionsOf,
   type UsageSink,
 } from "@skillcdn/core";
 import {
@@ -47,7 +48,8 @@ import { decideEmbedding, type EmbedPolicy } from "./scope.js";
 // only for a search or a request (ADR-0072), and a manifest may keep the documents it governs
 // out; the bounds are measured in the bytes of the bodies. A section whose text has a vector
 // under the model is given that one and costs no call (ADR-0093): a file that changed in one
-// place is a new body whose other sections say what they said.
+// place is a new body whose other sections say what they said. A skill is embedded as its
+// sections and as its head, its name and description as one text (ADR-0094).
 
 /**
  * How long one job embeds before it hands the rest back, whatever the server: a few minutes, so
@@ -131,38 +133,54 @@ const sameKey = (a: VectorKey, b: VectorKey): boolean =>
   a.sectioningVersion === b.sectioningVersion;
 
 /** What a section's vector is found by again: the hash of the text the model is given for it. */
-const textHashOf = (text: string): string => createHash("sha256").update(text).digest("hex");
+export const textHashOf = (text: string): string => createHash("sha256").update(text).digest("hex");
+
+/** What the vectors of some texts took: how many were written, the tokens read, and how many cost no call. */
+export interface EmbeddedTexts {
+  readonly sections: number;
+  readonly tokens: number;
+  readonly reused: number;
+}
+
+/** A text to embed, and the body and the place its vector is written under. */
+export interface TextToEmbed extends EmbeddedText {
+  readonly blobSha: string;
+}
 
 /**
- * Writes the vectors of every section of one body together: the one its text has already under
- * the model, where it has one, and the embedder's for the rest; `undefined`, with nothing
- * written, when `signal` stops it before one of its calls to the embedder.
+ * Writes the vectors of these texts together: the one a text has already under the model, where
+ * it has one, and the embedder's for the rest; `undefined`, with nothing written, when `signal`
+ * stops it before one of its calls to the embedder. The texts of one body are given together,
+ * since a body with any vector counts as done.
  */
-async function embedBody(
-  deps: EmbedSliceDependencies,
+export async function embedTexts(
+  deps: Pick<EmbedSliceDependencies, "database" | "embedder">,
   key: VectorKey,
-  blobSha: string,
-  title: string | undefined,
-  text: string,
-  signal: AbortSignal | undefined,
-): Promise<
-  { readonly sections: number; readonly tokens: number; readonly reused: number } | undefined
-> {
-  const sections = sectionsOf(text);
-  if (sections.length === 0) {
+  wanted: readonly TextToEmbed[],
+  signal?: AbortSignal | undefined,
+): Promise<EmbeddedTexts | undefined> {
+  if (wanted.length === 0) {
     return { sections: 0, tokens: 0, reused: 0 };
   }
-  const texts = sections.map((section) => embeddingTextOf(title, section, text));
+  const texts = wanted.map((item) => item.text);
   const hashes = texts.map(textHashOf);
   const known = await vectorsOfTexts(deps.database, key, hashes);
   const items: SectionVector[] = [];
   const write = (at: number, vector: Float32Array | undefined): void => {
-    const section = sections[at];
-    if (section !== undefined && vector !== undefined) {
-      items.push({ ...section, blobSha, section: at, vector, textHash: hashes[at] });
+    const item = wanted[at];
+    if (item !== undefined && vector !== undefined) {
+      items.push({
+        blobSha: item.blobSha,
+        section: item.section,
+        heading: item.heading,
+        offset: item.offset,
+        length: item.length,
+        vector,
+        textHash: hashes[at],
+      });
     }
   };
-  /** The sections whose text has no vector yet, by their place in the body. */
+  /** The texts that have no vector yet, by their place among those given. */
   const unknown: number[] = [];
   hashes.forEach((hash, at) => {
     const vector = known.get(hash);
@@ -193,6 +211,23 @@ async function embedBody(
   }
   await writeSectionVectors(deps.database, key, items);
   return { sections: items.length, tokens, reused };
+}
+
+/** Writes the vectors of everything one body is embedded as: its sections, and a skill's head before them. */
+function embedBody(
+  deps: EmbedSliceDependencies,
+  key: VectorKey,
+  blobSha: string,
+  entry: EmbeddedEntry,
+  text: string,
+  signal: AbortSignal | undefined,
+): Promise<EmbeddedTexts | undefined> {
+  return embedTexts(
+    deps,
+    key,
+    embeddedTextsOf(entry, text).map((item) => ({ ...item, blobSha })),
+    signal,
+  );
 }
 
 /** The bytes already embedded that a bound counts, read once per slice where the bound exists. */
@@ -319,14 +354,7 @@ export async function embedSnapshotSlice(
           "the body of an entry is not stored, so it is not embedded",
         );
       } else {
-        const done = await embedBody(
-          deps,
-          key,
-          entry.blobSha,
-          entry.title ?? entry.name ?? undefined,
-          text,
-          signal,
-        );
+        const done = await embedBody(deps, key, entry.blobSha, entry, text, signal);
         if (done === undefined) {
           interrupted = true;
           break;

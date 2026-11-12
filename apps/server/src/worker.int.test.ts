@@ -5,6 +5,9 @@ import {
   type Embedder,
   type EmbedLimits,
   type Entitlements,
+  embeddedTextsOf,
+  HEAD_SECTION,
+  headTextOf,
   parseAddress,
   SECTIONING_VERSION,
   sectionsOf,
@@ -23,6 +26,7 @@ import {
   recordSnapshotEmbedding,
   type SectionVector,
   type SnapshotScope,
+  searchSectionVectors,
   servedEntries,
   usageDayOf,
   type VectorKey,
@@ -31,6 +35,7 @@ import {
 import {
   createTestDatabase,
   DEV_DATABASE_URL,
+  dropHeadVectors,
   dropPartVectors,
   type TestDatabase,
 } from "@skillcdn/db/testing";
@@ -220,7 +225,10 @@ async function snapshotOf(repo: string): Promise<SnapshotScope & { readonly repo
   return { accountId: known.accountId, snapshotId: snapshot.id, repoId: known.id };
 }
 
-/** What the worker is expected to embed of a snapshot: its searchable Markdown bodies, each once. */
+/**
+ * What the worker is expected to embed of a snapshot: its searchable Markdown bodies, each once,
+ * as their sections and, for a skill, its head (ADR-0094).
+ */
 async function expectedOf(scope: SnapshotScope) {
   const entries = (await servedEntries(testDatabase.database, scope)).filter(
     (entry) => entry.searchable && (entry.kind === "markdown" || entry.kind === "skill"),
@@ -230,7 +238,7 @@ async function expectedOf(scope: SnapshotScope) {
   for (const entry of entries) {
     if (!bodies.has(entry.blobSha)) {
       const text = await blobs.read(entry.blobSha);
-      bodies.set(entry.blobSha, text === undefined ? 0 : sectionsOf(text).length);
+      bodies.set(entry.blobSha, text === undefined ? 0 : embeddedTextsOf(entry, text).length);
     }
   }
   return {
@@ -315,6 +323,14 @@ describe("the worker", () => {
     const texts = fake.calls.slice(before).flat();
     expect(new Set(texts).size).toBe(texts.length);
     expect(logs.some((line) => line.msg === "a job failed" && line.attempt === 0)).toBe(true);
+    // A skill is embedded as its sections and as its head, its name and description (ADR-0094).
+    const heads = (await servedEntries(testDatabase.database, scope)).flatMap((entry) => {
+      const head = headTextOf(entry);
+      return head === undefined ? [] : [head];
+    });
+    expect(heads).toHaveLength(1);
+    expect(heads[0]).toMatch(/^[a-z0-9-]+: \S/);
+    expect(texts).toContain(heads[0]);
   });
 
   it("skips a job for another model, and one whose snapshot is not ready", async () => {
@@ -414,6 +430,7 @@ describe("the worker", () => {
       dropped: { vectors: 1, snapshots: 1 },
       // Every body was written with the vectors of its parts: none is left to make.
       parts: 0,
+      heads: 0,
     });
     expect(await blobsWithoutVectors(testDatabase.database, OLD_KEY, [old.blobSha])).toEqual(
       new Set([old.blobSha]),
@@ -444,6 +461,70 @@ describe("the worker", () => {
       logger,
     });
     expect(again.parts).toBe(0);
+  });
+
+  it("gives the skills embedded before a skill had a head theirs, where the sweep has an embedder (ADR-0094)", async () => {
+    const lists = new OperatorLists({ database: testDatabase.database, clock });
+    const sweep = (heads?: { embedder: Embedder; clock: typeof clock; signal?: AbortSignal }) =>
+      sweepEmbeddings({
+        database: testDatabase.database,
+        jobs,
+        key: KEY,
+        scope: "all",
+        lists,
+        logger,
+        ...(heads === undefined ? {} : { heads }),
+      });
+    // As a deployment's vectors are on the day a skill is given a head: sections, no heads.
+    const dropped = await dropHeadVectors(testDatabase.database);
+    expect(dropped).toBeGreaterThan(1);
+    const before = fake.calls.length;
+    // The sweep a worker runs while it starts has no embedder, and embeds nothing.
+    expect(await sweep()).toMatchObject({ pending: 0, heads: 0 });
+    expect(fake.calls.length).toBe(before);
+    // A signal that stopped the job stops the fill before its first call.
+    const stopped = new AbortController();
+    stopped.abort();
+    expect(await sweep({ embedder: fake.embedder, clock, signal: stopped.signal })).toMatchObject({
+      heads: 0,
+    });
+    expect(fake.calls.length).toBe(before);
+    // An embedder that fails ends the fill, and never the sweep.
+    fake.fail(new InferenceError("inference_unreachable", "the server is away"));
+    expect(await sweep({ embedder: fake.embedder, clock })).toMatchObject({ pending: 0, heads: 0 });
+    expect(logs.some((line) => line.msg === "the heads of skills were not all embedded")).toBe(
+      true,
+    );
+    // The sweep the queue runs gives every such skill its head: one short text each, and
+    // nothing of the sections, which have their vectors.
+    const filled = await sweep({ embedder: fake.embedder, clock });
+    expect(filled).toMatchObject({ pending: 0, queued: 0, heads: dropped });
+    const texts = fake.calls.slice(before).flat();
+    expect(texts).toHaveLength(dropped);
+    const scope = await snapshotOf("multi-skill");
+    const heads = (await servedEntries(testDatabase.database, scope)).flatMap((entry) => {
+      const head = headTextOf(entry);
+      return head === undefined || !entry.searchable ? [] : [head];
+    });
+    expect(heads.length).toBeGreaterThan(1);
+    for (const head of heads) {
+      expect(texts).toContain(head);
+    }
+    // Each is found by meaning again, and the next sweep has none left to give.
+    const [first] = heads;
+    const nearest = await searchSectionVectors(
+      testDatabase.database,
+      scope,
+      "",
+      KEY,
+      vectorOf(first ?? ""),
+      1,
+    );
+    expect(nearest[0]).toMatchObject({ section: HEAD_SECTION, heading: [], length: 0 });
+    expect(nearest[0]?.similarity).toBeCloseTo(1, 5);
+    const calls = fake.calls.length;
+    expect(await sweep({ embedder: fake.embedder, clock })).toMatchObject({ heads: 0 });
+    expect(fake.calls.length).toBe(calls);
   });
 
   it("gives a section the vector its text has already, and embeds only what an edit says anew (ADR-0093)", async () => {

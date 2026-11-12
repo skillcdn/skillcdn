@@ -3,8 +3,8 @@ import { fileURLToPath } from "node:url";
 import {
   type Embedder,
   embeddable,
+  embeddedTextsOf,
   embeddingBatches,
-  embeddingTextOf,
   type FindResult,
   type IndexLimits,
   meaningSearchOf,
@@ -12,7 +12,6 @@ import {
   type RepoPath,
   type Reranker,
   ROOT_PATH,
-  sectionsOf,
 } from "@skillcdn/core";
 import { INDEX_LIMIT_DEFAULTS, readDirectory } from "@skillcdn/indexer";
 import {
@@ -362,8 +361,8 @@ async function memorySearchOf(
       if (text === undefined) {
         continue;
       }
-      const cut = sectionsOf(text);
-      const texts = cut.map((section) => embeddingTextOf(entry.title ?? entry.name, section, text));
+      const cut = embeddedTextsOf(entry, text);
+      const texts = cut.map((section) => section.text);
       const made: MemorySectionVector[] = [];
       for (const batch of embeddingBatches(texts, meaning.embedder)) {
         const answer = await meaning.embedder.embed(
@@ -374,7 +373,13 @@ async function memorySearchOf(
           const section = cut[at];
           const vector = answer.vectors[position];
           if (section !== undefined && vector !== undefined) {
-            made.push({ ...section, section: at, vector });
+            made.push({
+              heading: section.heading,
+              offset: section.offset,
+              length: section.length,
+              section: section.section,
+              vector,
+            });
           }
         });
       }

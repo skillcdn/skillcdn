@@ -1,5 +1,5 @@
-import type { DocumentSection } from "@skillcdn/core";
-import { and, eq, inArray, notExists, sql } from "drizzle-orm";
+import { type DocumentSection, HEAD_SECTION } from "@skillcdn/core";
+import { type AnyColumn, and, eq, inArray, notExists, type SQL, sql } from "drizzle-orm";
 import { type Database, type Drizzle, drizzleOf } from "../client.js";
 import { indexEntries, partVectors, sectionVectors } from "../schema.js";
 import { BY_PATH, FINDABLE, inSnapshot, underPath } from "./entries.js";
@@ -22,7 +22,7 @@ export interface VectorKey {
 /** The vector of one section of one body, to write. */
 export interface SectionVector extends DocumentSection {
   readonly blobSha: string;
-  /** The section's index in the order `sectionsOf` lists them, from 0. */
+  /** The section's index in the order `sectionsOf` lists them, from 0; `HEAD_SECTION` for a skill's head. */
   readonly section: number;
   readonly vector: Float32Array;
   /**
@@ -47,6 +47,23 @@ export interface SectionMatch extends DocumentSection {
  * of it is a migration that empties `part_vectors`, for the sweep to make them again.
  */
 export const PART_SECTIONS = 8;
+
+/**
+ * The part a skill's head is, alone (ADR-0094): before the parts of the body's sections, so that
+ * what a skill is named and says it does is compared as it stands, and not as a ninth of a mean.
+ */
+export const HEAD_PART = -1;
+
+/** The part a section stands in, by its number: the head a part of its own, the sections after it {@link PART_SECTIONS} to a part. */
+export const partOfSection = (section: SQL | AnyColumn): SQL<number> =>
+  sql<number>`case when ${section} < 0 then ${sql.raw(String(HEAD_PART))} else ${section} / ${sql.raw(String(PART_SECTIONS))} end`;
+
+/**
+ * What a search by meaning compares of an entry (ADR-0094): every section of its body, and the
+ * head only where the entry is a skill. A body two entries hold, a skill here and a document
+ * there, has the head for the skill alone: a head names no passage for a document to show.
+ */
+export const COMPARED = sql`(${sectionVectors.section} >= 0 or ${indexEntries.kind} = 'skill')`;
 
 const WRITE_BATCH_SIZE = 100;
 const HASH_BATCH_SIZE = 1000;
@@ -144,8 +161,9 @@ export async function writeSectionVectors(
 /**
  * Makes the vectors of the parts of these bodies from the vectors of their sections under the
  * key, as they are stored: the mean of every {@link PART_SECTIONS} consecutive sections, which
- * the cosine distance reads as their direction whatever its length. A part already there is
- * made again, so that a body whose sections were added to has the mean of them all.
+ * the cosine distance reads as their direction whatever its length, and a skill's head as a part
+ * of its own. A part already there is made again, so that a body whose sections were added to
+ * has the mean of them all.
  */
 async function writePartVectors(
   db: Drizzle,
@@ -159,7 +177,7 @@ async function writePartVectors(
     await db.execute(sql`
       insert into ${partVectors} (blob_sha, model, dimensions, sectioning_version, part, sections, vector)
       select v.blob_sha, v.model, v.dimensions, v.sectioning_version,
-        v.section / ${sql.raw(String(PART_SECTIONS))}, count(*)::integer, avg(v.vector)::halfvec
+        ${partOfSection(sql.raw("v.section"))}, count(*)::integer, avg(v.vector)::halfvec
       from ${sectionVectors} v
       where v.blob_sha = any(${sql.param(blobShas.slice(start, start + HASH_BATCH_SIZE))}::text[])
         and v.model = ${key.model} and v.dimensions = ${key.dimensions}
@@ -200,6 +218,53 @@ export async function fillPartVectors(
   const blobShas = without.rows.map((row) => row.blob_sha);
   await writePartVectors(db, key, blobShas);
   return blobShas.length;
+}
+
+/** A skill's body whose sections have vectors and whose head has none, with what the head says. */
+export interface HeadlessSkill {
+  readonly blobSha: string;
+  readonly name: string;
+  readonly description: string | null;
+}
+
+/**
+ * The bodies of findable skills that have vectors under the key and none of the head, at most
+ * `limit`, in the order of their hashes: what the worker's sweep gives a head, on a database
+ * whose skills were embedded before a head was (ADR-0094). A body whose sections have no vector
+ * is not here: whether it is embedded at all is the slice's to decide, which writes the head
+ * with the sections. A body several entries hold is named once, as the first of them names it.
+ */
+export async function skillBodiesWithoutHead(
+  database: Database,
+  key: VectorKey,
+  limit: number,
+): Promise<HeadlessSkill[]> {
+  const db = drizzleOf(database);
+  if (!(await present(db))) {
+    return [];
+  }
+  const ofKey = sql`v.model = ${key.model} and v.dimensions = ${key.dimensions}
+    and v.sectioning_version = ${key.sectioningVersion}`;
+  const found = await db.execute<{ blob_sha: string; name: string; description: string | null }>(
+    sql`
+    select distinct on (e.blob_sha) e.blob_sha, e.name, e.description
+    from ${indexEntries} e
+    where e.kind = 'skill' and e.visible and e.search is not null
+      and e.name is not null and e.name <> ''
+      and exists (
+        select 1 from ${sectionVectors} v where v.blob_sha = e.blob_sha and ${ofKey})
+      and not exists (
+        select 1 from ${sectionVectors} v
+        where v.blob_sha = e.blob_sha and ${ofKey} and v.section = ${HEAD_SECTION})
+    order by e.blob_sha, e.snapshot_id, e.path
+    limit ${limit}
+  `,
+  );
+  return found.rows.map((row) => ({
+    blobSha: row.blob_sha,
+    name: row.name,
+    description: row.description,
+  }));
 }
 
 /**
@@ -272,9 +337,10 @@ export async function blobsWithoutVectors(
 /**
  * The sections of a mount nearest to a query vector, best first and at most `limit`: an exact
  * comparison with every section of the mount's searchable entries that has a vector under the
- * key, by cosine distance, with no approximate index (ADR-0064). Two entries of the same bytes
- * are two results. Ties are broken by path, then section, so that the order is the same on
- * every database. The query must have the key's dimensions.
+ * key, and with the head of every skill among them (ADR-0094), by cosine distance, with no
+ * approximate index (ADR-0064). Two entries of the same bytes are two results. Ties are broken
+ * by path, then section, so that the order is the same on every database. The query must have
+ * the key's dimensions.
  */
 export async function searchSectionVectors(
   database: Database,
@@ -302,7 +368,15 @@ export async function searchSectionVectors(
     })
     .from(indexEntries)
     .innerJoin(sectionVectors, eq(sectionVectors.blobSha, indexEntries.blobSha))
-    .where(and(inSnapshot(scope), underPath(indexEntries.path, mountPath), FINDABLE, underKey(key)))
+    .where(
+      and(
+        inSnapshot(scope),
+        underPath(indexEntries.path, mountPath),
+        FINDABLE,
+        underKey(key),
+        COMPARED,
+      ),
+    )
     .orderBy(distance, BY_PATH, sectionVectors.section)
     .limit(limit);
   return rows.map((row) => ({

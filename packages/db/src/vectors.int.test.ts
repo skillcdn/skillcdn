@@ -1,4 +1,5 @@
 import {
+  HEAD_SECTION,
   type HostRepository,
   type IndexEntry,
   NO_LICENSE,
@@ -15,6 +16,7 @@ import {
   type Database,
   ensureSnapshot,
   fillPartVectors,
+  HEAD_PART,
   migrateDatabase,
   PART_SECTIONS,
   purgeRepositoryIndex,
@@ -23,6 +25,7 @@ import {
   type SnapshotScope,
   saveRepository,
   searchSectionVectors,
+  skillBodiesWithoutHead,
   supportsSectionVectors,
   type VectorKey,
   vectorsOfTexts,
@@ -459,6 +462,117 @@ describe("section vectors", () => {
     expect(await partsOf("blob-gone")).toEqual([]);
     // A body another repository still holds keeps both.
     expect(await partsOf("blob-billing")).toHaveLength(1);
+  });
+
+  it("keep a skill's head before its sections, a part of its own, compared for the skill alone (ADR-0094)", async () => {
+    const head = (blobSha: string, vector: number[]): SectionVector => ({
+      blobSha,
+      section: HEAD_SECTION,
+      heading: [],
+      offset: 0,
+      length: 0,
+      vector: Float32Array.from(vector),
+    });
+    const skill = [
+      head("blob-skill", [1, 0, 0, 0]),
+      ...vectorsOf("blob-skill", TOUR, [
+        [0, 0, 0, 1],
+        [0, 0, 1, 0],
+      ]),
+    ];
+    expect(await writeSectionVectors(database, KEY, skill)).toBe(3);
+    // The head is a part alone, and the mean of the sections is of the sections.
+    expect(await partsOf("blob-skill")).toEqual([
+      { part: HEAD_PART, sections: 1, vector: [1, 0, 0, 0] },
+      { part: 0, sections: 2, vector: [0, 0, 0.5, 0.5] },
+    ]);
+    const scope = await readySnapshot([
+      entry({
+        path: "skills/tour/SKILL.md",
+        blobSha: "blob-skill",
+        kind: "skill",
+        skillDir: "skills/tour",
+        name: "tour",
+        description: "Shows people around.",
+      }),
+      // The same bytes as a document of another folder: the head is the skill's alone.
+      entry({ path: "notes/tour.md", blobSha: "blob-skill" }),
+    ]);
+    const found = await search(scope, "", [1, 0, 0, 0]);
+    expect(
+      found.map((match) => [match.path, match.section, Number(match.similarity.toFixed(3))]),
+    ).toEqual([
+      ["skills/tour/SKILL.md", HEAD_SECTION, 1],
+      ["notes/tour.md", 0, 0],
+      ["notes/tour.md", 1, 0],
+      ["skills/tour/SKILL.md", 0, 0],
+      ["skills/tour/SKILL.md", 1, 0],
+    ]);
+    // A head names no passage.
+    expect(found[0]).toMatchObject({ heading: [], offset: 0, length: 0 });
+  });
+
+  it("name the skills embedded before a skill had a head, until each has its own (ADR-0094)", async () => {
+    // Sections and no head, as a deployment's skills are on the day a skill is given one.
+    const old = vectorsOf("blob-old-skill", TOUR, [
+      [0, 1, 0, 0],
+      [0, 0, 1, 0],
+    ]);
+    expect(await writeSectionVectors(database, KEY, old)).toBe(2);
+    await readySnapshot([
+      entry({
+        path: "skills/old/SKILL.md",
+        blobSha: "blob-old-skill",
+        kind: "skill",
+        skillDir: "skills/old",
+        name: "old",
+        description: "Was here before.",
+      }),
+      // A skill none of whose sections has a vector is the slice's to embed, head and all.
+      entry({
+        path: "skills/new/SKILL.md",
+        blobSha: "blob-unembedded",
+        kind: "skill",
+        skillDir: "skills/new",
+        name: "new",
+        description: "Not embedded yet.",
+      }),
+      // A document has no head to lack, and a skill nobody can find is given none.
+      entry({ path: "docs/billing.md", blobSha: "blob-billing" }),
+      entry({
+        path: "skills/hidden/SKILL.md",
+        blobSha: "blob-tour",
+        kind: "skill",
+        skillDir: "skills/hidden",
+        name: "hidden",
+        description: "Listed, not searched.",
+        searchable: false,
+      }),
+    ]);
+    expect(await skillBodiesWithoutHead(database, KEY, 10)).toEqual([
+      { blobSha: "blob-old-skill", name: "old", description: "Was here before." },
+    ]);
+    expect(await skillBodiesWithoutHead(database, { ...KEY, model: "another-model" }, 10)).toEqual(
+      [],
+    );
+    // The head written, its part is made beside the part of the sections, and it is named no more.
+    expect(
+      await writeSectionVectors(database, KEY, [
+        {
+          blobSha: "blob-old-skill",
+          section: HEAD_SECTION,
+          heading: [],
+          offset: 0,
+          length: 0,
+          vector: Float32Array.from([0, 0, 0, 1]),
+        },
+      ]),
+    ).toBe(1);
+    expect(await partsOf("blob-old-skill")).toEqual([
+      { part: HEAD_PART, sections: 1, vector: [0, 0, 0, 1] },
+      { part: 0, sections: 2, vector: [0, 0.5, 0.5, 0] },
+    ]);
+    expect(await skillBodiesWithoutHead(database, KEY, 10)).toEqual([]);
   });
 
   it("get their table on the next migrate where it is missing and the extension is there", async () => {

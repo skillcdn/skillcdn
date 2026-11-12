@@ -992,6 +992,13 @@ describe("the search by meaning in the admin API (ADR-0064)", () => {
         written: 0,
         skipped: 1,
       });
+      // A skill's head comes in under the number of the head (ADR-0094), and nothing below it.
+      const head = { ...item, section: -1, heading: [], length: 0 };
+      expect(await (await post({ ...KEY, items: [head] })).json()).toEqual({
+        written: 1,
+        skipped: 0,
+      });
+      expect((await post({ ...KEY, items: [{ ...item, section: -2 }] })).status).toBe(400);
       expect((await post({ ...KEY, model: "another-model", items: [item] })).status).toBe(409);
       expect((await post({ ...KEY, items: [{ ...item, vector: [1, 0] }] })).status).toBe(400);
       const unknown = await post({ ...KEY, items: [{ ...item, blobSha: "f".repeat(40) }] });

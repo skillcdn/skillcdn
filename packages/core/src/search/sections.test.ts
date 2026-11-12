@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { queryLexemes } from "./lexemes.js";
 import {
+  embeddedTextsOf,
   embeddingTextOf,
+  HEAD_SECTION,
+  headTextOf,
   MAX_EXCERPT_LENGTH,
   matchSections,
   SECTIONING_VERSION,
@@ -114,6 +117,82 @@ describe("embeddingTextOf", () => {
     const [section] = sectionsOf(text);
     if (section === undefined) throw new Error("one section");
     expect(embeddingTextOf(undefined, section, text)).toBe("Title: The body.");
+  });
+});
+
+describe("headTextOf", () => {
+  it("writes a skill's name and description as one text", () => {
+    expect(
+      headTextOf({ kind: "skill", name: "deck-from-outline", description: "Drafts a slide deck." }),
+    ).toBe("deck-from-outline: Drafts a slide deck.");
+    expect(
+      headTextOf({ kind: "skill", name: " deck ", description: "Drafts\n  a slide\tdeck. " }),
+    ).toBe("deck: Drafts a slide deck.");
+    expect(headTextOf({ kind: "skill", name: "deck", description: "  " })).toBe("deck");
+    expect(headTextOf({ kind: "skill", name: "deck", description: null })).toBe("deck");
+  });
+
+  it("has none for a skill without a name, and for what is no skill", () => {
+    expect(headTextOf({ kind: "skill", name: " ", description: "Drafts a deck." })).toBeUndefined();
+    expect(headTextOf({ kind: "skill", description: "Drafts a deck." })).toBeUndefined();
+    expect(
+      headTextOf({ kind: "markdown", name: "deck", title: "Deck", description: "Drafts a deck." }),
+    ).toBeUndefined();
+  });
+});
+
+describe("embeddedTextsOf", () => {
+  const SKILL = [
+    "---",
+    "name: deck-from-outline",
+    "description: Drafts a slide deck.",
+    "---",
+    "# Deck from an outline",
+    "",
+    "Read the outline first.",
+    "",
+    "## Slides",
+    "",
+    "One idea a slide.",
+    "",
+  ].join("\n");
+
+  it("gives a skill its head before its sections, under the number of the head", () => {
+    const texts = embeddedTextsOf(
+      { kind: "skill", name: "deck-from-outline", description: "Drafts a slide deck." },
+      SKILL,
+    );
+    expect(texts.map((item) => [item.section, item.text])).toEqual([
+      [HEAD_SECTION, "deck-from-outline: Drafts a slide deck."],
+      [0, "deck-from-outline > Deck from an outline: Read the outline first."],
+      [1, "deck-from-outline > Deck from an outline > Slides: One idea a slide."],
+    ]);
+    // The head names no passage of the body.
+    expect(texts[0]).toMatchObject({ heading: [], offset: 0, length: 0 });
+    expect(
+      texts.slice(1).map(({ heading, offset, length }) => ({ heading, offset, length })),
+    ).toEqual(sectionsOf(SKILL));
+  });
+
+  it("gives a document its sections under its title, and no head", () => {
+    const texts = embeddedTextsOf(
+      { kind: "markdown", title: "Handbook", description: "Drafts a slide deck." },
+      SKILL,
+    );
+    expect(texts.map((item) => [item.section, item.text])).toEqual([
+      [0, "Handbook > Deck from an outline: Read the outline first."],
+      [1, "Handbook > Deck from an outline > Slides: One idea a slide."],
+    ]);
+  });
+
+  it("gives a skill whose body is blank its head alone, and a blank document nothing", () => {
+    const blank = "---\nname: deck\ndescription: Drafts a deck.\n---\n\n";
+    expect(
+      embeddedTextsOf({ kind: "skill", name: "deck", description: "Drafts a deck." }, blank).map(
+        (item) => item.section,
+      ),
+    ).toEqual([HEAD_SECTION]);
+    expect(embeddedTextsOf({ kind: "markdown", title: "Deck" }, blank)).toEqual([]);
   });
 });
 

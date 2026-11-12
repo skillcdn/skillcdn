@@ -1,5 +1,6 @@
 import {
   type Embedder,
+  HEAD_SECTION,
   type IndexEntry,
   type IndexLimits,
   NO_LICENSE,
@@ -134,6 +135,45 @@ describe("an index in memory with vectors", () => {
     ).toHaveLength(1);
     // Without vectors there is no search by meaning at all.
     expect(createMemoryIndex({ index, blobs }).store.searchByMeaning).toBeUndefined();
+  });
+
+  it("compares a skill's head for the skill, and for no document that holds the same bytes (ADR-0094)", async () => {
+    const head: MemorySectionVector = {
+      heading: [],
+      offset: 0,
+      length: 0,
+      section: HEAD_SECTION,
+      vector: Float32Array.from([1, 0, 0, 0]),
+    };
+    const withSkill: SnapshotIndex = {
+      ...index,
+      entries: [
+        entry({
+          path: "skills/fees/SKILL.md",
+          blobSha: "s",
+          kind: "skill",
+          skillDir: "skills/fees",
+          name: "fees",
+          description: "Charges a late fee.",
+        }),
+        entry({ path: "notes/fees.md", blobSha: "s", title: "Fees" }),
+      ],
+    };
+    const memory = createMemoryIndex({
+      index: withSkill,
+      blobs,
+      vectors: vectorsOf({ s: [head, vectorOf("Steps", [0, 1, 0, 0])] }),
+    });
+    const found = await memory.store.searchByMeaning?.(
+      ROOT_PATH,
+      Float32Array.from([1, 0, 0, 0]),
+      10,
+    );
+    expect(found?.map((match) => [match.path, match.section, match.similarity])).toEqual([
+      ["skills/fees/SKILL.md", HEAD_SECTION, 1],
+      ["notes/fees.md", 0, 0],
+      ["skills/fees/SKILL.md", 0, 0],
+    ]);
   });
 
   it("counts the embedding as the worker counts it: findable documents a manifest does not keep out", async () => {

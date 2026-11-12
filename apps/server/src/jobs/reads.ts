@@ -2,6 +2,7 @@ import {
   type BlobStore,
   type Clock,
   formatAddress,
+  HEAD_SECTION,
   parseAddress,
   SECTIONING_VERSION,
 } from "@skillcdn/core";
@@ -92,7 +93,8 @@ const importSchema = vectorKeySchema.extend({
       z.object({
         /** The git blob hash of the body the section is of, as the index names it. */
         blobSha: z.string().regex(/^[0-9a-f]{40}$/),
-        section: z.number().int().min(0),
+        /** A section's place in its body, from 0; -1 for the head of a skill (ADR-0094). */
+        section: z.number().int().min(HEAD_SECTION),
         heading: z.array(z.string().max(1000)).max(100),
         offset: z.number().int().min(0),
         length: z.number().int().min(0),

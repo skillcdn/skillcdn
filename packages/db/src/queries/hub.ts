@@ -12,7 +12,8 @@ import {
 } from "../schema.js";
 import { BY_PATH, type EntryRecord, entryColumns, FINDABLE, rankOf, VISIBLE } from "./entries.js";
 import {
-  PART_SECTIONS,
+  COMPARED,
+  partOfSection,
   partVectorsPresent,
   underKey,
   type VectorKey,
@@ -231,7 +232,7 @@ function meaningStatement(
   const ofPicked =
     picked === undefined
       ? undefined
-      : sql`(${sectionVectors.blobSha}, ${sectionVectors.section} / ${sql.raw(String(PART_SECTIONS))}) in (select * from unnest(${sql.param(picked.map((part) => part.blobSha))}::text[], ${sql.param(picked.map((part) => part.part))}::integer[]))`;
+      : sql`(${sectionVectors.blobSha}, ${partOfSection(sectionVectors.section)}) in (select * from unnest(${sql.param(picked.map((part) => part.blobSha))}::text[], ${sql.param(picked.map((part) => part.part))}::integer[]))`;
   return runner
     .select({
       ...entryColumns,
@@ -244,7 +245,7 @@ function meaningStatement(
     })
     .from(indexEntries)
     .innerJoin(sectionVectors, eq(sectionVectors.blobSha, indexEntries.blobSha))
-    .where(and(among(snapshotIds), FINDABLE, underKey(key), ofPicked))
+    .where(and(among(snapshotIds), FINDABLE, underKey(key), COMPARED, ofPicked))
     .orderBy(distance, indexEntries.snapshotId, BY_PATH, sectionVectors.section)
     .limit(limit);
 }
@@ -299,8 +300,8 @@ export async function searchHubEntries(
  * The sections of the packs' findable entries nearest to a query vector, best first and at most
  * `limit`, with the entry each belongs to, in two steps (ADR-0092): the `parts` parts of their
  * bodies nearest the query are picked by the vector of each part, the mean of its sections',
- * and the sections of those parts are then compared exactly, as `searchSectionVectors` compares
- * inside one mount (ADR-0064). The two statements share the one time limit. A body without part
+ * a skill's head being a part of its own (ADR-0094), and the sections of those parts are then
+ * compared exactly, as `searchSectionVectors` compares inside one mount (ADR-0064). The two statements share the one time limit. A body without part
  * vectors yet is not found, which is the sweep's to end (`fillPartVectors`). With `parts` at 0,
  * and in a database that keeps no part vectors, every section of the packs is compared.
  */

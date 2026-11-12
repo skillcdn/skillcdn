@@ -488,7 +488,11 @@ export const sectionVectors = pgTable(
     dimensions: integer().notNull(),
     /** `SECTIONING_VERSION` of @skillcdn/core when the sections were cut. */
     sectioningVersion: integer().notNull(),
-    /** The section's index in the order `sectionsOf` lists them, from 0. */
+    /**
+     * The section's index in the order `sectionsOf` lists them, from 0; -1 (`HEAD_SECTION` of
+     * @skillcdn/core) for the head of a skill, its name and description as one text
+     * (ADR-0094), which names no passage: its heading is empty and its length 0.
+     */
     section: integer().notNull(),
     /** The heading path, outermost first; empty for the text before the first heading. */
     heading: jsonb().$type<string[]>().notNull(),
@@ -546,7 +550,10 @@ export const partVectors = pgTable(
     model: text().notNull(),
     dimensions: integer().notNull(),
     sectioningVersion: integer().notNull(),
-    /** The part's place in the body, from 0: the sections from `part * PART_SECTIONS` on. */
+    /**
+     * The part's place in the body, from 0: the sections from `part * PART_SECTIONS` on; -1
+     * (`HEAD_PART`) for the head of a skill, a part of its own (ADR-0094).
+     */
     part: integer().notNull(),
     /** How many sections the vector is the mean of. */
     sections: integer().notNull(),

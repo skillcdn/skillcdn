@@ -527,7 +527,12 @@ export {
 } from "./search/outline.js";
 export {
   type DocumentSection,
+  type EmbeddedEntry,
+  type EmbeddedText,
+  embeddedTextsOf,
   embeddingTextOf,
+  HEAD_SECTION,
+  headTextOf,
   MAX_EXCERPT_LENGTH,
   MAX_MATCHED_SECTIONS,
   type MatchedSection,

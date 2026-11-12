@@ -259,6 +259,68 @@ export function embeddingTextOf(
   return body.length === 0 ? head.join(" > ") : `${head.join(" > ")}: ${body}`;
 }
 
+/**
+ * The number a skill's head is kept under among the vectors of its body, before every section
+ * (ADR-0094). A section's number is its place in the order `sectionsOf` lists them, from 0; the
+ * head is none of them, since the front-matter it is made of belongs to no section.
+ */
+export const HEAD_SECTION = -1;
+
+/** What a body is embedded from: what kind of entry it is, and how the index names it. */
+export interface EmbeddedEntry {
+  readonly kind: string;
+  readonly name?: string | null | undefined;
+  readonly title?: string | null | undefined;
+  readonly description?: string | null | undefined;
+}
+
+/** One text a body is embedded as: where it stands in the body, and what the model is given. */
+export interface EmbeddedText extends DocumentSection {
+  /** The section's place in the order `sectionsOf` lists them, from 0; `HEAD_SECTION` for a skill's head. */
+  readonly section: number;
+  readonly text: string;
+}
+
+/**
+ * A skill's head as it is embedded (ADR-0094): its name and its description, the two things a
+ * skill is chosen by, as one text, `name: description`. The sections of its body say how the
+ * work is done, and a question about what a skill is for is nearer to this than to any of them.
+ * `undefined` for an entry that is no skill, and for a skill without a name.
+ */
+export function headTextOf(entry: EmbeddedEntry): string | undefined {
+  if (entry.kind !== "skill") {
+    return undefined;
+  }
+  const flat = (part: string | null | undefined): string =>
+    (part ?? "").replaceAll(/\s+/g, " ").trim();
+  const name = flat(entry.name);
+  const description = flat(entry.description);
+  if (name.length === 0) {
+    return undefined;
+  }
+  return description.length === 0 ? name : `${name}: ${description}`;
+}
+
+/**
+ * Every text a body is embedded as, for the search by meaning (ADR-0064): a skill's head first
+ * ({@link headTextOf}), which names no passage, then each section of the body as
+ * {@link embeddingTextOf} writes it under the entry's title, a skill's name where it has none.
+ * The one rule wherever the vectors are made, in a deployment and by the command, so that both
+ * find the same things by the same query.
+ */
+export function embeddedTextsOf(entry: EmbeddedEntry, text: string): EmbeddedText[] {
+  const title = entry.title ?? entry.name ?? undefined;
+  const head = headTextOf(entry);
+  const sections = sectionsOf(text).map((section, at) => ({
+    ...section,
+    section: at,
+    text: embeddingTextOf(title, section, text),
+  }));
+  return head === undefined
+    ? sections
+    : [{ heading: [], offset: 0, length: 0, section: HEAD_SECTION, text: head }, ...sections];
+}
+
 /** The characters of the heading at the start of a section: one line, two for a setext heading, none for a preamble. */
 function headingLineLength(body: string, headed: boolean): number {
   if (!headed) {

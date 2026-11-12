@@ -1,4 +1,5 @@
 import {
+  HEAD_SECTION,
   type HostRepository,
   type IndexEntry,
   NO_LICENSE,
@@ -405,6 +406,92 @@ describe("the words and the meaning across every pack", () => {
     ]);
     // With every section compared the long document's other sections follow, as before.
     expect(await ask(0)).toHaveLength(2 * PART_SECTIONS + 3);
+  });
+
+  it("picks a skill by its head, a part of its own, and gives the head to no document (ADR-0094)", async () => {
+    // The sections of a skill say how the work is done; what it is named and says it does
+    // is what is asked for, and stands in its head.
+    const pack = await repository(
+      "head-skill",
+      commit("b"),
+      [
+        entry({
+          path: "skills/deck/SKILL.md",
+          blobSha: "hub-skill",
+          kind: "skill",
+          skillDir: "skills/deck",
+          name: "deck",
+          description: "Drafts a slide deck.",
+        }),
+        entry({ path: "docs/other.md", blobSha: "hub-other", title: "Other" }),
+      ],
+      {
+        "hub-skill": "# Deck\n\nRead the outline.\n\n## Slides\n\nOne idea a slide.\n",
+        "hub-other": "# Other\n\nElse.\n",
+      },
+    );
+    // The same bytes as a document of another pack.
+    const copy = await repository(
+      "head-copy",
+      commit("c"),
+      [entry({ path: "notes/deck.md", blobSha: "hub-skill", title: "Deck" })],
+      { "hub-skill": "# Deck\n\nRead the outline.\n\n## Slides\n\nOne idea a slide.\n" },
+    );
+    await writeSectionVectors(database, KEY, [
+      {
+        blobSha: "hub-skill",
+        section: HEAD_SECTION,
+        heading: [],
+        offset: 0,
+        length: 0,
+        vector: Float32Array.from([1, 0, 0, 0]),
+      },
+      ...[0, 1].map((section) => ({
+        blobSha: "hub-skill",
+        section,
+        heading: ["Deck"],
+        offset: section * 20,
+        length: 20,
+        vector: Float32Array.from([0, 1, 0, 0]),
+      })),
+      {
+        blobSha: "hub-other",
+        section: 0,
+        heading: ["Other"],
+        offset: 0,
+        length: 10,
+        vector: Float32Array.from([0.6, 0, 0.8, 0]),
+      },
+    ]);
+    const ids = (await listSearchablePacks(database))
+      .filter((found) => [pack.repoId, copy.repoId].includes(found.repoId))
+      .map((found) => found.snapshotId);
+    const ask = async (parts: number) =>
+      (
+        await searchHubSectionVectors(
+          database,
+          ids,
+          KEY,
+          Float32Array.from([1, 0, 0, 0]),
+          30,
+          5000,
+          parts,
+        )
+      ).map((match) => `${match.path} ${match.section}`);
+    // One part: the head, for the skill and not for the document that holds the same bytes.
+    expect(await ask(1)).toEqual([`skills/deck/SKILL.md ${HEAD_SECTION}`]);
+    // Two: the other document as well, and nothing of the sections the head stands before.
+    expect(await ask(2)).toEqual([`skills/deck/SKILL.md ${HEAD_SECTION}`, "docs/other.md 0"]);
+    // With every section compared the same two lead, then the two sections of each entry
+    // of the body, the skill and the document, and no head for the document.
+    const every = await ask(0);
+    expect(every.slice(0, 2)).toEqual([`skills/deck/SKILL.md ${HEAD_SECTION}`, "docs/other.md 0"]);
+    expect([...every.slice(2)].sort()).toEqual([
+      "notes/deck.md 0",
+      "notes/deck.md 1",
+      "skills/deck/SKILL.md 0",
+      "skills/deck/SKILL.md 1",
+    ]);
   });
 
   it("finds a body by meaning once its part vectors are filled, where its sections came first", async () => {

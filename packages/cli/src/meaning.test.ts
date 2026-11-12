@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
-import { SECTIONING_VERSION } from "@skillcdn/core";
+import { HEAD_SECTION, SECTIONING_VERSION } from "@skillcdn/core";
 import { describe, expect, it } from "vitest";
 import { type CliIo, EXIT_CONFIG, EXIT_UNREADABLE, EXIT_USAGE, runCli } from "./cli.js";
 import {
@@ -245,6 +245,30 @@ describe("the vector cache", () => {
     expect(parseSections(JSON.parse(serializeSections(key, [])), key)).toEqual([]);
   });
 
+  it("keeps a skill's head as one, and numbers the sections without it (ADR-0094)", () => {
+    const head = {
+      heading: [],
+      offset: 0,
+      length: 0,
+      section: HEAD_SECTION,
+      vector: Float32Array.from([0, 0, 0, 1]),
+    };
+    const file = JSON.parse(serializeSections(key, [head, ...sections])) as {
+      sections: Record<string, unknown>[];
+    };
+    expect(file.sections.map((section) => section.head)).toEqual([true, undefined, undefined]);
+    expect(parseSections(file, key)).toEqual([head, ...sections]);
+    // A file that says anything else of a head, or has two, is not one of ours.
+    const marked = (at: number, value: unknown) => ({
+      ...file,
+      sections: file.sections.map((section, index) =>
+        index === at ? { ...section, head: value } : section,
+      ),
+    });
+    expect(parseSections(marked(0, "yes"), key)).toBeUndefined();
+    expect(parseSections(marked(1, true), key)).toBeUndefined();
+  });
+
   it("reads nothing from a file of another shape, another model's dimensions, or vectors that do not add up", () => {
     const file = JSON.parse(serializeSections(key, sections)) as Record<string, unknown>;
     expect(parseSections(null, key)).toBeUndefined();
@@ -307,6 +331,64 @@ describe("skillcdn embed", () => {
     expect(found.out()).toContain("Ranked by words and meaning.");
     expect(search.documents).toEqual([]);
     expect(search.queries).toEqual(["overdue penalty"]);
+  });
+
+  it("embeds a skill's name and description as its head, and adds it to vectors kept before a skill had one (ADR-0094)", async () => {
+    const root = await repository({
+      "skills/dunning/SKILL.md":
+        "---\nname: dunning\ndescription: Reminds a customer of an unpaid invoice.\n---\n# Steps\n\nRead the ledger first.\n",
+      "docs/guide.md": FILES["docs/guide.md"],
+    });
+    const cacheDir = await mkdtemp(join(tmpdir(), "skillcdn-cache-"));
+    const cache = createFileVectorCache(cacheDir, process.pid);
+    const HEAD = "dunning: Reminds a customer of an unpaid invoice.";
+    const server = pretendServer();
+    const first = harness({ environment: ENVIRONMENT, fetch: server.fetch, vectors: cache });
+    expect(await runCli(["embed", root], first.io)).toBe(0);
+    // The head is one text of its own, beside the section under the skill's name.
+    expect(server.documents).toContain(HEAD);
+    expect(server.documents).toContain("dunning > Steps: Read the ledger first.");
+
+    // As the vectors of a skill were kept before a skill had a head: its sections alone.
+    const key: VectorKey = {
+      model: MODEL,
+      dimensions: DIMENSIONS,
+      sectioningVersion: SECTIONING_VERSION,
+    };
+    const names = await readdir(join(cacheDir, "vectors", keyDirectoryOf(key)));
+    let stripped = 0;
+    for (const name of names) {
+      const sha = basename(name, ".json");
+      const kept = await cache.read(key, sha);
+      if (kept?.some((section) => section.section === HEAD_SECTION)) {
+        await cache.write(
+          key,
+          sha,
+          kept.filter((section) => section.section !== HEAD_SECTION),
+        );
+        stripped += 1;
+      }
+    }
+    expect(stripped).toBe(1);
+
+    // The next run embeds the head alone, and keeps it with the sections that were there.
+    const again = pretendServer();
+    const second = harness({ environment: ENVIRONMENT, fetch: again.fetch, vectors: cache });
+    expect(await runCli(["embed", root], second.io)).toBe(0);
+    expect(again.documents).toEqual([HEAD]);
+    expect(second.out()).toMatch(/^Embedded 1 document \(1 section\) of /);
+    const third = pretendServer();
+    const last = harness({ environment: ENVIRONMENT, fetch: third.fetch, vectors: cache });
+    expect(await runCli(["embed", root], last.io)).toBe(0);
+    expect(third.documents).toEqual([]);
+    expect(last.out()).toContain("Nothing to embed: the 2 documents of ");
+
+    // What a skill says it does finds it by meaning, whatever its steps say.
+    const search = pretendServer();
+    const found = harness({ environment: ENVIRONMENT, fetch: search.fetch, vectors: cache });
+    expect(await runCli(["find", root, "reminds", "customer"], found.io)).toBe(0);
+    expect(found.out()).toContain("dunning");
+    expect(search.documents).toEqual([]);
   });
 
   it("says how far it is and about how long is left, every little while", async () => {

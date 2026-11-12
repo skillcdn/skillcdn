@@ -274,8 +274,18 @@ export function createWorker(config: WorkerConfig, ports: WorkerPorts): Worker {
         }
         return { queues };
       }
-      const sweep = () =>
-        sweepEmbeddings({ database, jobs, key, scope: config.scope, lists, logger });
+      // The sweep the queue runs gives the skills embedded before a skill had a head theirs
+      // (ADR-0094), under the job's signal; the one at start embeds nothing, and holds no start.
+      const sweep = (signal?: AbortSignal) =>
+        sweepEmbeddings({
+          database,
+          jobs,
+          key,
+          scope: config.scope,
+          lists,
+          logger,
+          ...(signal === undefined ? {} : { heads: { embedder, clock, signal } }),
+        });
       // The first sweep runs here, in the process that starts, before it takes a slice, and never
       // through the queue: while a deployment rolls, the worker of the build before still takes
       // jobs, and would queue the backfill in the order of its own build (ADR-0073). It puts what
@@ -334,7 +344,7 @@ export function createWorker(config: WorkerConfig, ports: WorkerPorts): Worker {
       await jobs.work(
         SWEEP_QUEUE,
         { concurrency: 1, pollSeconds },
-        handling(sweepJobSchema, sweep),
+        handling(sweepJobSchema, (_job, queued) => sweep(queued.signal)),
       );
       await jobs.schedule(SWEEP_QUEUE, SWEEP_SCHEDULE, {}, SWEEP_SCHEDULE_KEY);
       queues.push(EMBED_QUEUE, SWEEP_QUEUE);

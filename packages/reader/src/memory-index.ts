@@ -4,6 +4,7 @@ import {
   type DocumentSection,
   type EmbeddingProgress,
   embeddable,
+  HEAD_SECTION,
   type IndexEntry,
   type IndexStore,
   type LexemeFrequencies,
@@ -44,7 +45,7 @@ export interface MemoryIndexOptions {
 
 /** The vector of one section of a body, as the cache of the command keeps it. */
 export interface MemorySectionVector extends DocumentSection {
-  /** The section's index in the order `sectionsOf` lists them, from 0. */
+  /** The section's index in the order `sectionsOf` lists them, from 0; `HEAD_SECTION` for a skill's head. */
   readonly section: number;
   readonly vector: Float32Array;
 }
@@ -172,9 +173,10 @@ export function createMemoryIndex(options: MemoryIndexOptions): ReadableIndex {
             vector: Float32Array,
             limit: number,
           ): Promise<readonly MeaningMatch[]> {
-            // Every section of the findable entries under the mount, compared exactly, as the
-            // deployment's database compares them (ADR-0064); two entries of the same bytes are
-            // two results; ties by path, then section, so that the order is the same everywhere.
+            // Every section of the findable entries under the mount, and the head of every
+            // skill among them (ADR-0094), compared exactly, as the deployment's database
+            // compares them (ADR-0064); two entries of the same bytes are two results; ties by
+            // path, then section, so that the order is the same everywhere.
             const nearest: MeaningMatch[] = [];
             for (const entry of served) {
               if (!entry.searchable || !underPath(entry.path, mountPath)) {
@@ -186,6 +188,10 @@ export function createMemoryIndex(options: MemoryIndexOptions): ReadableIndex {
               }
               for (const section of sections) {
                 if (section.vector.length !== vector.length) {
+                  continue;
+                }
+                // A head names no passage: it stands for a skill, never for a document.
+                if (section.section === HEAD_SECTION && entry.kind !== "skill") {
                   continue;
                 }
                 nearest.push({
