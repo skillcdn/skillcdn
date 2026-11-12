@@ -297,12 +297,15 @@ export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies):
       if (query instanceof Response) {
         return query;
       }
-      c.header("cache-control", searchCacheControl(dependencies.searchCacheMs ?? 0));
       try {
-        return c.json(hubBody(await hub.search(query.query, query.limit ?? HUB_DEFAULT_LIMIT)));
+        const body = hubBody(await hub.search(query.query, query.limit ?? HUB_DEFAULT_LIMIT));
+        c.header("cache-control", searchCacheControl(dependencies.searchCacheMs ?? 0));
+        return c.json(body);
       } catch (error) {
+        // Only an answer is for a cache to keep: a search that was refused, ran out of time or
+        // failed may answer the next one who asks.
+        c.header("cache-control", "no-store");
         if (error instanceof SearchBusyError) {
-          c.header("cache-control", "no-store");
           c.header("retry-after", String(error.retryAfterSeconds));
           return c.json(errorBody(error.code, error.message), 503);
         }
