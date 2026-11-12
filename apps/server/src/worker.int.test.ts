@@ -446,6 +446,67 @@ describe("the worker", () => {
     expect(again.parts).toBe(0);
   });
 
+  it("gives a section the vector its text has already, and embeds only what an edit says anew (ADR-0093)", async () => {
+    const written = [
+      "# Handbook",
+      "How the office runs, for whoever starts on a Monday.",
+      "## Hours",
+      "Nine to five on weekdays, and nobody is expected on a holiday.",
+      "## Leave",
+      "Ask a week ahead.",
+      "",
+    ].join("\n\n");
+    // The same file after an edit of one section: another body, whose other sections say what
+    // they said.
+    const edited = written.replace("Ask a week ahead.", "Ask two weeks ahead, in writing.");
+    const sections = sectionsOf(written).length;
+    expect(sections).toBeGreaterThan(1);
+    expect(sectionsOf(edited)).toHaveLength(sections);
+    const deps = {
+      database: testDatabase.database,
+      blobs: createBlobStore(testDatabase.database),
+      embedder: fake.embedder,
+      policy: { scope: "all" as const, entitlements: allowEverything },
+      lists: noLists,
+      usage: discardUsage,
+      clock,
+      logger,
+    };
+    const embed = async (text: string) => {
+      const made = await madeSnapshot({
+        visibility: "public",
+        files: [{ path: "docs/handbook.md", text }],
+      });
+      return embedSnapshotSlice(deps, {
+        ...made.scope,
+        repoId: made.repo.repoId,
+        commitSha: made.commit,
+        key: KEY,
+        reason: "designated",
+      });
+    };
+    const calls = fake.calls.length;
+    expect(await embed(written)).toMatchObject({
+      status: "embedded",
+      bodies: 1,
+      sections,
+      reused: 0,
+    });
+    expect(await embed(edited)).toMatchObject({
+      status: "embedded",
+      bodies: 1,
+      sections,
+      reused: sections - 1,
+    });
+    // The model was given every section of the first body, and of the second the one that changed.
+    const texts = fake.calls.slice(calls).flat();
+    expect(texts).toHaveLength(sections + 1);
+    expect(texts.at(-1)).toContain("Ask two weeks ahead, in writing.");
+    // A body all of whose sections were read before costs no call at all.
+    expect(await embed(`${edited}\n`)).toMatchObject({ sections, reused: sections, tokens: 0 });
+    expect(fake.calls.slice(calls).flat()).toHaveLength(sections + 1);
+  });
+
   it("makes the part vectors at start where nothing is embedded any more (ADR-0092)", async () => {
     expect(await dropPartVectors(testDatabase.database)).toBeGreaterThan(0);
     // A worker of a deployment whose scope embeds nothing: what was embedded before is searched.
@@ -995,14 +1056,18 @@ describe("the worker", () => {
       },
     };
     // The second body takes two calls of four sections at most; the queue stops the slice during
-    // its first.
-    const parts = Array.from({ length: 6 }, (_, at) => `## Part ${at}\n\nText ${at}.\n`);
+    // its first. The texts are this test's own: one that was embedded before costs no call
+    // (ADR-0093), and a slice without a call is not stopped at one.
+    const parts = Array.from(
+      { length: 6 },
+      (_, at) => `## Stopped part ${at}\n\nText ${at} of a slice the queue stops.\n`,
+    );
     const made = await madeSnapshot({
       visibility: "public",
       files: [
-        { path: "docs/a.md", text: "# A\n\nFirst.\n" },
+        { path: "docs/a.md", text: "# Stopped A\n\nFirst of a slice the queue stops.\n" },
         { path: "docs/b.md", text: parts.join("\n") },
-        { path: "docs/c.md", text: "# C\n\nThird.\n" },
+        { path: "docs/c.md", text: "# Stopped C\n\nThird of a slice the queue stops.\n" },
       ],
     });
     const deps = {

@@ -25,6 +25,11 @@ export interface SectionVector extends DocumentSection {
   /** The section's index in the order `sectionsOf` lists them, from 0. */
   readonly section: number;
   readonly vector: Float32Array;
+  /**
+   * SHA-256, in hex, of the text the model was given for the section, where the writer knows it:
+   * what {@link vectorsOfTexts} finds the vector by, for another body that says the same.
+   */
+  readonly textHash?: string | undefined;
 }
 
 /** A section of one of a mount's entries, as near to the query as the search found it. */
@@ -122,6 +127,7 @@ export async function writeSectionVectors(
         offset: item.offset,
         length: item.length,
         vector: item.vector,
+        textHash: item.textHash ?? null,
       }));
       const inserted = await tx
         .insert(sectionVectors)
@@ -194,6 +200,43 @@ export async function fillPartVectors(
   const blobShas = without.rows.map((row) => row.blob_sha);
   await writePartVectors(db, key, blobShas);
   return blobShas.length;
+}
+
+/**
+ * The vectors already made of these texts under the key's model and dimensions, by the hash of
+ * each text (ADR-0093): one for every hash that has any, whichever body it was written for and
+ * under whichever version of the sectioning rules, since a vector is the model's reading of the
+ * text and of nothing else. What the caller embeds is then the texts that are not here.
+ */
+export async function vectorsOfTexts(
+  database: Database,
+  key: VectorKey,
+  textHashes: Iterable<string>,
+): Promise<Map<string, Float32Array>> {
+  const db = drizzleOf(database);
+  const found = new Map<string, Float32Array>();
+  const unique = [...new Set(textHashes)];
+  for (let start = 0; start < unique.length; start += HASH_BATCH_SIZE) {
+    const rows = await db
+      .selectDistinctOn([sectionVectors.textHash], {
+        textHash: sectionVectors.textHash,
+        vector: sectionVectors.vector,
+      })
+      .from(sectionVectors)
+      .where(
+        and(
+          eq(sectionVectors.model, key.model),
+          eq(sectionVectors.dimensions, key.dimensions),
+          inArray(sectionVectors.textHash, unique.slice(start, start + HASH_BATCH_SIZE)),
+        ),
+      );
+    for (const row of rows) {
+      if (row.textHash !== null) {
+        found.set(row.textHash, row.vector);
+      }
+    }
+  }
+  return found;
 }
 
 /**

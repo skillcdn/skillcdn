@@ -25,6 +25,7 @@ import {
   searchSectionVectors,
   supportsSectionVectors,
   type VectorKey,
+  vectorsOfTexts,
   writeSectionVectors,
   writeSnapshotIndex,
 } from "./index.js";
@@ -350,6 +351,50 @@ describe("section vectors", () => {
     expect(await purgeRepositoryIndex(database, repoId ?? "")).toMatchObject({ snapshots: 1 });
     expect(await blobsWithoutVectors(database, KEY, ["blob-own", "blob-billing"])).toEqual(
       new Set(["blob-own"]),
+    );
+  });
+
+  it("are found again by the hash of the text they were made from, under the model that made them (ADR-0093)", async () => {
+    const hashed: SectionVector[] = [
+      {
+        blobSha: "blob-hashed",
+        section: 0,
+        heading: ["One"],
+        offset: 0,
+        length: 10,
+        vector: Float32Array.from([0, 0, 1, 0]),
+        textHash: "hash-of-one",
+      },
+      {
+        blobSha: "blob-hashed",
+        section: 1,
+        heading: ["Two"],
+        offset: 10,
+        length: 10,
+        vector: Float32Array.from([0, 0, 0, 1]),
+        textHash: "hash-of-two",
+      },
+    ];
+    expect(await writeSectionVectors(database, KEY, hashed)).toBe(2);
+    const found = await vectorsOfTexts(database, KEY, [
+      "hash-of-one",
+      "hash-of-two",
+      "hash-of-nothing",
+      "hash-of-one",
+    ]);
+    expect([...found.keys()].sort()).toEqual(["hash-of-one", "hash-of-two"]);
+    expect(Array.from(found.get("hash-of-two") ?? [])).toEqual([0, 0, 0, 1]);
+    // The vector is the model's reading of the text: the rules that cut it out do not change it,
+    // and another model reads it otherwise.
+    const cutOtherwise = { ...KEY, sectioningVersion: KEY.sectioningVersion + 1 };
+    expect((await vectorsOfTexts(database, cutOtherwise, ["hash-of-one"])).size).toBe(1);
+    expect(
+      (await vectorsOfTexts(database, { ...KEY, model: "another-model" }, ["hash-of-one"])).size,
+    ).toBe(0);
+    // The vectors written without a hash, as every one before this was, are found by none.
+    expect((await vectorsOfTexts(database, KEY, [])).size).toBe(0);
+    expect(await blobsWithoutVectors(database, KEY, ["blob-hashed", "blob-billing"])).toEqual(
+      new Set(),
     );
   });
 

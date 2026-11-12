@@ -496,9 +496,20 @@ export const sectionVectors = pgTable(
     offset: integer().notNull(),
     length: integer().notNull(),
     vector: vector().notNull(),
+    /**
+     * SHA-256, in hex, of the text the model was given for the section (ADR-0093): the same
+     * text under the same model has the same vector whichever body it stands in, so a section
+     * whose text has a vector is given that one and not embedded again. Null for a vector
+     * written before the hash was kept, or brought in from elsewhere, which is then never
+     * found by its text.
+     */
+    textHash: text(),
     createdAt: createdAt(),
   },
   (table) => [
+    index("section_vectors_text_idx")
+      .on(table.model, table.dimensions, table.textHash)
+      .where(sql`${table.textHash} is not null`),
     primaryKey({
       name: "section_vectors_pkey",
       columns: [

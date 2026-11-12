@@ -218,6 +218,13 @@
       "when": 1794501867940,
       "tag": "0030_part-vectors",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1794503566463,
+      "tag": "0031_section-text-hash",
+      "breakpoints": true
     }
   ]
 }

@@ -287,5 +287,6 @@ export {
   searchSectionVectors,
   supportsSectionVectors,
   type VectorKey,
+  vectorsOfTexts,
   writeSectionVectors,
 } from "./queries/vectors.js";

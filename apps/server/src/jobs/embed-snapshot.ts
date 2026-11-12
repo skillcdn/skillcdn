@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   type BlobStore,
   type Clock,
@@ -26,6 +27,7 @@ import {
   tierOfSnapshot,
   usageDayOf,
   type VectorKey,
+  vectorsOfTexts,
   writeSectionVectors,
 } from "@skillcdn/db";
 import { compareByteOrder } from "@skillcdn/reader";
@@ -43,7 +45,9 @@ import { decideEmbedding, type EmbedPolicy } from "./scope.js";
 // call to the embedder and leaves the body it was at to the next attempt. What may be embedded
 // at all is the scope's and the entitlements' to say, a repository that is no pack is embedded
 // only for a search or a request (ADR-0072), and a manifest may keep the documents it governs
-// out; the bounds are measured in the bytes of the bodies.
+// out; the bounds are measured in the bytes of the bodies. A section whose text has a vector
+// under the model is given that one and costs no call (ADR-0093): a file that changed in one
+// place is a new body whose other sections say what they said.
 
 /**
  * How long one job embeds before it hands the rest back, whatever the server: a few minutes, so
@@ -76,6 +80,8 @@ export interface EmbeddedCounts {
   readonly sections: number;
   readonly tokens: number;
   readonly bytes: number;
+  /** How many of the sections were given the vector their text had already, without a call. */
+  readonly reused: number;
 }
 
 export type EmbedSliceOutcome =
@@ -124,9 +130,13 @@ const sameKey = (a: VectorKey, b: VectorKey): boolean =>
   a.dimensions === b.dimensions &&
   a.sectioningVersion === b.sectioningVersion;
 
+/** What a section's vector is found by again: the hash of the text the model is given for it. */
+const textHashOf = (text: string): string => createHash("sha256").update(text).digest("hex");
+
 /**
- * Embeds every section of one body and writes them together; `undefined`, with nothing written,
- * when `signal` stops it before one of its calls to the embedder.
+ * Writes the vectors of every section of one body together: the one its text has already under
+ * the model, where it has one, and the embedder's for the rest; `undefined`, with nothing
+ * written, when `signal` stops it before one of its calls to the embedder.
  */
 async function embedBody(
   deps: EmbedSliceDependencies,
@@ -135,33 +145,54 @@ async function embedBody(
   title: string | undefined,
   text: string,
   signal: AbortSignal | undefined,
-): Promise<{ readonly sections: number; readonly tokens: number } | undefined> {
+): Promise<
+  { readonly sections: number; readonly tokens: number; readonly reused: number } | undefined
+> {
   const sections = sectionsOf(text);
   if (sections.length === 0) {
-    return { sections: 0, tokens: 0 };
+    return { sections: 0, tokens: 0, reused: 0 };
   }
   const texts = sections.map((section) => embeddingTextOf(title, section, text));
+  const hashes = texts.map(textHashOf);
+  const known = await vectorsOfTexts(deps.database, key, hashes);
   const items: SectionVector[] = [];
+  const write = (at: number, vector: Float32Array | undefined): void => {
+    const section = sections[at];
+    if (section !== undefined && vector !== undefined) {
+      items.push({ ...section, blobSha, section: at, vector, textHash: hashes[at] });
+    }
+  };
+  /** The sections whose text has no vector yet, by their place in the body. */
+  const unknown: number[] = [];
+  hashes.forEach((hash, at) => {
+    const vector = known.get(hash);
+    if (vector === undefined) {
+      unknown.push(at);
+    } else {
+      write(at, vector);
+    }
+  });
+  const reused = items.length;
   let tokens = 0;
-  for (const batch of embeddingBatches(texts, deps.embedder)) {
+  const pending = unknown.map((at) => texts[at] ?? "");
+  for (const batch of embeddingBatches(pending, deps.embedder)) {
     if (signal?.aborted) {
       return undefined;
     }
     const embedded = await deps.embedder.embed(
-      batch.map((at) => texts[at] ?? ""),
+      batch.map((at) => pending[at] ?? ""),
       "document",
     );
     batch.forEach((at, position) => {
-      const section = sections[at];
-      const vector = embedded.vectors[position];
-      if (section !== undefined && vector !== undefined) {
-        items.push({ ...section, blobSha, section: at, vector });
+      const place = unknown[at];
+      if (place !== undefined) {
+        write(place, embedded.vectors[position]);
       }
     });
     tokens += embedded.tokens ?? 0;
   }
   await writeSectionVectors(deps.database, key, items);
-  return { sections: items.length, tokens };
+  return { sections: items.length, tokens, reused };
 }
 
 /** The bytes already embedded that a bound counts, read once per slice where the bound exists. */
@@ -259,7 +290,7 @@ export async function embedSnapshotSlice(
   const limit = deps.sliceSections ?? SLICE_SECTIONS;
   const started = clock.now().getTime();
   const seen = new Set<string>();
-  const counts = { bodies: 0, sections: 0, tokens: 0, bytes: 0 };
+  const counts = { bodies: 0, sections: 0, tokens: 0, bytes: 0, reused: 0 };
   let next: string | undefined;
   let bound: "repository" | "account" | undefined;
   let interrupted = false;
@@ -306,6 +337,7 @@ export async function embedSnapshotSlice(
         }
         counts.sections += done.sections;
         counts.tokens += done.tokens;
+        counts.reused += done.reused;
       }
     }
     const spent = clock.now().getTime() - started >= SLICE_MS || counts.sections >= limit;
