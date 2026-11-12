@@ -1004,6 +1004,9 @@ describe("an index rebuilt under newer reading rules", () => {
     const cached = await h.connect(address);
     expect(cached.getInstructions()).toContain("SKILL.md: Writes commit messages");
     await cached.close();
+    // A request starts its mount's indexing without waiting for it: a start that is still on
+    // its way when the row goes back below would claim it before the process this test plays.
+    await h.snapshots.idle();
 
     // A process with newer rules sends the snapshot back and rebuilds it under the same id.
     const { database } = testDatabase;
