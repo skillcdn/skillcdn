@@ -30,6 +30,7 @@ import {
   type Database,
   type HubEntryRecord,
   type HubSectionMatch,
+  isStatementTimeout,
   listSearchablePacks,
   type SearchablePack,
   searchHubEntries,
@@ -132,42 +133,75 @@ export function createHubSearch(options: HubSearchOptions): HubSearch {
       // The words of the query, read with the default rules: the packs differ in language, and
       // the words are weighed by their rarity across all of them (ADR-0069).
       const lexemes = queryLexemes(query);
+      /** A statement over every pack, which says so in the log when it runs out of its time. */
+      const timed = async <T>(statement: string, work: () => Promise<T>): Promise<T> => {
+        try {
+          return await work();
+        } catch (error) {
+          if (isStatementTimeout(error)) {
+            logger.warn(
+              { statement, timeoutMs, packs: ids.length, lexemes: lexemes.length },
+              "a statement of the search across packs ran out of its time",
+            );
+          }
+          throw error;
+        }
+      };
       let weights: readonly number[] | undefined;
-      let words: readonly HubEntryRecord[] = [];
-      if (lexemes.length > 0) {
-        const counted = await countHubLexemes(database, ids, lexemes, timeoutMs);
+      const byWordsOf = async (): Promise<readonly HubEntryRecord[]> => {
+        if (lexemes.length === 0) {
+          return [];
+        }
+        const counted = await timed("count", () =>
+          countHubLexemes(database, ids, lexemes, timeoutMs),
+        );
         weights = queryWeights(counted.total, counted.counts);
-        words = await searchHubEntries(database, ids, lexemes, weights, candidates, timeoutMs);
-      }
-      // A query that is identifiers alone is ranked by its words, as inside a mount (ADR-0079).
-      const identifiers = queryIdentifiers(query);
-      const wordsAlone = identifiers.only && words.length > 0;
+        return timed("words", () =>
+          searchHubEntries(database, ids, lexemes, weights, candidates, timeoutMs),
+        );
+      };
       // The sections nearest in meaning, where the deployment searches by it; an embedder or a
       // database that does not answer in time leaves the words to answer, which the result says.
-      let ranking: FindRanking | undefined;
-      let nearest: readonly HubSectionMatch[] | undefined;
-      if (meaning?.key !== undefined && wordsAlone) {
-        ranking = { meaning: false, reranked: false, identifiers: true };
-      } else if (meaning?.key !== undefined) {
+      const key = meaning?.key;
+      const byMeaningOf = async (): Promise<readonly HubSectionMatch[] | undefined> => {
+        if (meaning === undefined || key === undefined) {
+          return undefined;
+        }
         try {
           const { vectors } = await meaning.embedder.embed([query], "query");
           const vector = vectors[0];
-          nearest =
-            vector === undefined
-              ? undefined
-              : await searchHubSectionVectors(
-                  database,
-                  ids,
-                  meaning.key,
-                  vector,
-                  candidates,
-                  timeoutMs,
-                );
+          return vector === undefined
+            ? undefined
+            : await timed("meaning", () =>
+                searchHubSectionVectors(database, ids, key, vector, candidates, timeoutMs),
+              );
         } catch (error) {
           logger.debug({ err: error }, "the search by meaning across packs did not answer");
-          nearest = undefined;
+          return undefined;
         }
-        ranking = { meaning: nearest !== undefined, reranked: false };
+      };
+      // A query that is identifiers alone is ranked by its words, as inside a mount (ADR-0079),
+      // so its meaning is asked for only once the words have found nothing. Any other query has
+      // both asked at once: the answer takes as long as the slower of the two, not their sum.
+      const identifiers = queryIdentifiers(query);
+      let words: readonly HubEntryRecord[];
+      let ranking: FindRanking | undefined;
+      let nearest: readonly HubSectionMatch[] | undefined;
+      if (identifiers.only) {
+        words = await byWordsOf();
+        if (words.length === 0) {
+          nearest = await byMeaningOf();
+        }
+      } else {
+        const asked = byMeaningOf();
+        words = await byWordsOf();
+        nearest = await asked;
+      }
+      const wordsAlone = identifiers.only && words.length > 0;
+      if (key !== undefined) {
+        ranking = wordsAlone
+          ? { meaning: false, reranked: false, identifiers: true }
+          : { meaning: nearest !== undefined, reranked: false };
       }
       // One order of the entries, by reciprocal rank fusion of the two, a skill boosted as inside
       // a mount, ties by pack and path.

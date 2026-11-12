@@ -7,14 +7,21 @@ import {
   type Reranker,
   restFindSchema,
   restMountSchema,
+  restSearchSchema,
 } from "@skillcdn/core";
 import { createBlobStore, ensureSnapshot, findRepoByAlias, type SnapshotScope } from "@skillcdn/db";
-import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
+import {
+  createTestDatabase,
+  DEV_DATABASE_URL,
+  holdIndexEntries,
+  type TestDatabase,
+} from "@skillcdn/db/testing";
 import { INDEX_VERSION } from "@skillcdn/indexer";
 import { InferenceError } from "@skillcdn/inference";
 import { pino } from "pino";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { vectorKeyOf } from "./adapters/meaning.js";
+import { HUB_DEFAULTS } from "./config/config.js";
 import { embedSnapshotSlice } from "./jobs/embed-snapshot.js";
 import { createFixtureHost, type FixtureHost, fixtureCommits } from "./testing/fixture-host.js";
 import { createHarness, type Harness } from "./testing/harness.js";
@@ -311,5 +318,70 @@ describe("a search by words and by meaning", () => {
     });
     expect(other.getInstructions()).toContain("search_repo matches original words");
     await other.close();
+  });
+});
+
+describe("a search across the packs by words and by meaning", () => {
+  const TIMED_OUT = "a statement of the search across packs ran out of its time";
+  const asked = (): number => embed.calls.filter((call) => call.as === "query").length;
+
+  it("asks the meaning beside the words, and names in the log the statement that ran out of its time", async () => {
+    // No answer is kept, and a statement has a short time, so that the test waits for little.
+    const across = createHarness(testDatabase, {
+      host,
+      hub: { ...HUB_DEFAULTS, cacheMs: 0, timeoutMs: 400 },
+      meaning: {
+        embedder: embed.embedder,
+        reranker: rerank.reranker,
+        rerankCandidates: 10,
+        key: KEY,
+      },
+    });
+    const search = (query: string) =>
+      across.request(`/api/v1/search?query=${encodeURIComponent(query)}`);
+
+    // A question in other words than the handbook's: found by meaning, across the packs.
+    const before = asked();
+    const found = await search("pardon tardy penalties");
+    expect(found.status).toBe(200);
+    const body = restSearchSchema.parse(await found.json());
+    expect(body.ranking).toMatchObject({ meaning: true });
+    expect(body.items[0]).toMatchObject({
+      address: ADDRESS,
+      item: { kind: "document", path: "docs/invoicing.md" },
+    });
+    expect(asked()).toBe(before + 1);
+
+    // Identifiers alone are ranked by the words that found them, and the model is not asked.
+    const coded = restSearchSchema.parse(await (await search("JOB-4090")).json());
+    expect(coded.ranking).toEqual({ meaning: false, reranked: false, identifiers: true });
+    expect(coded.items[0]).toMatchObject({ item: { kind: "document", path: "docs/api/jobs.md" } });
+    expect(asked()).toBe(before + 1);
+
+    // While nothing can read the entries, the count runs out of its time. The search says so,
+    // and the meaning had been asked for by then: the two do not wait for each other.
+    const release = await holdIndexEntries(testDatabase.database);
+    try {
+      const held = await search("waive a late fee");
+      expect(held.status).toBe(503);
+      expect(await held.json()).toMatchObject({ error: { code: "search.timeout" } });
+      expect(asked()).toBe(before + 2);
+      await expect
+        .poll(() =>
+          across.logs
+            .filter((line) => line.msg === TIMED_OUT)
+            .map((line) => line.statement)
+            .sort(),
+        )
+        .toEqual(["count", "meaning"]);
+    } finally {
+      await release();
+    }
+    expect(across.logs.find((line) => line.msg === TIMED_OUT)).toMatchObject({
+      level: 40,
+      timeoutMs: 400,
+      lexemes: 3,
+    });
+    expect((await search("waive a late fee")).status).toBe(200);
   });
 });

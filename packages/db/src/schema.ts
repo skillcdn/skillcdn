@@ -287,6 +287,11 @@ export const indexEntries = pgTable(
     index("index_entries_snapshot_kind_idx").on(table.snapshotId, table.kind),
     index("index_entries_snapshot_skill_dir_idx").on(table.snapshotId, table.skillDir),
     index("index_entries_search_idx").using("gin", table.search),
+    // The findable entries alone, a few among the files of a snapshot: what a search across
+    // every pack counts and compares is read through this, whatever else is kept (ADR-0090).
+    index("index_entries_findable_idx")
+      .on(table.snapshotId)
+      .where(sql`${table.visible} and ${table.search} is not null`),
     index("index_entries_account_idx").on(table.accountId),
     check(
       "index_entries_kind_check",

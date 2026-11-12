@@ -1,11 +1,17 @@
 import { randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { Client } from "pg";
-import { createDatabase, type Database, drizzleOf } from "./client.js";
+import { createDatabase, type Database, drizzleOf, poolOf } from "./client.js";
 import { migrateDatabase } from "./migrate.js";
 import { snapshots } from "./schema.js";
 
 // Support for integration tests, here and in other workspaces: `@skillcdn/db/testing`.
+
+export {
+  type HubQuestion,
+  type HubStatementReading,
+  readHubStatements,
+} from "./queries/hub.js";
 
 /** Where `deploy/compose.dev.yaml` listens. Tests use it unless TEST_DATABASE_URL says otherwise. */
 export const DEV_DATABASE_URL = "postgres://skillcdn:skillcdn-dev-only@127.0.0.1:5432/skillcdn";
@@ -60,6 +66,29 @@ export async function createTestDatabase(adminUrl: string): Promise<TestDatabase
         await cleanup.end();
       }
     },
+  };
+}
+
+/**
+ * For a test of a statement that runs out of its time: keeps every statement that reads the
+ * entries waiting, until the function it answers with is called. The test lets go within the
+ * time a transaction may stay idle.
+ */
+export async function holdIndexEntries(database: Database): Promise<() => Promise<void>> {
+  const client = await poolOf(database).connect();
+  try {
+    await client.query("begin");
+    await client.query("lock table index_entries in access exclusive mode");
+  } catch (error) {
+    client.release(true);
+    throw error;
+  }
+  return async () => {
+    try {
+      await client.query("rollback");
+    } finally {
+      client.release();
+    }
   };
 }
 

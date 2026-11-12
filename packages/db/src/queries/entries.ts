@@ -66,8 +66,12 @@ export const BY_PATH = sql`${indexEntries.path} collate "C"`;
 /** Files a repository manifest leaves out are known to the index and served by nothing. */
 export const VISIBLE = eq(indexEntries.visible, true);
 
-/** Documents and skills that are searchable: everything `find` can return. */
-export const FINDABLE = and(VISIBLE, sql`${indexEntries.search} is not null`);
+/**
+ * Documents and skills that are searchable: everything `find` can return. Written as the index
+ * of the findable entries states it (`index_entries_findable_idx`), without a parameter, so that
+ * a statement that asks for them reads that index and not every file of a snapshot.
+ */
+export const FINDABLE = sql`${indexEntries.visible} and ${indexEntries.search} is not null`;
 
 /**
  * The weights `ts_rank` is given, `{D, C, B, A}`: `SEARCH_WEIGHTS` of @skillcdn/core, in the order

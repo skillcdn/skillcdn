@@ -22,6 +22,19 @@ const MIGRATION_LOCK_KEY = 5_434_001;
 const NEEDS_VECTOR = "-- needs: vector";
 const STATEMENT_BREAKPOINT = "--> statement-breakpoint";
 /**
+ * The first line of a migration whose indexes are built `CONCURRENTLY` on a database in use
+ * (ADR-0090). It holds `CREATE INDEX IF NOT EXISTS` statements and nothing else. The migrations
+ * run in one transaction, where an index cannot be built that way, and an index built the plain
+ * way keeps every write to its table waiting for as long as the build takes. So on a database
+ * that was migrated before, each index of a marked migration still to be applied is built ahead
+ * of that transaction, outside any, and the migration finds it there; on a new database the
+ * migration builds it, over a table with nothing in it.
+ */
+const BUILT_CONCURRENTLY = "-- built: concurrently";
+const CREATE_INDEX = /^CREATE (UNIQUE )?INDEX IF NOT EXISTS "([a-z0-9_]+)" ON /u;
+/** A table or a column that is not there (SQLSTATE): it comes with a migration still to run. */
+const NOT_THERE_YET = new Set(["42P01", "42703"]);
+/**
  * The notices of what `IF NOT EXISTS` found there already (a schema, a table, an extension):
  * raised on every run, and not news. SQLSTATE codes.
  */
@@ -64,12 +77,75 @@ async function applyVectorMigrationsAgain(client: Client): Promise<void> {
 }
 
 /**
+ * Builds, `CONCURRENTLY`, the indexes of the migrations marked {@link BUILT_CONCURRENTLY} that
+ * this database has not applied yet. Nothing on a database that was never migrated. An index a
+ * build left unfinished is there by its name and used by nothing, so it is dropped and built
+ * again; one whose table or column comes with a migration still to run is left to its migration.
+ */
+async function buildIndexesAhead(client: Client): Promise<void> {
+  const migrated = await client.query<{ present: boolean }>(
+    "select to_regclass($1) is not null as present",
+    [`${MIGRATIONS_SCHEMA}.${MIGRATIONS_TABLE}`],
+  );
+  if (migrated.rows[0]?.present !== true) {
+    return;
+  }
+  const last = await client.query<{ applied: string | null }>(
+    `select max(created_at) as applied from ${client.escapeIdentifier(MIGRATIONS_SCHEMA)}.${client.escapeIdentifier(MIGRATIONS_TABLE)}`,
+  );
+  const applied = Number(last.rows[0]?.applied ?? 0);
+  if (applied === 0) {
+    return;
+  }
+  for (const entry of readJournal().entries) {
+    if (entry.when <= applied) {
+      continue;
+    }
+    const text = readFileSync(`${MIGRATIONS_FOLDER}/${entry.tag}.sql`, "utf8");
+    if (!text.startsWith(BUILT_CONCURRENTLY)) {
+      continue;
+    }
+    for (const part of text.slice(BUILT_CONCURRENTLY.length).split(STATEMENT_BREAKPOINT)) {
+      const statement = part.trim();
+      if (statement === "") {
+        continue;
+      }
+      const name = CREATE_INDEX.exec(statement)?.[2];
+      if (name === undefined) {
+        throw new Error(
+          `migration ${entry.tag} is built concurrently and holds a statement that is not CREATE INDEX IF NOT EXISTS`,
+        );
+      }
+      const found = await client.query<{ valid: boolean }>(
+        "select indisvalid as valid from pg_index where indexrelid = to_regclass($1)",
+        [name],
+      );
+      if (found.rows[0]?.valid === false) {
+        await client.query(`drop index concurrently if exists ${client.escapeIdentifier(name)}`);
+      }
+      try {
+        await client.query(
+          statement.replace(CREATE_INDEX, 'CREATE $1INDEX CONCURRENTLY IF NOT EXISTS "$2" ON '),
+        );
+      } catch (error) {
+        const code = (error as { code?: unknown } | null)?.code;
+        if (typeof code !== "string" || !NOT_THERE_YET.has(code)) {
+          throw error;
+        }
+      }
+    }
+  }
+}
+
+/**
  * Applies pending migrations on a dedicated connection, under an advisory lock, without the
  * statement timeout that ordinary queries run with, and then installs the schema of the job
- * queue, or brings it to the version this build ships (ADR-0064). Safe to run concurrently and
- * repeatedly. The notices the database raised on the way come back with the result: a migration
- * that leaves something out, such as the table of the search by meaning where the `vector`
- * extension is not available, says so in one.
+ * queue, or brings it to the version this build ships (ADR-0064). Indexes of tables that are
+ * large on a database in use are built before the migrations, without holding writes off
+ * ({@link BUILT_CONCURRENTLY}). Safe to run concurrently and repeatedly. The notices the database
+ * raised on the way come back with the result: a migration that leaves something out, such as
+ * the table of the search by meaning where the `vector` extension is not available, says so in
+ * one.
  */
 export async function migrateDatabase(
   connectionString: string,
@@ -88,6 +164,11 @@ export async function migrateDatabase(
   await client.connect();
   try {
     await client.query("select pg_advisory_lock($1)", [MIGRATION_LOCK_KEY]);
+    // A concurrent build waits for the transactions that were open when it began and keeps
+    // nobody waiting meanwhile, so it is given the time the lock timeout would cut short.
+    await client.query("set lock_timeout = 0");
+    await buildIndexesAhead(client);
+    await client.query("reset lock_timeout");
     await migrate(drizzle({ client }), {
       migrationsFolder: MIGRATIONS_FOLDER,
       migrationsSchema: MIGRATIONS_SCHEMA,

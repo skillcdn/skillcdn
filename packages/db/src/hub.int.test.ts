@@ -9,9 +9,10 @@ import {
   searchVectorOf,
   serializeSearchVector,
 } from "@skillcdn/core";
+import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import type { Database } from "./client.js";
+import { type Database, drizzleOf } from "./client.js";
 import {
   claimSnapshot,
   countHubLexemes,
@@ -29,7 +30,12 @@ import {
   writeSectionVectors,
   writeSnapshotIndex,
 } from "./index.js";
-import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "./testing.js";
+import {
+  createTestDatabase,
+  DEV_DATABASE_URL,
+  readHubStatements,
+  type TestDatabase,
+} from "./testing.js";
 
 // The search across every pack a deployment serves (ADR-0070): which packs it covers, and the
 // words and the meaning over all of them at once.
@@ -319,6 +325,112 @@ describe("the words and the meaning across every pack", () => {
     await expect(
       searchHubSectionVectors(database, ids, KEY, Float32Array.from([1, 0]), 10, 5000),
     ).rejects.toThrow(RangeError);
+  });
+
+  it("counts the findable entries of the packs searched, and no others", async () => {
+    const counted = await repository(
+      "counted",
+      commit("5"),
+      [
+        entry({ path: "docs/kept.md", blobSha: "hub-kept" }),
+        // Left out by the reading rules: its words are in the index and found by nothing.
+        entry({ path: "notes/hidden.md", blobSha: "hub-hidden", visible: false }),
+        // Listed, and not searched.
+        entry({ path: "src/tool.ts", blobSha: "hub-tool", kind: "other", searchable: false }),
+      ],
+      { "hub-kept": "quokka marsupial", "hub-hidden": "quokka" },
+    );
+    const beside = await repository(
+      "beside",
+      commit("6"),
+      [entry({ path: "docs/beside.md", blobSha: "hub-beside" })],
+      { "hub-beside": "quokka" },
+    );
+    const packs = await listSearchablePacks(database);
+    const idOf = (scope: RepoScope): string =>
+      packs.find((pack) => pack.repoId === scope.repoId)?.snapshotId ?? "";
+    const lexemes = queryLexemes("quokka marsupial wombat");
+    expect(lexemes).toHaveLength(3);
+
+    // A word nothing holds counts nothing, and the pack beside is not counted unless searched.
+    expect(await countHubLexemes(database, [idOf(counted)], lexemes, 5000)).toEqual({
+      total: 1,
+      counts: [1, 1, 0],
+    });
+    expect(await countHubLexemes(database, [idOf(counted), idOf(beside)], lexemes, 5000)).toEqual({
+      total: 2,
+      counts: [2, 1, 0],
+    });
+    expect(await countHubLexemes(database, [idOf(counted)], [], 5000)).toEqual({
+      total: 1,
+      counts: [],
+    });
+  });
+
+  it("reads the findable entries, and not the files a pack holds beside them", async () => {
+    // A repository as a deployment holds many: a few documents among thousands of files.
+    const files = Array.from({ length: 4000 }, (_, at) =>
+      entry({
+        path: `src/f${at}.ts`,
+        blobSha: `hub-file-${at}`,
+        kind: "other",
+        searchable: false,
+        visible: at % 2 === 0,
+      }),
+    );
+    const documents = Array.from({ length: 20 }, (_, at) =>
+      entry({ path: `docs/d${at}.md`, blobSha: `hub-document-${at}` }),
+    );
+    const large = await repository(
+      "large",
+      commit("7"),
+      [...files, ...documents],
+      Object.fromEntries(
+        documents.map((document, at) => [
+          document.blobSha,
+          at === 0 ? "numbat termite" : "termite mound",
+        ]),
+      ),
+    );
+    await writeSectionVectors(
+      database,
+      KEY,
+      documents.map((document) => ({
+        blobSha: document.blobSha,
+        section: 0,
+        heading: [],
+        offset: 0,
+        length: 10,
+        vector: Float32Array.from([0, 0, 1, 0]),
+      })),
+    );
+    // What the planner knows of the table is what autovacuum tells it on a deployment.
+    await drizzleOf(database).execute(sql`analyze index_entries`);
+    const ids = (await listSearchablePacks(database))
+      .filter((pack) => pack.repoId === large.repoId)
+      .map((pack) => pack.snapshotId);
+    const lexemes = queryLexemes("numbat termite");
+    const counted = await countHubLexemes(database, ids, lexemes, 5000);
+    expect(counted).toEqual({ total: 20, counts: [1, 20] });
+
+    const reading = await readHubStatements(database, {
+      snapshotIds: ids,
+      lexemes,
+      weights: queryWeights(counted.total, counted.counts),
+      limit: 10,
+      meaning: { key: KEY, query: Float32Array.from([0, 0, 1, 0]) },
+    });
+    // The count reads the twenty once for the total and once more for each word they hold, and
+    // nothing of the four thousand files.
+    expect(reading.count.entries).toBeLessThanOrEqual(20 + 1 + 20);
+    expect(reading.count.indexes).toEqual([
+      "index_entries_findable_idx",
+      "index_entries_search_idx",
+    ]);
+    // How the words and the meaning go about it is the planner's to choose in a table this
+    // small; what they may not do is read the files.
+    expect(reading.words?.entries).toBeLessThan(1000);
+    expect(reading.meaning?.entries).toBeLessThan(1000);
   });
 
   it("tells a statement the server cancelled for its time from any other failure", () => {

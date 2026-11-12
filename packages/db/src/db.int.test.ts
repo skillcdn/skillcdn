@@ -9,7 +9,7 @@ import {
   searchVectorOf,
   serializeSearchVector,
 } from "@skillcdn/core";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { drizzleOf } from "./client.js";
 import {
@@ -177,6 +177,43 @@ describe("migrations", () => {
     await migrateDatabase(testDatabase.connectionString);
     expect((await getSchemaStatus(database)).current).toBe(true);
     expect(await database.ping()).toBe(true);
+  });
+
+  it("builds the index of a migration marked for it ahead of the migration, over one a build left unfinished", async () => {
+    const db = drizzleOf(database);
+    const indexOf = async () => {
+      const found = await db.execute<{ valid: boolean; definition: string }>(
+        sql`select indisvalid as valid, pg_get_indexdef(indexrelid) as definition from pg_index where indexrelid = to_regclass('index_entries_findable_idx')`,
+      );
+      return found.rows[0];
+    };
+    const made = await indexOf();
+    expect(made?.valid).toBe(true);
+    expect(made?.definition).toMatch(
+      /\(snapshot_id\) WHERE \(visible AND \(search IS NOT NULL\)\)$/,
+    );
+
+    // The database as it was before the migration of the index, with entries in it, and with
+    // what a concurrent build leaves behind when it is cut short: an index by that name which
+    // nothing uses. A unique index over two entries of one kind is a build that fails.
+    await readySnapshot([entry({ path: "docs/one.md" }), entry({ path: "docs/two.md" })]);
+    await db.execute(
+      sql`delete from drizzle.__drizzle_migrations where created_at = (select max(created_at) from drizzle.__drizzle_migrations)`,
+    );
+    await db.execute(sql`drop index index_entries_findable_idx`);
+    await expect(
+      db.execute(
+        sql`create unique index concurrently index_entries_findable_idx on index_entries (kind)`,
+      ),
+    ).rejects.toThrow();
+    expect((await indexOf())?.valid).toBe(false);
+    expect((await getSchemaStatus(database)).current).toBe(false);
+
+    // The migration alone would find the name taken and leave it; the build ahead of it drops
+    // what was left and makes the index the migration states.
+    await migrateDatabase(testDatabase.connectionString);
+    expect(await indexOf()).toEqual(made);
+    expect((await getSchemaStatus(database)).current).toBe(true);
   });
 });
 
