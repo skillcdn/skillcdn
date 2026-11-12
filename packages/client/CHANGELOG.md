@@ -1,5 +1,13 @@
 # @skillcdn/client
 
+## 0.5.0
+
+### Patch Changes
+
+- [`fd7d61d`](https://github.com/skillcdn/skillcdn/commit/fd7d61d6e3e34086106cfc227e843a6bf25087fa) Thanks [@samo-lucid](https://github.com/samo-lucid)! - The tables and the fenced code blocks of a document are had as data (ADR-0080). `skillcdn rows [<pack>] [<path>]` prints the tables of a document, or of every document under a folder, as one CSV or as JSON, every row with the file and the section it stands in, and `skillcdn code` prints the code blocks as written; `--heading` keeps what stands under a heading, `--out` writes a file, `code --grep` filters by a pattern on this machine. The same is `GET /api/v1/rows/<address>` (`format=csv` for one CSV) and `GET /api/v1/code/<address>`, registered by `registerAddressRoutes` and read by the client's `rows` and `code`. The reader gains `rows` and `code`, and a mount may say where its data is had (`dataUrl`); the outline of a document says how many tables, rows and code blocks it holds and where they are had, and a heading how many rows its section holds (`tables`, `codeBlocks`, `data` and `rows` over REST). `core` exports `dataOfMarkdown`, `toCsv`, `rowsBody`, `codeBody`, `rowsCsv`, the schemas and the limits.
+- Updated dependencies [[`4cd8d35`](https://github.com/skillcdn/skillcdn/commit/4cd8d35cf19062346274a84f5a40bb56aec9931f), [`67c8df3`](https://github.com/skillcdn/skillcdn/commit/67c8df37c41c15f55bbe3016ebbc9a1c3f96831d), [`9b72da2`](https://github.com/skillcdn/skillcdn/commit/9b72da22ee37ec22bb1133825a4795b112db031b), [`fd7d61d`](https://github.com/skillcdn/skillcdn/commit/fd7d61d6e3e34086106cfc227e843a6bf25087fa), [`85264e1`](https://github.com/skillcdn/skillcdn/commit/85264e13a79dd400aae63be18c231b385f22bb23), [`dc29485`](https://github.com/skillcdn/skillcdn/commit/dc29485912bc71c7685838719782d4528f44b7d8), [`ca30bdf`](https://github.com/skillcdn/skillcdn/commit/ca30bdf165cc03632c619852a53c287c5486f720)]:
+  - @skillcdn/core@0.5.0
+
 ## 0.4.2
 
 ### Patch Changes
