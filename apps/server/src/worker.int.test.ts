@@ -430,7 +430,9 @@ describe("the worker", () => {
       dropped: { vectors: 1, snapshots: 1 },
       // Every body was written with the vectors of its parts: none is left to make.
       parts: 0,
+      // And every skill with its head.
       heads: 0,
+      headsLeft: 0,
     });
     expect(await blobsWithoutVectors(testDatabase.database, OLD_KEY, [old.blobSha])).toEqual(
       new Set([old.blobSha]),
@@ -479,26 +481,33 @@ describe("the worker", () => {
     const dropped = await dropHeadVectors(testDatabase.database);
     expect(dropped).toBeGreaterThan(1);
     const before = fake.calls.length;
-    // The sweep a worker runs while it starts has no embedder, and embeds nothing.
-    expect(await sweep()).toMatchObject({ pending: 0, heads: 0 });
+    // The sweep a worker runs while it starts has no embedder, and embeds nothing: it says
+    // how many skills are left without a head.
+    expect(await sweep()).toMatchObject({ pending: 0, heads: 0, headsLeft: dropped });
     expect(fake.calls.length).toBe(before);
     // A signal that stopped the job stops the fill before its first call.
     const stopped = new AbortController();
     stopped.abort();
     expect(await sweep({ embedder: fake.embedder, clock, signal: stopped.signal })).toMatchObject({
       heads: 0,
+      headsLeft: dropped,
     });
     expect(fake.calls.length).toBe(before);
-    // An embedder that fails ends the fill, and never the sweep.
+    // An embedder that fails ends the fill, and never the sweep, which gave none and says that
+    // as many are left: what tells it from a sweep that had none to give.
     fake.fail(new InferenceError("inference_unreachable", "the server is away"));
-    expect(await sweep({ embedder: fake.embedder, clock })).toMatchObject({ pending: 0, heads: 0 });
+    expect(await sweep({ embedder: fake.embedder, clock })).toMatchObject({
+      pending: 0,
+      heads: 0,
+      headsLeft: dropped,
+    });
     expect(logs.some((line) => line.msg === "the heads of skills were not all embedded")).toBe(
       true,
     );
     // The sweep the queue runs gives every such skill its head: one short text each, and
     // nothing of the sections, which have their vectors.
     const filled = await sweep({ embedder: fake.embedder, clock });
-    expect(filled).toMatchObject({ pending: 0, queued: 0, heads: dropped });
+    expect(filled).toMatchObject({ pending: 0, queued: 0, heads: dropped, headsLeft: 0 });
     const texts = fake.calls.slice(before).flat();
     expect(texts).toHaveLength(dropped);
     const scope = await snapshotOf("multi-skill");
@@ -523,7 +532,10 @@ describe("the worker", () => {
     expect(nearest[0]).toMatchObject({ section: HEAD_SECTION, heading: [], length: 0 });
     expect(nearest[0]?.similarity).toBeCloseTo(1, 5);
     const calls = fake.calls.length;
-    expect(await sweep({ embedder: fake.embedder, clock })).toMatchObject({ heads: 0 });
+    expect(await sweep({ embedder: fake.embedder, clock })).toMatchObject({
+      heads: 0,
+      headsLeft: 0,
+    });
     expect(fake.calls.length).toBe(calls);
   });
 

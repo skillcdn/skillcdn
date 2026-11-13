@@ -12,6 +12,7 @@ import { drizzleOf } from "./client.js";
 import {
   blobsWithoutVectors,
   claimSnapshot,
+  countSkillBodiesWithoutHead,
   createIndexStore,
   type Database,
   ensureSnapshot,
@@ -23,6 +24,7 @@ import {
   recordSnapshotEmbedding,
   type SectionVector,
   type SnapshotScope,
+  saveCachedRef,
   saveRepository,
   searchSectionVectors,
   skillBodiesWithoutHead,
@@ -552,9 +554,59 @@ describe("section vectors", () => {
     expect(await skillBodiesWithoutHead(database, KEY, 10)).toEqual([
       { blobSha: "blob-old-skill", name: "old", description: "Was here before." },
     ]);
+    expect(await countSkillBodiesWithoutHead(database, KEY)).toBe(1);
     expect(await skillBodiesWithoutHead(database, { ...KEY, model: "another-model" }, 10)).toEqual(
       [],
     );
+    expect(await countSkillBodiesWithoutHead(database, { ...KEY, model: "another-model" })).toBe(0);
+    // A skill of the commit a ref is served from is what a search reads now: it comes before
+    // the skill of a commit kept from before, whatever their hashes.
+    const read = vectorsOf("blob-z-read-now", TOUR, [
+      [0, 1, 0, 0],
+      [0, 0, 1, 0],
+    ]);
+    expect(await writeSectionVectors(database, KEY, read)).toBe(2);
+    const servedScope = await readySnapshot([
+      entry({
+        path: "skills/read/SKILL.md",
+        blobSha: "blob-z-read-now",
+        kind: "skill",
+        skillDir: "skills/read",
+        name: "read",
+        description: "Read by a search now.",
+      }),
+    ]);
+    const [served] = await drizzleOf(database)
+      .select({ repoId: snapshots.repoId, commitSha: snapshots.commitSha })
+      .from(snapshots)
+      .where(eq(snapshots.id, servedScope.snapshotId));
+    await saveCachedRef(
+      database,
+      { accountId: servedScope.accountId, repoId: served?.repoId ?? "" },
+      "",
+      served?.commitSha ?? "",
+      T0,
+    );
+    expect(await skillBodiesWithoutHead(database, KEY, 10)).toEqual([
+      { blobSha: "blob-z-read-now", name: "read", description: "Read by a search now." },
+      { blobSha: "blob-old-skill", name: "old", description: "Was here before." },
+    ]);
+    expect(await skillBodiesWithoutHead(database, KEY, 1)).toEqual([
+      { blobSha: "blob-z-read-now", name: "read", description: "Read by a search now." },
+    ]);
+    expect(await countSkillBodiesWithoutHead(database, KEY)).toBe(2);
+    expect(
+      await writeSectionVectors(database, KEY, [
+        {
+          blobSha: "blob-z-read-now",
+          section: HEAD_SECTION,
+          heading: [],
+          offset: 0,
+          length: 0,
+          vector: Float32Array.from([1, 0, 0, 0]),
+        },
+      ]),
+    ).toBe(1);
     // The head written, its part is made beside the part of the sections, and it is named no more.
     expect(
       await writeSectionVectors(database, KEY, [
@@ -573,6 +625,7 @@ describe("section vectors", () => {
       { part: 0, sections: 2, vector: [0, 0.5, 0.5, 0] },
     ]);
     expect(await skillBodiesWithoutHead(database, KEY, 10)).toEqual([]);
+    expect(await countSkillBodiesWithoutHead(database, KEY)).toBe(0);
   });
 
   it("get their table on the next migrate where it is missing and the extension is there", async () => {

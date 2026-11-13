@@ -1,5 +1,6 @@
 import { type Clock, type Embedder, HEAD_SECTION, headTextOf } from "@skillcdn/core";
 import {
+  countSkillBodiesWithoutHead,
   type Database,
   deleteEmbeddingsOutsideKey,
   type EmbedTier,
@@ -27,7 +28,9 @@ import { EMBED_QUEUE, embedJobSchema, embedPriority, sendEmbedJob } from "./queu
 // slice writes them with the sections, so this is for the sections written before there were
 // any, and it calls no model. Last, where the sweep is given an embedder, the skills embedded
 // before a skill had a head are given theirs (ADR-0094): one short text a skill, for a few
-// minutes a sweep, once whatever is to be embedded was queued.
+// minutes a sweep, once whatever is to be embedded was queued, those a search reads now first;
+// and every sweep says how many are left without one, which is what tells a sweep that gave
+// none because all have theirs from one whose embedder failed.
 
 /** How many snapshots one sweep queues: the rest wait for the next, an hour on. */
 export const SWEEP_LIMIT = 1000;
@@ -82,6 +85,8 @@ export interface SweepOutcome {
   readonly parts: number;
   /** How many skills embedded before a skill had a head this sweep gave theirs. */
   readonly heads: number;
+  /** How many of them are left without one after it: 0 once they all have theirs. */
+  readonly headsLeft: number;
 }
 
 const sameKey = (a: VectorKey, b: VectorKey): boolean =>
@@ -205,7 +210,16 @@ export async function sweepEmbeddings(deps: SweepDependencies): Promise<SweepOut
     if (parts > 0) {
       deps.logger.info({ model: key.model, parts }, "part vectors made");
     }
-    return { pending: 0, queued: 0, reordered: 0, tiers, dropped: undefined, parts, heads: 0 };
+    return {
+      pending: 0,
+      queued: 0,
+      reordered: 0,
+      tiers,
+      dropped: undefined,
+      parts,
+      heads: 0,
+      headsLeft: await countSkillBodiesWithoutHead(database, key),
+    };
   }
   const pending = await listSnapshotsToEmbed(database, key, deps.limit ?? SWEEP_LIMIT, {
     visibility: deps.scope === "public" ? "public" : undefined,
@@ -234,6 +248,7 @@ export async function sweepEmbeddings(deps: SweepDependencies): Promise<SweepOut
   const dropped =
     pending.length === 0 ? await deleteEmbeddingsOutsideKey(database, key) : undefined;
   const heads = await fillHeads(deps);
+  const headsLeft = await countSkillBodiesWithoutHead(database, key);
   deps.logger.info(
     {
       model: key.model,
@@ -244,8 +259,9 @@ export async function sweepEmbeddings(deps: SweepDependencies): Promise<SweepOut
       dropped,
       parts,
       heads,
+      headsLeft,
     },
     "embeddings swept",
   );
-  return { pending: pending.length, queued, reordered, tiers, dropped, parts, heads };
+  return { pending: pending.length, queued, reordered, tiers, dropped, parts, heads, headsLeft };
 }

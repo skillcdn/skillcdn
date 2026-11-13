@@ -1,7 +1,7 @@
 import { type DocumentSection, HEAD_SECTION } from "@skillcdn/core";
 import { type AnyColumn, and, eq, inArray, notExists, type SQL, sql } from "drizzle-orm";
 import { type Database, type Drizzle, drizzleOf } from "../client.js";
-import { indexEntries, partVectors, sectionVectors } from "../schema.js";
+import { indexEntries, partVectors, repoRefs, sectionVectors, snapshots } from "../schema.js";
 import { BY_PATH, FINDABLE, inSnapshot, underPath } from "./entries.js";
 import type { SnapshotScope } from "./snapshots.js";
 
@@ -227,12 +227,27 @@ export interface HeadlessSkill {
   readonly description: string | null;
 }
 
+/** The entries `e` of findable skills whose body has vectors under the key and none of the head. */
+const headless = (key: VectorKey): SQL => {
+  const ofKey = sql`v.model = ${key.model} and v.dimensions = ${key.dimensions}
+    and v.sectioning_version = ${key.sectioningVersion}`;
+  return sql`e.kind = 'skill' and e.visible and e.search is not null
+      and e.name is not null and e.name <> ''
+      and exists (
+        select 1 from ${sectionVectors} v where v.blob_sha = e.blob_sha and ${ofKey})
+      and not exists (
+        select 1 from ${sectionVectors} v
+        where v.blob_sha = e.blob_sha and ${ofKey} and v.section = ${HEAD_SECTION})`;
+};
+
 /**
  * The bodies of findable skills that have vectors under the key and none of the head, at most
- * `limit`, in the order of their hashes: what the worker's sweep gives a head, on a database
- * whose skills were embedded before a head was (ADR-0094). A body whose sections have no vector
- * is not here: whether it is embedded at all is the slice's to decide, which writes the head
- * with the sections. A body several entries hold is named once, as the first of them names it.
+ * `limit`: what the worker's sweep gives a head, on a database whose skills were embedded before
+ * a head was (ADR-0094). Those of a commit a ref is served from come first, since they are what
+ * a search reads now, and the skills of commits kept from before after them; within each, in
+ * the order of their hashes. A body whose sections have no vector is not here: whether it is
+ * embedded at all is the slice's to decide, which writes the head with the sections. A body
+ * several entries hold is named once, as an entry that is served names it where there is one.
  */
 export async function skillBodiesWithoutHead(
   database: Database,
@@ -243,20 +258,22 @@ export async function skillBodiesWithoutHead(
   if (!(await present(db))) {
     return [];
   }
-  const ofKey = sql`v.model = ${key.model} and v.dimensions = ${key.dimensions}
-    and v.sectioning_version = ${key.sectioningVersion}`;
   const found = await db.execute<{ blob_sha: string; name: string; description: string | null }>(
     sql`
-    select distinct on (e.blob_sha) e.blob_sha, e.name, e.description
-    from ${indexEntries} e
-    where e.kind = 'skill' and e.visible and e.search is not null
-      and e.name is not null and e.name <> ''
-      and exists (
-        select 1 from ${sectionVectors} v where v.blob_sha = e.blob_sha and ${ofKey})
-      and not exists (
-        select 1 from ${sectionVectors} v
-        where v.blob_sha = e.blob_sha and ${ofKey} and v.section = ${HEAD_SECTION})
-    order by e.blob_sha, e.snapshot_id, e.path
+    select b.blob_sha, b.name, b.description
+    from (
+      select distinct on (e.blob_sha) e.blob_sha, e.name, e.description,
+        exists (
+          select 1 from ${snapshots} s
+          join ${repoRefs} r on r.repo_id = s.repo_id
+          where s.id = e.snapshot_id
+            and (s.commit_sha = r.commit_sha or s.commit_sha = r.previous_commit_sha)
+        ) as served
+      from ${indexEntries} e
+      where ${headless(key)}
+      order by e.blob_sha, served desc, e.snapshot_id, e.path
+    ) b
+    order by b.served desc, b.blob_sha
     limit ${limit}
   `,
   );
@@ -265,6 +282,24 @@ export async function skillBodiesWithoutHead(
     name: row.name,
     description: row.description,
   }));
+}
+
+/**
+ * How many bodies {@link skillBodiesWithoutHead} would name without a limit: what a sweep has
+ * left to give a head, which is nothing once the skills embedded before all have theirs.
+ */
+export async function countSkillBodiesWithoutHead(
+  database: Database,
+  key: VectorKey,
+): Promise<number> {
+  const db = drizzleOf(database);
+  if (!(await present(db))) {
+    return 0;
+  }
+  const counted = await db.execute<{ bodies: number }>(
+    sql`select count(distinct e.blob_sha)::int as bodies from ${indexEntries} e where ${headless(key)}`,
+  );
+  return Number(counted.rows[0]?.bodies ?? 0);
 }
 
 /**

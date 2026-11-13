@@ -280,6 +280,7 @@ export {
 } from "./queries/users.js";
 export {
   blobsWithoutVectors,
+  countSkillBodiesWithoutHead,
   fillPartVectors,
   HEAD_PART,
   type HeadlessSkill,
