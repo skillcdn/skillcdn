@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createEmbeddingsApi, type EmbeddingsApiOptions } from "./embeddings-api.js";
 import { type FetchLike, InferenceError } from "./inference.js";
 
@@ -225,6 +225,43 @@ describe("the embeddings API adapter", () => {
     await expect(codeOf(embedder.embed(["q"], "query"))).resolves.toBe("inference_busy");
     release();
     await expect(documents).resolves.toMatchObject({ tokens: undefined });
+  });
+
+  it("gives documents that waited their turn their whole time, and a query what is left of its own", async () => {
+    // One slot. Each call is asked while another holds it, and starts nine seconds and then
+    // 400 ms later by the gate's clock, which no test waits for.
+    const granted = vi.spyOn(AbortSignal, "timeout");
+    try {
+      let clock = 0;
+      const releases: (() => void)[] = [];
+      const fetchLike: FetchLike = () =>
+        new Promise<Response>((resolve) => {
+          releases.push(() => resolve(embeddings([0])));
+        });
+      const embedder = api(fetchLike, {
+        concurrency: 1,
+        timeoutMs: 10_000,
+        queryTimeoutMs: 5_000,
+        now: () => clock,
+      });
+      const first = embedder.embed(["a"], "document");
+      const second = embedder.embed(["b"], "document");
+      await vi.waitFor(() => expect(releases).toHaveLength(1));
+      clock = 9_000;
+      releases[0]?.();
+      await first;
+      const query = embedder.embed(["q"], "query");
+      await vi.waitFor(() => expect(releases).toHaveLength(2));
+      clock = 9_400;
+      releases[1]?.();
+      await second;
+      await vi.waitFor(() => expect(releases).toHaveLength(3));
+      releases[2]?.();
+      await query;
+      expect(granted.mock.calls.map(([ms]) => ms)).toEqual([10_000, 10_000, 4_600]);
+    } finally {
+      granted.mockRestore();
+    }
   });
 
   it("leaves a server alone after it failed repeatedly", async () => {

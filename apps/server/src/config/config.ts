@@ -357,7 +357,7 @@ export interface EmbeddingsConfig {
   readonly queryInstruction: string | undefined;
   /** Sent as a bearer token when the server wants one. */
   readonly key: string | undefined;
-  /** How long a call embedding documents may take, its turn included; the same for a query. */
+  /** How long a call embedding documents may take once its turn has come, and one embedding a query, its turn included. */
   readonly timeoutMs: number;
   readonly queryTimeoutMs: number;
   /** Calls one process has in flight at once; the rest wait their turn within their timeout. */

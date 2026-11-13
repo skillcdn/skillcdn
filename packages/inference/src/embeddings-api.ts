@@ -38,9 +38,12 @@ export interface EmbeddingsApiOptions {
   readonly key: string | undefined;
   readonly userAgent: string;
   readonly fetch: FetchLike;
-  /** How long a call embedding documents may take, waiting for its turn included. */
+  /**
+   * How long a call embedding documents may take once its turn has come, and how long it waits
+   * for that turn before it fails as busy.
+   */
   readonly timeoutMs: number;
-  /** The same for a call embedding a query, which a search waits for. */
+  /** How long a call embedding a query may take, waiting for its turn included: a search waits for it. */
   readonly queryTimeoutMs: number;
   /** Calls in flight at once from this process; the rest wait their turn, within their timeout. */
   readonly concurrency?: number | undefined;
@@ -150,7 +153,11 @@ export function createEmbeddingsApi(options: EmbeddingsApiOptions): Embedder {
               key: options.key,
               userAgent: options.userAgent,
               fetch: options.fetch,
-              timeoutMs: remainingMs,
+              // A search waits for its query, so the wait for a turn comes out of the query's
+              // time. Documents are embedded behind one another, the calls of a slice behind
+              // whatever else the process embeds: one that waited out a long call has its whole
+              // time once it starts, or it would fail for the other's length and never its own.
+              timeoutMs: as === "query" ? remainingMs : timeoutMs,
               maxReplyBytes: MAX_REPLY_BYTES,
             },
             { model: options.model, input, encoding_format: "float" },
