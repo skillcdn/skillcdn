@@ -86,10 +86,15 @@ const TS_RANK_WEIGHTS = sql.raw(
  * weighs the same, else the weighed mean of `ts_rank` over each lexeme alone (ADR-0069), which
  * is what `rankSearchVector` of @skillcdn/core computes with the same weights: `ts_rank` averages
  * over the lexemes of a query and divides by the logarithm of the length once, so the weighed
- * mean of the lexemes' ranks is the rank of the weighed query.
+ * mean of the lexemes' ranks is the rank of the weighed query. `vector` is what is ranked: the
+ * stored vector unless a statement hands in one it has unpacked already.
  */
-export function rankOf(lexemes: readonly string[], weights: readonly number[] | undefined): SQL {
-  const whole = sql`ts_rank(${TS_RANK_WEIGHTS}, ${indexEntries.search}, ${serializeSearchQuery(lexemes)}::tsquery, 1)`;
+export function rankOf(
+  lexemes: readonly string[],
+  weights: readonly number[] | undefined,
+  vector: SQL = sql`${indexEntries.search}`,
+): SQL {
+  const whole = sql`ts_rank(${TS_RANK_WEIGHTS}, ${vector}, ${serializeSearchQuery(lexemes)}::tsquery, 1)`;
   if (weights === undefined || weights.every((weight) => weight === weights[0])) {
     return whole;
   }
@@ -100,7 +105,7 @@ export function rankOf(lexemes: readonly string[], weights: readonly number[] | 
   const terms = sql.join(
     lexemes.map(
       (lexeme, at) =>
-        sql`${weights[at] ?? 1}::float8 * ts_rank(${TS_RANK_WEIGHTS}, ${indexEntries.search}, ${serializeSearchQuery([lexeme])}::tsquery, 1)`,
+        sql`${weights[at] ?? 1}::float8 * ts_rank(${TS_RANK_WEIGHTS}, ${vector}, ${serializeSearchQuery([lexeme])}::tsquery, 1)`,
     ),
     sql` + `,
   );

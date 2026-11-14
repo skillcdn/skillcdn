@@ -642,9 +642,12 @@ describe("the words and the meaning across every pack", () => {
       "index_entries_findable_idx",
       "index_entries_search_idx",
     ]);
-    // How the words and the meaning go about it is the planner's to choose in a table this
-    // small; what they may not do is read the files.
-    expect(reading.words?.entries).toBeLessThan(1000);
+    // The words read the twenty that hold one once, through the index of the vectors, and are
+    // narrowed there: read a second time by their ids, they were forty (ADR-0098).
+    expect(reading.words?.entries).toBeLessThanOrEqual(20);
+    expect(reading.words?.indexes).toEqual(["index_entries_search_idx"]);
+    // How the meaning goes about it is the planner's to choose in a table this small; what it
+    // may not do is read the files.
     expect(reading.meaning?.entries).toBeLessThan(1000);
   });
 

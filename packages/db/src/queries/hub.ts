@@ -11,7 +11,7 @@ import {
   sectionVectors,
   snapshots,
 } from "../schema.js";
-import { BY_PATH, type EntryRecord, entryColumns, FINDABLE, rankOf, VISIBLE } from "./entries.js";
+import { BY_PATH, type EntryRecord, entryColumns, FINDABLE, rankOf } from "./entries.js";
 import {
   COMPARED,
   partOfSection,
@@ -143,16 +143,42 @@ type Runner = Pick<Drizzle, "select" | "execute">;
 const among = (snapshotIds: readonly string[]) =>
   sql`${indexEntries.snapshotId} = any(${sql.param([...snapshotIds])}::uuid[])`;
 
-// The entries that hold a word are taken from the index of the search vectors, and only then
-// narrowed to the snapshots searched (ADR-0090). Left to choose, the planner turns that around
-// where it expects a word in many entries: it reads the entries of the snapshots, or the table,
-// and tests each vector, which is kept apart from its row and unpacked for every test. That is what
-// the count across a deployment's packs ran out of time on, and it costs the same for a word
-// that nothing holds. Two things keep the order: the word reaches the comparison as a value the
-// planner does not look into, a row of a function or a subquery, so that it expects few entries
-// to hold it and goes through the index; and the entries found are handed on as a whole, a
-// `materialized` set or an array of ids, which no later condition is pushed into. A word then
-// costs the entries that hold it.
+// The entries that hold a word are taken from the index of the search vectors, and narrowed to
+// the snapshots searched as they are read (ADR-0090, ADR-0098). Three things in how the
+// statements are written keep a word to what it has to cost.
+//
+// The word reaches the comparison as a value the planner does not look into, a row of a function
+// or a subquery, so that it expects few entries to hold it and goes through the index. Left to
+// expect a word in many entries, it reads the entries of the snapshots, or the table, and tests
+// each vector.
+//
+// The read of the index stands alone behind an `offset 0`, which nothing is pushed into: with
+// the snapshots or what makes an entry findable beside the word in one read, the planner takes
+// an index that names those and tests every vector it finds there, whatever the word, which is
+// what the count across a deployment's packs once ran out of time on. What the read hands on is
+// narrowed at once, on the row it has in hand. Narrowed later, by the ids of every entry that
+// holds a word, each of those entries was read a second time to be turned away, and most of
+// them belong to commits kept from before and to repositories no search covers.
+//
+// And a vector is unpacked once a row. It is kept apart from its row, and whatever names the
+// column fetches it again, so that a rank of ten words fetched it ten times. The entries kept
+// hand on a copy of it, behind a second `offset 0` that keeps the planner from writing the
+// column back into every use.
+
+/**
+ * `offset 0` for a read made with the query builder, which leaves an offset of the number 0 out
+ * of what it writes, and with it the one thing the offset is here for: the planner writes
+ * nothing into a read that has one. The builder writes whatever it is handed that is not zero
+ * to it, so it is handed the text.
+ */
+const FENCE = sql`0` as unknown as number;
+
+/**
+ * The stored vector as a value of its own: a copy that changes nothing, since the weight is set
+ * on the lexemes of an empty list. A concatenation with an empty vector says the same and
+ * costs several times the copy, where it was measured.
+ */
+const unpackedOf = (vector: SQL): SQL => sql`setweight(${vector}, 'D', '{}'::text[])`;
 
 /**
  * The count of the findable entries, as row 0, and of those that hold each lexeme, as the row of
@@ -165,18 +191,20 @@ function countStatement(snapshotIds: readonly string[], lexemes: readonly string
     return total;
   }
   const asked = sql.param(lexemes.map((lexeme) => serializeSearchQuery([lexeme])));
-  return sql`with holding as materialized (
-      select asked.at, held.snapshot_id, held.visible
-      from unnest(${asked}::text[]) with ordinality as asked (word, at)
-      cross join lateral (
-        select e.snapshot_id, e.visible from ${indexEntries} e where e.search @@ asked.word::tsquery
-      ) held
-    )
-    ${total}
+  return sql`${total}
     union all
-    select holding.at::int, count(*)::int from holding
-    where holding.visible and holding.snapshot_id = any(${sql.param([...snapshotIds])}::uuid[])
-    group by holding.at`;
+    select asked.at::int, held.entries
+    from unnest(${asked}::text[]) with ordinality as asked (word, at)
+    cross join lateral (
+      select count(*)::int as entries
+      from (
+        select e.snapshot_id, e.visible from ${indexEntries} e
+        where e.search @@ asked.word::tsquery
+        offset 0
+      ) holding
+      where holding.visible and holding.snapshot_id = any(${sql.param([...snapshotIds])}::uuid[])
+    ) held
+    where held.entries > 0`;
 }
 
 function wordsStatement(
@@ -186,15 +214,42 @@ function wordsStatement(
   weights: readonly number[] | undefined,
   limit: number,
 ) {
-  // The entries that hold a word, by their ids: the one place a vector is tested. Those of the
-  // snapshots searched are then ranked, which is where a vector is unpacked.
-  const holding = sql`array(select held.id from ${indexEntries} held where held.search @@ (select ${serializeSearchQuery(lexemes)}::tsquery))`;
-  const rank = rankOf(lexemes, weights);
-  return runner
-    .select({ ...entryColumns, snapshotId: indexEntries.snapshotId })
+  // The entries that hold a word, as the index of the vectors names them.
+  const holding = runner
+    .select({
+      ...entryColumns,
+      // Every entry with a vector is searchable; said by a name, for the reads around this one.
+      searchable: sql<boolean>`true`.as("searchable"),
+      snapshotId: indexEntries.snapshotId,
+      visible: indexEntries.visible,
+      search: indexEntries.search,
+    })
     .from(indexEntries)
-    .where(and(sql`${indexEntries.id} = any(${holding})`, among(snapshotIds), VISIBLE))
-    .orderBy(sql`${rank} desc`, indexEntries.snapshotId, BY_PATH)
+    .where(sql`${indexEntries.search} @@ (select ${serializeSearchQuery(lexemes)}::tsquery)`)
+    .offset(FENCE)
+    .as("holding");
+  // Those of the snapshots searched, each with its vector unpacked once.
+  const { visible, search, ...kept } = holding._.selectedFields;
+  const found = runner
+    .select({ ...kept, unpacked: unpackedOf(sql`${search}`).as("unpacked") })
+    .from(holding)
+    .where(
+      and(
+        sql`${visible}`,
+        sql`${holding.snapshotId} = any(${sql.param([...snapshotIds])}::uuid[])`,
+      ),
+    )
+    .offset(FENCE)
+    .as("found");
+  const { unpacked, ...columns } = found._.selectedFields;
+  return runner
+    .select(columns)
+    .from(found)
+    .orderBy(
+      sql`${rankOf(lexemes, weights, sql`${unpacked}`)} desc`,
+      found.snapshotId,
+      sql`${found.path} collate "C"`,
+    )
     .limit(limit);
 }
 
