@@ -1,6 +1,7 @@
 import {
   type Address,
   accountAvatarUrl,
+  answeredInPart,
   formatAddress,
   HUB_DEFAULT_LIMIT,
   HUB_MAX_LIMIT,
@@ -40,7 +41,7 @@ import type { Logger } from "../logger.js";
 import type { Mount } from "../mounts/mount-service.js";
 import { OwnerNotFoundError, type OwnerService } from "../owners/owner-service.js";
 import { SearchBusyError } from "../search/cache.js";
-import { type HubSearch, standsInForFailure } from "../search/hub.js";
+import type { HubSearch } from "../search/hub.js";
 import type { AppEnv } from "./request-context.js";
 
 /**
@@ -299,10 +300,10 @@ export function registerRest(app: Hono<AppEnv>, dependencies: RestDependencies):
       }
       try {
         const result = await hub.search(query.query, query.limit ?? HUB_DEFAULT_LIMIT);
-        // What is left of a search that ran out of time is for whoever asked, and for no cache.
+        // An answer without its words or its meaning is for whoever asked, and for no cache.
         c.header(
           "cache-control",
-          standsInForFailure(result)
+          answeredInPart(result.ranking)
             ? "no-store"
             : searchCacheControl(dependencies.searchCacheMs ?? 0),
         );

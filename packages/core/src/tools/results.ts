@@ -287,6 +287,25 @@ export interface FindRanking {
   readonly embedding?: { readonly embedded: number; readonly total: number } | undefined;
 }
 
+/**
+ * Whether a search answered with less than it has to give, by what its ranking says: the words
+ * did not answer in time (ADR-0091), the meaning did not answer this time where the search is
+ * by meaning as well, or the index is still being embedded. Such an answer is for whoever asked
+ * and for no cache (ADR-0096): the same question a moment later may be answered in full. A query
+ * of identifiers ranked by its words (ADR-0079) is answered in full, and so is every search
+ * where there is no model to ask.
+ */
+export function answeredInPart(ranking: FindRanking | undefined): boolean {
+  if (ranking === undefined) {
+    return false;
+  }
+  return (
+    ranking.words === false ||
+    (!ranking.meaning && ranking.identifiers !== true) ||
+    ranking.embedding !== undefined
+  );
+}
+
 /** One result of a search across the packs a deployment serves (ADR-0070): an item, and the pack it is in. */
 /**
  * What the pack of a result is: a pack of skills (a manifest and skills), a pack of documents (a

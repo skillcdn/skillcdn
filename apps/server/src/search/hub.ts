@@ -69,21 +69,13 @@ export interface HubSearchOptions {
 export interface HubSearch {
   /**
    * The results for a query, at most `limit` of them. Where the words ran out of their time and
-   * the meaning answered, the answer is the meaning's alone, and says so (`standsInForFailure`).
-   * Throws when the database refused, or when nothing answered in time.
+   * the meaning answered, the answer is the meaning's alone, and where the meaning did not
+   * answer, the words'; the ranking says which, and such an answer is for no cache
+   * (`answeredInPart`). Throws when the database refused, or when nothing answered in time.
    */
   search(query: string, limit: number): Promise<HubResult>;
   /** How many packs a search covers right now. */
   packs(): Promise<number>;
-}
-
-/**
- * Whether an answer is what was left of a search whose words ran out of their time (ADR-0091):
- * given to whoever asked instead of a failure, and, like a failure, kept by no cache, so that the
- * next who asks is answered in full.
- */
-export function standsInForFailure(result: HubResult): boolean {
-  return result.ranking?.words === false;
 }
 
 /** How long the set of searchable packs is kept before it is read again. */

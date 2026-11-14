@@ -83,6 +83,40 @@ describe("withSearchCache", () => {
     expect(asked).toHaveLength(2);
   });
 
+  it("keeps nothing of an answer its meaning did not reach, and keeps one that asked for none", async () => {
+    // The comparison rests, or the embedder is away: the words answered alone this time
+    // (ADR-0096). Kept, that answer would be given again after the meaning is back.
+    const asked: string[] = [];
+    let ranking: HubResult["ranking"] = { meaning: false, reranked: false };
+    const hub: HubSearch = {
+      packs: async () => 1,
+      search: async (query) => {
+        asked.push(query);
+        return { ...answer(query), ...(ranking === undefined ? {} : { ranking }) };
+      },
+    };
+    const cached = withSearchCache(hub, {
+      ttlMs: 1000,
+      entries: 10,
+      concurrency: 4,
+      clock: { now: () => new Date(0) },
+    });
+    expect((await cached.search("card news", 10)).ranking?.meaning).toBe(false);
+    ranking = { meaning: true, reranked: false };
+    expect((await cached.search("card news", 10)).ranking?.meaning).toBe(true);
+    await cached.search("card news", 10);
+    expect(asked).toHaveLength(2);
+    // A query of identifiers is ranked by its words on purpose, and a deployment without a
+    // model says nothing of a ranking: both are answers in full.
+    ranking = { meaning: false, reranked: false, identifiers: true };
+    await cached.search("4.2.6", 10);
+    await cached.search("4.2.6", 10);
+    ranking = undefined;
+    await cached.search("decks", 10);
+    await cached.search("decks", 10);
+    expect(asked).toEqual(["card news", "card news", "4.2.6", "decks"]);
+  });
+
   it("asks once for everyone waiting on the same question", async () => {
     const { hub, asked, release } = slowHub();
     const cached = withSearchCache(hub, {

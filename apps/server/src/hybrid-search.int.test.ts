@@ -235,6 +235,25 @@ describe("a search by words and by meaning", () => {
     expect(body.items[0]).toMatchObject({ path: "docs/invoicing.md" });
   });
 
+  it("lets a cache keep the answer of a pinned address only where the meaning answered", async () => {
+    // A pinned public address may be kept a day: the commit never changes. An answer the
+    // embedder did not reach this time is not the commit's, and is for no cache (ADR-0096).
+    const pinned = `/api/v1/find${ADDRESS}@${fixtureCommits().main}?query=${encodeURIComponent("waive a late fee")}`;
+    const whole = await h.request(pinned);
+    expect(restFindSchema.parse(await whole.json())).toMatchObject({
+      status: "ready",
+      ranking: { meaning: true },
+    });
+    expect(whole.headers.get("cache-control")).toBe("public, max-age=86400");
+    embed.fail(new InferenceError("inference_unreachable", "the inference server is away"));
+    const alone = await h.request(pinned);
+    expect(restFindSchema.parse(await alone.json())).toMatchObject({
+      status: "ready",
+      ranking: { meaning: false },
+    });
+    expect(alone.headers.get("cache-control")).toBe("no-store");
+  });
+
   it("ranks a query of identifiers alone by its words, asking neither model, and says so (ADR-0079)", async () => {
     const asked = embed.calls.filter((call) => call.as === "query").length;
     const reranked = rerank.calls.length;
@@ -391,6 +410,8 @@ describe("a search across the packs by words and by meaning", () => {
     const resting = await search("waive a late fee");
     expect(resting.status).toBe(200);
     expect(restSearchSchema.parse(await resting.json()).ranking).toMatchObject({ meaning: false });
+    // An answer its meaning did not reach is for whoever asked, and for no cache (ADR-0096).
+    expect(resting.headers.get("cache-control")).toBe("no-store");
     expect(asked()).toBe(before + 2);
     expect(timedOut()).toEqual(["count", "meaning"]);
 
@@ -399,6 +420,33 @@ describe("a search across the packs by words and by meaning", () => {
     const rested = restSearchSchema.parse(await (await search("pardon tardy penalties")).json());
     expect(rested.ranking).toMatchObject({ meaning: true });
     expect(asked()).toBe(before + 3);
+  });
+
+  it("lets no cache keep an answer its meaning did not reach", async () => {
+    const across = createHarness(testDatabase, {
+      host,
+      hub: { ...HUB_DEFAULTS, cacheMs: 300_000 },
+      meaning: meaning(),
+    });
+    const search = searchOf(across);
+    // The embedder does not answer this once: the words answer alone, and say so.
+    embed.fail(new Error("the embedder is away"));
+    const alone = await search("waive the late fees");
+    expect(alone.status).toBe(200);
+    expect(alone.headers.get("cache-control")).toBe("no-store");
+    expect(restSearchSchema.parse(await alone.json()).ranking).toMatchObject({ meaning: false });
+    // The search kept nothing of it: the same question is asked again, answered by both, and
+    // that answer is one to keep (ADR-0096).
+    const before = asked();
+    const whole = await search("waive the late fees");
+    expect(whole.headers.get("cache-control")).toContain("s-maxage=300");
+    expect(restSearchSchema.parse(await whole.json()).ranking).toMatchObject({ meaning: true });
+    expect(asked()).toBe(before + 1);
+    await search("waive the late fees");
+    expect(asked()).toBe(before + 1);
+    // A query of identifiers is ranked by its words on purpose, and kept.
+    const coded = await search("JOB-4090");
+    expect(coded.headers.get("cache-control")).toContain("s-maxage=300");
   });
 
   it("answers by meaning alone when the words run out of their time, and lets no cache keep that", async () => {

@@ -1,4 +1,5 @@
 import {
+  answeredInPart,
   BROWSE_MAX_LIMIT,
   baseName,
   browseBody,
@@ -288,7 +289,8 @@ export function registerAddressRoutes<E extends Env, M extends ServedMount>(
     record(c, mount, "find");
     try {
       const result = await reader.find(mount, query, 0);
-      if (result.status === "ready") keep(c, mount);
+      // An answer the meaning did not reach, or reached in part, is not the commit's for a day.
+      if (result.status === "ready" && !answeredInPart(result.result.ranking)) keep(c, mount);
       return c.json(findBody(result));
     } catch (error) {
       return failure(c, error);

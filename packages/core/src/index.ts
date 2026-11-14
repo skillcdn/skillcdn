@@ -702,6 +702,7 @@ export type {
   FolderOverview,
 } from "./tools/results.js";
 export {
+  answeredInPart,
   type CodeResult,
   type DataCodeBlock,
   type DataTable,

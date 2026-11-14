@@ -4,6 +4,7 @@ import {
   ACCOUNT_PAGE_PATH,
   type Address,
   accountAvatarUrl,
+  answeredInPart,
   BADGE_ROUTE,
   browseBody,
   type Clock,
@@ -76,7 +77,7 @@ import type { OperatorLists } from "../operator/lists.js";
 import type { Showcase } from "../operator/showcase.js";
 import { OwnerNotFoundError, type OwnerService } from "../owners/owner-service.js";
 import { SearchBusyError } from "../search/cache.js";
-import { type HubSearch, standsInForFailure } from "../search/hub.js";
+import type { HubSearch } from "../search/hub.js";
 import type { SocialCards } from "../social/cards.js";
 import { type PictureFetcher, rasterImageType } from "../social/pictures.js";
 import { UsageReads } from "../stats/usage-reads.js";
@@ -1404,9 +1405,9 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
         }
         try {
           const result = await hub.search(term, HUB_MAX_LIMIT);
-          // What is left of a search that ran out of time is for whoever asked, and for no cache.
+          // An answer without its words or its meaning is for whoever asked, and for no cache.
           return bundle.search(request, { results: { ready: hubBody(result) } }, 200, {
-            "cache-control": standsInForFailure(result) ? "no-store" : cacheControl,
+            "cache-control": answeredInPart(result.ranking) ? "no-store" : cacheControl,
           });
         } catch (error) {
           if (error instanceof SearchBusyError) {
