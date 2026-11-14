@@ -105,7 +105,7 @@ Packages compile to `dist/` and consume each other's compiled output. Going thro
 - Dependabot's pull requests are landed one at a time, by a rebase merge or by cherry-picking the commit onto `main` (`git cherry-pick -x`), checked and pushed like any other commit; a cherry-picked one is closed with a comment naming the commit. Two that touch the lockfile conflict; see Dependencies.
 - Never force-push or rewrite `main`, skip hooks with `--no-verify`, or commit build output.
 - Keep the `Co-Authored-By` trailer your agent adds, so AI-authored changes stay traceable.
-- **Releases.** The published packages share one version (ADR-0058). The release workflow opens one pull request that bumps every published package to the next version, with the changelogs of the ones that changed; merging it publishes them all to npm, with provenance. Nobody runs `pnpm publish` by hand, except a maintainer for the first version of a new package (ADR-0046).
+- **Releases.** The published packages share one version (ADR-0058). The release workflow opens one pull request that bumps every published package to the next version, with the changelogs of the ones that changed; merging it publishes them all to npm, with provenance. Nobody publishes by hand, except a maintainer who holds a new package's name with a placeholder `0.0.0` before its first release (ADR-0102).
 
 ## Documentation protocol
 
