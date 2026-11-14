@@ -76,6 +76,9 @@ export function embedPriority(reason: EmbedReason, tier: EmbedTier | undefined):
  * died, and the time of an attempt only bounds one that hangs, far past any body: a slice that
  * outran it would start again at the same body for as long as it is tried.
  */
+/** How long one attempt of a sweep may take before it is counted as failed and tried again. */
+export const SWEEP_ATTEMPT_SECONDS = 3600;
+
 export const QUEUE_SETTINGS: Readonly<Record<(typeof JOB_QUEUES)[number], QueueSettings>> = {
   [EMBED_QUEUE]: {
     retryLimit: 5,
@@ -84,7 +87,12 @@ export const QUEUE_SETTINGS: Readonly<Record<(typeof JOB_QUEUES)[number], QueueS
     heartbeatSeconds: 60,
   },
   [INDEX_QUEUE]: { retryLimit: 5, retryDelaySeconds: 60, expireInSeconds: 1800 },
-  [SWEEP_QUEUE]: { retryLimit: 1, retryDelaySeconds: 60, expireInSeconds: 600 },
+  // A sweep gives skills their heads for up to five minutes, and its last call may then wait
+  // for its turn and run for its whole time, each up to the ten minutes `EMBEDDINGS_TIMEOUT_MS`
+  // may be: an attempt that outran its time would be tried again beside the call still running,
+  // and embed the same heads twice. An hour is the most a sweep may take, and the time between
+  // two of them.
+  [SWEEP_QUEUE]: { retryLimit: 1, retryDelaySeconds: 60, expireInSeconds: SWEEP_ATTEMPT_SECONDS },
   // A repository the host does not answer for is asked again after a minute, then two, and is
   // then left to a later pass, which finds its ref still due.
   [AHEAD_QUEUE]: { retryLimit: 2, retryDelaySeconds: 60, expireInSeconds: 1800 },
