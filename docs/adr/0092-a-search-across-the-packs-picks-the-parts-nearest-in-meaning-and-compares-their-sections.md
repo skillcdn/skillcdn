@@ -1,6 +1,6 @@
 # ADR-0092: A search across the packs picks the parts nearest in meaning and compares their sections
 
-- Status: Accepted
+- Status: Accepted; in point 4, the comparison of the sections of the parts picked with their own vectors is replaced by [ADR-0103](0103-a-search-across-the-packs-reads-its-vectors-in-the-order-they-are-stored-and-compares-sections-at-half-precision.md) (copies at half precision, read in the order they are stored)
 - Date: 2026-11-13
 - Builds on [ADR-0064](0064-meaning-search-runs-on-pgvector-and-pg-boss-behind-an-embedder-port.md) (the vectors of sections and their key), [ADR-0065](0065-meaning-search-runs-on-open-weight-models-served-beside-the-image.md) (a change of model is a backfill), [ADR-0070](0070-a-deployment-is-searched-across-every-pack-it-serves.md) (the search across packs), [ADR-0090](0090-a-search-across-the-packs-reads-what-is-searchable-and-an-index-of-a-table-in-use-is-built-without-holding-its-writes.md) and [ADR-0091](0091-a-search-across-the-packs-answers-with-what-answered-in-time-and-its-comparison-by-meaning-waits-for-the-words.md) (what it reads, and what it answers when a part of it runs out of time); supersedes point 5 of ADR-0070, and of its point 3 the sentence on the sections nearest the query.
 

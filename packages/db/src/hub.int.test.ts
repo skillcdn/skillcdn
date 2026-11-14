@@ -37,6 +37,7 @@ import {
   createTestDatabase,
   DEV_DATABASE_URL,
   dropPartVectors,
+  dropSectionHalves,
   readHubStatements,
   type TestDatabase,
 } from "./testing.js";
@@ -425,6 +426,88 @@ describe("the words and the meaning across every pack", () => {
     expect(await ask(0)).toHaveLength(2 * PART_SECTIONS + 3);
   });
 
+  it("compares the sections of the parts it picked at half precision, and at full those not kept so yet (ADR-0103)", async () => {
+    const pack = await repository(
+      "halves",
+      commit("d"),
+      [
+        entry({ path: "docs/halves.md", blobSha: "hub-halves", title: "Halves" }),
+        entry({ path: "docs/beside.md", blobSha: "hub-halves-beside", title: "Beside" }),
+      ],
+      { "hub-halves": "# Halves\n\nThree.\n", "hub-halves-beside": "# Beside\n\nOne.\n" },
+    );
+    // Numbers a half-precision vector holds as they are, so that both precisions say the same.
+    await writeSectionVectors(database, KEY, [
+      ...[
+        [1, 0, 0, 0],
+        [0.5, 0.5, 0, 0],
+        [0, 1, 0, 0],
+      ].map((numbers, section) => ({
+        blobSha: "hub-halves",
+        section,
+        heading: ["Halves", `Part ${section}`],
+        offset: section * 10,
+        length: 10,
+        vector: Float32Array.from(numbers),
+      })),
+      {
+        blobSha: "hub-halves-beside",
+        section: 0,
+        heading: ["Beside"],
+        offset: 0,
+        length: 12,
+        vector: Float32Array.from([0.75, 0, 0.25, 0]),
+      },
+    ]);
+    const ids = (await listSearchablePacks(database))
+      .filter((found) => found.repoId === pack.repoId)
+      .map((found) => found.snapshotId);
+    const ask = async (parts: number) =>
+      (
+        await searchHubSectionVectors(
+          database,
+          ids,
+          KEY,
+          Float32Array.from([1, 0, 0, 0]),
+          10,
+          5000,
+          parts,
+        )
+      ).map((match) => [
+        match.path,
+        match.section,
+        match.heading,
+        match.offset,
+        match.length,
+        Math.round(match.similarity * 1e6) / 1e6,
+      ]);
+    // Every section compared with its own vector, as the search inside a pack compares them.
+    const exact = await ask(0);
+    expect(exact.map((match) => `${match[0]} ${match[1]}`)).toEqual([
+      "docs/halves.md 0",
+      "docs/beside.md 0",
+      "docs/halves.md 1",
+      "docs/halves.md 2",
+    ]);
+    expect(await ask(10)).toEqual(exact);
+    // A part one of whose sections has no copy, and parts with none, as on the day a database
+    // is given their table: those sections are compared with their own vectors.
+    await drizzleOf(database).execute(
+      sql`delete from section_halves where blob_sha = 'hub-halves' and section = 1`,
+    );
+    expect(await ask(10)).toEqual(exact);
+    expect(await dropSectionHalves(database)).toBeGreaterThan(0);
+    expect(await ask(10)).toEqual(exact);
+    // The sweep makes them again, for this body and every other the earlier tests wrote.
+    let filled = 0;
+    for (let step = await fillPartVectors(database, KEY, 100); step > 0; ) {
+      filled += step;
+      step = await fillPartVectors(database, KEY, 100);
+    }
+    expect(filled).toBeGreaterThan(0);
+    expect(await ask(10)).toEqual(exact);
+  });
+
   it("picks a skill by its head, a part of its own, and gives the head to no document (ADR-0094)", async () => {
     // The sections of a skill say how the work is done; what it is named and says it does
     // is what is asked for, and stands in its head.
@@ -649,6 +732,15 @@ describe("the words and the meaning across every pack", () => {
     // How the meaning goes about it is the planner's to choose in a table this small; what it
     // may not do is read the files.
     expect(reading.meaning?.entries).toBeLessThan(1000);
+    // Nor read the vectors through a primary key, a page at a time wherever each lies: it reads
+    // them in the order they are stored, the sections from their copies at half precision
+    // (ADR-0103).
+    expect(reading.meaning?.scans).toContainEqual(expect.stringMatching(/ on section_halves$/));
+    expect(
+      reading.meaning?.scans.filter((scan) =>
+        /^Index Scan on (part_vectors|section_halves|section_vectors)$/.test(scan),
+      ),
+    ).toEqual([]);
   });
 
   it("tells a statement the server cancelled for its time from any other failure", () => {

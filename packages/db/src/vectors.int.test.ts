@@ -6,7 +6,7 @@ import {
   SECTIONING_VERSION,
   sectionsOf,
 } from "@skillcdn/core";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { drizzleOf } from "./client.js";
 import {
@@ -34,8 +34,13 @@ import {
   writeSectionVectors,
   writeSnapshotIndex,
 } from "./index.js";
-import { partVectors, snapshots } from "./schema.js";
-import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "./testing.js";
+import { partVectors, sectionHalves, snapshots } from "./schema.js";
+import {
+  createTestDatabase,
+  DEV_DATABASE_URL,
+  dropSectionHalves,
+  type TestDatabase,
+} from "./testing.js";
 
 // The vectors of sections (ADR-0064) on a database that has the extension, which the compose
 // database and the one of CI do. Four dimensions stand in for a model's thousand: the table
@@ -182,6 +187,19 @@ async function partsOf(
         (value) => Math.round(value * 1000) / 1000,
       ),
     }));
+}
+
+/** The sections of a body kept at half precision under the key (ADR-0103), by section, with their vectors. */
+async function halvesOf(blobSha: string): Promise<{ section: number; vector: number[] }[]> {
+  const rows = await drizzleOf(database)
+    .select({ section: sectionHalves.section, vector: sectionHalves.vector })
+    .from(sectionHalves)
+    .where(and(eq(sectionHalves.blobSha, blobSha), eq(sectionHalves.model, KEY.model)))
+    .orderBy(sectionHalves.section);
+  return rows.map((row) => ({
+    section: row.section,
+    vector: Array.from(row.vector as unknown as Iterable<number>),
+  }));
 }
 
 const search = (scope: SnapshotScope, mountPath: string, query: number[], limit = 10) =>
@@ -422,6 +440,10 @@ describe("section vectors", () => {
       { part: 0, sections: PART_SECTIONS, vector: [1, 0, 0, 0] },
       { part: 1, sections: 2, vector: [0, 0, 0, 1] },
     ]);
+    // Each section is kept at half precision beside them (ADR-0103).
+    expect(await halvesOf("blob-long")).toEqual(
+      long.map((item) => ({ section: item.section, vector: Array.from(item.vector) })),
+    );
     // Nothing is left to fill where every body was written with its parts.
     expect(await fillPartVectors(database, KEY, 100)).toBe(0);
   });
@@ -447,6 +469,29 @@ describe("section vectors", () => {
     expect(await fillPartVectors(database, { ...KEY, model: "another-model" }, 100)).toBe(0);
   });
 
+  it("fills the sections at half precision of bodies whose parts were made before there were any (ADR-0103)", async () => {
+    // As a deployment's vectors are on the day it is given that table: sections and parts.
+    expect(await dropSectionHalves(database)).toBeGreaterThan(0);
+    const parts = await partsOf("blob-long");
+    expect(await halvesOf("blob-long")).toEqual([]);
+    let filled = 0;
+    for (let step = await fillPartVectors(database, KEY, 2); step > 0; ) {
+      filled += step;
+      step = await fillPartVectors(database, KEY, 2);
+    }
+    expect(filled).toBeGreaterThanOrEqual(3);
+    expect((await halvesOf("blob-long")).map((half) => half.section)).toEqual(
+      Array.from({ length: PART_SECTIONS + 2 }, (_, section) => section),
+    );
+    expect(await partsOf("blob-long")).toEqual(parts);
+    // A body one of whose sections was left without is filled as well.
+    await drizzleOf(database)
+      .delete(sectionHalves)
+      .where(and(eq(sectionHalves.blobSha, "blob-long"), eq(sectionHalves.section, 1)));
+    expect(await fillPartVectors(database, KEY, 100)).toBe(1);
+    expect(await halvesOf("blob-long")).toHaveLength(PART_SECTIONS + 2);
+  });
+
   it("drops the part vectors with the sections of a body nothing names any more", async () => {
     const gone = vectorsOf("blob-gone", TOUR, [
       [0, 0, 0, 1],
@@ -460,10 +505,13 @@ describe("section vectors", () => {
       .from(snapshots)
       .where(eq(snapshots.id, scope.snapshotId))
       .then((rows) => rows.map((row) => row.repoId));
+    expect(await halvesOf("blob-gone")).toHaveLength(2);
     expect(await purgeRepositoryIndex(database, repoId ?? "")).toMatchObject({ snapshots: 1 });
     expect(await partsOf("blob-gone")).toEqual([]);
-    // A body another repository still holds keeps both.
+    expect(await halvesOf("blob-gone")).toEqual([]);
+    // A body another repository still holds keeps them all.
     expect(await partsOf("blob-billing")).toHaveLength(1);
+    expect(await halvesOf("blob-billing")).toHaveLength(3);
   });
 
   it("keep a skill's head before its sections, a part of its own, compared for the skill alone (ADR-0094)", async () => {
@@ -630,6 +678,7 @@ describe("section vectors", () => {
 
   it("get their table on the next migrate where it is missing and the extension is there", async () => {
     // As on a database that was migrated before the extension was installed on its server.
+    await drizzleOf(database).execute(sql`drop table section_halves`);
     await drizzleOf(database).execute(sql`drop table part_vectors`);
     await drizzleOf(database).execute(sql`drop table section_vectors`);
     expect(await supportsSectionVectors(database)).toBe(false);
@@ -637,17 +686,30 @@ describe("section vectors", () => {
     expect(notices).toEqual([]);
     expect(await supportsSectionVectors(database)).toBe(true);
     expect(await writeSectionVectors(database, KEY, BILLING_VECTORS)).toBe(3);
-    // The table of the parts came back with it.
+    // The tables of the parts and of the sections at half precision came back with it.
     expect(await partsOf("blob-billing")).toHaveLength(1);
+    expect(await halvesOf("blob-billing")).toHaveLength(3);
   });
 
-  it("gets the table of the part vectors on the next migrate where the extension was updated since", async () => {
+  it("gets the tables of the part vectors and the half sections on the next migrate where the extension was updated since", async () => {
     // As on a database whose extension had no half-precision type when it was migrated: the
-    // table of the sections, and none of the parts.
+    // table of the sections, and none of the parts or of the sections at half precision.
+    await drizzleOf(database).execute(sql`drop table section_halves`);
     await drizzleOf(database).execute(sql`drop table part_vectors`);
     expect(await fillPartVectors(database, KEY, 100)).toBe(0);
     await migrateDatabase(testDatabase.connectionString);
     expect(await fillPartVectors(database, KEY, 100)).toBe(1);
     expect(await partsOf("blob-billing")).toHaveLength(1);
+    expect(await halvesOf("blob-billing")).toHaveLength(3);
+  });
+
+  it("gets the table of the half sections on the next migrate where the parts had theirs already", async () => {
+    // As on a database migrated by a release that knew the parts and not the half sections,
+    // where a migration was skipped since.
+    await drizzleOf(database).execute(sql`drop table section_halves`);
+    expect(await fillPartVectors(database, KEY, 100)).toBe(0);
+    await migrateDatabase(testDatabase.connectionString);
+    expect(await fillPartVectors(database, KEY, 100)).toBe(1);
+    expect(await halvesOf("blob-billing")).toHaveLength(3);
   });
 });

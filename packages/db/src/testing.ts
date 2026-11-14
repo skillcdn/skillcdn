@@ -5,7 +5,7 @@ import { Client } from "pg";
 import { createDatabase, type Database, drizzleOf, poolOf } from "./client.js";
 import { migrateDatabase } from "./migrate.js";
 import { HEAD_PART } from "./queries/vectors.js";
-import { partVectors, sectionVectors, snapshots } from "./schema.js";
+import { partVectors, sectionHalves, sectionVectors, snapshots } from "./schema.js";
 
 // Support for integration tests, here and in other workspaces: `@skillcdn/db/testing`.
 
@@ -97,19 +97,31 @@ export async function holdIndexEntries(database: Database): Promise<() => Promis
 /**
  * For a test of the sweep that makes them (ADR-0092): leaves the database as one is on the day
  * it is given the table of the part vectors, with the vectors of the sections and none of the
- * parts. Says how many rows went.
+ * parts, nor of the sections at half precision that came after them. Says how many parts went.
  */
 export async function dropPartVectors(database: Database): Promise<number> {
+  const db = drizzleOf(database);
+  const removed = await db.delete(partVectors).returning({ part: partVectors.part });
+  await db.delete(sectionHalves);
+  return removed.length;
+}
+
+/**
+ * For a test of the sweep that makes them (ADR-0103): leaves the database as one is on the day
+ * it is given the table of the sections at half precision, with the vectors of the sections and
+ * of their parts and none of these. Says how many rows went.
+ */
+export async function dropSectionHalves(database: Database): Promise<number> {
   const removed = await drizzleOf(database)
-    .delete(partVectors)
-    .returning({ part: partVectors.part });
+    .delete(sectionHalves)
+    .returning({ section: sectionHalves.section });
   return removed.length;
 }
 
 /**
  * For a test of the sweep that gives them (ADR-0094): leaves the database as one is on the day
  * a skill is given a head, with the vectors of the sections of its skills and no head. Says how
- * many heads went; the parts they were go with them.
+ * many heads went; the parts they were, and their copies at half precision, go with them.
  */
 export async function dropHeadVectors(database: Database): Promise<number> {
   const db = drizzleOf(database);
@@ -118,6 +130,7 @@ export async function dropHeadVectors(database: Database): Promise<number> {
     .where(eq(sectionVectors.section, HEAD_SECTION))
     .returning({ blobSha: sectionVectors.blobSha });
   await db.delete(partVectors).where(eq(partVectors.part, HEAD_PART));
+  await db.delete(sectionHalves).where(eq(sectionHalves.section, HEAD_SECTION));
   return removed.length;
 }
 

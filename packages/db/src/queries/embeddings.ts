@@ -8,6 +8,7 @@ import {
   partVectors,
   repoRefs,
   repos,
+  sectionHalves,
   sectionVectors,
   snapshotEmbeddings,
   snapshots,
@@ -480,7 +481,8 @@ export async function deleteEmbeddingsOutsideKey(
   );
   let vectors = 0;
   if (present.rows[0]?.present === true) {
-    // The vectors of the parts were made from those of the sections, and go before them.
+    // The vectors of the parts and the sections at half precision were made from those of the
+    // sections, and go before them.
     if (await partVectorsPresent(db)) {
       await db
         .delete(partVectors)
@@ -491,30 +493,52 @@ export async function deleteEmbeddingsOutsideKey(
             ne(partVectors.sectioningVersion, key.sectioningVersion),
           ),
         );
-    }
-    const otherKey = or(
-      ne(sectionVectors.model, key.model),
-      ne(sectionVectors.dimensions, key.dimensions),
-      ne(sectionVectors.sectioningVersion, key.sectioningVersion),
-    );
-    while (true) {
-      const batch = await db.execute<{ removed: number }>(sql`
-        with doomed as (
-          select ctid from ${sectionVectors}
-          where ${otherKey}
-          limit ${DELETE_BATCH_SIZE}
+      await deleteInBatches(
+        db,
+        sectionHalves,
+        or(
+          ne(sectionHalves.model, key.model),
+          ne(sectionHalves.dimensions, key.dimensions),
+          ne(sectionHalves.sectioningVersion, key.sectioningVersion),
         ),
-        gone as (
-          delete from ${sectionVectors} where ctid in (select ctid from doomed) returning 1
-        )
-        select count(*)::integer as removed from gone
-      `);
-      const removed = Number(batch.rows[0]?.removed ?? 0);
-      vectors += removed;
-      if (removed < DELETE_BATCH_SIZE) {
-        break;
-      }
+      );
     }
+    vectors = await deleteInBatches(
+      db,
+      sectionVectors,
+      or(
+        ne(sectionVectors.model, key.model),
+        ne(sectionVectors.dimensions, key.dimensions),
+        ne(sectionVectors.sectioningVersion, key.sectioningVersion),
+      ),
+    );
   }
   return { vectors, snapshots: removedSnapshots.length };
+}
+
+/** Deletes the rows of a table a condition names, {@link DELETE_BATCH_SIZE} a statement, and says how many went. */
+async function deleteInBatches(
+  db: Drizzle,
+  table: typeof sectionVectors | typeof sectionHalves,
+  doomed: SQL | undefined,
+): Promise<number> {
+  let removed = 0;
+  while (true) {
+    const batch = await db.execute<{ removed: number }>(sql`
+      with doomed as (
+        select ctid from ${table}
+        where ${doomed}
+        limit ${DELETE_BATCH_SIZE}
+      ),
+      gone as (
+        delete from ${table} where ctid in (select ctid from doomed) returning 1
+      )
+      select count(*)::integer as removed from gone
+    `);
+    const count = Number(batch.rows[0]?.removed ?? 0);
+    removed += count;
+    if (count < DELETE_BATCH_SIZE) {
+      return removed;
+    }
+  }
 }

@@ -225,6 +225,13 @@
       "when": 1794503566463,
       "tag": "0031_section-text-hash",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1794678000501,
+      "tag": "0032_section-halves",
+      "breakpoints": true
     }
   ]
 }

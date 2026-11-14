@@ -1,7 +1,14 @@
 import { type DocumentSection, HEAD_SECTION } from "@skillcdn/core";
 import { type AnyColumn, and, eq, inArray, notExists, type SQL, sql } from "drizzle-orm";
 import { type Database, type Drizzle, drizzleOf } from "../client.js";
-import { indexEntries, partVectors, repoRefs, sectionVectors, snapshots } from "../schema.js";
+import {
+  indexEntries,
+  partVectors,
+  repoRefs,
+  sectionHalves,
+  sectionVectors,
+  snapshots,
+} from "../schema.js";
 import { BY_PATH, FINDABLE, inSnapshot, underPath } from "./entries.js";
 import type { SnapshotScope } from "./snapshots.js";
 
@@ -77,13 +84,15 @@ async function present(db: Drizzle): Promise<boolean> {
 }
 
 /**
- * True in a database that keeps the vectors of parts: one with section vectors whose extension
- * has the half-precision type (0.7.0 on). Where it is not, nothing makes them and a search
- * across the packs compares every section.
+ * True in a database that keeps the vectors of parts, and of the sections at half precision
+ * beside them: one with section vectors whose extension has the half-precision type (0.7.0 on).
+ * Where it is not, nothing makes them and a search across the packs compares every section.
+ * The two tables come with the same migrations, under the same conditions, and are made and
+ * dropped together (ADR-0092, ADR-0103).
  */
 export async function partVectorsPresent(db: Pick<Drizzle, "execute">): Promise<boolean> {
   const result = await db.execute<{ present: boolean }>(
-    sql`select to_regclass('part_vectors') is not null as present`,
+    sql`select to_regclass('part_vectors') is not null and to_regclass('section_halves') is not null as present`,
   );
   return result.rows[0]?.present === true;
 }
@@ -121,7 +130,8 @@ export function vectorLiteral(vector: Float32Array): string {
  * the same vector. A vector of other dimensions than the key's is refused by the table. The
  * caller writes a body's sections together, since a body with any section written counts as
  * done ({@link blobsWithoutVectors}); one transaction keeps that true through an interruption,
- * and the vectors of the body's parts are made in it from what is then stored (ADR-0092).
+ * and the vectors of the body's parts, and of its sections at half precision, are made in it
+ * from what is then stored (ADR-0092, ADR-0103).
  */
 export async function writeSectionVectors(
   database: Database,
@@ -163,7 +173,8 @@ export async function writeSectionVectors(
  * key, as they are stored: the mean of every {@link PART_SECTIONS} consecutive sections, which
  * the cosine distance reads as their direction whatever its length, and a skill's head as a part
  * of its own. A part already there is made again, so that a body whose sections were added to
- * has the mean of them all.
+ * has the mean of them all. Each section is kept at half precision beside them (ADR-0103); one
+ * already there stays, since a section's vector under a key does not change.
  */
 async function writePartVectors(
   db: Drizzle,
@@ -187,13 +198,40 @@ async function writePartVectors(
         do update set sections = excluded.sections, vector = excluded.vector
     `);
   }
+  await writeSectionHalves(db, key, blobShas);
+}
+
+/**
+ * Keeps the sections of these bodies under the key at half precision, inside their rows
+ * (ADR-0103), in the order of the bodies and their sections, so that the sections of a part lie
+ * together. A section kept so already stays as it is: its vector under the key does not change.
+ */
+async function writeSectionHalves(
+  db: Drizzle,
+  key: VectorKey,
+  blobShas: readonly string[],
+): Promise<void> {
+  for (let start = 0; start < blobShas.length; start += HASH_BATCH_SIZE) {
+    await db.execute(sql`
+      insert into ${sectionHalves} (blob_sha, model, dimensions, sectioning_version, section, vector)
+      select v.blob_sha, v.model, v.dimensions, v.sectioning_version, v.section, v.vector::halfvec
+      from ${sectionVectors} v
+      where v.blob_sha = any(${sql.param(blobShas.slice(start, start + HASH_BATCH_SIZE))}::text[])
+        and v.model = ${key.model} and v.dimensions = ${key.dimensions}
+        and v.sectioning_version = ${key.sectioningVersion}
+      order by v.blob_sha, v.section
+      on conflict (blob_sha, model, dimensions, sectioning_version, section) do nothing
+    `);
+  }
 }
 
 /**
  * Makes the part vectors of bodies that have section vectors under the key and none of these,
- * at most `limit` bodies, and says for how many: what the worker's sweep calls until nothing is
- * left, on a database whose section vectors were written before part vectors were (ADR-0092).
- * Nothing to do where the tables are not.
+ * with their sections at half precision, and then the sections at half precision of bodies
+ * whose parts were made before those were, at most `limit` bodies in all, and says for how
+ * many: what the worker's sweep calls until nothing is left, on a database whose section vectors
+ * were written before these were (ADR-0092, ADR-0103). A part already made is not made again
+ * for want of the other. Nothing to do where the tables are not.
  */
 export async function fillPartVectors(
   database: Database,
@@ -204,20 +242,36 @@ export async function fillPartVectors(
   if (!(await partVectorsPresent(db))) {
     return 0;
   }
-  const without = await db.execute<{ blob_sha: string }>(sql`
+  const ofKey = sql`v.model = ${key.model} and v.dimensions = ${key.dimensions}
+    and v.sectioning_version = ${key.sectioningVersion}`;
+  const unparted = await db.execute<{ blob_sha: string }>(sql`
     select distinct v.blob_sha
     from ${sectionVectors} v
-    where v.model = ${key.model} and v.dimensions = ${key.dimensions}
-      and v.sectioning_version = ${key.sectioningVersion}
+    where ${ofKey}
       and not exists (
         select 1 from ${partVectors} p
         where p.blob_sha = v.blob_sha and p.model = v.model and p.dimensions = v.dimensions
           and p.sectioning_version = v.sectioning_version)
     limit ${limit}
   `);
-  const blobShas = without.rows.map((row) => row.blob_sha);
-  await writePartVectors(db, key, blobShas);
-  return blobShas.length;
+  const parted = unparted.rows.map((row) => row.blob_sha);
+  await writePartVectors(db, key, parted);
+  if (parted.length >= limit) {
+    return parted.length;
+  }
+  const unhalved = await db.execute<{ blob_sha: string }>(sql`
+    select distinct v.blob_sha
+    from ${sectionVectors} v
+    where ${ofKey}
+      and not exists (
+        select 1 from ${sectionHalves} h
+        where h.blob_sha = v.blob_sha and h.model = v.model and h.dimensions = v.dimensions
+          and h.sectioning_version = v.sectioning_version and h.section = v.section)
+    limit ${limit - parted.length}
+  `);
+  const halved = unhalved.rows.map((row) => row.blob_sha);
+  await writeSectionHalves(db, key, halved);
+  return parted.length + halved.length;
 }
 
 /** A skill's body whose sections have vectors and whose head has none, with what the head says. */
@@ -432,7 +486,8 @@ export async function searchSectionVectors(
 /**
  * Drops the vectors of those of these bodies that no index entry names any more: for the purge
  * of a repository, with the bodies it referred to, once its entries are gone (ADR-0064). Says how
- * many rows went; the vectors of their parts go with them. Nothing to do where the table is not.
+ * many rows went; the vectors of their parts, and their sections at half precision, go with
+ * them. Nothing to do where the table is not.
  */
 export async function deleteUnreferencedSectionVectors(
   db: Drizzle,
@@ -471,6 +526,19 @@ export async function deleteUnreferencedSectionVectors(
               .select({ sha: indexEntries.blobSha })
               .from(indexEntries)
               .where(eq(indexEntries.blobSha, partVectors.blobSha)),
+          ),
+        ),
+      );
+    await db
+      .delete(sectionHalves)
+      .where(
+        and(
+          inArray(sectionHalves.blobSha, blobShas.slice(start, start + HASH_BATCH_SIZE)),
+          notExists(
+            db
+              .select({ sha: indexEntries.blobSha })
+              .from(indexEntries)
+              .where(eq(indexEntries.blobSha, sectionHalves.blobSha)),
           ),
         ),
       );

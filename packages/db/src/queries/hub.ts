@@ -8,6 +8,7 @@ import {
   repoAliases,
   repoRefs,
   repos,
+  sectionHalves,
   sectionVectors,
   snapshots,
 } from "../schema.js";
@@ -23,9 +24,9 @@ import {
 
 // The search across every pack a deployment serves (ADR-0070): which snapshots it covers, the
 // words over all of them at once, and the sections nearest in meaning, of the parts of their
-// bodies nearest in meaning (ADR-0092). Every statement runs under a time limit of its own,
-// since it reads every pack there is, and the caller decides what a search that ran out of time
-// answers.
+// bodies nearest in meaning (ADR-0092), compared at half precision (ADR-0103). Every statement
+// runs under a time limit of its own, since it reads every pack there is, and the caller decides
+// what a search that ran out of time answers.
 
 /** A pack the search across packs covers: the snapshot it is served from, and how it is addressed. */
 export interface SearchablePack {
@@ -253,11 +254,24 @@ function wordsStatement(
     .limit(limit);
 }
 
-/** A part of a body a search picked: the body, and the part's place in it. */
+/** A part of a body a search picked: the body, the part's place in it, and how many sections it has. */
 interface PickedPart {
   readonly blobSha: string;
   readonly part: number;
+  readonly sections: number;
 }
+
+/**
+ * The two statements of the comparison by meaning read their tables in the order they are
+ * stored (ADR-0103). Told nothing, the planner reads the parts of the bodies searched, or the
+ * sections of the parts picked, through their primary key, in the order of the bodies' hashes:
+ * one page at a time and each somewhere else, which a database that has them in memory does not
+ * feel and one that reads them from its storage waits for page by page, three and a half seconds
+ * where it was measured. Without a plain index scan it marks the pages first and reads them in
+ * order, which the database reads ahead of, and the same where they are in memory.
+ */
+const READ_AS_STORED = sql`select set_config('enable_indexscan', 'off', true)`;
+const READ_ANY_WAY = sql`select set_config('enable_indexscan', 'on', true)`;
 
 /**
  * The parts nearest the query among the bodies of the findable entries searched, at most
@@ -265,6 +279,7 @@ interface PickedPart {
  * sections and fewer. A body two packs hold is one body here. The bodies searched are handed on
  * as one array, as the entries that hold a word are (ADR-0090): joined in, the planner looks the
  * parts of each body up one body at a time, which took three times as long where it was measured.
+ * Run after {@link READ_AS_STORED}.
  */
 function partsStatement(
   snapshotIds: readonly string[],
@@ -273,7 +288,7 @@ function partsStatement(
   parts: number,
 ): SQL {
   return sql`
-    select p.blob_sha, p.part
+    select p.blob_sha, p.part, p.sections
     from ${partVectors} p
     where p.model = ${key.model} and p.dimensions = ${key.dimensions}
       and p.sectioning_version = ${key.sectioningVersion}
@@ -285,23 +300,102 @@ function partsStatement(
     limit ${parts}`;
 }
 
-const pickedOf = (rows: readonly { blob_sha: string; part: number }[]): PickedPart[] =>
-  rows.map((row) => ({ blobSha: row.blob_sha, part: Number(row.part) }));
+const pickedOf = (
+  rows: readonly { blob_sha: string; part: number; sections: number }[],
+): PickedPart[] =>
+  rows.map((row) => ({
+    blobSha: row.blob_sha,
+    part: Number(row.part),
+    sections: Number(row.sections),
+  }));
 
+/** A section the second step compared, with the entry it belongs to, as the database answers it. */
+interface ComparedRow extends HubEntryRecord {
+  readonly section: number;
+  readonly heading: string[];
+  readonly offset: number;
+  readonly length: number;
+  readonly distance: number;
+}
+
+/**
+ * The sections of the parts picked, nearest the query first, at most `limit`, with the entry
+ * each belongs to (ADR-0103): compared with the copies of their vectors at half precision, which
+ * lie in their rows, a part's together, where a section's own vector lies beside its row and is
+ * read alone. Where the copies of a part's sections are not all made, as on a database the sweep
+ * has not been through since it was given their table, that part's sections are compared with
+ * their own vectors, so an answer that says it is by meaning has looked. The heading, offset and
+ * length of a section are read for the sections answered alone. Run after {@link READ_AS_STORED}.
+ */
+function halvesStatement(
+  snapshotIds: readonly string[],
+  key: VectorKey,
+  query: Float32Array,
+  limit: number,
+  picked: readonly PickedPart[],
+): SQL {
+  const literal = vectorLiteral(query);
+  const blobs = sql.param(picked.map((part) => part.blobSha));
+  const ofKey = (alias: string) =>
+    sql`${sql.raw(alias)}.model = ${key.model} and ${sql.raw(alias)}.dimensions = ${key.dimensions}
+      and ${sql.raw(alias)}.sectioning_version = ${key.sectioningVersion}`;
+  const columns = sql.join(
+    Object.entries(entryColumns).map(([name, column]) => sql`${column} as ${sql.identifier(name)}`),
+    sql`, `,
+  );
+  return sql`
+    with picked (blob_sha, part, sections) as (
+      select * from unnest(${blobs}::text[], ${sql.param(picked.map((part) => part.part))}::integer[],
+        ${sql.param(picked.map((part) => part.sections))}::integer[])
+    ),
+    halved as (
+      select h.blob_sha, ${partOfSection(sql.raw("h.section"))} as part, h.section,
+        h.vector <=> ${literal}::halfvec as distance
+      from ${sectionHalves} h
+      where ${ofKey("h")} and h.blob_sha = any(${blobs}::text[])
+        and (h.blob_sha, ${partOfSection(sql.raw("h.section"))}) in (select blob_sha, part from picked)
+    ),
+    counted as (
+      select blob_sha, part, count(*) as halves from halved group by blob_sha, part
+    ),
+    whole as (
+      select p.blob_sha, p.part from picked p
+      left join counted c on c.blob_sha = p.blob_sha and c.part = p.part
+      where p.sections > coalesce(c.halves, 0)
+    ),
+    near as (
+      select blob_sha, section, distance from halved
+      union all
+      select v.blob_sha, v.section, v.vector <=> ${literal}::vector
+      from ${sectionVectors} v
+      where ${ofKey("v")}
+        and (v.blob_sha, ${partOfSection(sql.raw("v.section"))}) in (select blob_sha, part from whole)
+        and not exists (select 1 from halved x where x.blob_sha = v.blob_sha and x.section = v.section)
+    ),
+    top as (
+      select ${columns}, ${indexEntries.snapshotId} as "snapshotId", near.blob_sha as matched,
+        near.section, near.distance
+      from near join ${indexEntries} on ${indexEntries.blobSha} = near.blob_sha
+      where ${among(snapshotIds)} and ${FINDABLE}
+        and (near.section >= 0 or ${indexEntries.kind} = 'skill')
+      order by near.distance, ${indexEntries.snapshotId}, ${BY_PATH}, near.section
+      limit ${limit}
+    )
+    select top.*, v.heading, v."offset", v.length
+    from top join ${sectionVectors} v
+      on v.blob_sha = top.matched and ${ofKey("v")} and v.section = top.section
+    order by top.distance, top."snapshotId", top.path collate "C", top.section`;
+}
+
+/** Every section of the packs searched compared with the query, exactly: where no part is picked. */
 function meaningStatement(
   runner: Runner,
   snapshotIds: readonly string[],
   key: VectorKey,
   query: Float32Array,
   limit: number,
-  /** The parts whose sections are compared; left out, every section of the packs is. */
-  picked?: readonly PickedPart[],
 ) {
   const distance = sql<number>`${sectionVectors.vector} <=> ${vectorLiteral(query)}::vector`;
-  const ofPicked =
-    picked === undefined
-      ? undefined
-      : sql`(${sectionVectors.blobSha}, ${partOfSection(sectionVectors.section)}) in (select * from unnest(${sql.param(picked.map((part) => part.blobSha))}::text[], ${sql.param(picked.map((part) => part.part))}::integer[]))`;
   return runner
     .select({
       ...entryColumns,
@@ -314,7 +408,7 @@ function meaningStatement(
     })
     .from(indexEntries)
     .innerJoin(sectionVectors, eq(sectionVectors.blobSha, indexEntries.blobSha))
-    .where(and(among(snapshotIds), FINDABLE, underKey(key), COMPARED, ofPicked))
+    .where(and(among(snapshotIds), FINDABLE, underKey(key), COMPARED))
     .orderBy(distance, indexEntries.snapshotId, BY_PATH, sectionVectors.section)
     .limit(limit);
 }
@@ -370,12 +464,13 @@ export async function searchHubEntries(
  * `limit`, with the entry each belongs to, in two steps (ADR-0092): the `parts` parts of their
  * bodies nearest the query are picked by the vector of each part, the mean of its sections',
  * a skill's head being a part of its own (ADR-0094), and the sections of those parts are then
- * compared exactly, as `searchSectionVectors` compares inside one mount (ADR-0064). The two
- * statements share the one time limit. A body without part vectors yet is not found beside
+ * compared at half precision (ADR-0103), both read in the order their tables are stored. The
+ * two statements share the one time limit. A body without part vectors yet is not found beside
  * bodies that have theirs, which is the sweep's to end (`fillPartVectors`). With `parts` at 0,
  * in a database that keeps no part vectors, and where none of the bodies searched has a part
  * yet, as after an update that brought the parts or an import of vectors made elsewhere, every
- * section of the packs is compared: an answer that says it is by meaning has looked.
+ * section of the packs is compared exactly, as `searchSectionVectors` compares inside one mount
+ * (ADR-0064): an answer that says it is by meaning has looked.
  */
 export async function searchHubSectionVectors(
   database: Database,
@@ -394,19 +489,27 @@ export async function searchHubSectionVectors(
       `a query of ${query.length} dimensions cannot be searched under a key of ${key.dimensions}`,
     );
   }
-  const rows = await drizzleOf(database).transaction(async (tx) => {
+  const rows = await drizzleOf(database).transaction(async (tx): Promise<ComparedRow[]> => {
     await tx.execute(bounded(timeoutMs));
     if (parts <= 0 || !(await partVectorsPresent(tx))) {
       return meaningStatement(tx, snapshotIds, key, query, limit);
     }
     const started = performance.now();
-    const picked = await tx.execute<{ blob_sha: string; part: number }>(
+    await tx.execute(READ_AS_STORED);
+    const picked = await tx.execute<{ blob_sha: string; part: number; sections: number }>(
       partsStatement(snapshotIds, key, query, parts),
     );
     await tx.execute(bounded(timeoutMs - (performance.now() - started)));
-    return picked.rows.length === 0
-      ? meaningStatement(tx, snapshotIds, key, query, limit)
-      : meaningStatement(tx, snapshotIds, key, query, limit, pickedOf(picked.rows));
+    if (picked.rows.length === 0) {
+      await tx.execute(READ_ANY_WAY);
+      return meaningStatement(tx, snapshotIds, key, query, limit);
+    }
+    const compared = await tx.execute<Record<string, unknown>>(
+      halvesStatement(snapshotIds, key, query, limit, pickedOf(picked.rows)),
+    );
+    // The statement names its columns as the record does, and adds the body it matched by.
+    const answered = compared.rows as unknown as readonly (ComparedRow & { matched: string })[];
+    return answered.map(({ matched: _, ...row }) => row);
   });
   return rows.map(({ distance: away, ...row }) => ({ ...row, similarity: 1 - Number(away) }));
 }
@@ -423,6 +526,8 @@ export interface HubStatementReading {
   readonly pagesFromDisk: number;
   /** The indexes it went through. */
   readonly indexes: readonly string[];
+  /** How it read each table it read, as `Bitmap Heap Scan on part_vectors`: once each, sorted. */
+  readonly scans: readonly string[];
 }
 
 /** A question to the search across packs, for {@link readHubStatements}. */
@@ -441,6 +546,7 @@ export interface HubQuestion {
 }
 
 interface PlanNode {
+  readonly "Node Type"?: string;
   readonly "Relation Name"?: string;
   readonly "Index Name"?: string;
   readonly "Actual Rows"?: number;
@@ -458,6 +564,7 @@ function readingOf(explained: unknown): HubStatementReading {
   ];
   let entries = 0;
   const indexes = new Set<string>();
+  const scans = new Set<string>();
   const walk = (node: PlanNode): void => {
     const loops = node["Actual Loops"] ?? 1;
     if (node["Relation Name"] === "index_entries") {
@@ -466,6 +573,9 @@ function readingOf(explained: unknown): HubStatementReading {
           (node["Rows Removed by Filter"] ?? 0) +
           (node["Rows Removed by Index Recheck"] ?? 0)) *
         loops;
+    }
+    if (node["Relation Name"] !== undefined) {
+      scans.add(`${node["Node Type"]} on ${node["Relation Name"]}`);
     }
     if (node["Index Name"] !== undefined) {
       indexes.add(node["Index Name"]);
@@ -483,6 +593,7 @@ function readingOf(explained: unknown): HubStatementReading {
     pages: hit + read,
     pagesFromDisk: read,
     indexes: [...indexes].sort(),
+    scans: [...scans].sort(),
   };
 }
 
@@ -500,9 +611,15 @@ export async function readHubStatements(
   readonly words: HubStatementReading | undefined;
   readonly meaning: HubStatementReading | undefined;
 }> {
-  const explain = async (statement: (tx: Runner) => SQL): Promise<HubStatementReading> =>
+  const explain = async (
+    statement: (tx: Runner) => SQL,
+    asStored = false,
+  ): Promise<HubStatementReading> =>
     drizzleOf(database).transaction(async (tx) => {
       await tx.execute(sql`select set_config('statement_timeout', '0', true)`);
+      if (asStored) {
+        await tx.execute(READ_AS_STORED);
+      }
       const result = await tx.execute<{ "QUERY PLAN": unknown }>(
         sql`explain (analyze, buffers, timing off, format json) ${statement(tx)}`,
       );
@@ -514,23 +631,24 @@ export async function readHubStatements(
     asked: NonNullable<HubQuestion["meaning"]>,
   ): Promise<HubStatementReading> => {
     const parts = asked.parts ?? 0;
+    const everySection = () =>
+      explain((tx) => meaningStatement(tx, snapshotIds, asked.key, asked.query, limit).getSQL());
     if (parts <= 0 || !(await partVectorsPresent(drizzleOf(database)))) {
-      return explain((tx) =>
-        meaningStatement(tx, snapshotIds, asked.key, asked.query, limit).getSQL(),
-      );
+      return everySection();
     }
     const statement = partsStatement(snapshotIds, asked.key, asked.query, parts);
-    const picking = await explain(() => statement);
-    const picked = await drizzleOf(database).execute<{ blob_sha: string; part: number }>(statement);
-    const comparing = await explain((tx) =>
-      meaningStatement(
-        tx,
-        snapshotIds,
-        asked.key,
-        asked.query,
-        limit,
-        pickedOf(picked.rows),
-      ).getSQL(),
+    const picking = await explain(() => statement, true);
+    const picked = await drizzleOf(database).execute<{
+      blob_sha: string;
+      part: number;
+      sections: number;
+    }>(statement);
+    if (picked.rows.length === 0) {
+      return everySection();
+    }
+    const comparing = await explain(
+      () => halvesStatement(snapshotIds, asked.key, asked.query, limit, pickedOf(picked.rows)),
+      true,
     );
     return {
       ms: picking.ms + comparing.ms,
@@ -538,6 +656,7 @@ export async function readHubStatements(
       pages: picking.pages + comparing.pages,
       pagesFromDisk: picking.pagesFromDisk + comparing.pagesFromDisk,
       indexes: [...new Set([...picking.indexes, ...comparing.indexes])].sort(),
+      scans: [...new Set([...picking.scans, ...comparing.scans])].sort(),
     };
   };
   return {

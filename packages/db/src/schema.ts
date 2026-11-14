@@ -570,6 +570,44 @@ export const partVectors = pgTable(
 );
 
 /**
+ * The vector of a section at half precision and inside its row (`STORAGE MAIN`, set by the
+ * migration): what a search across the packs compares the sections of the parts it picked by
+ * (ADR-0103). A section's vector is kept beside its row, and a search that read the sections of
+ * two hundred parts read that many vectors from wherever they lay; read from here, they are a
+ * few pages a part, in the order they were written. Made in the database from the rows of
+ * `section_vectors` under the same key, with the vectors of the parts and dropped with them, and
+ * keyed and reached as `section_vectors` is. Present only where `part_vectors` is.
+ */
+export const sectionHalves = pgTable(
+  "section_halves",
+  {
+    blobSha: text().notNull(),
+    model: text().notNull(),
+    dimensions: integer().notNull(),
+    sectioningVersion: integer().notNull(),
+    section: integer().notNull(),
+    vector: halfvec().notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    primaryKey({
+      name: "section_halves_pkey",
+      columns: [
+        table.blobSha,
+        table.model,
+        table.dimensions,
+        table.sectioningVersion,
+        table.section,
+      ],
+    }),
+    check(
+      "section_halves_dimensions_check",
+      sql`vector_dims(${table.vector}) = ${table.dimensions}`,
+    ),
+  ],
+);
+
+/**
  * How far the sections of one snapshot have been embedded under one key (ADR-0064): the worker
  * adds to a row as it writes the vectors of each body, and marks it complete when the snapshot's
  * last body is done. A ready snapshot without a complete row under the configured key is what

@@ -31,9 +31,9 @@ import { EMBED_QUEUE, embedJobSchema, embedPriority, sendEmbedJob } from "./queu
 // queues anything, it puts what waits in the order of this build: a job that an older build
 // queued, or that waits since its repository's rank changed, is given the priority the rank gives
 // it now, in place. Once nothing is left to embed, what was embedded under other keys goes. And
-// the vectors of the parts of what is embedded are made where they are missing (ADR-0092): a
-// slice writes them with the sections, so this is for the sections written before there were
-// any, and it calls no model. Last, where the sweep is given an embedder, the skills embedded
+// the vectors of the parts of what is embedded, and its sections at half precision, are made
+// where they are missing (ADR-0092, ADR-0103): a slice writes them with the sections, so this is
+// for the sections written before there were any, and it calls no model. Last, where the sweep is given an embedder, the skills embedded
 // before a skill had a head are given theirs (ADR-0094): one short text a skill, for a few
 // minutes a sweep, once whatever is to be embedded was queued, those a search reads now first,
 // each call's heads written as the call answers; and every sweep says how many are left without
@@ -44,7 +44,7 @@ import { EMBED_QUEUE, embedJobSchema, embedPriority, sendEmbedJob } from "./queu
 export const SWEEP_LIMIT = 1000;
 /** How many of the jobs that wait one sweep looks through to put in order. */
 export const WAITING_LIMIT = 5000;
-/** How many bodies one statement makes part vectors for, and how many statements one sweep runs. */
+/** How many bodies one call makes part vectors or half sections for, and how many calls one sweep makes. */
 export const PART_FILL_BODIES = 500;
 export const PART_FILL_STEPS = 200;
 /** How many skills the sweep gives a head at once, and for how long one sweep goes on doing it. */
@@ -89,7 +89,7 @@ export interface SweepOutcome {
   readonly tiers: Readonly<Record<SweptTier, number>>;
   /** What went of other keys, when nothing was pending. */
   readonly dropped: { readonly vectors: number; readonly snapshots: number } | undefined;
-  /** How many bodies this sweep made the part vectors of, from their section vectors. */
+  /** How many bodies this sweep made the part vectors or the half sections of, from their section vectors. */
   readonly parts: number;
   /** How many skills embedded before a skill had a head this sweep gave theirs. */
   readonly heads: number;
@@ -144,8 +144,8 @@ async function reorderWaiting(
 
 /**
  * Makes the part vectors of the bodies that have section vectors under the key and none of
- * these, a batch a statement, and says for how many bodies. What one sweep does not reach, the
- * next goes on with.
+ * these, and the half sections of those that have parts and not these, a batch a call, and says
+ * for how many bodies. What one sweep does not reach, the next goes on with.
  */
 async function fillParts(deps: SweepDependencies): Promise<number> {
   let filled = 0;

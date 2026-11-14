@@ -38,7 +38,8 @@ import { fillPartVectors, supportsSectionVectors, type VectorKey } from "../quer
 // deployment keeps one. The searchable entries take their words from the Markdown files of the
 // directories given, so that the vectors are as large as a pack's; every section of a pack's
 // entries gets a vector of random numbers, which costs a comparison what a real one does, and
-// the vectors of the parts are made from them as the worker's sweep makes them (ADR-0092). A
+// the vectors of the parts, and the sections at half precision, are made from them as the
+// worker's sweep makes them (ADR-0092, ADR-0103). A
 // second `fill` under another `--series` adds as much again.
 //
 // `measure` asks five questions of the three statements, without a time limit, and prints for
@@ -304,7 +305,8 @@ async function fill(database: Database, options: FillOptions): Promise<void> {
       filled = await fillPartVectors(database, key, 500);
     }
     await drizzleOf(database).execute(sql`vacuum (analyze) part_vectors`);
-    write(`the part vectors of ${made} bodies made`);
+    await drizzleOf(database).execute(sql`vacuum (analyze) section_halves`);
+    write(`the part vectors and half sections of ${made} bodies made`);
   }
   write(
     vectors

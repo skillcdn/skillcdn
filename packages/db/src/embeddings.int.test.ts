@@ -467,6 +467,11 @@ describe("snapshot embeddings", () => {
       sql`select model, count(*)::integer as parts from part_vectors where blob_sha in ('blob-old-1', 'blob-old-2') group by model`,
     );
     expect(parts.rows).toEqual([{ model: KEY.model, parts: 1 }]);
+    // And so did the sections at half precision (ADR-0103).
+    const halves = await drizzleOf(database).execute<{ model: string; sections: number }>(
+      sql`select model, count(*)::integer as sections from section_halves where blob_sha in ('blob-old-1', 'blob-old-2') group by model`,
+    );
+    expect(halves.rows).toEqual([{ model: KEY.model, sections: 1 }]);
     // Nothing left of other keys: nothing more goes.
     expect(await deleteEmbeddingsOutsideKey(database, KEY)).toEqual({ vectors: 0, snapshots: 0 });
   });
