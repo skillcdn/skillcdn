@@ -11,7 +11,8 @@
       "@skillcdn/client",
       "@skillcdn/serve",
       "@skillcdn/cli",
-      "@skillcdn/brand"
+      "@skillcdn/brand",
+      "@skillcdn/web"
     ]
   ],
   "linked": [],

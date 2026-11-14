@@ -90,7 +90,7 @@
       }
     },
     {
-      "includes": ["scripts/**/*.mjs", "apps/*/scripts/**/*.mjs"],
+      "includes": ["scripts/**/*.mjs", "apps/*/scripts/**/*.mjs", "apps/web/bin/*.mjs"],
       "linter": {
         "rules": {
           "style": {

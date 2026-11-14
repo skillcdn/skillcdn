@@ -28,4 +28,4 @@ The VS Code mark in `apps/web/public/clients/vscode.svg`.
 
 ## npm packages in the web build
 
-The pages bundle npm packages, each under its own permissive license. The build writes their licenses and notices to `licenses/npm.txt` in the web build (`apps/web/scripts/collect-licenses.mjs`), served next to the pages at `/licenses/npm.txt`, and `pnpm check` refuses a production dependency whose license is not on the allowlist (`scripts/check-licenses.mjs`). The server's own dependencies travel with it in `node_modules`, licenses included.
+The pages bundle npm packages, each under its own permissive license. The build writes the licenses and notices of the packages it bundled to `licenses/npm.txt` in the web build (`apps/web/dev/licenses.ts`), served next to the pages at `/licenses/npm.txt`, wherever the pages are built, the published `@skillcdn/web` package in an installation's own directory included, and `pnpm check` refuses a production dependency whose license is not on the allowlist (`scripts/check-licenses.mjs`). The server's own dependencies travel with it in `node_modules`, licenses included.

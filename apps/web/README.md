@@ -4,6 +4,24 @@ The web UI: a landing page and an explorer that shows what an agent gets from an
 
 It is optional. A deployment without it is still a complete MCP and REST server for public repositories, and the UI uses nothing but the [REST API](../../docs/specs/rest.md). Signing in is the one thing that needs it: where people sign in and where they allow an app are pages.
 
+It is published as [`@skillcdn/web`](https://www.npmjs.com/package/@skillcdn/web), with the command that builds it, so that an installation builds the pages with screens of its own from a version of them ([ADR-0101](../../docs/adr/0101-the-web-ui-is-published-as-a-package-that-builds-the-pages-with-an-installations-own.md)).
+
+## Build it with pages of your own
+
+In a directory of your own, with Node.js 24, take the version of the package that the deployment's image is:
+
+```sh
+npm install @skillcdn/web@<release> vite @vitejs/plugin-react
+npx skillcdn-web build --config site.config.tsx --out web
+```
+
+`site.config.tsx` names the pages ([below](#pages-of-an-installations-own)), and `web` is then the product's pages with yours among them, for the server's `WEB_ROOT` ([deploy](../../deploy/README.md#a-ui-with-pages-of-your-own)). The output directory is emptied first, so the command refuses one that holds anything but a build. `npx skillcdn-web dev --config site.config.tsx` serves the pages while you write yours, against fixtures, or against a deployment with `--api https://skills.example.com`.
+
+- **What the package carries:** the sources of the pages and the steps of their build, the documentation of its release, which the pages publish under `/docs`, the [license](../../LICENSE.md), the [trademark policy](../../TRADEMARKS.md) and the [third-party notices](../../THIRD-PARTY-NOTICES.md). Vite and its React plugin build the pages and are installed beside it.
+- **Types:** a configuration imports `defineSite` and the types of what a page is given from `@skillcdn/web`. Add `"types": ["vite/client"]` to the `tsconfig.json` of the directory for the CSS modules of your pages.
+- **The marks:** the pages show the SkillCDN name, symbol and wordmark where they always do, and a build made with the package may keep them as the UI of your deployment. They stay KDX Labs' marks: your own pages may not use them for anything of yours ([trademark policy](../../TRADEMARKS.md)).
+- **One release:** the pages and the server change together. Build again with the package of the release you move to.
+
 ## Run it
 
 You need git and [pnpm](https://pnpm.io/installation) (`winget install pnpm.pnpm` on Windows, `brew install pnpm` on macOS). pnpm fetches the right Node.js by itself. No container runtime, no database, no server and no token are involved.
@@ -71,7 +89,7 @@ Browse and search have continuation pages, including repositories with more skil
 
 ## How it is built
 
-`pnpm --filter @skillcdn/web run build` does three things: the client bundle, a self-contained bundle of `src/entry-server.tsx` that renders pages to HTML (`dist/render/entry-server.js`), and `scripts/prerender.mjs`, which writes into `dist/`:
+`pnpm --filter @skillcdn/web run build` runs `skillcdn-web build` (`bin/skillcdn-web.mjs`), the command an installation runs, which does three things: the client bundle, with `licenses/npm.txt`, the notices of the npm packages it bundled (`dev/licenses.ts`); a self-contained bundle of `src/entry-server.tsx` that renders pages to HTML (`dist/render/entry-server.js`); and `scripts/prerender.mjs`, which writes into `dist/`:
 
 - every static page once per language (`index.html`, `index.ko.html`, `explore/index.html`, ...), with its title, description, canonical and `hreflang` links, social-preview tags and structured data already in the HTML, because most crawlers do not run scripts;
 - the documentation ([ADR-0049](../../docs/adr/0049-the-documentation-is-rendered-into-the-pages-from-the-repositorys-own-files.md)): `docs/index.html` and `docs/<slug>/index.html` per language, each listed in the sitemap in English alone (`alternates` in the manifest), the Markdown of each page as `docs/<slug>.md` with its links made absolute, and `llms-full.txt` with every page in it;
@@ -105,20 +123,22 @@ export const site = defineSite({
 });
 ```
 
+The published package builds it with `skillcdn-web build --config <file>` ([above](#build-it-with-pages-of-your-own)); a checkout of this repository at the release builds the same into `dist/`:
+
 ```
 pnpm turbo run build --filter=@skillcdn/web^...
 SKILLCDN_WEB_CONFIG=/srv/acme-ui/site.config.tsx pnpm --filter @skillcdn/web run build
 ```
 
-`dist/` is then the product's pages with the installation's among them, for `WEB_ROOT` ([deploy](../../deploy/README.md#a-ui-with-pages-of-your-own)). [`examples/site`](examples/site) is a configuration with one page, which the tests render.
+[`examples/site`](examples/site) is a configuration with one page, which the tests render.
 
 - **What a page is given** (`SitePageContext` in [`src/site-pages.ts`](src/site-pages.ts)): `client`, the REST API of the deployment as `@skillcdn/client` types it; `language` and `words`, the tag of the language shown and the product's words in it; `origin`; `search`, the query of the page's address, where a page keeps what it shows; and `navigation`, `go` and `replace`, which move to another page without loading a document. A page brings its own words, by language.
 - **Where a page lives:** `/pages/<key>`, the same in every language; `sitePageHref(key)` names it. A key is lowercase letters, digits and hyphens, and a build fails on one that is not, or on a key twice.
 - **A page is drawn in the browser alone.** The server answers its address with the frame, and `render` is called once the frame is up: never where pages are rendered to HTML, so a page may use `window` and storage as it likes, and is never a page for a search engine. A page that is to be found is a page of the product, added as the others are.
 - **What a page may reach** is what the content security policy of the pages lets every page reach: scripts, styles and connections of the deployment's own origin. The admin API is there for a page that is given the operator's token; another service is reached where the installation's reverse proxy puts it under the same origin.
 - **How it looks** is the tokens' to say (`var(--color-...)`, `var(--space-...)` of `src/styles/tokens.css`), in a CSS module beside the page, without inline styles.
-- **What it imports:** `react`, `@skillcdn/client` and `@skillcdn/core` are resolved from this workspace wherever the file stands, so the installation's directory needs no dependencies; `@skillcdn/web` is `src/site-pages.ts`. The development server takes the same variable (`SKILLCDN_WEB_CONFIG` in `.env.local`, or in the environment of `pnpm --filter @skillcdn/web run dev`).
-- **Run the build of this workspace itself** (`pnpm --filter @skillcdn/web run build`), as above, once what it depends on is built: the task runner keeps the output of a build by what is in the repository, and a configuration is not.
+- **What it imports:** `react`, `@skillcdn/client` and `@skillcdn/core` are resolved from the package wherever the file stands, so the installation's directory needs nothing else for them; `@skillcdn/web` is `src/site-pages.ts`, with its declarations in the package. What a page imports beyond them is the installation's own dependency, and the build lists it with the others in `licenses/npm.txt`. The development server takes the same configuration (`--config`, or `SKILLCDN_WEB_CONFIG` in `.env.local` or the environment of `pnpm --filter @skillcdn/web run dev`).
+- **In a checkout, run the build of this workspace itself** (`pnpm --filter @skillcdn/web run build`), as above, once what it depends on is built: the task runner keeps the output of a build by what is in the repository, and a configuration is not.
 
 ## Adding a language
 

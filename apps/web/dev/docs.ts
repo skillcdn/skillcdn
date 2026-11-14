@@ -33,8 +33,27 @@ export const CONTENT_MODULE = "virtual:skillcdn-docs-content";
 /** The list of what is published, from the repository root. */
 export const NAV_FILE = "docs/nav.json";
 
-/** The root of this repository, which the pages document. */
+/** The root of this repository, which the pages document, where they are built in a checkout of it. */
 export const REPOSITORY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+
+/**
+ * The copy of the published documentation the package carries (ADR-0101): docs/nav.json and the
+ * files it names, at their paths from the repository root.
+ */
+export const PACKAGED_DOCUMENTATION = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  "../documentation",
+);
+
+/**
+ * Where the pages read the documentation from: the checkout this workspace is part of, or, where
+ * the published package builds them in an installation's own directory, the copy it carries.
+ */
+export function documentationRoot(): string {
+  return existsSync(join(REPOSITORY_ROOT, "apps", "web", "dev", "docs.ts"))
+    ? REPOSITORY_ROOT
+    : PACKAGED_DOCUMENTATION;
+}
 
 /** Where a file that is not a page is read: at the git host, on the default branch. */
 const SOURCE_URL = `${REPOSITORY_URL}/blob/main/`;
@@ -317,7 +336,7 @@ export interface LoadDocsOptions {
  * found when the navigation, a file or a link is wrong.
  */
 export function loadDocs(
-  root: string = REPOSITORY_ROOT,
+  root: string = documentationRoot(),
   options: LoadDocsOptions = {},
 ): LoadedDocs {
   const complete = options.complete ?? existsSync(join(root, ".git"));

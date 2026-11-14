@@ -1,38 +1,97 @@
 {
   "name": "@skillcdn/web",
-  "version": "0.0.0",
-  "private": true,
-  "description": "The web UI: landing page and explorer. Static files, prerendered per language.",
+  "version": "0.5.0",
+  "description": "The web UI of a SkillCDN deployment, and the command that builds it with the pages of an installation's own.",
   "license": "FSL-1.1-ALv2",
+  "homepage": "https://skillcdn.ai",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/skillcdn/skillcdn.git",
+    "directory": "apps/web"
+  },
+  "bugs": "https://github.com/skillcdn/skillcdn/issues",
+  "keywords": [
+    "skillcdn",
+    "mcp",
+    "agent-skills",
+    "skills",
+    "web-ui"
+  ],
   "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "skillcdn-web": "./bin/skillcdn-web.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./types/site-pages.d.ts",
+      "default": "./src/site-pages.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "bin",
+    "dev",
+    "!dev/**/*.test.ts",
+    "documentation",
+    "examples",
+    "index.html",
+    "public",
+    "scripts/prerender.mjs",
+    "src",
+    "!src/**/*.test.ts",
+    "!src/**/*.test.tsx",
+    "types",
+    "vite.config.ts",
+    "LICENSE.md",
+    "THIRD-PARTY-NOTICES.md",
+    "TRADEMARKS.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "build": "vite build && vite build --ssr src/entry-server.tsx --outDir dist/render && node scripts/prerender.mjs && node scripts/collect-licenses.mjs",
+    "build": "node bin/skillcdn-web.mjs build",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json --noEmit",
     "test": "vitest run --passWithNoTests",
     "dev": "vite",
     "generate:fonts": "node scripts/generate-pretendard-css.mjs",
     "dev:api": "vite --mode api",
     "dev:live": "vite --mode live",
-    "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\""
+    "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\"",
+    "prepack": "tsc -p tsconfig.types.json && node scripts/pack-files.mjs copy",
+    "postpack": "node scripts/pack-files.mjs remove"
   },
   "dependencies": {
     "@skillcdn/brand": "workspace:*",
     "@skillcdn/client": "workspace:*",
     "@skillcdn/core": "workspace:*",
+    "pretendard": "^1.3.9",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "remark-parse": "^11.0.0",
+    "unified": "^11.0.5"
+  },
+  "peerDependencies": {
+    "@types/react": "^19.2.0",
+    "@vitejs/plugin-react": "^6.2.1",
+    "vite": "^8.3.6"
+  },
+  "peerDependenciesMeta": {
+    "@types/react": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/node": "catalog:",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^6.2.1",
-    "pretendard": "^1.3.9",
-    "remark-parse": "^11.0.0",
     "typescript": "catalog:",
-    "unified": "^11.0.5",
     "vite": "^8.3.6",
     "vitest": "catalog:"
   }

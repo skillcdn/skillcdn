@@ -6,13 +6,16 @@
 //
 // Pages carry a placeholder instead of the public origin; the server fills it in. For a plain
 // static host, set SKILLCDN_PUBLIC_URL when building and the origin is written into the files.
+//
+//   node scripts/prerender.mjs [<the directory of the build>]   (default: dist of this workspace)
 import { cpSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, join, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const dist = join(root, "dist");
+const dist = process.argv[2] === undefined ? join(root, "dist") : resolve(process.argv[2]);
 const RENDER_MODULE = "render/entry-server.js";
 const TEMPLATE_FILE = "template.html";
 
@@ -156,9 +159,7 @@ write(
 // The faces the server draws social previews with (ADR-0032): the same typeface as the pages,
 // unmodified, from the package the pages take it from, under the notice that ships with it.
 const fontSource = join(
-  root,
-  "node_modules",
-  "pretendard",
+  dirname(createRequire(import.meta.url).resolve("pretendard/package.json")),
   "dist",
   "public",
   "static",

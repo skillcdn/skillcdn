@@ -21,6 +21,12 @@ const ALLOWED = new Set([
   "Zlib",
 ]);
 
+/**
+ * Fonts, bundled unmodified under the SIL Open Font License with their notice beside them
+ * (CLAUDE.md, Dependencies; THIRD-PARTY-NOTICES.md): by name, so that nothing else passes as one.
+ */
+const FONTS = new Map([["pretendard", "OFL-1.1"]]);
+
 /** `(MIT OR Apache-2.0)` is fine when one side is; `MIT AND X` only when both are. */
 function allowed(expression) {
   const trimmed = expression.trim().replace(/^\(|\)$/g, "");
@@ -55,7 +61,7 @@ let count = 0;
 for (const [license, packages] of Object.entries(byLicense)) {
   for (const found of packages) {
     count += 1;
-    if (!allowed(license)) {
+    if (!allowed(license) && FONTS.get(found.name) !== license) {
       offenders.push(`${found.name}@${found.versions.join(", ")}: ${license}`);
     }
   }

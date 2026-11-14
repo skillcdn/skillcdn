@@ -37,7 +37,7 @@ Public repository hygiene
 ```
 apps/
   server/     the single deployable; roles: api | worker | migrate | check | purge (Node 24)
-  web/        optional web UI: landing and explorer; REST only, prerendered per language
+  web/        optional web UI: landing and explorer; REST only, prerendered per language   @skillcdn/web on npm
 packages/
   core/       pure domain logic and ports; no I/O, no Node APIs                 @skillcdn/core on npm
   db/         PostgreSQL schema, migrations, query layer
@@ -92,7 +92,7 @@ Packages compile to `dist/` and consume each other's compiled output. Going thro
 
 - `pnpm check` passes.
 - New behavior has tests; a bug fix starts with a failing regression test.
-- A change to a published package (`core`, `indexer`, `inference`, `reader`, `client`, `serve`, `cli`, `brand`) carries a changeset, written for whoever installs it ([ADR-0046](docs/adr/0046-packages-are-published-to-npm-through-trusted-publishing.md)): `patch` for a fix or an addition that changes nothing that exists, `minor` for a change of a public surface, whose entry starts with `Breaking:`; never `major` while the major is 0 ([ADR-0058](docs/adr/0058-the-published-packages-share-one-version.md)).
+- A change to a published package (`core`, `indexer`, `inference`, `reader`, `client`, `serve`, `cli`, `brand`, `web`) carries a changeset, written for whoever installs it ([ADR-0046](docs/adr/0046-packages-are-published-to-npm-through-trusted-publishing.md)): `patch` for a fix or an addition that changes nothing that exists, `minor` for a change of a public surface, whose entry starts with `Breaking:`; never `major` while the major is 0 ([ADR-0058](docs/adr/0058-the-published-packages-share-one-version.md)).
 - Docs are updated per the table below, in the same change.
 - No secrets, no operations details, no business logic (rules 1, 6, 7).
 - The change is safe to deploy on its own: `main` is always releasable and every push may ship.

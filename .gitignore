@@ -42,6 +42,12 @@ tmp/
 packages/*/LICENSE.md
 !packages/brand/LICENSE.md
 packages/brand/TRADEMARKS.md
+# What the web package carries while it is packed (apps/web/scripts/pack-files.mjs).
+apps/web/LICENSE.md
+apps/web/TRADEMARKS.md
+apps/web/THIRD-PARTY-NOTICES.md
+apps/web/documentation/
+apps/web/types/
 
 # Editors and OS
 .DS_Store

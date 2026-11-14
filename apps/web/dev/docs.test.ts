@@ -1,8 +1,10 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import process from "node:process";
 import { afterEach, describe, expect, it } from "vitest";
-import { loadDocs, NAV_FILE, REPOSITORY_ROOT } from "./docs.js";
+import { documentationRoot, loadDocs, NAV_FILE, REPOSITORY_ROOT } from "./docs.js";
 
 // A small repository to read the documentation from, written per test.
 let root: string | undefined;
@@ -394,6 +396,27 @@ describe("the files the navigation publishes", () => {
     const files = published();
     expect(files.length).toBeGreaterThan(5);
     expect(files.filter((file) => leftOutOfTheImage(rules, file))).toEqual([]);
+  });
+
+  it("travel in the published package, and make the same pages there (ADR-0101)", () => {
+    // In a checkout the pages read the repository; the package carries a copy, which its
+    // prepack writes, and the pages it builds in an installation's directory read that.
+    expect(documentationRoot()).toBe(REPOSITORY_ROOT);
+    root = mkdtempSync(join(tmpdir(), "skillcdn-packaged-docs-"));
+    execFileSync(process.execPath, [
+      join(REPOSITORY_ROOT, "apps", "web", "scripts", "pack-files.mjs"),
+      "documentation",
+      root,
+    ]);
+    expect(
+      published().filter((file) => !existsSync(join(root as string, ...file.split("/")))),
+    ).toEqual([]);
+    // The format's own license goes with its specification.
+    expect(existsSync(join(root, "docs", "specs", "LICENSE"))).toBe(true);
+    const packaged = loadDocs(root, { complete: false });
+    const checkout = loadDocs(REPOSITORY_ROOT);
+    expect(packaged.catalog).toEqual(checkout.catalog);
+    expect(packaged.content).toEqual(checkout.content);
   });
 
   it("are inputs of the web build and its tests in turbo.json, so that a change rebuilds the pages", () => {
