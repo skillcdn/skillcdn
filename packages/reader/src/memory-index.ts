@@ -15,7 +15,6 @@ import {
   type RepoPath,
   rankSearchVector,
   type SearchVector,
-  SKILL_RANK_BOOST,
   type SnapshotIndex,
 } from "@skillcdn/core";
 import { compareByteOrder, sortedByPath } from "./order.js";
@@ -132,7 +131,7 @@ export function createMemoryIndex(options: MemoryIndexOptions): ReadableIndex {
         }
         const rank = rankSearchVector(vector, lexemes, weights);
         if (rank > 0) {
-          ranked.push({ entry, rank: entry.kind === "skill" ? rank * SKILL_RANK_BOOST : rank });
+          ranked.push({ entry, rank });
         }
       }
       return ranked

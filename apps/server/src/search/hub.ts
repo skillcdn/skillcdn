@@ -274,8 +274,8 @@ export function createHubSearch(options: HubSearchOptions): HubSearch {
               ...(found === undefined ? { words: false } : {}),
             };
       }
-      // One order of the entries, by reciprocal rank fusion of the two, a skill boosted as inside
-      // a mount, ties by pack and path.
+      // One order of the entries, by reciprocal rank fusion of the two, ties by pack and path.
+      // This is where a skill is boosted over a document, once, as inside a mount (ADR-0095).
       const records = new Map<string, Candidate>();
       const remember = (row: HubEntryRecord): string | undefined => {
         const key = keyOf(row.snapshotId, row.path);

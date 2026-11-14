@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fuseRanks, RRF_K } from "./fusion.js";
+import { SKILL_RANK_BOOST } from "./vector.js";
 
 describe("fuseRanks", () => {
   it("puts a key both lists hold above one that only one holds first", () => {
@@ -25,6 +26,29 @@ describe("fuseRanks", () => {
       "x",
       "y",
     ]);
+  });
+
+  it("lets a skill pass the documents up to three places ahead of it, and no more", () => {
+    const boost = (key: string) => (key === "skill" ? SKILL_RANK_BOOST : 1);
+    // One list, as the words answering alone, and two that agree, as words and meaning.
+    const behind = (places: number) => [
+      ...Array.from({ length: places }, (_, at) => `doc-${at + 1}`),
+      "skill",
+    ];
+    expect(fuseRanks([behind(3)], { boost })[0]).toBe("skill");
+    expect(fuseRanks([behind(4)], { boost }).slice(0, 2)).toEqual(["doc-1", "skill"]);
+    expect(fuseRanks([behind(3), behind(3)], { boost })[0]).toBe("skill");
+    expect(fuseRanks([behind(4), behind(4)], { boost }).slice(0, 2)).toEqual(["doc-1", "skill"]);
+    // A skill and a document with the same places between them: the skill.
+    expect(
+      fuseRanks(
+        [
+          ["doc", "skill"],
+          ["skill", "doc"],
+        ],
+        { boost },
+      ),
+    ).toEqual(["skill", "doc"]);
   });
 
   it("applies a boost to a key's fused score", () => {

@@ -630,7 +630,7 @@ describe("search", () => {
     );
   });
 
-  it("matches on any word, ranks skills first and stems words", async () => {
+  it("matches on any word, ranks by the words alone and stems words", async () => {
     const results = await search(scope, "", "how do I write release notes", 10);
     expect(results.map((result) => result.path)).toEqual([
       "skills/release-notes/SKILL.md",
@@ -912,10 +912,11 @@ describe("a repository manifest", () => {
   });
 
   it("keeps what it leaves out away from every query", async () => {
-    // README.md says "releasing" too, and is left out.
+    // README.md says "releasing" too, and is left out. The document is named for the word and
+    // the skill only says it: the words rank a skill as they rank a document (ADR-0095).
     expect((await search(scope, "", "releasing", 10)).map((r) => r.path)).toEqual([
-      "skills/release-notes/SKILL.md",
       "docs/releasing.md",
+      "skills/release-notes/SKILL.md",
     ]);
     expect((await listEntries(database, scope, "", 10)).map((r) => r.path)).toEqual([
       "skills/release-notes/SKILL.md",

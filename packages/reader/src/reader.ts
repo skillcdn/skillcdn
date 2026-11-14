@@ -283,17 +283,19 @@ function cutChars(text: string, max: number): string {
 /**
  * The entries the words found and the entries whose sections the meaning found, in one order
  * (ADR-0063, point 5): by reciprocal rank fusion of the two lists, an entry's rank by meaning
- * being that of its nearest section, with the skill boost of the words' ranking kept and ties
- * broken by path, so that the order is the same on every machine.
+ * being that of its nearest section, and ties broken by path, so that the order is the same on
+ * every machine. This is where a skill is boosted over a document, once (ADR-0095): the words
+ * rank the two alike, so the words answering alone are put in order here as well, as the one
+ * list there is.
  */
 function fuseEntries(
   entries: readonly IndexEntry[],
   words: readonly IndexEntry[],
-  nearest: readonly MeaningMatch[],
+  nearest: readonly MeaningMatch[] | undefined,
 ): IndexEntry[] {
   const byPath = new Map<string, IndexEntry>(words.map((row) => [row.path, row]));
   const byMeaning: string[] = [];
-  for (const match of nearest) {
+  for (const match of nearest ?? []) {
     if (byMeaning.includes(match.path)) {
       continue;
     }
@@ -306,7 +308,8 @@ function fuseEntries(
     }
     byMeaning.push(match.path);
   }
-  const fused = fuseRanks([words.map((row) => row.path), byMeaning], {
+  const wordsOrder = words.map((row) => row.path);
+  const fused = fuseRanks(nearest === undefined ? [wordsOrder] : [wordsOrder, byMeaning], {
     boost: (path) => (byPath.get(path)?.kind === "skill" ? SKILL_RANK_BOOST : 1),
     compare: compareByteOrder,
   });
@@ -1631,8 +1634,7 @@ export class Reader<M extends MountContext = MountContext> {
       const meaning = wordsAlone
         ? { attempted: false, nearest: undefined }
         : await this.#meaningOf(index, path, query);
-      const fused =
-        meaning.nearest === undefined ? words : fuseEntries(entries, words, meaning.nearest);
+      const fused = fuseEntries(entries, words, meaning.nearest);
       // The documents one of whose headings names the identifier the query begins with
       // stand first, in the words' order, whatever else was found.
       const headed =

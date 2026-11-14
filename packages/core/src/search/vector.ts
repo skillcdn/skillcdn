@@ -35,8 +35,13 @@ export const MAX_SEARCHED_BODY_LENGTH = 200_000;
  */
 export const MAX_VECTOR_BYTES = 1_048_575;
 
-/** Skills outrank plain documents by this much. */
-export const SKILL_RANK_BOOST = 1.5;
+/**
+ * What a skill's score counts for beside a document's where the results of a search are put in
+ * one order (`fuseRanks`), which is the one place a skill is boosted (ADR-0095): the words rank
+ * a skill as they rank a document. Two places next to each other in a list differ by a sixtieth,
+ * so a skill passes the documents the lists place up to three ahead of it, and no more.
+ */
+export const SKILL_RANK_BOOST = 1.05;
 
 /** One position a lexeme occurs at, and the weight of the field it occurred in. */
 export interface SearchPosition {

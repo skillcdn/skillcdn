@@ -131,6 +131,75 @@ describe("the words of a query weighed by their rarity", () => {
   });
 });
 
+describe("a skill among the documents the words find", () => {
+  // One word each, in a field that weighs less from one document to the next, and the skill
+  // last: it holds both words in a longer body.
+  const fields: readonly (readonly ["A" | "B" | "C" | "D", string])[] = [
+    ["A", "tariff"],
+    ["B", "tariff levy"],
+    ["C", "tariff levy"],
+    ["D", "tariff levy"],
+  ];
+  const documents = fields.map(
+    ([weight, text], at): IndexEntry => ({
+      ...entry(`docs/${at + 1}.md`, `doc-${at + 1}`),
+      search: serializeSearchVector(searchVectorOf([{ weight, text }])),
+    }),
+  );
+  const skill: IndexEntry = {
+    ...entry("skills/duties/SKILL.md", "skill"),
+    kind: "skill",
+    skillDir: "skills/duties",
+    name: "duties",
+    description: "Works out what is owed.",
+    search: serializeSearchVector(
+      searchVectorOf([{ weight: "D", text: "tariff levy and six more words of a body" }]),
+    ),
+  };
+  const memory = createMemoryIndex({
+    index: { ...index, entries: [...documents, skill] },
+    blobs,
+  });
+  const reader = new Reader<MountContext>({
+    limits: LIMITS,
+    index: async () => ({ status: "ready", index: memory }),
+  });
+  const found = async (query: string): Promise<(string | undefined)[]> => {
+    const answer = await reader.find(mountOf(), { query }, 0);
+    if (answer.status !== "ready") throw new Error("not ready");
+    return answer.result.items.map((item) => item.path);
+  };
+
+  it("is ranked by the words as a document is", async () => {
+    const byWords = await memory.store.search(ROOT_PATH, queryLexemes("tariff"));
+    expect(byWords.map((item) => item.path)).toEqual([
+      "docs/1.md",
+      "docs/2.md",
+      "docs/3.md",
+      "docs/4.md",
+      "skills/duties/SKILL.md",
+    ]);
+  });
+
+  it("passes the documents up to three places ahead of it where the results are put in order, and no more", async () => {
+    // Three documents ahead by the words: the skill stands first.
+    expect(await found("levy")).toEqual([
+      "skills/duties/SKILL.md",
+      "docs/2.md",
+      "docs/3.md",
+      "docs/4.md",
+    ]);
+    // Four ahead: it passes three of them.
+    expect(await found("tariff")).toEqual([
+      "docs/1.md",
+      "skills/duties/SKILL.md",
+      "docs/2.md",
+      "docs/3.md",
+      "docs/4.md",
+    ]);
+  });
+});
+
 describe("a search while the embedding of the index goes on", () => {
   const embedder = {
     embed: async (texts: readonly string[]) => ({

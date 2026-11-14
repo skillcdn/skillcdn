@@ -111,7 +111,8 @@ export function rankOf(lexemes: readonly string[], weights: readonly number[] | 
  * Full-text search inside a mount, by the lexemes of a query as `queryLexemes` of @skillcdn/core
  * read it with the pack's word rules (ADR-0063). An entry matches when its stored vector holds
  * any of them; `ts_rank` decides the order, as `rankSearchVector` computes it in memory, each
- * lexeme weighing what `weights` says of it (ADR-0069), and skills outrank plain documents.
+ * lexeme weighing what `weights` says of it (ADR-0069), a skill ranked as a document is: what a
+ * skill counts for over one is said once, where the results are put in one order (ADR-0095).
  * Returns nothing for no lexemes (a query of stop words or punctuation alone): the caller decides
  * what to show instead.
  */
@@ -128,7 +129,7 @@ export async function searchEntries(
   }
   // The query in the text form of a tsquery, every lexeme quoted: the server parses it once.
   const tsquery = sql`${serializeSearchQuery(lexemes)}::tsquery`;
-  const rank = sql<number>`${rankOf(lexemes, weights)} * case when ${indexEntries.kind} = 'skill' then 1.5 else 1 end`;
+  const rank = rankOf(lexemes, weights);
   const queryRows = drizzleOf(database)
     .select(entryColumns)
     .from(indexEntries)

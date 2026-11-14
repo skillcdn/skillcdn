@@ -18,8 +18,10 @@ export interface IndexStore {
   /**
    * The findable entries under `mountPath` whose search vector holds any of `lexemes`, best
    * first, as `rankSearchVector` ranks them with `weights`, one per lexeme and every one the
-   * same when left out (ADR-0069): a skill outranks a document, and ties keep path order. The
-   * lexemes are a query's, read with the pack's word rules (`queryLexemes`); empty for none.
+   * same when left out (ADR-0069): ties keep path order, and a skill is ranked as a document
+   * is, since what a skill counts for over one is the reader's to say once, where it puts the
+   * results in one order (ADR-0095). The lexemes are a query's, read with the pack's word rules
+   * (`queryLexemes`); empty for none.
    */
   search(
     mountPath: RepoPath,

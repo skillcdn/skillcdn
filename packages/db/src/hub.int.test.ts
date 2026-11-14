@@ -247,7 +247,8 @@ describe("the words and the meaning across every pack", () => {
     });
 
     const plain = await searchHubEntries(database, ids, lexemes, undefined, 10, 5000);
-    // A skill outranks a document, as inside one pack; then the shorter document.
+    // The skill holds the word in its description, the documents in their bodies; then the
+    // shorter document.
     expect(plain.map((row) => row.path)).toEqual([
       "skills/x/SKILL.md",
       "docs/one.md",
@@ -262,11 +263,12 @@ describe("the words and the meaning across every pack", () => {
       10,
       5000,
     );
-    // Weighed by rarity, the document that holds the rare code passes the one with the common word;
-    // the skill, boosted and matched in its description, stays first.
+    // Weighed by rarity, the document that holds the rare code passes the one with the common
+    // word, and the skill that holds the common word alone: a skill is ranked as a document is
+    // (ADR-0095).
     expect(weighed.map((row) => row.path)).toEqual([
-      "skills/x/SKILL.md",
       "docs/two.md",
+      "skills/x/SKILL.md",
       "docs/one.md",
     ]);
     expect(await searchHubEntries(database, ids, lexemes, undefined, 1, 5000)).toHaveLength(1);

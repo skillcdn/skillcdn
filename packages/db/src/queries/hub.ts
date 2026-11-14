@@ -175,7 +175,7 @@ function wordsStatement(
   // The entries that hold a word, by their ids: the one place a vector is tested. Those of the
   // snapshots searched are then ranked, which is where a vector is unpacked.
   const holding = sql`array(select held.id from ${indexEntries} held where held.search @@ (select ${serializeSearchQuery(lexemes)}::tsquery))`;
-  const rank = sql<number>`${rankOf(lexemes, weights)} * case when ${indexEntries.kind} = 'skill' then 1.5 else 1 end`;
+  const rank = rankOf(lexemes, weights);
   return runner
     .select({ ...entryColumns, snapshotId: indexEntries.snapshotId })
     .from(indexEntries)
@@ -277,7 +277,7 @@ export async function countHubLexemes(
 /**
  * The findable entries of the packs whose vector holds any of the query's lexemes, best first
  * across every pack, as `searchEntries` ranks them inside one (ADR-0069): the weighed rank, a
- * skill above a document, ties by pack and then by path. At most `limit`.
+ * skill ranked as a document is (ADR-0095), ties by pack and then by path. At most `limit`.
  */
 export async function searchHubEntries(
   database: Database,
