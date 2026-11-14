@@ -197,6 +197,60 @@ describe("the search across every pack", () => {
     await h.lists.remove("blocked", "/gh/acme/document-pack");
   });
 
+  it("shows no result of a repository the git host no longer shows to everyone, once a day has passed since it was asked", async () => {
+    const host = createFixtureHost("hub-public");
+    let now = Date.parse("2026-02-10T00:00:00Z");
+    const h = createHarness(testDatabase, {
+      host,
+      clock: { now: () => new Date(now) },
+      hub: { ...HUB_DEFAULTS, cacheMs: 0 },
+    });
+    const addresses = async (): Promise<string[]> =>
+      (await search(h, "query=conventional+commits")).items.map((item) => item.address);
+    await indexed(h, "/gh/acme/single-skill");
+    await indexed(h, "/gh/acme/multi-skill");
+    now += 20_000;
+    expect(await addresses()).toContain("/gh/acme/single-skill");
+    const repositoryCalls = (): number =>
+      host.asked.filter((call) => call.method === "getRepository").length;
+
+    // Its owner makes it private. Nobody asks for its address, so the index has it as it was,
+    // and what the host said within the day is believed: the host is not asked.
+    host.hide("single-skill");
+    now += 60 * 60_000;
+    const asked = repositoryCalls();
+    expect(await addresses()).toContain("/gh/acme/single-skill");
+    expect(repositoryCalls()).toBe(asked);
+
+    // A day on, the host is asked before a result is shown, and shows the name to nobody.
+    now += 24 * 60 * 60_000;
+    const covered = (await search(h, "query=conventional+commits")).packs;
+    expect(repositoryCalls()).toBeGreaterThan(asked);
+    expect(await addresses()).not.toContain("/gh/acme/single-skill");
+    // The index has it as public no longer: the packs read again do not cover it, and the
+    // host is not asked about it again.
+    now += 20_000;
+    const again = repositoryCalls();
+    const after = await search(h, "query=conventional+commits");
+    expect(after.packs).toBe(covered - 1);
+    expect(repositoryCalls()).toBe(again);
+
+    // A host that cannot say whether a repository is public is not a yes either: a result of
+    // a pack it was not asked about for a day is left out, and comes back with the host.
+    now += 24 * 60 * 60_000;
+    const unreachable = createFixtureHost("hub-public");
+    unreachable.fail("getRepository");
+    const cautious = createHarness(testDatabase, {
+      host: unreachable,
+      clock: { now: () => new Date(now) },
+      hub: { ...HUB_DEFAULTS, cacheMs: 0 },
+    });
+    const guarded = await search(cautious, "query=release+notes");
+    expect(guarded.items.some((item) => item.address === "/gh/acme/multi-skill")).toBe(false);
+    const back = await search(h, "query=release+notes");
+    expect(back.items.some((item) => item.address === "/gh/acme/multi-skill")).toBe(true);
+  });
+
   it("is not there when the operator turns it off", async () => {
     const host = createFixtureHost("hub-off");
     const h = harness({ host, hub: { ...HUB_DEFAULTS, enabled: false } });

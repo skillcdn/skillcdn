@@ -5,6 +5,7 @@ import {
   accounts,
   indexEntries,
   partVectors,
+  repoAliases,
   repoRefs,
   repos,
   sectionVectors,
@@ -44,19 +45,31 @@ export interface SearchablePack {
   readonly hasManifest: boolean;
   /** How many skills the snapshot lists. */
   readonly skillCount: number;
+  /**
+   * When the git host last confirmed a name of the repository, which is when it was last seen
+   * to be what the index says it is; null where no name of it is kept. What the index calls
+   * public is public as of then (ADR-0097).
+   */
+  readonly confirmedAt: Date | null;
 }
 
 /**
  * The public repositories with an index to search, each at the snapshot a mount of its default
  * branch is served from: the ref's commit where that has an index, else the ref's previous
  * commit (ADR-0068); without the repositories whose root manifest keeps them out of the search
- * across packs (`search.hub: false`, ADR-0070). In the order of their addresses.
+ * across packs (`search.hub: false`, ADR-0070). In the order of their addresses. Public is what
+ * the index recorded when the host was last asked: whoever shows a result to everyone asks
+ * again where `confirmedAt` is long ago (ADR-0097).
  */
 export async function listSearchablePacks(database: Database): Promise<SearchablePack[]> {
   const served = sql`case when exists (select 1 from ${snapshots} n where n.repo_id = ${repos.id} and n.commit_sha = ${repoRefs.commitSha} and n.index_version > 0) then ${repoRefs.commitSha} else ${repoRefs.previousCommitSha} end`;
   const optedOut = sql`exists (select 1 from ${indexEntries} m where m.snapshot_id = ${snapshots.id} and m.path = 'SKILLCDN.md' and m.kind = 'manifest' and (m.front_matter -> 'search' ->> 'hub') = 'false')`;
   const hasManifest = sql<boolean>`exists (select 1 from ${indexEntries} m where m.snapshot_id = ${snapshots.id} and m.path = 'SKILLCDN.md' and m.kind = 'manifest')`;
   const skillCount = sql<number>`(select count(*)::int from ${indexEntries} k where k.snapshot_id = ${snapshots.id} and k.kind = 'skill' and k.visible)`;
+  const confirmedAt =
+    sql<Date | null>`(select max(a.checked_at) from ${repoAliases} a where a.repo_id = ${repos.id})`.mapWith(
+      (value: string | Date | null) => (value === null ? null : new Date(value)),
+    );
   return drizzleOf(database)
     .select({
       snapshotId: snapshots.id,
@@ -69,6 +82,7 @@ export async function listSearchablePacks(database: Database): Promise<Searchabl
       license: snapshots.license,
       hasManifest,
       skillCount,
+      confirmedAt,
     })
     .from(repos)
     .innerJoin(accounts, eq(accounts.id, repos.accountId))

@@ -208,6 +208,8 @@ export function createApi(
           timeoutMs: hubConfig.timeoutMs,
           candidates: hubConfig.candidates,
           parts: hubConfig.parts,
+          // Asked when a result is to be shown, by when the mounts are made.
+          isPublic: (name) => mounts.isPublic(name),
           clock,
           logger,
         }),

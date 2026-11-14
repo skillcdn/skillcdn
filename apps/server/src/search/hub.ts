@@ -20,6 +20,7 @@ import {
   queryIdentifiers,
   queryLexemes,
   queryWeights,
+  type RepoCoordinates,
   type RepoPath,
   SKILL_RANK_BOOST,
   sectionExcerpt,
@@ -62,6 +63,13 @@ export interface HubSearchOptions {
   readonly candidates: number;
   /** How many parts the meaning picks before it compares their sections; 0, every section. */
   readonly parts: number;
+  /**
+   * Whether a name is a public repository right now, as the git host shows it to nobody in
+   * particular (`MountService.isPublic`). The index remembers a repository as it was when its
+   * address was last asked for, and a result is shown to everyone: a pack the host was not
+   * asked about for a day is asked about before a result of it is shown (ADR-0097).
+   */
+  readonly isPublic: (name: RepoCoordinates) => Promise<boolean>;
   readonly clock: Clock;
   readonly logger: Logger;
 }
@@ -78,6 +86,17 @@ export interface HubSearch {
   packs(): Promise<number>;
 }
 
+/**
+ * How long a repository is believed to be public once the git host said so, for a result across
+ * the packs (ADR-0097): a day, the bound a cache is given for the answer of a pinned address.
+ */
+export const PUBLIC_BELIEF_MS = 24 * 60 * 60_000;
+/**
+ * How long a search waits for the git host to say that the packs of its results are still
+ * public. A pack it has not answered for by then is left out of this answer, and the question
+ * goes on, so that the next search has the answer.
+ */
+const CONFIRM_WAIT_MS = 2_000;
 /** How long the set of searchable packs is kept before it is read again. */
 const PACKS_TTL_MS = 15_000;
 /**
@@ -111,6 +130,58 @@ export function createHubSearch(options: HubSearchOptions): HubSearch {
     | undefined;
   /** Until when the search by meaning rests, on the deployment's clock; 0 while it is asked. */
   let meaningRestsUntil = 0;
+  /** When the git host last said a repository is public, where this process asked: by repository. */
+  const confirmedHere = new Map<string, number>();
+  /** The questions to the git host that are under way, one per repository. */
+  const confirming = new Map<string, Promise<boolean>>();
+
+  /**
+   * Whether the repository of a pack is public now: what the index says where the git host
+   * confirmed it within a day, and the host's answer otherwise, awaited for a moment. No
+   * answer is no. A time ahead of this process's clock is not believed, as elsewhere.
+   */
+  const stillPublic = (pack: SearchablePack): Promise<boolean> => {
+    const now = clock.now().getTime();
+    const fresh = (at: number | undefined): boolean =>
+      at !== undefined && now - at >= 0 && now - at < PUBLIC_BELIEF_MS;
+    if (fresh(pack.confirmedAt?.getTime()) || fresh(confirmedHere.get(pack.repoId))) {
+      return Promise.resolve(true);
+    }
+    const address = addressOf(pack);
+    if (address === undefined) {
+      return Promise.resolve(false);
+    }
+    let asked = confirming.get(pack.repoId);
+    if (asked === undefined) {
+      asked = options
+        .isPublic({ host: address.host, owner: address.owner, repo: address.repo })
+        .then(
+          (open) => {
+            if (open) {
+              confirmedHere.set(pack.repoId, clock.now().getTime());
+            } else {
+              // The index has it as not public now: the next search does not read it.
+              confirmedHere.delete(pack.repoId);
+              cached = undefined;
+            }
+            return open;
+          },
+          (error: unknown) => {
+            logger.warn({ err: error }, "a pack of a search could not be confirmed to be public");
+            return false;
+          },
+        )
+        .finally(() => {
+          confirming.delete(pack.repoId);
+        });
+      confirming.set(pack.repoId, asked);
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const inTime = new Promise<boolean>((resolve) => {
+      timer = setTimeout(() => resolve(false), CONFIRM_WAIT_MS);
+    });
+    return Promise.race([asked, inTime]).finally(() => clearTimeout(timer));
+  };
 
   /** The packs searched: every public one with an index, without those the operator blocked. */
   const packsOf = (): Promise<readonly SearchablePack[]> => {
@@ -305,6 +376,17 @@ export function createHubSearch(options: HubSearchOptions): HubSearch {
         return vouched;
       };
       const legsEnded = clock.now().getTime();
+      // The packs of the first results are asked about together, where they are to be asked
+      // about at all: the results after them, one at a time, if these do not fill the answer.
+      const publicOf = new Map<string, Promise<boolean>>();
+      const shownPublic = (pack: SearchablePack): Promise<boolean> => {
+        let open = publicOf.get(pack.repoId);
+        if (open === undefined) {
+          open = stillPublic(pack);
+          publicOf.set(pack.repoId, open);
+        }
+        return open;
+      };
       // The documents one of whose headings names the identifier the query begins with
       // stand first, in the words' order (ADR-0079); a document the deployment only describes is
       // not read for it.
@@ -337,12 +419,26 @@ export function createHubSearch(options: HubSearchOptions): HubSearch {
       const reranker = wordsAlone ? undefined : meaning?.reranker;
       const rerankCount = reranker === undefined ? 0 : (meaning?.rerankCandidates ?? 10);
       const wanted = Math.max(limit, headed.length + rerankCount);
+      for (const key of ordered.slice(0, wanted)) {
+        const pack = records.get(key)?.pack;
+        if (pack !== undefined) {
+          void shownPublic(pack);
+        }
+      }
       const scored: Scored[] = [];
       /** How many of the scored stand first for their heading, and are not the reranker's to move. */
       let fixed = 0;
-      for (const key of ordered.slice(0, wanted)) {
+      for (const key of ordered) {
+        if (scored.length >= wanted) {
+          break;
+        }
         const candidate = records.get(key);
         if (candidate === undefined) {
+          continue;
+        }
+        // A result is shown to everyone: one of a repository the host no longer shows to
+        // everyone, or cannot be asked about, is not shown (ADR-0097).
+        if (!(await shownPublic(candidate.pack))) {
           continue;
         }
         const address = addressOf(candidate.pack);
