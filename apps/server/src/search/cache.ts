@@ -1,5 +1,5 @@
-import { answeredInPart, type Clock, normalizeSearchTerm } from "@skillcdn/core";
-import type { HubSearch } from "./hub.js";
+import { type Clock, normalizeSearchTerm } from "@skillcdn/core";
+import { answeredInFull, type HubSearch } from "./hub.js";
 
 // What stands between the search across every pack and whoever asks for it (ADR-0075): the
 // answer to a question is kept for a while and given to the next who asks the same, a question
@@ -39,8 +39,9 @@ interface Kept<T> {
 /**
  * A search cached, coalesced and bounded. The same question is the same words, however they
  * were spaced, at the same limit. Only a search that answered in full is kept; one that failed,
- * or that answered without its words or without its meaning (ADR-0091, ADR-0096), is asked again
- * by the next who asks. `packs()` goes through as it is: the search keeps its own count.
+ * or that answered without its words or without its meaning (ADR-0091, ADR-0096), or without a
+ * result whose pack the git host was not asked about in time (ADR-0097), is asked again by the
+ * next who asks. `packs()` goes through as it is: the search keeps its own count.
  */
 export function withSearchCache(hub: HubSearch, options: SearchCacheOptions): HubSearch {
   const { ttlMs, entries, concurrency, clock } = options;
@@ -53,7 +54,7 @@ export function withSearchCache(hub: HubSearch, options: SearchCacheOptions): Hu
     `${normalizeSearchTerm(query)}\u0000${limit}`;
 
   const remember = (key: string, value: Answer): void => {
-    if (ttlMs <= 0 || entries <= 0 || answeredInPart(value.ranking)) {
+    if (ttlMs <= 0 || entries <= 0 || !answeredInFull(value)) {
       return;
     }
     kept.delete(key);

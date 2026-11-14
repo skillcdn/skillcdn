@@ -206,4 +206,21 @@ describe("the page of an account", () => {
     const guarded = restOwnerSchema.parse(await (await cautious.request(OWNER)).json());
     expect(guarded.indexed).toEqual([]);
   });
+
+  it("shows no card of a repository whose name the git host has given to another", async () => {
+    const host = createFixtureHost("owners-replaced");
+    const h = createHarness(testDatabase, { host, ttlMs: 0 });
+    expect((await h.request("/api/v1/mounts/gh/acme/multi-skill")).status).toBe(200);
+    await h.snapshots.idle();
+    const indexedCards = async () =>
+      restOwnerSchema
+        .parse(await (await h.request(OWNER)).json())
+        .indexed.map((card) => card.address);
+    expect(await indexedCards()).toContain("/gh/acme/multi-skill");
+
+    // Deleted, and a new repository made under the name: the host's list names the new one, and
+    // the name is public, but the repository the index holds is not it.
+    host.replace("multi-skill");
+    expect(await indexedCards()).not.toContain("/gh/acme/multi-skill");
+  });
 });

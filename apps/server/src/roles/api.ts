@@ -209,7 +209,7 @@ export function createApi(
           candidates: hubConfig.candidates,
           parts: hubConfig.parts,
           // Asked when a result is to be shown, by when the mounts are made.
-          isPublic: (name) => mounts.isPublic(name),
+          publicRepository: (name) => mounts.publicRepository(name),
           clock,
           logger,
         }),
@@ -360,7 +360,7 @@ export function createApi(
           images,
           clock,
           ttlMs: config.mounts.repoTtlMs,
-          isPublic: (coordinates) => mounts.isPublic(coordinates),
+          publicRepository: (coordinates) => mounts.publicRepository(coordinates),
         });
   const snapshots = new SnapshotService({
     database,

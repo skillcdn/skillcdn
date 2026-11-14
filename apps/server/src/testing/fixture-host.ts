@@ -119,6 +119,11 @@ export interface FixtureHost extends GitHost, GitHostDirectory {
    */
   hide(repo: string): void;
   /**
+   * Gives the name to another repository, as an owner who deletes a repository and makes a new
+   * one of the same name does: the host's id under the name is not the one it was.
+   */
+  replace(repo: string): void;
+  /**
    * Moves `main`, and so the default branch, of every repository to a commit nobody has seen,
    * as a push does, and answers with that commit.
    */
@@ -159,6 +164,10 @@ export function createFixtureHost(
   let gate: Promise<void> = Promise.resolve();
   const known = new Set(readdirSync(FIXTURES_ROOT).filter((name) => !name.includes(".")));
   const hidden = new Set<string>();
+  const replaced = new Set<string>();
+  /** A host id belongs to one repository for good: derived from the name, and from a name given again. */
+  const idOf = (name: string): string =>
+    fixtureRepoId(replaced.has(name) ? `${name} made again` : name);
   const uninstalled = new Set<string>();
   const failing = new Set<string>();
   const commits: { main: string; release: string } = { ...fixtureCommits(variant) };
@@ -227,7 +236,7 @@ export function createFixtureHost(
       const start = (page - 1) * 2;
       return {
         repositories: names.slice(start, start + 2).map((name) => ({
-          hostRepoId: fixtureRepoId(name),
+          hostRepoId: idOf(name),
           name,
           description: FIXTURE_DESCRIPTIONS[name],
           fork: false,
@@ -240,6 +249,9 @@ export function createFixtureHost(
     },
     hide(repo) {
       hidden.add(repo);
+    },
+    replace(repo) {
+      replaced.add(repo);
     },
     push() {
       pushes += 1;
@@ -290,8 +302,7 @@ export function createFixtureHost(
         throw new GitHostError("not_found", "not found on the git host");
       }
       return {
-        // A host id belongs to one repository for good, so it is derived from the name.
-        hostRepoId: fixtureRepoId(coordinates.repo),
+        hostRepoId: idOf(coordinates.repo),
         owner: { hostAccountId: "42", login: "Acme", kind: "organization" },
         name: coordinates.repo,
         defaultBranch: "main",

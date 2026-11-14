@@ -122,6 +122,20 @@ export function repositoryKey(address: Address): string {
   return formatAddress({ ...address, ref: undefined, path: ROOT_PATH });
 }
 
+/**
+ * What a name is to everyone, as the git host last said (`MountService.publicRepository`): the
+ * repository it is, by its id here and at the host, and when the host said so; or no public
+ * repository; or nobody knows, because the host could not be asked.
+ */
+export type PublicStanding =
+  | {
+      readonly status: "public";
+      readonly repoId: string;
+      readonly hostRepoId: string;
+      readonly checkedAt: Date;
+    }
+  | { readonly status: "not public" | "unknown" };
+
 export type MountErrorCode =
   /** Missing, private or otherwise invisible: callers cannot tell which. */
   "repo_not_found" | "ref_not_found" | "not_allowed" | "rate_limited" | "unavailable";
@@ -464,17 +478,34 @@ export class MountService {
   }
 
   /**
-   * Whether a name is a public repository right now, as far as the git host shows the
-   * deployment. For whatever names repositories to everyone: a name that cannot be confirmed is
-   * no, whether the host said so or could not be asked.
+   * The public repository a name is right now, as far as the git host shows the deployment, and
+   * when the host said so: for whatever names repositories to everyone, which shows one only
+   * where it is the repository it remembers under the name. `not public` where the host shows
+   * the name to nobody, `unknown` where it could not be asked; neither is a yes.
    */
-  async isPublic(name: RepoCoordinates): Promise<boolean> {
+  async publicRepository(name: RepoCoordinates): Promise<PublicStanding> {
     try {
-      await this.#publicly({ host: name.host, owner: name.owner, repo: name.repo }, true);
-      return true;
+      const record = await this.#publicly(
+        { host: name.host, owner: name.owner, repo: name.repo },
+        true,
+      );
+      return {
+        status: "public",
+        repoId: record.id,
+        hostRepoId: record.repository.hostRepoId,
+        checkedAt:
+          "checkedAt" in record && record.checkedAt instanceof Date
+            ? record.checkedAt
+            : this.#options.clock.now(),
+      };
     } catch (error) {
       if (error instanceof MountError) {
-        return false;
+        return {
+          status:
+            error.reason === "rate_limited" || error.reason === "unavailable"
+              ? "unknown"
+              : "not public",
+        };
       }
       throw error;
     }

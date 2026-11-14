@@ -18,7 +18,7 @@ import {
   rawFileUrl,
 } from "@skillcdn/core";
 import { type Database, type IndexedRepository, listIndexedRepositories } from "@skillcdn/db";
-import { repositoryKey } from "../mounts/mount-service.js";
+import { type PublicStanding, repositoryKey } from "../mounts/mount-service.js";
 import type { OperatorImages } from "../operator/images.js";
 import type { OperatorLists } from "../operator/lists.js";
 
@@ -38,10 +38,11 @@ export interface OwnerServiceOptions {
   /** How long what the host said about an account is believed. */
   readonly ttlMs: number;
   /**
-   * Whether a name is a public repository right now, for a repository the host's list did not
-   * just name: `false` when it is not, and when that could not be asked.
+   * The public repository a name is right now, for a repository the host's list did not just
+   * name (`MountService.publicRepository`): a card is shown where it is the repository the
+   * index remembers under the name, and not where the host said no or could not be asked.
    */
-  readonly isPublic: (coordinates: RepoCoordinates) => Promise<boolean>;
+  readonly publicRepository: (coordinates: RepoCoordinates) => Promise<PublicStanding>;
 }
 
 /** The size of the pictures the pages ask the host for: 80 CSS pixels on a 2x screen. */
@@ -130,7 +131,7 @@ export class OwnerService {
     row: IndexedRepository,
     listed: ReadonlySet<string>,
   ) {
-    const { lists, images, isPublic } = this.#options;
+    const { lists, images, publicRepository } = this.#options;
     const parsed = parseAddress(`/${owner.host}/${row.owner}/${row.name}`);
     if (!parsed.ok) {
       return undefined;
@@ -142,14 +143,18 @@ export class OwnerService {
       return undefined;
     }
     // The index remembers a repository as it was when it was read. It is shown only while the
-    // host still shows it to everyone: its public list names it, or the host confirms the name.
-    // One that went private since is nobody's to see here, and what cannot be confirmed is not
-    // shown.
-    if (
-      !listed.has(row.hostRepoId) &&
-      !(await isPublic({ host: owner.host, owner: address.owner, repo: address.repo }))
-    ) {
-      return undefined;
+    // host still shows it to everyone: its public list names it, or the host confirms that the
+    // name is still this repository. One that went private since, or was deleted and its name
+    // given to another, is nobody's to see here, and what cannot be confirmed is not shown.
+    if (!listed.has(row.hostRepoId)) {
+      const standing = await publicRepository({
+        host: owner.host,
+        owner: address.owner,
+        repo: address.repo,
+      });
+      if (standing.status !== "public" || standing.hostRepoId !== row.hostRepoId) {
+        return undefined;
+      }
     }
     const declared = row.manifest?.image;
     const declaredPath = declared === undefined ? undefined : parseRepoPath(declared);

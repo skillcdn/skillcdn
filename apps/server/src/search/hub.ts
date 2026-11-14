@@ -1,6 +1,7 @@
 import {
   type Address,
   accountAvatarUrl,
+  answeredInPart,
   type BlobStore,
   type Clock,
   type FindItem,
@@ -39,7 +40,7 @@ import {
 } from "@skillcdn/db";
 import { HEADED_CANDIDATES } from "@skillcdn/reader";
 import type { Logger } from "../logger.js";
-import { repositoryKey } from "../mounts/mount-service.js";
+import { type PublicStanding, repositoryKey } from "../mounts/mount-service.js";
 import type { MountMeaning } from "../mounts/reader.js";
 import type { OperatorLists } from "../operator/lists.js";
 
@@ -64,12 +65,12 @@ export interface HubSearchOptions {
   /** How many parts the meaning picks before it compares their sections; 0, every section. */
   readonly parts: number;
   /**
-   * Whether a name is a public repository right now, as the git host shows it to nobody in
-   * particular (`MountService.isPublic`). The index remembers a repository as it was when its
+   * The public repository a name is right now, as the git host shows it to nobody in particular
+   * (`MountService.publicRepository`). The index remembers a repository as it was when its
    * address was last asked for, and a result is shown to everyone: a pack the host was not
    * asked about for a day is asked about before a result of it is shown (ADR-0097).
    */
-  readonly isPublic: (name: RepoCoordinates) => Promise<boolean>;
+  readonly publicRepository: (name: RepoCoordinates) => Promise<PublicStanding>;
   readonly clock: Clock;
   readonly logger: Logger;
 }
@@ -79,12 +80,31 @@ export interface HubSearch {
    * The results for a query, at most `limit` of them. Where the words ran out of their time and
    * the meaning answered, the answer is the meaning's alone, and where the meaning did not
    * answer, the words'; the ranking says which, and such an answer is for no cache
-   * (`answeredInPart`). Throws when the database refused, or when nothing answered in time.
+   * (`answeredInFull`), nor one that left out a result whose pack the git host was not asked
+   * about in time. Throws when the database refused, or when nothing answered in time.
    */
-  search(query: string, limit: number): Promise<HubResult>;
+  search(query: string, limit: number): Promise<HubAnswer>;
   /** How many packs a search covers right now. */
   packs(): Promise<number>;
 }
+
+/** An answer of the search, with what tells a cache not to keep it beside its ranking. */
+export interface HubAnswer extends HubResult {
+  /**
+   * A result was left out because the git host did not say in time whether its repository is
+   * still public (ADR-0097): the next search may have it, so no cache keeps this answer. Never
+   * part of what is sent.
+   */
+  readonly unconfirmed?: true;
+}
+
+/**
+ * Whether a cache may keep an answer: one that came without its words or its meaning
+ * (ADR-0091, ADR-0096), or that left out a result the git host was not asked about in time
+ * (ADR-0097), is for whoever asked alone.
+ */
+export const answeredInFull = (answer: HubAnswer): boolean =>
+  !answeredInPart(answer.ranking) && answer.unconfirmed !== true;
 
 /**
  * How long a repository is believed to be public once the git host said so, for a result across
@@ -93,7 +113,8 @@ export interface HubSearch {
 export const PUBLIC_BELIEF_MS = 24 * 60 * 60_000;
 /**
  * How long a search waits for the git host to say that the packs of its results are still
- * public. A pack it has not answered for by then is left out of this answer, and the question
+ * public, all of them together, however far down its order the search has to go. A pack it has
+ * not answered for by then is left out of this answer, which no cache keeps, and the question
  * goes on, so that the next search has the answer.
  */
 const CONFIRM_WAIT_MS = 2_000;
@@ -110,6 +131,9 @@ const MEANING_REST_MS = 60_000;
 const SECTION_CANDIDATES = 4;
 /** How much of a result the reranker is given to score it by. */
 const RERANK_CANDIDATE_CHARS = 1200;
+
+/** What a search knows of whether the repository of a pack is public now (ADR-0097). */
+type Standing = "public" | "not public" | "unknown";
 
 interface Candidate {
   readonly key: string;
@@ -133,42 +157,57 @@ export function createHubSearch(options: HubSearchOptions): HubSearch {
   /** When the git host last said a repository is public, where this process asked: by repository. */
   const confirmedHere = new Map<string, number>();
   /** The questions to the git host that are under way, one per repository. */
-  const confirming = new Map<string, Promise<boolean>>();
+  const confirming = new Map<string, Promise<Standing>>();
+  /** Whether a time the host said something at is within the day, and not ahead of this clock. */
+  const fresh = (at: number | undefined): boolean => {
+    const now = clock.now().getTime();
+    return at !== undefined && now - at >= 0 && now - at < PUBLIC_BELIEF_MS;
+  };
 
   /**
    * Whether the repository of a pack is public now: what the index says where the git host
-   * confirmed it within a day, and the host's answer otherwise, awaited for a moment. No
-   * answer is no. A time ahead of this process's clock is not believed, as elsewhere.
+   * confirmed it within a day, and the host's answer otherwise, awaited until `until` (on
+   * `performance.now()`). The answer is about the repository, not its name: a name the host
+   * now gives to another repository says nothing of this one, which is not shown. No answer is
+   * no, and says so (`unknown`), so that the answer it leaves a result out of is kept by no
+   * cache. A time ahead of this process's clock is not believed, as elsewhere.
    */
-  const stillPublic = (pack: SearchablePack): Promise<boolean> => {
-    const now = clock.now().getTime();
-    const fresh = (at: number | undefined): boolean =>
-      at !== undefined && now - at >= 0 && now - at < PUBLIC_BELIEF_MS;
+  const stillPublic = (pack: SearchablePack, until: number): Promise<Standing> => {
     if (fresh(pack.confirmedAt?.getTime()) || fresh(confirmedHere.get(pack.repoId))) {
-      return Promise.resolve(true);
+      return Promise.resolve("public");
     }
     const address = addressOf(pack);
     if (address === undefined) {
-      return Promise.resolve(false);
+      return Promise.resolve("not public");
     }
     let asked = confirming.get(pack.repoId);
     if (asked === undefined) {
       asked = options
-        .isPublic({ host: address.host, owner: address.owner, repo: address.repo })
+        .publicRepository({ host: address.host, owner: address.owner, repo: address.repo })
         .then(
-          (open) => {
-            if (open) {
-              confirmedHere.set(pack.repoId, clock.now().getTime());
-            } else {
-              // The index has it as not public now: the next search does not read it.
-              confirmedHere.delete(pack.repoId);
-              cached = undefined;
+          (standing): Standing => {
+            if (standing.status === "unknown") {
+              return "unknown";
             }
-            return open;
+            if (standing.status === "public" && standing.repoId === pack.repoId) {
+              const at = standing.checkedAt.getTime();
+              if (fresh(at)) {
+                confirmedHere.set(pack.repoId, at);
+                return "public";
+              }
+              // What the host said more than a day ago, which a host that cannot be asked
+              // leaves standing for a while: not a yes for everyone.
+              return "unknown";
+            }
+            // Public no longer, or the name is another repository's now: the index has this
+            // one as not public, or its name leads elsewhere, and the next search reads again.
+            confirmedHere.delete(pack.repoId);
+            cached = undefined;
+            return "not public";
           },
-          (error: unknown) => {
+          (error: unknown): Standing => {
             logger.warn({ err: error }, "a pack of a search could not be confirmed to be public");
-            return false;
+            return "unknown";
           },
         )
         .finally(() => {
@@ -177,8 +216,8 @@ export function createHubSearch(options: HubSearchOptions): HubSearch {
       confirming.set(pack.repoId, asked);
     }
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const inTime = new Promise<boolean>((resolve) => {
-      timer = setTimeout(() => resolve(false), CONFIRM_WAIT_MS);
+    const inTime = new Promise<Standing>((resolve) => {
+      timer = setTimeout(() => resolve("unknown"), Math.max(0, until - performance.now()));
     });
     return Promise.race([asked, inTime]).finally(() => clearTimeout(timer));
   };
@@ -378,11 +417,16 @@ export function createHubSearch(options: HubSearchOptions): HubSearch {
       const legsEnded = clock.now().getTime();
       // The packs of the first results are asked about together, where they are to be asked
       // about at all: the results after them, one at a time, if these do not fill the answer.
-      const publicOf = new Map<string, Promise<boolean>>();
-      const shownPublic = (pack: SearchablePack): Promise<boolean> => {
+      // The search waits for the host once, for all of them: what has not answered when the
+      // time is up is left out of this answer.
+      const confirmUntil = performance.now() + CONFIRM_WAIT_MS;
+      const publicOf = new Map<string, Promise<Standing>>();
+      /** Whether a result was left out because the host did not answer for its pack in time. */
+      let unconfirmed = false;
+      const shownPublic = (pack: SearchablePack): Promise<Standing> => {
         let open = publicOf.get(pack.repoId);
         if (open === undefined) {
-          open = stillPublic(pack);
+          open = stillPublic(pack, confirmUntil);
           publicOf.set(pack.repoId, open);
         }
         return open;
@@ -438,7 +482,9 @@ export function createHubSearch(options: HubSearchOptions): HubSearch {
         }
         // A result is shown to everyone: one of a repository the host no longer shows to
         // everyone, or cannot be asked about, is not shown (ADR-0097).
-        if (!(await shownPublic(candidate.pack))) {
+        const standing = await shownPublic(candidate.pack);
+        if (standing !== "public") {
+          unconfirmed ||= standing === "unknown";
           continue;
         }
         const address = addressOf(candidate.pack);
@@ -497,6 +543,7 @@ export function createHubSearch(options: HubSearchOptions): HubSearch {
         packs: packs.length,
         items: scored.slice(0, limit).map((entry) => entry.item),
         ...(ranking === undefined ? {} : { ranking }),
+        ...(unconfirmed ? { unconfirmed: true as const } : {}),
       };
     },
   };

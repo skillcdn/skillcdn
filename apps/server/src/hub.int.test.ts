@@ -251,6 +251,74 @@ describe("the search across every pack", () => {
     expect(back.items.some((item) => item.address === "/gh/acme/multi-skill")).toBe(true);
   });
 
+  it("shows no result of a repository whose name the git host has given to another", async () => {
+    const host = createFixtureHost("hub-replaced");
+    let now = Date.parse("2026-03-01T00:00:00Z");
+    const h = createHarness(testDatabase, {
+      host,
+      clock: { now: () => new Date(now) },
+      hub: { ...HUB_DEFAULTS, cacheMs: 0 },
+    });
+    const addresses = async (): Promise<string[]> =>
+      (await search(h, "query=conventional+commits")).items.map((item) => item.address);
+    await indexed(h, "/gh/acme/single-skill");
+    now += 20_000;
+    expect(await addresses()).toContain("/gh/acme/single-skill");
+
+    // Its owner deletes it and makes a new public repository of the same name, which nobody has
+    // asked for. The name is public, but it is another repository: the one the index holds is
+    // not shown under it, today or later.
+    host.replace("single-skill");
+    now += 25 * 60 * 60_000;
+    expect(await addresses()).not.toContain("/gh/acme/single-skill");
+    now += 20_000;
+    expect(await addresses()).not.toContain("/gh/acme/single-skill");
+  });
+
+  it("waits for the git host once a search, and keeps no answer it left a result out of", async () => {
+    const host = createFixtureHost("hub-waits");
+    let now = Date.parse("2026-04-01T00:00:00Z");
+    const h = createHarness(testDatabase, {
+      host,
+      clock: { now: () => new Date(now) },
+      hub: { ...HUB_DEFAULTS, cacheMs: 60_000 },
+    });
+    await indexed(h, "/gh/acme/single-skill");
+    await indexed(h, "/gh/acme/multi-skill");
+    await indexed(h, "/gh/acme/licensed");
+    await indexed(h, "/gh/acme/with-manifest");
+    now += 20_000;
+    const all = await h.request("/api/v1/search?query=skill&limit=20");
+    const packs = new Set(
+      restSearchSchema.parse(await all.json()).items.map((item) => item.address),
+    );
+    expect(packs.size).toBeGreaterThanOrEqual(3);
+
+    // A day on, with a host that does not answer: every pack of the results is to be asked
+    // about, one result is asked for, and the search goes down its order through pack after
+    // pack. It waits two seconds for all of them, not two for each, and answers without them.
+    now += 25 * 60 * 60_000;
+    const silent = { ...host, getRepository: () => new Promise<never>(() => {}) };
+    const waiting = createHarness(testDatabase, {
+      host: silent,
+      clock: { now: () => new Date(now) },
+      hub: { ...HUB_DEFAULTS, cacheMs: 60_000 },
+    });
+    const started = performance.now();
+    const answer = await waiting.request("/api/v1/search?query=skill&limit=1");
+    expect(performance.now() - started).toBeLessThan(3_500);
+    expect(answer.status).toBe(200);
+    expect(restSearchSchema.parse(await answer.json()).items).toEqual([]);
+    // What it left out may be there the next time: no cache keeps the answer, and the search
+    // keeps nothing of it either.
+    expect(answer.headers.get("cache-control")).toBe("no-store");
+    const answered = await h.request("/api/v1/search?query=skill&limit=1");
+    expect(restSearchSchema.parse(await answered.json()).items).toHaveLength(1);
+    expect(answered.headers.get("cache-control")).toBe(
+      "public, max-age=60, s-maxage=60, stale-while-revalidate=60",
+    );
+  });
+
   it("is not there when the operator turns it off", async () => {
     const host = createFixtureHost("hub-off");
     const h = harness({ host, hub: { ...HUB_DEFAULTS, enabled: false } });
