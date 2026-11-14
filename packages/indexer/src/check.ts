@@ -218,7 +218,7 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
       if (section.length > READ_FILE_DEFAULT_LIMIT) {
         const heading = section.heading.at(-1);
         notes.push(
-          `${document.path} (section_large): ${heading === undefined ? "the text before the first heading" : `the section ${JSON.stringify(heading)}`} is ${section.length} characters, more than one read carries (${READ_FILE_DEFAULT_LIMIT}); a long table stands in sections of a few dozen rows, a long text under more headings`,
+          `${document.path} (section_large): ${heading === undefined ? "the text before the first heading" : `the section ${JSON.stringify(heading)}`} is ${section.length} characters, more than one read carries (${READ_FILE_DEFAULT_LIMIT}); a long table stands in sections of a few dozen rows, a long text under more headings, a long code block in blocks of a few hundred lines under headings that name what each holds`,
         );
       }
     }

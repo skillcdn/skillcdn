@@ -159,6 +159,39 @@ describe("pageOfText", () => {
     expect(pageOfText("abcdefgh", 6, 3)).toMatchObject({ content: "gh", nextOffset: undefined });
   });
 
+  it("ends a page it cuts at the end of a line where it is asked to, and joins back to the text", () => {
+    const text = "first line\nsecond line\nthird line\n";
+    // Cut in the middle of the second line: the page ends after the first.
+    expect(pageOfText(text, 0, 16, { atLineEnd: true })).toMatchObject({
+      content: "first line\n",
+      nextOffset: 11,
+    });
+    // Cut exactly at the end of a line, or holding the rest of the text: as it is.
+    expect(pageOfText(text, 0, 11, { atLineEnd: true }).content).toBe("first line\n");
+    expect(pageOfText(text, 11, 100, { atLineEnd: true })).toMatchObject({
+      content: "second line\nthird line\n",
+      nextOffset: undefined,
+    });
+    // A line longer than the page is cut by the count: a page always advances.
+    expect(pageOfText(text, 0, 5, { atLineEnd: true })).toMatchObject({
+      content: "first",
+      nextOffset: 5,
+    });
+    // Without the option a page is the count asked for.
+    expect(pageOfText(text, 0, 16).content).toBe("first line\nsecon");
+    // Page by page, whatever the size, the pages are the text.
+    for (const size of [1, 4, 7, 12, 20, 100]) {
+      let joined = "";
+      let at: number | undefined = 0;
+      while (at !== undefined) {
+        const page = pageOfText(text, at, size, { atLineEnd: true });
+        joined += page.content;
+        at = page.nextOffset;
+      }
+      expect(joined).toBe(text);
+    }
+  });
+
   it("clamps offsets and limits instead of failing", () => {
     expect(pageOfText("abc", 99, 10)).toMatchObject({ content: "", offset: 3 });
     expect(pageOfText("abc", -5, 0)).toMatchObject({ content: "a", offset: 0, nextOffset: 1 });

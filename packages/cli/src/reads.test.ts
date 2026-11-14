@@ -199,6 +199,47 @@ describe("the reads of a directory", () => {
     expect(outside.err).toContain("request.invalid: Not a valid path");
   });
 
+  it("ends a page it cuts at the end of a line, and gives a length that was asked for as measured", async () => {
+    // A table drawn with characters, longer than one read carries: a row cut in the middle
+    // would read as a row with empty cells.
+    const rows = Array.from(
+      { length: 900 },
+      (_, at) =>
+        `    ${String(at).padStart(4)}   FIELD_${String(at).padStart(4, "0")}   ENUM   m/s   0   ${5000 + at}   4   50`,
+    );
+    const table = ["# Fields", "", "```", ...rows, "```", ""].join("\n");
+    expect(table.length).toBeGreaterThan(40_000);
+    const root = await repository({ ...PACK, "docs/fields.md": table });
+    const read = async (...flags: string[]) => {
+      const answer = await run(["file", root, "docs/fields.md", "--json", ...flags]);
+      expect(answer.code).toBe(0);
+      return JSON.parse(answer.out) as {
+        content: string;
+        offset: number;
+        nextOffset: number | null;
+      };
+    };
+    const first = await read();
+    expect(first.nextOffset).not.toBeNull();
+    expect(first.content.endsWith("\n")).toBe(true);
+    expect(first.content.length).toBeLessThanOrEqual(40_000);
+    // The last line of the page is a row whole, and the next page begins with the row after it.
+    expect(rows).toContain(first.content.trimEnd().split("\n").at(-1));
+    let joined = first.content;
+    let next = first.nextOffset;
+    while (next !== null) {
+      const page = await read("--offset", String(next));
+      expect(page.offset).toBe(next);
+      joined += page.content;
+      next = page.nextOffset;
+    }
+    expect(joined).toBe(table);
+    // A length that was asked for is given as measured, wherever it ends: a section is read so.
+    const measured = await read("--offset", "12", "--limit", "25");
+    expect(measured.content).toBe(table.slice(12, 37));
+    expect(measured.nextOffset).toBe(37);
+  });
+
   it("refuses what cannot be read or is not asked right", async () => {
     const root = await repository(PACK);
     const nowhere = await run(["skills", join(root, "nowhere")]);

@@ -2160,7 +2160,12 @@ export class Reader<M extends MountContext = MountContext> {
         ? (await this.#documentFacts(mount, index, path, text)).sources
         : [];
     const make = (length: number): FileResult => {
-      const page = pageOfText(text, input.offset ?? 0, length);
+      // A page the reader cuts, where no length was asked or the one asked did not fit, ends at
+      // the end of a line; a length that was asked for and fits is given as measured, since it
+      // is how a section is read.
+      const page = pageOfText(text, input.offset ?? 0, length, {
+        atLineEnd: input.limit === undefined || length < input.limit,
+      });
       return {
         // A page lists the links within it: a section read is not told of the rest of the file's.
         references:

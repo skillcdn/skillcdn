@@ -528,11 +528,17 @@ export type ListedItem =
       readonly entries: readonly ResourceEntry[];
     };
 
-/** A slice of `content` that never splits a surrogate pair. */
+/**
+ * A slice of `content` that never splits a surrogate pair. With `atLineEnd`, a page that stops
+ * short of the end of the text stops after the last line that is whole in it, where it holds
+ * one: a row of a table or a line of code cut in the middle reads as a row with empty cells.
+ * A line longer than the page is still cut by the count.
+ */
 export function pageOfText(
   content: string,
   offset: number,
   limit: number,
+  options: { readonly atLineEnd?: boolean | undefined } = {},
 ): Pick<FileResult, "content" | "offset" | "nextOffset" | "totalLength"> {
   const isLowSurrogate = (index: number): boolean => {
     const unit = content.charCodeAt(index);
@@ -545,6 +551,12 @@ export function pageOfText(
   let end = Math.min(start + Math.max(limit, 1), content.length);
   if (end < content.length && isLowSurrogate(end)) {
     end += 1;
+  }
+  if (options.atLineEnd === true && end < content.length && content[end - 1] !== "\n") {
+    const lineEnd = content.lastIndexOf("\n", end - 1);
+    if (lineEnd >= start) {
+      end = lineEnd + 1;
+    }
   }
   return {
     content: content.slice(start, end),
