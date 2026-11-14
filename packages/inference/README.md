@@ -20,8 +20,9 @@ The `Embedder` and `Reranker` ports of [`@skillcdn/core`](https://www.npmjs.com/
 | `withQueryCache(embedder, options)` | The embedder with the vectors of recent queries remembered in the process, so that the next page of a search costs no call. Bounded in number and in time. |
 | `createGate(concurrency)`, `createBreaker(options)` | What bounds the adapters, for an adapter of another shape: a gate lets a few calls run at once from one process and sheds a call that cannot start within its timeout as `inference_busy`; a breaker stops asking a server that failed a few times in a row for a while, failing at once as `inference_unreachable`. |
 | `InferenceError`, `isTransientInferenceError`, `cutText`, `FetchLike` | A failure by what the caller does about it: `inference_unreachable`, `inference_busy` and `inference_failed` are the server's moment and worth a retry by whoever queues the call; `inference_refused`, `inference_malformed` and `inference_too_many` are not. A text cut never splits a character. The adapters take any `fetch`. |
+| `inferenceFetch` | The `fetch` to hand the adapters where there is no other: one call over Node's HTTP client, which waits for an answer as long as the call's timeout says. The platform's `fetch` ends a call whose answer has not begun after five minutes, whatever its timeout, which a batch of long texts on a machine without a GPU exceeds. A redirect is answered as it came and never followed. |
 
-The adapters retry nothing themselves: a worker retries through its queue, a search answers by words alone. Node.js 24 or newer; the platform's `fetch` unless another is given.
+The adapters retry nothing themselves: a worker retries through its queue, a search answers by words alone. Node.js 24 or newer; the `fetch` it is given, which is `inferenceFetch` in the server and in the command.
 
 ## Tests
 

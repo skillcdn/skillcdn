@@ -14,3 +14,4 @@ export {
 } from "./inference.js";
 export { type QueryCacheOptions, withQueryCache } from "./query-cache.js";
 export { createRerankApi, type RerankApiOptions } from "./rerank-api.js";
+export { inferenceFetch } from "./transport.js";

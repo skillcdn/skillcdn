@@ -50,7 +50,12 @@ import {
   type ToolWords,
 } from "@skillcdn/core";
 import { checkDirectory, openWorkingTreeFile, readIndexLimits } from "@skillcdn/indexer";
-import { createEmbeddingsApi, createRerankApi, withQueryCache } from "@skillcdn/inference";
+import {
+  createEmbeddingsApi,
+  createRerankApi,
+  inferenceFetch,
+  withQueryCache,
+} from "@skillcdn/inference";
 import { ReaderInputError } from "@skillcdn/reader";
 import { createLocalApp, listenOn, type ServeLogger, serveOverStdio } from "@skillcdn/serve";
 import {
@@ -613,7 +618,9 @@ function meaningOf(io: CliIo): LocalMeaning | undefined {
   if (url === undefined || model === undefined) {
     return undefined;
   }
-  const fetchLike: FetchLike = io.fetch ?? ((input, init) => fetch(input, init));
+  // The package's own transport, where the caller hands in none: the platform's `fetch` ends a
+  // call after five minutes whatever `EMBEDDINGS_TIMEOUT_MS` says.
+  const fetchLike: FetchLike = io.fetch ?? inferenceFetch;
   const userAgent = io.userAgent ?? "skillcdn";
   const embedder = withQueryCache(
     createEmbeddingsApi({

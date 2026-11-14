@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { createEmbeddingsApi, createRerankApi } from "@skillcdn/inference";
+import { createEmbeddingsApi, createRerankApi, inferenceFetch } from "@skillcdn/inference";
 import {
   evaluateRetrieval,
   formatRetrievalReport,
@@ -40,7 +40,6 @@ const set = loadRetrievalSet(questions === undefined ? undefined : resolve(quest
 const write = (text: string): void => {
   process.stdout.write(text);
 };
-const fetchLike = (input: string, init: RequestInit) => fetch(input, init);
 const userAgent = "skillcdn-eval";
 const timeoutMs = Number(values["timeout-ms"]);
 
@@ -89,7 +88,7 @@ if (embeddingsUrl !== undefined && embeddingsModel !== undefined) {
     queryInstruction: values.instruction,
     key: values["embeddings-key"],
     userAgent,
-    fetch: fetchLike,
+    fetch: inferenceFetch,
     timeoutMs,
     queryTimeoutMs: timeoutMs,
   });
@@ -103,7 +102,7 @@ if (embeddingsUrl !== undefined && embeddingsModel !== undefined) {
           model: rerankerModel,
           key: values["reranker-key"],
           userAgent,
-          fetch: fetchLike,
+          fetch: inferenceFetch,
           timeoutMs,
         });
   const { find, embedded } = await memorySearchWithMeaning(
