@@ -1,5 +1,15 @@
 # @skillcdn/indexer
 
+## 0.5.1
+
+### Patch Changes
+
+- [`cb9208d`](https://github.com/skillcdn/skillcdn/commit/cb9208de60152cb0ab8f96e5a0a9675a30133ba4) Thanks [@samo-lucid](https://github.com/samo-lucid)! - A field or an identifier written with underscores is found as written (ADR-0100). `TIDE_RATE_C2` was read as its parts alone, which every row of the table that lists it holds; it is now a word of the search vector as a whole beside them, as a code joined by hyphens and a token joined by dots already are. And the sections of a document are ranked by how rare a word is among the sections of that document, where they were ranked by how rare it is in the pack: the name then finds the section that holds its row, where it found the first section of the table. `matchSections` of `@skillcdn/core` still takes `weights` and no longer reads them. The reading rules have a new version (`INDEX_VERSION` 18): a deployment rebuilds the index of each commit and serves the one it had meanwhile, and `skillcdn` reads a directory under the new rules at once.
+
+- [`b6972a1`](https://github.com/skillcdn/skillcdn/commit/b6972a12b34eb829f0a1a3305fd428a40639c390) Thanks [@samo-lucid](https://github.com/samo-lucid)! - A page a read cuts ends at the end of a line. A file longer than one read carries was cut by the count of its characters, in the middle of a line: a row of a table drawn with characters, cut there, reads as a row whose other cells are empty. A page cut by the default length, or by the size a response may have, now ends after the last line that is whole in it, and `nextOffset` begins the next line; a `limit` that was asked for and fits is given as measured, since that is how a section is read. In `@skillcdn/core`, `pageOfText` takes `{ atLineEnd: true }` for it. `skillcdn check` says of a section longer than one read what to do with a long code block as well, and the format says that what an original sets in a fixed-width font keeps its alignment, every character at its column.
+- Updated dependencies [[`cb9208d`](https://github.com/skillcdn/skillcdn/commit/cb9208de60152cb0ab8f96e5a0a9675a30133ba4), [`b6972a1`](https://github.com/skillcdn/skillcdn/commit/b6972a12b34eb829f0a1a3305fd428a40639c390), [`4416e43`](https://github.com/skillcdn/skillcdn/commit/4416e43a3a184aa5ced2bbe657198faf054dc9ae), [`6b050be`](https://github.com/skillcdn/skillcdn/commit/6b050bef6e52bdb454f949a8eaf31bdd07706536), [`1475fc3`](https://github.com/skillcdn/skillcdn/commit/1475fc3f296daec0b2cae0140fa1b911df1e3f54), [`6010c2f`](https://github.com/skillcdn/skillcdn/commit/6010c2f50a9f2bf53a0b0dc37b4e2dbad1db0a45), [`75bfccf`](https://github.com/skillcdn/skillcdn/commit/75bfccf4c6c2218bac98a561dfb0b825be47e70b)]:
+  - @skillcdn/core@0.5.1
+
 ## 0.5.0
 
 ### Minor Changes

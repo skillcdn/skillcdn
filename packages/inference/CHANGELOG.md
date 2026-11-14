@@ -1,5 +1,15 @@
 # @skillcdn/inference
 
+## 0.5.1
+
+### Patch Changes
+
+- [`2dcee75`](https://github.com/skillcdn/skillcdn/commit/2dcee7531d0d8015ae57fb26f97947cc8d0b095d) Thanks [@samo-lucid](https://github.com/samo-lucid)! - A call that embeds documents has its whole timeout once its turn comes. The time it waited for a slot used to come out of it, so a short call that waited behind a long one failed as unanswered within what was left, for the other call's length and not its own. It still waits no longer than the timeout for its turn, and fails as busy when the turn does not come. A query is as before: the wait counts, since a search waits for it.
+
+- [`34b09f2`](https://github.com/skillcdn/skillcdn/commit/34b09f2ae9875d035abfc54b9c7c637a5ae7f653) Thanks [@samo-lucid](https://github.com/samo-lucid)! - A call to an inference server may take as long as its timeout says. The platform's `fetch` ends a call whose answer has not begun after five minutes, whatever the call was given, so `EMBEDDINGS_TIMEOUT_MS` above 300000 never applied and a batch of long texts on a machine without a GPU failed at the same place every time it was tried. `@skillcdn/inference` exports `inferenceFetch`, one call over Node's HTTP client answered as `fetch` answers, which waits for as long as the signal of the call lets it and follows no redirect; the `skillcdn` command hands it to the adapters when it embeds a directory.
+- Updated dependencies [[`cb9208d`](https://github.com/skillcdn/skillcdn/commit/cb9208de60152cb0ab8f96e5a0a9675a30133ba4), [`b6972a1`](https://github.com/skillcdn/skillcdn/commit/b6972a12b34eb829f0a1a3305fd428a40639c390), [`4416e43`](https://github.com/skillcdn/skillcdn/commit/4416e43a3a184aa5ced2bbe657198faf054dc9ae), [`6b050be`](https://github.com/skillcdn/skillcdn/commit/6b050bef6e52bdb454f949a8eaf31bdd07706536), [`1475fc3`](https://github.com/skillcdn/skillcdn/commit/1475fc3f296daec0b2cae0140fa1b911df1e3f54), [`6010c2f`](https://github.com/skillcdn/skillcdn/commit/6010c2f50a9f2bf53a0b0dc37b4e2dbad1db0a45), [`75bfccf`](https://github.com/skillcdn/skillcdn/commit/75bfccf4c6c2218bac98a561dfb0b825be47e70b)]:
+  - @skillcdn/core@0.5.1
+
 ## 0.5.0
 
 ### Patch Changes

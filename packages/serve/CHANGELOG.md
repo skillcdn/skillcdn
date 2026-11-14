@@ -1,5 +1,14 @@
 # @skillcdn/serve
 
+## 0.5.1
+
+### Patch Changes
+
+- [`6010c2f`](https://github.com/skillcdn/skillcdn/commit/6010c2f50a9f2bf53a0b0dc37b4e2dbad1db0a45) Thanks [@samo-lucid](https://github.com/samo-lucid)! - An answer of a search that came without its meaning is for whoever asked, and for no cache (ADR-0096). `answeredInPart` of `@skillcdn/core` says when a ranking is of an answer in part: the words did not answer in time, the meaning did not answer where the search is by meaning as well, or the index is still being embedded; a query of identifiers ranked by its words, and a search where there is no model, are answered in full. The REST routes of `@skillcdn/serve` tell a cache to keep the answer of `find` at a pinned public address for a day only where it is in full, and answer `no-store` otherwise: an answer given while the embedder was away used to be kept for the day.
+- Updated dependencies [[`cb9208d`](https://github.com/skillcdn/skillcdn/commit/cb9208de60152cb0ab8f96e5a0a9675a30133ba4), [`b6972a1`](https://github.com/skillcdn/skillcdn/commit/b6972a12b34eb829f0a1a3305fd428a40639c390), [`4416e43`](https://github.com/skillcdn/skillcdn/commit/4416e43a3a184aa5ced2bbe657198faf054dc9ae), [`6b050be`](https://github.com/skillcdn/skillcdn/commit/6b050bef6e52bdb454f949a8eaf31bdd07706536), [`1475fc3`](https://github.com/skillcdn/skillcdn/commit/1475fc3f296daec0b2cae0140fa1b911df1e3f54), [`6010c2f`](https://github.com/skillcdn/skillcdn/commit/6010c2f50a9f2bf53a0b0dc37b4e2dbad1db0a45), [`75bfccf`](https://github.com/skillcdn/skillcdn/commit/75bfccf4c6c2218bac98a561dfb0b825be47e70b)]:
+  - @skillcdn/core@0.5.1
+  - @skillcdn/reader@0.5.1
+
 ## 0.5.0
 
 ### Minor Changes
