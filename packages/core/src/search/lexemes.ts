@@ -95,7 +95,7 @@ const DIGITS = /^\p{N}+$/u;
 const WORDY = /^[\p{L}\p{N}]*\p{L}[\p{L}\p{N}]*$/u;
 /** A code: parts of letters and digits joined by single hyphens, `OIW-PV-120`, `6635-81-302-5518`, `서돌-4`. */
 const CODE = /^[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)+$/u;
-/** A name: parts of letters and digits joined by single underscores, `RNG_RATE_B3`, `msg_id`. */
+/** A name: parts of letters and digits joined by single underscores, `TIDE_RATE_C2`, `berth_id`. */
 const NAME = /^[\p{L}\p{N}]+(?:_[\p{L}\p{N}]+)+$/u;
 
 /** A raw token and which dictionary reads it: letters are stemmed, everything else is kept. */

@@ -49,10 +49,10 @@ describe("searchLexemes", () => {
 
   it("keeps a name joined by underscores whole beside its parts (ADR-0100)", () => {
     // A field of an interface, an identifier of code: asked for as written, and found whole.
-    expect(queryLexemes("RNG_RATE_B3")).toEqual(["rng_rate_b3", "rng", "rate", "b3"]);
-    expect(queryLexemes("the msg_id field")).toEqual(["msg_id", "msg", "id", "field"]);
+    expect(queryLexemes("TIDE_RATE_C2")).toEqual(["tide_rate_c2", "tide", "rate", "c2"]);
+    expect(queryLexemes("the berth_id field")).toEqual(["berth_id", "berth", "id", "field"]);
     // The parts are read as they always were: a stop word among them is dropped, a word stemmed.
-    expect(queryLexemes("SEQ_NO_B3")).toEqual(["seq_no_b3", "seq", "b3"]);
+    expect(queryLexemes("HULL_NO_C2")).toEqual(["hull_no_c2", "hull", "c2"]);
     expect(queryLexemes("running_totals")).toEqual(["running_totals", "run", "total"]);
     // A name in a script matched by pairs, and across scripts.
     expect(queryLexemes("서돌_4")).toEqual(["서돌_4", "서돌", "4"]);

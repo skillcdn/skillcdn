@@ -6,9 +6,9 @@
 
 ## Context
 
-A document that describes a data format is full of names written with underscores, the fields of an interface, the identifiers of code: `RNG_RATE_B3`, `MSG_ID`. Such a name was read as its parts alone, `rng`, `rate`, `b3`, since the underscore parts words as a blank does. A code joined by hyphens and a token joined by slashes or dots are each a word as a whole as well (ADR-0069, ADR-0078); a name joined by underscores was not.
+A document that describes a data format is full of names written with underscores, the fields of an interface, the identifiers of code: `TIDE_RATE_C2`, `BERTH_ID`. Such a name was read as its parts alone, `tide`, `rate`, `c2`, since the underscore parts words as a blank does. A code joined by hyphens and a token joined by slashes or dots are each a word as a whole as well (ADR-0069, ADR-0078); a name joined by underscores was not.
 
-And a long table of such names stands in sections of a few dozen rows, as the format asks (a section is what is read at once). Every section holds the parts of every name, `b3` in each of fifteen sections, and one section holds the name asked for. The sections of a document were ranked with the weights of the mount, how many documents of the pack hold each word, and that says which document is meant and nothing of which section: a word every section of the one table holds and a word one section holds weigh the same where the table is the only document that holds either.
+And a long table of such names stands in sections of a few dozen rows, as the format asks (a section is what is read at once). Every section holds the parts of every name, `c2` in each of fifteen sections, and one section holds the name asked for. The sections of a document were ranked with the weights of the mount, how many documents of the pack hold each word, and that says which document is meant and nothing of which section: a word every section of the one table holds and a word one section holds weigh the same where the table is the only document that holds either.
 
 Measured on a table of 600 rows in fifteen sections, each headed by its first and last name, every name asked for as written: the section that holds the row stood first for 104 of the 600 names. With the same names written with hyphens, which are words as a whole, for 289 inside the table's folder, and for 600 once the words were weighed by the sections of the document.
 
@@ -24,7 +24,7 @@ The document found first is the same in every row (95% and 57%): neither change 
 
 ## Decision
 
-1. **A name joined by underscores is a word of the vector beside its parts.** Parts of letters and digits joined by single underscores, `rng_rate_b3`, `msg_id`, `x86_64`, are kept whole and unstemmed, and the parts follow, read as they were. A run that is no such name, one with an underscore at an end or doubled, or one that a dot, a slash or a hyphen joins as well (`my_module.py`), is its parts as before.
+1. **A name joined by underscores is a word of the vector beside its parts.** Parts of letters and digits joined by single underscores, `tide_rate_c2`, `berth_id`, `x86_64`, are kept whole and unstemmed, and the parts follow, read as they were. A run that is no such name, one with an underscore at an end or doubled, or one that a dot, a slash or a hyphen joins as well (`my_module.py`), is its parts as before.
 2. **The sections of a document are ranked by a word's rarity among the sections of that document**: the weight ADR-0069 gives a word among the entries of a mount, counted over the sections of the one document. The weights of the mount rank the documents, as before, and are no longer read where a document's sections are ranked.
 3. **The reading rules have a new version** (`INDEX_VERSION` 18), since the vector of an entry changes: a commit indexed under the rules before is rebuilt, and served from the index it has until it is (ADR-0068).
 

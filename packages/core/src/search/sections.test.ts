@@ -216,7 +216,7 @@ describe("matchSections", () => {
     // section holds the words every name is made of, and one section holds the name.
     const names = Array.from(
       { length: 60 },
-      (_, at) => `LINK_STATE_${String(at).padStart(2, "0")}`,
+      (_, at) => `BERTH_SLOT_${String(at).padStart(2, "0")}`,
     );
     const table = [
       "# Fields",
@@ -228,7 +228,7 @@ describe("matchSections", () => {
           "",
           "| Name | Kind | Unit |",
           "|---|---|---|",
-          ...rows.map((name) => `| ${name} | LINK STATE enum | none |`),
+          ...rows.map((name) => `| ${name} | BERTH SLOT enum | none |`),
           "",
         ].join("\n");
       }),
@@ -243,9 +243,9 @@ describe("matchSections", () => {
       ]);
     }
     // A part of the names alone still finds the table: every section holds it, the first first.
-    expect(matchSections(table, queryLexemes("STATE"))[0]?.heading).toEqual([
+    expect(matchSections(table, queryLexemes("SLOT"))[0]?.heading).toEqual([
       "Fields",
-      "LINK_STATE_00 to LINK_STATE_09",
+      "BERTH_SLOT_00 to BERTH_SLOT_09",
     ]);
     // What the mount says of a word tells documents apart, not the sections of one: it is not read.
     const lexemes = queryLexemes("billing discounts");
