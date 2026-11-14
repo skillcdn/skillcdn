@@ -628,6 +628,33 @@ describe("the worker", () => {
     // A body all of whose sections were read before costs no call at all.
     expect(await embed(`${edited}\n`)).toMatchObject({ sections, reused: sections, tokens: 0 });
     expect(fake.calls.slice(calls).flat()).toHaveLength(sections + 1);
+
+    // What is found again is the text the model was given: a section longer than the embedder
+    // embeds is its beginning, and a deployment that comes to embed more of it embeds it anew.
+    const long = `# Appendix\n\n${"A clause of the long appendix. ".repeat(40)}\n`;
+    const brief: Embedder = { ...fake.embedder, maxTextChars: 200 };
+    const embedLong = async (embedder: Embedder, trailing: string) => {
+      const made = await madeSnapshot({
+        visibility: "public",
+        files: [{ path: "docs/appendix.md", text: `${long}${trailing}` }],
+      });
+      return embedSnapshotSlice(
+        { ...deps, embedder },
+        {
+          ...made.scope,
+          repoId: made.repo.repoId,
+          commitSha: made.commit,
+          key: KEY,
+          reason: "designated",
+        },
+      );
+    };
+    expect(await embedLong(brief, "")).toMatchObject({ sections: 1, reused: 0 });
+    // The same cut: the same text, found again.
+    expect(await embedLong(brief, "\n")).toMatchObject({ sections: 1, reused: 1 });
+    // More of it embedded: another text.
+    expect(await embedLong(fake.embedder, "\n\n")).toMatchObject({ sections: 1, reused: 0 });
+    expect(await embedLong(fake.embedder, "\n\n\n")).toMatchObject({ sections: 1, reused: 1 });
   });
 
   it("makes the part vectors at start where nothing is embedded any more (ADR-0092)", async () => {

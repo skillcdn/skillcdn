@@ -31,6 +31,7 @@ import {
   vectorsOfTexts,
   writeSectionVectors,
 } from "@skillcdn/db";
+import { cutText } from "@skillcdn/inference";
 import { compareByteOrder } from "@skillcdn/reader";
 import { vectorKeyOf } from "../adapters/meaning.js";
 import type { Logger } from "../logger.js";
@@ -132,8 +133,14 @@ const sameKey = (a: VectorKey, b: VectorKey): boolean =>
   a.dimensions === b.dimensions &&
   a.sectioningVersion === b.sectioningVersion;
 
-/** What a section's vector is found by again: the hash of the text the model is given for it. */
-export const textHashOf = (text: string): string => createHash("sha256").update(text).digest("hex");
+/**
+ * What a section's vector is found by again: the hash of the text the model is given for it,
+ * which is the text cut to what the embedder embeds of one (ADR-0093). A longer text hashed
+ * whole would keep the vector of its beginning under a deployment that has since come to embed
+ * more of it.
+ */
+export const textHashOf = (text: string, embedder: Pick<Embedder, "maxTextChars">): string =>
+  createHash("sha256").update(cutText(text, embedder.maxTextChars)).digest("hex");
 
 /** What the vectors of some texts took: how many were written, the tokens read, and how many cost no call. */
 export interface EmbeddedTexts {
@@ -163,7 +170,7 @@ export async function embedTexts(
     return { sections: 0, tokens: 0, reused: 0 };
   }
   const texts = wanted.map((item) => item.text);
-  const hashes = texts.map(textHashOf);
+  const hashes = texts.map((text) => textHashOf(text, deps.embedder));
   const known = await vectorsOfTexts(deps.database, key, hashes);
   const items: SectionVector[] = [];
   const write = (at: number, vector: Float32Array | undefined): void => {
