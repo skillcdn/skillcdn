@@ -19,6 +19,8 @@ import {
   searchTermOfPath,
 } from "@skillcdn/core";
 import { hasDocsPage } from "./docs/catalog.js";
+import { SITE_PAGES } from "./site-config.js";
+import { type SitePage, sitePageAt } from "./site-pages.js";
 
 // A few kinds of page and no nesting, so the router is a function from a URL to a route.
 // Paths are the same in every language; the language travels in the query (i18n/languages.ts).
@@ -61,6 +63,8 @@ export type Route =
   | { readonly name: "legal"; readonly kind: LegalDocumentKind }
   /** The documentation (ADR-0049): its index without a slug, else one of its pages. */
   | { readonly name: "docs"; readonly slug: string | undefined }
+  /** A page of the installation's own, by its key (ADR-0099). */
+  | { readonly name: "site"; readonly key: string }
   | { readonly name: "bad-address"; readonly error: AddressError }
   /** Every state of every page, for whoever works on the design. Only in development. */
   | { readonly name: "states" }
@@ -128,9 +132,19 @@ export function connectHref(code?: string): string {
   return code === undefined ? PATHS.connect : `${PATHS.connect}/${code}`;
 }
 
-export function matchRoute(pathname: string, search: string, development = false): Route {
+export function matchRoute(
+  pathname: string,
+  search: string,
+  development = false,
+  /** The pages of the installation's own; those the build was configured with unless given. */
+  sitePages: readonly SitePage[] = SITE_PAGES,
+): Route {
   if (pathname === PATHS.landing) {
     return { name: "landing" };
+  }
+  const sitePage = sitePageAt(sitePages, pathname);
+  if (sitePage !== undefined) {
+    return { name: "site", key: sitePage.key };
   }
   if (pathname === PATHS.explore) {
     return { name: "explore" };

@@ -6,6 +6,8 @@ import { useLegalLinks } from "../legal-links.js";
 import { Link } from "../navigation.js";
 import { PATHS } from "../router.js";
 import { LINKS } from "../site.js";
+import { useSitePages } from "../site-config.js";
+import { sitePageHref, sitePageLabel } from "../site-pages.js";
 import { BrandLogo } from "./brand.js";
 import { ConsentBanner } from "./consent-banner.js";
 import { LanguageSwitcher } from "./language-switcher.js";
@@ -18,8 +20,10 @@ export function Layout(props: {
   /** A page wider than the others, with the header and the footer as wide as it. */
   readonly wide?: boolean;
 }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const features = useFeatures();
+  // The pages of the installation's own that ask for a place in the menu (ADR-0099).
+  const sitePages = useSitePages().filter((page) => page.menu === true);
   // The deployment's own pages are written into the head by the server, so they are known only
   // once the page is up: until then, as in prerendered markup, the footer has none.
   const legal = useLegalLinks() ?? {};
@@ -58,6 +62,11 @@ export function Layout(props: {
             <Link href={PATHS.explore}>{t.nav.explore}</Link>
             {features.search && <Link href={PATHS.search}>{t.nav.search}</Link>}
             <Link href={PATHS.docs}>{t.nav.docs}</Link>
+            {sitePages.map((page) => (
+              <Link key={page.key} href={sitePageHref(page.key)}>
+                {sitePageLabel(page, language)}
+              </Link>
+            ))}
             <a href={LINKS.repository}>{t.nav.github}</a>
           </nav>
           <div className={styles.controls}>

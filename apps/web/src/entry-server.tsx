@@ -38,6 +38,8 @@ import { docsHref, matchRoute, PATHS, searchHref } from "./router.js";
 import { buildHead, type PageData, renderHead } from "./seo/head.js";
 import { showcaseEntries, showcaseTexts } from "./showcase.js";
 import { CONSOLE_PACK_ADDRESS, LINKS, ORIGIN_PLACEHOLDER } from "./site.js";
+import { SITE_PAGES } from "./site-config.js";
+import { sitePageHref } from "./site-pages.js";
 import { socialCard } from "./social.js";
 
 // Rendering to HTML, without a browser. scripts/prerender.mjs imports the bundle made from this
@@ -76,6 +78,14 @@ export const DOCS_ROUTES: readonly {
     alternates: [DEFAULT_LANGUAGE],
   })),
 ];
+
+/**
+ * The pages of the installation's own (ADR-0099), by their addresses: each is answered with the
+ * frame, in every language, and draws itself in the browser. None is one for a search engine.
+ */
+export const SITE_ROUTES: readonly { readonly path: string }[] = SITE_PAGES.map((page) => ({
+  path: sitePageHref(page.key),
+}));
 
 /** The Markdown of each page of the documentation, served beside the page for agents. */
 export const DOCS_SOURCES: readonly {

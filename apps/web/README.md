@@ -85,6 +85,41 @@ The explorer view of an address is rendered by the server per request: it calls 
 
 Languages share their paths; `?lang=ko` forces Korean on that page. A URL without a parameter is served in the language the request's `Accept-Language` asks for, else English, so a link preview is in the language of the app that fetches it ([ADR-0021](../../docs/adr/0021-a-url-without-a-language-is-served-in-the-language-asked-for.md)); the page served is that language's own, canonical URL included. In a browser such a URL is shown in the visitor's language, without the URL changing: when the visitor's choice differs from what the server sent, `public/boot.js` hides the page and the app renders it in that language ([ADR-0013](../../docs/adr/0013-language-decided-in-the-browser-without-changing-the-url.md)); otherwise the app hydrates what it got, which the root records with `data-lang`. Links inside the app carry no language, whatever page they are on ([ADR-0015](../../docs/adr/0015-a-forced-language-holds-for-one-page.md)), and a language the URL forces becomes the visitor's preference ([ADR-0017](../../docs/adr/0017-a-forced-language-becomes-the-preference.md)). Pages carry a placeholder instead of the public origin, which the server fills in, so one build works on any domain. For a plain static host, build with `SKILLCDN_PUBLIC_URL=https://your.host` and the origin is written into the files; such a host serves the default language only.
 
+## Pages of an installation's own
+
+An installation adds screens of its own to the pages without changing this workspace ([ADR-0099](../../docs/adr/0099-the-pages-take-pages-of-an-installations-own-from-a-configuration-of-the-build.md)): what its operator looks at, how its people have a pack made. A build is given a configuration, a file anywhere on the machine that exports `site`, which names the pages:
+
+```tsx
+import { defineSite } from "@skillcdn/web";
+import { StatusPage } from "./status-page.js";
+
+export const site = defineSite({
+  pages: [
+    {
+      key: "status", // the address: /pages/status
+      label: { en: "Status", ko: "상태" }, // one word, or a word by language
+      menu: true, // named in the header's menu
+      render: (context) => <StatusPage {...context} />,
+    },
+  ],
+});
+```
+
+```
+pnpm turbo run build --filter=@skillcdn/web^...
+SKILLCDN_WEB_CONFIG=/srv/acme-ui/site.config.tsx pnpm --filter @skillcdn/web run build
+```
+
+`dist/` is then the product's pages with the installation's among them, for `WEB_ROOT` ([deploy](../../deploy/README.md#a-ui-with-pages-of-your-own)). [`examples/site`](examples/site) is a configuration with one page, which the tests render.
+
+- **What a page is given** (`SitePageContext` in [`src/site-pages.ts`](src/site-pages.ts)): `client`, the REST API of the deployment as `@skillcdn/client` types it; `language` and `words`, the tag of the language shown and the product's words in it; `origin`; `search`, the query of the page's address, where a page keeps what it shows; and `navigation`, `go` and `replace`, which move to another page without loading a document. A page brings its own words, by language.
+- **Where a page lives:** `/pages/<key>`, the same in every language; `sitePageHref(key)` names it. A key is lowercase letters, digits and hyphens, and a build fails on one that is not, or on a key twice.
+- **A page is drawn in the browser alone.** The server answers its address with the frame, and `render` is called once the frame is up: never where pages are rendered to HTML, so a page may use `window` and storage as it likes, and is never a page for a search engine. A page that is to be found is a page of the product, added as the others are.
+- **What a page may reach** is what the content security policy of the pages lets every page reach: scripts, styles and connections of the deployment's own origin. The admin API is there for a page that is given the operator's token; another service is reached where the installation's reverse proxy puts it under the same origin.
+- **How it looks** is the tokens' to say (`var(--color-...)`, `var(--space-...)` of `src/styles/tokens.css`), in a CSS module beside the page, without inline styles.
+- **What it imports:** `react`, `@skillcdn/client` and `@skillcdn/core` are resolved from this workspace wherever the file stands, so the installation's directory needs no dependencies; `@skillcdn/web` is `src/site-pages.ts`. The development server takes the same variable (`SKILLCDN_WEB_CONFIG` in `.env.local`, or in the environment of `pnpm --filter @skillcdn/web run dev`).
+- **Run the build of this workspace itself** (`pnpm --filter @skillcdn/web run build`), as above, once what it depends on is built: the task runner keeps the output of a build by what is in the repository, and a configuration is not.
+
 ## Adding a language
 
 A pack in `src/i18n/messages/`, an entry in `src/i18n/languages.ts` and in `src/i18n/index.ts`, the code in the list in `public/boot.js`, and `public/og/og-<language>.png`. Tests fail until they all agree.

@@ -192,6 +192,9 @@ export function pageOfRoute(route: Route): AnalyticsPage | undefined {
     case "states":
     case "og-card":
       return undefined;
+    // A page of the installation's own is the installation's to count, if it counts at all.
+    case "site":
+      return undefined;
   }
 }
 

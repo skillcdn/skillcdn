@@ -39,6 +39,8 @@ import {
 } from "../router.js";
 import { showcaseEntries, showcaseTexts } from "../showcase.js";
 import { LINKS } from "../site.js";
+import { SITE_PAGES } from "../site-config.js";
+import { type SitePage, sitePageLabel } from "../site-pages.js";
 
 // What a crawler reads before it reads the page: title, description, which URL is canonical,
 // where the other languages are, the social preview, and structured data. Built as data so it can
@@ -225,6 +227,12 @@ function legalText(
   };
 }
 
+/** What a page of the installation's own is called, or the site's name where there is no such page. */
+function siteLabelOf(pages: readonly SitePage[], key: string, language: Language): string {
+  const page = pages.find((candidate) => candidate.key === key);
+  return page === undefined ? messagesFor(language).meta.siteName : sitePageLabel(page, language);
+}
+
 function docsText(
   route: Extract<Route, { name: "docs" }>,
   language: Language,
@@ -244,6 +252,8 @@ export function buildHead(
   language: Language,
   origin: string,
   data?: PageData,
+  /** The pages of the installation's own; those the build was configured with unless given. */
+  sitePages: readonly SitePage[] = SITE_PAGES,
 ): PageHead {
   const t = messagesFor(language);
   const path = indexablePathOf(route, data);
@@ -283,20 +293,26 @@ export function buildHead(
                       title: t.owner.metaTitle(data?.owner?.login ?? route.owner.owner),
                       description: t.owner.metaDescription(data?.owner?.login ?? route.owner.owner),
                     }
-                  : route.name === "account"
-                    ? { title: t.account.metaTitle, description: "" }
-                    : route.name === "consent"
-                      ? { title: t.authorize.metaTitle, description: "" }
-                      : route.name === "connect"
-                        ? { title: t.connectCommand.metaTitle, description: "" }
-                        : route.name === "states" || route.name === "og-card"
-                          ? { title: t.meta.siteName, description: "" }
-                          : route.name === "bad-address"
-                            ? {
-                                title: `${t.address.invalid} | ${t.meta.siteName}`,
-                                description: "",
-                              }
-                            : t.meta.notFound;
+                  : route.name === "site"
+                    ? {
+                        // Named as the installation names it; never a page to find.
+                        title: `${siteLabelOf(sitePages, route.key, language)} | ${t.meta.siteName}`,
+                        description: "",
+                      }
+                    : route.name === "account"
+                      ? { title: t.account.metaTitle, description: "" }
+                      : route.name === "consent"
+                        ? { title: t.authorize.metaTitle, description: "" }
+                        : route.name === "connect"
+                          ? { title: t.connectCommand.metaTitle, description: "" }
+                          : route.name === "states" || route.name === "og-card"
+                            ? { title: t.meta.siteName, description: "" }
+                            : route.name === "bad-address"
+                              ? {
+                                  title: `${t.address.invalid} | ${t.meta.siteName}`,
+                                  description: "",
+                                }
+                              : t.meta.notFound;
 
   const jsonLd: Record<string, unknown>[] = [];
   // The front page shows the operator's showcase, else the build's own (ADR-0028).

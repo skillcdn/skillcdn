@@ -30,8 +30,11 @@ import type { MountPageProps } from "./pages/mount.js";
 import type { OwnerPageProps } from "./pages/owner.js";
 import type { SearchPageProps } from "./pages/search.js";
 import { BadAddressPage, NotFoundPage } from "./pages/simple.js";
+import { SitePageView } from "./pages/site-page.js";
 import { matchRoute, type Route } from "./router.js";
 import { applyHead, buildHead } from "./seo/head.js";
+import { SITE, SiteContext, useSitePages } from "./site-config.js";
+import type { SiteConfig, SitePage } from "./site-pages.js";
 
 /**
  * The pages that are not on the way of every visitor: the explorer view, the deployment's own
@@ -105,9 +108,19 @@ export interface AppProps {
    * prerenderer leaves it out and renders everything.
    */
   readonly features?: SiteFeatures;
+  /**
+   * The configuration of the installation the pages are for (ADR-0099); the one the build was
+   * made with unless given, which is what a test does.
+   */
+  readonly site?: SiteConfig;
 }
 
-function pageOf(route: Route, origin: string, pages: PageComponents): ReactNode {
+function pageOf(
+  route: Route,
+  origin: string,
+  pages: PageComponents,
+  sitePages: readonly SitePage[],
+): ReactNode {
   switch (route.name) {
     case "landing":
       return <LandingPage origin={origin} />;
@@ -129,6 +142,10 @@ function pageOf(route: Route, origin: string, pages: PageComponents): ReactNode 
       return <pages.legal origin={origin} kind={route.kind} />;
     case "docs":
       return <pages.docs origin={origin} slug={route.slug} />;
+    case "site": {
+      const page = sitePages.find((candidate) => candidate.key === route.key);
+      return page === undefined ? <NotFoundPage /> : <SitePageView page={page} origin={origin} />;
+    }
     case "bad-address":
       return <BadAddressPage origin={origin} error={route.error} />;
     case "states":
@@ -161,12 +178,15 @@ function Routed(props: {
   const location = useLocation();
   const language = resolveLanguage(location.search, props.preferredLanguage);
   const i18n = useMemo(() => ({ language, t: messagesFor(language) }), [language]);
-  const route = matchRoute(location.pathname, location.search, import.meta.env.DEV);
+  const sitePages = useSitePages();
+  const route = matchRoute(location.pathname, location.search, import.meta.env.DEV, sitePages);
+  const sitePage =
+    route.name === "site" ? sitePages.find((page) => page.key === route.key) : undefined;
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: the route is a function of the location
   useEffect(() => {
     if (!OWN_HEAD.has(route.name)) {
-      applyHead(buildHead(route, language, props.origin));
+      applyHead(buildHead(route, language, props.origin, undefined, sitePages));
     }
   }, [location.pathname, location.search, language, props.origin]);
 
@@ -216,11 +236,13 @@ function Routed(props: {
       {/* The dialog a person signs in from lies over whatever page they are on, so it is held
           here, around all of them: the header and the pages only ask for it. */}
       <SignInDialogProvider>
-        <Layout wide={route.name === "docs"}>
+        <Layout wide={route.name === "docs" || sitePage?.wide === true}>
           {props.shell ? (
             placeholder
           ) : (
-            <Suspense fallback={placeholder}>{pageOf(route, props.origin, props.pages)}</Suspense>
+            <Suspense fallback={placeholder}>
+              {pageOf(route, props.origin, props.pages, sitePages)}
+            </Suspense>
           )}
         </Layout>
       </SignInDialogProvider>
@@ -233,27 +255,29 @@ export function App(props: AppProps) {
   const preference = useMemo(() => ({ preferred, setPreferred }), [preferred]);
   const pages = useMemo(() => ({ ...LAZY_PAGES, ...props.pages }), [props.pages]);
   return (
-    <InitialDataContext.Provider value={props.initialData ?? {}}>
-      <FeaturesContext.Provider value={props.features ?? DEFAULT_FEATURES}>
-        <LanguagePreferenceContext.Provider value={preference}>
-          <LocationProvider initial={props.initialLocation}>
-            {/* Who is signed in is one fact for the whole page: the header, and whatever page
+    <SiteContext.Provider value={props.site ?? SITE}>
+      <InitialDataContext.Provider value={props.initialData ?? {}}>
+        <FeaturesContext.Provider value={props.features ?? DEFAULT_FEATURES}>
+          <LanguagePreferenceContext.Provider value={preference}>
+            <LocationProvider initial={props.initialLocation}>
+              {/* Who is signed in is one fact for the whole page: the header, and whatever page
               shows something that is a person's, read it from here. */}
-            <SessionProvider>
-              {/* And so are the deployment's terms and privacy policy: the footer links to them,
+              <SessionProvider>
+                {/* And so are the deployment's terms and privacy policy: the footer links to them,
                 and whoever signs in is told that they agree to them. */}
-              <LegalLinksProvider>
-                <Routed
-                  origin={props.origin}
-                  shell={props.shell === true}
-                  pages={pages}
-                  preferredLanguage={preferred}
-                />
-              </LegalLinksProvider>
-            </SessionProvider>
-          </LocationProvider>
-        </LanguagePreferenceContext.Provider>
-      </FeaturesContext.Provider>
-    </InitialDataContext.Provider>
+                <LegalLinksProvider>
+                  <Routed
+                    origin={props.origin}
+                    shell={props.shell === true}
+                    pages={pages}
+                    preferredLanguage={preferred}
+                  />
+                </LegalLinksProvider>
+              </SessionProvider>
+            </LocationProvider>
+          </LanguagePreferenceContext.Provider>
+        </FeaturesContext.Provider>
+      </InitialDataContext.Provider>
+    </SiteContext.Provider>
   );
 }

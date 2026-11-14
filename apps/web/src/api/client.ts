@@ -10,6 +10,9 @@ export { ApiError };
 
 const client = createClient({ baseUrl: "" });
 
+/** The client whole, for a page of an installation's own, which reads what it likes (ADR-0099). */
+export const restClient = client;
+
 export const api = {
   /** Whoever is signed in on this browser, or nobody. */
   me: (signal: AbortSignal) => client.me(signal),

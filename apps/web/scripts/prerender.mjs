@@ -23,6 +23,7 @@ const {
   LANGUAGE_PARAM,
   LANGUAGES,
   ORIGIN_PLACEHOLDER,
+  SITE_ROUTES,
   STATIC_PAGES,
   TEMPLATE_MARKERS,
   renderDocument,
@@ -123,6 +124,11 @@ const notFound = byLanguage((language) => `not-found${suffixOf(language)}.html`)
 for (const language of LANGUAGES) {
   writePage(shell[language], renderShell(language));
   writePage(notFound[language], renderNotFound(language));
+}
+// The pages of the installation's own (ADR-0099): the frame answers each, and the page draws
+// itself in the browser. Never one for a sitemap.
+for (const page of SITE_ROUTES) {
+  routes.push({ path: page.path, files: shell, indexable: false });
 }
 // What static hosts serve for unknown paths: the shell, so that deep links still open.
 cpSync(join(dist, shell[DEFAULT_LANGUAGE]), join(dist, "404.html"));

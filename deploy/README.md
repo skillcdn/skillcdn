@@ -95,7 +95,7 @@ The server is configured only through environment variables. [`.env.example`](..
 | `SESSION_TTL_DAYS` | `api` | no | no | How long a browser stays signed in without being used. Default `30`. |
 | `ACCESS_TOKEN_TTL_SECONDS`, `REFRESH_TOKEN_TTL_DAYS` | `api` | no | no | How long an AI app's access token lasts, and how long it can renew it without the person. Defaults `3600` and `30`. |
 | `PERMISSION_TTL_SECONDS` | `api` | no | no | How long the git host's answer about what a person can see is believed: someone removed at the host keeps access for at most this long. Default `60`; `0` asks on every request. |
-| `WEB_ROOT` | `api` | no | no | Directory of a web UI build. The image sets `/app/web`; set it to an empty value to run without a UI. The build's render module runs inside the server, so only ever point this at a build made from this repository. |
+| `WEB_ROOT` | `api` | no | no | Directory of a web UI build. The image sets `/app/web`; set it to an empty value to run without a UI. The build's render module runs inside the server, so only ever point this at a build made from this repository, by you or by someone you trust, with or without pages of your own ([below](#a-ui-with-pages-of-your-own)). |
 | `PUBLIC_URL` | `api` | no | no | The origin visitors use, such as `https://skills.example.com`. Goes into canonical links, the sitemap and the URLs pages show. Unset: the origin of each request, which is right behind one hostname and wrong behind several; set it for any public deployment. Required for signing in: it is where the git host sends people back, the issuer of every token, and what the session cookie is bound to. |
 | `PACKS_DIR` | `api`, `worker` | no | no | A directory of packs the deployment serves at `local` addresses, besides the git host ([packs from a directory](#packs-from-a-directory-of-the-deployment)). Unset: a `local` address is a name that is nothing. |
 | `PACKS_ACCESS` | `api`, `worker` | no | no | Who reads the packs of `PACKS_DIR` ([ADR-0088](../docs/adr/0088-the-packs-of-a-directory-may-be-read-with-a-token-only-and-a-password-is-used-once.md)): `public` (the default), everyone the deployment serves; `token`, only a request that presents a token the operator made for the pack through the [admin API](#the-admin-api), which therefore needs `ADMIN_TOKEN`. Give the two roles the same value. |
@@ -205,7 +205,7 @@ Without `EMBEDDINGS_URL` the worker indexes, on request and ahead of requests, a
 
 ## The admin API
 
-The operator's lists and the takedown ([ADR-0026](../docs/adr/0026-serving-follows-the-license-and-the-operators-lists.md)) are managed through `/admin/v1`, which exists only while `ADMIN_TOKEN` is set and answers to nothing else than that token as a bearer token. Keep it off the public internet where you can: it is meant for an operator's shell, not for browsers. Every answer is JSON and never cached.
+The operator's lists and the takedown ([ADR-0026](../docs/adr/0026-serving-follows-the-license-and-the-operators-lists.md)) are managed through `/admin/v1`, which exists only while `ADMIN_TOKEN` is set and answers to nothing else than that token as a bearer token. Keep it off the public internet where you can: it is meant for an operator's shell. A page of your own may call it too ([below](#a-ui-with-pages-of-your-own)), with the token typed into the page by whoever has it: the token is then in that browser, and is good for everything this API does. Every answer is JSON and never cached.
 
 | Request | What it does |
 |---|---|
@@ -386,6 +386,18 @@ With `GOOGLE_ANALYTICS_ID` set, the pages send their own page views and the even
 4. **No advertising.** Leave Google signals and ads personalization off, and link no advertising account: the consent the pages ask for is for analytics only, and the consent mode denies advertising storage everywhere. Advertising would be a consent of its own, with new words in the banner.
 5. **Data retention and the privacy policy.** Choose the retention your privacy policy states, and say in it what is sent: page views as public addresses or stand-ins, the events, and nothing a visitor typed; that visitors in the regions that ask are asked first; that elsewhere analytics run until turned off in the footer's cookie settings; and that a browser signaling Global Privacy Control is left alone.
 6. **Check it.** In the property's DebugView, from a browser with the debugging extension: the `page_location` of a `page_view` is the address of a public repository or `/gh/-/-`, never a private name; `/oauth/consent` arrives without its query and `/connect/<code>` as `/connect`; a search arrives as the address with `view` set to `search` and no term; the connection guide's install and copy actions send `connect_start`; and a visitor placed outside the regions that ask sees no banner and sends from the first page.
+
+## A UI with pages of your own
+
+The image's web UI is the product's pages. An installation that needs screens of its own, for its operator or for its people, builds the same pages with those among them and serves that build instead ([ADR-0099](../docs/adr/0099-the-pages-take-pages-of-an-installations-own-from-a-configuration-of-the-build.md), [the web workspace](../apps/web/README.md#pages-of-an-installations-own)); nothing of the server changes, and no fork is kept.
+
+1. **Write the pages** in a directory of your own: a configuration file that names each page, its address under `/pages/`, its word in the menu and what it shows, with the page's components and style sheets beside it. A page is given the REST client of the deployment, the language and the way to move between pages.
+2. **Build** from a checkout of this repository at the release your image is of: `pnpm install`, `pnpm turbo run build --filter=@skillcdn/web^...`, then `SKILLCDN_WEB_CONFIG=/path/to/site.config.tsx pnpm --filter @skillcdn/web run build`. The output is `apps/web/dist`.
+3. **Serve it:** copy the output over `/app/web` in an image made `FROM` the release's, or mount it there, or point `WEB_ROOT` at where it is. The server reads a build once, when it starts.
+
+- **A page is yours, and so is what it does.** It is drawn in the browser, is never listed for a search engine, and is as public as the deployment: there is no sign-in in front of `/pages/`. A screen for an operator asks for what it needs, the admin token for one, and shows nothing without it; keep it off the public internet with the admin API it calls.
+- **A page reaches the deployment's own origin and nothing else**, by the content security policy of every page. A service you run beside the deployment is reached where your reverse proxy puts it under the same origin, a path of its own that the server does not answer.
+- **A build is of one release.** The pages and the server change together: build again from the release you move to. The `version` of `routes.json` is what the server checks.
 
 ## Behind a reverse proxy
 

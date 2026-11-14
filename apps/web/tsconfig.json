@@ -6,9 +6,10 @@
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
     "noEmit": true,
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+    "paths": { "@skillcdn/web": ["./src/site-pages.ts"] }
   },
-  "include": ["src"],
+  "include": ["src", "examples"],
   "references": [
     { "path": "../../packages/core/tsconfig.build.json" },
     { "path": "../../packages/client/tsconfig.build.json" }

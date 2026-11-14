@@ -5,6 +5,7 @@ import { defineConfig, type HtmlTagDescriptor, loadEnv, type Plugin } from "vite
 import { brandFiles } from "./dev/brand-files.js";
 import { docsPages } from "./dev/docs.js";
 import { handleFixtureRequest } from "./dev/fixture-api.js";
+import { siteConfig } from "./dev/site-config.js";
 
 /** Long enough to see loading states, short enough not to be in the way. */
 const FIXTURE_LATENCY_MS = 350;
@@ -149,6 +150,8 @@ export default defineConfig(({ mode, isSsrBuild }) => {
   return {
     plugins: [
       react(),
+      // The pages of the installation the build is for, where a file names them (ADR-0099).
+      siteConfig(env.SKILLCDN_WEB_CONFIG),
       brandFiles(),
       docsPages(),
       ...(apiUrl === undefined ? [fixtureApi(consoleUrl)] : []),
