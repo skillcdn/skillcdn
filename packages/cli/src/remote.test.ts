@@ -728,10 +728,17 @@ describe("a search across the packs of a deployment (ADR-0070)", () => {
         url: "https://bound.example",
       }),
     });
+    // The search sends no token, so the address alone is enough, where a read wants both.
+    const alone = await run(["search", "notes"], deployment, {
+      environment: { SKILLCDN_URL: "https://alone.example" },
+    });
+    expect(alone.err).toBe("");
+    expect(alone.code).toBe(0);
     expect(deployment.requests.map((request) => new URL(request.url).origin)).toEqual([
       "https://packs.example",
       "https://env.example",
       "https://bound.example",
+      "https://alone.example",
     ]);
     expect(deployment.requests.every((request) => request.authorization === undefined)).toBe(true);
   });

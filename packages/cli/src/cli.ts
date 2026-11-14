@@ -737,14 +737,7 @@ function originFor(
   specUrl: string | undefined,
   boundUrl: string | undefined,
 ): string {
-  const envUrl = io.environment.SKILLCDN_URL;
-  const envToken = io.environment.SKILLCDN_TOKEN;
-  if ((envUrl === undefined) !== (envToken === undefined)) {
-    throw new Misuse(
-      "SKILLCDN_URL and SKILLCDN_TOKEN are taken together or not at all: set both, or neither.",
-    );
-  }
-  const written = flagUrl ?? specUrl ?? envUrl ?? boundUrl ?? DEFAULT_ORIGIN;
+  const written = flagUrl ?? specUrl ?? io.environment.SKILLCDN_URL ?? boundUrl ?? DEFAULT_ORIGIN;
   const url = originOf(written);
   if (url === undefined) {
     throw new Misuse(
@@ -765,9 +758,17 @@ async function deploymentOf(
   boundUrl: string | undefined,
   address: Address,
 ): Promise<{ readonly url: string; readonly token: string | undefined }> {
-  const url = originFor(io, flagUrl, specUrl, boundUrl);
   const envUrl = io.environment.SKILLCDN_URL;
   const envToken = io.environment.SKILLCDN_TOKEN;
+  // A read may send a token, and the environment's goes to the environment's deployment alone:
+  // one without the other would be a token for nowhere, or a deployment read as nobody by
+  // mistake. A command that sends no token, the search across packs, takes the address alone.
+  if ((envUrl === undefined) !== (envToken === undefined)) {
+    throw new Misuse(
+      "SKILLCDN_URL and SKILLCDN_TOKEN are taken together or not at all: set both, or neither.",
+    );
+  }
+  const url = originFor(io, flagUrl, specUrl, boundUrl);
   if (envUrl !== undefined && envToken !== undefined && originOf(envUrl) === url) {
     return { url, token: envToken.trim() };
   }
