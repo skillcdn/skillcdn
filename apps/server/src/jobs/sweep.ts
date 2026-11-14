@@ -1,4 +1,10 @@
-import { type Clock, type Embedder, HEAD_SECTION, headTextOf } from "@skillcdn/core";
+import {
+  type Clock,
+  type Embedder,
+  embeddingBatches,
+  HEAD_SECTION,
+  headTextOf,
+} from "@skillcdn/core";
 import {
   countSkillBodiesWithoutHead,
   type Database,
@@ -11,6 +17,7 @@ import {
   skillBodiesWithoutHead,
   type VectorKey,
 } from "@skillcdn/db";
+import { isTransientInferenceError } from "@skillcdn/inference";
 import type { EmbeddingScope } from "../config/config.js";
 import type { Logger } from "../logger.js";
 import type { OperatorLists } from "../operator/lists.js";
@@ -28,9 +35,10 @@ import { EMBED_QUEUE, embedJobSchema, embedPriority, sendEmbedJob } from "./queu
 // slice writes them with the sections, so this is for the sections written before there were
 // any, and it calls no model. Last, where the sweep is given an embedder, the skills embedded
 // before a skill had a head are given theirs (ADR-0094): one short text a skill, for a few
-// minutes a sweep, once whatever is to be embedded was queued, those a search reads now first;
-// and every sweep says how many are left without one, which is what tells a sweep that gave
-// none because all have theirs from one whose embedder failed.
+// minutes a sweep, once whatever is to be embedded was queued, those a search reads now first,
+// each call's heads written as the call answers; and every sweep says how many are left without
+// one, which is what tells a sweep that gave none because all have theirs from one whose
+// embedder failed.
 
 /** How many snapshots one sweep queues: the rest wait for the next, an hour on. */
 export const SWEEP_LIMIT = 1000;
@@ -153,10 +161,19 @@ async function fillParts(deps: SweepDependencies): Promise<number> {
 
 /**
  * Gives a head to the skills whose sections have vectors under the key and whose head has none
- * (ADR-0094), a batch at a time for as long as a sweep gives it, and says to how many. Whether
- * a body is embedded at all stays the slice's to decide: only what it embedded is given a head
- * here. An embedder that fails ends the fill for this sweep, and never the sweep; the next goes
- * on, as it does with what the time did not reach.
+ * (ADR-0094), for as long as a sweep gives it, and says to how many. Whether a body is embedded
+ * at all stays the slice's to decide: only what it embedded is given a head here.
+ *
+ * The heads are embedded a call at a time and written as each call answers. A head is the one
+ * text of its body here, so nothing is half written, and the calls wait their turn behind those
+ * of a slice, which may take minutes each: written at the end of a batch of bodies, what was
+ * embedded was lost whenever the sweep's time ran out first, and the next sweep began with the
+ * same bodies. The time is asked before every call for the same reason.
+ *
+ * An embedder that is away or busy ends the fill for this sweep, and never the sweep; the next
+ * goes on. One that refuses a call, or answers it with something else, has said so of those
+ * texts: they are passed over for this sweep and the fill goes on with the rest, so that a few
+ * heads no call takes do not stand before every other, sweep after sweep.
  */
 async function fillHeads(deps: SweepDependencies): Promise<number> {
   if (deps.heads === undefined) {
@@ -164,34 +181,68 @@ async function fillHeads(deps: SweepDependencies): Promise<number> {
   }
   const { embedder, clock, signal } = deps.heads;
   const started = clock.now().getTime();
+  const due = (): boolean =>
+    signal?.aborted !== true && clock.now().getTime() - started < HEAD_FILL_MS;
+  /** The bodies this sweep could not give a head: not asked for again before the next. */
+  const passedOver: string[] = [];
   let filled = 0;
   try {
-    while (signal?.aborted !== true && clock.now().getTime() - started < HEAD_FILL_MS) {
-      const bodies = await skillBodiesWithoutHead(deps.database, deps.key, HEAD_FILL_BODIES);
-      const heads = bodies.flatMap((body): TextToEmbed[] => {
-        const text = headTextOf({ kind: "skill", ...body });
-        return text === undefined
-          ? []
-          : [
-              {
-                blobSha: body.blobSha,
-                section: HEAD_SECTION,
-                heading: [],
-                offset: 0,
-                length: 0,
-                text,
-              },
-            ];
-      });
-      const written = await embedTexts(
-        { database: deps.database, embedder },
+    while (due()) {
+      const bodies = await skillBodiesWithoutHead(
+        deps.database,
         deps.key,
-        heads,
-        signal,
+        HEAD_FILL_BODIES,
+        passedOver,
       );
-      filled += written?.sections ?? 0;
-      // A step that wrote nothing would find the same bodies again.
-      if (bodies.length < HEAD_FILL_BODIES || (written?.sections ?? 0) === 0) {
+      const had = filled + passedOver.length;
+      const heads: TextToEmbed[] = [];
+      for (const body of bodies) {
+        const text = headTextOf({ kind: "skill", ...body });
+        if (text === undefined) {
+          passedOver.push(body.blobSha);
+        } else {
+          heads.push({
+            blobSha: body.blobSha,
+            section: HEAD_SECTION,
+            heading: [],
+            offset: 0,
+            length: 0,
+            text,
+          });
+        }
+      }
+      for (const call of embeddingBatches(
+        heads.map((head) => head.text),
+        embedder,
+      )) {
+        if (!due()) {
+          return filled;
+        }
+        const these = call.flatMap((at) => heads[at] ?? []);
+        try {
+          const written = await embedTexts(
+            { database: deps.database, embedder },
+            deps.key,
+            these,
+            signal,
+          );
+          if (written === undefined) {
+            return filled;
+          }
+          filled += written.sections;
+        } catch (error) {
+          if (isTransientInferenceError(error)) {
+            throw error;
+          }
+          passedOver.push(...these.map((head) => head.blobSha));
+          deps.logger.warn(
+            { err: error, heads: these.length },
+            "the heads of some skills were refused, and are left for the next sweep",
+          );
+        }
+      }
+      // A step that neither wrote nor passed anything over would find the same bodies again.
+      if (bodies.length < HEAD_FILL_BODIES || filled + passedOver.length === had) {
         break;
       }
     }

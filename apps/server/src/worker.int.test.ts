@@ -504,11 +504,41 @@ describe("the worker", () => {
     expect(logs.some((line) => line.msg === "the heads of skills were not all embedded")).toBe(
       true,
     );
+    // A head is written as its call answers: a job stopped after the first call keeps that
+    // head, where the fill used to write a batch of bodies at its end and lose them all.
+    expect(dropped).toBeGreaterThan(2);
+    const single = fakeEmbedder(1);
+    const stopping = new AbortController();
+    const stopsAfterOne: Embedder = {
+      ...single.embedder,
+      embed: async (texts, as) => {
+        const embedded = await single.embedder.embed(texts, as);
+        stopping.abort();
+        return embedded;
+      },
+    };
+    expect(await sweep({ embedder: stopsAfterOne, clock, signal: stopping.signal })).toMatchObject({
+      heads: 1,
+      headsLeft: dropped - 1,
+    });
+    // A call the embedder refuses says so of its texts: they are passed over for this sweep and
+    // the fill goes on with the rest, where it used to end at the same call every sweep.
+    single.fail(new InferenceError("inference_refused", "the server refused the request (400)"));
+    expect(await sweep({ embedder: single.embedder, clock })).toMatchObject({
+      heads: dropped - 2,
+      headsLeft: 1,
+    });
+    expect(
+      logs.some(
+        (line) =>
+          line.msg === "the heads of some skills were refused, and are left for the next sweep",
+      ),
+    ).toBe(true);
     // The sweep the queue runs gives every such skill its head: one short text each, and
     // nothing of the sections, which have their vectors.
     const filled = await sweep({ embedder: fake.embedder, clock });
-    expect(filled).toMatchObject({ pending: 0, queued: 0, heads: dropped, headsLeft: 0 });
-    const texts = fake.calls.slice(before).flat();
+    expect(filled).toMatchObject({ pending: 0, queued: 0, heads: 1, headsLeft: 0 });
+    const texts = [...single.calls.flat(), ...fake.calls.slice(before).flat()];
     expect(texts).toHaveLength(dropped);
     const scope = await snapshotOf("multi-skill");
     const heads = (await servedEntries(testDatabase.database, scope)).flatMap((entry) => {

@@ -248,11 +248,14 @@ const headless = (key: VectorKey): SQL => {
  * the order of their hashes. A body whose sections have no vector is not here: whether it is
  * embedded at all is the slice's to decide, which writes the head with the sections. A body
  * several entries hold is named once, as an entry that is served names it where there is one.
+ * The bodies of `except` are passed over: those a sweep could not give a head this time, so that
+ * it goes on to the ones after them.
  */
 export async function skillBodiesWithoutHead(
   database: Database,
   key: VectorKey,
   limit: number,
+  except: readonly string[] = [],
 ): Promise<HeadlessSkill[]> {
   const db = drizzleOf(database);
   if (!(await present(db))) {
@@ -271,6 +274,7 @@ export async function skillBodiesWithoutHead(
         ) as served
       from ${indexEntries} e
       where ${headless(key)}
+        and e.blob_sha <> all(${sql.param([...except])}::text[])
       order by e.blob_sha, served desc, e.snapshot_id, e.path
     ) b
     order by b.served desc, b.blob_sha
