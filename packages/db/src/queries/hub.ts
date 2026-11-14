@@ -301,9 +301,12 @@ export async function searchHubEntries(
  * `limit`, with the entry each belongs to, in two steps (ADR-0092): the `parts` parts of their
  * bodies nearest the query are picked by the vector of each part, the mean of its sections',
  * a skill's head being a part of its own (ADR-0094), and the sections of those parts are then
- * compared exactly, as `searchSectionVectors` compares inside one mount (ADR-0064). The two statements share the one time limit. A body without part
- * vectors yet is not found, which is the sweep's to end (`fillPartVectors`). With `parts` at 0,
- * and in a database that keeps no part vectors, every section of the packs is compared.
+ * compared exactly, as `searchSectionVectors` compares inside one mount (ADR-0064). The two
+ * statements share the one time limit. A body without part vectors yet is not found beside
+ * bodies that have theirs, which is the sweep's to end (`fillPartVectors`). With `parts` at 0,
+ * in a database that keeps no part vectors, and where none of the bodies searched has a part
+ * yet, as after an update that brought the parts or an import of vectors made elsewhere, every
+ * section of the packs is compared: an answer that says it is by meaning has looked.
  */
 export async function searchHubSectionVectors(
   database: Database,
@@ -331,11 +334,10 @@ export async function searchHubSectionVectors(
     const picked = await tx.execute<{ blob_sha: string; part: number }>(
       partsStatement(snapshotIds, key, query, parts),
     );
-    if (picked.rows.length === 0) {
-      return [];
-    }
     await tx.execute(bounded(timeoutMs - (performance.now() - started)));
-    return meaningStatement(tx, snapshotIds, key, query, limit, pickedOf(picked.rows));
+    return picked.rows.length === 0
+      ? meaningStatement(tx, snapshotIds, key, query, limit)
+      : meaningStatement(tx, snapshotIds, key, query, limit, pickedOf(picked.rows));
   });
   return rows.map(({ distance: away, ...row }) => ({ ...row, similarity: 1 - Number(away) }));
 }

@@ -36,6 +36,7 @@ import {
 import {
   createTestDatabase,
   DEV_DATABASE_URL,
+  dropPartVectors,
   readHubStatements,
   type TestDatabase,
 } from "./testing.js";
@@ -334,6 +335,20 @@ describe("the words and the meaning across every pack", () => {
     await expect(
       searchHubSectionVectors(database, ids, KEY, Float32Array.from([1, 0]), 10, 5000, 10),
     ).rejects.toThrow(RangeError);
+    // No part made yet, as after an update that brought the parts: every section is compared,
+    // where the answer used to be nothing, said to be by meaning.
+    expect(await dropPartVectors(database)).toBeGreaterThan(0);
+    const unparted = await searchHubSectionVectors(
+      database,
+      ids,
+      KEY,
+      Float32Array.from([1, 0, 0, 0]),
+      10,
+      5000,
+      10,
+    );
+    expect(unparted.map((match) => match.path)).toEqual(["docs/near.md", "docs/far.md"]);
+    expect(await fillPartVectors(database, KEY, 100)).toBeGreaterThan(0);
   });
 
   it("picks the parts nearest the query, and compares the sections of those alone (ADR-0092)", async () => {
@@ -508,14 +523,23 @@ describe("the words and the meaning across every pack", () => {
       sql`insert into section_vectors (blob_sha, model, dimensions, sectioning_version, section, heading, "offset", length, vector)
         values ('hub-early', ${KEY.model}, ${KEY.dimensions}, ${KEY.sectioningVersion}, 0, '["Early"]', 0, 10, '[0.8,0,0,0.6]')`,
     );
-    const ids = (await listSearchablePacks(database))
-      .filter((pack) => pack.repoId === early.repoId)
-      .map((pack) => pack.snapshotId);
+    const packs = await listSearchablePacks(database);
+    const ids = packs.filter((pack) => pack.repoId === early.repoId).map((pack) => pack.snapshotId);
+    const all = packs.map((pack) => pack.snapshotId);
     const query = Float32Array.from([1, 0, 0, 0]);
-    expect(await searchHubSectionVectors(database, ids, KEY, query, 10, 5000, 10)).toEqual([]);
+    const pathsOf = async (snapshotIds: readonly string[]): Promise<string[]> =>
+      (await searchHubSectionVectors(database, snapshotIds, KEY, query, 50, 5000, 10)).map(
+        (match) => match.path,
+      );
+    // Beside bodies that have their parts, a body without is not among the parts picked.
+    const beside = await pathsOf(all);
+    expect(beside.length).toBeGreaterThan(0);
+    expect(beside).not.toContain("docs/early.md");
+    // Searched alone, there is no part to pick, and every section is compared.
+    expect(await pathsOf(ids)).toEqual(["docs/early.md"]);
     expect(await fillPartVectors(database, KEY, 100)).toBe(1);
-    const found = await searchHubSectionVectors(database, ids, KEY, query, 10, 5000, 10);
-    expect(found.map((match) => match.path)).toEqual(["docs/early.md"]);
+    expect(await pathsOf(ids)).toEqual(["docs/early.md"]);
+    expect(await pathsOf(all)).toContain("docs/early.md");
   });
 
   it("counts the findable entries of the packs searched, and no others", async () => {
