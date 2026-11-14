@@ -211,14 +211,48 @@ describe("matchSections", () => {
     expect(sections[1]?.heading).toEqual(["Billing", "Discounts", "Education"]);
   });
 
-  it("ranks the sections with the weights of the query's words (ADR-0069)", () => {
-    const lexemes = queryLexemes("billing discounts");
-    // The heading that holds the one word that counts comes first, whichever word that is.
-    expect(matchSections(DOCUMENT, lexemes, { weights: [1, 0] })[0]?.heading).toEqual(["Billing"]);
-    expect(matchSections(DOCUMENT, lexemes, { weights: [0, 1] })[0]?.heading).toEqual([
-      "Billing",
-      "Discounts",
+  it("weighs a word by its rarity among the sections of the document (ADR-0100)", () => {
+    // A table of fields in sections of a few rows, as a long original is laid out: every
+    // section holds the words every name is made of, and one section holds the name.
+    const names = Array.from(
+      { length: 60 },
+      (_, at) => `LINK_STATE_${String(at).padStart(2, "0")}`,
+    );
+    const table = [
+      "# Fields",
+      "",
+      ...Array.from({ length: 6 }, (_, section) => {
+        const rows = names.slice(section * 10, section * 10 + 10);
+        return [
+          `## ${rows[0]} to ${rows[9]}`,
+          "",
+          "| Name | Kind | Unit |",
+          "|---|---|---|",
+          ...rows.map((name) => `| ${name} | LINK STATE enum | none |`),
+          "",
+        ].join("\n");
+      }),
+    ].join("\n");
+    for (const [at, name] of names.entries()) {
+      const [first] = matchSections(table, queryLexemes(name));
+      const section = Math.floor(at / 10);
+      // The section that holds the row, whichever section's heading names the words more often.
+      expect(first?.heading).toEqual([
+        "Fields",
+        `${names[section * 10]} to ${names[section * 10 + 9]}`,
+      ]);
+    }
+    // A part of the names alone still finds the table: every section holds it, the first first.
+    expect(matchSections(table, queryLexemes("STATE"))[0]?.heading).toEqual([
+      "Fields",
+      "LINK_STATE_00 to LINK_STATE_09",
     ]);
+    // What the mount says of a word tells documents apart, not the sections of one: it is not read.
+    const lexemes = queryLexemes("billing discounts");
+    expect(matchSections(DOCUMENT, lexemes, { weights: [1, 0] })).toEqual(
+      matchSections(DOCUMENT, lexemes, { weights: [0, 1] }),
+    );
+    expect(matchSections(DOCUMENT, lexemes)[0]?.heading).toEqual(["Billing", "Discounts"]);
   });
 
   it("takes the excerpt from the line that matched, not from code, and falls back to the first prose", () => {

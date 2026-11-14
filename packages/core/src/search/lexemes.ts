@@ -59,8 +59,13 @@ export const MAX_LEXEME_BYTES = 2046;
 /** A token this long in characters may be over the byte limit; shorter ones never are. */
 const SHORT_ENOUGH = Math.floor(MAX_LEXEME_BYTES / 3);
 
-/** A run of what can be in a word: letters, digits, and the dots, hyphens and slashes that join them; a hyphen before digits is their sign. */
-const RUN = /(?:\/|-(?=\p{N}))?[\p{L}\p{N}][\p{L}\p{N}./-]*/u;
+/**
+ * A run of what can be in a word: letters, digits, and the dots, hyphens and slashes that join
+ * them; a hyphen before digits is their sign. An underscore joins as well, and parts the run:
+ * what stands on either side of it is read as it always was, and a name written with
+ * underscores is a word beside them (ADR-0100).
+ */
+const RUN = /(?:\/|-(?=\p{N}))?[\p{L}\p{N}][\p{L}\p{N}./_-]*/u;
 /**
  * `scheme://host/path`: the parser keeps the host with the path, the host, and the path, and drops
  * the scheme. A scheme is short: the bound keeps a text of letters and plus signs, which looks
@@ -90,6 +95,8 @@ const DIGITS = /^\p{N}+$/u;
 const WORDY = /^[\p{L}\p{N}]*\p{L}[\p{L}\p{N}]*$/u;
 /** A code: parts of letters and digits joined by single hyphens, `OIW-PV-120`, `6635-81-302-5518`, `서돌-4`. */
 const CODE = /^[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)+$/u;
+/** A name: parts of letters and digits joined by single underscores, `RNG_RATE_B3`, `msg_id`. */
+const NAME = /^[\p{L}\p{N}]+(?:_[\p{L}\p{N}]+)+$/u;
 
 /** A raw token and which dictionary reads it: letters are stemmed, everything else is kept. */
 interface Token {
@@ -223,8 +230,31 @@ function tokensOfWord(text: string): Token[] {
   return [whole, ...parts.filter((part) => WORDY.test(part)).map(wordToken)];
 }
 
+/**
+ * The tokens of a run that underscores part: the name whole, where the run is one, then what
+ * stands between the underscores, each read as a run of its own, as it was before a name was a
+ * word (ADR-0100). A field of an interface or an identifier of code is written this way, and is
+ * asked for as written: its parts are in every row of the table that lists it. A run that is
+ * no name, a file `my_module.py` or a run with an underscore at its end, is its parts alone.
+ */
+function tokensOfName(run: string): Token[] {
+  const tokens: Token[] = NAME.test(run) ? [{ text: run, stem: false }] : [];
+  for (const part of run.split("_")) {
+    if (part.length === 0) {
+      continue;
+    }
+    for (const token of tokensOfScripts(part)) {
+      tokens.push(token);
+    }
+  }
+  return tokens;
+}
+
 /** The tokens of a run, its scripts cut apart: pairs for the scripts without stems, words for the rest. */
 function tokensOfScripts(run: string): Token[] {
+  if (run.includes("_")) {
+    return tokensOfName(run);
+  }
   const tokens: Token[] = [];
   const pieces = run.match(SCRIPT_RUNS) ?? [];
   // A code across scripts, `서돌-4` or `蒼陵-2`, is kept whole as well, as a code in one script is

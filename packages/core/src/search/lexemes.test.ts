@@ -14,11 +14,11 @@ function vectorText(text: string): string {
 }
 
 // Every expectation here is what `to_tsvector('english', ...)` printed on PostgreSQL 18 for text
-// in the Latin script, which this parser follows, with two additions of our own: a hyphenated code
-// with a digit part (`top-10`, `beta-1`) is a word of the vector beside its parts (ADR-0069), and a
-// token joined by slashes or dots (`marketing/ads`, `SKILL.md`) is a word beside the words it
-// joins (ADR-0078), neither of which the server's parser makes. The scripts matched by pairs have
-// their own test.
+// in the Latin script, which this parser follows, with three additions of our own: a hyphenated
+// code with a digit part (`top-10`, `beta-1`) is a word of the vector beside its parts (ADR-0069),
+// a token joined by slashes or dots (`marketing/ads`, `SKILL.md`) is a word beside the words it
+// joins (ADR-0078), and so is a name joined by underscores (`foo_bar`, `x86_64`, ADR-0100), none
+// of which the server's parser makes. The scripts matched by pairs have their own test.
 /**
  * What a test of a long input may take: linear work on 200,000 characters is well under a second
  * here and a few seconds on a loaded runner, which the default five seconds did not allow for; the
@@ -33,7 +33,7 @@ describe("searchLexemes", () => {
         "Foo_bar skill-cdn top-10 SKILL.md v1.2.0 https://example.com/x/y 2026 abc123 don't marketing/ads e-mail",
       ),
     ).toBe(
-      "'-10':8 '/x/y':16 '2026':17 'abc123':18 'ad':23 'bar':2 'cdn':5 'e':25 'e-mail':24 'example.com':15 'example.com/x/y':14 'foo':1 'mail':26 'market':22 'marketing/ads':21 'md':11 'skill':4,10 'skill-cdn':3 'skill.md':9 'top':7 'top-10':6 'v1':13 'v1.2.0':12",
+      "'-10':9 '/x/y':17 '2026':18 'abc123':19 'ad':24 'bar':3 'cdn':6 'e':26 'e-mail':25 'example.com':16 'example.com/x/y':15 'foo':2 'foo_bar':1 'mail':27 'market':23 'marketing/ads':22 'md':12 'skill':5,11 'skill-cdn':4 'skill.md':10 'top':8 'top-10':7 'v1':14 'v1.2.0':13",
     );
   });
 
@@ -45,6 +45,25 @@ describe("searchLexemes", () => {
     ).toBe(
       "'-1':47 '-10':43 '-5':48 '/usr/local':15 '10':2 '10-top':1 '1e10':25 '3.14':24 '5':49 'a1':5 'a1-b2':4 'ai':27 'ai-driven':26 'b2':6 'bar':9,36 'beta':46 'beta-1':45 'c':32 'd':34 'doc':10 'driven':28 'e':13 'e.g':12 'example.com':19 'foo':7,8,35 'g':14 'host':31,39 'list':44 'local':17 'r':33 'self':30,38 'self-host':29 'self-hosted-th':37 'thing':40 'top':3,42 'top-10-list':41 'user@example.com':18 'usr':16 'wait':11 'x':20 'y':22 'y-z':21 'z':23",
     );
+  });
+
+  it("keeps a name joined by underscores whole beside its parts (ADR-0100)", () => {
+    // A field of an interface, an identifier of code: asked for as written, and found whole.
+    expect(queryLexemes("RNG_RATE_B3")).toEqual(["rng_rate_b3", "rng", "rate", "b3"]);
+    expect(queryLexemes("the msg_id field")).toEqual(["msg_id", "msg", "id", "field"]);
+    // The parts are read as they always were: a stop word among them is dropped, a word stemmed.
+    expect(queryLexemes("SEQ_NO_B3")).toEqual(["seq_no_b3", "seq", "b3"]);
+    expect(queryLexemes("running_totals")).toEqual(["running_totals", "run", "total"]);
+    // A name in a script matched by pairs, and across scripts.
+    expect(queryLexemes("서돌_4")).toEqual(["서돌_4", "서돌", "4"]);
+    // What is no name is its parts alone, as before: an underscore at an end or doubled, and a
+    // run that a dot, a slash or a hyphen joins as well, which is read by its own rule.
+    expect(queryLexemes("_private")).toEqual(["privat"]);
+    expect(queryLexemes("name_")).toEqual(["name"]);
+    expect(queryLexemes("a__b")).toEqual(["b"]);
+    expect(queryLexemes("my_module.py")).toEqual(["module.py", "modul", "py"]);
+    expect(queryLexemes("x_y-z")).toEqual(["x", "y-z", "y", "z"]);
+    expect(queryLexemes("docs/my_file")).toEqual(["docs/my", "doc", "file"]);
   });
 
   it("keeps a code whole beside its parts, in one script or across scripts (ADR-0069)", () => {
@@ -196,7 +215,7 @@ describe("searchLexemes", () => {
     expect(searchLexemes("http://.")).toEqual([]);
     expect(vectorText("see https://.../path and http://. too")).toBe("'/path':2 'see':1");
     expect(vectorText('"value":"https://...","is_secret":false')).toBe(
-      "'fals':4 'secret':3 'valu':1",
+      "'fals':5 'is_secret':2 'secret':4 'valu':1",
     );
     expect(queryLexemes("https://...")).toEqual([]);
     for (const { lexeme } of searchLexemes('"value":"https://...","is_secret":false')) {
@@ -211,6 +230,10 @@ describe("searchLexemes", () => {
       // file of one such line took minutes to index, or overflowed the stack and failed its pack.
       const length = 200_000;
       expect(searchLexemes("_".repeat(length))).toEqual([]);
+      // A name too long to be a word is its parts, each read once.
+      expect(searchLexemes("b_".repeat(length))).toHaveLength(length);
+      expect(searchLexemes(`${"b_".repeat(length)}b`)).toHaveLength(length + 1);
+      expect(searchLexemes(`b${"_".repeat(length)}c`)).toHaveLength(2);
       expect(searchLexemes(".".repeat(length))).toEqual([]);
       expect(searchLexemes("-".repeat(length))).toEqual([]);
       expect(searchLexemes("b+".repeat(length))).toHaveLength(length);
@@ -235,7 +258,7 @@ describe("searchLexemes", () => {
   it("reads a sign before digits wherever it stands, and a version up to its hyphen", () => {
     expect(vectorText("-5 -foo --10 foo--10 - -")).toBe("'-10':3,5 '-5':1 'foo':2,4");
     expect(vectorText("Version 2.0.1-beta.3 of the 3D-viewer (x86_64, arm64)")).toBe(
-      "'2.0.1':2 '3d':8 '3d-viewer':7 '64':11 'arm64':12 'beta':4 'beta.3':3 'version':1 'viewer':9 'x86':10",
+      "'2.0.1':2 '3d':8 '3d-viewer':7 '64':12 'arm64':13 'beta':4 'beta.3':3 'version':1 'viewer':9 'x86':11 'x86_64':10",
     );
   });
 });

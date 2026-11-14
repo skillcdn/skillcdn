@@ -90,9 +90,10 @@ import { gitBlobHash, sha256Hex } from "./git-hash.js";
  *     quotes is held against the section its last line links to (ADR-0083).
  *
  * 17 was on `main` alone, for a declaration that was taken out again (ADR-0089), and is not used
- * again: the next version is 18, so that an index written under that 17 is rebuilt.
+ * again, so that an index written under that 17 is rebuilt.
+ * 18: a name written with underscores is a word of the vector beside its parts (ADR-0100).
  */
-export const INDEX_VERSION = 16;
+export const INDEX_VERSION = 18;
 
 /**
  * The lowest version of the reading rules whose index is still served while the commit is

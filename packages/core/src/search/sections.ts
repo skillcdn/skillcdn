@@ -2,7 +2,7 @@ import { BLANK, consumeBlockLine, HEADING, openBlocks, plainText } from "../mark
 import { hasForbiddenCodePoint } from "../text-safety.js";
 import { searchLexemes } from "./lexemes.js";
 import { headingPaths, type MarkdownOutline, outlineMarkdown } from "./outline.js";
-import { rankSearchVector, searchVectorOf } from "./vector.js";
+import { queryWeights, rankSearchVector, searchVectorOf } from "./vector.js";
 
 // The sections of a document that a search matched, named so that one `read_repo_file` call
 // reads the passage (ADR-0063): the heading path, the character offset and length of the
@@ -178,13 +178,19 @@ export function sectionExcerpt(
  * rules of `language`, as the documents themselves are ranked. The text before the first
  * heading is a section of its own when it holds prose; a document without headings is one
  * section. Empty when nothing matches.
+ *
+ * Each word counts by its rarity among the sections of this document (ADR-0100), as a word
+ * counts by its rarity among the documents of a mount where the documents are ranked
+ * (ADR-0069): the word every section of a long table holds says nothing of which section is
+ * meant, and the word one section holds says it. How rare a word is in the mount tells the
+ * documents apart and not the sections of one, so `weights` is no longer read.
  */
 export function matchSections(
   text: string,
   lexemes: readonly string[],
   options: {
     readonly language?: string | undefined;
-    /** How much each lexeme counts, by its rarity in the mount (ADR-0069); every one the same when left out. */
+    /** No longer read: the words are weighed by the document's own sections. */
     readonly weights?: readonly number[] | undefined;
     readonly limit?: number | undefined;
     readonly outline?: MarkdownOutline | undefined;
@@ -198,19 +204,28 @@ export function matchSections(
   // A section is ranked like a document: its own heading as the name, the headings above it as
   // the words of a path, and its text as the body, so that a section does not outrank its parent
   // on the parent's heading alone.
-  const ranked = sections
-    .map((section) => {
-      const body = text.slice(section.offset, section.offset + section.length);
-      const vector = searchVectorOf(
-        [
-          { weight: "A", text: section.heading[section.heading.length - 1] ?? "" },
-          { weight: "C", text: section.heading.slice(0, -1).join(" ") },
-          { weight: "D", text: body },
-        ],
-        options.language,
-      );
-      return { section, body, rank: rankSearchVector(vector, lexemes, options.weights) };
-    })
+  const read = sections.map((section) => {
+    const body = text.slice(section.offset, section.offset + section.length);
+    const vector = searchVectorOf(
+      [
+        { weight: "A", text: section.heading[section.heading.length - 1] ?? "" },
+        { weight: "C", text: section.heading.slice(0, -1).join(" ") },
+        { weight: "D", text: body },
+      ],
+      options.language,
+    );
+    return { section, body, vector };
+  });
+  const weights = queryWeights(
+    read.length,
+    lexemes.map((lexeme) => read.filter((item) => item.vector.has(lexeme)).length),
+  );
+  const ranked = read
+    .map(({ section, body, vector }) => ({
+      section,
+      body,
+      rank: rankSearchVector(vector, lexemes, weights),
+    }))
     .filter((item) => item.rank > 0)
     .sort((a, b) => b.rank - a.rank || a.section.offset - b.section.offset)
     .slice(0, options.limit ?? MAX_MATCHED_SECTIONS);
