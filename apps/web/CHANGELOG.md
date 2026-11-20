@@ -1,5 +1,14 @@
 # @skillcdn/web
 
+## 0.5.4
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @skillcdn/brand@0.5.4
+  - @skillcdn/client@0.5.4
+  - @skillcdn/core@0.5.4
+
 ## 0.5.3
 
 ### Patch Changes

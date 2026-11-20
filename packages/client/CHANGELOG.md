@@ -1,5 +1,12 @@
 # @skillcdn/client
 
+## 0.5.4
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @skillcdn/core@0.5.4
+
 ## 0.5.3
 
 ### Patch Changes

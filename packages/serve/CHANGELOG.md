@@ -1,5 +1,14 @@
 # @skillcdn/serve
 
+## 0.5.4
+
+### Patch Changes
+
+- [`fbfc31f`](https://github.com/skillcdn/skillcdn/commit/fbfc31f26081d20756d8d75cf11afdfc211c659b) Thanks [@samo-lucid](https://github.com/samo-lucid)! - A page of a skill after the first, and a part `skillcdn skill` reads from `--cursor`, no longer says the `License` line again. 0.5.3 said that a later part leaves the license out, and the line stayed: it is written from the license the reader resolved for the skill, not from the front-matter field that was left out. The first page says it as before, and a skill that is only described says it on every answer, since the license is why nothing else follows.
+- Updated dependencies []:
+  - @skillcdn/core@0.5.4
+  - @skillcdn/reader@0.5.4
+
 ## 0.5.3
 
 ### Patch Changes
