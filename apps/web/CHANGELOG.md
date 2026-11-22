@@ -1,5 +1,14 @@
 # @skillcdn/web
 
+## 0.6.0
+
+### Patch Changes
+
+- Updated dependencies [[`67e9d7d`](https://github.com/skillcdn/skillcdn/commit/67e9d7dadd0a58d9f28657f5f79ada1cccb3fda8), [`669e216`](https://github.com/skillcdn/skillcdn/commit/669e2167f754a1fa53cdde037e906dba71e10213), [`9cce1dd`](https://github.com/skillcdn/skillcdn/commit/9cce1dd5af2481a23cbe8239f007c8ed63fb2381), [`59a1ecd`](https://github.com/skillcdn/skillcdn/commit/59a1ecd5affa553f5e63ef3ea591d4a734c015a8), [`7e803b6`](https://github.com/skillcdn/skillcdn/commit/7e803b60a76015f93d809bf8a2b5362bae94593d)]:
+  - @skillcdn/core@0.6.0
+  - @skillcdn/brand@0.6.0
+  - @skillcdn/client@0.6.0
+
 ## 0.5.3
 
 ### Patch Changes

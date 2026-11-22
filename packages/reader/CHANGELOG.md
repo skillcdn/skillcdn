@@ -1,5 +1,37 @@
 # @skillcdn/reader
 
+## 0.6.0
+
+### Minor Changes
+
+- [`7e803b6`](https://github.com/skillcdn/skillcdn/commit/7e803b60a76015f93d809bf8a2b5362bae94593d) Thanks [@samo-lucid](https://github.com/samo-lucid)! - Breaking: the `SKILL.md` a skill is served as names no commit, so its digest changes when the skill changes and through no other push (ADR-0117). The first line reads `> Assembled by SkillCDN from <paths>.`, and a file left out for its size is named by the address of its git object, with the header to send where the host needs one (`Accept: application/vnd.github.raw+json` at GitHub), instead of its raw address in the commit served. `load_skill` and the REST skill route still name such a file in the commit they read. A host that verified a skill is asked once more, when the commit is reindexed, and then only when the skill changes.
+  
+  The reading rules are at version 20, so every index is rebuilt; an index of an older version is served as it was digested until then. In `@skillcdn/core`, `provenanceLine` takes the sources first and the commit only for such an older index, `SkillDocumentInput.commit` and `SkillDocumentSources.commit` are optional for the same reason, an `OmittedFile` may carry `accept`, and `blobFileUrl` and `COMMITLESS_DOCUMENT_INDEX_VERSION` are new.
+
+### Patch Changes
+
+- [`67e9d7d`](https://github.com/skillcdn/skillcdn/commit/67e9d7dadd0a58d9f28657f5f79ada1cccb3fda8) Thanks [@samo-lucid](https://github.com/samo-lucid)! - A link whose destination is a skill URI names a file of another pack (ADR-0120): `[the base skill](skill://gh/acme/skills/design/card/SKILL.md)`, in a skill, in a manifest's rules or in any served Markdown document. The index keeps the link with the file that holds it and looks into no other repository. The first page of `load_skill` and a page of `read_repo_file` list what they link to in other packs, under `In other packs, not readable here:`, with how each is read at its pack; the REST API answers `packReferences` on a skill and on a file page. A destination under the scheme that is no skill URI, one with a ref or without a path, is the index diagnostic `pack_link_invalid`.
+  
+  `skillcdn check` lists the files of other packs a directory links to, and `skillcdn check --references [--url <origin>]` reads each once at a deployment: a file its pack does not have fails the check, and one that could not be asked about is `not known`. The reading rules are at version 22.
+  
+  In `@skillcdn/core`, `inspectMarkdownLinks` answers `packs`, and `PackLink`, `PackReference`, `restPackReferenceSchema` and `MAX_PACK_LINKS` are new; in `@skillcdn/indexer`, `checkDirectory` takes `verifyPackReferences`.
+
+- [`669e216`](https://github.com/skillcdn/skillcdn/commit/669e2167f754a1fa53cdde037e906dba71e10213) Thanks [@samo-lucid](https://github.com/samo-lucid)! - A `SKILLCDN.md` can name the page an agent reads first (ADR-0119): `start: docs/finding-a-skill.md`, the path of a Markdown document relative to the manifest. A client is told on connect `Start here, before a task: read_repo_file <path>.`, in the place of the line that names the README, by every mount that can read the page. The page is served as a document wherever it stands. A path that names no Markdown document of the repository, or one that is excluded, is the index diagnostic `start_missing`, which `skillcdn check` fails on; `check` prints the field with the manifest.
+  
+  The REST API answers the page as `start` in the manifest of a mount. The reading rules are at version 21. In `@skillcdn/core`, `RepoManifest`, `MountManifest` and `CatalogManifest` carry `start`.
+
+- [`9cce1dd`](https://github.com/skillcdn/skillcdn/commit/9cce1dd5af2481a23cbe8239f007c8ed63fb2381) Thanks [@samo-lucid](https://github.com/samo-lucid)! - A page of a skill, and a part `skillcdn skill` prints, ends between two blocks of Markdown where it can (ADR-0118): outside a table and a fenced code block, and not right after a heading or a line that ends in a colon, when such a place is within 4,096 characters of where the page would end. A rule or a file that begins late on a page with no such place begins the next one. A table longer than that is still cut after a row, and the page that goes on with it says the table's first two lines again above its text; the REST skill route answers them as `tableHead`, beside the text and not in it. Cursors stay good: they are offsets into the same context.
+  
+  The first page of `load_skill` names what it shortened: an `Abbreviated above:` line says which of the description, the metadata and the warnings were, and the references beyond the five it resolves are named by the files they point to, with the count of any it has no room for. It said only that something was abbreviated.
+  
+  In `@skillcdn/core`, `contextLinesPage` takes `mayBeEmpty`, `tableHeadAt` is new, and a `SkillResult` may carry `tableHead`, `detailsAbbreviated` and `referencesUnlisted`.
+
+- [`59a1ecd`](https://github.com/skillcdn/skillcdn/commit/59a1ecd5affa553f5e63ef3ea591d4a734c015a8) Thanks [@samo-lucid](https://github.com/samo-lucid)! - `skillcdn check` says for each skill how large its context is and in how many pages an agent reads it: `context: 42459 bytes, read in 3 pages (rules 19, instructions 20, included 42420)`. A skill whose instructions and included files are over the 16 KiB the format recommends gets one line more, with what each included file weighs, the largest first, and the report's notes count such skills (`skill_large`). It is a note: the exit code is as before.
+  
+  The pages are counted by the function the reader cuts them with: `pageOfContext` and `countContextPages` are new in `@skillcdn/core`.
+- Updated dependencies [[`67e9d7d`](https://github.com/skillcdn/skillcdn/commit/67e9d7dadd0a58d9f28657f5f79ada1cccb3fda8), [`669e216`](https://github.com/skillcdn/skillcdn/commit/669e2167f754a1fa53cdde037e906dba71e10213), [`9cce1dd`](https://github.com/skillcdn/skillcdn/commit/9cce1dd5af2481a23cbe8239f007c8ed63fb2381), [`59a1ecd`](https://github.com/skillcdn/skillcdn/commit/59a1ecd5affa553f5e63ef3ea591d4a734c015a8), [`7e803b6`](https://github.com/skillcdn/skillcdn/commit/7e803b60a76015f93d809bf8a2b5362bae94593d)]:
+  - @skillcdn/core@0.6.0
+
 ## 0.5.3
 
 ### Patch Changes

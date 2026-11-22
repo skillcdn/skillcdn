@@ -1,5 +1,26 @@
 # @skillcdn/serve
 
+## 0.6.0
+
+### Patch Changes
+
+- [`fbfc31f`](https://github.com/skillcdn/skillcdn/commit/fbfc31f26081d20756d8d75cf11afdfc211c659b) Thanks [@samo-lucid](https://github.com/samo-lucid)! - A page of a skill after the first, and a part `skillcdn skill` reads from `--cursor`, no longer says the `License` line again. 0.5.3 said that a later part leaves the license out, and the line stayed: it is written from the license the reader resolved for the skill, not from the front-matter field that was left out. The first page says it as before, and a skill that is only described says it on every answer, since the license is why nothing else follows.
+
+- [`67e9d7d`](https://github.com/skillcdn/skillcdn/commit/67e9d7dadd0a58d9f28657f5f79ada1cccb3fda8) Thanks [@samo-lucid](https://github.com/samo-lucid)! - A link whose destination is a skill URI names a file of another pack (ADR-0120): `[the base skill](skill://gh/acme/skills/design/card/SKILL.md)`, in a skill, in a manifest's rules or in any served Markdown document. The index keeps the link with the file that holds it and looks into no other repository. The first page of `load_skill` and a page of `read_repo_file` list what they link to in other packs, under `In other packs, not readable here:`, with how each is read at its pack; the REST API answers `packReferences` on a skill and on a file page. A destination under the scheme that is no skill URI, one with a ref or without a path, is the index diagnostic `pack_link_invalid`.
+  
+  `skillcdn check` lists the files of other packs a directory links to, and `skillcdn check --references [--url <origin>]` reads each once at a deployment: a file its pack does not have fails the check, and one that could not be asked about is `not known`. The reading rules are at version 22.
+  
+  In `@skillcdn/core`, `inspectMarkdownLinks` answers `packs`, and `PackLink`, `PackReference`, `restPackReferenceSchema` and `MAX_PACK_LINKS` are new; in `@skillcdn/indexer`, `checkDirectory` takes `verifyPackReferences`.
+
+- [`9cce1dd`](https://github.com/skillcdn/skillcdn/commit/9cce1dd5af2481a23cbe8239f007c8ed63fb2381) Thanks [@samo-lucid](https://github.com/samo-lucid)! - A page of a skill, and a part `skillcdn skill` prints, ends between two blocks of Markdown where it can (ADR-0118): outside a table and a fenced code block, and not right after a heading or a line that ends in a colon, when such a place is within 4,096 characters of where the page would end. A rule or a file that begins late on a page with no such place begins the next one. A table longer than that is still cut after a row, and the page that goes on with it says the table's first two lines again above its text; the REST skill route answers them as `tableHead`, beside the text and not in it. Cursors stay good: they are offsets into the same context.
+  
+  The first page of `load_skill` names what it shortened: an `Abbreviated above:` line says which of the description, the metadata and the warnings were, and the references beyond the five it resolves are named by the files they point to, with the count of any it has no room for. It said only that something was abbreviated.
+  
+  In `@skillcdn/core`, `contextLinesPage` takes `mayBeEmpty`, `tableHeadAt` is new, and a `SkillResult` may carry `tableHead`, `detailsAbbreviated` and `referencesUnlisted`.
+- Updated dependencies [[`67e9d7d`](https://github.com/skillcdn/skillcdn/commit/67e9d7dadd0a58d9f28657f5f79ada1cccb3fda8), [`669e216`](https://github.com/skillcdn/skillcdn/commit/669e2167f754a1fa53cdde037e906dba71e10213), [`9cce1dd`](https://github.com/skillcdn/skillcdn/commit/9cce1dd5af2481a23cbe8239f007c8ed63fb2381), [`59a1ecd`](https://github.com/skillcdn/skillcdn/commit/59a1ecd5affa553f5e63ef3ea591d4a734c015a8), [`7e803b6`](https://github.com/skillcdn/skillcdn/commit/7e803b60a76015f93d809bf8a2b5362bae94593d)]:
+  - @skillcdn/core@0.6.0
+  - @skillcdn/reader@0.6.0
+
 ## 0.5.3
 
 ### Patch Changes
