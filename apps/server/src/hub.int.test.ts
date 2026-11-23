@@ -1,7 +1,9 @@
 import type { Client } from "@modelcontextprotocol/client";
 import { restSearchSchema } from "@skillcdn/core";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
+import { SURFACE_TTL_MS } from "@skillcdn/serve";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import * as z from "zod";
 import { HUB_DEFAULTS } from "./config/config.js";
 import { createFixtureHost } from "./testing/fixture-host.js";
 import { createHarness, type Harness, type HarnessOptions } from "./testing/harness.js";
@@ -135,6 +137,17 @@ describe("the search across every pack", () => {
     expect(text).toContain("Connect to a pack at http://");
     expect(await searchText(client, "nothingmatchesthisword")).toContain("No results for");
     await client.close();
+
+    // What the root says of itself is the same for everyone and changes with a release, but for
+    // the count of the packs: a client of the current revision may keep it an hour.
+    const current = await h.connect("/", { revision: "current" });
+    const cacheFields = z.looseObject({ ttlMs: z.number(), cacheScope: z.string() });
+    const hour = { ttlMs: SURFACE_TTL_MS, cacheScope: "public" };
+    expect(cacheFields.parse(await current.discover())).toMatchObject(hour);
+    expect(await current.request({ method: "tools/list", params: {} }, cacheFields)).toMatchObject(
+      hour,
+    );
+    await current.close();
 
     // A plain GET of the root is not an MCP request: without the pages, there is nothing at it.
     const page = await h.request("/", { headers: { accept: "text/html" } });

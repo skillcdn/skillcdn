@@ -25,6 +25,7 @@ import {
 } from "@skillcdn/db";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
 import { gitBlobHash, INDEX_VERSION } from "@skillcdn/indexer";
+import { SURFACE_TTL_MS } from "@skillcdn/serve";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as z from "zod";
 import { MountService } from "./mounts/mount-service.js";
@@ -1263,6 +1264,42 @@ describe("clients of the current protocol revision", () => {
       expect(JSON.stringify(read.contents)).toContain("commit-messages");
     } finally {
       await client.close();
+    }
+  });
+
+  it("tells a client how long to keep discovery and the lists, which the SDK answers itself", async () => {
+    const cacheFields = z.looseObject({
+      ttlMs: z.number().int().nonnegative(),
+      cacheScope: z.enum(["public", "private"]),
+    });
+    const h = harness();
+    const address = "/gh/acme/single-skill";
+    const commit = `${address}@${fixtureCommits().main}`;
+    await indexed(h, address);
+    await indexed(h, commit);
+    const moving = await h.connect(address, { revision: "current" });
+    const pinned = await h.connect(commit, { revision: "current" });
+    try {
+      // The lists are the same at every address and change with a release alone: an hour.
+      for (const client of [moving, pinned]) {
+        for (const method of ["tools/list", "prompts/list"]) {
+          const listed = await client.request({ method, params: {} }, cacheFields);
+          expect(listed, method).toMatchObject({ ttlMs: SURFACE_TTL_MS, cacheScope: "public" });
+        }
+      }
+      // Discovery introduces the commit too: no longer than the ref is believed (a minute in
+      // this harness), and for a commit that never changes no longer than the lists.
+      const discovered = cacheFields.parse(await moving.discover());
+      expect(discovered.cacheScope).toBe("public");
+      expect(discovered.ttlMs).toBeGreaterThan(0);
+      expect(discovered.ttlMs).toBeLessThanOrEqual(60_000);
+      expect(cacheFields.parse(await pinned.discover())).toMatchObject({
+        ttlMs: SURFACE_TTL_MS,
+        cacheScope: "public",
+      });
+    } finally {
+      await moving.close();
+      await pinned.close();
     }
   });
 

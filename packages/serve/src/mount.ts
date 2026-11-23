@@ -35,6 +35,15 @@ export function sourceAccess(
 export const PINNED_TTL_MS = 86_400_000;
 
 /**
+ * How long a client may keep what a deployment's software offers, in milliseconds: the lists of
+ * the tools and the prompts, which are the same at every address and change only with the
+ * release that serves them (docs/specs/tools.md). An hour, so that a deployment that was
+ * upgraded is asked with the lists of the release before for no longer. What a deployment gives
+ * as `surfaceTtlMs`; a server of a machine's own gives nothing, and nothing is kept.
+ */
+export const SURFACE_TTL_MS = 3_600_000;
+
+/**
  * What a ready REST answer of the mount tells the caches (docs/specs/rest.md): a public address
  * pinned to a commit may be kept a day, the bound the skills extension gives it as `ttlMs`,
  * since the operator's lists, the reading rules and the repository's visibility can still change

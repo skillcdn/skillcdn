@@ -23,6 +23,12 @@ export interface HubServerOptions {
   readonly logger: ServeLogger;
   /** The origin the request came to, where the packs are; left out, the instructions name none. */
   readonly origin?: string | undefined;
+  /**
+   * How long a client of the current protocol revision may keep the list of the tools and
+   * `server/discover`, in whole milliseconds (docs/specs/tools.md): a deployment gives
+   * `SURFACE_TTL_MS`; left out, both say to keep nothing.
+   */
+  readonly surfaceTtlMs?: number | undefined;
 }
 
 const READ_ONLY = { readOnlyHint: true, idempotentHint: true, openWorldHint: false };
@@ -30,10 +36,11 @@ const READ_ONLY = { readOnlyHint: true, idempotentHint: true, openWorldHint: fal
 /** One stateless tool surface for the root of a deployment. One instance per connection or request. */
 export async function createHubServer(options: HubServerOptions): Promise<McpServer> {
   const { search, logger, origin } = options;
-  const packs = await options.packs().catch((error: unknown) => {
+  const counted = await options.packs().catch((error: unknown) => {
     logger.warn({ err: error }, "the packs could not be counted for the instructions");
-    return 0;
+    return undefined;
   });
+  const surfaceTtlMs = options.surfaceTtlMs ?? 0;
   const server = new McpServer(
     {
       name: options.server.name,
@@ -45,7 +52,17 @@ export async function createHubServer(options: HubServerOptions): Promise<McpSer
     },
     {
       capabilities: { tools: { listChanged: false } },
-      instructions: renderHubInstructions(packs, origin),
+      instructions: renderHubInstructions(counted ?? 0, origin),
+      // The root answers everyone alike, and nothing private is in it, so a shared cache may
+      // keep what it says of itself. The instructions say how many packs there are: a count
+      // that is an hour old is close enough, and one that could not be had is nobody's to keep.
+      cacheHints: {
+        "tools/list": { ttlMs: surfaceTtlMs, cacheScope: "public" },
+        "server/discover": {
+          ttlMs: counted === undefined ? 0 : surfaceTtlMs,
+          cacheScope: "public",
+        },
+      },
     },
   );
   server.registerTool(

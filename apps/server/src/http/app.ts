@@ -47,7 +47,7 @@ import {
 } from "@skillcdn/core";
 import { type Database, getSchemaStatus, isStatementTimeout, type UserRecord } from "@skillcdn/db";
 import { type Reader, ReaderInputError } from "@skillcdn/reader";
-import { createHubServer } from "@skillcdn/serve";
+import { createHubServer, SURFACE_TTL_MS } from "@skillcdn/serve";
 import { type Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
@@ -1139,6 +1139,7 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
           server: { name: SERVER_NAME, version: SERVER_VERSION },
           logger,
           origin: request === undefined ? undefined : originOf(request.url),
+          surfaceTtlMs: SURFACE_TTL_MS,
         });
       },
       { onerror: (error) => logger.warn({ err: error }, "mcp handler error at the root") },

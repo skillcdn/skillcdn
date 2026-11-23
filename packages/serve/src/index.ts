@@ -12,7 +12,7 @@ export {
   type StdioServer,
   serveOverStdio,
 } from "./local.js";
-export type { ServedMount } from "./mount.js";
+export { type ServedMount, SURFACE_TTL_MS } from "./mount.js";
 export {
   browseReply,
   fileReply,

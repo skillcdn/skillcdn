@@ -1,6 +1,12 @@
-import { McpServer, ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
+import {
+  McpServer,
+  type McpServerOptions,
+  ProtocolError,
+  ProtocolErrorCode,
+} from "@modelcontextprotocol/server";
 import {
   browseTool,
+  type CatalogState,
   type Clock,
   catalogDescription,
   compactSummary,
@@ -73,6 +79,14 @@ export interface ToolDependencies<M extends ServedMount> {
   readonly hooks?: UsageHooks<M> | undefined;
   /** What the server calls itself and which version it is. */
   readonly server: { readonly name: string; readonly version: string };
+  /**
+   * How long a client of the current protocol revision may keep what the software offers, in
+   * whole milliseconds: the lists of the tools and the prompts for that long, and
+   * `server/discover` for no longer than that, nor than what it says of the commit holds
+   * (docs/specs/tools.md). A deployment gives `SURFACE_TTL_MS`; left out, the three say to keep
+   * nothing, which is what a server of a machine's own says.
+   */
+  readonly surfaceTtlMs?: number | undefined;
 }
 
 export interface ToolRequest {
@@ -108,6 +122,32 @@ function cacheHint(
       ? PINNED_TTL_MS
       : Math.max(0, mount.trustedUntil.getTime() - now.getTime());
   return { ttlMs, cacheScope: mount.visibility === "public" ? "public" : "private" };
+}
+
+/**
+ * The cache fields of the three answers the SDK builds itself (ADR-0127). The lists of the
+ * tools and the prompts are the same for every mount and change only with the software, so they
+ * are kept for `surfaceTtlMs`. `server/discover` says what the software offers and introduces
+ * the commit as well, so it is kept no longer than the lists nor than a list of the extension,
+ * and as briefly as an empty one while the commit is not indexed or another index answers in
+ * its place (ADR-0068): what it says is about to change. Whose the answers are follows the
+ * repository in all three: that a private address answered at all is one person's to know.
+ */
+function surfaceHints(
+  mount: ServedMount,
+  catalog: CatalogState,
+  now: Date,
+  surfaceTtlMs: number,
+): NonNullable<McpServerOptions["cacheHints"]> {
+  const { ttlMs, cacheScope } = cacheHint(mount, now);
+  const settled = catalog.status === "ready" && catalog.catalog.mount.newest === undefined;
+  const commitTtlMs = settled ? ttlMs : Math.min(ttlMs, INDEXING_TTL_MS);
+  const lists = { ttlMs: surfaceTtlMs, cacheScope };
+  return {
+    "tools/list": lists,
+    "prompts/list": lists,
+    "server/discover": { ttlMs: Math.min(commitTtlMs, surfaceTtlMs), cacheScope },
+  };
 }
 
 /**
@@ -174,6 +214,7 @@ export async function createMountServer<M extends ServedMount>(
         extensions: { [SKILLS_EXTENSION]: { directoryRead: true } },
       },
       instructions: renderInstructions(catalog),
+      cacheHints: surfaceHints(mount, catalog, clock.now(), dependencies.surfaceTtlMs ?? 0),
     },
   );
   // Who used the repository: the client at the request's address, through the app it names in

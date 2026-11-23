@@ -1,7 +1,11 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import type { Clock, UsageSink } from "@skillcdn/core";
 import type { Reader } from "@skillcdn/reader";
-import { createMountServer as createServedMountServer, type UsageHooks } from "@skillcdn/serve";
+import {
+  createMountServer as createServedMountServer,
+  SURFACE_TTL_MS,
+  type UsageHooks,
+} from "@skillcdn/serve";
 import type { Logger } from "../logger.js";
 import type { Mount } from "../mounts/mount-service.js";
 import type { UsageStats } from "../stats/usage-recorder.js";
@@ -72,6 +76,7 @@ export async function createMountServer(
       indexWaitMs: dependencies.indexWaitMs,
       hooks: usageHooksOf(dependencies),
       server: { name: SERVER_NAME, version: SERVER_VERSION },
+      surfaceTtlMs: SURFACE_TTL_MS,
     },
     request,
   );

@@ -1,3 +1,4 @@
+import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import {
   REPO_TOKEN_PREFIX,
   restMeSchema,
@@ -12,10 +13,17 @@ import {
   saveRepository,
 } from "@skillcdn/db";
 import { createTestDatabase, DEV_DATABASE_URL, type TestDatabase } from "@skillcdn/db/testing";
+import { SURFACE_TTL_MS } from "@skillcdn/serve";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import * as z from "zod";
 import { MAX_REPO_TOKENS_PER_USER } from "./auth/repo-tokens.js";
 import { createFixtureLogin, type FixtureLogin } from "./testing/fixture-login.js";
-import { createHarness, type Harness, type HarnessOptions } from "./testing/harness.js";
+import {
+  CURRENT_REVISION,
+  createHarness,
+  type Harness,
+  type HarnessOptions,
+} from "./testing/harness.js";
 
 let testDatabase: TestDatabase;
 
@@ -311,6 +319,36 @@ describe("an agent with a token", () => {
       },
       { timeout: 5_000, interval: 25 },
     );
+  });
+
+  it("is told that what it keeps of the private address is one person's, the lists included", async () => {
+    // The lists of the tools and the prompts are the same at every address. That this address
+    // answered at all is not: a cache between people that handed its list on would tell the
+    // next person that the repository is there.
+    const h = harness();
+    const { token } = await tokenFor(h, await h.signIn(newcomer(h.login)));
+    const client = new Client(
+      { name: "skillcdn-test", version: "0.0.0" },
+      { versionNegotiation: { mode: { pin: CURRENT_REVISION } } },
+    );
+    await client.connect(
+      new StreamableHTTPClientTransport(new URL(`${h.origin}${SECRET}`), {
+        requestInit: { headers: { authorization: `Bearer ${token}` } },
+        fetch: async (input, init) => h.app.fetch(new Request(input, init)),
+      }),
+    );
+    const cacheFields = z.looseObject({ ttlMs: z.number(), cacheScope: z.string() });
+    try {
+      expect(cacheFields.parse(await client.discover()).cacheScope).toBe("private");
+      for (const method of ["tools/list", "prompts/list"]) {
+        expect(await client.request({ method, params: {} }, cacheFields), method).toMatchObject({
+          ttlMs: SURFACE_TTL_MS,
+          cacheScope: "private",
+        });
+      }
+    } finally {
+      await client.close();
+    }
   });
 
   it("reads nothing else with it, and is told that the token is no good there", async () => {
