@@ -18,6 +18,7 @@ import {
   type IndexDiagnostic,
   type IndexLimits,
   isWithinRepoPath,
+  MCP_RESULT_MAX_BYTES,
   type MountCatalog,
   outlineMarkdown,
   parentDirectory,
@@ -214,6 +215,9 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
   const notes: string[] = [];
   const bytesOf = (text: string): number => Buffer.byteLength(text, "utf8");
   let large = 0;
+  // The skills the extension serves as a document that is more than a tool result holds
+  // (ADR-0125): that document is handed over in one piece, where the tools give pages.
+  let servedLarge = 0;
   // The pages that end inside a code block or a line, which nothing said on the next page
   // mends, and the skills that have one.
   let cutPages = 0;
@@ -305,6 +309,11 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
     const own = included.length - shared.length;
     const omitted = skill.frontMatter?.omitted ?? [];
     const license = skill.frontMatter?.licenseFact;
+    // The bound is this server's own, the one it keeps every tool result within: what a client
+    // gives its model of one read is the client's to say, and differs with its version and its
+    // model, so none of theirs is compared with here (docs/specs/tools.md names those measured).
+    const servedOver = skill.listed === true && (skill.servedSize ?? 0) > MCP_RESULT_MAX_BYTES;
+    if (servedOver) servedLarge += 1;
     write(
       `- ${skill.name ?? "?"} (${directory === "" ? "." : directory})\n` +
         `  ${skill.description ?? ""}\n` +
@@ -315,7 +324,7 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
         (omitted.length === 0
           ? ""
           : `  over the read limit, named in the served document with their source: ${omitted.map((file) => `${file.path} (${file.size} bytes)`).join(", ")}\n`) +
-        `  extension: ${skill.listed === true ? `listed, ${skill.servedSize ?? 0} bytes as served` : `not listed (${skill.frontMatter?.unlisted ?? "unknown"})`}\n` +
+        `  extension: ${skill.listed === true ? `listed, ${skill.servedSize ?? 0} bytes as served${servedOver ? `, in one piece: over the ${MCP_RESULT_MAX_BYTES} bytes a tool result is kept within` : ""}` : `not listed (${skill.frontMatter?.unlisted ?? "unknown"})`}\n` +
         context +
         (license === undefined
           ? ""
@@ -332,6 +341,11 @@ export async function checkDirectory(options: CheckOptions): Promise<number> {
   if (large > 0) {
     notes.push(
       `skills (skill_large): ${large} of ${skills.length} hold more than ${SKILL_PAGE_BYTES} bytes of instructions and included files, what a skill is read in at once; each says under its name what it is made of. An agent reads every page before it starts: what not every run needs is linked from the step that needs it, not included`,
+    );
+  }
+  if (servedLarge > 0) {
+    notes.push(
+      `skills (served_large): ${servedLarge} of ${listed.length} listed through the skills extension ${servedLarge === 1 ? "is" : "are"} served as a document of more than ${MCP_RESULT_MAX_BYTES} bytes, what a tool result is kept within; each says so under its name. A host is handed that document in one piece, and its model gets it cut where that is more than the host gives it of one read, where load_skill gives the same text in pages. The document holds the rules above the skill, its instructions and the files it includes, as the context line of each weighs them: what not every run needs is linked from the step that needs it, not included`,
     );
   }
   if (cutPages > 0) {

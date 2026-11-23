@@ -104,8 +104,64 @@ describe("checking a working tree", () => {
         "  over the 16384 bytes of instructions and included files a skill aims at; included: skills/large/references/long.md 42000, skills/large/references/short.md 420\n",
     );
     expect(report.split("over the 16384 bytes").length).toBe(2);
+    // The same skill is one document of some 42 KB to a host of the extension: a second note.
     expect(report).toContain(
-      "Notes: 1\n- skills (skill_large): 1 of 2 hold more than 16384 bytes of instructions and included files",
+      "Notes: 2\n- skills (skill_large): 1 of 2 hold more than 16384 bytes of instructions and included files",
+    );
+    expect(report).toContain(
+      "- skills (served_large): 1 of 2 listed through the skills extension is served as a document of more than 24576 bytes",
+    );
+  });
+
+  it("says when the document a skill is served as is more than a tool result holds (ADR-0125)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "skillcdn-check-served-"));
+    // Forty-two bytes a line.
+    const lines = (count: number) => "A line of forty characters, with its end.\n".repeat(count);
+    const front = (name: string) => `---\nname: ${name}\ndescription: A skill of ${name}.\n---\n`;
+    const files: Record<string, string> = {
+      "SKILLCDN.md": "---\ndescription: Served.\n---\n# Rules\n\nAsk first.\n",
+      "skills/small/SKILL.md": `${front("small")}# Small\n`,
+      // 21 KB: two pages of the tools, and a document a tool result would still hold.
+      "skills/paged/SKILL.md": `${front("paged")}# Paged\n\n${lines(500)}`,
+      // 29 KB of instructions.
+      "skills/long/SKILL.md": `${front("long")}# Long\n\n${lines(700)}`,
+      // 26 KB of rules above a skill of a few bytes: the document carries them too.
+      "area/SKILLCDN.md": `---\ndescription: An area with long rules.\n---\n# Area rules\n\n${lines(620)}`,
+      "area/skills/brief/SKILL.md": `${front("brief")}# Brief\n`,
+      // As long as the long one, and not served through the extension at all.
+      "skills/misnamed/SKILL.md": `${front("another")}# Misnamed\n\n${lines(700)}`,
+    };
+    for (const [name, contents] of Object.entries(files)) {
+      const parts = name.split("/");
+      await mkdir(join(root, ...parts.slice(0, -1)), { recursive: true });
+      await writeFile(join(root, ...parts), contents);
+    }
+    const { code, report } = await check(root);
+    // A long document is a note, never a failure.
+    expect(code).toBe(0);
+    const over = ", in one piece: over the 24576 bytes a tool result is kept within\n";
+    const block = (name: string) => report.split(`- ${name} (`)[1]?.split("\n- ")[0] ?? "";
+    expect(block("small")).toMatch(/\n {2}extension: listed, \d+ bytes as served\n/);
+    // Over what a skill aims at, read in two pages, and no more than a tool result as a document.
+    expect(block("paged")).toMatch(
+      /\n {2}extension: listed, \d+ bytes as served\n {2}context: \d+ bytes, read in 2 pages /,
+    );
+    expect(block("paged")).toContain("  over the 16384 bytes of instructions and included files");
+    expect(block("long")).toMatch(
+      new RegExp(`\\n {2}extension: listed, \\d+ bytes as served${over} {2}context: `),
+    );
+    // Rules are no part of what a skill aims at, and are part of the document it is served as.
+    expect(block("brief")).toMatch(
+      new RegExp(`\\n {2}extension: listed, \\d+ bytes as served${over} {2}context: `),
+    );
+    expect(block("brief")).not.toContain("over the 16384 bytes");
+    expect(block("another")).toContain("  extension: not listed (name_directory_mismatch)\n");
+    expect(report.split(over).length).toBe(3);
+    expect(report).toContain(
+      "- skills (skill_large): 3 of 5 hold more than 16384 bytes of instructions and included files",
+    );
+    expect(report).toContain(
+      "- skills (served_large): 2 of 4 listed through the skills extension are served as a document of more than 24576 bytes, what a tool result is kept within; each says so under its name. A host is handed that document in one piece, and its model gets it cut where that is more than the host gives it of one read, where load_skill gives the same text in pages.",
     );
   });
 
