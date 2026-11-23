@@ -109,7 +109,6 @@ Every account has a page at `skillcdn.ai/gh/<owner>` with its public repositorie
 | `load_skill` | load an exact `SKILL.md` path, its inherited rules and required files through bounded pages |
 | `read_repo_file` | read a text file by its repository-root path, whole or one section |
 | `search_packs` | at the root of a deployment: search every public pack it serves, to find the one to connect to |
-| `intake` | *(planned)* walk a non-expert through the questions a skill declares |
 | `describe` / `run` | *(undecided)* composed tools declared in Markdown or YAML |
 
 One `use_skill(path)` prompt starts loading a skill. The server introduces the pack and its folders when an agent connects; browsing and search provide the rest. Names are display metadata, and every content path keeps its actual spelling from the repository root.

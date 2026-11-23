@@ -23,7 +23,6 @@ What exists, what is being built and what comes next, at a glance. This page say
 |---|---|
 | **More git hosts** | GitLab and Gitea behind the git-host port, each a package of its own, with signing in through them. The address grammar for nested namespaces is decided first, before the [address spec](specs/address.md) becomes normative. |
 | **A blob store on S3-compatible storage** | Behind the blob-store port that PostgreSQL implements today, for bodies that do not belong in rows ([ADR-0004](adr/0004-postgresql-only-state.md)). |
-| **`intake`** | A skill's inputs declared under the `skillcdn` key and rendered as the inputs of the skill's text, so that any agent asks for them and nothing new travels on the wire. Built when a pack needs it. |
 | **Revalidation of a moving ref** | A read of a branch or a tag revalidated by its commit hash as the `ETag`. A read pinned to a commit is kept by a cache for a day already ([caching](architecture.md#caching-and-cost-posture)). |
 | **Metrics and tracing** | Through OpenTelemetry, with nothing of one vendor in the code ([observability](architecture.md#observability)). |
 | **An approximate index over the vectors** | For the search across packs, when picking the parts nearest in meaning exactly becomes too slow ([ADR-0092](adr/0092-a-search-across-the-packs-picks-the-parts-nearest-in-meaning-and-compares-their-sections.md)). |
