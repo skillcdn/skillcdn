@@ -3,6 +3,7 @@ import {
   type Database,
   getSnapshotEmbedding,
   type JobQueue,
+  recordSnapshotEmbedding,
   type SnapshotRecord,
   tierOfSnapshot,
   type VectorKey,
@@ -91,19 +92,30 @@ export function createEmbedTriggers(deps: EmbedTriggerDependencies): EmbedTrigge
       }
       if (deps.reuse !== undefined) {
         // Before the job, which the worker may take at once: what it finds then is what is left.
-        const reused = await reuseKnownVectors({ database, ...deps.reuse }, snapshot, key).catch(
-          (error: unknown) => {
-            logger.warn(
-              { err: error, snapshot: snapshot.snapshotId },
-              "the vectors a commit shares with the one before could not be given it",
+        try {
+          const reused = await reuseKnownVectors({ database, ...deps.reuse }, snapshot, key);
+          if (reused.sections > 0) {
+            logger.info(
+              { snapshot: snapshot.snapshotId, ...reused },
+              "a commit was given the vectors its texts had already",
             );
-            return undefined;
-          },
-        );
-        if (reused !== undefined && reused.sections > 0) {
-          logger.info(
-            { snapshot: snapshot.snapshotId, ...reused },
-            "a commit was given the vectors its texts had already",
+          }
+          if (reused.left > 0) {
+            // The embedding of the commit is under way from here, and not from the worker's
+            // first slice (ADR-0126): a search says how far it is, and keeps an entry it has
+            // not reached at the place the words gave it, while the job waits its turn.
+            await recordSnapshotEmbedding(
+              database,
+              snapshot,
+              key,
+              { bodies: 0, sections: 0, tokens: 0, bytes: 0, completed: false },
+              clock.now(),
+            );
+          }
+        } catch (error) {
+          logger.warn(
+            { err: error, snapshot: snapshot.snapshotId },
+            "the vectors a commit shares with the one before could not be given it",
           );
         }
       }

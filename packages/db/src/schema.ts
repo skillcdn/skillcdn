@@ -674,8 +674,9 @@ export const unfinishedBodies = pgTable(
 );
 
 /**
- * How far the sections of one snapshot have been embedded under one key (ADR-0064): the worker
- * adds to a row as it writes the vectors of each body, and marks it complete when the snapshot's
+ * How far the sections of one snapshot have been embedded under one key (ADR-0064): the row is
+ * written, empty, when the embedding of a commit just indexed is queued (ADR-0126), the worker
+ * adds to it as it writes the vectors of each body, and marks it complete when the snapshot's
  * last body is done. A ready snapshot without a complete row under the configured key is what
  * the worker still has to embed; a rebuilt index drops the rows of its snapshot. Tenant-scoped:
  * a snapshot's embedding is the repository's.

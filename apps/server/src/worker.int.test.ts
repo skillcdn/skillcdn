@@ -704,6 +704,7 @@ describe("the worker", () => {
       whole: 0,
       unfinished: 1,
       sections: sections - 1,
+      left: 1,
     });
     expect(fake.calls.length).toBe(calls);
     // Searched by meaning at once, by what it still says.
@@ -737,12 +738,14 @@ describe("the worker", () => {
       whole: 0,
       unfinished: 0,
       sections: 0,
+      left: 0,
     });
     const another = await snapshotOf(`${edited}\nOne more line.\n`);
     expect(await reuseKnownVectors(deps, another.scope, KEY, 0)).toEqual({
       whole: 0,
       unfinished: 0,
       sections: 0,
+      left: 1,
     });
   });
 
@@ -1181,9 +1184,47 @@ describe("the worker", () => {
         whole: 0,
         unfinished: 1,
         sections: 1,
+        left: 1,
         msg: "a commit was given the vectors its texts had already",
       }),
     );
+    sent.pop();
+    // A body is left for the worker, so the embedding of the commit is under way from here, and
+    // a search says so while the job waits its turn (ADR-0126).
+    expect(await getSnapshotEmbedding(testDatabase.database, grown.scope, KEY)).toMatchObject({
+      bodies: 0,
+      sections: 0,
+      completedAt: null,
+    });
+
+    // The worker embeds the commit.
+    await embedSnapshotSlice(embedDeps, {
+      ...grown.scope,
+      repoId: grown.repo.repoId,
+      commitSha: grown.commit,
+      key: KEY,
+      reason: "designated",
+    });
+
+    // A commit with nothing left to embed is queued as before, and nothing is said to be under way.
+    const same = await madeSnapshot({
+      visibility: "public",
+      files: [
+        {
+          path: "SKILLCDN.md",
+          kind: "manifest",
+          text: "---\ndescription: A pack.\n---\n",
+          frontMatter: { metadata: {}, warnings: [], documents: ["docs"] },
+        },
+        { path: "docs/a.md", text: "# A\n\nText.\n\n## Later\n\nA section added.\n" },
+      ],
+    });
+    await reusing.onIndexed(
+      { repo: { host: "gh", repository: same.repository } } as unknown as Mount,
+      { ...same.scope, repoId: same.repo.repoId, commitSha: same.commit },
+    );
+    expect(sent.at(-1)).toMatchObject({ reason: "indexed", snapshotId: same.scope.snapshotId });
+    expect(await getSnapshotEmbedding(testDatabase.database, same.scope, KEY)).toBeUndefined();
     sent.pop();
 
     // A repository that is no pack (ADR-0072): its index queues nothing, and a search queues it

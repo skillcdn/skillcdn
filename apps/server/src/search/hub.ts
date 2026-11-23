@@ -30,6 +30,7 @@ import {
 import {
   countHubLexemes,
   type Database,
+  entriesStillToEmbed,
   type HubEntryRecord,
   type HubSectionMatch,
   isStatementTimeout,
@@ -405,9 +406,24 @@ export function createHubSearch(options: HubSearchOptions): HubSearch {
           byMeaning.push(key);
         }
       }
+      // An entry the embedding of its pack has still to reach could not have been found by
+      // meaning: where the meaning leaves it out, its place among the words counts for both
+      // lists, as inside a mount (ADR-0126). A search does without the answer where there is none.
+      const waiting = new Set<string>();
+      if (key !== undefined && nearest !== undefined && words.length > 0) {
+        try {
+          const left = await part("waiting", () => entriesStillToEmbed(database, key, words));
+          for (const row of left) {
+            waiting.add(keyOf(row.snapshotId, row.path));
+          }
+        } catch (error) {
+          logger.debug({ err: error }, "what is still to be embedded was not read for a search");
+        }
+      }
       const fused = fuseRanks([byWords, byMeaning], {
         boost: (key) => (records.get(key)?.row.kind === "skill" ? SKILL_RANK_BOOST : 1),
         compare: (a, b) => (a < b ? -1 : a > b ? 1 : 0),
+        unplaced: (key, list) => list === 1 && waiting.has(key),
       });
       const verified = new Map<string, Promise<boolean>>();
       const vouchedFor = (pack: SearchablePack, address: Address): Promise<boolean> => {

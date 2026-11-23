@@ -323,6 +323,8 @@ export interface ReusedVectors {
   readonly whole: number;
   readonly unfinished: number;
   readonly sections: number;
+  /** Bodies the worker has still to embed, those given some of their vectors among them. */
+  readonly left: number;
 }
 
 /**
@@ -354,7 +356,7 @@ export async function reuseKnownVectors(
   );
   const done = { whole: 0, unfinished: 0, sections: 0 };
   if (missing.size === 0 || missing.size > limit) {
-    return done;
+    return { ...done, left: missing.size };
   }
   const seen = new Set<string>();
   for (const entry of entries) {
@@ -398,7 +400,7 @@ export async function reuseKnownVectors(
       done.unfinished += 1;
     }
   }
-  return done;
+  return { ...done, left: missing.size - done.whole };
 }
 
 /** The bytes already embedded that a bound counts, read once per slice where the bound exists. */

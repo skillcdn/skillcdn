@@ -1,5 +1,18 @@
-import { LOCAL_HOST_KEY } from "@skillcdn/core";
-import { and, eq, gte, isNotNull, lte, ne, notExists, or, type SQL, sql } from "drizzle-orm";
+import { embeddable, LOCAL_HOST_KEY, meaningSearchOf, type PolicyEntry } from "@skillcdn/core";
+import {
+  and,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  ne,
+  notExists,
+  or,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 import { type Database, type Drizzle, drizzleOf } from "../client.js";
 import {
   accounts,
@@ -17,7 +30,7 @@ import {
 import type { RepoScope } from "./repos.js";
 import type { SnapshotScope } from "./snapshots.js";
 import type { UsageDay } from "./usage.js";
-import { partVectorsPresent, type VectorKey } from "./vectors.js";
+import { blobsWithoutVectors, partVectorsPresent, type VectorKey } from "./vectors.js";
 
 // How far each snapshot's sections have been embedded under a key (ADR-0064): what the worker
 // writes down as it goes, what tells it which served snapshots are still to be embedded under the
@@ -132,6 +145,93 @@ export async function getSnapshotEmbedding(
     )
     .limit(1);
   return row;
+}
+
+/** What {@link entriesStillToEmbed} is asked about: an entry, and the snapshot it is of. */
+export interface EmbeddedCandidate {
+  readonly snapshotId: string;
+  readonly path: string;
+  readonly kind: string;
+  readonly searchable: boolean;
+  readonly blobSha: string;
+}
+
+/**
+ * Which of these entries, of whichever snapshots, the embedding of their snapshot has still to
+ * reach (ADR-0126): the entries of a snapshot whose embedding under the key is under way, begun
+ * and not complete, that are embedded at all, as the worker decides it, a searchable document
+ * or skill that no manifest of the snapshot keeps to the words, and whose bodies have no vector
+ * yet, or only some of theirs. An entry of a snapshot nothing embeds is not one: it is found by
+ * its words for good, and not for the while its vectors take.
+ */
+export async function entriesStillToEmbed<E extends EmbeddedCandidate>(
+  database: Database,
+  key: VectorKey,
+  entries: readonly E[],
+): Promise<E[]> {
+  const covered = entries.filter((entry) => embeddable(entry));
+  if (covered.length === 0) {
+    return [];
+  }
+  const db = drizzleOf(database);
+  const underWay = new Set(
+    (
+      await db
+        .select({ id: snapshotEmbeddings.snapshotId })
+        .from(snapshotEmbeddings)
+        .where(
+          and(
+            inArray(snapshotEmbeddings.snapshotId, [
+              ...new Set(covered.map((entry) => entry.snapshotId)),
+            ]),
+            underKey(key),
+            isNull(snapshotEmbeddings.completedAt),
+          ),
+        )
+    ).map((row) => row.id),
+  );
+  const candidates = covered.filter((entry) => underWay.has(entry.snapshotId));
+  if (candidates.length === 0) {
+    return [];
+  }
+  const left = await blobsWithoutVectors(
+    database,
+    key,
+    candidates.map((entry) => entry.blobSha),
+  );
+  const waiting = candidates.filter((entry) => left.has(entry.blobSha));
+  if (waiting.length === 0) {
+    return [];
+  }
+  // What a manifest keeps to the words is never embedded, so it waits for nothing.
+  const manifests = await db
+    .select({
+      snapshotId: indexEntries.snapshotId,
+      path: indexEntries.path,
+      kind: indexEntries.kind,
+      frontMatter: indexEntries.frontMatter,
+    })
+    .from(indexEntries)
+    .where(
+      and(
+        inArray(indexEntries.snapshotId, [...new Set(waiting.map((entry) => entry.snapshotId))]),
+        eq(indexEntries.kind, "manifest"),
+        eq(indexEntries.visible, true),
+      ),
+    );
+  const bySnapshot = new Map<string, PolicyEntry[]>();
+  for (const { snapshotId, ...manifest } of manifests) {
+    bySnapshot.set(snapshotId, [...(bySnapshot.get(snapshotId) ?? []), manifest]);
+  }
+  const allowed = new Map<string, (path: string) => boolean>();
+  return waiting.filter((entry) => {
+    let decides = allowed.get(entry.snapshotId);
+    if (decides === undefined) {
+      decides = meaningSearchOf(bySnapshot.get(entry.snapshotId) ?? []);
+      allowed.set(entry.snapshotId, decides);
+    }
+    return decides(entry.path);
+  });
 }
 
 /**

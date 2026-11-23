@@ -51,6 +51,13 @@ export interface IndexStore {
    * keeps no vectors, and by one that does not count.
    */
   embeddingProgress?(): Promise<EmbeddingProgress | undefined>;
+  /**
+   * Which of these bodies, named by hash, have still to be embedded (ADR-0126): those with no
+   * vector yet, or with only some of theirs. Asked, while the embedding goes on, of the bodies
+   * of the entries the words found that are to be embedded, so that an entry the meaning could
+   * not have found keeps the place the words gave it. Left out by a store that keeps no vectors.
+   */
+  unembedded?(blobShas: readonly string[]): Promise<ReadonlySet<string>>;
   /** What the reading rules could not read as intended. */
   diagnostics(): Promise<readonly SnapshotDiagnostic[]>;
 }

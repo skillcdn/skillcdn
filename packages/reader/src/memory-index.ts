@@ -212,6 +212,11 @@ export function createMemoryIndex(options: MemoryIndexOptions): ReadableIndex {
               )
               .slice(0, limit);
           },
+          async unembedded(blobShas: readonly string[]): Promise<ReadonlySet<string>> {
+            return new Set(
+              blobShas.filter((blobSha) => options.vectors?.sectionsOf(blobSha) === undefined),
+            );
+          },
           async embeddingProgress(): Promise<EmbeddingProgress | undefined> {
             // The bodies to embed are the ones a deployment's worker would embed (ADR-0064):
             // the findable documents whose manifest does not keep them to the words, once each.

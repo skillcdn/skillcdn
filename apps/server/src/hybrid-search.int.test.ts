@@ -9,7 +9,13 @@ import {
   restMountSchema,
   restSearchSchema,
 } from "@skillcdn/core";
-import { createBlobStore, ensureSnapshot, findRepoByAlias, type SnapshotScope } from "@skillcdn/db";
+import {
+  createBlobStore,
+  ensureSnapshot,
+  findRepoByAlias,
+  type JobQueue,
+  type SnapshotScope,
+} from "@skillcdn/db";
 import {
   createTestDatabase,
   DEV_DATABASE_URL,
@@ -23,6 +29,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { vectorKeyOf } from "./adapters/meaning.js";
 import { HUB_DEFAULTS } from "./config/config.js";
 import { embedSnapshotSlice } from "./jobs/embed-snapshot.js";
+import type { EmbedJob } from "./jobs/queues.js";
 import { createFixtureHost, type FixtureHost, fixtureCommits } from "./testing/fixture-host.js";
 import { createHarness, type Harness } from "./testing/harness.js";
 import { textOf } from "./testing/tool-text.js";
@@ -532,5 +539,159 @@ describe("a search across the packs by words and by meaning", () => {
     } finally {
       await root.close();
     }
+  });
+});
+
+describe("a search while a commit just pushed waits to be embedded (ADR-0126)", () => {
+  const PACK = "/gh/acme/multi-skill";
+  const DEEP_DIVE = "skills/item-deep-dive/SKILL.md";
+  const VENTURE = "skills/venture-deep-dive/SKILL.md";
+  const skillOf = (name: string, description: string, title: string, lines: readonly string[]) =>
+    new TextEncoder().encode(
+      [`---\nname: ${name}\ndescription: ${description}\n---\n# ${title}`, ...lines, ""].join(
+        "\n\n",
+      ),
+    );
+
+  it("finds a skill given a new name by its words, first for its name", async () => {
+    // A host of its own, whose pushes nobody else sees, with one skill more than the fixture.
+    const pushing = createFixtureHost("while-embedding");
+    pushing.addFile(
+      DEEP_DIVE,
+      skillOf(
+        "item-deep-dive",
+        "Looks into one item of a shortlist and says whether to waive its late fee.",
+        "Item deep dive",
+        [
+          "Read the item and the shortlist it came from.",
+          "## Verdict",
+          "Say whether to waive the late fee, and why.",
+        ],
+      ),
+    );
+    // The jobs the api queues are kept, and run here as the worker runs them, when the test says.
+    const sent: EmbedJob[] = [];
+    const recording: JobQueue = {
+      ensureQueue: async () => {},
+      send: async (_name, data) => {
+        sent.push(data as EmbedJob);
+        return "sent";
+      },
+      work: async () => {},
+      schedule: async () => {},
+      unschedule: async () => {},
+      waiting: async () => [],
+      reorder: async () => false,
+      counts: async () => [],
+      failures: async () => [],
+      stop: async () => {},
+    };
+    // A clock the test moves, for the packs a search across them covers to be read again.
+    let ahead = 0;
+    const clock = { now: () => new Date(Date.now() + ahead) };
+    const during = createHarness(testDatabase, {
+      host: pushing,
+      ttlMs: 0,
+      clock,
+      hub: { ...HUB_DEFAULTS, cacheMs: 0 },
+      embedding: { jobs: recording, key: KEY, scope: "all", vectors: true },
+      meaning: {
+        embedder: embed.embedder,
+        reranker: undefined,
+        rerankCandidates: undefined,
+        key: KEY,
+      },
+    });
+    const mount = async () =>
+      restMountSchema.parse(await (await during.request(`/api/v1/mounts${PACK}`)).json());
+    const servedFrom = (commit: string) =>
+      expect
+        .poll(
+          async () => {
+            const body = await mount();
+            return body.index.status === "ready" && body.newest === null ? body.commit : undefined;
+          },
+          { timeout: 15_000, interval: 50 },
+        )
+        .toBe(commit);
+    const worker = (job: EmbedJob | undefined) => {
+      if (job === undefined) throw new Error("no job was queued");
+      return embedSnapshotSlice(
+        {
+          database: testDatabase.database,
+          blobs: createBlobStore(testDatabase.database),
+          embedder: embed.embedder,
+          policy: { scope: "all", entitlements: allowEverything },
+          lists: during.lists,
+          usage: discardUsage,
+          clock,
+          logger: pino({ level: "silent" }),
+        },
+        job,
+      );
+    };
+    const inPack = async (query: string) => {
+      const response = await during.request(
+        `/api/v1/find${PACK}?query=${encodeURIComponent(query)}`,
+      );
+      const body = restFindSchema.parse(await response.json());
+      if (body.status !== "ready") throw new Error(`not ready: ${body.status}`);
+      return body;
+    };
+    const across = async (query: string) =>
+      restSearchSchema.parse(
+        await (await during.request(`/api/v1/search?query=${encodeURIComponent(query)}`)).json(),
+      );
+
+    // The first commit, indexed by the api and embedded whole.
+    await servedFrom(fixtureCommits("while-embedding").main);
+    await during.snapshots.idle();
+    expect(sent).toHaveLength(1);
+    expect(await worker(sent[0])).toMatchObject({ status: "embedded", next: undefined });
+
+    // A push adds a skill under a name nothing had: no text of it has a vector.
+    pushing.addFile(
+      VENTURE,
+      skillOf(
+        "venture-deep-dive",
+        "Looks into one venture and says what it would cost to start.",
+        "Venture deep dive",
+        ["Read the venture and what it would cost."],
+      ),
+    );
+    const pushed = pushing.push();
+    ahead += 20_000;
+    await servedFrom(pushed);
+    await during.snapshots.idle();
+    // Queued for the worker, which has not run: the embedding is under way from the moment the
+    // commit is served, and the body it has not reached counts as not embedded.
+    expect(sent).toHaveLength(2);
+    const search = (await mount()).index;
+    const embedding = search.status === "ready" ? search.search?.embedding : undefined;
+    if (embedding?.status !== "in_progress") throw new Error("the embedding is under way");
+    expect(embedding.total - embedding.embedded).toBe(1);
+
+    // The skill under the new name is asked for by its name. The meaning cannot have found it,
+    // and finds the other deep dive: the new one keeps the first place the words gave it.
+    const named = await inPack("venture-deep-dive");
+    expect(named.ranking).toEqual({
+      meaning: true,
+      reranked: false,
+      embedding: { embedded: embedding.embedded, total: embedding.total },
+    });
+    expect(named.items.map((item) => item.path).slice(0, 2)).toEqual([VENTURE, DEEP_DIVE]);
+    // Across the packs too, under the address of its pack.
+    const everywhere = await across("venture-deep-dive");
+    expect(everywhere.ranking).toMatchObject({ meaning: true });
+    expect(everywhere.items[0]).toMatchObject({
+      address: PACK,
+      item: { kind: "skill", path: VENTURE },
+    });
+
+    // The worker embeds the commit: nothing waits, and the skill is found by what it says.
+    expect(await worker(sent[1])).toMatchObject({ status: "embedded", next: undefined, bodies: 1 });
+    const after = await inPack("venture-deep-dive");
+    expect(after.ranking).toEqual({ meaning: true, reranked: false });
+    expect(after.items[0]).toMatchObject({ path: VENTURE });
   });
 });

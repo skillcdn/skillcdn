@@ -240,6 +240,96 @@ describe("a search while the embedding of the index goes on", () => {
     expect(whole.result.ranking).toEqual({ meaning: true, reranked: false });
   });
 
+  /** A reader over the index, each body with the vector the test gives it, or none yet. */
+  const readerWith = (
+    vectors: Readonly<Record<string, readonly number[]>>,
+    entries: readonly IndexEntry[] = index.entries,
+  ) =>
+    new Reader<MountContext>({
+      limits: LIMITS,
+      index: async () => ({
+        status: "ready",
+        index: createMemoryIndex({
+          index: { ...index, entries },
+          blobs,
+          vectors: {
+            sectionsOf: (blobSha) => {
+              const vector = vectors[blobSha];
+              return vector === undefined
+                ? undefined
+                : [{ ...section, vector: Float32Array.from(vector) }];
+            },
+          },
+        }),
+      }),
+      meaning: { embedder },
+    });
+  const pathsOf = async (reader: Reader<MountContext>, query: string) => {
+    const found = await reader.find(mountOf(), { query }, 0);
+    if (found.status !== "ready") throw new Error("not ready");
+    return found.result.items.map((item) => item.path);
+  };
+
+  it("keeps an entry it has not reached at the place the words gave it (ADR-0126)", async () => {
+    // The words put the document that holds the rare word first, and it has no vector yet: left
+    // out of the meaning's list, it would stand behind the two documents both lists hold.
+    const words = await createMemoryIndex({ index, blobs }).store.search(
+      ROOT_PATH,
+      queryLexemes("VDS list"),
+      queryWeights(3, [2, 1]),
+    );
+    expect(words.map((item) => item.path)).toEqual(["docs/b.md", "docs/a.md", "other/c.md"]);
+    expect(await pathsOf(readerWith({ a: [1, 0], c: [1, 0] }), "VDS list")).toEqual([
+      "docs/b.md",
+      "docs/a.md",
+      "other/c.md",
+    ]);
+    // A document only the meaning found does not pass it either.
+    expect(await pathsOf(readerWith({ a: [1, 0] }), "standard list")).toEqual([
+      "docs/b.md",
+      "docs/a.md",
+    ]);
+    // Embedded, it is where the two lists put it: the meaning has it far from the query.
+    expect(await pathsOf(readerWith({ a: [1, 0], b: [0, 1], c: [1, 0] }), "VDS list")).toEqual([
+      "docs/a.md",
+      "docs/b.md",
+      "other/c.md",
+    ]);
+  });
+
+  it("leaves an entry the embedding does not cover where one list alone puts it (ADR-0126)", async () => {
+    // The document under a manifest that keeps it to the words is never embedded: it is not
+    // waiting for a vector, and stands behind what both lists hold, as it does once the
+    // embedding is done.
+    const kept: readonly IndexEntry[] = [
+      entry("docs/a.md", "a"),
+      entry("other/c.md", "c"),
+      {
+        ...entry("kept/SKILLCDN.md", "m"),
+        kind: "manifest",
+        searchable: false,
+        search: undefined,
+        frontMatter: { metadata: {}, warnings: [], search: { meaning: false } },
+      },
+      entry("kept/b.md", "b"),
+      // One more document to embed, so that the embedding is still going on.
+      entry("docs/d.md", "d"),
+    ];
+    const reader = readerWith({ a: [1, 0], c: [1, 0] }, kept);
+    const found = await reader.find(mountOf(), { query: "VDS list" }, 0);
+    if (found.status !== "ready") throw new Error("not ready");
+    expect(found.result.ranking).toEqual({
+      meaning: true,
+      reranked: false,
+      embedding: { embedded: 2, total: 3 },
+    });
+    expect(found.result.items.map((item) => item.path)).toEqual([
+      "docs/a.md",
+      "other/c.md",
+      "kept/b.md",
+    ]);
+  });
+
   it("ranks a query of identifiers alone by its words, with no word of the embedding (ADR-0079)", async () => {
     const found = await readerOver(["a"]).find(mountOf(), { query: "4205" }, 0);
     if (found.status !== "ready") throw new Error("not ready");

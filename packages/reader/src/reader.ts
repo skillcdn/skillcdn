@@ -23,6 +23,7 @@ import {
   decodeText,
   documentSources,
   type Embedder,
+  embeddable,
   embeddingTextOf,
   FIND_DEFAULT_LIMIT,
   FIND_LIST_SKILLS_MAX,
@@ -68,6 +69,7 @@ import {
   type MountSearch,
   type MountSummary,
   matchSections,
+  meaningSearchOf,
   NO_LICENSE,
   type OutlineHeading,
   outlineMarkdown,
@@ -291,12 +293,15 @@ function cutChars(text: string, max: number): string {
  * being that of its nearest section, and ties broken by path, so that the order is the same on
  * every machine. This is where a skill is boosted over a document, once (ADR-0095): the words
  * rank the two alike, so the words answering alone are put in order here as well, as the one
- * list there is.
+ * list there is. An entry of `waiting`, which the embedding of the index has still to reach,
+ * could not have been found by meaning: where the meaning leaves it out, its place among the
+ * words counts for both lists, so that it is not put behind everything both found (ADR-0126).
  */
 function fuseEntries(
   entries: readonly IndexEntry[],
   words: readonly IndexEntry[],
   nearest: readonly MeaningMatch[] | undefined,
+  waiting: ReadonlySet<string>,
 ): IndexEntry[] {
   const byPath = new Map<string, IndexEntry>(words.map((row) => [row.path, row]));
   const byMeaning: string[] = [];
@@ -317,6 +322,7 @@ function fuseEntries(
   const fused = fuseRanks(nearest === undefined ? [wordsOrder] : [wordsOrder, byMeaning], {
     boost: (path) => (byPath.get(path)?.kind === "skill" ? SKILL_RANK_BOOST : 1),
     compare: compareByteOrder,
+    unplaced: (path, list) => list === 1 && waiting.has(path),
   });
   return fused.flatMap((path) => {
     const row = byPath.get(path);
@@ -952,6 +958,32 @@ export class Reader<M extends MountContext = MountContext> {
     } catch {
       return { attempted: true, nearest: undefined };
     }
+  }
+
+  /**
+   * The entries among those the words found that the embedding of the index has still to reach
+   * (ADR-0126), by path: the ones it is to embed, as the worker of a deployment and the command
+   * decide it, whose bodies have no vector yet, or only some of theirs. None where the store
+   * does not say.
+   */
+  async #waitingOf(
+    index: ReadableIndex,
+    entries: readonly IndexEntry[],
+    words: readonly IndexEntry[],
+  ): Promise<ReadonlySet<string>> {
+    const unembedded = index.store.unembedded;
+    if (unembedded === undefined) {
+      return new Set();
+    }
+    const allowed = meaningSearchOf(entries);
+    const covered = words.filter((row) => embeddable(row) && allowed(row.path));
+    if (covered.length === 0) {
+      return new Set();
+    }
+    const left = await unembedded.call(index.store, [
+      ...new Set(covered.map((row) => row.blobSha)),
+    ]);
+    return new Set(covered.filter((row) => left.has(row.blobSha)).map((row) => row.path));
   }
 
   /** Whether a search of this index could be answered by meaning as well as by words. */
@@ -1649,7 +1681,15 @@ export class Reader<M extends MountContext = MountContext> {
       const meaning = wordsAlone
         ? { attempted: false, nearest: undefined }
         : await this.#meaningOf(index, path, query);
-      const fused = fuseEntries(entries, words, meaning.nearest);
+      // While the embedding of the index goes on, the result says how far it is, and an entry
+      // it has not reached keeps the place the words gave it (ADR-0126).
+      const progress =
+        meaning.nearest === undefined ? undefined : await index.store.embeddingProgress?.();
+      const waiting =
+        progress?.status === "in_progress"
+          ? await this.#waitingOf(index, entries, words)
+          : new Set<string>();
+      const fused = fuseEntries(entries, words, meaning.nearest, waiting);
       // The documents one of whose headings names the identifier the query begins with
       // stand first, in the words' order, whatever else was found.
       const headed =
@@ -1694,9 +1734,6 @@ export class Reader<M extends MountContext = MountContext> {
         reranker === undefined ? false : await rerankFirst(reranker, query, rest, candidates);
       detailed.splice(fixed, rest.length, ...rest);
       items = [...detailed.map((entry) => entry.item), ...items.slice(detailed.length)];
-      // While the embedding of the index goes on, the result says how far it is.
-      const progress =
-        meaning.nearest === undefined ? undefined : await index.store.embeddingProgress?.();
       ranking = meaning.attempted
         ? {
             meaning: meaning.nearest !== undefined,

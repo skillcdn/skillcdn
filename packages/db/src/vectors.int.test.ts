@@ -16,6 +16,7 @@ import {
   createIndexStore,
   type Database,
   ensureSnapshot,
+  entriesStillToEmbed,
   fillPartVectors,
   HEAD_PART,
   migrateDatabase,
@@ -473,6 +474,89 @@ describe("section vectors", () => {
         .from(unfinishedBodies)
         .where(eq(unfinishedBodies.blobSha, "blob-orphan")),
     ).toEqual([]);
+  });
+
+  it("name the entries the embedding of their snapshot has still to reach (ADR-0126)", async () => {
+    const files = (tag: string): IndexEntry[] => [
+      entry({ path: "docs/a.md", blobSha: `blob-wait-${tag}-a` }),
+      entry({ path: "docs/b.md", blobSha: `blob-wait-${tag}-b` }),
+      entry({ path: "docs/c.md", blobSha: `blob-wait-${tag}-c` }),
+      entry({
+        path: "docs/private/SKILLCDN.md",
+        blobSha: `blob-wait-${tag}-manifest`,
+        kind: "manifest",
+        searchable: false,
+        frontMatter: { metadata: {}, warnings: [], search: { meaning: false } },
+      }),
+      entry({ path: "docs/private/notes.md", blobSha: `blob-wait-${tag}-notes` }),
+      entry({ path: "docs/data.json", blobSha: `blob-wait-${tag}-json`, kind: "json" }),
+    ];
+    const candidatesOf = (snapshotId: string, entries: readonly IndexEntry[]) =>
+      entries.map((item) => ({
+        snapshotId,
+        path: item.path,
+        kind: item.kind,
+        searchable: item.searchable,
+        blobSha: item.blobSha,
+      }));
+    const going = await readySnapshot(files("going"));
+    const never = await readySnapshot(files("never"));
+    const asked = [
+      ...candidatesOf(going.snapshotId, files("going")),
+      ...candidatesOf(never.snapshotId, files("never")),
+    ];
+    const pathsOf = async () =>
+      (await entriesStillToEmbed(database, KEY, asked)).map(
+        (item) => `${item.snapshotId === going.snapshotId ? "going" : "never"} ${item.path}`,
+      );
+    // Nothing embeds either snapshot: their entries are found by their words for good.
+    expect(await pathsOf()).toEqual([]);
+    // The embedding of one is under way: a body with its vectors is reached, one with some of
+    // them is not, the notes a manifest keeps to the words and the JSON file wait for nothing.
+    await recordSnapshotEmbedding(
+      database,
+      going,
+      KEY,
+      { bodies: 0, sections: 0, tokens: 0, bytes: 0, completed: false },
+      T0,
+    );
+    await writeSectionVectors(
+      database,
+      KEY,
+      vectorsOf("blob-wait-going-a", TOUR, [
+        [1, 0, 0, 0],
+        [0, 1, 0, 0],
+      ]),
+    );
+    await writeSectionVectors(
+      database,
+      KEY,
+      vectorsOf("blob-wait-going-b", TOUR, [
+        [1, 0, 0, 0],
+        [0, 1, 0, 0],
+      ]),
+      { unfinished: ["blob-wait-going-b"] },
+    );
+    expect(await pathsOf()).toEqual(["going docs/b.md", "going docs/c.md"]);
+    // The index store names the same bodies for a search inside the mount.
+    const store = createIndexStore(database, going, { vectors: KEY });
+    expect(
+      await store.unembedded?.(["blob-wait-going-a", "blob-wait-going-b", "blob-wait-going-c"]),
+    ).toEqual(new Set(["blob-wait-going-b", "blob-wait-going-c"]));
+    expect(createIndexStore(database, going).unembedded).toBeUndefined();
+    // Under another key nothing is under way.
+    expect(await entriesStillToEmbed(database, { ...KEY, model: "other-model" }, asked)).toEqual(
+      [],
+    );
+    // Complete, with a body it could not read left without vectors: nothing waits.
+    await recordSnapshotEmbedding(
+      database,
+      going,
+      KEY,
+      { bodies: 1, sections: 2, tokens: 0, bytes: 10, completed: true },
+      T0,
+    );
+    expect(await pathsOf()).toEqual([]);
   });
 
   it("have the vectors of the body's parts made with them, the mean of every few sections (ADR-0092)", async () => {

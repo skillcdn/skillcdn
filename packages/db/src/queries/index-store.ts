@@ -96,6 +96,10 @@ export function createIndexStore(
               similarity,
             }));
           },
+          unembedded(blobShas: readonly string[]): Promise<ReadonlySet<string>> {
+            // What is left to embed, an unfinished body among it (ADR-0107).
+            return blobsWithoutVectors(database, key, blobShas);
+          },
           async embeddingProgress(): Promise<EmbeddingProgress | undefined> {
             const record = await getSnapshotEmbedding(database, scope, key);
             if (record === undefined) {

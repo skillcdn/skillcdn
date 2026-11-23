@@ -78,6 +78,43 @@ describe("fuseRanks", () => {
     ).toEqual(["b", "a", "c"]);
   });
 
+  it("counts a key a list could not have held at the place the other list gave it (ADR-0126)", () => {
+    // Words first, meaning second: `new` has no vector yet, so the meaning could not place it.
+    const words = ["new", "a", "b", "c"];
+    const meaning = ["a", "b", "c"];
+    // Left out of one list, it comes after everything both lists hold, though the words put it first.
+    expect(fuseRanks([words, meaning])).toEqual(["a", "b", "c", "new"]);
+    const unplaced = (key: string, list: number) => list === 1 && key === "new";
+    expect(fuseRanks([words, meaning], { unplaced })).toEqual(["new", "a", "b", "c"]);
+    // Its place among the words is what counts twice: fourth there, it is not first.
+    expect(fuseRanks([["a", "b", "c", "new"], meaning], { unplaced })).toEqual([
+      "a",
+      "b",
+      "c",
+      "new",
+    ]);
+    // A list that held it keeps the place it gave, and a list that could have held it counts nothing.
+    expect(
+      fuseRanks(
+        [
+          ["x", "new"],
+          ["new", "x"],
+        ],
+        { unplaced },
+      ),
+    ).toEqual(
+      fuseRanks([
+        ["x", "new"],
+        ["new", "x"],
+      ]),
+    );
+    expect(
+      fuseRanks([words, meaning], { unplaced: (key, list) => list === 0 && key === "new" }),
+    ).toEqual(["a", "b", "c", "new"]);
+    // The words, asked alone, are the one list there is.
+    expect(fuseRanks([words], { unplaced })).toEqual(words);
+  });
+
   it("answers nothing for no lists and for empty ones", () => {
     expect(fuseRanks([])).toEqual([]);
     expect(fuseRanks([[], []])).toEqual([]);
