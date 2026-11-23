@@ -1,6 +1,7 @@
 ---
 name: SkillCDN Docs
 description: "Turn any git repository into an MCP server. SkillCDN's documentation: how to write a pack agents read well, addresses, MCP tools, REST API, the skillcdn command, self-hosting, architecture and every decision. Ask here about SkillCDN itself."
+start: docs/README.md
 documents:
   - docs
   - deploy
