@@ -92,31 +92,38 @@ export function createEmbedTriggers(deps: EmbedTriggerDependencies): EmbedTrigge
       }
       if (deps.reuse !== undefined) {
         // Before the job, which the worker may take at once: what it finds then is what is left.
-        try {
-          const reused = await reuseKnownVectors({ database, ...deps.reuse }, snapshot, key);
-          if (reused.sections > 0) {
-            logger.info(
-              { snapshot: snapshot.snapshotId, ...reused },
-              "a commit was given the vectors its texts had already",
+        const reused = await reuseKnownVectors({ database, ...deps.reuse }, snapshot, key).catch(
+          (error: unknown) => {
+            logger.warn(
+              { err: error, snapshot: snapshot.snapshotId },
+              "the vectors a commit shares with the one before could not be given it",
             );
-          }
-          if (reused.left > 0) {
-            // The embedding of the commit is under way from here, and not from the worker's
-            // first slice (ADR-0126): a search says how far it is, and keeps an entry it has
-            // not reached at the place the words gave it, while the job waits its turn.
-            await recordSnapshotEmbedding(
-              database,
-              snapshot,
-              key,
-              { bodies: 0, sections: 0, tokens: 0, bytes: 0, completed: false },
-              clock.now(),
-            );
-          }
-        } catch (error) {
-          logger.warn(
-            { err: error, snapshot: snapshot.snapshotId },
-            "the vectors a commit shares with the one before could not be given it",
+            return undefined;
+          },
+        );
+        if (reused !== undefined && reused.sections > 0) {
+          logger.info(
+            { snapshot: snapshot.snapshotId, ...reused },
+            "a commit was given the vectors its texts had already",
           );
+        }
+        if (reused !== undefined && reused.left > 0) {
+          // The embedding of the commit is under way from here, and not from the worker's
+          // first slice (ADR-0126): a search says how far it is, and keeps an entry it has
+          // not reached at the place the words gave it, while the job waits its turn. Where
+          // the row cannot be written the worker's first slice writes it, as it did.
+          await recordSnapshotEmbedding(
+            database,
+            snapshot,
+            key,
+            { bodies: 0, sections: 0, tokens: 0, bytes: 0, completed: false },
+            clock.now(),
+          ).catch((error: unknown) => {
+            logger.warn(
+              { err: error, snapshot: snapshot.snapshotId },
+              "the embedding of a commit could not be written down as under way",
+            );
+          });
         }
       }
       await sendEmbedJob(jobs, { ...snapshot, key, reason: "indexed", tier });
