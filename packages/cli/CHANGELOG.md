@@ -1,5 +1,33 @@
 # @skillcdn/cli
 
+## 0.6.2
+
+### Patch Changes
+
+- [`96ba77a`](https://github.com/skillcdn/skillcdn/commit/96ba77a4789fc2db3ebf2045bfa2c8733149d23d) Thanks [@kdxlabs-erato](https://github.com/kdxlabs-erato)! - `skillcdn check` says when the document a skill is served as through the MCP skills extension is more than a tool result holds ([ADR-0125](https://github.com/skillcdn/skillcdn/blob/main/docs/adr/0125-the-document-a-skill-is-served-as-stays-whole-and-check-says-when-it-is-more-than-a-tool-result-holds.md)). A host of the extension is handed that document in one piece, with the rules above the skill and every included file in it, where the tools give the same text in pages, and a client that bounds what its model gets of one read cuts a long one.
+  
+  - Under a listed skill whose document is over 24,576 bytes, the `extension:` line goes on: `extension: listed, 61390 bytes as served, in one piece: over the 24576 bytes a tool result is kept within`. A shorter document is reported as before.
+  - The notes count such skills among the listed (`served_large`). It is a note: the exit code is as before.
+  
+  The bound is the server's own, `MCP_RESULT_MAX_BYTES` of `@skillcdn/core`, and no client's bound is compared with. What is served does not change.
+
+- [`a522479`](https://github.com/skillcdn/skillcdn/commit/a5224798ab49897a3bd57efce5df7a665d2bca69) Thanks [@samo-lucid](https://github.com/samo-lucid)! - What one read of the command prints for an agent is bounded in bytes, as the hosts that run its commands count, and a part of a skill says what a page over MCP says ([ADR-0124](https://github.com/skillcdn/skillcdn/blob/main/docs/adr/0124-what-reaches-an-agent-is-bounded-in-bytes-on-either-route-and-a-part-says-what-a-page-says.md)).
+  
+  - **Every read of the command keeps within 28,000 bytes** (`COMMAND_OUTPUT_MAX_BYTES` of `@skillcdn/core`), where a skill was bounded at 28,000 characters and the other reads not at all. Text of three bytes a character passed both hosts measured: a skill in Hangul was printed in parts of some 49,000 bytes, which one host saved to a file and the other cut in the middle; it is now printed in parts of at most 17,600. A page of a file is ended after the last line that fits, a page of a folder, an outline or a search holds no more entries than fit, and `skillcdn skills` prints a long listing in pages, each ending with the command that lists the rest (`--cursor`).
+  - **A part of a skill says how many pages of the skill follow it**, at its head with the command that prints the next part and again at its end, where it says not to use the skill, plan from it or answer from it yet and to read the next part now; its last line is that command, alone. The last part says `Skill context is complete: this was its last part.` Against a deployment that counts no pages a part says the same without the count.
+  - **The command's first part shows a skill's lists as a first page over MCP does**: its files up to 3 KiB of paths, five references resolved, a long description, metadata or warnings shortened, with a line that names what was.
+  - **`readPack` answers where a read goes on** (`next`: the `cursor` of the next part or page, with `pagesLeft` for a skill, or the `offset` of a file), so that a program built on it reads no text for it, and prints the sentences of a part in the caller's words, with the line its `nextPart` makes. A listing is printed in pages only for a caller that gives `nextPart`, and whole otherwise, as before. A caller that prints lines of its own beside the text says how many bytes they take (`room`), and the read keeps them free.
+  - `@skillcdn/core` adds `COMMAND_OUTPUT_MAX_BYTES`, `fitsCommandOutput`, `utf8Length`, and `skillShown` and `fileShown`, what one answer shows of a page of a skill or of a file, which the MCP replies of `@skillcdn/serve` and the command now share; `ToolWords` takes `loadNext`, the line that reads on. `OUTPUT_CHARS` of `@skillcdn/cli` is deprecated, and is the same number.
+  
+  The MCP text, the pages, the cursors and the reading rules do not change.
+- Updated dependencies [[`3ed5002`](https://github.com/skillcdn/skillcdn/commit/3ed5002a5cef7b0c77f0ec140f0e76c496a9a1f7), [`6c485d6`](https://github.com/skillcdn/skillcdn/commit/6c485d6eb174c1497935f4237d20bcd5564e437f), [`96ba77a`](https://github.com/skillcdn/skillcdn/commit/96ba77a4789fc2db3ebf2045bfa2c8733149d23d), [`a522479`](https://github.com/skillcdn/skillcdn/commit/a5224798ab49897a3bd57efce5df7a665d2bca69), [`e46a7d0`](https://github.com/skillcdn/skillcdn/commit/e46a7d0ec28288f5bc4897350872a243ec7dc1bf)]:
+  - @skillcdn/core@0.6.2
+  - @skillcdn/reader@0.6.2
+  - @skillcdn/serve@0.6.2
+  - @skillcdn/indexer@0.6.2
+  - @skillcdn/client@0.6.2
+  - @skillcdn/inference@0.6.2
+
 ## 0.6.1
 
 ### Patch Changes

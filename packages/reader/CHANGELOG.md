@@ -1,5 +1,17 @@
 # @skillcdn/reader
 
+## 0.6.2
+
+### Patch Changes
+
+- [`3ed5002`](https://github.com/skillcdn/skillcdn/commit/3ed5002a5cef7b0c77f0ec140f0e76c496a9a1f7) Thanks [@kdxlabs-erato](https://github.com/kdxlabs-erato)! - While the embedding of an index is under way, an entry it has not reached keeps the place its words give it ([ADR-0126](https://github.com/skillcdn/skillcdn/blob/main/docs/adr/0126-an-entry-still-to-be-embedded-keeps-the-place-its-words-give-it.md)).
+  
+  - **A search by words and meaning no longer puts an entry that has no vector yet behind everything both lists found.** Such an entry cannot be in the list by meaning, so its place among the words now counts for both lists: a skill or a document asked for by its name stands first before it is embedded, and a directory the command is still embedding answers with the documents that hold the words, not with the ones embedded first. An index whose embedding is complete is ranked as before, and so is an entry that is never embedded.
+  - `fuseRanks` of `@skillcdn/core` takes `unplaced`, which says that a list could not have held a key: that list then counts the key at the best place another list gave it.
+  - `IndexStore` takes an optional `unembedded`, which names the bodies the embedding has still to reach; the index in memory of `@skillcdn/reader` answers it, and a store that leaves it out is searched as before.
+- Updated dependencies [[`3ed5002`](https://github.com/skillcdn/skillcdn/commit/3ed5002a5cef7b0c77f0ec140f0e76c496a9a1f7), [`a522479`](https://github.com/skillcdn/skillcdn/commit/a5224798ab49897a3bd57efce5df7a665d2bca69)]:
+  - @skillcdn/core@0.6.2
+
 ## 0.6.1
 
 ### Patch Changes
