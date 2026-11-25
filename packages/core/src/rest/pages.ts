@@ -66,6 +66,7 @@ export function searchTermOfPath(pathname: string): string | undefined {
  * screen, with the search box, is always there.
  */
 export const LANDING_SECTIONS = [
+  "agents",
   "organizations",
   "showcase",
   "console",

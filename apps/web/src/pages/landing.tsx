@@ -5,6 +5,7 @@ import { api } from "../api/client.js";
 import { resourceKeys } from "../api/keys.js";
 import { useResource } from "../api/use-resource.js";
 import { AddressForm } from "../components/address-form.js";
+import { AgentsStage } from "../components/agents-stage.js";
 import { BrandSymbol } from "../components/brand.js";
 import { ConsoleDemo } from "../components/console-demo.js";
 import glass from "../components/glass.module.css";
@@ -311,6 +312,33 @@ export function LandingPage(props: { readonly origin: string }) {
           </div>
         </Container>
       </section>
+
+      {shows("agents") && (
+        <section id="agents" className={styles.agents}>
+          <Container className={cx(styles.agentsHead, glass.reveal)}>
+            <p className={styles.kicker}>{copy.agents.eyebrow}</p>
+            <h2>
+              {copy.agents.title}
+              <span>{copy.agents.titleAccent}</span>
+            </h2>
+            <p className={styles.sectionLead}>{copy.agents.lead}</p>
+          </Container>
+          <div className={styles.agentsStage}>
+            {/* Remounted per language, since what is typed and where lines break is measured. */}
+            <AgentsStage key={language} />
+          </div>
+          <Container className={cx(styles.actions, styles.centered)}>
+            <Link
+              className={cx(styles.primary, styles.large)}
+              href={CONSOLE_PACK_ADDRESS}
+              onClick={() => track("cta_click", { id: "agents_start" })}
+            >
+              {copy.agents.start}
+              <ArrowIcon />
+            </Link>
+          </Container>
+        </section>
+      )}
 
       {shows("organizations") && <OrganizationsStrip organizations={organizations} />}
 

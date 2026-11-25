@@ -1,0 +1,2223 @@
+/* The stage of the agent accounts on the front page (agents-stage.tsx). Everything on it is drawn
+   in units of its own, `--u`, a share of its width, so that one drawing stands at every width:
+   390 units across on a phone, the team over the conversation and the board, which share one
+   place there so that the whole of it is seen at once; 1200 across on a wide screen, the team
+   between the two. What moves is the score's (agents-score.ts): nothing here moves a part, and
+   the places here are the places at work. */
+.frame {
+  width: 100%;
+  container-type: inline-size;
+}
+
+.stage {
+  --u: calc(min(100cqw, 29rem) / 390);
+  --s-chat: 12;
+  --s-small: 10.5;
+  --s-name: 13.5;
+  --planet: calc(var(--u) * 88);
+  --slot: calc(var(--u) * 158);
+  width: min(100%, 29rem);
+  margin-inline: auto;
+}
+
+.scene {
+  position: relative;
+  height: calc(var(--u) * 498);
+  font-size: calc(var(--u) * var(--s-chat));
+  line-height: 1.4;
+  pointer-events: none;
+  user-select: none;
+  isolation: isolate;
+}
+
+/* Before the score is on it the stage is empty but for its ground: the parts of every moment
+   stand on it at once. */
+.stage:not([data-ready]) .scene [data-part] {
+  opacity: 0;
+}
+
+.scene i,
+.scene em {
+  font-style: normal;
+}
+
+/* A picture here may stand out past a box that has no width of its own. */
+.scene svg {
+  max-width: none;
+}
+
+/* Places the score reads and nobody sees. */
+.spot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  visibility: hidden;
+}
+
+.unit {
+  width: calc(var(--u) * 100);
+}
+
+/* How much of the window behind is seen over the one in front. */
+.deck {
+  height: calc(var(--u) * 26);
+}
+
+.spotHub {
+  top: calc(50% - var(--u) * 84);
+  left: calc(50% - var(--u) * 84);
+  width: calc(var(--u) * 168);
+  height: calc(var(--u) * 168);
+}
+
+.spotChat {
+  top: calc(var(--u) * 148);
+  left: calc(var(--u) * 92);
+  width: 0;
+}
+
+.spotBoard {
+  top: calc(var(--u) * 166);
+  left: calc(var(--u) * 236);
+  width: 0;
+}
+
+.lineup-0,
+.lineup-1,
+.lineup-2 {
+  top: calc(var(--u) * 66);
+}
+
+.lineup-0 {
+  left: calc(var(--u) * 74);
+}
+
+.lineup-1 {
+  left: calc(var(--u) * 195);
+}
+
+.lineup-2 {
+  left: calc(var(--u) * 316);
+}
+
+/* Where they stand while the work is told and split: the first before the two it tells. */
+.brief-0 {
+  top: calc(var(--u) * 46);
+  left: calc(var(--u) * 195);
+}
+
+.brief-1 {
+  top: calc(var(--u) * 72);
+  left: calc(var(--u) * 66);
+}
+
+.brief-2 {
+  top: calc(var(--u) * 72);
+  left: calc(var(--u) * 324);
+}
+
+/* The ground: the rings the team stands on, about the board, and the faint squares of an
+   avatar's ground strewn over the dark. They fade towards the edges of the stage. */
+.rings {
+  position: absolute;
+  inset: calc(var(--u) * -40);
+  z-index: -1;
+  overflow: hidden;
+  mask-image: radial-gradient(closest-side, #000 55%, transparent);
+}
+
+.rings::before {
+  content: "";
+  position: absolute;
+  inset: calc(var(--u) * 40);
+  background: var(--agents-squares);
+  opacity: 0.55;
+}
+
+.rings > i {
+  --ring: 232;
+  position: absolute;
+  top: calc(var(--u) * (262 + 40 - var(--ring)));
+  left: calc(var(--u) * (195 + 40 - var(--ring)));
+  width: calc(var(--u) * var(--ring) * 2);
+  height: calc(var(--u) * var(--ring) * 2);
+  border: 1px solid var(--agents-ring);
+  border-radius: var(--radius-full);
+}
+
+.rings > i:nth-child(2) {
+  --ring: 300;
+}
+
+.rings > i:nth-child(3) {
+  --ring: 380;
+}
+
+.rings > b {
+  display: none;
+}
+
+/* The planets: the tones of each ramp, what stands beside a body in a ramp of its own. */
+.shapes {
+  position: absolute;
+}
+
+.planet {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.tone-violet {
+  --t0: var(--agents-violet-0);
+  --t1: var(--agents-violet-1);
+  --t2: var(--agents-violet-2);
+  --t3: var(--agents-violet-3);
+  --t4: var(--agents-violet-4);
+  --a0: var(--agents-butter-0);
+  --a1: var(--agents-butter-1);
+}
+
+.tone-sunset {
+  --t0: var(--agents-sunset-0);
+  --t1: var(--agents-sunset-1);
+  --t2: var(--agents-sunset-2);
+  --t3: var(--agents-sunset-3);
+  --t4: var(--agents-sunset-4);
+  --a0: var(--agents-violet-1);
+  --a1: var(--agents-violet-2);
+}
+
+.tone-mint {
+  --t0: var(--agents-mint-0);
+  --t1: var(--agents-mint-1);
+  --t2: var(--agents-mint-2);
+  --t3: var(--agents-mint-3);
+  --t4: var(--agents-mint-4);
+  --a0: var(--agents-sunset-0);
+  --a1: var(--agents-sunset-1);
+}
+
+.tone-ocean {
+  --t0: var(--agents-ocean-0);
+  --t1: var(--agents-ocean-1);
+  --t2: var(--agents-ocean-2);
+  --t3: var(--agents-ocean-3);
+  --t4: var(--agents-ocean-4);
+  --a0: var(--agents-sunset-0);
+  --a1: var(--agents-sunset-1);
+}
+
+.tone-rose {
+  --t0: var(--agents-rose-0);
+  --t1: var(--agents-rose-1);
+  --t2: var(--agents-rose-2);
+  --t3: var(--agents-rose-3);
+  --t4: var(--agents-rose-4);
+  --a0: var(--agents-butter-0);
+  --a1: var(--agents-butter-1);
+}
+
+/* An avatar: a planet a little larger than its box on a graphite tile. */
+.tile {
+  --tile: 28;
+  position: relative;
+  display: block;
+  flex: none;
+  width: calc(var(--u) * var(--tile));
+  height: calc(var(--u) * var(--tile));
+  overflow: hidden;
+  border-radius: 24%;
+  background: var(--agents-tile);
+}
+
+.tile > .planet {
+  position: absolute;
+  top: -14%;
+  left: -14%;
+  width: 128%;
+  height: 128%;
+}
+
+.person {
+  display: grid;
+  flex: none;
+  place-items: center;
+  border-radius: 24%;
+  background: var(--color-accent-solid);
+  color: var(--color-accent-contrast);
+  font-weight: var(--weight-bold);
+  line-height: 1;
+}
+
+/* The places the team will have, before anybody is in them. */
+.seat {
+  position: absolute;
+  width: calc(var(--planet) * 0.62);
+  height: calc(var(--planet) * 0.62);
+  margin: calc(var(--planet) * -0.31);
+  border: calc(var(--u) * 1.5) dashed var(--color-border-lit);
+  border-radius: var(--radius-full);
+}
+
+.seat::before,
+.seat::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(var(--u) * 18);
+  height: calc(var(--u) * 1.5);
+  margin: calc(var(--u) * -0.75) calc(var(--u) * -9);
+  background: var(--color-border-lit);
+}
+
+.seat::after {
+  transform: rotate(90deg);
+}
+
+/* The form: the console's own sheet. */
+.hire,
+.ask {
+  border-radius: calc(var(--u) * 18);
+  background: var(--console-bg);
+  color: var(--console-text);
+  box-shadow: var(--agents-window-shadow);
+}
+
+.hire {
+  position: absolute;
+  top: calc(var(--u) * 186);
+  left: calc(var(--u) * 15);
+  display: grid;
+  gap: calc(var(--u) * 13);
+  width: calc(var(--u) * 360);
+  padding: calc(var(--u) * 18);
+}
+
+.hireHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: calc(var(--u) * 15);
+}
+
+.rollButton {
+  padding: calc(var(--u) * 4) calc(var(--u) * 10);
+  border: 1px solid var(--console-border);
+  border-radius: calc(var(--u) * 8);
+  background: var(--color-bg-invert);
+  font-size: calc(var(--u) * 11);
+}
+
+.faces {
+  --gap: calc(var(--u) * 9);
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--gap);
+}
+
+.face {
+  display: grid;
+  justify-items: center;
+  gap: calc(var(--u) * 7);
+  padding: calc(var(--u) * 10) 0 calc(var(--u) * 9);
+  border: 1px solid var(--console-border);
+  border-radius: calc(var(--u) * 13);
+  background: var(--console-sheet);
+}
+
+.strip {
+  width: calc(var(--u) * 56);
+  height: calc(var(--u) * 56);
+  overflow: hidden;
+  border-radius: calc(var(--u) * 13);
+  background: var(--agents-tile);
+}
+
+.faceTile {
+  --tile: 56;
+  border-radius: 0;
+}
+
+.persona {
+  display: grid;
+  justify-items: center;
+  line-height: 1.3;
+}
+
+.persona b {
+  font-size: calc(var(--u) * 12.5);
+}
+
+.persona span {
+  color: var(--console-text-faint);
+  font-size: calc(var(--u) * 10.5);
+}
+
+.pick {
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  width: calc((100% - var(--gap) * 3) / 4);
+  border: calc(var(--u) * 2) solid var(--console-accent-solid);
+  border-radius: calc(var(--u) * 13);
+  box-shadow: 0 0 0 calc(var(--u) * 4) var(--console-accent-subtle);
+  /* Over the tile's edge, under its face. */
+  mix-blend-mode: multiply;
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(var(--u) * 10);
+}
+
+.field > span {
+  color: var(--console-text-muted);
+  font-size: calc(var(--u) * 11);
+}
+
+.field > div {
+  position: relative;
+  height: calc(var(--u) * 36);
+  margin-top: calc(var(--u) * 4);
+  border: 1px solid var(--console-border);
+  border-radius: calc(var(--u) * 9);
+  background: var(--color-bg-invert);
+}
+
+.fieldValue {
+  position: absolute;
+  inset: 0 auto 0 calc(var(--u) * 11);
+  display: flex;
+  align-items: center;
+  font-size: calc(var(--u) * 13.5);
+  font-weight: var(--weight-medium);
+}
+
+.typed {
+  display: inline-block;
+  white-space: pre;
+}
+
+.addSlot,
+.answerSlot {
+  display: block;
+  justify-self: start;
+}
+
+.add,
+.answer {
+  position: relative;
+  display: block;
+  padding: calc(var(--u) * 9) calc(var(--u) * 16);
+  border-radius: calc(var(--u) * 9);
+  background: var(--console-accent-solid);
+  color: var(--color-accent-contrast);
+  font-size: calc(var(--u) * 13);
+  font-weight: var(--weight-medium);
+  line-height: 1.3;
+}
+
+/* The team. An agent is placed by the middle of its planet. */
+.fleet {
+  position: absolute;
+  inset: 0;
+}
+
+.agent {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+.agent-0 {
+  top: calc(var(--u) * 54);
+  left: calc(var(--u) * 70);
+}
+
+.agent-1 {
+  top: calc(var(--u) * 44);
+  left: calc(var(--u) * 195);
+}
+
+.agent-2 {
+  top: calc(var(--u) * 54);
+  left: calc(var(--u) * 320);
+}
+
+.body {
+  position: absolute;
+  top: calc(var(--planet) / -2);
+  left: calc(var(--planet) / -2);
+  width: var(--planet);
+  height: var(--planet);
+}
+
+.glow {
+  position: absolute;
+  inset: -12%;
+  border-radius: var(--radius-full);
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--t2) 62%, transparent),
+    transparent
+  );
+  opacity: 0.6;
+}
+
+.halo {
+  position: absolute;
+  inset: 12%;
+  border: calc(var(--u) * 2) solid var(--t1);
+  border-radius: var(--radius-full);
+}
+
+.need {
+  position: absolute;
+  inset: 12%;
+  border: calc(var(--u) * 2) solid var(--color-point);
+  border-radius: var(--radius-full);
+  box-shadow: var(--glow-point);
+}
+
+.float,
+.system {
+  position: absolute;
+  inset: 0;
+}
+
+.system {
+  transform-style: preserve-3d;
+}
+
+/* The moon that goes round a planet at work: an orbit leaned away from the eye, so that the moon
+   passes behind the planet and before it. */
+.orbit {
+  position: absolute;
+  inset: 4%;
+  transform: rotateZ(-16deg) rotateX(76deg);
+  transform-style: preserve-3d;
+}
+
+.track {
+  position: absolute;
+  inset: 0;
+  border: calc(var(--u) * 1.5) solid var(--agents-track);
+  border-radius: var(--radius-full);
+}
+
+.spin {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+}
+
+.moon {
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  width: 0;
+  height: 0;
+  transform-style: preserve-3d;
+}
+
+.moon::before {
+  content: "";
+  position: absolute;
+  width: calc(var(--u) * 11);
+  height: calc(var(--u) * 11);
+  margin: calc(var(--u) * -5.5);
+  border-radius: var(--radius-full);
+  background: linear-gradient(90deg, var(--a0) 50%, var(--a1) 50%);
+  transform: rotateX(-76deg);
+}
+
+.tag {
+  position: absolute;
+  top: calc(var(--u) * 33);
+  left: calc(var(--u) * -62);
+  display: grid;
+  justify-items: center;
+  gap: calc(var(--u) * 3);
+  width: calc(var(--u) * 124);
+}
+
+.who {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: calc(var(--u) * 5);
+  color: var(--color-text);
+  font-size: calc(var(--u) * var(--s-name));
+  white-space: nowrap;
+}
+
+.who span {
+  color: var(--color-text-muted);
+  font-size: 0.82em;
+}
+
+/* What it learned: a point of light for each time, beside the name. */
+.marks {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + var(--u) * 4);
+  display: flex;
+  gap: calc(var(--u) * 1);
+  margin-top: calc(var(--u) * -6);
+}
+
+.marks > i {
+  width: calc(var(--u) * 12);
+  height: calc(var(--u) * 12);
+}
+
+.sparkShape {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: var(--agents-butter-0);
+}
+
+.sparkPath {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+}
+
+.spark {
+  position: absolute;
+  width: calc(var(--u) * 30);
+  height: calc(var(--u) * 30);
+  margin: calc(var(--u) * -15);
+  filter: drop-shadow(0 0 calc(var(--u) * 6) var(--agents-butter-1));
+}
+
+.doing {
+  position: relative;
+  width: 100%;
+  height: calc(var(--u) * 20);
+}
+
+.doing > span {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 5);
+  width: fit-content;
+  margin-inline: auto;
+  padding-inline: calc(var(--u) * 9);
+  border: 1px solid var(--agents-pill-edge);
+  border-radius: var(--radius-full);
+  background: var(--agents-pill);
+  color: var(--color-text);
+  font-size: calc(var(--u) * var(--s-small));
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.doing i {
+  width: calc(var(--u) * 6);
+  height: calc(var(--u) * 6);
+  border-radius: var(--radius-full);
+  background: var(--dot, var(--color-success));
+}
+
+.waits {
+  --dot: var(--color-point);
+}
+
+/* The conversation. */
+.chat,
+.board {
+  position: absolute;
+  left: 0;
+  width: calc(var(--u) * 390);
+  border-radius: calc(var(--u) * 16);
+  box-shadow: var(--agents-window-shadow);
+}
+
+.chat {
+  top: var(--slot);
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr);
+  height: calc(var(--u) * 336);
+  overflow: hidden;
+  background: var(--agents-chat-bg);
+  color: var(--agents-chat-text);
+  transform-origin: 50% 0;
+}
+
+.rail {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--u) * 10);
+  width: calc(var(--u) * 38);
+  padding-top: calc(var(--u) * 10);
+  background: var(--agents-chat-rail);
+}
+
+.workspace {
+  display: grid;
+  place-items: center;
+  width: calc(var(--u) * 24);
+  height: calc(var(--u) * 24);
+  border-radius: 28%;
+  background: var(--color-bg-invert);
+}
+
+.workspaceSymbol {
+  width: 62%;
+  height: 62%;
+}
+
+.railDot {
+  width: calc(var(--u) * 18);
+  height: calc(var(--u) * 18);
+  border-radius: 34%;
+  background: var(--agents-chat-rail-dot);
+  opacity: 0.5;
+}
+
+.railOn {
+  opacity: 1;
+}
+
+.channel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  min-width: 0;
+}
+
+.chatHead {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 8);
+  padding: calc(var(--u) * 8) calc(var(--u) * 12);
+  border-bottom: 1px solid var(--agents-chat-border);
+  font-size: calc(var(--u) * 13);
+  white-space: nowrap;
+}
+
+.members {
+  display: flex;
+  margin-inline-start: auto;
+}
+
+.memberTile {
+  --tile: 20;
+  margin-inline-start: calc(var(--u) * -4);
+  box-shadow: 0 0 0 calc(var(--u) * 1.5) var(--agents-chat-bg);
+}
+
+.log {
+  position: relative;
+  overflow: hidden;
+}
+
+.message {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: calc(var(--u) * 9);
+  padding: calc(var(--u) * 7) calc(var(--u) * 12);
+}
+
+.messageTile {
+  --tile: 28;
+  width: calc(var(--u) * var(--tile));
+  height: calc(var(--u) * var(--tile));
+}
+
+.said {
+  min-width: 0;
+  line-height: 1.38;
+}
+
+.said b {
+  display: block;
+  font-size: 1em;
+  line-height: 1.2;
+}
+
+.said p {
+  text-wrap: pretty;
+}
+
+.mention {
+  border-radius: calc(var(--u) * 3);
+  background: var(--agents-chat-mention-bg);
+  color: var(--agents-chat-mention);
+}
+
+.joined {
+  align-items: center;
+  padding-block: calc(var(--u) * 5);
+}
+
+.joined .said {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: calc(var(--u) * 5);
+}
+
+.joined p {
+  color: var(--agents-chat-muted);
+  font-size: 0.92em;
+}
+
+.joined .messageTile {
+  --tile: 22;
+}
+
+.seen {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--u) * 4);
+  margin-top: calc(var(--u) * 4);
+  padding: calc(var(--u) * 1) calc(var(--u) * 8);
+  border: 1px solid var(--agents-chat-mention);
+  border-radius: var(--radius-full);
+  background: var(--agents-chat-mention-bg);
+  color: var(--agents-chat-mention);
+  font-size: calc(var(--u) * 11);
+  font-weight: var(--weight-medium);
+}
+
+.seen svg {
+  width: calc(var(--u) * 11);
+  height: calc(var(--u) * 11);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.candy {
+  display: block;
+  width: 100%;
+}
+
+/* The result, as the conversation shows it: the page and the ad. */
+.results {
+  display: flex;
+  gap: calc(var(--u) * 8);
+  margin-top: calc(var(--u) * 6);
+}
+
+.resultPage,
+.resultAd {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  width: calc(var(--u) * 148);
+  height: calc(var(--u) * 92);
+  border-radius: calc(var(--u) * 9);
+  background: var(--agents-fruit-ground);
+}
+
+.resultAd {
+  width: calc(var(--u) * 62);
+  background: var(--agents-candy-ground);
+}
+
+.resultBar {
+  position: absolute;
+  inset: 0 0 auto;
+  height: calc(var(--u) * 11);
+  background: var(--color-bg-invert);
+}
+
+.resultPage > span,
+.resultAd > span {
+  position: absolute;
+  bottom: calc(var(--u) * 5);
+  left: calc(var(--u) * 6);
+  padding: calc(var(--u) * 1) calc(var(--u) * 6);
+  border-radius: var(--radius-full);
+  background: var(--agents-candy-line);
+  color: var(--color-accent-contrast);
+  font-size: calc(var(--u) * 9);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+}
+
+.resultAd > span {
+  right: calc(var(--u) * 4);
+  left: calc(var(--u) * 4);
+  padding-inline: 0;
+  text-align: center;
+}
+
+.resultPage .candy {
+  position: absolute;
+  top: 8%;
+  right: 4%;
+  left: auto;
+  width: 78%;
+}
+
+.resultAd .candy {
+  position: absolute;
+  top: 2%;
+  left: -40%;
+  width: 180%;
+}
+
+.playMark {
+  position: absolute;
+  top: 30%;
+  left: calc(50% - var(--u) * 11);
+  width: calc(var(--u) * 22);
+  height: calc(var(--u) * 22);
+  fill: var(--agents-candy-line);
+}
+
+.playMark path {
+  fill: var(--color-accent-contrast);
+}
+
+.stick {
+  fill: var(--agents-candy-stick);
+}
+
+.sweet {
+  fill: var(--agents-candy);
+}
+
+.swirl,
+.shine {
+  fill: none;
+  stroke: var(--agents-candy-swirl);
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.shine {
+  stroke: var(--agents-candy-shine);
+  stroke-width: 2.6;
+}
+
+.berry {
+  fill: var(--agents-berry);
+}
+
+.leaf {
+  fill: var(--agents-leaf);
+}
+
+.composer {
+  --box: 34;
+  position: relative;
+  height: calc(var(--u) * var(--box));
+  margin: 0 calc(var(--u) * 12);
+  line-height: 1.38;
+}
+
+/* The box is drawn in two, its top and its foot, the sides of the one over the other's, so that it
+   grows by a line with its top going up one. */
+.boxTop,
+.boxFoot {
+  --corner: calc(var(--u) * 8);
+  --seam: calc(var(--u) * 8.5);
+  position: absolute;
+  inset: 0 0 var(--seam);
+  border: 1px solid var(--agents-chat-idle);
+  border-bottom: 0;
+  border-radius: var(--corner) var(--corner) 0 0;
+  background: var(--agents-chat-bg);
+}
+
+.boxFoot {
+  inset: var(--seam) 0 0;
+  border-top: 0;
+  border-bottom: 1px solid var(--agents-chat-idle);
+  border-radius: 0 0 var(--corner) var(--corner);
+}
+
+.placeholder,
+.draft {
+  position: absolute;
+  top: calc((var(--u) * var(--box) - 1.38em) / 2);
+  right: calc(var(--u) * 38);
+  left: calc(var(--u) * 11);
+}
+
+.placeholder {
+  overflow: hidden;
+  color: var(--agents-chat-muted);
+  white-space: nowrap;
+}
+
+.draft .mention {
+  background: none;
+}
+
+.send {
+  position: absolute;
+  right: calc(var(--u) * 5);
+  bottom: calc(var(--u) * 5);
+  display: grid;
+  place-items: center;
+  width: calc(var(--u) * 26);
+  height: calc(var(--u) * 24);
+  overflow: hidden;
+  border-radius: calc(var(--u) * 6);
+  background: var(--agents-chat-idle);
+}
+
+.send i {
+  position: absolute;
+  inset: 0;
+  background: var(--agents-chat-send);
+}
+
+.send svg {
+  position: relative;
+  width: calc(var(--u) * 13);
+  height: calc(var(--u) * 13);
+  fill: var(--color-accent-contrast);
+}
+
+.typing {
+  position: relative;
+  height: calc(var(--u) * 19);
+  margin-inline: calc(var(--u) * 14);
+  color: var(--agents-chat-muted);
+  font-size: calc(var(--u) * var(--s-small));
+}
+
+.typing span {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 3);
+}
+
+.typing i {
+  width: calc(var(--u) * 3.5);
+  height: calc(var(--u) * 3.5);
+  border-radius: var(--radius-full);
+  background: currentColor;
+}
+
+.typing i:nth-child(3) {
+  margin-inline-end: calc(var(--u) * 3);
+}
+
+/* The board: as the console's own window under it (console-demo.module.css). It clips nothing,
+   since a card comes to it from outside. */
+.board {
+  top: var(--slot);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: calc(var(--u) * 336);
+  background: var(--console-bg);
+  color: var(--console-text);
+}
+
+.boardHead {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 8);
+  height: calc(var(--u) * 36);
+  padding-inline: calc(var(--u) * 13);
+  border-bottom: 1px solid var(--console-border);
+  border-radius: calc(var(--u) * 16) calc(var(--u) * 16) 0 0;
+  background: var(--color-bg-invert);
+  font-size: calc(var(--u) * 12);
+  white-space: nowrap;
+}
+
+.boardSymbol {
+  flex: none;
+  width: calc(var(--u) * 17);
+  height: calc(var(--u) * 17);
+}
+
+.tabs {
+  display: flex;
+  gap: calc(var(--u) * 2);
+  margin-inline-start: calc(var(--u) * 5);
+}
+
+.tab {
+  position: relative;
+  padding: calc(var(--u) * 3) calc(var(--u) * 8);
+  border-radius: calc(var(--u) * 8);
+  color: var(--console-text-muted);
+  font-size: calc(var(--u) * 11);
+}
+
+.tabOn {
+  background: var(--console-accent-subtle);
+  color: var(--console-accent);
+  font-weight: var(--weight-medium);
+}
+
+/* The decision that waits: on the corner of its tab. */
+.waiting {
+  position: absolute;
+  top: calc(var(--u) * -3);
+  right: calc(var(--u) * -4);
+  display: grid;
+  place-items: center;
+  width: calc(var(--u) * 15);
+  height: calc(var(--u) * 15);
+  border-radius: var(--radius-full);
+  background: var(--console-point-subtle);
+  color: var(--console-point);
+  font-size: calc(var(--u) * 10);
+  font-weight: var(--weight-bold);
+  line-height: 1;
+}
+
+.live {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--u) * 5);
+  margin-inline-start: auto;
+  color: var(--console-success);
+  font-size: calc(var(--u) * 10.5);
+}
+
+.live i {
+  width: calc(var(--u) * 7);
+  height: calc(var(--u) * 7);
+  border-radius: var(--radius-full);
+  background: var(--console-live);
+}
+
+.boardField {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: calc(var(--u) * 8);
+  min-height: 0;
+  padding: calc(var(--u) * 8);
+  border-radius: 0 0 calc(var(--u) * 16) calc(var(--u) * 16);
+  background: var(--console-field);
+}
+
+.columns {
+  --gap: calc(var(--u) * 6);
+  --head: 28;
+  --card: 61;
+  --card-gap: 4;
+  --card-pad: 4;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--gap);
+}
+
+.column {
+  border-radius: calc(var(--u) * 13);
+  background: var(--console-glass);
+  box-shadow: inset 0 1px 0 var(--console-glass-edge);
+}
+
+.columnHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: calc(var(--u) * var(--head));
+  padding-inline: calc(var(--u) * 10);
+  border-bottom: 1px solid var(--console-border);
+  font-size: calc(var(--u) * 11.5);
+  font-weight: var(--weight-bold);
+  white-space: nowrap;
+}
+
+.column-doing .columnHead,
+.column-review .columnHead {
+  color: var(--console-accent);
+}
+
+.column-done .columnHead {
+  color: var(--console-success);
+}
+
+.count {
+  position: relative;
+  width: calc(var(--u) * 20);
+  height: calc(var(--u) * 17);
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--console-text-muted) 12%, transparent);
+  color: var(--console-text-muted);
+  font-size: calc(var(--u) * 10.5);
+}
+
+.count i {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+}
+
+.cardPlace {
+  position: absolute;
+  left: calc(var(--u) * var(--card-pad));
+  width: calc((100% - var(--gap) * 2) / 3 - var(--u) * var(--card-pad) * 2);
+  height: calc(var(--u) * var(--card));
+}
+
+.place-0 {
+  top: calc(var(--u) * (var(--head) + var(--card-pad)));
+}
+
+.place-1 {
+  top: calc(var(--u) * (var(--head) + var(--card-pad) + var(--card) + var(--card-gap)));
+}
+
+.place-2 {
+  top: calc(var(--u) * (var(--head) + var(--card-pad) + (var(--card) + var(--card-gap)) * 2));
+}
+
+.cardPlace > div,
+.cardPlace > div > div {
+  height: 100%;
+}
+
+.card {
+  position: relative;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr);
+  gap: calc(var(--u) * 4);
+  height: 100%;
+  padding: calc(var(--u) * 5) calc(var(--u) * 7) calc(var(--u) * 5);
+  border: 1px solid var(--console-border);
+  border-radius: calc(var(--u) * 9);
+  background: var(--console-sheet-hover);
+  box-shadow: var(--console-card-glow);
+}
+
+.number {
+  display: none;
+  color: var(--console-text-faint);
+  font-family: var(--font-mono);
+  font-size: calc(var(--u) * 10);
+  line-height: 1;
+}
+
+.cardTitle {
+  font-size: calc(var(--u) * 10);
+  font-weight: var(--weight-medium);
+  line-height: 1.25;
+  text-wrap: pretty;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 3);
+  height: calc(var(--u) * 16);
+}
+
+.badge {
+  padding: calc(var(--u) * 1.5) calc(var(--u) * 6);
+  border-radius: var(--radius-full);
+  background: var(--console-neutral);
+  color: var(--console-neutral-text);
+  font-size: calc(var(--u) * 8.5);
+  font-weight: var(--weight-medium);
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.flag,
+.askKind {
+  background: var(--console-point-subtle);
+  color: var(--console-point);
+}
+
+/* The decision a card waits for: on its corner, in place of nothing. */
+.flag {
+  position: absolute;
+  top: calc(var(--u) * -6);
+  right: calc(var(--u) * 8);
+  box-shadow: var(--console-card-shadow);
+}
+
+/* A job done the way another one taught. */
+.known {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--u) * 2);
+  padding-inline: calc(var(--u) * 4) calc(var(--u) * 6);
+  background: var(--console-accent-subtle);
+  color: var(--console-accent);
+}
+
+.known .sparkShape {
+  width: calc(var(--u) * 9);
+  height: calc(var(--u) * 9);
+  fill: currentColor;
+}
+
+.category-marketing {
+  background: var(--console-category-marketing);
+  color: var(--console-category-marketing-text);
+}
+
+.category-design {
+  background: var(--console-category-design);
+  color: var(--console-category-design-text);
+}
+
+.category-engineering {
+  background: var(--console-category-engineering);
+  color: var(--console-category-engineering-text);
+}
+
+.worker {
+  display: flex;
+  margin-inline-start: auto;
+}
+
+.workerTile {
+  --tile: 16;
+}
+
+.workerTile + .workerTile {
+  margin-inline-start: calc(var(--u) * -6);
+  box-shadow: 0 0 0 calc(var(--u) * 1) var(--console-sheet-hover);
+}
+
+.progress {
+  overflow: hidden;
+  height: calc(var(--u) * 3);
+  border-radius: var(--radius-full);
+  background: var(--console-neutral);
+}
+
+.progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--console-accent-solid);
+  transform-origin: 0 50%;
+}
+
+.check {
+  position: absolute;
+  top: calc(var(--u) * -6);
+  right: calc(var(--u) * -5);
+  display: grid;
+  place-items: center;
+  width: calc(var(--u) * 18);
+  height: calc(var(--u) * 18);
+  border-radius: var(--radius-full);
+  background: var(--console-live);
+}
+
+.check svg,
+.answered svg {
+  width: calc(var(--u) * 11);
+  height: calc(var(--u) * 11);
+  fill: none;
+  stroke: var(--color-accent-contrast);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* What is thrown up when the work is done: the squares of an avatar's ground. */
+.squares {
+  position: absolute;
+  top: 44%;
+  left: calc(100% / 6 * 5);
+  width: 0;
+  height: 0;
+}
+
+.square {
+  position: absolute;
+  width: calc(var(--u) * 9);
+  height: calc(var(--u) * 9);
+  margin: calc(var(--u) * -4.5);
+  background: var(--agents-square-0);
+}
+
+.square:nth-child(5n + 2) {
+  background: var(--agents-square-1);
+}
+
+.square:nth-child(5n + 3) {
+  background: var(--agents-square-2);
+}
+
+.square:nth-child(5n + 4) {
+  background: var(--agents-square-3);
+}
+
+.square:nth-child(5n) {
+  background: var(--agents-square-4);
+}
+
+.feed {
+  --line: 21;
+  --shown: 2;
+  padding: calc(var(--u) * 6) calc(var(--u) * 10);
+  border-radius: calc(var(--u) * 12);
+  background: var(--console-glass);
+}
+
+.feed > strong {
+  display: none;
+  font-size: calc(var(--u) * 12);
+  line-height: calc(var(--u) * 20);
+}
+
+.lines {
+  height: calc(var(--u) * var(--line) * var(--shown));
+  overflow: hidden;
+}
+
+.line {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 6);
+  height: calc(var(--u) * var(--line));
+  color: var(--console-text-muted);
+  font-size: calc(var(--u) * 10.5);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.line b {
+  color: var(--console-text);
+}
+
+.lineTile {
+  --tile: 15;
+  width: calc(var(--u) * var(--tile));
+  height: calc(var(--u) * var(--tile));
+  font-size: calc(var(--u) * 8.5);
+}
+
+/* The lines along which the first tells the others: laid out by the score, as long as a comet. */
+.link {
+  position: absolute;
+  top: calc(var(--u) * -1);
+  left: 0;
+  width: calc(var(--u) * 100);
+  height: calc(var(--u) * 2);
+  background: var(--agents-link);
+  transform-origin: 0 50%;
+}
+
+/* A light on its way between two of them: its head leads, and where it goes is the score's. */
+.comet {
+  position: absolute;
+  top: calc(var(--u) * -1.5);
+  left: calc(var(--u) * -90);
+  width: calc(var(--u) * 90);
+  height: calc(var(--u) * 3);
+  border-radius: var(--radius-full);
+  background: var(--agents-comet);
+  transform-origin: 100% 50%;
+}
+
+.comet::after {
+  content: "";
+  position: absolute;
+  top: calc(var(--u) * -1.5);
+  right: calc(var(--u) * -3);
+  width: calc(var(--u) * 6);
+  height: calc(var(--u) * 6);
+  border-radius: var(--radius-full);
+  background: var(--agents-comet-tip);
+  box-shadow: var(--agents-comet-head);
+}
+
+/* The decision, over the rest of the stage, which steps back. */
+.veil {
+  position: absolute;
+  inset: calc(var(--u) * -80);
+  background: var(--agents-veil);
+  mask-image:
+    linear-gradient(
+      90deg,
+      transparent,
+      #000 calc(var(--u) * 78),
+      #000 calc(100% - var(--u) * 78),
+      transparent
+    ),
+    linear-gradient(
+      transparent,
+      #000 calc(var(--u) * 78),
+      #000 calc(100% - var(--u) * 78),
+      transparent
+    );
+  mask-composite: intersect;
+}
+
+.askPlace {
+  position: absolute;
+  top: calc(var(--u) * 112);
+  left: calc(var(--u) * 22);
+  width: calc(var(--u) * 346);
+}
+
+.ask {
+  position: relative;
+  display: grid;
+  gap: calc(var(--u) * 11);
+  padding: calc(var(--u) * 18);
+  box-shadow: var(--agents-ask-shadow);
+}
+
+.askHead {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 7);
+  font-size: calc(var(--u) * 13);
+}
+
+.askTile {
+  --tile: 26;
+}
+
+.ai {
+  padding: 0 calc(var(--u) * 4);
+  border: 1px solid var(--console-border);
+  border-radius: calc(var(--u) * 4);
+  color: var(--console-text-muted);
+  font-size: calc(var(--u) * 9.5);
+  font-weight: var(--weight-bold);
+}
+
+.askKind {
+  margin-inline-start: auto;
+  font-size: calc(var(--u) * 10.5);
+}
+
+.ask > strong {
+  font-size: calc(var(--u) * 16);
+  line-height: 1.3;
+}
+
+.options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(var(--u) * 10);
+}
+
+.option {
+  position: relative;
+  padding: calc(var(--u) * 7) calc(var(--u) * 7) calc(var(--u) * 9);
+  border: 1px solid var(--console-border);
+  border-radius: calc(var(--u) * 12);
+  background: var(--color-bg-invert);
+}
+
+.picture {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  height: calc(var(--u) * 92);
+  border-radius: calc(var(--u) * 8);
+  background: var(--agents-candy-ground);
+}
+
+.pictureFruit {
+  background: var(--agents-fruit-ground);
+}
+
+.pictureLine {
+  position: absolute;
+  bottom: calc(var(--u) * 14);
+  left: calc(var(--u) * 9);
+  width: 34%;
+  height: calc(var(--u) * 5);
+  border-radius: var(--radius-full);
+  background: var(--agents-candy-line);
+}
+
+.pictureLine + .pictureLine {
+  bottom: calc(var(--u) * 6);
+  width: 22%;
+  opacity: 0.5;
+}
+
+.optionName {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 6);
+  margin-top: calc(var(--u) * 8);
+  font-size: calc(var(--u) * 12);
+  font-weight: var(--weight-medium);
+  line-height: 1.2;
+}
+
+.radio {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: calc(var(--u) * 14);
+  height: calc(var(--u) * 14);
+  border: 1.5px solid var(--console-text-faint);
+  border-radius: var(--radius-full);
+}
+
+.radio i {
+  width: calc(var(--u) * 8);
+  height: calc(var(--u) * 8);
+  border-radius: var(--radius-full);
+  background: var(--console-accent-solid);
+}
+
+.over,
+.chosen {
+  position: absolute;
+  inset: -1px;
+  border: calc(var(--u) * 2) solid var(--console-accent-solid);
+  border-radius: inherit;
+}
+
+.over {
+  border-color: var(--console-accent-subtle);
+}
+
+.answer {
+  overflow: hidden;
+  background: var(--console-neutral);
+  color: var(--color-accent-contrast);
+}
+
+.answer i {
+  position: absolute;
+  inset: 0;
+  background: var(--console-accent-solid);
+}
+
+.answer span {
+  position: relative;
+}
+
+.answered {
+  position: absolute;
+  right: calc(var(--u) * 18);
+  bottom: calc(var(--u) * 22);
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--u) * 6);
+  color: var(--console-success);
+  font-size: calc(var(--u) * 13);
+  font-weight: var(--weight-bold);
+}
+
+.answered svg {
+  box-sizing: content-box;
+  padding: calc(var(--u) * 3);
+  border-radius: var(--radius-full);
+  background: var(--console-live);
+}
+
+/* The end of a pass: the team about its mark. */
+.hub {
+  position: absolute;
+  top: calc(50% - var(--u) * 90);
+  left: calc(50% - var(--u) * 90);
+  display: grid;
+  place-items: center;
+  width: calc(var(--u) * 180);
+  height: calc(var(--u) * 180);
+  border-radius: var(--radius-full);
+  background: var(--agents-hub-glow);
+}
+
+.hubSymbol {
+  width: calc(var(--u) * 62);
+  height: calc(var(--u) * 62);
+}
+
+/* The hand, the pointer of the guides (connect-preview.module.css): its tip is where it is. */
+.hand {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+}
+
+.hand svg {
+  position: absolute;
+  top: calc(var(--u) * -3);
+  left: calc(var(--u) * -3);
+  width: calc(var(--u) * 24);
+  height: calc(var(--u) * 28);
+  overflow: visible;
+  filter: drop-shadow(var(--preview-pointer-shadow));
+}
+
+.hand path {
+  fill: var(--color-accent-contrast);
+  stroke: var(--client-terminal-bg);
+  stroke-width: 1.3;
+  stroke-linejoin: round;
+}
+
+.hand i {
+  position: absolute;
+  width: calc(var(--u) * 44);
+  height: calc(var(--u) * 44);
+  margin: calc(var(--u) * -22);
+  border: calc(var(--u) * 2.5) solid var(--color-accent);
+  border-radius: var(--radius-full);
+}
+
+/* A wide screen: the conversation and the board at the two sides, the team between them. */
+@container (min-width: 54rem) {
+  .stage {
+    --u: calc(min(100cqw, 75rem) / 1200);
+    --s-chat: 14;
+    --s-small: 12;
+    --s-name: 16;
+    --planet: calc(var(--u) * 156);
+    --slot: calc(var(--u) * 40);
+    width: min(100%, 75rem);
+  }
+
+  .scene {
+    height: calc(var(--u) * 640);
+  }
+
+  .deck {
+    height: 0;
+  }
+
+  .spotHub {
+    top: calc(50% - var(--u) * 132);
+    left: calc(50% - var(--u) * 132);
+    width: calc(var(--u) * 264);
+    height: calc(var(--u) * 264);
+  }
+
+  .spotChat {
+    top: calc(var(--u) * 320);
+    left: calc(var(--u) * 384);
+  }
+
+  .spotBoard {
+    top: calc(var(--u) * 320);
+    left: calc(var(--u) * 712);
+  }
+
+  .lineup-0,
+  .lineup-1,
+  .lineup-2 {
+    top: calc(var(--u) * 286);
+  }
+
+  .lineup-0 {
+    left: calc(var(--u) * 650);
+  }
+
+  .lineup-1 {
+    left: calc(var(--u) * 855);
+  }
+
+  .lineup-2 {
+    left: calc(var(--u) * 1060);
+  }
+
+  .brief-0 {
+    top: calc(var(--u) * 300);
+    left: calc(var(--u) * 600);
+  }
+
+  .brief-1 {
+    top: calc(var(--u) * 168);
+    left: calc(var(--u) * 960);
+  }
+
+  .brief-2 {
+    top: calc(var(--u) * 432);
+    left: calc(var(--u) * 960);
+  }
+
+  .rings > i {
+    --ring: 452;
+    top: calc(var(--u) * (300 + 40 - var(--ring)));
+    left: calc(var(--u) * (954 + 40 - var(--ring)));
+  }
+
+  .rings > i:nth-child(2) {
+    --ring: 580;
+  }
+
+  .rings > i:nth-child(3) {
+    --ring: 720;
+  }
+
+  .hire {
+    top: calc(var(--u) * 112);
+    left: calc(var(--u) * 40);
+    gap: calc(var(--u) * 18);
+    width: calc(var(--u) * 460);
+    padding: calc(var(--u) * 24);
+  }
+
+  .hireHead {
+    font-size: calc(var(--u) * 19);
+  }
+
+  .rollButton {
+    font-size: calc(var(--u) * 12.5);
+  }
+
+  .faces {
+    --gap: calc(var(--u) * 12);
+  }
+
+  .face {
+    gap: calc(var(--u) * 9);
+    padding: calc(var(--u) * 13) 0 calc(var(--u) * 12);
+    border-radius: calc(var(--u) * 16);
+  }
+
+  .strip {
+    width: calc(var(--u) * 70);
+    height: calc(var(--u) * 70);
+    border-radius: calc(var(--u) * 16);
+  }
+
+  .faceTile {
+    --tile: 70;
+  }
+
+  .persona b {
+    font-size: calc(var(--u) * 14.5);
+  }
+
+  .persona span {
+    font-size: calc(var(--u) * 12);
+  }
+
+  .pick {
+    border-radius: calc(var(--u) * 16);
+  }
+
+  .field > span {
+    font-size: calc(var(--u) * 12.5);
+  }
+
+  .field > div {
+    height: calc(var(--u) * 42);
+  }
+
+  .fieldValue {
+    font-size: calc(var(--u) * 15.5);
+  }
+
+  .add,
+  .answer {
+    padding: calc(var(--u) * 11) calc(var(--u) * 20);
+    font-size: calc(var(--u) * 14.5);
+  }
+
+  .agent-0 {
+    top: calc(var(--u) * 106);
+    left: calc(var(--u) * 552);
+  }
+
+  .agent-1 {
+    top: calc(var(--u) * 300);
+    left: calc(var(--u) * 536);
+  }
+
+  .agent-2 {
+    top: calc(var(--u) * 494);
+    left: calc(var(--u) * 552);
+  }
+
+  .moon::before {
+    width: calc(var(--u) * 15);
+    height: calc(var(--u) * 15);
+    margin: calc(var(--u) * -7.5);
+  }
+
+  .tag {
+    top: calc(var(--u) * 56);
+    left: calc(var(--u) * -100);
+    gap: calc(var(--u) * 5);
+    width: calc(var(--u) * 200);
+  }
+
+  .marks {
+    left: calc(100% + var(--u) * 6);
+    gap: calc(var(--u) * 2);
+    margin-top: calc(var(--u) * -8);
+  }
+
+  .marks > i {
+    width: calc(var(--u) * 16);
+    height: calc(var(--u) * 16);
+  }
+
+  .spark {
+    width: calc(var(--u) * 40);
+    height: calc(var(--u) * 40);
+    margin: calc(var(--u) * -20);
+  }
+
+  .doing {
+    height: calc(var(--u) * 26);
+  }
+
+  .doing > span {
+    padding-inline: calc(var(--u) * 12);
+  }
+
+  .doing i {
+    width: calc(var(--u) * 7);
+    height: calc(var(--u) * 7);
+  }
+
+  .chat {
+    width: calc(var(--u) * 384);
+    height: calc(var(--u) * 560);
+  }
+
+  .rail {
+    gap: calc(var(--u) * 14);
+    width: calc(var(--u) * 48);
+    padding-top: calc(var(--u) * 14);
+  }
+
+  .workspace {
+    width: calc(var(--u) * 30);
+    height: calc(var(--u) * 30);
+  }
+
+  .railDot {
+    width: calc(var(--u) * 22);
+    height: calc(var(--u) * 22);
+  }
+
+  .chatHead {
+    padding: calc(var(--u) * 12) calc(var(--u) * 14);
+    font-size: calc(var(--u) * 15.5);
+  }
+
+  .memberTile {
+    --tile: 24;
+  }
+
+  .message {
+    gap: calc(var(--u) * 10);
+    padding: calc(var(--u) * 8) calc(var(--u) * 14);
+  }
+
+  .messageTile {
+    --tile: 36;
+  }
+
+  .joined .messageTile {
+    --tile: 26;
+  }
+
+  .resultPage {
+    width: calc(var(--u) * 168);
+    height: calc(var(--u) * 118);
+  }
+
+  .resultAd {
+    width: calc(var(--u) * 78);
+    height: calc(var(--u) * 118);
+  }
+
+  .composer {
+    --box: 42;
+    margin-inline: calc(var(--u) * 14);
+  }
+
+  .placeholder,
+  .draft {
+    right: calc(var(--u) * 46);
+    left: calc(var(--u) * 13);
+  }
+
+  .send {
+    right: calc(var(--u) * 7);
+    bottom: calc(var(--u) * 7);
+    width: calc(var(--u) * 30);
+    height: calc(var(--u) * 28);
+  }
+
+  .typing {
+    height: calc(var(--u) * 24);
+  }
+
+  .board {
+    left: calc(var(--u) * 704);
+    width: calc(var(--u) * 496);
+    height: calc(var(--u) * 560);
+  }
+
+  .boardHead {
+    gap: calc(var(--u) * 10);
+    height: calc(var(--u) * 48);
+    padding-inline: calc(var(--u) * 16);
+    font-size: calc(var(--u) * 14);
+  }
+
+  .boardSymbol {
+    width: calc(var(--u) * 22);
+    height: calc(var(--u) * 22);
+  }
+
+  .tab {
+    padding: calc(var(--u) * 4) calc(var(--u) * 10);
+    font-size: calc(var(--u) * 13);
+  }
+
+  .waiting {
+    width: calc(var(--u) * 18);
+    height: calc(var(--u) * 18);
+    font-size: calc(var(--u) * 11);
+  }
+
+  .live {
+    font-size: calc(var(--u) * 12.5);
+  }
+
+  .boardField {
+    gap: calc(var(--u) * 12);
+    padding: calc(var(--u) * 14);
+  }
+
+  .columns {
+    --gap: calc(var(--u) * 10);
+    --head: 38;
+    --card: 98;
+    --card-gap: 8;
+    --card-pad: 8;
+  }
+
+  .columnHead {
+    padding-inline: calc(var(--u) * 13);
+    font-size: calc(var(--u) * 13.5);
+  }
+
+  .count {
+    width: calc(var(--u) * 26);
+    height: calc(var(--u) * 21);
+    font-size: calc(var(--u) * 12);
+  }
+
+  .card {
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    padding: calc(var(--u) * 9) calc(var(--u) * 11);
+    border-radius: calc(var(--u) * 12);
+  }
+
+  .number {
+    display: block;
+    font-size: calc(var(--u) * 11);
+  }
+
+  .cardTitle {
+    font-size: calc(var(--u) * 13);
+    line-height: 1.28;
+  }
+
+  .meta {
+    gap: calc(var(--u) * 4);
+    height: calc(var(--u) * 20);
+  }
+
+  .badge {
+    padding: calc(var(--u) * 2) calc(var(--u) * 7);
+    font-size: calc(var(--u) * 10.5);
+  }
+
+  .known {
+    gap: calc(var(--u) * 3);
+    padding-inline: calc(var(--u) * 5) calc(var(--u) * 8);
+  }
+
+  .known .sparkShape {
+    width: calc(var(--u) * 11);
+    height: calc(var(--u) * 11);
+  }
+
+  .workerTile {
+    --tile: 22;
+  }
+
+  .workerTile + .workerTile {
+    margin-inline-start: calc(var(--u) * -12);
+  }
+
+  .progress {
+    height: calc(var(--u) * 4);
+  }
+
+  .check {
+    width: calc(var(--u) * 22);
+    height: calc(var(--u) * 22);
+  }
+
+  .feed {
+    --line: 26;
+    --shown: 3;
+    padding: calc(var(--u) * 10) calc(var(--u) * 14);
+  }
+
+  .feed > strong {
+    display: block;
+  }
+
+  .line {
+    gap: calc(var(--u) * 8);
+    font-size: calc(var(--u) * 13);
+  }
+
+  .lineTile {
+    --tile: 19;
+    font-size: calc(var(--u) * 10);
+  }
+
+  .comet {
+    left: calc(var(--u) * -140);
+    width: calc(var(--u) * 140);
+  }
+
+  .askPlace {
+    top: calc(var(--u) * 138);
+    left: calc(var(--u) * 390);
+    width: calc(var(--u) * 420);
+  }
+
+  .ask {
+    gap: calc(var(--u) * 15);
+    padding: calc(var(--u) * 24);
+  }
+
+  .askHead {
+    font-size: calc(var(--u) * 15);
+  }
+
+  .askTile {
+    --tile: 32;
+  }
+
+  .askKind {
+    font-size: calc(var(--u) * 12);
+  }
+
+  .ask > strong {
+    font-size: calc(var(--u) * 20);
+  }
+
+  .picture {
+    height: calc(var(--u) * 116);
+  }
+
+  .optionName {
+    font-size: calc(var(--u) * 14);
+  }
+
+  .answered {
+    right: calc(var(--u) * 24);
+    bottom: calc(var(--u) * 34);
+    font-size: calc(var(--u) * 15);
+  }
+
+  .hub {
+    top: calc(50% - var(--u) * 130);
+    left: calc(50% - var(--u) * 130);
+    width: calc(var(--u) * 260);
+    height: calc(var(--u) * 260);
+  }
+
+  .hubSymbol {
+    width: calc(var(--u) * 92);
+    height: calc(var(--u) * 92);
+  }
+
+  .hand svg {
+    top: calc(var(--u) * -3.5);
+    left: calc(var(--u) * -3.5);
+    width: calc(var(--u) * 28);
+    height: calc(var(--u) * 32.7);
+  }
+}
+
+/* What goes round and round by itself, with the score and only while it plays. */
+@media (prefers-reduced-motion: no-preference) {
+  .float {
+    animation: float 5.2s ease-in-out infinite alternate;
+  }
+
+  .agent-1 .float {
+    animation-duration: 6.1s;
+    animation-delay: -2s;
+  }
+
+  .agent-2 .float {
+    animation-duration: 4.7s;
+    animation-delay: -3.4s;
+  }
+
+  .spin {
+    animation: turn 2.6s linear infinite;
+  }
+
+  .moon {
+    animation: turn 2.6s linear infinite reverse;
+  }
+
+  .agent-1 .spin,
+  .agent-1 .moon {
+    animation-duration: 3.1s;
+  }
+
+  .agent-2 .spin,
+  .agent-2 .moon {
+    animation-duration: 2.2s;
+  }
+
+  .stage:not([data-play="on"]) :is(.float, .spin, .moon) {
+    animation-play-state: paused;
+  }
+}
+
+@keyframes float {
+  from {
+    transform: translateY(calc(var(--u) * -4));
+  }
+
+  to {
+    transform: translateY(calc(var(--u) * 4));
+  }
+}
+
+@keyframes turn {
+  from {
+    transform: rotateZ(0deg);
+  }
+
+  to {
+    transform: rotateZ(360deg);
+  }
+}

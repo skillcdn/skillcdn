@@ -1,5 +1,6 @@
 import { createContext, type RefObject, useContext, useEffect, useRef, useState } from "react";
 import styles from "./connect-preview.module.css";
+import { PointerShape } from "./pointer-shape.js";
 
 const LOOP_MS = 6400;
 const FRAME_MS = 80;
@@ -169,15 +170,10 @@ export function TypedText({ text }: { readonly text: string }) {
   );
 }
 
-const POINTER_PATH =
-  "M4 2.8a.7.7 0 0 0-1.2.5v18.4a.7.7 0 0 0 1.2.5l4.3-4.1 3.7 7.2a.9.9 0 0 0 1.2.4l2.5-1.3a.9.9 0 0 0 .4-1.2l-3.7-7.1 5.9-1.1a.7.7 0 0 0 .3-1.2L4 2.8Z";
-
 export function DemoPointer({ action = false }: { readonly action?: boolean }) {
   return (
     <span className={action ? styles.actionPointer : styles.pointer}>
-      <svg viewBox="0 0 24 28" fill="none" aria-hidden="true" focusable="false">
-        <path d={POINTER_PATH} />
-      </svg>
+      <PointerShape />
     </span>
   );
 }
@@ -238,9 +234,7 @@ export function ScenePointer({
       data-visible={name !== undefined}
       data-pressed={path.pressed.includes(phase)}
     >
-      <svg viewBox="0 0 24 28" fill="none" aria-hidden="true" focusable="false">
-        <path d={POINTER_PATH} />
-      </svg>
+      <PointerShape />
     </span>
   );
 }

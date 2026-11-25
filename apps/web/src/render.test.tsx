@@ -330,6 +330,17 @@ describe("prerendered pages", () => {
       // The organizations of the build, the console's board in the visitor's words, the way to
       // the console pack, the steps, the builders and the questions.
       expect(body).toContain('src="/organizations/kdxlabs.png"');
+      // The promotion calls an agent account an employee, in every language.
+      expect(body).not.toMatch(/에이전트 계정|agent account/i);
+      // The agent accounts come first after the first screen, before the organizations; what the
+      // scene shows is said once, and the scene carries no inline style for the policy to refuse.
+      expect(body).toContain(t.landing.agents.titleAccent);
+      const [said = "missing"] = t.landing.agents.scene.description.split(".");
+      expect(body.split(said)).toHaveLength(2);
+      expect(body.indexOf(t.landing.agents.titleAccent)).toBeLessThan(
+        body.indexOf(t.landing.organizations.title),
+      );
+      expect(body).not.toContain(' style="');
       expect(body).toContain(t.landing.console.window.columns.in_progress);
       expect(body).toContain(t.landing.console.window.tasks[0]?.title ?? "missing");
       expect(body).toContain(t.landing.console.window.description);
@@ -418,6 +429,7 @@ describe("prerendered pages", () => {
     }).html;
     expect(trimmed).not.toContain('name="q"');
     expect(trimmed).not.toContain('href="/search"');
+    expect(trimmed).not.toContain(t.landing.agents.titleAccent);
     expect(trimmed).not.toContain(t.landing.showcase.title);
     expect(trimmed).not.toContain(t.landing.console.title);
     expect(trimmed).not.toContain(t.landing.builders.title);

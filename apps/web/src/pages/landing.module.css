@@ -293,6 +293,54 @@
   --glow-fade: 0.38;
 }
 
+/* The agent accounts, right under the first screen: the head as large as the page says anything,
+   and the stage wider than the page is elsewhere. */
+.agents {
+  position: relative;
+  padding-block: var(--space-7) var(--space-9);
+}
+
+/* Over what the stage lets out past its edges: the veil of its decision dims neither. */
+.agentsHead,
+.agents > .actions {
+  position: relative;
+  z-index: 1;
+}
+
+.agentsHead {
+  text-align: center;
+}
+
+.agentsHead h2 {
+  font-size: var(--text-display);
+  line-height: 1.12;
+  letter-spacing: var(--tracking-display);
+  font-weight: var(--weight-display);
+}
+
+.agentsHead h2 > span {
+  display: block;
+  margin-top: var(--space-2);
+  color: var(--color-accent);
+}
+
+.agentsHead .sectionLead {
+  max-width: var(--hero-lead-width);
+  margin: var(--space-5) auto 0;
+  line-height: var(--leading-code);
+  white-space: pre-line;
+}
+
+.agentsStage {
+  max-width: var(--agents-stage-width);
+  margin: var(--space-3) auto 0;
+  padding-inline: var(--space-5);
+}
+
+.agents > .actions {
+  margin-top: var(--space-5);
+}
+
 /* The console: its own surface, a rule above and below, since its window is a light thing on
    the dark page and wants a quieter ground around it than the lit sections have. */
 .console {
@@ -946,6 +994,12 @@
   }
 }
 
+@media (max-width: 57rem) {
+  .agentsStage {
+    margin-top: var(--space-6);
+  }
+}
+
 @media (max-width: 52rem) {
   .points,
   .timeline {
@@ -1025,6 +1079,18 @@
 
   .clients {
     margin-top: var(--space-6);
+  }
+
+  .agents {
+    padding-block: var(--space-6) var(--space-8);
+  }
+
+  .agentsHead h2 {
+    font-size: var(--text-display-mobile);
+  }
+
+  .agentsStage {
+    padding-inline: var(--space-4);
   }
 
   .clients > div {

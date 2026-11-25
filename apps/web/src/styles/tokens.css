@@ -627,4 +627,90 @@
   --console-hand-fill: #ffffff;
   --console-hand-stroke: #1d2433;
   --console-hand-shadow: drop-shadow(0 2px 3px #0000004d);
+
+  /* The agent accounts on the front page: an infographic that plays (components/agents-stage.tsx),
+     its windows on the console's light ground (`--console-*`) and on the messenger's own, its
+     agents the small planets the console draws an agent account's avatar as. The planets keep
+     the ramps of those avatars (packages/console/src/avatar.ts of skillcdn/console), five tones
+     each from the lightest to the darkest, since the face of an agent here is the face it has
+     there; they are actors on the stage and never a control, a link or a state. */
+  --agents-stage-width: 78rem;
+  --agents-violet-0: #eadcff;
+  --agents-violet-1: #cdb0ff;
+  --agents-violet-2: #a77cf5;
+  --agents-violet-3: #8556de;
+  --agents-violet-4: #6638bd;
+  --agents-sunset-0: #ffd643;
+  --agents-sunset-1: #ffb052;
+  --agents-sunset-2: #ff8a5b;
+  --agents-sunset-3: #ff3d5a;
+  --agents-sunset-4: #d6264a;
+  --agents-mint-0: #5ef0b8;
+  --agents-mint-1: #22e3a5;
+  --agents-mint-2: #1cb2b2;
+  --agents-mint-3: #137f80;
+  --agents-mint-4: #0e5f60;
+  --agents-ocean-0: #c7e2ff;
+  --agents-ocean-1: #9cc4ff;
+  --agents-ocean-2: #7fa8ff;
+  --agents-ocean-3: #6f74e8;
+  --agents-ocean-4: #5257c9;
+  --agents-rose-0: #ffd6e4;
+  --agents-rose-1: #ffb3c7;
+  --agents-rose-2: #ff8fb3;
+  --agents-rose-3: #ff5c8a;
+  --agents-rose-4: #d6336c;
+  --agents-butter-0: #ffe08a;
+  --agents-butter-1: #ffc25c;
+  /* The ground of an avatar, and the faint squares strewn over it and over the stage. */
+  --agents-tile: #51525c;
+  --agents-square-0: #ffd95a;
+  --agents-square-1: #ff9f80;
+  --agents-square-2: #8fb6ff;
+  --agents-square-3: #a77cf5;
+  --agents-square-4: #22e3a5;
+  --agents-squares:
+    linear-gradient(#ffd95a, #ffd95a) 7% 14% / 0.3125rem 0.3125rem no-repeat,
+    linear-gradient(#8fb6ff, #8fb6ff) 36% 4% / 0.375rem 0.375rem no-repeat,
+    linear-gradient(#a77cf5, #a77cf5) 33.5% 93% / 0.3125rem 0.3125rem no-repeat,
+    linear-gradient(#ff9f80, #ff9f80) 57.5% 14% / 0.25rem 0.25rem no-repeat,
+    linear-gradient(#22e3a5, #22e3a5) 52% 97% / 0.3125rem 0.3125rem no-repeat,
+    linear-gradient(#8fb6ff, #8fb6ff) 55.5% 56% / 0.25rem 0.25rem no-repeat,
+    linear-gradient(#ffd95a, #ffd95a) 34.5% 62% / 0.25rem 0.25rem no-repeat,
+    linear-gradient(#ff9f80, #ff9f80) 88% 3% / 0.3125rem 0.3125rem no-repeat,
+    linear-gradient(#a77cf5, #a77cf5) 97% 97% / 0.3125rem 0.3125rem no-repeat,
+    linear-gradient(#22e3a5, #22e3a5) 3% 95% / 0.25rem 0.25rem no-repeat;
+  --agents-ring: #8fb6ff3d;
+  --agents-link: linear-gradient(90deg, #8fb6ff00 18%, #8fb6ffb3 34%, #8fb6ffb3 66%, #8fb6ff00 82%);
+  --agents-track: #ffffff5c;
+  --agents-comet: linear-gradient(90deg, transparent, #6ea1ff 55%, #ffffff);
+  --agents-comet-head: 0 0 0.75rem 0.125rem #8fb6ff, 0 0 2rem 0.5rem #6ea1ff66;
+  --agents-veil: #0a1020b8;
+  --agents-pill: #0c1424cc;
+  --agents-pill-edge: #ffffff24;
+  --agents-window-shadow: 0 1.5rem 4rem #00000080, 0 0 0 1px #ffffff14;
+  --agents-ask-shadow: 0 1.5rem 5rem #000000a6, 0 0 5rem #6ea1ff59;
+  --agents-hub-glow: radial-gradient(closest-side, #6ea1ff80, #6ea1ff2e 45%, transparent);
+  --agents-comet-tip: #ffffff;
+  /* What the team of the scene launches: a strawberry lollipop. */
+  --agents-candy: #ff5c8a;
+  --agents-candy-swirl: #ffb3c7;
+  --agents-candy-shine: #ffffffb3;
+  --agents-candy-stick: #f6f1ea;
+  --agents-berry: #e8334f;
+  --agents-leaf: #3f9e58;
+  --agents-candy-ground: linear-gradient(160deg, #ffd6e4, #ffb3c7);
+  --agents-fruit-ground: linear-gradient(160deg, #fff4d6, #ffe08a);
+  --agents-candy-line: #7a2340;
+  /* The conversation's window, a messenger's, which nothing names. */
+  --agents-chat-rail: #4a154b;
+  --agents-chat-rail-dot: #ffffff3d;
+  --agents-chat-bg: #ffffff;
+  --agents-chat-text: #1d1c1d;
+  --agents-chat-muted: #616061;
+  --agents-chat-border: #e3e2e3;
+  --agents-chat-mention: #1264a3;
+  --agents-chat-mention-bg: #e8f5fa;
+  --agents-chat-send: #007a5a;
+  --agents-chat-idle: #c9c8c9;
 }
