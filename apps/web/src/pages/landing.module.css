@@ -20,16 +20,6 @@
   font-size: var(--text-sm);
 }
 
-/* The one warm mark in the interface: the first thing on the page, and the only place the point
-   colour touches text rather than light. */
-.eyebrow > span {
-  width: var(--space-2);
-  height: var(--space-2);
-  border-radius: var(--radius-full);
-  background: var(--color-point);
-  box-shadow: var(--glow-point);
-}
-
 .title {
   font-size: var(--text-display);
   line-height: 1.12;
@@ -293,42 +283,17 @@
   --glow-fade: 0.38;
 }
 
-/* The agent accounts, right under the first screen: the head as large as the page says anything,
-   and the stage wider than the page is elsewhere. */
+/* The agent accounts, right under the first screen, whose title the first screen carries:
+   the stage wider than the page is elsewhere. */
 .agents {
   position: relative;
   padding-block: var(--space-7) var(--space-9);
 }
 
 /* Over what the stage lets out past its edges: the veil of its decision dims neither. */
-.agentsHead,
 .agents > .actions {
   position: relative;
   z-index: 1;
-}
-
-.agentsHead {
-  text-align: center;
-}
-
-.agentsHead h2 {
-  font-size: var(--text-display);
-  line-height: 1.12;
-  letter-spacing: var(--tracking-display);
-  font-weight: var(--weight-display);
-}
-
-.agentsHead h2 > span {
-  display: block;
-  margin-top: var(--space-2);
-  color: var(--color-accent);
-}
-
-.agentsHead .sectionLead {
-  max-width: var(--hero-lead-width);
-  margin: var(--space-5) auto 0;
-  line-height: var(--leading-code);
-  white-space: pre-line;
 }
 
 .agentsStage {
@@ -1083,10 +1048,6 @@
 
   .agents {
     padding-block: var(--space-6) var(--space-8);
-  }
-
-  .agentsHead h2 {
-    font-size: var(--text-display-mobile);
   }
 
   .agentsStage {

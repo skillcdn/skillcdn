@@ -2,8 +2,8 @@ import type { LandingMessages } from "./landing-en.js";
 
 export const landingKo: LandingMessages = {
   eyebrow: "AI 에이전트로 운영하는 1인 회사",
-  title: "혼자 시작하세요.",
-  titleAccent: "팀은 이미 있습니다.",
+  title: "AI를 채용하세요.",
+  titleAccent: "일할수록 똑똑해집니다.",
   lead: "전문가가 일하는 방법을 스킬로 받아 쓰세요.\n지금 쓰는 AI가 마케터, 디자이너, 개발자처럼 일합니다.\n혼자서도 회사 하나를 꾸릴 수 있습니다.",
   search: {
     label: "무엇을 만들까요?",
@@ -20,11 +20,7 @@ export const landingKo: LandingMessages = {
   },
   clients: "지금 쓰는 AI 앱에서 바로",
   agents: {
-    eyebrow: "에이전트 직원",
-    title: "AI를 채용하세요.",
-    titleAccent: "일할수록 똑똑해집니다.",
-    lead: "오늘부터 출근하고, 노하우를 스스로 학습합니다.\n메신저로 말하고, 결정만 하세요.",
-    start: "에이전트 직원 채용하기",
+    start: "콘솔에서 시작하기",
     scene: {
       agents: [
         {

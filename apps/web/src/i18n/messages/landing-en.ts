@@ -32,8 +32,8 @@ export type DemoMoment =
 
 export const landingEn = {
   eyebrow: "A one-person company, run with AI agents",
-  title: "Start alone.",
-  titleAccent: "The team is already here.",
+  title: "Hire an AI.",
+  titleAccent: "It gets smarter as it works.",
   lead: "Take the way experts work, as skills.\nThe AI you already use works as your marketer, your designer and your developer.\nOne person can run a whole company.",
   search: {
     label: "What will you make?",
@@ -50,11 +50,7 @@ export const landingEn = {
   },
   clients: "Right in the AI apps you already use",
   agents: {
-    eyebrow: "AI employees",
-    title: "Hire an AI.",
-    titleAccent: "It gets smarter as it works.",
-    lead: "Starts today. Learns the know-how by itself.\nTell it in a chat, and just decide.",
-    start: "Hire your first AI employee",
+    start: "Start in the console",
     scene: {
       /** The agents, and what the status under each says in turn (`DOING` in agents-score.ts). */
       agents: [

@@ -271,10 +271,7 @@ export function LandingPage(props: { readonly origin: string }) {
     <div className={styles.page}>
       <section className={styles.hero}>
         <Container>
-          <p className={styles.eyebrow}>
-            <span />
-            {copy.eyebrow}
-          </p>
+          <p className={styles.eyebrow}>{copy.eyebrow}</p>
           <h1 className={styles.title}>
             {copy.title}
             <span>{copy.titleAccent}</span>
@@ -315,14 +312,6 @@ export function LandingPage(props: { readonly origin: string }) {
 
       {shows("agents") && (
         <section id="agents" className={styles.agents}>
-          <Container className={cx(styles.agentsHead, glass.reveal)}>
-            <p className={styles.kicker}>{copy.agents.eyebrow}</p>
-            <h2>
-              {copy.agents.title}
-              <span>{copy.agents.titleAccent}</span>
-            </h2>
-            <p className={styles.sectionLead}>{copy.agents.lead}</p>
-          </Container>
           <div className={styles.agentsStage}>
             {/* Remounted per language, since what is typed and where lines break is measured. */}
             <AgentsStage key={language} />
