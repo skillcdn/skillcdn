@@ -1388,3 +1388,299 @@
     transform-origin: center top;
   }
 }
+
+/* The agents' planets, a few adrift about the page: in the room beside the words, never over
+   them. Each has a light of its own tone around it, a size, a pace and a moment of its own, so
+   that no two rise together, and the larger are lifted more by the scroll. Between them a few
+   stars come and go. On a phone, where there is no room beside the words, only the few in the
+   corners stay. */
+.cta {
+  position: relative;
+}
+
+.floater {
+  --size: 3rem;
+  --bob: 9s;
+  --sway: 14s;
+  --delay: 0s;
+  --lift: 2.5rem;
+  --halo: var(--agents-violet-2);
+  position: absolute;
+  width: var(--size);
+  height: var(--size);
+  pointer-events: none;
+}
+
+.floater::before {
+  content: "";
+  position: absolute;
+  inset: -70%;
+  border-radius: var(--radius-full);
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--halo) 30%, transparent),
+    color-mix(in srgb, var(--halo) 9%, transparent) 55%,
+    transparent
+  );
+}
+
+.floaterSway {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.floaterSway > svg {
+  position: relative;
+  filter: drop-shadow(0 0 0.75rem color-mix(in srgb, var(--halo) 55%, transparent));
+}
+
+/* A moon on a faint orbit, tilted against the planet's own ring; the planet hides it as it
+   passes behind. */
+.floaterOrbit {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 190%;
+  height: 60%;
+  translate: -50% -50%;
+  rotate: 12deg;
+  border: 1px solid color-mix(in srgb, var(--halo) 34%, transparent);
+  border-radius: 50%;
+}
+
+.floaterOrbit > b {
+  position: absolute;
+  top: -0.25rem;
+  left: 50%;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--radius-full);
+  background: var(--moon, var(--agents-sunset-0));
+  box-shadow: 0 0 0.5rem var(--moon, var(--agents-sunset-0));
+  offset-path: ellipse(50% 50% at 50% 50%);
+  offset-rotate: 0deg;
+}
+
+.floater-heroA {
+  --size: 5.25rem;
+  --bob: 10s;
+  --sway: 16s;
+  --lift: 4rem;
+  top: 15%;
+  left: max(4rem, calc(50% - 33rem));
+}
+
+.floater-heroB {
+  --size: 3rem;
+  --bob: 8s;
+  --sway: 12s;
+  --delay: -3s;
+  --halo: var(--agents-ocean-2);
+  --lift: 3rem;
+  top: 44%;
+  right: calc(50% - 30rem);
+}
+
+.showcaseStage {
+  position: relative;
+}
+
+/* Over the top right corner of the showcase, a little above it. */
+.floater-showcase {
+  --size: 3.75rem;
+  --delay: -2s;
+  --lift: 0.75rem;
+  --halo: var(--agents-sunset-2);
+  top: -3.5rem;
+  right: 0;
+}
+
+/* Up and to the left of the console's centred head. */
+.floater-console {
+  --size: 4.5rem;
+  --bob: 8.5s;
+  --delay: -4s;
+  --lift: 2rem;
+  --halo: var(--agents-rose-2);
+  top: calc(var(--space-9) - 1.75rem);
+  left: calc(50% - 25.5rem);
+}
+
+/* In the room the questions' title leaves under it. */
+.floater-faq {
+  --size: 4.5rem;
+  --bob: 10s;
+  --delay: -1s;
+  --lift: 3.5rem;
+  --halo: var(--agents-ocean-2);
+  bottom: calc(var(--space-9) + 1.5rem);
+  left: calc(50% - 27rem);
+}
+
+.floater-ctaA {
+  --size: 5rem;
+  --bob: 10.5s;
+  --sway: 15s;
+  --delay: -7s;
+  --lift: 3.5rem;
+  --moon: var(--agents-mint-0);
+  top: 30%;
+  right: max(4rem, calc(50% - 31rem));
+}
+
+/* The stars: four points, in the tones of the planets near them. */
+.twinkle {
+  --star: 0.625rem;
+  --shine: var(--agents-violet-0);
+  --pace: 3.6s;
+  --wait: 0s;
+  position: absolute;
+  width: var(--star);
+  height: var(--star);
+  background: var(--shine);
+  clip-path: polygon(50% 0, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0 50%, 40% 40%);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.twinkle-heroA {
+  --star: 0.875rem;
+  top: 34%;
+  left: calc(50% - 23rem);
+}
+
+.twinkle-heroB {
+  --shine: var(--agents-ocean-0);
+  --wait: -1.4s;
+  top: 30%;
+  right: calc(50% - 27rem);
+}
+
+.twinkle-steps {
+  --star: 0.5rem;
+  --shine: var(--agents-mint-0);
+  --wait: -2s;
+  top: calc(var(--space-9) + 4.5rem);
+  right: calc(50% - 31rem);
+}
+
+.twinkle-ctaA {
+  --star: 0.75rem;
+  --wait: -1.8s;
+  top: 24%;
+  left: calc(50% - 27rem);
+}
+
+@media (max-width: 64rem) {
+  .floater,
+  .twinkle {
+    display: none;
+  }
+
+  .floater-heroA,
+  .floater-heroB,
+  .floater-ctaA {
+    display: block;
+    --lift: 1rem;
+  }
+
+  .floater-heroA {
+    --size: 2.75rem;
+    top: var(--space-4);
+    left: var(--space-5);
+  }
+
+  .floater-heroB {
+    --size: 1.75rem;
+    top: var(--space-7);
+    right: var(--space-5);
+  }
+
+  .floater-ctaA {
+    --size: 2.5rem;
+    top: var(--space-6);
+    right: var(--space-6);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .floaterSway {
+    animation: floater-sway var(--sway) ease-in-out var(--delay) infinite alternate;
+  }
+
+  .floaterSway > svg {
+    animation: floater-bob var(--bob) ease-in-out var(--delay) infinite alternate;
+  }
+
+  .floaterOrbit > b {
+    animation: floater-moon 18s linear infinite;
+  }
+
+  .twinkle {
+    animation: twinkle var(--pace) ease-in-out var(--wait) infinite;
+  }
+
+  @supports (animation-timeline: view()) {
+    .floater {
+      animation: floater-lift linear both;
+      animation-timeline: view();
+    }
+  }
+}
+
+@keyframes floater-sway {
+  from {
+    translate: -0.375rem 0;
+  }
+
+  to {
+    translate: 0.375rem 0;
+  }
+}
+
+@keyframes floater-bob {
+  from {
+    translate: 0 -0.5rem;
+    rotate: -6deg;
+  }
+
+  to {
+    translate: 0 0.625rem;
+    rotate: 6deg;
+  }
+}
+
+@keyframes floater-moon {
+  from {
+    offset-distance: 0%;
+  }
+
+  to {
+    offset-distance: 100%;
+  }
+}
+
+@keyframes floater-lift {
+  from {
+    translate: 0 var(--lift);
+  }
+
+  to {
+    translate: 0 calc(var(--lift) * -1);
+  }
+}
+
+@keyframes twinkle {
+  0%,
+  100% {
+    opacity: 0.15;
+    scale: 0.55;
+  }
+
+  50% {
+    opacity: 0.95;
+    scale: 1;
+  }
+}

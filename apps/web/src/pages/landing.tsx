@@ -5,6 +5,12 @@ import { api } from "../api/client.js";
 import { resourceKeys } from "../api/keys.js";
 import { useResource } from "../api/use-resource.js";
 import { AddressForm } from "../components/address-form.js";
+import {
+  Planet,
+  type PlanetKind,
+  PlanetShapes,
+  type PlanetTone,
+} from "../components/agents-planet.js";
 import { AgentsStage } from "../components/agents-stage.js";
 import { BrandSymbol } from "../components/brand.js";
 import { ConsoleDemo } from "../components/console-demo.js";
@@ -180,6 +186,43 @@ function useStepsPlay() {
   return ref;
 }
 
+/** Where on the page a planet floats, which planet it is, and whether a moon goes round it. */
+const FLOATERS = {
+  heroA: [0, "violet", true],
+  heroB: [3, "ocean", false],
+  showcase: [1, "sunset", false],
+  console: [3, "rose", false],
+  faq: [2, "ocean", false],
+  ctaA: [1, "violet", true],
+} as const satisfies Record<string, readonly [PlanetKind, PlanetTone, boolean]>;
+
+/**
+ * One of the agents' planets, adrift in the room beside a section: the faces of the scene, seen
+ * about the page. Three motions make the drift, one an element so that none undoes another: the
+ * page's scroll lifts the slot, the sway carries it sideways, the planet bobs and tilts. Where it
+ * is, how large, how near and how slowly it drifts is its slot's, in the styles.
+ */
+function Floater(props: { readonly at: keyof typeof FLOATERS }) {
+  const [kind, tone, moon] = FLOATERS[props.at];
+  return (
+    <span className={cx(styles.floater, styles[`floater-${props.at}`])} aria-hidden="true">
+      <i className={styles.floaterSway}>
+        {moon && (
+          <i className={styles.floaterOrbit}>
+            <b />
+          </i>
+        )}
+        <Planet kind={kind} tone={tone} />
+      </i>
+    </span>
+  );
+}
+
+/** A star that comes and goes in the room between the planets. */
+function Twinkle(props: { readonly at: string }) {
+  return <i className={cx(styles.twinkle, styles[`twinkle-${props.at}`])} aria-hidden="true" />;
+}
+
 function SectionHead(props: {
   readonly kicker: string;
   readonly title: string;
@@ -269,7 +312,12 @@ export function LandingPage(props: { readonly origin: string }) {
 
   return (
     <div className={styles.page}>
+      <PlanetShapes />
       <section className={styles.hero}>
+        <Floater at="heroA" />
+        <Floater at="heroB" />
+        <Twinkle at="heroA" />
+        <Twinkle at="heroB" />
         <Container>
           <p className={styles.eyebrow}>{copy.eyebrow}</p>
           <h1 className={styles.title}>
@@ -339,13 +387,18 @@ export function LandingPage(props: { readonly origin: string }) {
               title={copy.showcase.title}
               lead={copy.showcase.lead}
             />
-            <ShowcaseGrid entries={entries} language={language} />
+            {/* The planet rests on the corner of the grid, over the card under it. */}
+            <div className={styles.showcaseStage}>
+              <ShowcaseGrid entries={entries} language={language} />
+              <Floater at="showcase" />
+            </div>
           </Container>
         </section>
       )}
 
       {shows("console") && (
         <section id="console" className={styles.console}>
+          <Floater at="console" />
           <Container>
             <SectionHead
               kicker={copy.console.eyebrow}
@@ -411,6 +464,7 @@ export function LandingPage(props: { readonly origin: string }) {
 
       {shows("steps") && (
         <section id="steps" className={styles.steps}>
+          <Twinkle at="steps" />
           <Container>
             <SectionHead kicker={copy.steps.eyebrow} title={copy.steps.title} />
             <ol className={styles.timeline} ref={stepsRef}>
@@ -507,6 +561,7 @@ export function LandingPage(props: { readonly origin: string }) {
 
       {shows("faq") && (
         <section id="faq" className={styles.faqSection}>
+          <Floater at="faq" />
           <Container className={styles.faqGrid}>
             <h2 className={glass.reveal}>{copy.faq.title}</h2>
             <div className={glass.reveal}>
@@ -526,6 +581,8 @@ export function LandingPage(props: { readonly origin: string }) {
 
       {shows("cta") && (
         <section className={styles.cta}>
+          <Floater at="ctaA" />
+          <Twinkle at="ctaA" />
           <Container className={glass.reveal}>
             <BrandSymbol className={styles.ctaSymbol} />
             <h2>{copy.cta.title}</h2>

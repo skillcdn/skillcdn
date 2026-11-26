@@ -1,12 +1,6 @@
 import { type RefObject, useEffect, useRef } from "react";
 import { useI18n } from "../i18n/index.js";
-import {
-  Planet,
-  type PlanetKind,
-  PlanetShapes,
-  PlanetTile,
-  type PlanetTone,
-} from "./agents-planet.js";
+import { Planet, type PlanetKind, PlanetTile, type PlanetTone } from "./agents-planet.js";
 import {
   AGAIN,
   AGENTS,
@@ -771,7 +765,6 @@ export function AgentsStage() {
     <div className={styles.frame}>
       <div ref={stage} className={styles.stage}>
         <div className={styles.scene} aria-hidden="true">
-          <PlanetShapes />
           <i className={cx(styles.spot, styles.unit)} data-spot="unit" />
           <i className={cx(styles.spot, styles.deck)} data-spot="deck" />
           <i className={cx(styles.spot, styles.spotHub)} data-spot="hub" />
