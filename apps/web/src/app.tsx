@@ -31,6 +31,7 @@ import type { OwnerPageProps } from "./pages/owner.js";
 import type { SearchPageProps } from "./pages/search.js";
 import { BadAddressPage, NotFoundPage } from "./pages/simple.js";
 import { SitePageView } from "./pages/site-page.js";
+import { StartPage } from "./pages/start.js";
 import { matchRoute, type Route } from "./router.js";
 import { applyHead, buildHead } from "./seo/head.js";
 import { SITE, SiteContext, useSitePages } from "./site-config.js";
@@ -124,6 +125,8 @@ function pageOf(
   switch (route.name) {
     case "landing":
       return <LandingPage origin={origin} />;
+    case "start":
+      return <StartPage origin={origin} />;
     case "explore":
       return <ExplorePage origin={origin} />;
     case "search":

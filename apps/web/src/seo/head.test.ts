@@ -111,6 +111,12 @@ describe("buildHead", () => {
     expect(buildHead(matchRoute("/explore", ""), "ko", ORIGIN).canonical).toBe(
       "https://skills.example/explore?lang=ko",
     );
+    // The start page is a page to find, in each language, under its own words.
+    const start = buildHead(matchRoute("/start", ""), "ko", ORIGIN);
+    expect(start.indexable).toBe(true);
+    expect(start.canonical).toBe("https://skills.example/start?lang=ko");
+    expect(start.title).toBe(messagesFor("ko").meta.start.title);
+    expect(start.description).toBe(messagesFor("ko").meta.start.description);
   });
 
   it("describes the product as structured data on the front page, in the page's language", () => {

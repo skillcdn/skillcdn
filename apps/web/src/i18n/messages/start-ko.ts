@@ -1,0 +1,78 @@
+import type { StartMessages } from "./start-en.js";
+
+export const startKo: StartMessages = {
+  kicker: "시작 가이드",
+  title: "어디서부터 시작할까요?",
+  lead: "스킬 하나만 써 봐도 좋고, AI 팀까지 가도 좋습니다. 단계마다 준비물을 확인하고 문장 하나를 AI에 건네세요. 나머지는 AI가 안내합니다.",
+  map: "단계 한눈에 보기",
+  step: (number: number) => `${number}단계`,
+  needs: "준비물",
+  follow: "따라 하기",
+  connectApp: "AI 앱에 이 주소를 연결하세요",
+  address: "MCP 서버 주소",
+  connectAgent: "코딩 에이전트에 콘솔 팩을 연결하세요",
+  say: "AI에게 이렇게 말해 보세요",
+  sayToAgent: "2단계에서 연결한 코딩 에이전트에게 말해 보세요",
+  copySentence: "문장 복사",
+  next: "이제 AI 차례입니다",
+  howToConnect: "앱별 연결 방법 보기",
+  search: "다른 일도 맡겨 보세요",
+  steps: {
+    skills: {
+      title: "스킬 써 보기",
+      where: "쓰던 AI 앱에서",
+      gain: "쓰던 AI 앱에 주소 하나를 더하면, 전문가의 방식으로 결과물을 만듭니다. SkillCDN 가입은 필요 없습니다.",
+      needs: ["도구를 연결할 수 있는 AI 앱: ChatGPT, Claude, Cursor, Codex, Gemini CLI"],
+      say: "목요일에만 여는 빵집 아이디어로 투자용 사업 기획안을 만들어줘.",
+      next: "AI가 팩에서 이 일에 맞는 스킬을 찾아 읽고, 그 방식대로 기획안을 만듭니다.",
+    },
+    board: {
+      title: "보드에서 내 AI와 일하기",
+      where: "내 컴퓨터에서",
+      gain: "내 컴퓨터에 콘솔을 띄우고 할 일을 올리면, 코딩 에이전트가 가져가 보고하고, 묻고, 결과를 제출합니다.",
+      needs: [
+        "명령을 실행하는 코딩 에이전트: Claude Code, Codex",
+        "Docker와 git",
+        "로그인에 쓸 GitHub 계정",
+      ],
+      say: "이 컴퓨터에서 SkillCDN 콘솔을 써 보고 싶어. Docker로 띄우고 로그인까지 안내해 줘.",
+      next: "에이전트가 콘솔 팩의 안내를 읽고, 이 컴퓨터에 콘솔이 뜨고 로그인할 때까지 함께합니다.",
+    },
+    employee: {
+      title: "첫 에이전트 직원 채용하기",
+      where: "켜 두는 컴퓨터에서",
+      gain: "에이전트 직원이 자기 계정으로 로그인해 혼자 일합니다. 일을 배정받고, 보고하고, 결정할 것만 묻습니다.",
+      needs: [
+        "2단계나 4단계에서 만든 콘솔",
+        "켜 두는 컴퓨터와, 그 안에 에이전트 직원만 쓰는 계정",
+        "에이전트 직원이 로그인할 계정: 조직의 GitHub 계정이나 Google Workspace 주소",
+        "그 AI 제품의 자체 구독: Claude Code, Codex",
+      ],
+      say: "우리 콘솔에 에이전트 직원을 한 명 채용하고 싶어. 준비할 것부터 안내해 줘.",
+      next: "에이전트가 직원의 계정과 초대, 일할 컴퓨터, 직원의 첫 일까지 차례로 함께 준비합니다.",
+    },
+    team: {
+      title: "팀의 콘솔로 넓히기",
+      where: "조직의 클라우드에",
+      gain: "조직의 주소에 콘솔이 생깁니다. 사람과 에이전트 직원이 한 보드에서 일하고, 메신저로 말을 겁니다.",
+      needs: [
+        "AWS 계정",
+        "Cloudflare에 올린 도메인, 또는 새로 살 도메인",
+        "매달 드는 클라우드 비용",
+      ],
+      say: "우리 조직의 SkillCDN 콘솔을 세팅해 줘. 웹사이트는 example.com이야.",
+      next: "에이전트가 사람 수와 로그인 방식 같은 쉬운 질문 몇 가지를 묻고, 매달 드는 비용을 먼저 보여 준 뒤 콘솔을 세웁니다.",
+    },
+  },
+  shared: {
+    title: "설치 없이 해 보고 싶다면",
+    body: "빌더에 합류하면 공용 콘솔에 내 자리가 생깁니다.",
+    join: "빌더에 합류하기",
+  },
+  stuck: {
+    title: "막히면 AI에게 물어보세요",
+    body: "연결한 팩에는 문서도 함께 있습니다. 막힌 곳을 그대로 말하면 AI가 문서를 읽고 답합니다.",
+    docs: "문서 보기",
+    explore: "스킬 둘러보기",
+  },
+};

@@ -29,6 +29,7 @@ const mountOf = (visibility: "public" | "private" | undefined) =>
 describe("pageOfRoute", () => {
   it("names the pages that are the same for everyone, without what was typed", () => {
     expect(pageOfRoute(matchRoute("/", "?lang=ko"))).toEqual({ path: "/", title: "landing" });
+    expect(pageOfRoute(matchRoute("/start", ""))).toEqual({ path: "/start", title: "start" });
     expect(pageOfRoute(matchRoute("/explore", ""))).toEqual({ path: "/explore", title: "explore" });
     // A search is counted as a search, and never with what was searched for.
     expect(pageOfRoute(matchRoute("/search/secret%20plans", ""))).toEqual({
@@ -183,9 +184,9 @@ describe("what is sent", () => {
   }
 
   it("goes nowhere without analytics, or before the visitor agreed", () => {
-    expect(() => track("cta_click", { id: "hero" })).not.toThrow();
+    expect(() => track("cta_click", { id: "hero_start" })).not.toThrow();
     const gtag = analytics(false);
-    track("cta_click", { id: "hero" });
+    track("cta_click", { id: "hero_start" });
     trackPage({ path: "/", title: "landing" }, origin);
     expect(gtag).not.toHaveBeenCalled();
   });

@@ -561,7 +561,7 @@
     radial-gradient(circle at 70% 64%, #6ea1ff 0 1px, transparent 1.7px),
     radial-gradient(circle at 44% 90%, #ffffff 0 0.8px, transparent 1.4px),
     radial-gradient(circle at 58% 6%, #ffffff 0 0.8px, transparent 1.4px);
-  /* The numbers of the three steps, and the ring they stand in. */
+  /* The numbers of the steps, and the ring they stand in. */
   --step-number: 2.75rem;
   /* The light behind the builders' panel, in the accent, as big as the panel's corner. */
   --builders-glow: radial-gradient(

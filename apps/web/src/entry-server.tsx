@@ -54,6 +54,8 @@ export { DEFAULT_LANGUAGE, LANGUAGE_PARAM, LANGUAGES, ORIGIN_PLACEHOLDER, social
 /** Pages that do not depend on data and are therefore prerendered completely. */
 export const STATIC_PAGES = [
   { name: "landing", path: PATHS.landing, file: "index", indexable: true },
+  // Where a newcomer starts (ADR-0129).
+  { name: "start", path: PATHS.start, file: "start/index", indexable: true },
   { name: "explore", path: PATHS.explore, file: "explore/index", indexable: true },
   // The page of the search box alone (ADR-0075); the page of a term is rendered per request.
   { name: "search", path: PATHS.search, file: "search/index", indexable: true },
@@ -588,6 +590,8 @@ export function renderLlmsTxt(language: Language, showcase?: RestShowcase): stri
     `## ${t.landing.steps.title}`,
     "",
     ...t.landing.steps.items.map((step, index) => `${index + 1}. **${step.title}** ${step.body}`),
+    "",
+    `[${t.landing.steps.more}](${origin}${withLanguage(PATHS.start, language)})`,
     "",
     `## ${t.landing.builders.title}`,
     "",

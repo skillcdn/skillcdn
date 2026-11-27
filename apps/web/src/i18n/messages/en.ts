@@ -1,6 +1,7 @@
 import { accountEn } from "./account-en.js";
 import { connectEn } from "./connect-en.js";
 import { landingEn } from "./landing-en.js";
+import { startEn } from "./start-en.js";
 
 // The English pack is the source: its shape is the type every other pack must have.
 // Copy states what the product does today. No prices, no plans, no comparisons.
@@ -9,12 +10,18 @@ export const en = {
   meta: {
     siteName: "SkillCDN",
     landing: {
-      title: "SkillCDN: a one-person company, run with AI agents",
+      title: "SkillCDN: AI employees with expert skills",
       description:
-        "Take the way experts work as skills, and the AI you already use becomes your marketer, designer and developer. Search for what to make, put the work on a board, and let the agents work. Join the builders.",
+        "Hire an AI that joins your team with an account of its own: it takes the work, reports, and asks only what is yours to decide. Take the way experts work as skills, start in the AI app you already use, and put the work on a board.",
       /** What SkillCDN is, in one plain sentence, for readers that are machines. */
       about:
         "SkillCDN serves a pack, a git repository of skills and documents, to an AI app such as ChatGPT or Claude as an MCP server, so that the app can load the skills it holds and follow them in a conversation; a deployment is searched across every pack it serves, and a console pack runs a company's work on a board with agents.",
+    },
+    /** The start page (ADR-0129). */
+    start: {
+      title: "Get started | SkillCDN",
+      description:
+        "From trying one skill to a team where AI employees work: what each step takes, and the one sentence to paste into your AI.",
     },
     explore: {
       title: "Find what to make | SkillCDN",
@@ -59,11 +66,12 @@ export const en = {
       title: "Page not found | SkillCDN",
       description: "There is nothing at this address.",
     },
-    ogImageAlt: "SkillCDN: start alone, the team is already here",
+    ogImageAlt: "SkillCDN: hire an AI, it gets smarter as it works",
   },
 
   nav: {
     home: "SkillCDN home",
+    start: "Get started",
     explore: "Explore",
     search: "Search",
     docs: "Docs",
@@ -115,6 +123,8 @@ export const en = {
   ...accountEn,
 
   landing: landingEn,
+
+  start: startEn,
 
   explore: {
     kicker: "Explore",

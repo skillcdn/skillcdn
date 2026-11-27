@@ -31,10 +31,16 @@ export type DemoMoment =
   | { readonly kind: "add"; readonly task: DemoTask; readonly feed: string };
 
 export const landingEn = {
-  eyebrow: "A one-person company, run with AI agents",
+  eyebrow: "AI employees with expert skills",
   title: "Hire an AI.",
   titleAccent: "It gets smarter as it works.",
-  lead: "Take the way experts work, as skills.\nThe AI you already use works as your marketer, your designer and your developer.",
+  /** One line: what the employee does, which the scene under it shows. */
+  lead: "It joins your team with an account of its own, takes the work, reports, and asks only what is yours to decide.",
+  /** The one action of the page, wherever it stands: the way to the start page (ADR-0129). */
+  start: "Get started",
+  /** The quieter way beside it on the first screen: the search across the packs. */
+  searchSkills: "Search skills",
+  /** The search box of the packs section and of the explorer. */
   search: {
     label: "What will you make?",
     placeholder: "What will you make? Card news, a short ad, a website that takes payments…",
@@ -50,7 +56,6 @@ export const landingEn = {
   },
   clients: "Right in the AI apps you already use",
   agents: {
-    start: "Start in the console",
     scene: {
       /** The agents, and what the status under each says in turn (`DOING` in agents-score.ts). */
       agents: [
@@ -407,31 +412,37 @@ export const landingEn = {
       console: "Builder console",
     },
   },
+  /**
+   * The ways to start, in the order the start page lists them (`START_STEPS` in router.ts): a
+   * line each here, and what each takes there.
+   */
   steps: {
     eyebrow: "How to start",
-    title: "Three steps, and your AI team gets to work.",
+    title: "Start with one skill. Grow into an AI team.",
     items: [
       {
-        title: "Get the skill pack",
-        body: "Fork skillcdn/skills to your own GitHub. Skills for marketing, design, engineering, product and video production become your company’s own.",
-        link: "Open the pack",
+        title: "Try a skill",
+        body: "Connect a pack’s address to the AI app you already use, and hand it a job in one sentence.",
       },
       {
-        title: "Open the console",
-        body: "The board where you post work and watch it move. Connect the console pack to your AI, and it walks you through the setup from the start.",
-        link: "Open the console pack",
+        title: "Work a board with your own AI",
+        body: "Bring a console up on your computer. Your AI takes the tasks on its board, reports and asks.",
       },
       {
-        title: "Connect your AI",
-        body: "Connect the pack’s address to the AI app you already use, such as ChatGPT, Claude, Cursor, Codex or Gemini CLI. Your AI becomes an expert at once.",
-        link: "Connection guide",
+        title: "Hire an AI employee",
+        body: "Bring in an AI employee that signs in with an account of its own and works by itself.",
+      },
+      {
+        title: "Grow into a team",
+        body: "On a console at your organization’s own address, people and AI employees work one board.",
       },
     ],
+    more: "See what each step takes",
   },
   packs: {
     eyebrow: "Skill packs",
-    title: "Meet expert skill packs of every kind, each by one address.",
-    lead: "Start with the verified packs. Enter the address of your own GitHub repository, and it opens as a pack.",
+    title: "Find the skill for the job.",
+    lead: "Search every public pack, by words and by meaning. Enter the address of your own GitHub repository, and it opens as a pack.",
     all: "See all featured packs",
     skills: (count: number) => (count === 1 ? "1 skill" : `${count} skills`),
   },
@@ -471,12 +482,17 @@ export const landingEn = {
       {
         question: "How do I start?",
         answer:
-          "Search for what you want to make, pick a skill, and connect the address of the pack it is in to your AI app. The pack’s page shows how to connect each app.",
+          "Search for what you want to make, pick a skill, and connect the address of the pack it is in to your AI app. The pack’s page shows how to connect each app. The steps after that are on the Get started page, each with what it takes.",
       },
       {
         question: "What should I start with?",
         answer:
           "Start with one job you need done now. Search for something you can ask for in one sentence, such as card news or an intro deck, and see the result. Once you have several jobs, connect the console pack and manage them on a board.",
+      },
+      {
+        question: "What is an AI employee?",
+        answer:
+          "An AI agent that works as a member of your team. It signs in to the console with an account of its own, is given work, reports, and asks only what is yours to decide. It runs on a computer that stays on, under a subscription of its own to its AI product, such as Claude Code or Codex.",
       },
       {
         question: "Who are the builders?",
@@ -487,7 +503,6 @@ export const landingEn = {
   },
   cta: {
     title: "Start your AI team today.",
-    search: "Search for what to make",
     join: "Join the builders",
     share: "Share a pack you made",
   },

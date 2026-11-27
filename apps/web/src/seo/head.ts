@@ -105,6 +105,8 @@ function indexablePathOf(route: Route, data: PageData | undefined): string | und
   switch (route.name) {
     case "landing":
       return PATHS.landing;
+    case "start":
+      return PATHS.start;
     case "explore":
       return PATHS.explore;
     case "search":
@@ -268,51 +270,55 @@ export function buildHead(
   const text =
     route.name === "landing"
       ? t.meta.landing
-      : route.name === "explore"
-        ? t.meta.explore
-        : route.name === "search"
-          ? route.term === undefined
-            ? t.meta.search
-            : {
-                title: t.meta.search.resultsTitle(route.term),
-                description: t.meta.search.resultsDescription(
-                  route.term,
-                  data?.search?.items.length ?? 0,
-                  data?.search?.packs ?? 0,
-                ),
-              }
-          : route.name === "mount"
-            ? mountText(route, language, data)
-            : route.name === "legal"
-              ? legalText(route, language, data)
-              : route.name === "docs"
-                ? docsText(route, language)
-                : route.name === "owner"
-                  ? {
-                      // Named as the host spells it once that is known, as its path writes it before.
-                      title: t.owner.metaTitle(data?.owner?.login ?? route.owner.owner),
-                      description: t.owner.metaDescription(data?.owner?.login ?? route.owner.owner),
-                    }
-                  : route.name === "site"
+      : route.name === "start"
+        ? t.meta.start
+        : route.name === "explore"
+          ? t.meta.explore
+          : route.name === "search"
+            ? route.term === undefined
+              ? t.meta.search
+              : {
+                  title: t.meta.search.resultsTitle(route.term),
+                  description: t.meta.search.resultsDescription(
+                    route.term,
+                    data?.search?.items.length ?? 0,
+                    data?.search?.packs ?? 0,
+                  ),
+                }
+            : route.name === "mount"
+              ? mountText(route, language, data)
+              : route.name === "legal"
+                ? legalText(route, language, data)
+                : route.name === "docs"
+                  ? docsText(route, language)
+                  : route.name === "owner"
                     ? {
-                        // Named as the installation names it; never a page to find.
-                        title: `${siteLabelOf(sitePages, route.key, language)} | ${t.meta.siteName}`,
-                        description: "",
+                        // Named as the host spells it once that is known, as its path writes it before.
+                        title: t.owner.metaTitle(data?.owner?.login ?? route.owner.owner),
+                        description: t.owner.metaDescription(
+                          data?.owner?.login ?? route.owner.owner,
+                        ),
                       }
-                    : route.name === "account"
-                      ? { title: t.account.metaTitle, description: "" }
-                      : route.name === "consent"
-                        ? { title: t.authorize.metaTitle, description: "" }
-                        : route.name === "connect"
-                          ? { title: t.connectCommand.metaTitle, description: "" }
-                          : route.name === "states" || route.name === "og-card"
-                            ? { title: t.meta.siteName, description: "" }
-                            : route.name === "bad-address"
-                              ? {
-                                  title: `${t.address.invalid} | ${t.meta.siteName}`,
-                                  description: "",
-                                }
-                              : t.meta.notFound;
+                    : route.name === "site"
+                      ? {
+                          // Named as the installation names it; never a page to find.
+                          title: `${siteLabelOf(sitePages, route.key, language)} | ${t.meta.siteName}`,
+                          description: "",
+                        }
+                      : route.name === "account"
+                        ? { title: t.account.metaTitle, description: "" }
+                        : route.name === "consent"
+                          ? { title: t.authorize.metaTitle, description: "" }
+                          : route.name === "connect"
+                            ? { title: t.connectCommand.metaTitle, description: "" }
+                            : route.name === "states" || route.name === "og-card"
+                              ? { title: t.meta.siteName, description: "" }
+                              : route.name === "bad-address"
+                                ? {
+                                    title: `${t.address.invalid} | ${t.meta.siteName}`,
+                                    description: "",
+                                  }
+                                : t.meta.notFound;
 
   const jsonLd: Record<string, unknown>[] = [];
   // The front page shows the operator's showcase, else the build's own (ADR-0028).

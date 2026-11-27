@@ -47,6 +47,8 @@ export type AccountSection = (typeof ACCOUNT_SECTIONS)[number];
 
 export type Route =
   | { readonly name: "landing" }
+  /** Where a newcomer starts (ADR-0129): the ways to start, each with what to tell an agent. */
+  | { readonly name: "start" }
   | { readonly name: "explore" }
   /** A search across the packs (ADR-0075): the results of a term, or the page of the box alone. */
   | { readonly name: "search"; readonly term: string | undefined }
@@ -74,6 +76,7 @@ export type Route =
 
 export const PATHS = {
   landing: "/",
+  start: "/start",
   explore: "/explore",
   search: SEARCH_PAGE_PATH,
   docs: DOCS_PAGE_PATH,
@@ -127,6 +130,15 @@ export function docsSectionHref(section: string): string {
   return `${PATHS.docs}#${section}`;
 }
 
+/** The ways to start, in the order the start page lists them; each is a heading there. */
+export const START_STEPS = ["skills", "board", "employee", "team"] as const;
+export type StartStep = (typeof START_STEPS)[number];
+
+/** The start page, or one of its ways at its heading. */
+export function startHref(step?: StartStep): string {
+  return step === undefined ? PATHS.start : `${PATHS.start}#${step}`;
+}
+
 /** The page where a command's code is approved, or the page that asks for a code. */
 export function connectHref(code?: string): string {
   return code === undefined ? PATHS.connect : `${PATHS.connect}/${code}`;
@@ -145,6 +157,9 @@ export function matchRoute(
   const sitePage = sitePageAt(sitePages, pathname);
   if (sitePage !== undefined) {
     return { name: "site", key: sitePage.key };
+  }
+  if (pathname === PATHS.start) {
+    return { name: "start" };
   }
   if (pathname === PATHS.explore) {
     return { name: "explore" };

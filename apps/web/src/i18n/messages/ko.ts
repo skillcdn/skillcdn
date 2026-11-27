@@ -2,6 +2,7 @@ import { accountKo } from "./account-ko.js";
 import { connectKo } from "./connect-ko.js";
 import type { Messages } from "./en.js";
 import { landingKo } from "./landing-ko.js";
+import { startKo } from "./start-ko.js";
 
 // Korean pack. Language packs are the one place where committed text is not English.
 // Keep technical terms that readers search for in their original form: MCP, SKILL.md, browse_repo, search_repo, load_skill.
@@ -10,11 +11,16 @@ export const ko: Messages = {
   meta: {
     siteName: "SkillCDN",
     landing: {
-      title: "SkillCDN: AI 에이전트로 운영하는 1인 회사",
+      title: "SkillCDN: 전문가의 스킬을 갖춘 에이전트 직원",
       description:
-        "전문가의 방식을 스킬로 받으면 내 AI가 마케터, 디자이너, 개발자가 됩니다. 만들고 싶은 것을 검색하고, 일은 보드에 올리고, 에이전트에 맡기세요. 빌더에 합류하세요.",
+        "AI를 채용하세요. 자기 계정으로 팀에 들어와 일을 가져가고, 보고하고, 결정할 것만 묻습니다. 전문가의 방식을 스킬로 받아 쓰던 AI 앱에서 바로 시작하고, 일은 보드에 올리세요.",
       about:
         "SkillCDN은 스킬과 문서를 담은 git 저장소, 곧 팩을 MCP 서버로 ChatGPT나 Claude 같은 AI 앱에 제공해, 앱이 그 안의 스킬을 불러와 대화 속에서 따르게 합니다. 한 배포는 제공하는 모든 팩을 한 번에 검색하고, 콘솔 팩은 회사의 일을 에이전트와 함께 보드에서 돌립니다.",
+    },
+    start: {
+      title: "시작하기 | SkillCDN",
+      description:
+        "스킬 하나를 써 보는 데서 에이전트 직원이 일하는 팀까지, 단계마다 필요한 것과 AI에 붙여 넣을 문장 하나를 안내합니다.",
     },
     explore: {
       title: "만들고 싶은 것 찾기 | SkillCDN",
@@ -48,11 +54,12 @@ export const ko: Messages = {
       title: "페이지를 찾을 수 없습니다 | SkillCDN",
       description: "이 주소에는 아무것도 없습니다.",
     },
-    ogImageAlt: "SkillCDN: 혼자 시작하세요, 팀은 이미 있습니다",
+    ogImageAlt: "SkillCDN: AI를 채용하세요, 일할수록 똑똑해집니다",
   },
 
   nav: {
     home: "SkillCDN 홈",
+    start: "시작하기",
     explore: "둘러보기",
     search: "검색",
     docs: "문서",
@@ -104,6 +111,8 @@ export const ko: Messages = {
   ...accountKo,
 
   landing: landingKo,
+
+  start: startKo,
 
   explore: {
     kicker: "둘러보기",

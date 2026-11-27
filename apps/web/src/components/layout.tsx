@@ -59,6 +59,7 @@ export function Layout(props: {
             <BrandLogo className={styles.logo} />
           </Link>
           <nav className={styles.nav} aria-label={t.nav.main}>
+            <Link href={PATHS.start}>{t.nav.start}</Link>
             <Link href={PATHS.explore}>{t.nav.explore}</Link>
             {features.search && <Link href={PATHS.search}>{t.nav.search}</Link>}
             <Link href={PATHS.docs}>{t.nav.docs}</Link>

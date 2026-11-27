@@ -33,6 +33,7 @@ import {
   TEMPLATE_MARKERS,
 } from "./entry-server.js";
 import { messagesFor } from "./i18n/index.js";
+import { START_STEPS } from "./router.js";
 import { defaultShowcase } from "./showcase.js";
 import {
   CONSOLE_PACK_ADDRESS,
@@ -287,12 +288,20 @@ describe("prerendered pages", () => {
     expect(body).toContain('href="/gh/skillcdn/skills@v1"');
   });
 
-  it("leads the front page with the search box and the build's own showcase, every entry a real result", () => {
+  it("leads the front page with the way to start and the build's own showcase, every entry a real result", () => {
     for (const language of LANGUAGES) {
       const t = messagesFor(language);
       const { body, head } = renderPage("/", language);
-      // The box first, the showcase after it, and the address field far down the page.
+      // The first screen is the promise and the one action (ADR-0129): the way to start, with
+      // the search across the packs as a link beside it. The box itself stands with the packs,
+      // after the showcase, over the address field.
+      const firstScreen = body.slice(0, body.indexOf('id="agents"'));
+      expect(firstScreen).toContain(t.landing.lead);
+      expect(firstScreen).toContain('href="/start"');
+      expect(firstScreen).toContain('href="/search"');
+      expect(firstScreen).not.toContain('name="q"');
       expect(body).toContain('name="q"');
+      expect(body.indexOf(t.landing.showcase.title)).toBeLessThan(body.indexOf('name="q"'));
       expect(body.indexOf('name="q"')).toBeLessThan(body.indexOf('inputMode="url"'));
       for (const id of ["deck", "site"] as const) {
         const entry = DEFAULT_SHOWCASE_MEDIA.entries[id];
@@ -332,20 +341,26 @@ describe("prerendered pages", () => {
       expect(body).toContain('src="/organizations/kdxlabs.png"');
       // The promotion calls an agent account an employee, in every language.
       expect(body).not.toMatch(/에이전트 계정|agent account/i);
-      // The agent accounts come first after the first screen, before the organizations; what the
-      // scene shows is said once, and the scene carries no inline style for the policy to refuse.
-      expect(body).toContain(t.landing.agents.start);
+      // The agent accounts come first after the first screen, before the organizations, with the
+      // AI apps named under them; what the scene shows is said once, and the scene carries no
+      // inline style for the policy to refuse.
       const [said = "missing"] = t.landing.agents.scene.description.split(".");
       expect(body.split(said)).toHaveLength(2);
-      expect(body.indexOf(t.landing.agents.start)).toBeLessThan(
+      expect(body.indexOf(said)).toBeLessThan(body.indexOf(t.landing.clients));
+      expect(body.indexOf(t.landing.clients)).toBeLessThan(
         body.indexOf(t.landing.organizations.title),
       );
       expect(body).not.toContain(' style="');
       expect(body).toContain(t.landing.console.window.columns.in_progress);
       expect(body).toContain(t.landing.console.window.tasks[0]?.title ?? "missing");
       expect(body).toContain(t.landing.console.window.description);
+      // The console's bar leads to the step of the start page that brings a console up, with
+      // the pack beside it; the packs come before the ways to start, which lead to that page.
+      expect(body).toContain('href="/start#board"');
       expect(body).toContain(`href="${CONSOLE_PACK_ADDRESS}"`);
+      expect(body.indexOf(t.landing.packs.title)).toBeLessThan(body.indexOf(t.landing.steps.title));
       expect(body).toContain(t.landing.steps.items[0]?.title ?? "missing");
+      expect(body).toContain(t.landing.steps.more);
       expect(body).toContain(t.landing.builders.title);
       expect(body).toContain(`href="${LINKS.builders}"`);
       for (const item of t.landing.faq.items) expect(head).toContain(item.question);
@@ -429,7 +444,12 @@ describe("prerendered pages", () => {
     }).html;
     expect(trimmed).not.toContain('name="q"');
     expect(trimmed).not.toContain('href="/search"');
-    expect(trimmed).not.toContain(t.landing.agents.start);
+    // Without the scene the first screen names the AI apps itself, and its second way is the
+    // explorer, since there is no search to lead to.
+    const [scene = "missing"] = t.landing.agents.scene.description.split(".");
+    expect(trimmed).not.toContain(scene);
+    expect(trimmed).toContain(t.landing.clients);
+    expect(trimmed).toContain('href="/start"');
     expect(trimmed).not.toContain(t.landing.showcase.title);
     expect(trimmed).not.toContain(t.landing.console.title);
     expect(trimmed).not.toContain(t.landing.builders.title);
@@ -478,6 +498,70 @@ describe("prerendered pages", () => {
     expect(explore.html).toContain('data-prerendered="explore" data-lang="ko"');
     expect(explore.html).toContain(messagesFor("ko").explore.title);
     expect(explore.html).not.toContain('name="q"');
+    // And the start page: a deployment that shows neither the console nor the agents has the
+    // first way alone, without the box where it has no search.
+    const start = renderSitePage(TEMPLATE, {
+      language: "en",
+      origin: "https://skills.example",
+      pathname: "/start",
+      search: "",
+      features: { landingSections: ["packs", "faq"], search: false },
+    });
+    expect(start.indexable).toBe(true);
+    expect(start.html).toContain('data-prerendered="start" data-lang="en"');
+    expect(start.html).toContain(t.start.steps.skills.say);
+    expect(start.html).toContain("https://skills.example/gh/skillcdn/skills");
+    expect(start.html).not.toContain(t.start.steps.board.title);
+    expect(start.html).not.toContain(t.start.steps.team.say);
+    expect(start.html).not.toContain('name="q"');
+    // One way needs no row of the ways at the top.
+    expect(start.html).not.toContain('href="#skills"');
+  });
+
+  it("show the ways to start on a page of their own, each with what it takes and what to say", () => {
+    for (const language of LANGUAGES) {
+      const t = messagesFor(language);
+      const start = renderPage("/start", language);
+      expect(start.htmlLang).toBe(language);
+      expect(start.routeName).toBe("start");
+      expect(start.head).toContain(`<title data-head="">${t.meta.start.title}</title>`);
+      expect(start.head).toContain("index,follow");
+      expect(start.body).toContain(t.start.title);
+      // Every way in the order the router names them, at a glance at the top, each a link to its
+      // step below, and then one by one: what it takes, the sentence to copy and what comes of it.
+      let last = start.body.indexOf(`href="#${START_STEPS[START_STEPS.length - 1]}"`);
+      for (const step of START_STEPS) {
+        const words = t.start.steps[step];
+        const link = start.body.indexOf(`href="#${step}"`);
+        expect(link, step).toBeGreaterThan(-1);
+        expect(link, step).toBeLessThanOrEqual(last);
+        const at = start.body.indexOf(`id="${step}"`);
+        expect(at, step).toBeGreaterThan(last);
+        last = at;
+        expect(start.body, step).toContain(words.title);
+        expect(start.body, step).toContain(words.where);
+        expect(start.body, step).toContain(words.say);
+        expect(start.body, step).toContain(words.next);
+        for (const need of words.needs) expect(start.body, step).toContain(need);
+      }
+      // The first way connects the reference pack, the second the console pack to a coding
+      // agent by its own command; the search box stands in the first.
+      const host = ORIGIN_PLACEHOLDER;
+      expect(start.body).toContain(`${host}/gh/skillcdn/skills`);
+      expect(start.body).toContain(
+        `claude mcp add --transport http skillcdn-console ${host}${CONSOLE_PACK_ADDRESS}`,
+      );
+      expect(start.body).toContain(
+        `codex mcp add skillcdn-console --url ${host}${CONSOLE_PACK_ADDRESS}`,
+      );
+      expect(start.body).toContain('name="q"');
+      expect(start.body).toContain(`href="${LINKS.builders}"`);
+      // An agent account is an employee here as on the front page, and nothing is styled inline.
+      expect(start.body).not.toMatch(/에이전트 계정|agent account/i);
+      expect(start.body).not.toContain(' style="');
+      // The front page's ways to start are the same ones, by their number.
+      expect(t.landing.steps.items).toHaveLength(START_STEPS.length);
+    }
   });
 
   it("exist once per language, with their content in the HTML itself", () => {
@@ -500,7 +584,7 @@ describe("prerendered pages", () => {
       expect(explore.routeName).toBe("explore");
       expect(explore.body).toContain(t.explore.title);
     }
-    expect(STATIC_PAGES.map((page) => page.path)).toEqual(["/", "/explore", "/search"]);
+    expect(STATIC_PAGES.map((page) => page.path)).toEqual(["/", "/start", "/explore", "/search"]);
   });
 
   it("link to each other without a language, and to the other languages", () => {

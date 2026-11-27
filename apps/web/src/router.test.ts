@@ -9,6 +9,7 @@ import {
   mountHref,
   ownerFromInput,
   ownerHref,
+  startHref,
   TOKEN_REPOSITORY_PARAM,
   tokensHref,
 } from "./router.js";
@@ -17,6 +18,10 @@ describe("matchRoute", () => {
   it("knows the pages that exist once per language", () => {
     expect(matchRoute("/", "")).toEqual({ name: "landing" });
     expect(matchRoute("/", "?lang=ko")).toEqual({ name: "landing" });
+    expect(matchRoute("/start", "")).toEqual({ name: "start" });
+    expect(matchRoute("/start/board", "")).toEqual({ name: "not-found" });
+    expect(startHref()).toBe("/start");
+    expect(startHref("board")).toBe("/start#board");
     expect(matchRoute("/explore", "")).toEqual({ name: "explore" });
     expect(matchRoute("/explore/", "")).toEqual({ name: "not-found" });
     // The search across the packs (ADR-0075): the box alone, or the page of a term as written.

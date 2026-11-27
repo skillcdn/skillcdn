@@ -2,8 +2,9 @@
   overflow: clip;
 }
 
-/* The first screen: centred words, the search box, and the clients under it. The hero has no
-   light of its own: the light comes up past it from the page's ground (layout.module.css). */
+/* The first screen: centred words and the one action under them, with room to breathe above and
+   between them, and the top of the scene still on the same screen. The hero has no light of its
+   own: the light comes up past it from the page's ground (layout.module.css). */
 .hero {
   position: relative;
   padding-block: var(--space-9) var(--space-8);
@@ -15,7 +16,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  margin-bottom: var(--hero-eyebrow-gap);
+  margin-bottom: var(--space-6);
   color: var(--color-text-muted);
   font-size: var(--text-sm);
 }
@@ -33,29 +34,25 @@
   color: var(--color-accent);
 }
 
-/* The lead breaks where the copy breaks it: one thought a line. */
+/* The lead is one line where it fits, and breaks evenly where it does not. */
 .lead {
   max-width: var(--hero-lead-width);
-  margin: var(--space-5) auto 0;
+  margin: var(--space-6) auto 0;
   color: var(--color-text-muted);
   font-size: var(--text-lg);
   line-height: var(--leading-code);
-  white-space: pre-line;
-  text-wrap: pretty;
+  text-wrap: balance;
 }
 
-.search {
-  max-width: var(--search-width);
-  margin: var(--space-7) auto 0;
-}
-
-/* The clients, named with their marks, in one quiet row. */
+/* The clients, named with their marks, in one quiet row: under the scene, or under the action
+   where a deployment shows no scene. */
 .clients {
   display: grid;
   gap: var(--space-3);
   margin-top: var(--space-7);
   color: var(--color-text-faint);
   font-size: var(--text-xs);
+  text-align: center;
 }
 
 .clients > div {
@@ -97,6 +94,10 @@
 
 .actions.centered {
   justify-content: center;
+}
+
+.heroActions {
+  margin-top: var(--space-7);
 }
 
 .primary,
@@ -287,23 +288,13 @@
    the stage wider than the page is elsewhere. */
 .agents {
   position: relative;
-  padding-block: var(--space-7) var(--space-9);
-}
-
-/* Over what the stage lets out past its edges: the veil of its decision dims neither. */
-.agents > .actions {
-  position: relative;
-  z-index: 1;
+  padding-block: 0 var(--space-8);
 }
 
 .agentsStage {
   max-width: var(--agents-stage-width);
-  margin: var(--space-3) auto 0;
+  margin: 0 auto;
   padding-inline: var(--space-5);
-}
-
-.agents > .actions {
-  margin-top: var(--space-5);
 }
 
 /* The console: its own surface, a rule above and below, since its window is a light thing on
@@ -373,11 +364,11 @@
   gap: var(--space-3);
 }
 
-/* The three steps: a line across, the numbers on it, the words under each. */
+/* The steps: a line across, the numbers on it, the words under each. */
 .timeline {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-6);
 }
 
@@ -428,21 +419,13 @@
   text-wrap: balance;
 }
 
-.stepLink {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  justify-self: start;
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  text-decoration: none;
+/* The way to the page that says what each step takes. */
+.stepsMore {
+  margin-top: var(--space-7);
 }
 
-.stepLink svg {
-  translate: 0 var(--mark-optical);
-}
-
-/* The packs: the words and the address field on one side, the cloud of names on the other. */
+/* The packs: the words, the search box and the address field on one side, the cloud of names on
+   the other. */
 .packsGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -451,6 +434,11 @@
 }
 
 .packsGrid .sectionHead {
+  margin-bottom: var(--space-6);
+}
+
+/* The search box leads the section; the address field under it is the second way in. */
+.packsSearch {
   margin-bottom: var(--space-6);
 }
 
@@ -921,6 +909,16 @@
 }
 
 @media (max-width: 60rem) {
+  .timeline {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: var(--space-7);
+  }
+
+  /* The line across belongs to one row of numbers; two rows have none. */
+  .timeline::before {
+    display: none;
+  }
+
   .packsGrid {
     grid-template-columns: 1fr;
     gap: var(--space-6);
@@ -956,12 +954,6 @@
 
   .features li:nth-child(n + 3) {
     border-top: 1px solid var(--color-glass-edge);
-  }
-}
-
-@media (max-width: 57rem) {
-  .agentsStage {
-    margin-top: var(--space-6);
   }
 }
 
@@ -1011,8 +1003,7 @@
     align-self: center;
   }
 
-  .timeline p,
-  .stepLink {
+  .timeline p {
     grid-column: 2;
   }
 
@@ -1023,10 +1014,11 @@
 
 @media (max-width: 40rem) {
   .hero {
-    padding-block: var(--space-8) var(--space-7);
+    padding-block: var(--space-7) var(--space-5);
   }
 
   .eyebrow {
+    margin-bottom: var(--hero-eyebrow-gap);
     font-size: var(--text-xs);
   }
 
@@ -1038,16 +1030,12 @@
     font-size: var(--text-md);
   }
 
-  .search {
-    margin-top: var(--space-6);
-  }
-
   .clients {
     margin-top: var(--space-6);
   }
 
   .agents {
-    padding-block: var(--space-6) var(--space-8);
+    padding-block: 0 var(--space-7);
   }
 
   .agentsStage {
@@ -1161,6 +1149,19 @@
 
   .large {
     width: 100%;
+  }
+
+  /* The pair of the first screen stands side by side on a phone as well, so that the scene
+     under it stays on the same screen. */
+  .heroActions {
+    flex-wrap: nowrap;
+    margin-top: var(--space-6);
+  }
+
+  .heroActions > .large {
+    flex: 1;
+    width: auto;
+    padding-inline: var(--space-3);
   }
 }
 

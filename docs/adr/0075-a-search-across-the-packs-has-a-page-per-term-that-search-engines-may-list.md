@@ -1,6 +1,6 @@
 # ADR-0075: A search across the packs has a page per term that search engines may list
 
-- Status: Accepted; [ADR-0128](0128-the-front-page-shows-the-agent-accounts-as-a-scene-the-browser-plays.md) adds a section of the front page to point 5
+- Status: Accepted; [ADR-0128](0128-the-front-page-shows-the-agent-accounts-as-a-scene-the-browser-plays.md) adds a section of the front page to point 5, and [ADR-0129](0129-the-front-page-leads-with-one-action-and-a-start-page-says-how-to-begin.md) changes what the front page leads with and the order of its sections
 - Date: 2026-10-27
 - Builds on [ADR-0070](0070-a-deployment-is-searched-across-every-pack-it-serves.md) (the search across every pack, over MCP and REST), [ADR-0028](0028-the-front-page-and-the-explorer-are-operator-content.md) (the front page and the explorer as operator content) and [ADR-0050](0050-the-pages-tell-analytics-only-what-is-public-and-usage-is-counted-in-the-database.md) (what the pages tell analytics).
 

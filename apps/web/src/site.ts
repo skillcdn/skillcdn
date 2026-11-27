@@ -10,7 +10,8 @@ export { ORIGIN_META_NAME, ORIGIN_PLACEHOLDER, REPOSITORY_URL };
 
 /**
  * The reference console (ADR-0047): a pack of its own, which an agent connected to it follows to
- * set a console up and run one. The front page leads there, since the pack is the way in.
+ * set a console up and run one. The start page gives its address to connect, and the front page
+ * links its page.
  */
 export const CONSOLE_PACK_ADDRESS = "/gh/skillcdn/console";
 

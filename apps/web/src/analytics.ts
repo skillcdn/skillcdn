@@ -165,6 +165,8 @@ export function pageOfRoute(route: Route): AnalyticsPage | undefined {
   switch (route.name) {
     case "landing":
       return { path: PATHS.landing, title: "landing" };
+    case "start":
+      return { path: PATHS.start, title: "start" };
     case "explore":
       return { path: PATHS.explore, title: "explore" };
     // Without the term, which is what somebody typed: a search is counted, never read.

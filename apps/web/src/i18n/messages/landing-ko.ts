@@ -1,10 +1,12 @@
 import type { LandingMessages } from "./landing-en.js";
 
 export const landingKo: LandingMessages = {
-  eyebrow: "AI 에이전트로 운영하는 1인 회사",
+  eyebrow: "전문가의 스킬을 갖춘 에이전트 직원",
   title: "AI를 채용하세요.",
   titleAccent: "일할수록 똑똑해집니다.",
-  lead: "전문가가 일하는 방법을 스킬로 받아 쓰세요.\n지금 쓰는 AI가 마케터, 디자이너, 개발자처럼 일합니다.",
+  lead: "자기 계정으로 팀에 들어와 일을 가져가고, 보고하고, 결정할 것만 묻습니다.",
+  start: "시작하기",
+  searchSkills: "스킬 검색",
   search: {
     label: "무엇을 만들까요?",
     placeholder: "무엇을 만들까요? 카드뉴스, 쇼츠 광고, 결제 되는 웹사이트…",
@@ -20,7 +22,6 @@ export const landingKo: LandingMessages = {
   },
   clients: "지금 쓰는 AI 앱에서 바로",
   agents: {
-    start: "콘솔에서 시작하기",
     scene: {
       agents: [
         {
@@ -369,29 +370,31 @@ export const landingKo: LandingMessages = {
   },
   steps: {
     eyebrow: "시작하는 방법",
-    title: "세 단계면 AI 팀이 일을 시작합니다.",
+    title: "스킬 하나로 시작해, AI 팀까지 갑니다.",
     items: [
       {
-        title: "스킬 팩 가져오기",
-        body: "skillcdn/skills를 내 GitHub로 포크하세요. 마케팅, 디자인, 개발, 기획, 영상 제작을 하는 방법이 담긴 스킬이 내 회사 것이 됩니다.",
-        link: "팩 열기",
+        title: "스킬 써 보기",
+        body: "쓰던 AI 앱에 팩 주소를 연결하고, 한 문장으로 일을 맡겨 보세요.",
       },
       {
-        title: "콘솔 열기",
-        body: "할 일을 올리고 진행을 지켜보는 작업 보드입니다. 콘솔 팩을 AI에 연결하면 설치를 처음부터 차근차근 안내합니다.",
-        link: "콘솔 팩 열기",
+        title: "보드에서 내 AI와 일하기",
+        body: "내 컴퓨터에 콘솔을 띄우세요. 내 AI가 보드의 일을 가져가 보고하고 묻습니다.",
       },
       {
-        title: "AI 연결하기",
-        body: "ChatGPT, Claude, Cursor, Codex, Gemini CLI처럼 쓰던 AI 앱에 팩 주소를 연결하세요. AI가 즉시 전문가가 됩니다.",
-        link: "연결 안내",
+        title: "에이전트 직원 채용하기",
+        body: "자기 계정으로 로그인해 혼자 일하는 에이전트 직원을 팀에 들이세요.",
+      },
+      {
+        title: "팀으로 넓히기",
+        body: "조직의 주소에 있는 콘솔에서 사람과 에이전트 직원이 한 보드로 일합니다.",
       },
     ],
+    more: "단계별로 필요한 것 보기",
   },
   packs: {
     eyebrow: "스킬 팩",
-    title: "다양한 전문가 스킬 팩을 주소 하나로 만나보세요.",
-    lead: "검증된 팩부터 둘러보세요. 내 GitHub 저장소는 주소를 넣으면 바로 팩으로 열립니다.",
+    title: "맡길 일에 맞는 스킬을 찾으세요.",
+    lead: "모든 공개 팩을 단어와 의미로 검색합니다. 내 GitHub 저장소는 주소를 넣으면 바로 팩으로 열립니다.",
     all: "추천 팩 모두 보기",
     skills: (count: number) => `스킬 ${count}개`,
   },
@@ -425,12 +428,17 @@ export const landingKo: LandingMessages = {
       {
         question: "어떻게 시작하나요?",
         answer:
-          "만들고 싶은 것을 검색해 스킬을 고르고, 그 스킬이 든 팩의 주소를 AI 앱에 연결하세요. 앱별 연결 방법은 팩 페이지에 있습니다.",
+          "만들고 싶은 것을 검색해 스킬을 고르고, 그 스킬이 든 팩의 주소를 AI 앱에 연결하세요. 앱별 연결 방법은 팩 페이지에 있습니다. 그다음 단계는 시작하기 페이지에 단계마다 필요한 것과 함께 있습니다.",
       },
       {
         question: "무엇부터 시작하면 될까요?",
         answer:
           "지금 당장 필요한 일 하나부터 시작하세요. 카드뉴스나 소개 자료처럼 한 문장으로 맡길 수 있는 일을 검색해 결과를 받아 보세요. 맡길 일이 여러 개가 되면 콘솔 팩을 연결해 보드에서 관리하면 됩니다.",
+      },
+      {
+        question: "에이전트 직원은 무엇인가요?",
+        answer:
+          "팀의 구성원으로 일하는 AI 에이전트입니다. 자기 계정으로 콘솔에 로그인해 일을 배정받고, 보고하고, 결정할 것만 묻습니다. 켜 두는 컴퓨터에서 실행되고, Claude Code나 Codex 같은 그 AI 제품의 구독이 따로 필요합니다.",
       },
       {
         question: "빌더는 누구인가요?",
@@ -441,7 +449,6 @@ export const landingKo: LandingMessages = {
   },
   cta: {
     title: "오늘, 당신의 AI 팀을 시작하세요.",
-    search: "만들고 싶은 것 검색하기",
     join: "빌더에 합류하세요",
     share: "내가 만든 팩 공유하기",
   },

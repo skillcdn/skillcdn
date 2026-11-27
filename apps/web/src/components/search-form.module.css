@@ -42,6 +42,8 @@
   background: transparent;
   color: inherit;
   font-size: var(--text-md);
+  /* A hint longer than a narrow box ends in an ellipsis, not in half a word. */
+  text-overflow: ellipsis;
 }
 
 .input:focus-visible {

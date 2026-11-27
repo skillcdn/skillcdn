@@ -20,17 +20,17 @@ import { SearchForm } from "../components/search-form.js";
 import { ShowcaseGrid } from "../components/showcase-card.js";
 import { ArrowIcon, Container, cx, ExternalIcon, VerifiedMark } from "../components/ui.js";
 import { useCloudDrag } from "../components/use-cloud-drag.js";
-import { AUTHORS_GUIDE_SLUG, USE_GUIDE_SLUG } from "../docs/catalog.js";
+import { AUTHORS_GUIDE_SLUG } from "../docs/catalog.js";
 import { useFeatures } from "../features.js";
 import { useI18n } from "../i18n/index.js";
 import { Link } from "../navigation.js";
-import { docsHref, PATHS, searchHref } from "../router.js";
+import { docsHref, PATHS, searchHref, startHref } from "../router.js";
 import { applyHead, buildHead } from "../seo/head.js";
 import { showcaseEntries, showcaseOrganizations } from "../showcase.js";
 import { CONSOLE_PACK_ADDRESS, hostOf, LINKS } from "../site.js";
 import styles from "./landing.module.css";
 
-/** The clients named under the search box, each with its mark from `public/clients/`. */
+/** The clients named on the first screen, each with its mark from `public/clients/`. */
 const CLIENTS = [
   { client: "chatgpt", icon: "openai" },
   { client: "claude", icon: "claude" },
@@ -231,6 +231,24 @@ function Twinkle(props: { readonly at: string }) {
   return <i className={cx(styles.twinkle, styles[`twinkle-${props.at}`])} aria-hidden="true" />;
 }
 
+/** The AI apps the packs and the console work in, named with their marks in one quiet row. */
+function Clients() {
+  const { t } = useI18n();
+  return (
+    <div className={styles.clients}>
+      <span>{t.landing.clients}</span>
+      <div>
+        {CLIENTS.map(({ client, icon }) => (
+          <span key={client}>
+            <img src={`/clients/${icon}.svg`} alt="" width="20" height="20" />
+            {t.connect.clients[client].label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function SectionHead(props: {
   readonly kicker: string;
   readonly title: string;
@@ -333,36 +351,27 @@ export function LandingPage(props: { readonly origin: string }) {
             <span>{copy.titleAccent}</span>
           </h1>
           <p className={styles.lead}>{copy.lead}</p>
-          {features.search ? (
-            <SearchForm
-              className={styles.search}
-              from="hero"
-              placeholder={copy.search.placeholder}
-              chips={copy.search.chips}
-            />
-          ) : (
-            <div className={styles.actions}>
-              <Link
-                className={styles.primary}
-                href={PATHS.explore}
-                onClick={() => track("cta_click", { id: "hero" })}
-              >
-                {t.explore.title}
-                <ArrowIcon />
-              </Link>
-            </div>
-          )}
-          <div className={styles.clients}>
-            <span>{copy.clients}</span>
-            <div>
-              {CLIENTS.map(({ client, icon }) => (
-                <span key={client}>
-                  <img src={`/clients/${icon}.svg`} alt="" width="20" height="20" />
-                  {t.connect.clients[client].label}
-                </span>
-              ))}
-            </div>
+          {/* One action, the way to start, and the search across the packs as the quieter way
+              beside it; where the deployment has no search, the explorer. */}
+          <div className={cx(styles.actions, styles.centered, styles.heroActions)}>
+            <Link
+              className={cx(styles.primary, styles.large)}
+              href={startHref()}
+              onClick={() => track("cta_click", { id: "hero_start" })}
+            >
+              {copy.start}
+              <ArrowIcon />
+            </Link>
+            <Link
+              className={cx(styles.ghost, styles.large)}
+              href={features.search ? searchHref() : PATHS.explore}
+              onClick={() => track("cta_click", { id: "hero_search" })}
+            >
+              {features.search ? copy.searchSkills : t.nav.explore}
+            </Link>
           </div>
+          {/* Under the scene where the page shows it; here where it does not. */}
+          {!shows("agents") && <Clients />}
         </Container>
       </section>
 
@@ -372,15 +381,8 @@ export function LandingPage(props: { readonly origin: string }) {
             {/* Remounted per language, since what is typed and where lines break is measured. */}
             <AgentsStage key={language} />
           </div>
-          <Container className={cx(styles.actions, styles.centered)}>
-            <Link
-              className={cx(styles.primary, styles.large)}
-              href={CONSOLE_PACK_ADDRESS}
-              onClick={() => track("cta_click", { id: "agents_start" })}
-            >
-              {copy.agents.start}
-              <ArrowIcon />
-            </Link>
+          <Container>
+            <Clients />
           </Container>
         </section>
       )}
@@ -441,14 +443,18 @@ export function LandingPage(props: { readonly origin: string }) {
               <div className={styles.packBarActions}>
                 <Link
                   className={styles.primary}
+                  href={startHref("board")}
+                  onClick={() => track("cta_click", { id: "console_start" })}
+                >
+                  {copy.console.pack.guide}
+                  <ArrowIcon />
+                </Link>
+                <Link
+                  className={styles.ghost}
                   href={CONSOLE_PACK_ADDRESS}
                   onClick={() => track("cta_click", { id: "console_pack" })}
                 >
                   {copy.console.pack.open}
-                  <ArrowIcon />
-                </Link>
-                <Link className={styles.ghost} href={CONSOLE_PACK_ADDRESS}>
-                  {copy.console.pack.guide}
                 </Link>
                 {features.consoleUrl !== undefined && (
                   // The console itself, for whoever has a seat there; a deployment without one
@@ -470,38 +476,6 @@ export function LandingPage(props: { readonly origin: string }) {
         </section>
       )}
 
-      {shows("steps") && (
-        <section id="steps" className={styles.steps}>
-          <Twinkle at="steps" />
-          <Container>
-            <SectionHead kicker={copy.steps.eyebrow} title={copy.steps.title} />
-            <ol className={styles.timeline} ref={stepsRef}>
-              {copy.steps.items.map((step, index) => {
-                const href =
-                  index === 0
-                    ? `/gh/skillcdn/skills`
-                    : index === 1
-                      ? CONSOLE_PACK_ADDRESS
-                      : docsHref(USE_GUIDE_SLUG);
-                return (
-                  <li key={step.title}>
-                    <span className={styles.stepNumber} aria-hidden="true">
-                      {index + 1}
-                    </span>
-                    <h3>{step.title}</h3>
-                    <p>{step.body}</p>
-                    <Link className={styles.stepLink} href={href}>
-                      {step.link}
-                      <ArrowIcon />
-                    </Link>
-                  </li>
-                );
-              })}
-            </ol>
-          </Container>
-        </section>
-      )}
-
       {shows("packs") && (
         <section id="packs" className={styles.packs}>
           {/* The room a pill of the cloud may be pulled about in, less the words beside it. */}
@@ -512,6 +486,15 @@ export function LandingPage(props: { readonly origin: string }) {
                 title={copy.packs.title}
                 lead={copy.packs.lead}
               />
+              {/* The search across the packs stands here, with the packs it searches. */}
+              {features.search && (
+                <SearchForm
+                  className={styles.packsSearch}
+                  from="landing"
+                  placeholder={copy.search.placeholder}
+                  chips={copy.search.chips}
+                />
+              )}
               <AddressForm origin={props.origin} label={copy.authors.check} />
               <p className={styles.packsAll}>
                 <Link
@@ -525,6 +508,37 @@ export function LandingPage(props: { readonly origin: string }) {
             </div>
             <div className={cx(styles.cloudSide, glass.reveal, glass.late)}>
               <PackCloud />
+            </div>
+          </Container>
+        </section>
+      )}
+
+      {shows("steps") && (
+        <section id="steps" className={styles.steps}>
+          <Twinkle at="steps" />
+          <Container>
+            <SectionHead kicker={copy.steps.eyebrow} title={copy.steps.title} />
+            <ol className={styles.timeline} ref={stepsRef}>
+              {copy.steps.items.map((step, index) => (
+                <li key={step.title}>
+                  <span className={styles.stepNumber} aria-hidden="true">
+                    {index + 1}
+                  </span>
+                  <h3>{step.title}</h3>
+                  <p>{step.body}</p>
+                </li>
+              ))}
+            </ol>
+            {/* What each takes, and what to tell an AI, is the start page's (ADR-0129). */}
+            <div className={cx(styles.actions, styles.stepsMore, glass.reveal)}>
+              <Link
+                className={styles.primary}
+                href={startHref()}
+                onClick={() => track("cta_click", { id: "steps_start" })}
+              >
+                {copy.steps.more}
+                <ArrowIcon />
+              </Link>
             </div>
           </Container>
         </section>
@@ -597,10 +611,10 @@ export function LandingPage(props: { readonly origin: string }) {
             <div className={cx(styles.actions, styles.centered)}>
               <Link
                 className={cx(styles.primary, styles.large)}
-                href={features.search ? searchHref() : PATHS.explore}
+                href={startHref()}
                 onClick={() => track("cta_click", { id: "start" })}
               >
-                {copy.cta.search}
+                {copy.start}
                 <ArrowIcon />
               </Link>
               {shows("builders") && (

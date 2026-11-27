@@ -1,0 +1,658 @@
+.page {
+  --map-face: 5.5rem;
+  --rail-face: 4rem;
+  --mark: 2.25rem;
+  --steps-gap: var(--space-9);
+  padding-block: var(--space-8) var(--space-9);
+}
+
+/* The head: a badge, a question, and one paragraph, centred. */
+.head {
+  max-width: var(--width-prose);
+  margin-inline: auto;
+  text-align: center;
+}
+
+.kicker {
+  display: inline-flex;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
+  border-radius: var(--radius-full);
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.title {
+  margin-top: var(--space-4);
+  font-size: var(--text-hero);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-display);
+  font-weight: var(--weight-display);
+  text-wrap: balance;
+}
+
+.lead {
+  margin-top: var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--text-lg);
+  line-height: var(--leading-normal);
+  text-wrap: balance;
+}
+
+/* A face: a drawing of the page's own, one planet of the scene, or three together for a team, on
+   a light of its own tone.
+   The bob is on the HTML element that holds a planet, never on its drawing, so that it stays on
+   the compositor (README, Gotchas). */
+.face {
+  position: relative;
+  isolation: isolate;
+  display: block;
+  flex: none;
+}
+
+.face::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: -35%;
+  border-radius: var(--radius-full);
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--halo) 38%, transparent),
+    color-mix(in srgb, var(--halo) 10%, transparent) 60%,
+    transparent
+  );
+}
+
+.face > span {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+/* The page's own drawings: where they are defined, and where one is shown. */
+.shapes {
+  position: absolute;
+}
+
+.drawing {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.crowd > span:nth-child(1) {
+  inset: 14% 30% 14% -6%;
+}
+
+.crowd > span:nth-child(2) {
+  inset: -6% -4% 52% 50%;
+}
+
+.crowd > span:nth-child(3) {
+  inset: 50% -6% -8% 48%;
+}
+
+.halo-mint {
+  --halo: var(--agents-mint-1);
+}
+
+.halo-ocean {
+  --halo: var(--agents-ocean-2);
+}
+
+.halo-violet {
+  --halo: var(--agents-violet-2);
+}
+
+/* The steps at a glance: their faces on one dotted path, each a link to its step below. */
+.map {
+  margin-top: var(--space-8);
+}
+
+.map ol {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+}
+
+.map li {
+  position: relative;
+}
+
+/* The path from one face to the next, kept clear of both. */
+.map li:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: calc(var(--space-4) + var(--map-face) / 2);
+  left: calc(50% + var(--map-face) / 2 + var(--space-3));
+  width: calc(100% + var(--space-4) - var(--map-face) - 2 * var(--space-3));
+  border-top: 2px dashed color-mix(in srgb, var(--color-accent) 40%, transparent);
+}
+
+.stop {
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  gap: var(--space-1);
+  height: 100%;
+  padding: var(--space-4) var(--space-3);
+  border-radius: var(--radius-xl);
+  color: var(--color-text);
+  text-align: center;
+  text-decoration: none;
+  transition: background var(--transition);
+}
+
+.stop:hover {
+  background: var(--color-glass-hover);
+}
+
+.stop:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.stopFace {
+  width: var(--map-face);
+  height: var(--map-face);
+  margin-bottom: var(--space-3);
+  transition: translate var(--transition);
+}
+
+.stop:hover .stopFace {
+  translate: 0 calc(-1 * var(--space-1));
+}
+
+.number {
+  color: var(--color-accent);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+}
+
+.stopTitle {
+  font-weight: var(--weight-bold);
+  text-wrap: balance;
+}
+
+.stopWhere {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* The steps, one after another on a line that runs from face to face. */
+.steps {
+  display: grid;
+  gap: var(--steps-gap);
+  margin-top: var(--space-9);
+}
+
+.step {
+  display: grid;
+  grid-template-columns: var(--rail-face) minmax(0, 1fr);
+  gap: var(--space-6);
+  /* Added to the document's own, which clears the header. */
+  scroll-margin-top: var(--space-6);
+}
+
+.rail {
+  position: relative;
+}
+
+.railFace {
+  width: var(--rail-face);
+  height: var(--rail-face);
+}
+
+.step:not(:last-child) .rail::after {
+  content: "";
+  position: absolute;
+  top: calc(var(--rail-face) + var(--space-5));
+  bottom: calc(var(--space-5) - var(--steps-gap));
+  left: calc(50% - 1px);
+  width: 2px;
+  background: repeating-linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--color-accent) 40%, transparent) 0 var(--space-2),
+    transparent var(--space-2) var(--space-4)
+  );
+}
+
+.body {
+  min-width: 0;
+}
+
+.stepHead {
+  display: grid;
+  gap: var(--space-2);
+  max-width: var(--width-prose);
+  /* The heading's first line sits level with the middle of the face beside it. */
+  padding-top: var(--space-1);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.where {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.stepHead h2 {
+  font-size: var(--text-2xl);
+  letter-spacing: var(--tracking-display);
+  text-wrap: balance;
+}
+
+.gain {
+  color: var(--color-text-muted);
+  font-size: var(--text-lg);
+  line-height: var(--leading-normal);
+  text-wrap: pretty;
+}
+
+/* What to have ready beside what to do: a list to tick on one side, the moves on the other. */
+.work {
+  display: grid;
+  grid-template-columns: minmax(0, 4fr) minmax(0, 7fr);
+  align-items: start;
+  gap: var(--space-5);
+  margin-top: var(--space-5);
+}
+
+.label {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+}
+
+/* Links that carry an arrow after their words. */
+.shared a,
+.more a,
+.stuckLinks a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  justify-self: start;
+  text-decoration: none;
+}
+
+.shared svg,
+.more svg,
+.stuckLinks svg {
+  translate: 0 var(--mark-optical);
+}
+
+/* The list stays in view beside the moves while they are read, under the header. */
+.needs {
+  position: sticky;
+  top: calc(var(--header-height) + var(--space-5));
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--color-bg-raised) 45%, transparent);
+}
+
+.needs ul {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.needs li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  text-wrap: pretty;
+}
+
+.needs li svg {
+  margin-top: var(--label-optical);
+  color: var(--color-success);
+}
+
+/* The way in without an install, under the list of the step it spares. */
+.shared {
+  display: grid;
+  gap: var(--space-1);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  text-wrap: pretty;
+}
+
+.sharedTitle {
+  color: var(--color-text);
+  font-weight: var(--weight-bold);
+}
+
+.follow {
+  padding: var(--space-5) var(--space-6) var(--space-6);
+}
+
+/* The moves of a step, each with its mark, on a thin line from one mark to the next. */
+.moves {
+  display: grid;
+  gap: var(--space-5);
+  margin-top: var(--space-4);
+}
+
+.move {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--mark) minmax(0, 1fr);
+  gap: var(--space-4);
+}
+
+.move:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  top: calc(var(--mark) + var(--space-2));
+  bottom: calc(var(--space-2) - var(--space-5));
+  left: calc(var(--mark) / 2 - 1px);
+  width: 2px;
+  border-radius: var(--radius-full);
+  background: var(--color-border);
+}
+
+.mark {
+  display: grid;
+  place-items: center;
+  width: var(--mark);
+  height: var(--mark);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 45%, transparent);
+  border-radius: var(--radius-full);
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
+}
+
+.moveBody {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.moveTitle {
+  display: flex;
+  align-items: center;
+  min-height: var(--mark);
+  font-weight: var(--weight-medium);
+}
+
+.more {
+  font-size: var(--text-sm);
+}
+
+/* The sentence, as a message one sends: on the right, in the accent, its corner toward the
+   sender. */
+.say {
+  display: grid;
+  justify-items: end;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.bubble {
+  max-width: 34rem;
+  margin: 0;
+  padding: var(--space-3) var(--space-5) var(--space-4);
+  border-radius: var(--radius-xl) var(--radius-xl) var(--radius-sm) var(--radius-xl);
+  background: linear-gradient(
+    135deg,
+    var(--color-accent-solid),
+    color-mix(in srgb, var(--color-accent-solid) 62%, var(--agents-violet-3))
+  );
+  box-shadow: var(--glow);
+  color: var(--color-accent-contrast);
+  font-size: var(--text-lg);
+  line-height: var(--leading-normal);
+  text-wrap: pretty;
+}
+
+.next {
+  color: var(--color-text-muted);
+  line-height: var(--leading-normal);
+  text-wrap: pretty;
+}
+
+.search {
+  display: grid;
+  gap: var(--space-3);
+  max-width: var(--width-prose);
+  margin-top: var(--space-6);
+}
+
+/* The last word: where to turn when a step stops. */
+.stuck {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-5) var(--space-6);
+  margin-top: var(--space-9);
+  padding: var(--space-6);
+}
+
+.stuckFace {
+  width: var(--rail-face);
+  height: var(--rail-face);
+}
+
+.stuck h2 {
+  font-size: var(--text-xl);
+  letter-spacing: var(--tracking-display);
+}
+
+.stuck p {
+  color: var(--color-text-muted);
+  text-wrap: pretty;
+}
+
+.stuck h2 + p {
+  margin-top: var(--space-1);
+}
+
+.stuckLinks {
+  display: grid;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .map .face > span {
+    animation: start-bob 5s ease-in-out infinite alternate;
+  }
+
+  .map li:nth-child(2) .face > span {
+    animation-delay: -1.3s;
+  }
+
+  .map li:nth-child(3) .face > span {
+    animation-delay: -2.6s;
+  }
+
+  .map li:nth-child(4) .face > span:nth-child(1) {
+    animation-delay: -3.9s;
+  }
+
+  .map li:nth-child(4) .face > span:nth-child(2) {
+    animation-delay: -0.7s;
+  }
+
+  .map li:nth-child(4) .face > span:nth-child(3) {
+    animation-delay: -2s;
+  }
+}
+
+@keyframes start-bob {
+  from {
+    translate: 0 4%;
+  }
+
+  to {
+    translate: 0 -4%;
+  }
+}
+
+@media (max-width: 60rem) {
+  .work {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .needs {
+    position: static;
+  }
+}
+
+@media (max-width: 52rem) {
+  .page {
+    --steps-gap: var(--space-8);
+    padding-block: var(--space-7) var(--space-8);
+  }
+
+  .map ol {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .map li::after {
+    display: none;
+  }
+
+  .stuck {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .stuckLinks {
+    grid-column: 2;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-5);
+  }
+}
+
+/* On a phone the steps at a glance are a list, the face of a step stands beside its number, and
+   what a move holds takes the whole width under its mark. */
+@media (max-width: 40rem) {
+  .page {
+    --map-face: 3rem;
+    --rail-face: 3rem;
+    --mark: 2rem;
+  }
+
+  .lead,
+  .gain {
+    font-size: var(--text-md);
+  }
+
+  .map {
+    margin-top: var(--space-6);
+  }
+
+  .map ol {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .stop {
+    grid-template-columns: var(--map-face) minmax(0, 1fr);
+    justify-items: start;
+    align-items: center;
+    gap: 0 var(--space-4);
+    padding: var(--space-2) var(--space-3);
+    text-align: left;
+  }
+
+  .stopFace {
+    grid-row: 1 / 4;
+    margin-bottom: 0;
+  }
+
+  .stop > :not(.stopFace) {
+    grid-column: 2;
+  }
+
+  .steps {
+    margin-top: var(--space-8);
+  }
+
+  .step {
+    position: relative;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .rail {
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+
+  .step:not(:last-child) .rail::after {
+    display: none;
+  }
+
+  .stepHead {
+    padding-top: 0;
+  }
+
+  .meta {
+    min-height: var(--rail-face);
+    padding-left: calc(var(--rail-face) + var(--space-3));
+  }
+
+  .move {
+    gap: var(--space-3);
+  }
+
+  .move:not(:last-child)::before {
+    display: none;
+  }
+
+  .moveBody {
+    display: contents;
+  }
+
+  .moveBody > :not(.moveTitle) {
+    grid-column: 1 / -1;
+  }
+
+  .stepHead h2 {
+    font-size: var(--text-xl);
+  }
+
+  .needs {
+    padding: var(--space-4);
+  }
+
+  .follow {
+    padding: var(--space-4);
+  }
+
+  .bubble {
+    font-size: var(--text-md);
+  }
+
+  .stuck {
+    grid-template-columns: minmax(0, 1fr);
+    padding: var(--space-5);
+  }
+
+  .stuckLinks {
+    grid-column: auto;
+  }
+}

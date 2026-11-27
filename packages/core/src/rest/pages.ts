@@ -61,17 +61,19 @@ export function searchTermOfPath(pathname: string): string | undefined {
 }
 
 /**
- * The sections of the front page after its first screen, in the order the page shows them. An
- * operator lists the ones a deployment shows (`LANDING_SECTIONS` in the environment); the first
- * screen, with the search box, is always there.
+ * The sections of the front page after its first screen, in the order the page shows them
+ * (ADR-0129): what the skills make and the board they are worked on, then the packs, where the
+ * search box stands, then the ways to start. An operator lists the ones a deployment shows
+ * (`LANDING_SECTIONS` in the environment); the first screen, with what the page promises and the
+ * way to start, is always there.
  */
 export const LANDING_SECTIONS = [
   "agents",
   "organizations",
   "showcase",
   "console",
-  "steps",
   "packs",
+  "steps",
   "builders",
   "faq",
   "cta",

@@ -11,15 +11,15 @@ import { ArrowIcon, cx, SearchIcon } from "./ui.js";
  * The search box (ADR-0075): one field and one button, which lead to the page of the term. The
  * form has a real action, so that it works without a script, where the server turns the query
  * into the page of the term; with one, the page is navigated to at once. The box is the same
- * wherever it stands, on the first screen and in the explorer alike. The chips under it are
- * terms to try, each a link to its page.
+ * wherever it stands: with the packs on the front page, on the start page and in the explorer.
+ * The chips under it are terms to try, each a link to its page.
  */
 export function SearchForm(props: {
   readonly initialValue?: string | undefined;
   readonly placeholder?: string;
   readonly chips?: readonly string[];
   readonly className?: string;
-  /** Where the submit is counted from (`hero`, `explore`, `results`). */
+  /** Where the submit is counted from (`landing`, `start`, `explore`, `results`). */
   readonly from: string;
 }) {
   const { t } = useI18n();
