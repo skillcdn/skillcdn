@@ -7,7 +7,12 @@ import {
   useState,
 } from "react";
 import { useI18n } from "../i18n/index.js";
-import type { DemoMoment, DemoTask, DemoTaskState } from "../i18n/messages/landing-en.js";
+import type {
+  DemoCategory,
+  DemoMoment,
+  DemoTask,
+  DemoTaskState,
+} from "../i18n/messages/landing-en.js";
 import { Planet, type PlanetKind, type PlanetTone } from "./agents-planet.js";
 import { BrandSymbol } from "./brand.js";
 import styles from "./console-demo.module.css";
@@ -25,14 +30,18 @@ import { useInView } from "./use-in-view.js";
 
 /** The columns the board shows open; the last one is folded, as the console folds it. */
 const OPEN_STATES: readonly DemoTaskState[] = ["idea", "ready", "in_progress", "in_review"];
-/** The agents at work on the board: the four hired in the scene above it, each on the cards whose
-    number falls to it. */
-const WORKERS: readonly (readonly [PlanetKind, PlanetTone])[] = [
-  [0, "violet"],
-  [1, "sunset"],
-  [2, "mint"],
-  [3, "ocean"],
-];
+/**
+ * The agents at work on the board, each on the cards of its own trade: the three hired in the
+ * scene of the first screen, with the faces they have there (`LOOKS` in agents-stage.tsx), and
+ * the fourth face of that scene for the trades it hires nobody for.
+ */
+export const WORKERS: Readonly<Record<DemoCategory, readonly [PlanetKind, PlanetTone]>> = {
+  marketing: [0, "violet"],
+  design: [1, "sunset"],
+  engineering: [2, "mint"],
+  product: [3, "ocean"],
+  operations: [3, "ocean"],
+};
 
 /** How far a mouse travels before a pressed card comes loose. */
 const DRAG_SLACK = 4;
@@ -254,15 +263,15 @@ function Card(props: {
           </span>
         )}
         <span className={styles.spacer} />
-        {task.working === true && <Worker number={task.number} />}
+        {task.working === true && <Worker category={task.category} />}
       </span>
     </article>
   );
 }
 
 /** The face of the agent that works a card: its planet on a graphite tile. */
-function Worker(props: { readonly number: number }) {
-  const [kind, tone] = WORKERS[props.number % WORKERS.length] ?? [0, "violet"];
+function Worker(props: { readonly category: DemoCategory }) {
+  const [kind, tone] = WORKERS[props.category];
   return (
     <span className={styles.avatar}>
       <Planet kind={kind} tone={tone} />

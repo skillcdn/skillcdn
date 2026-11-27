@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { messagesFor } from "../i18n/index.js";
 import { LANGUAGES } from "../i18n/languages.js";
 import type { DemoTask } from "../i18n/messages/landing-en.js";
-import { afterMoment, edgeScroll, landing, momentDelay, moved } from "./console-demo.js";
+import { afterMoment, edgeScroll, landing, momentDelay, moved, WORKERS } from "./console-demo.js";
 
 // The console on the front page plays a few moments of a working day as it comes into view;
 // each is a change of the board that a language pack describes.
@@ -30,6 +30,26 @@ describe("the moments of the console on the front page", () => {
       for (const task of tasks) {
         expect(words.columns[task.state]).toBeTruthy();
       }
+    }
+  });
+
+  it("show a card at work under the face of its trade, as the scene of the first screen hires them", () => {
+    // Marketing, design and engineering are three agents with three faces; a trade the scene
+    // hires nobody for has the fourth, and never one of theirs.
+    const face = (category: DemoTask["category"]) => WORKERS[category].join(" ");
+    const hired = [face("marketing"), face("design"), face("engineering")];
+    expect(new Set(hired).size).toBe(3);
+    expect(hired).not.toContain(face("product"));
+    expect(hired).not.toContain(face("operations"));
+    for (const language of LANGUAGES) {
+      const words = messagesFor(language).landing.console.window;
+      const scene = messagesFor(language).landing.agents.scene.agents;
+      // The scene's three stand in that order, and the board's names of their trades are the same.
+      expect(scene.map((agent) => agent.title)).toEqual([
+        words.categories.marketing,
+        words.categories.design,
+        words.categories.engineering,
+      ]);
     }
   });
 
