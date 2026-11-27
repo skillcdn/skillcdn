@@ -4,7 +4,7 @@ export const landingKo: LandingMessages = {
   eyebrow: "AI 에이전트로 운영하는 1인 회사",
   title: "AI를 채용하세요.",
   titleAccent: "일할수록 똑똑해집니다.",
-  lead: "전문가가 일하는 방법을 스킬로 받아 쓰세요.\n지금 쓰는 AI가 마케터, 디자이너, 개발자처럼 일합니다.\n혼자서도 회사 하나를 꾸릴 수 있습니다.",
+  lead: "전문가가 일하는 방법을 스킬로 받아 쓰세요.\n지금 쓰는 AI가 마케터, 디자이너, 개발자처럼 일합니다.",
   search: {
     label: "무엇을 만들까요?",
     placeholder: "무엇을 만들까요? 카드뉴스, 쇼츠 광고, 결제 되는 웹사이트…",

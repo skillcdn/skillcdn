@@ -34,7 +34,7 @@ export const landingEn = {
   eyebrow: "A one-person company, run with AI agents",
   title: "Hire an AI.",
   titleAccent: "It gets smarter as it works.",
-  lead: "Take the way experts work, as skills.\nThe AI you already use works as your marketer, your designer and your developer.\nOne person can run a whole company.",
+  lead: "Take the way experts work, as skills.\nThe AI you already use works as your marketer, your designer and your developer.",
   search: {
     label: "What will you make?",
     placeholder: "What will you make? Card news, a short ad, a website that takes payments…",
