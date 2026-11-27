@@ -1431,13 +1431,23 @@
   height: 100%;
 }
 
-.floaterSway > svg {
+/* The planet's own rise and tilt, on an element around the drawing: animated on the drawing
+   itself it is recalculated on the main thread every frame. */
+.floaterBob {
   position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.floaterBob > svg {
   filter: drop-shadow(0 0 0.75rem color-mix(in srgb, var(--halo) 55%, transparent));
 }
 
 /* A moon on a faint orbit, tilted against the planet's own ring; the planet hides it as it
-   passes behind. */
+   passes behind. It goes round on two elements, one carried across and one up and down a
+   quarter of a turn later, each a transform the compositor animates: a place along a path
+   (`offset-distance`) is the main thread's every frame. */
 .floaterOrbit {
   position: absolute;
   top: 50%;
@@ -1451,16 +1461,23 @@
 }
 
 .floaterOrbit > b {
+  --across: calc(var(--size) * 0.95);
+  --up: calc(var(--size) * 0.3);
   position: absolute;
-  top: -0.25rem;
-  left: 50%;
+  top: calc(50% - 0.25rem);
+  left: calc(50% - 0.25rem);
   width: 0.5rem;
   height: 0.5rem;
+  translate: 0 calc(var(--up) * -1);
+}
+
+.floaterOrbit > b > b {
+  display: block;
+  width: 100%;
+  height: 100%;
   border-radius: var(--radius-full);
   background: var(--moon, var(--agents-sunset-0));
   box-shadow: 0 0 0.5rem var(--moon, var(--agents-sunset-0));
-  offset-path: ellipse(50% 50% at 50% 50%);
-  offset-rotate: 0deg;
 }
 
 .floater-heroA {
@@ -1610,12 +1627,17 @@
     animation: floater-sway var(--sway) ease-in-out var(--delay) infinite alternate;
   }
 
-  .floaterSway > svg {
+  .floaterBob {
     animation: floater-bob var(--bob) ease-in-out var(--delay) infinite alternate;
   }
 
+  /* A sine each way, the second a quarter of the turn behind the first: together, round. */
   .floaterOrbit > b {
-    animation: floater-moon 18s linear infinite;
+    animation: floater-moon-across 9s cubic-bezier(0.37, 0, 0.63, 1) -4.5s infinite alternate;
+  }
+
+  .floaterOrbit > b > b {
+    animation: floater-moon-up 9s cubic-bezier(0.37, 0, 0.63, 1) infinite alternate;
   }
 
   .twinkle {
@@ -1652,13 +1674,23 @@
   }
 }
 
-@keyframes floater-moon {
+@keyframes floater-moon-across {
   from {
-    offset-distance: 0%;
+    translate: calc(var(--across) * -1) 0;
   }
 
   to {
-    offset-distance: 100%;
+    translate: var(--across) 0;
+  }
+}
+
+@keyframes floater-moon-up {
+  from {
+    translate: 0 calc(var(--up) * -1);
+  }
+
+  to {
+    translate: 0 var(--up);
   }
 }
 

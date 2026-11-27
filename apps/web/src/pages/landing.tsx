@@ -199,8 +199,12 @@ const FLOATERS = {
 /**
  * One of the agents' planets, adrift in the room beside a section: the faces of the scene, seen
  * about the page. Three motions make the drift, one an element so that none undoes another: the
- * page's scroll lifts the slot, the sway carries it sideways, the planet bobs and tilts. Where it
- * is, how large, how near and how slowly it drifts is its slot's, in the styles.
+ * page's scroll lifts the slot, the sway carries it sideways, the planet bobs and tilts. Each is
+ * an HTML element, the planet's own bob too: a transform animated on the drawing itself, or a
+ * moon carried along a path, is recalculated on the main thread every frame, and the same motion
+ * on an element around it is the compositor's. The moon goes round on two of them, one across
+ * and one up and down, a quarter of a turn apart. Where a planet is, how large, how near and how
+ * slowly it drifts is its slot's, in the styles.
  */
 function Floater(props: { readonly at: keyof typeof FLOATERS }) {
   const [kind, tone, moon] = FLOATERS[props.at];
@@ -209,10 +213,14 @@ function Floater(props: { readonly at: keyof typeof FLOATERS }) {
       <i className={styles.floaterSway}>
         {moon && (
           <i className={styles.floaterOrbit}>
-            <b />
+            <b>
+              <b />
+            </b>
           </i>
         )}
-        <Planet kind={kind} tone={tone} />
+        <i className={styles.floaterBob}>
+          <Planet kind={kind} tone={tone} />
+        </i>
       </i>
     </span>
   );
