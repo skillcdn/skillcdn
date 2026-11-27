@@ -8,6 +8,7 @@ import {
 } from "react";
 import { useI18n } from "../i18n/index.js";
 import type { DemoMoment, DemoTask, DemoTaskState } from "../i18n/messages/landing-en.js";
+import { Planet, type PlanetKind, type PlanetTone } from "./agents-planet.js";
 import { BrandSymbol } from "./brand.js";
 import styles from "./console-demo.module.css";
 import { cx } from "./ui.js";
@@ -24,6 +25,15 @@ import { useInView } from "./use-in-view.js";
 
 /** The columns the board shows open; the last one is folded, as the console folds it. */
 const OPEN_STATES: readonly DemoTaskState[] = ["idea", "ready", "in_progress", "in_review"];
+/** The agents at work on the board: the four hired in the scene above it, each on the cards whose
+    number falls to it. */
+const WORKERS: readonly (readonly [PlanetKind, PlanetTone])[] = [
+  [0, "violet"],
+  [1, "sunset"],
+  [2, "mint"],
+  [3, "ocean"],
+];
+
 /** How far a mouse travels before a pressed card comes loose. */
 const DRAG_SLACK = 4;
 /** How long a finger rests on a card before it comes loose, and how far it may wander meanwhile. */
@@ -244,9 +254,19 @@ function Card(props: {
           </span>
         )}
         <span className={styles.spacer} />
-        {task.working === true && <span className={styles.avatar}>{words.worker}</span>}
+        {task.working === true && <Worker number={task.number} />}
       </span>
     </article>
+  );
+}
+
+/** The face of the agent that works a card: its planet on a graphite tile. */
+function Worker(props: { readonly number: number }) {
+  const [kind, tone] = WORKERS[props.number % WORKERS.length] ?? [0, "violet"];
+  return (
+    <span className={styles.avatar}>
+      <Planet kind={kind} tone={tone} />
+    </span>
   );
 }
 

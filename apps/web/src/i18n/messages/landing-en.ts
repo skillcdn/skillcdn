@@ -253,7 +253,6 @@ export const landingEn = {
       },
       priorities: { urgent: "Urgent", high: "High", normal: "Normal", low: "Low" },
       decisions: (count: number) => (count === 1 ? "1 decision" : `${count} decisions`),
-      worker: "AI",
       tasks: [
         {
           number: 31,

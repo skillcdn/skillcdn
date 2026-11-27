@@ -315,18 +315,29 @@
   color: var(--console-category-operations-text);
 }
 
-/* The agent at work on a card: its initials in a disc of the accent. */
+/* The agent at work on a card, as the console shows an agent account among a task's workers: a
+   soft square, its corners rounded by a fifth of its side, edged with a line, its planet on the
+   graphite ground drawn a tenth larger than the set writes it, as a picture this small is. */
 .avatar {
-  display: inline-grid;
-  place-items: center;
+  position: relative;
+  display: block;
+  flex: none;
+  box-sizing: border-box;
   width: var(--console-avatar);
   height: var(--console-avatar);
-  border-radius: var(--radius-full);
-  background: var(--console-accent-solid);
-  color: var(--color-accent-contrast);
-  font-size: 0.6rem;
-  font-weight: var(--weight-bold);
-  line-height: 1;
+  overflow: hidden;
+  border: 1px solid var(--console-border);
+  border-radius: 20%;
+  background: var(--agents-tile);
+}
+
+.avatar > svg {
+  position: absolute;
+  top: -5%;
+  left: -5%;
+  width: 110%;
+  max-width: none;
+  height: 110%;
 }
 
 /* Beside the board: the one decision waiting, and the feed. */

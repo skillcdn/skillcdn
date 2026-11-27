@@ -213,7 +213,6 @@ export const landingKo: LandingMessages = {
       },
       priorities: { urgent: "긴급", high: "높음", normal: "보통", low: "낮음" },
       decisions: (count: number) => `결정 ${count}건`,
-      worker: "AI",
       tasks: [
         {
           number: 31,
