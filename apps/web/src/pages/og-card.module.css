@@ -11,19 +11,154 @@
   background: var(--color-bg);
   color: var(--color-text);
 }
-/* The picture keeps to the right of the words, in either language, and fades in from the
-   background at its left edge, so that there is no seam between them and nothing shows through
-   the words. */
-.art {
+
+/* The team keeps to the right of the words, in either language: the three of the scene in the
+   room they work in, one light behind them all and a light of its own tone behind each. */
+.team {
   position: absolute;
   z-index: -1;
   inset: 0 0 0 auto;
   width: 560px;
   height: 630px;
-  object-fit: cover;
-  object-position: 30% center;
-  mask-image: linear-gradient(90deg, transparent, black 45%);
 }
+
+.team::before {
+  content: "";
+  position: absolute;
+  inset: -120px -160px -120px -220px;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--color-accent-solid) 34%, transparent),
+    color-mix(in srgb, var(--color-accent-solid) 12%, transparent) 55%,
+    transparent
+  );
+}
+
+/* A faint orbit through the room, as the scene has them. */
+.team::after {
+  content: "";
+  position: absolute;
+  top: -260px;
+  left: 20px;
+  width: 1150px;
+  height: 1150px;
+  border: 1px solid color-mix(in srgb, var(--color-text) 9%, transparent);
+  border-radius: 50%;
+}
+
+.links {
+  position: absolute;
+  inset: 0;
+  width: 560px;
+  height: 630px;
+  fill: none;
+  stroke: color-mix(in srgb, var(--agents-ocean-2) 70%, transparent);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+/* One of the three: its planet, its name and trade, and what it is doing. Placed by the middle
+   of its planet. */
+.agent {
+  position: absolute;
+  isolation: isolate;
+  display: grid;
+  justify-items: center;
+  translate: -50% 0;
+  white-space: nowrap;
+}
+
+.agent-0 {
+  --size: 250px;
+  top: 135px;
+  left: 175px;
+}
+
+.agent-1 {
+  --size: 190px;
+  top: 40px;
+  left: 420px;
+}
+
+.agent-2 {
+  --size: 190px;
+  top: 318px;
+  left: 420px;
+}
+
+.halo-violet {
+  --halo: var(--agents-violet-2);
+}
+
+.halo-sunset {
+  --halo: var(--agents-sunset-2);
+}
+
+.halo-mint {
+  --halo: var(--agents-mint-1);
+}
+
+.planet {
+  position: relative;
+  display: block;
+  width: var(--size);
+  height: var(--size);
+}
+
+/* The light of its own tone, behind the planet and behind its words. */
+.planet::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 4%;
+  border-radius: 50%;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--halo) 46%, transparent),
+    color-mix(in srgb, var(--halo) 14%, transparent) 60%,
+    transparent
+  );
+}
+
+.planet > svg {
+  position: relative;
+}
+
+.who {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  /* The drawing leaves room around the planet for a ring; the words come up into it. */
+  margin-top: calc(var(--size) * -0.17);
+  font-size: 25px;
+  font-weight: 700;
+}
+
+.who span {
+  color: var(--color-text-muted);
+  font-size: 19px;
+  font-weight: 400;
+}
+
+.doing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 5px 16px 6px;
+  border: 1px solid var(--agents-pill-edge);
+  border-radius: 999px;
+  background: var(--agents-pill);
+  font-size: 17px;
+}
+
+.doing i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--color-success);
+}
+
 /* The lockup; the wordmark in the brand's white, the symbol in its own blue. It keeps its own
    width in the column, where a flex item would otherwise be stretched to the card's. */
 .brand {
@@ -33,26 +168,32 @@
   height: 40px;
   color: var(--color-wordmark);
 }
+
+/* The title and the line under it stand in the middle of the room between the lockup and the
+   address, level with the team beside them. */
 .title {
   max-width: 600px;
-  margin-top: 75px;
+  margin-top: auto;
   font-size: 60px;
   font-weight: 700;
   line-height: 1.2;
   letter-spacing: -2.7px;
   text-wrap: balance;
 }
+
 .title span {
   display: block;
   margin-top: 8px;
   color: var(--color-accent);
 }
+
 .tagline {
   margin-top: 30px;
   max-width: 520px;
   font-size: 22px;
   color: var(--color-text-muted);
 }
+
 .address {
   margin-top: auto;
   font-size: 20px;
