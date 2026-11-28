@@ -8,7 +8,10 @@ const noFiles = (): string => {
   throw new Error("no file expected");
 };
 
-function problemsOf(environment: Record<string, string | undefined>, readFile = noFiles) {
+function problemsOf(
+  environment: Record<string, string | undefined>,
+  readFile: (path: string) => string = noFiles,
+) {
   try {
     loadConfig(environment, readFile);
   } catch (error) {
@@ -43,6 +46,7 @@ describe("loadConfig", () => {
     expect(versionOf("")).toBe("0.0.0");
     expect(versionOf("1.2.3")).toBe("1.2.3");
     expect(versionOf("1.2.3-4-gabc1234")).toBe("1.2.3-4-gabc1234");
+    expect(versionOf("1.2.3+abc1234")).toBe("1.2.3+abc1234");
 
     // It goes into a header: nothing that is not a version, and no second line.
     const lineBreak = String.fromCodePoint(13, 10);
@@ -51,6 +55,30 @@ describe("loadConfig", () => {
         "SERVER_VERSION: must be a version such as 1.2.3",
       ]);
     }
+  });
+
+  it("takes what the image was built as from the file the image names (ADR-0134)", () => {
+    const file = "/app/version";
+    const read = (content: string) => (path: string) => {
+      expect(path).toBe(file);
+      return content;
+    };
+    const built = { DATABASE_URL, SERVER_VERSION_FILE: file };
+    expect(loadConfig(built, read("1.2.3+abc1234\n")).version).toBe("1.2.3+abc1234");
+    expect(loadConfig(built, read("1.2.3\n")).version).toBe("1.2.3");
+    // A file that says nothing is a build that was told nothing.
+    expect(loadConfig(built, read("\n")).version).toBe("0.0.0");
+    expect(loadConfig({ DATABASE_URL, SERVER_VERSION_FILE: "" }, noFiles).version).toBe("0.0.0");
+
+    // A version the deployment names is said instead, and the file is not read.
+    expect(loadConfig({ ...built, SERVER_VERSION: "0.0.0" }, noFiles).version).toBe("0.0.0");
+    expect(loadConfig({ ...built, SERVER_VERSION: "" }, read("1.2.3\n")).version).toBe("1.2.3");
+
+    // What the file holds is refused like a variable, and a file that is not there is named.
+    expect(problemsOf(built, read("latest\n")).problems).toEqual([
+      "SERVER_VERSION: must be a version such as 1.2.3",
+    ]);
+    expect(problemsOf(built).problems).toEqual([`SERVER_VERSION_FILE: cannot read ${file}`]);
   });
 
   it("reads overrides and treats empty variables as unset", () => {

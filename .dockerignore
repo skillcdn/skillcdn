@@ -44,3 +44,10 @@ docs
 !docs/specs/*.md
 !deploy/README.md
 !packages/cli/README.md
+# What says which commit the image is built from, for the version its server says (ADR-0134): the
+# head of the checkout and the branches it may name. Nothing else of .git: not its settings, which
+# may hold a credential, and not its history. Kept last, so that no rule above takes a branch away
+# for its name.
+!.git/HEAD
+!.git/packed-refs
+!.git/refs/heads/**

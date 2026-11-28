@@ -49,6 +49,10 @@ src/
   main.ts        role dispatch and exit codes; nothing else
   roles.ts       the list of roles
   config/        the only place that reads process.env; validates once at boot
+  image-version.ts  what the server of an image says of itself, worked out when the image is built
+                 (ADR-0134): the version the build names, else the version of the packages with the
+                 commit of the checkout; print-image-version.ts is what the Dockerfile runs, and
+                 nothing in a deployment does
   roles/         api.ts (composition root, HTTP server, shutdown), worker.ts (the queue's jobs until told
                  to stop), migrate.ts and purge.ts; the check role is main.ts handing a directory to
                  @skillcdn/indexer

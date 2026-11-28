@@ -107,9 +107,8 @@ jobs:
           push: false
           load: true
           tags: skillcdn:ci
-          # A version no release has, so that the steps below can tell it reached the server.
-          build-args: |
-            VERSION=0.0.0-ci
+          # No version is named: the image is built as a deployment that follows main builds it,
+          # and the steps below ask its server for the commit of this run (ADR-0134).
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Exit codes (64 for an unknown role, 78 for invalid configuration)
@@ -155,11 +154,13 @@ jobs:
           curl -fsS 'http://127.0.0.1:11188/docs/format.md' | grep -q '^# '
           curl -fsS -o /dev/null -w '%{content_type}\n' 'http://127.0.0.1:11188/social/docs/format' | grep -q 'image/png'
           curl -fsS 'http://127.0.0.1:11188/api/v1/featured' | grep -q '"items"'
-          # The server says the version the build named (ADR-0133), here at the root.
+          # The server says what the build worked out (ADR-0134), here at the root: the version
+          # of the packages with the commit that was checked out, which the build read from .git.
+          built="$(sed -n 's/^  "version": "\(.*\)",$/\1/p' packages/cli/package.json | head -n 1)+$(git rev-parse HEAD | cut -c 1-7)"
           curl -fsS -X POST 'http://127.0.0.1:11188/' \
             -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' \
             -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}' \
-            | grep -q '"version":"0.0.0-ci"'
+            | grep -qF "\"version\":\"$built\""
           # The notices ship with the pages and with the image.
           curl -fsS 'http://127.0.0.1:11188/licenses/npm.txt' | grep -q '^react '
           docker run --rm --entrypoint sh skillcdn:ci -c 'test -s /app/LICENSE.md && test -s /app/THIRD-PARTY-NOTICES.md'

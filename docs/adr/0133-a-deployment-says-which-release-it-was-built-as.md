@@ -1,6 +1,6 @@
 # ADR-0133: A deployment says which release it was built as
 
-- Status: Accepted
+- Status: Accepted; how the version reaches the server (point 2) and what an image built without the argument says (point 3) are superseded by ADR-0134
 - Date: 2026-11-28
 - Builds on [ADR-0087](0087-the-image-of-a-release-is-published-and-an-installation-is-made-from-a-bundle.md) (the image of a release is published) and [ADR-0058](0058-the-published-packages-share-one-version.md) (the published packages share one version).
 

@@ -14,7 +14,7 @@ import {
   DEFAULT_CONSENT_REGIONS,
   parseConsentRegions,
 } from "../http/consent-regions.js";
-import { UNRELEASED_VERSION } from "../version.js";
+import { UNRELEASED_VERSION, VERSION_PATTERN } from "../version.js";
 
 // The only module that reads the environment. Contract: .env.example and deploy/README.md.
 
@@ -146,16 +146,9 @@ const landingSections = z
     return parsed;
   });
 
-/**
- * A version as releases are numbered: three numbers, and what a build may write after them. It
- * goes into a header and into what the server says of itself, so nothing else is taken.
- */
 const releaseVersion = z
   .string()
-  .regex(
-    /^\d{1,5}\.\d{1,5}\.\d{1,5}(?:[-+][0-9A-Za-z.+-]{1,60})?$/,
-    "must be a version such as 1.2.3",
-  )
+  .regex(VERSION_PATTERN, "must be a version such as 1.2.3")
   .default(UNRELEASED_VERSION);
 
 const environmentSchema = z.object({
@@ -406,8 +399,8 @@ export interface Config {
   readonly environment: "development" | "test" | "production";
   readonly logLevel: string;
   /**
-   * The release the deployment was built as, which the server says to whoever asks (ADR-0133):
-   * the image of a release carries it. `0.0.0` for a build that was told none.
+   * What the deployment was built as, which the server says to whoever asks (ADR-0133): the
+   * version the deployment names, else what the build of its image wrote (ADR-0134), else `0.0.0`.
    */
   readonly version: string;
   readonly http: {
@@ -586,6 +579,29 @@ function withSecretFiles(
 }
 
 /**
+ * Takes what the image was built as from the file its build wrote, which the image names in
+ * `SERVER_VERSION_FILE` (ADR-0134). A version the deployment names itself is said instead, so
+ * the two together are no mistake, unlike a secret and its file.
+ */
+function withBuiltVersion(
+  environment: Environment,
+  readFile: (path: string) => string,
+  problems: string[],
+): Environment {
+  const file = environment.SERVER_VERSION_FILE;
+  const named = environment.SERVER_VERSION;
+  if (file === undefined || file === "" || (named !== undefined && named !== "")) {
+    return environment;
+  }
+  try {
+    return { ...environment, SERVER_VERSION: readFile(file).trim() };
+  } catch {
+    problems.push(`SERVER_VERSION_FILE: cannot read ${file}`);
+    return environment;
+  }
+}
+
+/**
  * What signing in is configured with, or `undefined` when it is not. It takes all of the app's
  * credentials and the secret, and an origin that does not change with the request: the git host
  * sends people back to it, and clients are issued tokens in its name.
@@ -716,7 +732,11 @@ export function loadConfig(
   readFile: (path: string) => string = (path) => readFileSync(path, "utf8"),
 ): Config {
   const problems: string[] = [];
-  const resolved = withSecretFiles(environment, readFile, problems);
+  const resolved = withBuiltVersion(
+    withSecretFiles(environment, readFile, problems),
+    readFile,
+    problems,
+  );
   // An empty variable means "not set": compose files and shells produce those easily.
   const present = Object.fromEntries(
     Object.entries(resolved).filter(([, value]) => value !== undefined && value !== ""),
