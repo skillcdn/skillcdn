@@ -635,7 +635,7 @@ export function registerAdmin(app: Hono<AppEnv>, dependencies: AdminDependencies
       return c.json(
         errorBody(
           "embeddings.invalid_address",
-          "The address names a repository of a git host, with a ref at most: /gh/owner/repo[@ref].",
+          "The address names a repository, with a ref at most, or a pack of the directory: /gh/owner/repo[@ref], /local/owner/name.",
         ),
         400,
       );

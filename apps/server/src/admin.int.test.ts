@@ -902,6 +902,14 @@ describe("the search by meaning in the admin API (ADR-0064)", () => {
           })
         ).json(),
       ).toMatchObject({ queued: false });
+      // A pack of the deployment's directory is asked for by its address as well: how a pack
+      // just written there is read at once, and not at the worker's next look.
+      const pack = await h.request("/admin/v1/embeddings/index/local/acme/handbook", {
+        method: "POST",
+        headers: authorized,
+      });
+      expect(pack.status).toBe(202);
+      expect(await pack.json()).toEqual({ address: "/local/acme/handbook", queued: true });
       expect(
         (
           await h.request("/admin/v1/embeddings/index/gh/acme/single-skill/skills", {
