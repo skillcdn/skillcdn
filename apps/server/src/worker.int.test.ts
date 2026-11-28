@@ -1107,6 +1107,14 @@ describe("the worker", () => {
       reason: "searched",
       tier: "declared",
     });
+    // The embedding is under way from the moment the job is queued, and not from the worker's
+    // first slice (ADR-0126): a search meanwhile says how far it is.
+    await vi.waitFor(async () =>
+      expect(await getSnapshotEmbedding(testDatabase.database, made.scope, KEY)).toMatchObject({
+        bodies: 0,
+        completedAt: null,
+      }),
+    );
     // Asked again at once: remembered, and not looked at.
     triggers.onSearched(mountOf("public"), snapshot);
     await settle();
@@ -1163,6 +1171,7 @@ describe("the worker", () => {
         { path: "docs/a.md", text: "# A\n\nText.\n\n## Later\n\nA section added.\n" },
       ],
     });
+    const duringReuse: unknown[] = [];
     const reusing = createEmbedTriggers({
       database: testDatabase.database,
       jobs: recording,
@@ -1171,7 +1180,16 @@ describe("the worker", () => {
       lists: noLists,
       clock,
       logger,
-      reuse: { blobs: embedDeps.blobs, embedder: fake.embedder },
+      reuse: {
+        // What a search would be told while the vectors are being given: read as each body is.
+        blobs: {
+          read: async (sha) => {
+            duringReuse.push(await getSnapshotEmbedding(testDatabase.database, grown.scope, KEY));
+            return embedDeps.blobs.read(sha);
+          },
+        },
+        embedder: fake.embedder,
+      },
     });
     const logged = logs.length;
     await reusing.onIndexed(
@@ -1189,6 +1207,10 @@ describe("the worker", () => {
       }),
     );
     sent.pop();
+    // The commit is served before its vectors are given: the embedding is under way from before
+    // the first body is read, so that no search in between ranks a waiting entry last.
+    expect(duringReuse.length).toBeGreaterThan(0);
+    expect(duringReuse[0]).toMatchObject({ bodies: 0, sections: 0, completedAt: null });
     // A body is left for the worker, so the embedding of the commit is under way from here, and
     // a search says so while the job waits its turn (ADR-0126).
     expect(await getSnapshotEmbedding(testDatabase.database, grown.scope, KEY)).toMatchObject({
@@ -1206,7 +1228,8 @@ describe("the worker", () => {
       reason: "designated",
     });
 
-    // A commit with nothing left to embed is queued as before, and nothing is said to be under way.
+    // A commit with nothing left to embed is queued as before, and its embedding is complete at
+    // once: the pack is said to be searched by meaning without waiting for the worker's turn.
     const same = await madeSnapshot({
       visibility: "public",
       files: [
@@ -1224,7 +1247,36 @@ describe("the worker", () => {
       { ...same.scope, repoId: same.repo.repoId, commitSha: same.commit },
     );
     expect(sent.at(-1)).toMatchObject({ reason: "indexed", snapshotId: same.scope.snapshotId });
-    expect(await getSnapshotEmbedding(testDatabase.database, same.scope, KEY)).toBeUndefined();
+    const settled = await getSnapshotEmbedding(testDatabase.database, same.scope, KEY);
+    expect(settled).toMatchObject({ bodies: 0, sections: 0 });
+    expect(settled?.completedAt).toBeInstanceOf(Date);
+    sent.pop();
+
+    // A body in other bytes that says what an embedded one says: every vector is given, nothing
+    // is left for the worker, and the embedding that began under way ends complete here.
+    const spaced = await madeSnapshot({
+      visibility: "public",
+      files: [
+        {
+          path: "SKILLCDN.md",
+          kind: "manifest",
+          text: "---\ndescription: A pack.\n---\n",
+          frontMatter: { metadata: {}, warnings: [], documents: ["docs"] },
+        },
+        { path: "docs/a.md", text: "# A\n\nText.\n\n## Later\n\nA section added.\n\n\n" },
+      ],
+    });
+    const given = logs.length;
+    await reusing.onIndexed(
+      { repo: { host: "gh", repository: spaced.repository } } as unknown as Mount,
+      { ...spaced.scope, repoId: spaced.repo.repoId, commitSha: spaced.commit },
+    );
+    expect(logs.slice(given)).toContainEqual(
+      expect.objectContaining({ whole: 1, unfinished: 0, left: 0 }),
+    );
+    expect(
+      (await getSnapshotEmbedding(testDatabase.database, spaced.scope, KEY))?.completedAt,
+    ).toBeInstanceOf(Date);
     sent.pop();
 
     // A repository that is no pack (ADR-0072): its index queues nothing, and a search queues it

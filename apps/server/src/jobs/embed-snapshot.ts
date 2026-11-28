@@ -344,6 +344,11 @@ export async function reuseKnownVectors(
   scope: SnapshotScope,
   key: VectorKey,
   limit: number = REUSE_BODIES,
+  /**
+   * Told how many bodies have nothing embedded, before any is given a vector: whoever queues the
+   * commit says there how its embedding stands ({@link beginEmbedding}), while this still reads.
+   */
+  begun?: (left: number) => Promise<void>,
 ): Promise<ReusedVectors> {
   const { database } = deps;
   const served = await servedEntries(database, scope);
@@ -354,6 +359,7 @@ export async function reuseKnownVectors(
     key,
     entries.map((entry) => entry.blobSha),
   );
+  await begun?.(missing.size);
   const done = { whole: 0, unfinished: 0, sections: 0 };
   if (missing.size === 0 || missing.size > limit) {
     return { ...done, left: missing.size };
@@ -401,6 +407,51 @@ export async function reuseKnownVectors(
     }
   }
   return { ...done, left: missing.size - done.whole };
+}
+
+/**
+ * How many bodies of a snapshot have nothing embedded under the key, or only some of their
+ * vectors: what the worker would find left, counted as it counts it.
+ */
+export async function bodiesLeftToEmbed(
+  database: Database,
+  scope: SnapshotScope,
+  key: VectorKey,
+): Promise<number> {
+  const served = await servedEntries(database, scope);
+  const allowed = meaningSearchOf(served);
+  const missing = await blobsWithoutVectors(
+    database,
+    key,
+    served
+      .filter((entry) => embeddable(entry) && allowed(entry.path))
+      .map((entry) => entry.blobSha),
+  );
+  return missing.size;
+}
+
+/**
+ * Says how the embedding of a snapshot stands, for whoever is about to queue it (ADR-0126,
+ * point 4). With a body left it is under way from here, and not from the worker's first slice: a
+ * commit is served the moment it is indexed, and a search before the row is written would rank
+ * an entry without its vectors behind every embedded one and say nothing of it. With none left
+ * it is complete, so that the pack is said to be searched by meaning at once, where it waited
+ * for a slice that embeds nothing. A completion is never undone by a later call.
+ */
+export async function beginEmbedding(
+  database: Database,
+  scope: SnapshotScope,
+  key: VectorKey,
+  left: number,
+  now: Date,
+): Promise<void> {
+  await recordSnapshotEmbedding(
+    database,
+    scope,
+    key,
+    { bodies: 0, sections: 0, tokens: 0, bytes: 0, completed: left === 0 },
+    now,
+  );
 }
 
 /** The bytes already embedded that a bound counts, read once per slice where the bound exists. */

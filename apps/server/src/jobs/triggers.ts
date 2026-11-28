@@ -3,8 +3,8 @@ import {
   type Database,
   getSnapshotEmbedding,
   type JobQueue,
-  recordSnapshotEmbedding,
   type SnapshotRecord,
+  type SnapshotScope,
   tierOfSnapshot,
   type VectorKey,
 } from "@skillcdn/db";
@@ -12,7 +12,7 @@ import type { IndexedSnapshot } from "../indexer/snapshot-service.js";
 import type { Logger } from "../logger.js";
 import type { Mount } from "../mounts/mount-service.js";
 import type { OperatorLists } from "../operator/lists.js";
-import { reuseKnownVectors } from "./embed-snapshot.js";
+import { beginEmbedding, bodiesLeftToEmbed, reuseKnownVectors } from "./embed-snapshot.js";
 import { sendEmbedJob } from "./queues.js";
 import { decideEmbedding, type EmbedPolicy, withinScope } from "./scope.js";
 
@@ -80,6 +80,23 @@ export function createEmbedTriggers(deps: EmbedTriggerDependencies): EmbedTrigge
     }
   };
 
+  /**
+   * Writes down how the embedding of a snapshot stands before its job is queued, with the bodies
+   * left where the caller counted them. Where it cannot be written the worker's first slice
+   * writes it, as it did.
+   */
+  const say = async (scope: SnapshotScope, counted: number | undefined): Promise<void> => {
+    try {
+      const left = counted ?? (await bodiesLeftToEmbed(database, scope, key));
+      await beginEmbedding(database, scope, key, left, clock.now());
+    } catch (error) {
+      logger.warn(
+        { err: error, snapshot: scope.snapshotId },
+        "how the embedding of a commit stands could not be written down",
+      );
+    }
+  };
+
   return {
     async onIndexed(mount, snapshot) {
       const decision = await decideEmbedding(policy, mount.repo.host, mount.repo.repository);
@@ -90,40 +107,43 @@ export function createEmbedTriggers(deps: EmbedTriggerDependencies): EmbedTrigge
       if (tier === undefined || tier === "other") {
         return;
       }
-      if (deps.reuse !== undefined) {
+      // How the embedding stands is said before a vector is given and before the job is queued
+      // (ADR-0126): the commit is served already, and a search in between would rank an entry
+      // without its vectors behind every embedded one and say nothing of it. With a body left
+      // it is under way, while the job waits its turn too; with none it is complete.
+      if (deps.reuse === undefined) {
+        await say(snapshot, undefined);
+      } else {
+        const counted: { left?: number } = {};
         // Before the job, which the worker may take at once: what it finds then is what is left.
-        const reused = await reuseKnownVectors({ database, ...deps.reuse }, snapshot, key).catch(
-          (error: unknown) => {
-            logger.warn(
-              { err: error, snapshot: snapshot.snapshotId },
-              "the vectors a commit shares with the one before could not be given it",
-            );
-            return undefined;
+        const reused = await reuseKnownVectors(
+          { database, ...deps.reuse },
+          snapshot,
+          key,
+          undefined,
+          async (left) => {
+            counted.left = left;
+            await say(snapshot, left);
           },
-        );
+        ).catch((error: unknown) => {
+          logger.warn(
+            { err: error, snapshot: snapshot.snapshotId },
+            "the vectors a commit shares with the one before could not be given it",
+          );
+          return undefined;
+        });
         if (reused !== undefined && reused.sections > 0) {
           logger.info(
             { snapshot: snapshot.snapshotId, ...reused },
             "a commit was given the vectors its texts had already",
           );
         }
-        if (reused !== undefined && reused.left > 0) {
-          // The embedding of the commit is under way from here, and not from the worker's
-          // first slice (ADR-0126): a search says how far it is, and keeps an entry it has
-          // not reached at the place the words gave it, while the job waits its turn. Where
-          // the row cannot be written the worker's first slice writes it, as it did.
-          await recordSnapshotEmbedding(
-            database,
-            snapshot,
-            key,
-            { bodies: 0, sections: 0, tokens: 0, bytes: 0, completed: false },
-            clock.now(),
-          ).catch((error: unknown) => {
-            logger.warn(
-              { err: error, snapshot: snapshot.snapshotId },
-              "the embedding of a commit could not be written down as under way",
-            );
-          });
+        if (counted.left === undefined) {
+          // The bodies could not be counted there: counted here, if they can be now.
+          await say(snapshot, undefined);
+        } else if (reused !== undefined && reused.left === 0 && counted.left > 0) {
+          // Every body that was left was given its vectors: nothing waits for the worker.
+          await say(snapshot, 0);
         }
       }
       await sendEmbedJob(jobs, { ...snapshot, key, reason: "indexed", tier });
@@ -152,6 +172,8 @@ export function createEmbedTriggers(deps: EmbedTriggerDependencies): EmbedTrigge
         if (tier === undefined) {
           return;
         }
+        // Under way from the moment it is queued, as a commit just indexed is.
+        await say(scope, undefined);
         await sendEmbedJob(jobs, {
           ...scope,
           repoId: snapshot.repoId,
