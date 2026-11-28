@@ -618,6 +618,35 @@ describe("a pack at a deployment", () => {
     ).toBe(EXIT_USAGE);
   });
 
+  it("reads a folder of the bound pack, and not the directory of that name here", async () => {
+    // A checkout bound to its own pack: every folder of the pack is a directory here as well.
+    const root = await repository(PACK, "acme");
+    const deployment = await deploymentOf(root);
+    const directory = createMemoryDirectoryStore();
+    const here = { directory, cwd: root };
+    expect((await run(["use", "."], deployment, here)).code).toBe(0);
+    const folder = await run(["browse", "marketing/ads"], deployment, here);
+    expect(folder.code).toBe(0);
+    expect(folder.out).toContain("Folder: marketing/ads\n");
+    expect(folder.out).toContain("- skill: marketing/ads/SKILL.md (ads)");
+    const listed = await run(["file", "docs"], deployment, here);
+    expect(listed.code).toBe(0);
+    expect(listed.out).toContain("docs/guide.md");
+    // The words of a search are all words, the name of a folder among them.
+    const found = await run(["find", "docs", "guide"], deployment, here);
+    expect(found.code).toBe(0);
+    expect(found.out).toContain('for "docs guide" in ');
+    // A directory written as a path is a pack of its own, here as anywhere.
+    const other = await run(["browse", "./marketing/ads"], deployment, here);
+    expect(other.code).toBe(0);
+    expect(other.out).toContain("Folder: repository root\n");
+    expect(other.out).toContain("- skill: SKILL.md (ads)");
+    // And where nothing is bound, a directory named first is the pack, as it was.
+    const unbound = await run(["browse", "marketing/ads"], deployment, { cwd: root });
+    expect(unbound.code).toBe(0);
+    expect(unbound.out).toContain("Folder: repository root\n");
+  });
+
   it("says what this directory reads, and whether a token is kept for it", async () => {
     const root = await repository(PACK);
     const deployment = await deploymentOf(root);

@@ -213,8 +213,9 @@ Commands:
   help [<command>]                 This, or one command in full.
 
 A <pack> is a directory, or an address: gh/<owner>/<repo>[@<ref>][/<path>], the URL of a pack
-at a deployment, or a skill:// URI. Left out, the pack this directory is bound to (${DIRECTORY_FILE}).
-An address is read at --url, else SKILLCDN_URL, else the deployment the directory is bound to,
+at a deployment, or a skill:// URI. Left out, the pack this directory is bound to (${DIRECTORY_FILE});
+there, a directory is a pack only when written as a path, ./<name>, since a bare word is a folder
+of the bound pack. An address is read at --url, else SKILLCDN_URL, else the deployment the directory is bound to,
 else ${DEFAULT_ORIGIN}, with the token kept for that deployment and the repository read, or
 SKILLCDN_TOKEN beside SKILLCDN_URL. Paths start at the pack's root, as marketing/ads/SKILL.md.
 Every read answers the words an MCP client's model is given, or the JSON of the REST API with --json.
@@ -983,6 +984,13 @@ async function readCommand(
   // anything at all for skills, which takes nothing else. What else is given is the command's
   // own argument; without a pack, the directory's binding is the pack.
   const first = positionals[0];
+  // A bare word that is a directory here is a pack, unless this directory is bound to one: a
+  // read there names no pack, and in a checkout bound to its own pack every folder of the pack
+  // is a directory here, so the word is the folder asked for. A pack on this machine is then
+  // written as a path, ./<name>.
+  const directoryHere = async (word: string): Promise<boolean> =>
+    ((await stat(resolve(io.cwd ?? ".", word)).catch(() => undefined))?.isDirectory() ?? false) &&
+    (await io.directory?.load()) === undefined;
   const firstIsPack =
     first !== undefined &&
     (command === "skills" ||
@@ -990,7 +998,7 @@ async function readCommand(
       /^https?:\/\//i.test(first) ||
       looksLikePath(first) ||
       parseAddress(first.startsWith("/") ? first : `/${first}`).ok ||
-      ((await stat(resolve(io.cwd ?? ".", first)).catch(() => undefined))?.isDirectory() ?? false));
+      (await directoryHere(first)));
   const given = firstIsPack ? positionals.shift() : undefined;
   const { pack, skillPath } = await openPack(given, parsed.values, io);
   const json = parsed.values.json === true;
