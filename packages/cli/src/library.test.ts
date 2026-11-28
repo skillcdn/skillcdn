@@ -291,7 +291,12 @@ describe("the reads of a pack as a library", () => {
         asked += 1;
         const body = await pack.find({ ...query, cursor: undefined });
         if (body.status !== "ready") throw new Error("the listing is there");
-        return { ...body, nextCursor: "again" };
+        // A page of skills alone: the listing ends at the first document (ADR-0131).
+        return {
+          ...body,
+          items: body.items.filter((item) => item.kind === "skill"),
+          nextCursor: "again",
+        };
       },
     });
     await expect(readPack(listing, { read: "skills" })).rejects.toThrow(

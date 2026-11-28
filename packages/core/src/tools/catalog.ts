@@ -54,7 +54,7 @@ export const FIND_DESCRIPTION_MAX_LENGTH = 800;
  * (ADR-0064).
  */
 const howTo = (words: ToolWords, meaning: boolean): string =>
-  `${words.browse} explores folders and outlines a file by its headings; ${words.search} ${meaning ? "matches words and meaning, so ask in your own words; it names the sections that matched" : "matches original words (usually English) and names the sections that matched"}. ${words.load} loads an exact SKILL.md path; follow nextCursor until complete before applying it. ${words.read} reads optional references, or one section by its offset and limit. Paths start at the repository root and stay inside the mount.`;
+  `${words.browse} explores folders and outlines a file by its headings; ${words.search} ${meaning ? "matches words and meaning, so ask in your own words; it names the sections that matched" : "matches original words (usually English) and names the sections that matched"}. ${words.load} loads an exact SKILL.md path; ${words.piece === undefined ? "follow nextCursor until complete before applying it" : `a long skill comes in ${words.piece}s, each ending with the command that prints the next: read every ${words.piece} before applying it`}. ${words.read} reads optional references, or one section by its offset and limit. Paths start at the repository root and stay inside the mount.`;
 
 /** Where the same skills are for a host that implements the MCP skills extension (ADR-0024). */
 function extensionLine(mount: MountSummary): string {

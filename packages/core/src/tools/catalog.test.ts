@@ -124,6 +124,25 @@ describe("repository instructions", () => {
     expect(renderInstructions({ status: "ready", catalog: plain })).toContain(
       "Optional overview: read_repo_file README.md.\nManifest: read_repo_file SKILLCDN.md",
     );
+    // A client is told of the cursor a long skill goes on with; a reader of a command, who is
+    // given no cursor to call with, of its parts and the command each ends with.
+    expect(renderInstructions({ status: "ready", catalog: plain })).toContain(
+      "load_skill loads an exact SKILL.md path; follow nextCursor until complete before applying it.",
+    );
+    const command = renderInstructions(
+      { status: "ready", catalog: plain },
+      {
+        browse: "skillcdn browse",
+        search: "skillcdn find",
+        load: "skillcdn skill",
+        read: "skillcdn file",
+        piece: "part",
+      },
+    );
+    expect(command).toContain(
+      "skillcdn skill loads an exact SKILL.md path; a long skill comes in parts, each ending with the command that prints the next: read every part before applying it.",
+    );
+    expect(command).not.toContain("nextCursor");
   });
 
   it("says once, on connect, that another commit's index is served and why (ADR-0068)", () => {

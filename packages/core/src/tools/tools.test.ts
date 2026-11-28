@@ -462,6 +462,62 @@ describe("rendering", () => {
     expect(complete).not.toContain("not listed");
   });
 
+  it("ends a page with the sentence a reader of a command runs, and lists the skills alone for one", () => {
+    // A reader that runs a line is given the line last, and no cursor to call a tool with.
+    const words = {
+      ...MCP_TOOL_WORDS,
+      browse: "skillcdn browse",
+      search: "skillcdn find",
+      pageNext: (cursor: string) => `Next page: skillcdn skills pack --cursor ${cursor}`,
+    };
+    const listing = {
+      mount: { ...mount, verified: false, visibility: "public" as const },
+      query: undefined,
+      items: [skillItem("a"), skillItem("b")],
+      totals: { skills: 3, documents: 5 },
+      diagnostics: [],
+      nextCursor: "next-page",
+    };
+    const text = renderFindResult({ ...listing, skillsAlone: true }, words);
+    expect(text).toContain("3 skills and 5 documents in ");
+    expect(text).toContain("1 skills are outside this page; the command below continues.");
+    // The documents are counted with what reads them, and not said to be on a later page.
+    expect(text).toContain(
+      "The 5 documents outside the skills are not listed here: skillcdn browse lists a folder with what it holds, and skillcdn find finds them by what they say.",
+    );
+    expect(text).not.toContain("documents are outside this page");
+    expect(text).not.toContain("nextCursor");
+    // The sentence is the last thing said, after what is said of the source.
+    expect(text).toContain(PROVENANCE_NOTICE);
+    expect(text.endsWith("\n\nNext page: skillcdn skills pack --cursor next-page")).toBe(true);
+    // A pack of documents alone is not one where nothing is indexed.
+    const documents = renderFindResult(
+      {
+        ...listing,
+        items: [],
+        totals: { skills: 0, documents: 1 },
+        nextCursor: undefined,
+        skillsAlone: true,
+      },
+      words,
+    );
+    expect(documents).toContain("0 skills and 1 document in ");
+    expect(documents).toContain("The 1 document outside the skills is not listed here:");
+    expect(documents).not.toContain("Nothing is indexed");
+    // A client that calls a tool is told of the cursor, as before, and of every document.
+    const called = renderFindResult(listing);
+    expect(called).toContain("1 skills are outside this page; continue with nextCursor.");
+    expect(called).toContain("5 documents are outside this page; continue with nextCursor.");
+    expect(called).toContain('nextCursor: "next-page"');
+    // A page of a folder ends the same way.
+    const folder = renderBrowseResult(
+      { mount, path: path("docs"), entries: [], nextCursor: "next-page" },
+      words,
+    );
+    expect(folder.endsWith("\n\nNext page: skillcdn skills pack --cursor next-page")).toBe(true);
+    expect(folder).not.toContain("nextCursor");
+  });
+
   it("explains an empty result and an empty listing", () => {
     const empty = renderFindResult({
       mount,

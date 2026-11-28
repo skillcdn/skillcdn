@@ -55,7 +55,7 @@ const PACK: Record<string, string> = {
 };
 
 describe("the reads of a directory", () => {
-  it("tells an agent what a client is told on connect, then lists every skill and document", async () => {
+  it("tells an agent what a client is told on connect, then lists every skill and counts the documents", async () => {
     const root = await repository(PACK);
     const { code, out, err } = await run(["skills", root]);
     expect(err).toBe("");
@@ -71,7 +71,12 @@ describe("the reads of a directory", () => {
     expect(out).toContain("2 skills and 1 document in");
     expect(out).toContain("skill: ads (marketing/ads/SKILL.md)");
     expect(out).toContain("skill: release-notes (engineering/release-notes/SKILL.md)");
-    expect(out).toContain("document: docs/guide.md");
+    // The documents outside the skills are counted, with what reads them: a pack of documents
+    // holds hundreds, and its folders and the search are how one is found (ADR-0131).
+    expect(out).not.toContain("document: docs/guide.md");
+    expect(out).toContain(
+      "The 1 document outside the skills is not listed here: skillcdn browse lists a folder with what it holds, and skillcdn find finds them by what they say.",
+    );
     // The person chose the directory: it is verified, and no provenance notice follows.
     expect(out).not.toContain("Unverified repository content");
   });
@@ -146,9 +151,13 @@ describe("the reads of a directory", () => {
     expect(top.out).toContain("- directory: engineering; 1 skill");
     expect(top.out).toContain("- directory: docs; 0 skills, 1 document");
     const paged = await run(["browse", root, "--limit", "1"]);
-    expect(paged.out).toContain("nextCursor:");
-    const cursor = /nextCursor: "([^"]+)"/.exec(paged.out)?.[1];
-    expect(cursor).toBeDefined();
+    // A page that ends before the folder does ends with the command that reads the next, as it
+    // was asked for, and names no cursor beside it.
+    const line = /\nNext page: skillcdn browse (\S+) --limit 1 --cursor (\S+)\n$/.exec(paged.out);
+    expect(line).not.toBeNull();
+    expect(line?.[1]?.replace(/^'(.*)'$/, "$1")).toBe(root);
+    expect(paged.out).not.toContain("nextCursor");
+    const cursor = line?.[2];
     const next = await run(["browse", root, "--limit", "1", "--cursor", cursor ?? ""]);
     expect(next.code).toBe(0);
     expect(next.out).not.toBe(paged.out);
@@ -624,22 +633,27 @@ describe("the reads of a directory", () => {
     // What a client is told on connect is said once, and a later page says that it goes on.
     expect(pages[0]).toContain("Skills and documents from");
     expect(pages[0]).toContain(`${count + 2} skills and 1 document in`);
-    expect(pages[0]).toMatch(/\d+ skills are outside this page; continue with nextCursor\./);
+    expect(pages[0]).toMatch(/\d+ skills are outside this page; the command below continues\./);
+    for (const page of pages) {
+      expect(page).not.toContain("nextCursor");
+    }
     for (const page of pages.slice(1)) {
       expect(page.startsWith("Continued from the page before. This page lists:\n")).toBe(true);
       expect(page).not.toContain("Skills and documents from");
     }
     expect(pages.at(-1)?.endsWith("The listing is complete: this was its last page.\n")).toBe(true);
-    // Every skill is listed once, and so is the document.
+    // Every skill is listed once; the document is counted on the first page, and not listed.
     const listed = pages.join("\n");
     for (let at = 0; at < count; at += 1) {
       expect(listed.split(`skill: job-${number(at)} (`).length).toBe(2);
     }
-    expect(listed.split("document: docs/guide.md").length).toBe(2);
+    expect(listed).not.toContain("document: docs/guide.md");
+    expect(pages[0]).toContain("The 1 document outside the skills is not listed here:");
+    expect(listed.split("outside the skills").length).toBe(2);
     // A cursor of nothing is refused as a misuse, as for any read.
     expect((await run(["skills", root, "--cursor", "bm90LWEtY3Vyc29y"])).code).toBe(EXIT_USAGE);
     // A page of a folder holds no more entries than print within the bound, whatever was asked,
-    // and names the cursor that goes on.
+    // and ends with the command that reads the next.
     const folder: string[] = [];
     cursor = undefined;
     do {
@@ -654,7 +668,9 @@ describe("the reads of a directory", () => {
       expect(code).toBe(0);
       expect(bytesOf(out)).toBeLessThanOrEqual(COMMAND_OUTPUT_MAX_BYTES);
       folder.push(out);
-      cursor = /nextCursor: "([^"]+)"/.exec(out)?.[1];
+      cursor = /\nNext page: skillcdn browse \S+ skills --limit 200 --cursor (\S+)\n$/.exec(
+        out,
+      )?.[1];
       expect(folder.length).toBeLessThan(40);
     } while (cursor !== undefined);
     expect(folder.length).toBeGreaterThan(1);

@@ -141,11 +141,13 @@ export interface ReadOptions {
   /** The JSON of the REST API instead of the words a model is given. */
   readonly json?: boolean | undefined;
   /**
-   * The command that reads on from a cursor: the next part of a skill, said at the head of a part
-   * and as its last line, or the next page of the listing of `skills`. For a skill it is by
-   * default `<words.load> <path> --cursor <cursor>`, which names no pack; without it the listing
-   * is printed whole, since its reader would have no way on from a page. It only makes the line:
-   * it is called more than once for a read, and for parts the read tries and does not print.
+   * The command that reads on from a cursor, for the read asked for: the next part of a skill,
+   * said at the head of a part and as its last line; the next page of the listing of `skills`;
+   * or the next page of a folder, an outline or a search, which then ends with it and names no
+   * cursor. For a skill it is by default `<words.load> <path> --cursor <cursor>`, which names no
+   * pack; without it the listing is printed whole, since its reader would have no way on from a
+   * page, and a page of a folder or a search names its cursor. It only makes the line: it is
+   * called more than once for a read, and for parts the read tries and does not print.
    */
   readonly nextPart?: ((cursor: string) => string) | undefined;
   /**
@@ -233,10 +235,11 @@ async function listingPage(
 }
 
 /**
- * The skills and documents the pack lists from `from` on, page after page, as one listing: all
- * of them, or with `fits` as many as one read prints (ADR-0124). Of the page that does not fit,
- * as many results as do are asked for again by their number, so that the pack says where the
- * listing goes on. The first result is listed whatever its length.
+ * The skills the pack lists from `from` on, page after page, as one listing: all of them, or
+ * with `fits` as many as one read prints (ADR-0124). Of the page that does not fit, as many
+ * results as do are asked for again by their number, so that the pack says where the listing goes
+ * on. The first result is listed whatever its length. The documents outside the skills are
+ * counted by the first page and not listed (ADR-0131).
  */
 async function listing(
   pack: Pack,
@@ -248,7 +251,13 @@ async function listing(
   let first: FindResult | undefined;
   let cursor = from;
   for (let pages = 0; pages < MAX_DATA_PAGES; pages += 1) {
-    const page = await listingPage(pack, summary, cursor, FIND_MAX_LIMIT);
+    const answered = await listingPage(pack, summary, cursor, FIND_MAX_LIMIT);
+    // A pack lists its skills before its documents, so the skills end at the first document.
+    const cut = answered.items.findIndex((item) => item.kind !== "skill");
+    const page =
+      cut === -1
+        ? answered
+        : { ...answered, items: answered.items.slice(0, cut), nextCursor: undefined };
     // The totals are the first page's to say: a page read from a cursor counts what it lists.
     first ??= from === undefined ? page : { ...page, totals: undefined };
     const head = first;
@@ -258,9 +267,9 @@ async function listing(
       nextCursor,
     });
     const whole = listed(page.items, page.nextCursor);
-    if (fits !== undefined && !fits(whole)) {
+    if (fits !== undefined && page.items.length > 0 && !fits(whole)) {
       // Counted with the cursor this page gave: one for fewer results is as long.
-      const ended = page.nextCursor ?? cursor ?? "";
+      const ended = answered.nextCursor ?? cursor ?? "";
       let count = page.items.length - 1;
       while (count > 0 && !fits(listed(page.items.slice(0, count), ended))) {
         count -= 1;
@@ -531,6 +540,13 @@ export async function readPack(
   options: ReadOptions = {},
 ): Promise<ReadOutput> {
   const words = options.words ?? COMMAND_WORDS;
+  // A page of a folder, of an outline or of a search ends with the command that reads the next,
+  // where the caller says how a read goes on; without it the page names its cursor.
+  const { nextPart: nextPage } = options;
+  const paged: ToolWords =
+    nextPage === undefined
+      ? words
+      : { ...words, pageNext: (cursor) => `Next page: ${nextPage(cursor)}` };
   const json = options.json === true;
   // What one read prints for an agent, in bytes, less what the caller prints beside it: every
   // read below is made to fit it (ADR-0124).
@@ -548,23 +564,28 @@ export async function readPack(
       // What a client is told on connect is said once, above the first page of the listing; a
       // page read from a cursor says that it goes on from the one before.
       const continued = read.cursor !== undefined;
+      // A reader of a command is told of parts and of the command that prints the next, where a
+      // client is told of a cursor.
       const above = continued
         ? "Continued from the page before. This page lists:\n"
-        : `${renderInstructions(catalogStateOf(mount), words)}\n\n`;
+        : `${renderInstructions(catalogStateOf(mount), { ...words, piece: words.piece ?? "part" })}\n\n`;
       // A listing longer than one read prints is printed in pages where the caller says how to
       // read on (`nextPart`), and each page ends with that command. A caller that gives none has
       // no way on from a page, so it is given the listing whole, as before: what a page would
       // leave out would be lost for certain, and a host loses only what is past its bound.
       const goesOn = options.nextPart;
+      // The page ends with the command, and names no cursor beside it.
+      const said: ToolWords =
+        goesOn === undefined
+          ? words
+          : { ...words, pageNext: (cursor) => `The listing goes on: ${goesOn(cursor)}` };
+      // The skills are listed, and the documents outside them counted with what reads them: a
+      // pack of documents holds hundreds, which its folders and the search are for (ADR-0131).
       const print = (listed: FindResult): string =>
-        `${above}${renderFindResult(listed, words)}${
-          listed.nextCursor === undefined
-            ? continued
-              ? "\n\nThe listing is complete: this was its last page."
-              : ""
-            : goesOn === undefined
-              ? ""
-              : `\n\nThe listing goes on: ${goesOn(listed.nextCursor)}`
+        `${above}${renderFindResult({ ...listed, skillsAlone: true }, said)}${
+          listed.nextCursor === undefined && continued
+            ? "\n\nThe listing is complete: this was its last page."
+            : ""
         }`;
       const listed = await listing(
         pack,
@@ -605,7 +626,7 @@ export async function readPack(
       const { page, text } = await pageWithin(bound, limit, ask, (body) => {
         const result = resultOf(body);
         return {
-          text: renderBrowseResult(result, words),
+          text: renderBrowseResult(result, paged),
           count: result.outline?.headings.length ?? result.entries.length,
         };
       });
@@ -631,7 +652,7 @@ export async function readPack(
       }
       const { page, text } = await pageWithin(bound, limit, ask, (body) => {
         const result = findResultOf(body, summary);
-        return { text: renderFindResult(result, words), count: result.items.length };
+        return { text: renderFindResult(result, paged), count: result.items.length };
       });
       const { nextCursor } = findResultOf(page, summary);
       return { text, ...(nextCursor === undefined ? {} : { next: { cursor: nextCursor } }) };

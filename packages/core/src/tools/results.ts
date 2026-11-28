@@ -362,6 +362,11 @@ export interface FindResult {
   readonly ranking?: FindRanking | undefined;
   /** Without a query: how many skills, and how many documents outside the skills, the mount has. */
   readonly totals: { readonly skills: number; readonly documents: number } | undefined;
+  /**
+   * Without a query, where the listing is of the skills alone: the documents outside them are
+   * counted and left to the folders and the search, since a pack of documents holds hundreds.
+   */
+  readonly skillsAlone?: boolean | undefined;
   /** Manifests inside the mount that could not be read, so what they declare is not served. */
   readonly diagnostics: readonly IndexDiagnostic[];
 }

@@ -4,6 +4,11 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { EXIT_CONFIG, EXIT_USAGE, isLaterRelease, runCli } from "./cli.js";
 
+// What the help may cost whoever reads it (ADR-0131): the list with what holds for every
+// command, and one command's page. A command or a paragraph added past them makes room first.
+const HELP_MAX_BYTES = 2_600;
+const COMMAND_HELP_MAX_BYTES = 1_900;
+
 async function run(args: string[], environment: Record<string, string | undefined> = {}) {
   let out = "";
   let err = "";
@@ -96,17 +101,79 @@ describe("the skillcdn command", () => {
     expect(err).not.toContain("many");
   });
 
-  it("prints the usage for anything that is not a command, and a command's help for its misuse", async () => {
-    for (const args of [[], ["--bogus"], ["lint", "."]]) {
+  it("answers a word that is no command with the names, and a misuse with the usage lines alone", async () => {
+    // Nothing at all prints the list, as an error: the name was typed alone.
+    const bare = await run([]);
+    expect(bare.code).toBe(EXIT_USAGE);
+    expect(bare.out).toBe("");
+    expect(bare.err).toContain("usage: skillcdn <command> [arguments]");
+    // A word that is no command is answered with the names, and not with the list and its lines:
+    // an agent that mistypes one pays for a sentence.
+    for (const args of [["--bogus"], ["lint", "."], ["help", "lint"]]) {
       const { code, out, err } = await run(args);
       expect(code).toBe(EXIT_USAGE);
       expect(out).toBe("");
-      expect(err).toContain("usage: skillcdn <command> [arguments]");
+      expect(err).toMatch(
+        /^Not a command: \S+\. The commands are status, skills, find, .+; skillcdn help says what each is for\.\n$/,
+      );
+      expect(Buffer.byteLength(err)).toBeLessThan(400);
     }
+    // A misuse says what was wrong, how the command is written and where the rest is: the usage
+    // lines of its page, and not the page.
     const misuse = await run(["check", "a", "b"]);
     expect(misuse.code).toBe(EXIT_USAGE);
-    expect(misuse.err).toContain("check takes one directory at most.");
-    expect(misuse.err).toContain("usage: skillcdn check [<directory>]");
+    expect(misuse.err).toBe(
+      "check takes one directory at most.\n\nusage: skillcdn check [<directory>] [--references [--url <origin>]] [--offline]\n\nskillcdn help check says the rest.\n",
+    );
+    // An option another command takes is refused, where it was read and dropped: browse does not
+    // keep to a folder with --path as find does.
+    const stray = await run(["browse", ".", "--path", "docs"]);
+    expect(stray.code).toBe(EXIT_USAGE);
+    expect(stray.out).toBe("");
+    expect(stray.err).toContain("skillcdn browse takes no --path.");
+    expect(stray.err).toContain("usage: skillcdn browse [<pack>] [<folder>]");
+    // Whatever the parser refuses is a misuse as well: a word where none is taken, an option
+    // without its value, an option nobody takes.
+    for (const args of [
+      ["status", "extra"],
+      ["skill", ".", "SKILL.md", "--cursor"],
+      ["logins", "--nope"],
+    ]) {
+      const refused = await run(args);
+      expect(refused.code).toBe(EXIT_USAGE);
+      expect(refused.err).toContain(`skillcdn help ${args[0]} says the rest.`);
+    }
+  });
+
+  it("keeps its help short, lists every command once, and names no option a command refuses (ADR-0131)", async () => {
+    const help = (await run(["help"])).out;
+    expect(Buffer.byteLength(help)).toBeLessThanOrEqual(HELP_MAX_BYTES);
+    const names =
+      /The commands are (.+); skillcdn help/.exec((await run(["nope"])).err)?.[1]?.split(", ") ??
+      [];
+    expect(names.length).toBeGreaterThan(10);
+    // Each under one of the headings, on a line of its own.
+    const listed = [...help.matchAll(/^ {2}([a-z]+)(?: |$)/gm)].map((match) => match[1]);
+    expect(listed).toEqual(names);
+    expect([...help.matchAll(/^(\S[^\n]*):$/gm)].map((match) => match[1])).toEqual([
+      "Read a pack",
+      "Write a pack",
+      "Serve a directory",
+      "Connect",
+    ]);
+    for (const name of names) {
+      const page = (await run(["help", name])).out;
+      expect(page.startsWith(`usage: skillcdn ${name}`)).toBe(true);
+      expect(Buffer.byteLength(page)).toBeLessThanOrEqual(COMMAND_HELP_MAX_BYTES);
+      // Every option its usage lines name is one it takes: asked for with --help beside it, the
+      // command prints its page, where an option it refuses would be a misuse.
+      const usage = page.split("\n\n", 1)[0] ?? "";
+      for (const [, option, value] of usage.matchAll(/--([a-z-]+)(?: ([<a-z]\S*))?/g)) {
+        const given = [`--${option}`, ...(value === undefined ? [] : ["x"])];
+        const asked = await run([name, ...given, "--help"]);
+        expect({ name, option, code: asked.code }).toEqual({ name, option, code: 0 });
+      }
+    }
   });
 
   it("says beside the report of check that a later version is published, and asks nothing when told not to", async () => {

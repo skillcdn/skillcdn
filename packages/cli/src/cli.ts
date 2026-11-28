@@ -134,27 +134,143 @@ export const DEFAULT_PORT = 11189;
 
 export { COMMAND_WORDS, FILE_PAGE_CHARS, OUTPUT_CHARS } from "./read.js";
 
-const COMMANDS = [
-  "check",
-  "catalog",
-  "skills",
-  "browse",
-  "find",
-  "search",
-  "skill",
-  "file",
-  "rows",
-  "code",
-  "mcp",
-  "serve",
-  "embed",
-  "login",
-  "logout",
-  "logins",
-  "use",
-  "status",
+// The commands are one table (ADR-0131): a row says whom a command is for, what follows its name,
+// one line of what it answers and the options it takes. The list `skillcdn help` prints, the
+// options a command refuses and the names a mistyped one is answered with are all read from it,
+// so a command is added as a row here, a page in HELP and a case in `runCli`.
+
+/** Whom a command is for: the headings of the list, in its order. */
+const GROUPS = [
+  { key: "read", title: "Read a pack" },
+  { key: "write", title: "Write a pack" },
+  { key: "serve", title: "Serve a directory" },
+  { key: "connect", title: "Connect" },
 ] as const;
-type Command = (typeof COMMANDS)[number];
+
+interface CommandRow {
+  readonly group: (typeof GROUPS)[number]["key"];
+  /** What follows the name on its line of the list. */
+  readonly takes: string;
+  /** One line of what it answers; its page of help says the rest. */
+  readonly summary: string;
+  /** The options it takes beside --help. Any other is refused, one of another command too. */
+  readonly options: readonly Exclude<keyof typeof OPTIONS, "help">[];
+}
+
+/** Every command, in the order its group lists it. */
+const TABLE = {
+  status: {
+    group: "read",
+    takes: "",
+    summary: "What this directory reads, and the read to run next.",
+    options: [],
+  },
+  skills: {
+    group: "read",
+    takes: "[<pack>]",
+    summary: "What a client is told on connect, then every skill.",
+    options: ["as", "url", "json", "cursor"],
+  },
+  find: {
+    group: "read",
+    takes: "[<pack>] <words...>",
+    summary: "What the words find in the pack.",
+    options: ["as", "url", "json", "cursor", "limit", "path"],
+  },
+  browse: {
+    group: "read",
+    takes: "[<pack>] [<folder>]",
+    summary: "What a folder holds, or the outline of a file.",
+    options: ["as", "url", "json", "cursor", "limit"],
+  },
+  skill: {
+    group: "read",
+    takes: "[<pack>] <path>",
+    summary: "A skill whole: rules, instructions, included files.",
+    options: ["as", "url", "json", "cursor"],
+  },
+  file: {
+    group: "read",
+    takes: "[<pack>] <path>",
+    summary: "A page of a file, or what a folder holds.",
+    options: ["as", "url", "json", "offset", "limit"],
+  },
+  rows: {
+    group: "read",
+    takes: "[<pack>] [<path>]",
+    summary: "The tables under a path, as CSV or JSON.",
+    options: ["as", "url", "json", "heading", "format", "out"],
+  },
+  code: {
+    group: "read",
+    takes: "[<pack>] [<path>]",
+    summary: "The fenced code blocks under a path.",
+    options: ["as", "url", "json", "heading", "grep", "out"],
+  },
+  search: {
+    group: "read",
+    takes: "<words...>",
+    summary: "What the words find across every pack of a deployment.",
+    options: ["url", "json", "limit"],
+  },
+  check: {
+    group: "write",
+    takes: "[<directory>]",
+    summary: "What an agent would get from the directory, before pushing.",
+    options: ["references", "offline", "url"],
+  },
+  catalog: {
+    group: "write",
+    takes: "[<directory>]",
+    summary: "The table of its skills for a README: print, write or check it.",
+    options: ["folder", "write", "check"],
+  },
+  mcp: {
+    group: "serve",
+    takes: "<directory>",
+    summary: "To the MCP client that started the command.",
+    options: ["as"],
+  },
+  serve: {
+    group: "serve",
+    takes: "<directory>...",
+    summary: "Over HTTP on this machine: MCP and the REST API.",
+    options: ["as", "port", "host"],
+  },
+  embed: {
+    group: "serve",
+    takes: "<directory>",
+    summary: "Embed its documents ahead of the first search.",
+    options: ["as"],
+  },
+  use: {
+    group: "connect",
+    takes: "<address>|<directory>",
+    summary: "Bind this directory to a pack: reads here need no <pack>.",
+    options: ["url", "as"],
+  },
+  login: {
+    group: "connect",
+    takes: "--url <origin> [<address>]",
+    summary: "Connect with a code a person approves.",
+    options: ["url", "agent", "token-stdin"],
+  },
+  logout: {
+    group: "connect",
+    takes: "--url <origin> [<address>]",
+    summary: "Forget the tokens kept there.",
+    options: ["url"],
+  },
+  logins: {
+    group: "connect",
+    takes: "",
+    summary: "Where a token is kept.",
+    options: [],
+  },
+} as const satisfies Record<string, CommandRow>;
+
+type Command = keyof typeof TABLE;
+const COMMANDS = Object.keys(TABLE) as Command[];
 
 /**
  * The sentence a checkout's agreement carries (AGENTS.md, or CLAUDE.md where that is the file
@@ -185,52 +301,41 @@ const HAND_OVER = `Tell the agents that work here, in the checkout's agreement (
 
 const isCommand = (name: string): name is Command => (COMMANDS as readonly string[]).includes(name);
 
+/** The list of the commands under their headings, each on a line with what it takes. */
+const COMMAND_LIST = GROUPS.map(({ key, title }) => {
+  const rows = COMMANDS.filter((name) => TABLE[name].group === key).map((name) => {
+    const row: CommandRow = TABLE[name];
+    return `  ${`${name} ${row.takes}`.trimEnd().padEnd(26)} ${row.summary}`;
+  });
+  return `${title}:\n${rows.join("\n")}`;
+}).join("\n\n");
+
+/**
+ * What `skillcdn help` prints: the list, and what holds for every command. What one command
+ * needs alone is on its own page, so that this one stays short for whoever reads it first.
+ */
 export const USAGE = `usage: skillcdn <command> [arguments]
+       skillcdn help <command>    One command in full: its arguments, its options, its limits.
 
-Reads a pack as SkillCDN serves one: a directory on this machine in the SkillCDN Format (a git
-checkout or any folder of skills, documents and rules), or a pack at a deployment, by its
-address. Nothing in a directory is executed.
+Reads a pack as SkillCDN serves one: a pack at a deployment, by its address, or a directory on
+this machine in the SkillCDN Format. Nothing in a directory is executed.
 
-Commands:
-  check [<directory>]              Report what an agent would get from the directory, before pushing.
-  catalog [<directory>]            The table of the skills for a README: print it, write it into a file, or check one.
-  skills [<pack>]                  What a client is told on connect, then every skill and document.
-  browse [<pack>] [<folder>]       What a folder holds, as browse_repo lists it.
-  find [<pack>] <words...>         What the words find, as search_repo does.
-  search <words...>                What the words find across every pack of a deployment, each under its address.
-  skill [<pack>] <path>            A skill whole, as load_skill assembles it: rules, instructions, included files.
-  file [<pack>] <path>             A page of a file, as read_repo_file reads it, or what a folder holds.
-  rows [<pack>] [<path>]           The tables of a document, or of every document under a folder, as CSV or JSON.
-  code [<pack>] [<path>]           The fenced code blocks of a document, or of every document under a folder.
-  mcp <directory>                  Serve the directory to the MCP client that started the command.
-  serve <directory>...             Serve directories over HTTP on this machine: MCP and the REST API.
-  embed <directory>                Embed the directory's documents ahead of the first search, saying how far it is.
-  login --url <origin> [<address>] Connect to a deployment with a code a person approves; the token is kept, never shown.
-  logout --url <origin> [<address>] Forget the tokens kept for a deployment, or the one for a repository.
-  logins                           The deployments and repositories a token is kept for.
-  use <address>|<directory>        Bind this directory to a pack, at a deployment or on this machine: reads here need no <pack>.
-  status                           What this directory reads, and whether a token is kept for it.
-  help [<command>]                 This, or one command in full.
+${COMMAND_LIST}
 
-A <pack> is a directory, or an address: gh/<owner>/<repo>[@<ref>][/<path>], the URL of a pack
-at a deployment, or a skill:// URI. Left out, the pack this directory is bound to (${DIRECTORY_FILE});
-there, a directory is a pack only when written as a path, ./<name>, since a bare word is a folder
-of the bound pack. An address is read at --url, else SKILLCDN_URL, else the deployment the directory is bound to,
-else ${DEFAULT_ORIGIN}, with the token kept for that deployment and the repository read, or
-SKILLCDN_TOKEN beside SKILLCDN_URL. Paths start at the pack's root, as marketing/ads/SKILL.md.
-Every read answers the words an MCP client's model is given, or the JSON of the REST API with --json.
-A read prints no more than ${COMMAND_OUTPUT_MAX_BYTES} bytes for an agent, what the hosts that run its commands show
-whole, and one that ends before what was asked for says how to read on.
+A <pack> is an address, gh/<owner>/<repo>[@<ref>][/<path>], the URL of a pack at a deployment, a
+skill:// URI, or a directory. Left out, it is the pack this directory is bound to (${DIRECTORY_FILE}),
+and a directory is then written as a path, ./<name>: a bare word there is a folder of the pack.
+Paths start at the pack's root, as marketing/ads/SKILL.md. A read prints the words an MCP
+client's model is given, at most ${COMMAND_OUTPUT_MAX_BYTES} bytes, and says how to read on where it ends before
+what was asked for; --json prints the JSON of the REST API.
 
-Exit codes: 0 done; 1 the pack does not have it, or refuses it; 2 the pack cannot be read, the
-directory or the deployment; 64 a usage error; 78 a variable that cannot be read; 70 a failure.
-
-Options:
-  -h, --help     Print this help.
-  -v, --version  Print the version.
+Exit codes: 0 done; 1 the pack does not have it, or refuses it; 2 the pack cannot be read;
+64 a usage error; 78 a variable that cannot be read; 70 a failure. -v prints the version.
 `;
 
-const READ_OPTIONS = `  --url <origin>  The deployment an address is read at.
+const READ_OPTIONS = `  --url <origin>  The deployment an address is read at; else SKILLCDN_URL, else the one this
+                  directory is bound to, else ${DEFAULT_ORIGIN}. The token kept for it and for the
+                  repository is sent, or SKILLCDN_TOKEN beside SKILLCDN_URL.
   --as <address>  Address a directory as local/<owner>/<name> instead of its parent's and its own name.
   --json          Print the JSON the REST API answers instead of the words a model is given.`;
 
@@ -271,9 +376,11 @@ be read. The INDEX_* and READ_MAX_FILE_BYTES variables set the limits a deployme
   skills: `usage: skillcdn skills [<pack>] [--cursor <cursor>] [--url <origin>] [--as <address>] [--json]
 
 What a client is told when it connects to the pack, within its 2,000 characters, then every
-skill and every document outside the skills, as a search without words lists them: each skill
-with its SKILL.md path, which skillcdn skill takes. A listing longer than one read prints,
-${COMMAND_OUTPUT_MAX_BYTES} bytes, ends with the command that lists the rest, with its --cursor.
+skill with its description and its SKILL.md path, which skillcdn skill takes. The documents
+outside the skills are counted and not listed: skillcdn browse lists a folder with what it
+holds, and skillcdn find finds them by what they say. A listing longer than one read prints,
+${COMMAND_OUTPUT_MAX_BYTES} bytes, ends with the command that lists the rest, with its --cursor. --json prints the
+mount as the REST API answers it.
 
 ${READ_OPTIONS}
 `,
@@ -283,7 +390,7 @@ What a folder holds, as browse_repo lists it: its skills, its folders with what 
 the README that introduces it, and its files, with the canonical path of each. The pack's root
 when no folder is given. A page of ${BROWSE_DEFAULT_LIMIT} entries unless --limit says otherwise (up to
 ${BROWSE_MAX_LIMIT}), and of fewer where they would not print within ${COMMAND_OUTPUT_MAX_BYTES} bytes; a page that ends
-before the folder does names its nextCursor, which --cursor continues.
+before the folder does ends with the command that reads the next, with its --cursor.
 
 ${READ_OPTIONS}
 `,
@@ -295,8 +402,8 @@ and EMBEDDINGS_MODEL name an embeddings server for a directory (skillcdn help se
 a skill comes with the files of it that matched, in order of relevance, and skills outrank
 documents. --path keeps the search to a folder. A page of ${FIND_DEFAULT_LIMIT}
 results unless --limit says otherwise (up to ${FIND_MAX_LIMIT}), and of fewer where they would not print
-within ${COMMAND_OUTPUT_MAX_BYTES} bytes; a page that ends before the results do names its nextCursor, which
---cursor continues.
+within ${COMMAND_OUTPUT_MAX_BYTES} bytes; a page that ends before the results do ends with the command that
+reads the next, with its --cursor.
 
 ${READ_OPTIONS}
 `,
@@ -527,9 +634,46 @@ const OPTIONS = {
   format: { type: "string" },
   out: { type: "string" },
   grep: { type: "string" },
+  references: { type: "boolean" },
+  offline: { type: "boolean" },
+  folder: { type: "string" },
+  write: { type: "string", multiple: true },
+  check: { type: "string", multiple: true },
 } as const;
 
 type Values = ReturnType<typeof parseArgs<{ options: typeof OPTIONS }>>["values"];
+
+/**
+ * The arguments of a command, read. An option nobody takes is refused by the parser; one that
+ * another command takes is refused here, by the command's row of the table, where it would
+ * otherwise be read and dropped: a search kept to a folder with --path is not what browse does
+ * with it.
+ */
+function argumentsOf(command: Command, args: readonly string[], positionals: boolean) {
+  const parsed = parseArgs({
+    args: [...args],
+    options: OPTIONS,
+    allowPositionals: positionals,
+    strict: true,
+  });
+  const taken: readonly string[] = TABLE[command].options;
+  const stray = Object.keys(parsed.values).find((name) => name !== "help" && !taken.includes(name));
+  if (stray !== undefined) {
+    throw new Misuse(`skillcdn ${command} takes no --${stray}.`);
+  }
+  return parsed;
+}
+
+/** The usage lines of a command's page of help: what a misuse is answered with, and not the page. */
+const usageOf = (name: Command): string => HELP[name].split("\n\n", 1)[0] ?? "";
+
+/** What a misuse prints: what was wrong, how the command is written, and where the rest is. */
+const misused = (name: Command, message: string): string =>
+  `${message}\n\n${usageOf(name)}\n\nskillcdn help ${name} says the rest.\n`;
+
+/** What a word that is no command is answered with: the names, and not the list with its lines. */
+const notACommand = (name: string): string =>
+  `Not a command: ${name}. The commands are ${COMMANDS.join(", ")}; skillcdn help says what each is for.\n`;
 
 const count = (value: string | undefined, name: string, max: number): number | undefined =>
   readNumber(value, name, max);
@@ -969,12 +1113,7 @@ async function readCommand(
   args: readonly string[],
   io: CliIo,
 ): Promise<number> {
-  const parsed = parseArgs({
-    args: [...args],
-    options: OPTIONS,
-    allowPositionals: true,
-    strict: true,
-  });
+  const parsed = argumentsOf(command, args, true);
   if (parsed.values.help === true) {
     io.stdout(HELP[command]);
     return 0;
@@ -1009,6 +1148,8 @@ async function readCommand(
     ...(values.url === undefined ? [] : ["--url", values.url]),
     ...(values.as === undefined ? [] : ["--as", values.as]),
   ];
+  /** The page size that was asked for, which the next page is asked for with. */
+  const sized = values.limit === undefined ? [] : ["--limit", values.limit];
   /** The read the arguments ask for, checked for what the command takes of them. */
   const asked = ((): {
     read: PackRead;
@@ -1034,6 +1175,19 @@ async function readCommand(
         }
         return {
           read: { read: "browse", path: argument, cursor: values.cursor, limit: values.limit },
+          nextPart: (cursor) =>
+            [
+              "skillcdn",
+              "browse",
+              ...named,
+              ...(argument === undefined ? [] : [argument]),
+              ...origin,
+              ...sized,
+              "--cursor",
+              cursor,
+            ]
+              .map(shellWord)
+              .join(" "),
         };
       case "find":
         return {
@@ -1044,6 +1198,20 @@ async function readCommand(
             cursor: values.cursor,
             limit: values.limit,
           },
+          nextPart: (cursor) =>
+            [
+              "skillcdn",
+              "find",
+              ...named,
+              ...positionals,
+              ...(values.path === undefined ? [] : ["--path", values.path]),
+              ...origin,
+              ...sized,
+              "--cursor",
+              cursor,
+            ]
+              .map(shellWord)
+              .join(" "),
         };
       case "skill": {
         if (more.length > 0 || (argument === undefined && skillPath === undefined)) {
@@ -1145,12 +1313,7 @@ const refused = (error: unknown): never => {
 };
 
 async function loginCommand(args: readonly string[], io: CliIo): Promise<number> {
-  const parsed = parseArgs({
-    args: [...args],
-    options: OPTIONS,
-    allowPositionals: true,
-    strict: true,
-  });
+  const parsed = argumentsOf("login", args, true);
   if (parsed.values.help === true) {
     io.stdout(HELP.login);
     return 0;
@@ -1256,12 +1419,7 @@ async function loginCommand(args: readonly string[], io: CliIo): Promise<number>
 }
 
 async function logoutCommand(args: readonly string[], io: CliIo): Promise<number> {
-  const parsed = parseArgs({
-    args: [...args],
-    options: OPTIONS,
-    allowPositionals: true,
-    strict: true,
-  });
+  const parsed = argumentsOf("logout", args, true);
   if (parsed.values.help === true) {
     io.stdout(HELP.logout);
     return 0;
@@ -1293,12 +1451,7 @@ async function logoutCommand(args: readonly string[], io: CliIo): Promise<number
 }
 
 async function loginsCommand(args: readonly string[], io: CliIo): Promise<number> {
-  const parsed = parseArgs({
-    args: [...args],
-    options: OPTIONS,
-    allowPositionals: false,
-    strict: true,
-  });
+  const parsed = argumentsOf("logins", args, false);
   if (parsed.values.help === true) {
     io.stdout(HELP.logins);
     return 0;
@@ -1317,12 +1470,7 @@ async function loginsCommand(args: readonly string[], io: CliIo): Promise<number
 }
 
 async function useCommand(args: readonly string[], io: CliIo): Promise<number> {
-  const parsed = parseArgs({
-    args: [...args],
-    options: OPTIONS,
-    allowPositionals: true,
-    strict: true,
-  });
+  const parsed = argumentsOf("use", args, true);
   if (parsed.values.help === true) {
     io.stdout(HELP.use);
     return 0;
@@ -1382,12 +1530,7 @@ async function useCommand(args: readonly string[], io: CliIo): Promise<number> {
 }
 
 async function statusCommand(args: readonly string[], io: CliIo): Promise<number> {
-  const parsed = parseArgs({
-    args: [...args],
-    options: OPTIONS,
-    allowPositionals: false,
-    strict: true,
-  });
+  const parsed = argumentsOf("status", args, false);
   if (parsed.values.help === true) {
     io.stdout(HELP.status);
     return 0;
@@ -1442,12 +1585,7 @@ async function statusCommand(args: readonly string[], io: CliIo): Promise<number
  * repository there stays where it is.
  */
 async function searchCommand(args: readonly string[], io: CliIo): Promise<number> {
-  const parsed = parseArgs({
-    args: [...args],
-    options: OPTIONS,
-    allowPositionals: true,
-    strict: true,
-  });
+  const parsed = argumentsOf("search", args, true);
   if (parsed.values.help === true) {
     io.stdout(HELP.search);
     return 0;
@@ -1491,7 +1629,11 @@ export async function runCli(args: readonly string[], io: CliIo): Promise<number
       io.stdout(HELP[wanted]);
       return 0;
     }
-    if (name === undefined || wanted !== undefined) {
+    if (wanted !== undefined) {
+      io.stderr(notACommand(wanted));
+      return EXIT_USAGE;
+    }
+    if (name === undefined) {
       io.stderr(USAGE);
       return EXIT_USAGE;
     }
@@ -1499,7 +1641,7 @@ export async function runCli(args: readonly string[], io: CliIo): Promise<number
     return 0;
   }
   if (!isCommand(name)) {
-    io.stderr(`Not a command: ${name}.\n\n${USAGE}`);
+    io.stderr(notACommand(name));
     return EXIT_USAGE;
   }
   try {
@@ -1531,7 +1673,7 @@ export async function runCli(args: readonly string[], io: CliIo): Promise<number
     }
   } catch (error) {
     if (error instanceof ReadMisuse) {
-      io.stderr(`${error.message}\n\n${HELP[name]}`);
+      io.stderr(misused(name, error.message));
       return EXIT_USAGE;
     }
     if (error instanceof ConfigurationError) {
@@ -1556,12 +1698,15 @@ export async function runCli(args: readonly string[], io: CliIo): Promise<number
           ? EXIT_UNREADABLE
           : EXIT_MISSING;
     }
+    // Whatever the parser refuses is a misuse: an option nobody takes, one given without its
+    // value or with one it does not take, a word where the command takes none.
     if (
       error instanceof Error &&
       "code" in error &&
-      error.code === "ERR_PARSE_ARGS_UNKNOWN_OPTION"
+      typeof error.code === "string" &&
+      error.code.startsWith("ERR_PARSE_ARGS_")
     ) {
-      io.stderr(`${error.message}\n\n${HELP[name]}`);
+      io.stderr(misused(name, error.message));
       return EXIT_USAGE;
     }
     io.stderr(`${error instanceof Error ? error.message : String(error)}\n`);
@@ -1672,17 +1817,7 @@ function packReferenceVerifier(
  * would list, read as `check` reads the directory.
  */
 async function catalogCommand(args: readonly string[], io: CliIo): Promise<number> {
-  const parsed = parseArgs({
-    args: [...args],
-    options: {
-      help: { type: "boolean", short: "h" },
-      folder: { type: "string" },
-      write: { type: "string", multiple: true },
-      check: { type: "string", multiple: true },
-    },
-    allowPositionals: true,
-    strict: true,
-  });
+  const parsed = argumentsOf("catalog", args, true);
   if (parsed.values.help === true) {
     io.stdout(HELP.catalog);
     return 0;
@@ -1755,17 +1890,7 @@ async function catalogCommand(args: readonly string[], io: CliIo): Promise<numbe
 }
 
 async function checkCommand(args: readonly string[], io: CliIo): Promise<number> {
-  const parsed = parseArgs({
-    args: [...args],
-    options: {
-      help: { type: "boolean", short: "h" },
-      offline: { type: "boolean" },
-      references: { type: "boolean" },
-      url: { type: "string" },
-    },
-    allowPositionals: true,
-    strict: true,
-  });
+  const parsed = argumentsOf("check", args, true);
   if (parsed.values.help === true) {
     io.stdout(HELP.check);
     return 0;
@@ -1895,12 +2020,7 @@ const watchAll = (mounted: readonly MountedDirectory[], logger: ServeLogger): { 
 };
 
 async function mcpCommand(args: readonly string[], io: CliIo): Promise<number> {
-  const parsed = parseArgs({
-    args: [...args],
-    options: OPTIONS,
-    allowPositionals: true,
-    strict: true,
-  });
+  const parsed = argumentsOf("mcp", args, true);
   if (parsed.values.help === true) {
     io.stdout(HELP.mcp);
     return 0;
@@ -1943,12 +2063,7 @@ async function mcpCommand(args: readonly string[], io: CliIo): Promise<number> {
  * each body, so whatever reads the directory next finds them made.
  */
 async function embedCommand(args: readonly string[], io: CliIo): Promise<number> {
-  const parsed = parseArgs({
-    args: [...args],
-    options: OPTIONS,
-    allowPositionals: true,
-    strict: true,
-  });
+  const parsed = argumentsOf("embed", args, true);
   if (parsed.values.help === true) {
     io.stdout(HELP.embed);
     return 0;
@@ -2017,12 +2132,7 @@ function hostOf(value: string | undefined): string {
 }
 
 async function serveCommand(args: readonly string[], io: CliIo): Promise<number> {
-  const parsed = parseArgs({
-    args: [...args],
-    options: OPTIONS,
-    allowPositionals: true,
-    strict: true,
-  });
+  const parsed = argumentsOf("serve", args, true);
   if (parsed.values.help === true) {
     io.stdout(HELP.serve);
     return 0;

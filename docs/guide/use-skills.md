@@ -45,7 +45,7 @@ An agent that can run commands does the rest. By hand, it is the same three step
 From then on an agent in the project reads the pack without naming it, and any pack by its address:
 
 ```sh
-skillcdn skills                                 # every skill and document of the pack
+skillcdn skills                                 # what the pack says of itself, then every skill
 skillcdn skill marketing/ads/SKILL.md           # one skill whole, a long one in parts that name the next
 skillcdn skills gh/acme/skills                  # any pack, by its address
 skillcdn search make a slide deck               # which pack has a skill for it, among every public pack

@@ -48,6 +48,13 @@ export interface ToolWords {
    * only makes the line; without it the folder is named as the call of the tool.
    */
   readonly browseFolder?: ((path: string) => string) | undefined;
+  /**
+   * What a page says last when it ends before what it lists does, where a reader runs a line
+   * and does not call the read again with a cursor: the sentence with the command that reads
+   * the next page, in place of the cursor. A page of a folder, of an outline, of a search or of
+   * the listing. It only makes the sentence.
+   */
+  readonly pageNext?: ((cursor: string) => string) | undefined;
 }
 
 /** The tools as the MCP endpoint names them (docs/specs/tools.md). */
@@ -279,10 +286,7 @@ function renderOutline(result: BrowseResult, outline: FileOutline, words: ToolWo
     headings,
     // The reader gives the pictures to the first page alone, with the start of the outline.
     imagesLine(outline.images),
-    result.nextCursor === undefined
-      ? undefined
-      : `nextCursor: ${JSON.stringify(result.nextCursor)}`,
-    notices(result.mount).join("\n"),
+    ...pageEnd(result.nextCursor, result.mount, words),
   ]);
 }
 
@@ -317,10 +321,7 @@ export function renderBrowseResult(
       )
       .join("\n"),
     renderDiagnostics(result.diagnostics ?? [], true, result.diagnosticsTotal, words),
-    result.nextCursor === undefined
-      ? undefined
-      : `nextCursor: ${JSON.stringify(result.nextCursor)}`,
-    notices(result.mount).join("\n"),
+    ...pageEnd(result.nextCursor, result.mount, words),
   ]);
 }
 
@@ -387,6 +388,25 @@ function notices(mount: MountSummary): string[] {
     lines.push(PROVENANCE_NOTICE);
   }
   return lines;
+}
+
+/**
+ * How a page that goes on ends: the cursor the read is called with again, then what is said of
+ * the source; or, for a reader that runs a line, the sentence with the line, last, since the end
+ * of a page is what a reader has just read when it decides what to do next.
+ */
+function pageEnd(
+  cursor: string | undefined,
+  mount: MountSummary,
+  words: ToolWords,
+): (string | undefined)[] {
+  const said = notices(mount).join("\n");
+  if (cursor === undefined) {
+    return [said];
+  }
+  return words.pageNext === undefined
+    ? [`nextCursor: ${JSON.stringify(cursor)}`, said]
+    : [said, words.pageNext(cursor)];
 }
 
 function joinSections(sections: readonly (string | undefined)[]): string {
@@ -586,18 +606,25 @@ export function renderFindResult(result: FindResult, words: ToolWords = MCP_TOOL
   let heading: string;
   if (result.query === undefined) {
     const totals = result.totals ?? { skills: skillsListed, documents: documentsListed };
+    // A reader that runs a line is given the line at the end of the page, and no cursor.
+    const onward =
+      words.pageNext === undefined ? "continue with nextCursor" : "the command below continues";
+    const unlisted = result.skillsAlone === true ? totals.documents : 0;
     heading =
-      count === 0
+      count === 0 && unlisted === 0
         ? `Nothing is indexed in ${where}.`
         : `${plural(totals.skills, "skill")} and ${plural(totals.documents, "document")} in ${where}:`;
     if (totals.skills > skillsListed) {
-      more.push(
-        `${totals.skills - skillsListed} skills are outside this page; continue with nextCursor.`,
-      );
+      more.push(`${totals.skills - skillsListed} skills are outside this page; ${onward}.`);
     }
-    if (totals.documents > documentsListed) {
+    if (unlisted > 0) {
+      // A listing of the skills alone counts the documents and says what reads them.
       more.push(
-        `${totals.documents - documentsListed} documents are outside this page; continue with nextCursor.`,
+        `The ${plural(unlisted, "document")} outside the skills ${unlisted === 1 ? "is" : "are"} not listed here: ${words.browse} lists a folder with what it holds, and ${words.search} finds them by what they say.`,
+      );
+    } else if (result.skillsAlone !== true && totals.documents > documentsListed) {
+      more.push(
+        `${totals.documents - documentsListed} documents are outside this page; ${onward}.`,
       );
     }
   } else if (count === 0) {
@@ -630,10 +657,7 @@ export function renderFindResult(result: FindResult, words: ToolWords = MCP_TOOL
     rankingLine(result),
     more.join("\n"),
     diagnostics,
-    result.nextCursor === undefined
-      ? undefined
-      : `nextCursor: ${JSON.stringify(result.nextCursor)}`,
-    notices(result.mount).join("\n"),
+    ...pageEnd(result.nextCursor, result.mount, words),
   ]);
 }
 
