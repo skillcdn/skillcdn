@@ -1,6 +1,7 @@
 import type { BlobStore, Clock, Embedder } from "@skillcdn/core";
 import {
   type Database,
+  findSnapshotOfCommit,
   getSnapshotEmbedding,
   type JobQueue,
   type SnapshotRecord,
@@ -44,6 +45,8 @@ export interface EmbedTriggerDependencies {
     | {
         readonly blobs: Pick<BlobStore, "read">;
         readonly embedder: Pick<Embedder, "maxTextChars" | "maxTextTokens">;
+        /** How many bodies a commit is given vectors for at most; for tests. */
+        readonly limit?: number | undefined;
       }
     | undefined;
 }
@@ -97,6 +100,28 @@ export function createEmbedTriggers(deps: EmbedTriggerDependencies): EmbedTrigge
     }
   };
 
+  /**
+   * The snapshot of the commit the mount's ref was at before the one just indexed: what tells
+   * the bodies a commit changed from the ones its pack had waiting already (ADR-0132).
+   */
+  const snapshotBefore = async (
+    mount: Mount,
+    snapshot: IndexedSnapshot,
+  ): Promise<SnapshotScope | undefined> => {
+    const previous = mount.previousCommit;
+    if (previous === undefined || previous === snapshot.commitSha) {
+      return undefined;
+    }
+    const before = await findSnapshotOfCommit(
+      database,
+      { accountId: snapshot.accountId, repoId: snapshot.repoId },
+      previous,
+    );
+    return before === undefined
+      ? undefined
+      : { accountId: before.accountId, snapshotId: before.id };
+  };
+
   return {
     async onIndexed(mount, snapshot) {
       const decision = await decideEmbedding(policy, mount.repo.host, mount.repo.repository);
@@ -116,16 +141,15 @@ export function createEmbedTriggers(deps: EmbedTriggerDependencies): EmbedTrigge
       } else {
         const counted: { left?: number } = {};
         // Before the job, which the worker may take at once: what it finds then is what is left.
-        const reused = await reuseKnownVectors(
-          { database, ...deps.reuse },
-          snapshot,
-          key,
-          undefined,
-          async (left) => {
+        const { blobs, embedder, limit } = deps.reuse;
+        const reused = await reuseKnownVectors({ database, blobs, embedder }, snapshot, key, {
+          limit,
+          before: () => snapshotBefore(mount, snapshot),
+          begun: async (left) => {
             counted.left = left;
             await say(snapshot, left);
           },
-        ).catch((error: unknown) => {
+        }).catch((error: unknown) => {
           logger.warn(
             { err: error, snapshot: snapshot.snapshotId },
             "the vectors a commit shares with the one before could not be given it",

@@ -21,11 +21,18 @@ export interface MadeSnapshotOptions {
   readonly owner?: string;
   /** The commit of the default branch, so served right now, when true. */
   readonly served?: boolean;
+  /** Another commit of a repository made before, in place of a repository of its own. */
+  readonly of?: {
+    readonly repository: HostRepository;
+    readonly repo: { readonly accountId: string; readonly repoId: string };
+  };
   readonly files: readonly {
     readonly path: string;
     readonly text: string;
     readonly kind?: "markdown" | "manifest" | "skill";
     readonly frontMatter?: IndexEntry["frontMatter"];
+    /** The blob of a file another snapshot holds with the same text: a file the commit left alone. */
+    readonly blobSha?: string;
   }[];
 }
 
@@ -33,23 +40,26 @@ let nextHostId = 8000;
 
 export async function makeSnapshot(database: Database, options: MadeSnapshotOptions) {
   nextHostId += 1;
-  const owner = options.owner ?? `owner-${nextHostId}`;
-  const repository: HostRepository = {
-    hostRepoId: String(nextHostId),
-    name: `repo-${nextHostId}`,
-    defaultBranch: "main",
-    description: undefined,
-    visibility: options.visibility,
-    owner: { hostAccountId: `account-${owner}`, login: owner, kind: "organization" },
-  };
   const now = new Date();
-  const saved = await saveRepository(
-    database,
-    { host: "gh", owner, repo: repository.name },
-    repository,
-    now,
-  );
-  const repo = { accountId: saved.accountId, repoId: saved.id };
+  const made = async () => {
+    const owner = options.owner ?? `owner-${nextHostId}`;
+    const repository: HostRepository = {
+      hostRepoId: String(nextHostId),
+      name: `repo-${nextHostId}`,
+      defaultBranch: "main",
+      description: undefined,
+      visibility: options.visibility,
+      owner: { hostAccountId: `account-${owner}`, login: owner, kind: "organization" },
+    };
+    const saved = await saveRepository(
+      database,
+      { host: "gh", owner, repo: repository.name },
+      repository,
+      now,
+    );
+    return { repository, repo: { accountId: saved.accountId, repoId: saved.id } };
+  };
+  const { repository, repo } = options.of ?? (await made());
   const commit = nextHostId.toString(16).padStart(40, "0");
   const snapshot = await ensureSnapshot(database, repo, commit, INDEX_VERSION, now);
   const scope: SnapshotScope = { accountId: repo.accountId, snapshotId: snapshot.id };
@@ -60,7 +70,7 @@ export async function makeSnapshot(database: Database, options: MadeSnapshotOpti
   const entries: IndexEntry[] = [];
   for (const file of options.files) {
     const bytes = new TextEncoder().encode(file.text);
-    const blobSha = `blob-${nextHostId}-${entries.length}`;
+    const blobSha = file.blobSha ?? `blob-${nextHostId}-${entries.length}`;
     await blobs.write(blobSha, bytes);
     const skillDir = file.path.slice(0, file.path.lastIndexOf("/"));
     entries.push({

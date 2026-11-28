@@ -741,11 +741,171 @@ describe("the worker", () => {
       left: 0,
     });
     const another = await snapshotOf(`${edited}\nOne more line.\n`);
-    expect(await reuseKnownVectors(deps, another.scope, KEY, 0)).toEqual({
+    expect(await reuseKnownVectors(deps, another.scope, KEY, { limit: 0 })).toEqual({
       whole: 0,
       unfinished: 0,
       sections: 0,
       left: 1,
+    });
+  });
+
+  it("gives a commit the vectors of the bodies it changed while the embedding of its pack is behind (ADR-0132)", async () => {
+    const written = [
+      "# Expenses",
+      "How a claim for travel is filed, and who signs it.",
+      "## Receipts",
+      "Keep the paper receipt of every taxi and every meal.",
+      "## Deadlines",
+      "A claim is filed before the tenth of the next month.",
+      "",
+    ].join("\n\n");
+    const edited = written.replace("the tenth", "the fifteenth");
+    const sections = sectionsOf(written).length;
+    const read: string[] = [];
+    const store = createBlobStore(testDatabase.database);
+    // What gives a commit its vectors, with the bodies it reads written down.
+    const deps = {
+      database: testDatabase.database,
+      blobs: {
+        read: async (sha: string) => {
+          read.push(sha);
+          return store.read(sha);
+        },
+      },
+      embedder: fake.embedder,
+    };
+    const manifest = {
+      path: "SKILLCDN.md",
+      kind: "manifest" as const,
+      text: "---\ndescription: A pack.\n---\n",
+      frontMatter: { metadata: {}, warnings: [], documents: ["docs"] },
+    };
+    const waiting = [
+      {
+        path: "docs/payroll.md",
+        text: "# Payroll\n\nSalaries are paid on the last working day.\n",
+      },
+      { path: "docs/pensions.md", text: "# Pensions\n\nThe scheme is joined after a quarter.\n" },
+    ];
+    // The pack as the worker left it: one body embedded, two still waiting for their turn. The
+    // embedded one is embedded as a snapshot of its own, which the pack then shares the blob of.
+    const alone = await madeSnapshot({
+      visibility: "public",
+      files: [{ path: "docs/expenses.md", text: written }],
+    });
+    const expenses = alone.entries[0]?.blobSha;
+    await embedSnapshotSlice(
+      {
+        database: testDatabase.database,
+        blobs: store,
+        embedder: fake.embedder,
+        policy: { scope: "all" as const, entitlements: allowEverything },
+        lists: noLists,
+        usage: discardUsage,
+        clock,
+        logger,
+      },
+      {
+        ...alone.scope,
+        repoId: alone.repo.repoId,
+        commitSha: alone.commit,
+        key: KEY,
+        reason: "designated",
+      },
+    );
+    const before = await madeSnapshot({
+      visibility: "public",
+      files: [manifest, { path: "docs/expenses.md", text: written, blobSha: expenses }, ...waiting],
+    });
+    const blobOf = (path: string) => before.entries.find((entry) => entry.path === path)?.blobSha;
+    // A commit that edits one sentence of the embedded body and leaves the two others alone.
+    const after = await madeSnapshot({
+      visibility: "public",
+      of: before,
+      files: [
+        manifest,
+        { path: "docs/expenses.md", text: edited },
+        ...waiting.map((file) => ({ ...file, blobSha: blobOf(file.path) })),
+      ],
+    });
+    const body = after.entries.find((entry) => entry.path === "docs/expenses.md")?.blobSha;
+    if (body === undefined) throw new Error("the snapshot holds the edited document");
+
+    // More bodies are left than are given at once, and nothing says which the commit changed:
+    // none is read, as before.
+    expect(await reuseKnownVectors(deps, after.scope, KEY, { limit: 2 })).toEqual({
+      whole: 0,
+      unfinished: 0,
+      sections: 0,
+      left: 3,
+    });
+    expect(read).toEqual([]);
+    // Told by the commit before: the one body it changed is given the vectors its texts had,
+    // and the two that waited already are left to the worker unread.
+    expect(
+      await reuseKnownVectors(deps, after.scope, KEY, {
+        limit: 2,
+        before: async () => before.scope,
+      }),
+    ).toEqual({ whole: 0, unfinished: 1, sections: sections - 1, left: 3 });
+    expect(read).toEqual([body]);
+
+    // What onIndexed does with the commit the ref was at before.
+    const sent: EmbedJob[] = [];
+    const logged = logs.length;
+    const again = await madeSnapshot({
+      visibility: "public",
+      of: before,
+      files: [
+        manifest,
+        { path: "docs/expenses.md", text: `${edited}\n` },
+        ...waiting.map((file) => ({ ...file, blobSha: blobOf(file.path) })),
+      ],
+    });
+    const recording: JobQueue = {
+      ensureQueue: async () => {},
+      send: async (_name, data) => {
+        sent.push(data as EmbedJob);
+        return "sent";
+      },
+      work: async () => {},
+      schedule: async () => {},
+      unschedule: async () => {},
+      waiting: async () => [],
+      reorder: async () => false,
+      counts: async () => [],
+      failures: async () => [],
+      stop: async () => {},
+    };
+    await createEmbedTriggers({
+      database: testDatabase.database,
+      jobs: recording,
+      key: KEY,
+      policy: { scope: "public", entitlements: allowEverything },
+      lists: noLists,
+      clock,
+      logger,
+      reuse: { blobs: store, embedder: fake.embedder, limit: 2 },
+    }).onIndexed(
+      {
+        repo: { host: "gh", repository: again.repository },
+        previousCommit: before.commit,
+      } as unknown as Mount,
+      { ...again.scope, repoId: again.repo.repoId, commitSha: again.commit },
+    );
+    expect(logs.slice(logged)).toContainEqual(
+      expect.objectContaining({
+        whole: 0,
+        unfinished: 1,
+        sections: sections - 1,
+        left: 3,
+        msg: "a commit was given the vectors its texts had already",
+      }),
+    );
+    expect(sent).toHaveLength(1);
+    // Under way, as any commit with a body left (ADR-0126).
+    expect(await getSnapshotEmbedding(testDatabase.database, again.scope, KEY)).toMatchObject({
+      completedAt: null,
     });
   });
 

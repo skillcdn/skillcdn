@@ -327,13 +327,35 @@ export interface ReusedVectors {
   readonly left: number;
 }
 
+/** What {@link reuseKnownVectors} is told beside the snapshot and the key. */
+export interface ReuseOptions {
+  /** How many bodies are given their vectors at most: {@link REUSE_BODIES} unless said. */
+  readonly limit?: number | undefined;
+  /**
+   * The snapshot of the commit the ref was at before, asked for only where more bodies are left
+   * than are given at once: the embedding of the pack is behind then, and the bodies that
+   * snapshot did not have are the ones this commit changed (ADR-0132).
+   */
+  readonly before?: (() => Promise<SnapshotScope | undefined>) | undefined;
+  /**
+   * Told how many bodies have nothing embedded, before any is given a vector: whoever queues the
+   * commit says there how its embedding stands ({@link beginEmbedding}), while this still reads.
+   */
+  readonly begun?: ((left: number) => Promise<void>) | undefined;
+}
+
 /**
  * Gives the bodies of a snapshot just indexed the vectors their texts have already under the
  * key (ADR-0107), at once and without a call to the embedder: a file edited in one place is
  * searched by the meaning of what it still says from the moment its commit is served, where it
  * waited for the worker to reach it. A body some of whose texts have no vector is written as
- * unfinished, and the worker still embeds the rest. Nothing is done when more than
- * {@link REUSE_BODIES} bodies are left to embed.
+ * unfinished, and the worker still embeds the rest.
+ *
+ * Every body left to embed is looked at where they are at most {@link REUSE_BODIES}. Where more
+ * are left, the embedding of the pack is behind, and only the bodies the commit before did not
+ * have are looked at, when those are at most as many (ADR-0132): the rest waited for the worker
+ * before this commit and wait on. Nothing is done where there is no commit before to tell them
+ * by, or the commit changed more than that.
  */
 export async function reuseKnownVectors(
   deps: {
@@ -343,14 +365,10 @@ export async function reuseKnownVectors(
   },
   scope: SnapshotScope,
   key: VectorKey,
-  limit: number = REUSE_BODIES,
-  /**
-   * Told how many bodies have nothing embedded, before any is given a vector: whoever queues the
-   * commit says there how its embedding stands ({@link beginEmbedding}), while this still reads.
-   */
-  begun?: (left: number) => Promise<void>,
+  options: ReuseOptions = {},
 ): Promise<ReusedVectors> {
   const { database } = deps;
+  const limit = options.limit ?? REUSE_BODIES;
   const served = await servedEntries(database, scope);
   const allowed = meaningSearchOf(served);
   const entries = served.filter((entry) => embeddable(entry) && allowed(entry.path));
@@ -359,14 +377,15 @@ export async function reuseKnownVectors(
     key,
     entries.map((entry) => entry.blobSha),
   );
-  await begun?.(missing.size);
+  await options.begun?.(missing.size);
   const done = { whole: 0, unfinished: 0, sections: 0 };
-  if (missing.size === 0 || missing.size > limit) {
+  const given = missing.size <= limit ? missing : await changedSince(database, options, missing);
+  if (given.size === 0 || given.size > limit) {
     return { ...done, left: missing.size };
   }
   const seen = new Set<string>();
   for (const entry of entries) {
-    if (!missing.has(entry.blobSha) || seen.has(entry.blobSha)) {
+    if (!given.has(entry.blobSha) || seen.has(entry.blobSha)) {
       continue;
     }
     seen.add(entry.blobSha);
@@ -407,6 +426,24 @@ export async function reuseKnownVectors(
     }
   }
   return { ...done, left: missing.size - done.whole };
+}
+
+/**
+ * Which of the bodies left to embed the snapshot of the commit before did not have: the ones a
+ * commit changed, told from the ones that waited for the worker already. None where no snapshot
+ * of a commit before is named.
+ */
+async function changedSince(
+  database: Database,
+  options: Pick<ReuseOptions, "before">,
+  missing: ReadonlySet<string>,
+): Promise<ReadonlySet<string>> {
+  const before = await options.before?.();
+  if (before === undefined) {
+    return new Set();
+  }
+  const had = new Set((await servedEntries(database, before)).map((entry) => entry.blobSha));
+  return new Set([...missing].filter((blobSha) => !had.has(blobSha)));
 }
 
 /**
