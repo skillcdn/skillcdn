@@ -103,6 +103,13 @@ export interface HubAnswer extends HubResult {
  * Whether a cache may keep an answer: one that came without its words or its meaning
  * (ADR-0091, ADR-0096), or that left out a result the git host was not asked about in time
  * (ADR-0097), is for whoever asked alone.
+ *
+ * An answer that holds an entry still waiting for its vectors is kept like any other, unlike
+ * the answer of a search inside a mount (ADR-0126). That one says how far the embedding is, so
+ * whoever reads it asks again and must not be given the same answer; this one says nothing of
+ * it, and the entry stands where its words put it. An embedding a bound stopped stays under way
+ * for as long as the bound holds, and the answers with an entry of such a pack would be kept by
+ * nothing for as long.
  */
 export const answeredInFull = (answer: HubAnswer): boolean =>
   !answeredInPart(answer.ranking) && answer.unconfirmed !== true;
