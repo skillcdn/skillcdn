@@ -294,6 +294,49 @@ describe("rendering", () => {
     expect(one).toContain("1 more linked file, not resolved above: write/a.md. Each is linked");
   });
 
+  it("names a skill's folder by the line that lists it, where the words make one", () => {
+    // A reader that runs lines cannot run the call of a tool: the caller makes the line, whole.
+    const words = {
+      ...MCP_TOOL_WORDS,
+      browse: "skillcdn browse",
+      browseFolder: (folder: string) =>
+        folder.length === 0 ? "skillcdn browse pack" : `skillcdn browse pack ${folder}`,
+    };
+    const linked = renderSkillResult(
+      skillResult({
+        directory: path("write"),
+        referencesTruncated: true,
+        referencesUnlisted: { paths: ["write/a.md"], more: 0 },
+      }),
+      words,
+    );
+    expect(linked).toContain(
+      "Each is linked where the text names it; skillcdn browse pack write lists the skill's own files.",
+    );
+    const listed = renderSkillResult(
+      skillResult({
+        directory: path("write"),
+        files: [path("write/references/style.md")],
+        filesTruncated: true,
+      }),
+      words,
+    );
+    expect(listed).toContain("- ... (skillcdn browse pack write for all supporting files)");
+    // A skill at the root of the pack has the pack itself for its folder.
+    const root = renderSkillResult(
+      skillResult({
+        directory: path(""),
+        files: [path("references/style.md")],
+        filesTruncated: true,
+      }),
+      words,
+    );
+    expect(root).toContain("- ... (skillcdn browse pack for all supporting files)");
+    for (const text of [linked, listed, root]) {
+      expect(text).not.toContain('{"path"');
+    }
+  });
+
   it("says the head of a table again above the rows a page begins with (ADR-0118)", () => {
     const head = "| Input | Source |\n|---|---|\n";
     const rows = "| The task | Its number |\n| The work | Its body |\n";

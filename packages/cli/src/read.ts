@@ -149,6 +149,12 @@ export interface ReadOptions {
    */
   readonly nextPart?: ((cursor: string) => string) | undefined;
   /**
+   * The command that lists a folder of the pack, by its path from the pack's root, empty for the
+   * root: a skill names its own folder with it where it does not list every file or resolve
+   * every link. By default `<words.browse> <path>`, which names no pack. It only makes the line.
+   */
+  readonly browseFolder?: ((path: string) => string) | undefined;
+  /**
    * The bytes of UTF-8 the caller prints in the same output beside the text, a line of its own
    * above or below it: the read keeps that much of the bound free, so that the whole output is
    * still one a host shows whole (ADR-0124). None by default.
@@ -643,10 +649,17 @@ export async function readPack(
       const nextPart =
         options.nextPart ??
         ((cursor: string) => `${words.load} ${shellWord(read.path)} --cursor ${shellWord(cursor)}`);
+      // The skill's own folder is named by the command that lists it, and not by the call of a
+      // tool, which a reader of a command cannot run.
+      const browseFolder =
+        options.browseFolder ??
+        ((path: string) =>
+          path.length === 0 ? words.browse : `${words.browse} ${shellWord(path)}`);
       const said: ToolWords = {
         ...words,
         piece: words.piece ?? "part",
         loadNext: words.loadNext ?? ((_path, cursor) => nextPart(cursor)),
+        browseFolder: words.browseFolder ?? browseFolder,
       };
       const continued = read.cursor !== undefined;
       const render = (part: SkillResult): string =>

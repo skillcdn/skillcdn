@@ -286,6 +286,44 @@ describe("the reads of a directory", () => {
     expect(measured.nextOffset).toBe(37);
   });
 
+  it("names a skill's folder by the command that lists it, in the pack as it was given", async () => {
+    // Seven linked files: more than a skill's first page resolves, so the rest are named with
+    // what lists the folder they are in.
+    const names = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf"];
+    const root = await repository({
+      ...PACK,
+      "engineering/linked/SKILL.md": `---\nname: linked\ndescription: A skill of many linked files.\n---\n# Linked\n\n${names.map((name) => `- [${name}](references/${name}.md)`).join("\n")}\n`,
+      ...Object.fromEntries(
+        names.map((name) => [`engineering/linked/references/${name}.md`, `# ${name}\n`]),
+      ),
+    });
+    const { code, out } = await run(["skill", root, "engineering/linked/SKILL.md"]);
+    expect(code).toBe(0);
+    const line =
+      /2 more linked files, not resolved above: [^\n]+\. Each is linked where the text names it; (skillcdn browse (\S+) engineering\/linked) lists the skill's own files\./.exec(
+        out,
+      );
+    expect(line).not.toBeNull();
+    // The directory as it was given, quoted for a shell where it needs it: a line to run, and
+    // not the call of a tool.
+    expect(line?.[2]?.replace(/^'(.*)'$/, "$1")).toBe(root);
+    expect(out).not.toContain('{"path"');
+    const listed = await run(["browse", root, "engineering/linked"]);
+    expect(listed.code).toBe(0);
+    expect(listed.out).toContain("- directory: engineering/linked/references");
+    // Where the pack is read under another name, the line says so as the read did.
+    const named = await run([
+      "skill",
+      root,
+      "engineering/linked/SKILL.md",
+      "--as",
+      "local/acme/skills",
+    ]);
+    expect(named.out).toMatch(
+      /; skillcdn browse \S+ engineering\/linked --as local\/acme\/skills lists the skill's own files\./,
+    );
+  });
+
   it("prints a skill longer than a host shows whole in parts, each naming the next (ADR-0108)", async () => {
     // Three included files of some twelve thousand characters: more than one read prints.
     const files = ["alpha", "bravo", "charlie"];

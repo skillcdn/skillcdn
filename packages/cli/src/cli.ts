@@ -1002,7 +1002,11 @@ async function readCommand(
     ...(values.as === undefined ? [] : ["--as", values.as]),
   ];
   /** The read the arguments ask for, checked for what the command takes of them. */
-  const asked = ((): { read: PackRead; nextPart?: (cursor: string) => string } => {
+  const asked = ((): {
+    read: PackRead;
+    nextPart?: (cursor: string) => string;
+    browseFolder?: (path: string) => string;
+  } => {
     const [argument, ...more] = positionals;
     switch (command) {
       case "skills":
@@ -1043,6 +1047,10 @@ async function readCommand(
         // The next part is asked for as this one was: the pack, the path or URI, and where it
         // is read (ADR-0108).
         const asGiven = [...named, ...(argument === undefined ? [] : [argument]), ...origin];
+        // The skill's folder is listed in the pack as it was given; a URI that named the skill
+        // with its pack names one file, so the pack is said by its address.
+        const inPack =
+          skillPath === undefined ? named : [formatAddress(pack.address).replace(/^\//, "")];
         return {
           read: {
             read: "skill",
@@ -1051,6 +1059,10 @@ async function readCommand(
           },
           nextPart: (cursor) =>
             ["skillcdn", "skill", ...asGiven, "--cursor", cursor].map(shellWord).join(" "),
+          browseFolder: (path) =>
+            ["skillcdn", "browse", ...inPack, ...(path.length === 0 ? [] : [path]), ...origin]
+              .map(shellWord)
+              .join(" "),
         };
       }
       case "file":
@@ -1080,6 +1092,7 @@ async function readCommand(
     words: COMMAND_WORDS,
     json,
     nextPart: asked.nextPart,
+    browseFolder: asked.browseFolder,
   });
   if (output.holds !== undefined) {
     // What a data read made goes to the output, or to the file `--out` names.

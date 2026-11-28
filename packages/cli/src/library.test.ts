@@ -92,6 +92,41 @@ describe("the reads of a pack as a library", () => {
     expect(code.text).toContain("--- docs/codes.md > Codes (sh) ---\necho codes\n");
   });
 
+  it("names a skill's folder by the line the caller makes for it", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "skillcdn-library-folder-"));
+    const root = join(parent, "acme-skills");
+    // Seven linked files: more than a skill's first page resolves, so the rest are named with
+    // what lists the folder they are in.
+    const linked = Array.from({ length: 7 }, (_, at) => `file-${at}`);
+    const files: Record<string, string> = {
+      "marketing/linked/SKILL.md": `---\nname: linked\ndescription: A skill of linked files.\n---\n# Linked\n\n${linked.map((name) => `- [${name}](references/${name}.md)`).join("\n")}\n`,
+      ...Object.fromEntries(
+        linked.map((name) => [`marketing/linked/references/${name}.md`, `# ${name}\n`]),
+      ),
+    };
+    for (const [file, text] of Object.entries(files)) {
+      const parts = file.split("/");
+      await mkdir(join(root, ...parts.slice(0, -1)), { recursive: true });
+      await writeFile(join(root, ...parts), text);
+    }
+    const pack = await openDirectory({ directory: root, limits: INDEX_LIMIT_DEFAULTS });
+    if ("error" in pack) throw new Error("the directory is a pack");
+    const read = { read: "skill", path: "marketing/linked/SKILL.md" } as const;
+    // A program with commands of its own says the line in them: a line to run, where the call of
+    // a tool stood, which a reader of a command cannot run.
+    const own = await readPack(pack, read, {
+      words: { ...COMMAND_WORDS, browse: "console skills <folder>" },
+      browseFolder: (path) => `console skills ${path}`,
+    });
+    expect(own.text).toContain("; console skills marketing/linked lists the skill's own files.");
+    // Without one it is the word for the read and the folder, which names no pack.
+    const plain = await readPack(pack, read);
+    expect(plain.text).toContain("; skillcdn browse marketing/linked lists the skill's own files.");
+    for (const { text } of [own, plain]) {
+      expect(text).not.toContain('{"path"');
+    }
+  });
+
   it("answers on every page of a long skill how many pages are left (ADR-0123)", async () => {
     const parent = await mkdtemp(join(tmpdir(), "skillcdn-library-pages-"));
     const root = join(parent, "acme-skills");

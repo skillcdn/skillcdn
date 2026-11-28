@@ -41,6 +41,13 @@ export interface ToolWords {
    * It is said at the head of a part and is the last line of it, so it only makes the line.
    */
   readonly loadNext?: ((path: string, cursor: string) => string) | undefined;
+  /**
+   * The line that lists a folder, where a reader runs a line and does not call `browse` with a
+   * path: the command, whole, for the folder given from the pack's root, which is empty for the
+   * root itself. A skill names its own folder so where it does not list every file of it. It
+   * only makes the line; without it the folder is named as the call of the tool.
+   */
+  readonly browseFolder?: ((path: string) => string) | undefined;
 }
 
 /** The tools as the MCP endpoint names them (docs/specs/tools.md). */
@@ -662,11 +669,13 @@ export function renderSkillResult(result: SkillResult, words: ToolWords = MCP_TO
   }
 
   const includedPaths = new Set(result.included.map((file) => file.path));
+  // What lists the skill's folder: the call of the tool, or the line a reader of a command runs.
+  const folder =
+    words.browseFolder?.(result.directory) ??
+    `${words.browse} ${JSON.stringify({ path: result.directory })}`;
   let files: string | undefined;
   if (result.files.length > 0) {
-    const more = result.filesTruncated
-      ? `\n- ... (${words.browse} ${JSON.stringify({ path: result.directory })} for all supporting files)`
-      : "";
+    const more = result.filesTruncated ? `\n- ... (${folder} for all supporting files)` : "";
     const listed = result.files.map(
       (file) => `- ${file}${includedPaths.has(file) ? " (included below)" : ""}`,
     );
@@ -702,7 +711,6 @@ export function renderSkillResult(result: SkillResult, words: ToolWords = MCP_TO
   const source =
     result.path ?? `${result.directory.length === 0 ? "" : `${result.directory}/`}SKILL.md`;
   const unlisted = result.referencesUnlisted;
-  const folder = `${words.browse} ${JSON.stringify({ path: result.directory })}`;
   // How much is left is counted in pages whatever one read is called: a part the command prints
   // is a run of them (ADR-0108), so the count is of the skill's pages, and never under what is
   // left to read.
