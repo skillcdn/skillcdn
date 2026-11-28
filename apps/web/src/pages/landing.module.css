@@ -2,9 +2,9 @@
   overflow: clip;
 }
 
-/* The first screen: centred words and the one action under them, with room to breathe above and
-   between them, and the top of the scene still on the same screen. The hero has no light of its
-   own: the light comes up past it from the page's ground (layout.module.css). */
+/* The first screen: the promise and one line, centred, with room to breathe above and under them,
+   and the top of the scene still on the same screen. The hero has no light of its own: the light
+   comes up past it from the page's ground (layout.module.css). */
 .hero {
   position: relative;
   padding-block: var(--space-9) var(--space-8);
@@ -44,8 +44,8 @@
   text-wrap: balance;
 }
 
-/* The clients, named with their marks, in one quiet row: under the scene, or under the action
-   where a deployment shows no scene. */
+/* The clients, named with their marks, in one quiet row: under the scene, or under the line of the
+   first screen where a deployment shows no scene. */
 .clients {
   display: grid;
   gap: var(--space-3);
@@ -94,10 +94,6 @@
 
 .actions.centered {
   justify-content: center;
-}
-
-.heroActions {
-  margin-top: var(--space-7);
 }
 
 .primary,
@@ -1149,19 +1145,6 @@
 
   .large {
     width: 100%;
-  }
-
-  /* The pair of the first screen stands side by side on a phone as well, so that the scene
-     under it stays on the same screen. */
-  .heroActions {
-    flex-wrap: nowrap;
-    margin-top: var(--space-6);
-  }
-
-  .heroActions > .large {
-    flex: 1;
-    width: auto;
-    padding-inline: var(--space-3);
   }
 }
 

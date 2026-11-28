@@ -24,7 +24,7 @@ import { AUTHORS_GUIDE_SLUG } from "../docs/catalog.js";
 import { useFeatures } from "../features.js";
 import { useI18n } from "../i18n/index.js";
 import { Link } from "../navigation.js";
-import { docsHref, PATHS, searchHref, startHref } from "../router.js";
+import { docsHref, PATHS, startHref } from "../router.js";
 import { applyHead, buildHead } from "../seo/head.js";
 import { showcaseEntries, showcaseOrganizations } from "../showcase.js";
 import { CONSOLE_PACK_ADDRESS, hostOf, LINKS } from "../site.js";
@@ -350,26 +350,9 @@ export function LandingPage(props: { readonly origin: string }) {
             {copy.title}
             <span>{copy.titleAccent}</span>
           </h1>
+          {/* The promise and one line, and nothing to press (ADR-0130): the scene under it is
+              what the line says, and the header's first link is the way to start. */}
           <p className={styles.lead}>{copy.lead}</p>
-          {/* One action, the way to start, and the search across the packs as the quieter way
-              beside it; where the deployment has no search, the explorer. */}
-          <div className={cx(styles.actions, styles.centered, styles.heroActions)}>
-            <Link
-              className={cx(styles.primary, styles.large)}
-              href={startHref()}
-              onClick={() => track("cta_click", { id: "hero_start" })}
-            >
-              {copy.start}
-              <ArrowIcon />
-            </Link>
-            <Link
-              className={cx(styles.ghost, styles.large)}
-              href={features.search ? searchHref() : PATHS.explore}
-              onClick={() => track("cta_click", { id: "hero_search" })}
-            >
-              {features.search ? copy.searchSkills : t.nav.explore}
-            </Link>
-          </div>
           {/* Under the scene where the page shows it; here where it does not. */}
           {!shows("agents") && <Clients />}
         </Container>

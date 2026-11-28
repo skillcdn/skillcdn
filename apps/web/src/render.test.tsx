@@ -288,17 +288,18 @@ describe("prerendered pages", () => {
     expect(body).toContain('href="/gh/skillcdn/skills@v1"');
   });
 
-  it("leads the front page with the way to start and the build's own showcase, every entry a real result", () => {
+  it("leads the front page with the promise alone and the build's own showcase, every entry a real result", () => {
     for (const language of LANGUAGES) {
       const t = messagesFor(language);
       const { body, head } = renderPage("/", language);
-      // The first screen is the promise and the one action (ADR-0129): the way to start, with
-      // the search across the packs as a link beside it. The box itself stands with the packs,
-      // after the showcase, over the address field.
-      const firstScreen = body.slice(0, body.indexOf('id="agents"'));
+      // The first screen is the promise and one line, with nothing to press (ADR-0130); the
+      // header before it leads to the start page. The box stands with the packs, after the
+      // showcase, over the address field.
+      const title = body.indexOf("<h1");
+      const firstScreen = body.slice(title, body.indexOf('id="agents"'));
       expect(firstScreen).toContain(t.landing.lead);
-      expect(firstScreen).toContain('href="/start"');
-      expect(firstScreen).toContain('href="/search"');
+      expect(firstScreen).not.toContain("<a ");
+      expect(body.slice(0, title)).toContain('href="/start"');
       expect(firstScreen).not.toContain('name="q"');
       expect(body).toContain('name="q"');
       expect(body.indexOf(t.landing.showcase.title)).toBeLessThan(body.indexOf('name="q"'));
@@ -444,8 +445,8 @@ describe("prerendered pages", () => {
     }).html;
     expect(trimmed).not.toContain('name="q"');
     expect(trimmed).not.toContain('href="/search"');
-    // Without the scene the first screen names the AI apps itself, and its second way is the
-    // explorer, since there is no search to lead to.
+    // Without the scene the first screen names the AI apps itself; the header still leads to the
+    // start page, and nowhere leads to a search there is not.
     const [scene = "missing"] = t.landing.agents.scene.description.split(".");
     expect(trimmed).not.toContain(scene);
     expect(trimmed).toContain(t.landing.clients);

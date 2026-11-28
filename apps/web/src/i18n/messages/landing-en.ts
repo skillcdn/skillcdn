@@ -36,10 +36,8 @@ export const landingEn = {
   titleAccent: "It gets smarter as it works.",
   /** One line: what the employee does, which the scene under it shows. */
   lead: "It joins your team with an account of its own, takes the work, reports, and asks only what is yours to decide.",
-  /** The one action of the page, wherever it stands: the way to the start page (ADR-0129). */
+  /** The way to the start page, on the last call of the page (ADR-0129). */
   start: "Get started",
-  /** The quieter way beside it on the first screen: the search across the packs. */
-  searchSkills: "Search skills",
   /** The search box of the packs section and of the explorer. */
   search: {
     label: "What will you make?",

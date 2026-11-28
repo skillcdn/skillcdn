@@ -1,6 +1,6 @@
 # ADR-0129: The front page leads with one action, and a start page says how to begin
 
-- Status: Accepted
+- Status: Accepted; point 1 and the first screen among the ways in of point 5 are superseded by [ADR-0130](0130-the-first-screen-is-the-promise-alone-and-the-header-leads-to-the-start-page.md) (the first screen has nothing to press)
 - Date: 2026-11-27
 - Builds on [ADR-0075](0075-a-search-across-the-packs-has-a-page-per-term-that-search-engines-may-list.md) (the sections of the front page, whose first screen and order this changes), [ADR-0128](0128-the-front-page-shows-the-agent-accounts-as-a-scene-the-browser-plays.md) (the scene of the agent accounts) and [ADR-0047](0047-the-console-is-a-separate-repository-built-on-the-published-packages.md) (the reference console and its pack).
 

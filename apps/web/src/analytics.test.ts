@@ -184,9 +184,9 @@ describe("what is sent", () => {
   }
 
   it("goes nowhere without analytics, or before the visitor agreed", () => {
-    expect(() => track("cta_click", { id: "hero_start" })).not.toThrow();
+    expect(() => track("cta_click", { id: "steps_start" })).not.toThrow();
     const gtag = analytics(false);
-    track("cta_click", { id: "hero_start" });
+    track("cta_click", { id: "steps_start" });
     trackPage({ path: "/", title: "landing" }, origin);
     expect(gtag).not.toHaveBeenCalled();
   });

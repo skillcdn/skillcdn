@@ -6,7 +6,6 @@ export const landingKo: LandingMessages = {
   titleAccent: "일할수록 똑똑해집니다.",
   lead: "자기 계정으로 팀에 들어와 일을 가져가고, 보고하고, 결정할 것만 묻습니다.",
   start: "시작하기",
-  searchSkills: "스킬 검색",
   search: {
     label: "무엇을 만들까요?",
     placeholder: "무엇을 만들까요? 카드뉴스, 쇼츠 광고, 결제 되는 웹사이트…",
