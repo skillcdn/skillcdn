@@ -7,17 +7,16 @@ import {
   inferenceFetch,
 } from "@skillcdn/inference";
 import type { EmbeddingsConfig, RerankerConfig } from "../config/config.js";
-import { SERVER_NAME, SERVER_VERSION } from "../version.js";
 
 // The servers of the search by meaning as the configuration names them (ADR-0064, ADR-0065),
 // wired to the adapters of @skillcdn/inference the same way in every role that uses them, over
 // the package's own transport: the platform's `fetch` ends a call after five minutes whatever
-// its timeout says, and an embedding of long texts may be given longer.
-
-const USER_AGENT = `${SERVER_NAME}/${SERVER_VERSION}`;
+// its timeout says, and an embedding of long texts may be given longer. `userAgent` is what the
+// deployment calls itself to them (`userAgentOf`).
 
 export function createEmbedderOf(
   config: EmbeddingsConfig,
+  userAgent: string,
   fetchLike: FetchLike = inferenceFetch,
 ): Embedder {
   return createEmbeddingsApi({
@@ -26,7 +25,7 @@ export function createEmbedderOf(
     dimensions: config.dimensions,
     queryInstruction: config.queryInstruction,
     key: config.key,
-    userAgent: USER_AGENT,
+    userAgent,
     fetch: fetchLike,
     timeoutMs: config.timeoutMs,
     queryTimeoutMs: config.queryTimeoutMs,
@@ -41,13 +40,14 @@ export function createEmbedderOf(
 
 export function createRerankerOf(
   config: RerankerConfig,
+  userAgent: string,
   fetchLike: FetchLike = inferenceFetch,
 ): Reranker {
   return createRerankApi({
     url: config.url,
     model: config.model,
     key: config.key,
-    userAgent: USER_AGENT,
+    userAgent,
     fetch: fetchLike,
     timeoutMs: config.timeoutMs,
     concurrency: config.concurrency,

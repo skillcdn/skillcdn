@@ -9,7 +9,7 @@ import {
 import type { Logger } from "../logger.js";
 import type { Mount } from "../mounts/mount-service.js";
 import type { UsageStats } from "../stats/usage-recorder.js";
-import { SERVER_NAME, SERVER_VERSION } from "../version.js";
+import { SERVER_NAME } from "../version.js";
 
 // The MCP surface of this deployment: the tools and the skills extension of @skillcdn/serve
 // over the deployment's reader, with what the deployment counts of their use (ADR-0050) as the
@@ -23,6 +23,8 @@ export interface ToolDependencies {
   readonly logger: Logger;
   readonly indexWaitMs: number;
   readonly publicUrl: string | undefined;
+  /** The release the deployment was built as: what the server info of every address says. */
+  readonly version: string;
 }
 
 export { SKILLS_EXTENSION } from "@skillcdn/serve";
@@ -75,7 +77,7 @@ export async function createMountServer(
       logger: log,
       indexWaitMs: dependencies.indexWaitMs,
       hooks: usageHooksOf(dependencies),
-      server: { name: SERVER_NAME, version: SERVER_VERSION },
+      server: { name: SERVER_NAME, version: dependencies.version },
       surfaceTtlMs: SURFACE_TTL_MS,
     },
     request,

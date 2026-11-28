@@ -42,6 +42,10 @@ COPY --from=build --chown=node:node /repo/apps/web/dist ./web
 # What the image is distributed under, and what it carries of others: the notices travel with it.
 COPY --from=build --chown=node:node /repo/LICENSE.md /repo/THIRD-PARTY-NOTICES.md /repo/TRADEMARKS.md ./
 ENV WEB_ROOT=/app/web
+# What the server says of itself (the MCP server info, the user agent of its calls): the release
+# the image is built as, which the release workflow names. A build that names none says 0.0.0.
+ARG VERSION=0.0.0
+ENV SERVER_VERSION=${VERSION}
 USER node
 EXPOSE 11188
 ENTRYPOINT ["node", "--enable-source-maps", "dist/main.js"]

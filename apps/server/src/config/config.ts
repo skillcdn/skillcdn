@@ -14,6 +14,7 @@ import {
   DEFAULT_CONSENT_REGIONS,
   parseConsentRegions,
 } from "../http/consent-regions.js";
+import { UNRELEASED_VERSION } from "../version.js";
 
 // The only module that reads the environment. Contract: .env.example and deploy/README.md.
 
@@ -145,9 +146,22 @@ const landingSections = z
     return parsed;
   });
 
+/**
+ * A version as releases are numbered: three numbers, and what a build may write after them. It
+ * goes into a header and into what the server says of itself, so nothing else is taken.
+ */
+const releaseVersion = z
+  .string()
+  .regex(
+    /^\d{1,5}\.\d{1,5}\.\d{1,5}(?:[-+][0-9A-Za-z.+-]{1,60})?$/,
+    "must be a version such as 1.2.3",
+  )
+  .default(UNRELEASED_VERSION);
+
 const environmentSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("production"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
+  SERVER_VERSION: releaseVersion,
 
   HOST: z.string().min(1).default("0.0.0.0"),
   PORT: integer(11188, 1, 65_535),
@@ -391,6 +405,11 @@ export interface RerankerConfig {
 export interface Config {
   readonly environment: "development" | "test" | "production";
   readonly logLevel: string;
+  /**
+   * The release the deployment was built as, which the server says to whoever asks (ADR-0133):
+   * the image of a release carries it. `0.0.0` for a build that was told none.
+   */
+  readonly version: string;
   readonly http: {
     readonly host: string;
     readonly port: number;
@@ -730,6 +749,7 @@ export function loadConfig(
   return {
     environment: env.NODE_ENV,
     logLevel: env.LOG_LEVEL,
+    version: env.SERVER_VERSION,
     http: {
       host: env.HOST,
       port: env.PORT,

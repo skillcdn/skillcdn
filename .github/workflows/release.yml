@@ -225,6 +225,9 @@ jobs:
           file: deploy/Dockerfile
           platforms: linux/${{ matrix.arch }}
           outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          # What the server of this image says of itself (ADR-0133).
+          build-args: |
+            VERSION=${{ needs.image-plan.outputs.version }}
           labels: |
             org.opencontainers.image.version=${{ needs.image-plan.outputs.version }}
             org.opencontainers.image.revision=${{ needs.image-plan.outputs.commit }}

@@ -107,6 +107,9 @@ jobs:
           push: false
           load: true
           tags: skillcdn:ci
+          # A version no release has, so that the steps below can tell it reached the server.
+          build-args: |
+            VERSION=0.0.0-ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Exit codes (64 for an unknown role, 78 for invalid configuration)
@@ -152,6 +155,11 @@ jobs:
           curl -fsS 'http://127.0.0.1:11188/docs/format.md' | grep -q '^# '
           curl -fsS -o /dev/null -w '%{content_type}\n' 'http://127.0.0.1:11188/social/docs/format' | grep -q 'image/png'
           curl -fsS 'http://127.0.0.1:11188/api/v1/featured' | grep -q '"items"'
+          # The server says the version the build named (ADR-0133), here at the root.
+          curl -fsS -X POST 'http://127.0.0.1:11188/' \
+            -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' \
+            -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}' \
+            | grep -q '"version":"0.0.0-ci"'
           # The notices ship with the pages and with the image.
           curl -fsS 'http://127.0.0.1:11188/licenses/npm.txt' | grep -q '^react '
           docker run --rm --entrypoint sh skillcdn:ci -c 'test -s /app/LICENSE.md && test -s /app/THIRD-PARTY-NOTICES.md'

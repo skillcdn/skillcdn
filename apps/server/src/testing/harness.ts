@@ -71,6 +71,8 @@ export interface Harness {
 }
 
 export interface HarnessOptions {
+  /** The release the deployment was built as; left out, that of a build that was told none. */
+  readonly version?: string;
   readonly indexWaitMs?: number;
   /** Commits indexed at once by this process; 0 leaves indexing to another process. */
   readonly indexConcurrency?: number;
@@ -138,6 +140,7 @@ export function createHarness(testDatabase: TestDatabase, options: HarnessOption
   const ttlMs = options.ttlMs ?? 60_000;
   const { app, snapshots, lists, showcase, images, legal, auth } = createApi(
     {
+      version: options.version,
       mounts: { repoTtlMs: ttlMs, refTtlMs: ttlMs },
       hub: options.hub,
       packs:

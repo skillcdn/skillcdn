@@ -1164,6 +1164,49 @@ describe("clients from the previous protocol era", () => {
     expect((await post(JSON.stringify(ping))).status).toBe(200);
   });
 
+  it("says the release it was built as, at an address and at the root (ADR-0133)", async () => {
+    const serverInfoAt = async (h: ReturnType<typeof harness>, path: string) => {
+      const response = await h.request(path, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "initialize",
+          params: {
+            protocolVersion: "2025-06-18",
+            capabilities: {},
+            clientInfo: { name: "legacy-client", version: "1.0.0" },
+          },
+        }),
+      });
+      expect(response.status).toBe(200);
+      const body = await response.text();
+      const payload = response.headers.get("content-type")?.includes("text/event-stream")
+        ? (/^data: (.*)$/m.exec(body)?.[1] ?? "")
+        : body;
+      const { result } = JSON.parse(payload) as {
+        result: { serverInfo: { name: string; version: string } };
+      };
+      return { name: result.serverInfo.name, version: result.serverInfo.version };
+    };
+
+    const released = harness({ version: "1.2.3" });
+    expect(await serverInfoAt(released, "/gh/acme/single-skill")).toEqual({
+      name: "skillcdn",
+      version: "1.2.3",
+    });
+    expect(await serverInfoAt(released, "/")).toEqual({ name: "skillcdn", version: "1.2.3" });
+
+    // A build that was told no release says so, rather than a release it is not.
+    const fromSource = harness();
+    expect((await serverInfoAt(fromSource, "/gh/acme/single-skill")).version).toBe("0.0.0");
+    expect((await serverInfoAt(fromSource, "/")).version).toBe("0.0.0");
+  });
+
   it("serves stateless JSON-RPC without a session", async () => {
     const { request } = harness();
     const post = async (message: unknown) => {

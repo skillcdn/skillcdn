@@ -80,7 +80,7 @@ import { answeredInFull, type HubSearch } from "../search/hub.js";
 import type { SocialCards } from "../social/cards.js";
 import { type PictureFetcher, rasterImageType } from "../social/pictures.js";
 import { UsageReads } from "../stats/usage-reads.js";
-import { SERVER_NAME, SERVER_VERSION } from "../version.js";
+import { SERVER_NAME } from "../version.js";
 import { purgeByAddress, registerAdmin } from "./admin.js";
 import { registerAuth } from "./auth.js";
 import type { ClientAddressResolver } from "./client-address.js";
@@ -1136,7 +1136,7 @@ export function createApp(dependencies: AppDependencies): Hono<AppEnv> {
         return createHubServer({
           search: (query, limit) => hub.search(query, limit),
           packs: () => hub.packs(),
-          server: { name: SERVER_NAME, version: SERVER_VERSION },
+          server: { name: SERVER_NAME, version: dependencies.tools.version },
           logger,
           origin: request === undefined ? undefined : originOf(request.url),
           surfaceTtlMs: SURFACE_TTL_MS,

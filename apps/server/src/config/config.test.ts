@@ -35,6 +35,24 @@ describe("loadConfig", () => {
     expect(config.indexing.limits.maxIndexedFiles).toBeGreaterThan(0);
   });
 
+  it("takes the release the build names, and refuses what is not a version (ADR-0133)", () => {
+    const versionOf = (value: string | undefined) =>
+      loadConfig({ DATABASE_URL, SERVER_VERSION: value }, noFiles).version;
+    // A build that was told none, and one whose argument came out empty.
+    expect(versionOf(undefined)).toBe("0.0.0");
+    expect(versionOf("")).toBe("0.0.0");
+    expect(versionOf("1.2.3")).toBe("1.2.3");
+    expect(versionOf("1.2.3-4-gabc1234")).toBe("1.2.3-4-gabc1234");
+
+    // It goes into a header: nothing that is not a version, and no second line.
+    const lineBreak = String.fromCodePoint(13, 10);
+    for (const not of ["v1.2.3", "1.2", "latest", "1.2.3 (ours)", `1.2.3${lineBreak}x-added: 1`]) {
+      expect(problemsOf({ DATABASE_URL, SERVER_VERSION: not }).problems).toEqual([
+        "SERVER_VERSION: must be a version such as 1.2.3",
+      ]);
+    }
+  });
+
   it("reads overrides and treats empty variables as unset", () => {
     const config = loadConfig(
       {

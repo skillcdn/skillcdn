@@ -6,7 +6,7 @@ import { systemClock } from "../adapters/system-clock.js";
 import type { Config } from "../config/config.js";
 import { createWorker } from "../jobs/worker.js";
 import type { Logger } from "../logger.js";
-import { SERVER_NAME, SERVER_VERSION } from "../version.js";
+import { SERVER_NAME, userAgentOf } from "../version.js";
 
 /**
  * The composition root of the `worker` role (ADR-0064): runs the jobs of the queue until told to
@@ -29,7 +29,7 @@ export async function runWorker(config: Config, logger: Logger): Promise<void> {
   // The same connection to the git host the api role reads repositories with.
   const github: GitHubHostOptions = {
     baseUrl: config.github.apiUrl,
-    userAgent: `${SERVER_NAME}/${SERVER_VERSION}`,
+    userAgent: userAgentOf(config.version),
     token: async () => config.github.token,
     ...(config.auth === undefined
       ? {}
@@ -41,7 +41,7 @@ export async function runWorker(config: Config, logger: Logger): Promise<void> {
   const embedder =
     config.meaning.embeddings === undefined
       ? undefined
-      : createEmbedderOf(config.meaning.embeddings);
+      : createEmbedderOf(config.meaning.embeddings, userAgentOf(config.version));
 
   const worker = createWorker(
     {

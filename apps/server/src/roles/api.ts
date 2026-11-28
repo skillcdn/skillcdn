@@ -78,7 +78,7 @@ import { createHubSearch } from "../search/hub.js";
 import { SocialCards } from "../social/cards.js";
 import { PictureFetcher } from "../social/pictures.js";
 import { noUsageStats, UsageRecorder, type UsageStats } from "../stats/usage-recorder.js";
-import { SERVER_NAME, SERVER_VERSION } from "../version.js";
+import { SERVER_NAME, UNRELEASED_VERSION, userAgentOf } from "../version.js";
 
 /** How much older than its TTL a cached fact may be when the git host cannot be asked. */
 const STALE_GRACE_FACTOR = 10;
@@ -135,6 +135,8 @@ export interface ApiPorts {
 }
 
 export type ApiConfig = Pick<Config, "mounts" | "indexing"> & {
+  /** The release the deployment was built as; left out, that of a build that was told none. */
+  readonly version?: string | undefined;
   readonly web?: { readonly publicUrl?: string | undefined };
   /** The search across every pack (ADR-0070); left out, on with its defaults. */
   readonly hub?: Config["hub"] | undefined;
@@ -477,6 +479,7 @@ export function createApi(
       logger,
       indexWaitMs: config.indexing.waitMs,
       publicUrl: config.web?.publicUrl,
+      version: config.version ?? UNRELEASED_VERSION,
     },
   });
   return { app, snapshots, lists, showcase, images, legal, auth };
@@ -536,7 +539,7 @@ export async function runApi(config: Config, logger: Logger): Promise<void> {
   // through the app's installations, and signing people in through the same app.
   const github: GitHubHostOptions = {
     baseUrl: config.github.apiUrl,
-    userAgent: `${SERVER_NAME}/${SERVER_VERSION}`,
+    userAgent: userAgentOf(config.version),
     token: async () => config.github.token,
     ...(config.auth === undefined
       ? {}
@@ -586,11 +589,13 @@ export async function runApi(config: Config, logger: Logger): Promise<void> {
       );
     }
     meaning = {
-      embedder: withQueryCache(createEmbedderOf(config.meaning.embeddings)),
+      embedder: withQueryCache(
+        createEmbedderOf(config.meaning.embeddings, userAgentOf(config.version)),
+      ),
       reranker:
         config.meaning.reranker === undefined
           ? undefined
-          : createRerankerOf(config.meaning.reranker),
+          : createRerankerOf(config.meaning.reranker, userAgentOf(config.version)),
       rerankCandidates: config.meaning.reranker?.candidates,
       key: supported ? key : undefined,
     };
