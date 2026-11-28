@@ -84,6 +84,41 @@
   overflow: visible;
 }
 
+/* The sentence sent, in the colours of the sentences of the page (`.bubble`). */
+.sentFrom {
+  stop-color: var(--color-accent-solid);
+}
+
+.sentTo {
+  stop-color: color-mix(in srgb, var(--color-accent-solid) 62%, var(--agents-violet-3));
+}
+
+.faint {
+  opacity: 0.5;
+}
+
+/* The spark of the front page's scene, with its light. A length in a drawing is in the drawing's
+   own units, a hundredth of the face. */
+.spark {
+  fill: var(--agents-butter-0);
+  filter: drop-shadow(0 0 var(--space-1) var(--agents-butter-1));
+}
+
+/* The card in hand and the hand, lifted off the page as the board's are; where it stood, pale. */
+.place {
+  fill: var(--console-sheet-hover);
+  opacity: 0.22;
+}
+
+.carried,
+.hand {
+  filter: var(--console-hand-shadow);
+}
+
+.hand {
+  fill: var(--console-hand-fill);
+}
+
 .crowd > span:nth-child(1) {
   inset: 14% 30% 14% -6%;
 }
@@ -96,8 +131,12 @@
   inset: 50% -6% -8% 48%;
 }
 
-.halo-mint {
-  --halo: var(--agents-mint-1);
+.halo-skill {
+  --halo: var(--agents-violet-3);
+}
+
+.halo-board {
+  --halo: var(--color-accent-solid);
 }
 
 .halo-ocean {
@@ -398,8 +437,8 @@
   font-size: var(--text-sm);
 }
 
-/* The sentence, as a message one sends: on the right, in the accent, its corner toward the
-   sender. */
+/* The sentence, as a message one sends in a chat: on the right, no wider than a message is, in the
+   accent, its corner toward the sender, its words the size of the words around it. */
 .say {
   display: grid;
   justify-items: end;
@@ -408,9 +447,10 @@
 }
 
 .bubble {
-  max-width: 34rem;
+  max-width: 26rem;
   margin: 0;
-  padding: var(--space-3) var(--space-5) var(--space-4);
+  padding: calc(var(--space-3) - var(--label-optical)) var(--space-4)
+    calc(var(--space-3) + var(--label-optical));
   border-radius: var(--radius-xl) var(--radius-xl) var(--radius-sm) var(--radius-xl);
   background: linear-gradient(
     135deg,
@@ -419,9 +459,8 @@
   );
   box-shadow: var(--glow);
   color: var(--color-accent-contrast);
-  font-size: var(--text-lg);
-  line-height: var(--leading-normal);
-  text-wrap: pretty;
+  font-size: var(--text-md);
+  line-height: 1.55;
 }
 
 .next {
@@ -643,8 +682,9 @@
     padding: var(--space-4);
   }
 
+  /* As a message on a phone is: not across the whole screen. */
   .bubble {
-    font-size: var(--text-md);
+    max-width: 85%;
   }
 
   .stuck {

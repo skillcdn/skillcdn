@@ -149,6 +149,14 @@ export function PlanetShapes() {
   );
 }
 
+/**
+ * The class that gives what is inside it the tones of a ramp: for a planet that stands within a
+ * drawing of its own (`<use href="#agents-planet-0">` in a group of this class).
+ */
+export function toneClass(tone: PlanetTone): string | undefined {
+  return styles[`tone-${tone}`];
+}
+
 /** A planet by itself, in the tones of one of the ramps. */
 export function Planet(props: {
   readonly kind: PlanetKind;

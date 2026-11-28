@@ -84,9 +84,9 @@ export const startEn = {
       title: "Grow into your team’s console",
       where: "In your organization’s cloud",
       gain: "A console at your organization’s own address: people and AI employees work one board, and you talk to them in your messenger.",
-      needs: ["An AWS account", "A domain on Cloudflare, or one to buy", "A monthly cloud bill"],
+      needs: ["An account with a cloud provider", "A domain for the console’s address"],
       say: "Set up a SkillCDN console for my organization. Our website is example.com.",
-      next: "Your agent asks a few plain questions, such as how many people and how they sign in, shows you the monthly cost first, then builds the console.",
+      next: "Your agent asks a few plain questions, such as how many people and how they sign in, then builds the console.",
     },
   } satisfies Record<string, StartStepWords>,
   /** Beside the second step, where the deployment has builders: the way in without an install. */

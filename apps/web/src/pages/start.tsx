@@ -6,6 +6,7 @@ import {
   type PlanetKind,
   PlanetShapes,
   type PlanetTone,
+  toneClass,
 } from "../components/agents-planet.js";
 import { CodeBlock, CopyButton } from "../components/code-block.js";
 import { clientConfiguration } from "../components/connect-clients.js";
@@ -29,9 +30,10 @@ const AGENTS = ["claudeCode", "codex"] as const;
 type Look = "skill" | "board" | readonly (readonly [PlanetKind, PlanetTone])[];
 
 /**
- * The face of each way to start: a skill is a page with the spark of learning, a console of
- * one's own its board, the first employee the ringed planet the scene hires first, and a team
- * three planets together. The first two are things, the last two the AI employees themselves.
+ * The face of each way to start: a skill is a sentence sent in an AI app and answered with one,
+ * a console of one's own a card of its board in hand, the first employee the ringed planet the
+ * scene hires first, and a team three planets together. The first two are what the reader does,
+ * the last two the AI employees themselves.
  */
 const FACES: Readonly<Record<StartStep, Look>> = {
   skills: "skill",
@@ -47,92 +49,123 @@ const FACES: Readonly<Record<StartStep, Look>> = {
 /** The face of the last word, which sends the reader to their AI: an AI's own. */
 const STUCK: Look = [[3, "ocean"]];
 
-/** The tone each drawing is in, as a planet has one. */
-const DRAWN: Readonly<Record<"skill" | "board", PlanetTone>> = { skill: "mint", board: "ocean" };
+/** What is learned, as the scene of the front page draws it: a point of light, in a box of 24. */
+const SPARK =
+  "M12 1.5c1.1 6.4 4.1 9.4 10.5 10.5C16.1 13.1 13.1 16.1 12 22.5 10.9 16.1 7.9 13.1 1.5 12 7.9 10.9 10.9 7.9 12 1.5Z";
+/** The hand of the console's board holding a card, in a box of 24 (console-demo.tsx). */
+const GRAB =
+  "M7.4 13.2V11.3C7.4 9.9 9.6 9.9 9.6 11.3V10.6C9.6 9.1 12 9.1 12 10.6V10.9C12 9.4 14.4 9.4 14.4 10.9V11.7C14.4 10.3 16.8 10.3 16.8 11.7V16.4C16.8 19.6 14.5 22 11.4 22H10.5C8.4 22 6.7 21 5.7 19.4L3.5 16.1C2.8 15 3.7 13.6 5 13.9C5.4 14 5.7 14.2 6 14.6L7.4 16.3Z";
+/** The two messages: the reader's, sent, its corner toward them, and the answer under it. */
+const SENT =
+  "M44 18H75A8 8 0 0 1 83 26V37.5A2.5 2.5 0 0 1 80.5 40H44A8 8 0 0 1 36 32V26A8 8 0 0 1 44 18Z";
+const ANSWER =
+  "M25 46H63A8 8 0 0 1 71 54V71A8 8 0 0 1 63 79H19.5A2.5 2.5 0 0 1 17 76.5V54A8 8 0 0 1 25 46Z";
 
-const mint = (n: number): string => `var(--agents-mint-${n})`;
-const ocean = (n: number): string => `var(--agents-ocean-${n})`;
-
-/** A page with its corner turned, and the spark on it. */
-const PAGE = "M32 20H60L72 32V76A4 4 0 0 1 68 80H32A4 4 0 0 1 28 76V24A4 4 0 0 1 32 20Z";
-const CORNER = "M60 20V28A4 4 0 0 0 64 32H72Z";
-const SPARK = "M72 63q1.8 8.2 10 10q-8.2 1.8-10 10q-1.8-8.2-10-10q8.2-1.8 10-10Z";
-/** The board's three lanes and the cards that lie in them. */
-const LANES = [25.5, 42.5, 59.5] as const;
-const CARDS = [
-  [25.5, 36],
-  [25.5, 47],
-  [25.5, 58],
-  [42.5, 36],
-  [59.5, 36],
-] as const;
-
-/** A skill's page in the tones from `by` on, drawn once for each half as a planet is. */
-function SkillPage(props: { readonly by: number }) {
-  const { by } = props;
+/** A line of words in a drawing: a bar as tall as a small letter. */
+function Words(props: {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly fill: string;
+  readonly className?: string;
+}) {
   return (
-    <>
-      <path d={PAGE} fill={mint(by)} />
-      <path d={CORNER} fill={mint(1 + by)} />
-      <rect x="36" y="40" width="28" height="5" rx="2.5" fill={mint(1 + by)} />
-      <rect x="36" y="50" width="28" height="5" rx="2.5" fill={mint(1 + by)} />
-      <rect x="36" y="60" width="16" height="5" rx="2.5" fill={mint(1 + by)} />
-    </>
-  );
-}
-
-/** A board in the tones from `by` on: its lanes and the cards in them. */
-function BoardFrame(props: { readonly by: number }) {
-  const { by } = props;
-  return (
-    <>
-      <rect x="20" y="26" width="60" height="50" rx="8" fill={ocean(1 + by)} />
-      {LANES.map((x) => (
-        <rect key={x} x={x} y="33" width="15" height="37" rx="3" fill={ocean(2 + by)} />
-      ))}
-      {CARDS.map(([x, y]) => (
-        <rect key={`${x} ${y}`} x={x + 2} y={y} width="11" height="8" rx="2" fill={ocean(by)} />
-      ))}
-    </>
+    <rect
+      className={props.className}
+      x={props.x}
+      y={props.y}
+      width={props.width}
+      height="3.4"
+      rx="1.7"
+      fill={props.fill}
+    />
   );
 }
 
 /**
- * The page's own drawings, once on the page: flat and of two tones as the planets are, the
- * lighter left of the middle, so that they stand among them as one family.
+ * The page's own drawings, once on the page, made of what the front page shows: the first a
+ * sentence sent in an AI app and its answer, given with a skill, which the spark of the scene
+ * marks; the second a card of the console's board in the hand that carries it, with its badges
+ * and the face of the agent at work on it. They are drawn as small as a planet, so that the four
+ * stand in a row as equals.
  */
 function StartShapes() {
   return (
     <svg className={styles.shapes} width="0" height="0" aria-hidden="true">
       <defs>
-        <clipPath id="start-right">
-          <rect x="50" y="-20" width="80" height="140" />
+        <linearGradient id="start-sent" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" className={styles.sentFrom} />
+          <stop offset="1" className={styles.sentTo} />
+        </linearGradient>
+        <clipPath id="start-tile">
+          <rect x="37" y="19" width="11" height="11" rx="2.6" />
         </clipPath>
       </defs>
-      {/* Seen a little closer than a planet, whose ring and moons reach further out. */}
-      <symbol id="start-skill" viewBox="7 7 86 86">
-        <SkillPage by={0} />
-        <g clipPath="url(#start-right)">
-          <SkillPage by={1} />
-        </g>
-        <path d={SPARK} fill="var(--agents-sunset-0)" />
+      <symbol id="start-skill" viewBox="0 0 100 100">
+        <path d={SENT} fill="url(#start-sent)" />
+        <Words x={43} y={25} width={30} fill="var(--color-accent-contrast)" />
+        <Words x={43} y={31.5} width={18} fill="var(--color-accent-contrast)" />
+        <path d={ANSWER} fill="var(--console-sheet-hover)" />
+        {/* The answer says what it was given with, as a card of the scene does. */}
+        <rect x="24" y="53" width="25" height="8" rx="4" fill="var(--console-accent-subtle)" />
+        <path
+          d={SPARK}
+          transform="translate(26.2 54.2) scale(0.233)"
+          fill="var(--console-accent)"
+        />
+        <Words
+          x={33.4}
+          y={55.3}
+          width={11.5}
+          fill="var(--console-accent)"
+          className={styles.faint}
+        />
+        <Words x={24} y={66} width={39} fill="var(--console-neutral)" />
+        <Words x={24} y={72} width={24} fill="var(--console-neutral)" />
+        <path d={SPARK} transform="translate(9 33) scale(0.62)" className={styles.spark} />
       </symbol>
-      <symbol id="start-board" viewBox="7 7 86 86">
-        <BoardFrame by={0} />
-        <g clipPath="url(#start-right)">
-          <BoardFrame by={1} />
-        </g>
-        {/* A card on its way from one lane to the next. */}
-        <g transform="rotate(-9 56 51)">
-          <rect x="45" y="46" width="22" height="10" rx="2.5" fill="var(--agents-sunset-0)" />
-          <rect
-            x="45"
-            y="46"
-            width="22"
-            height="10"
-            rx="2.5"
-            fill="var(--agents-sunset-1)"
-            clipPath="url(#start-right)"
+      <symbol id="start-board" viewBox="0 0 100 100">
+        {/* Where the card stood in its column, left pale while it is carried. */}
+        <rect x="13" y="46" width="50" height="32" rx="7" className={styles.place} />
+        <g transform="translate(31 20) scale(1.08) rotate(-5 26 16.5)">
+          <g className={styles.carried}>
+            <rect
+              width="52"
+              height="33"
+              rx="7"
+              fill="var(--console-sheet-hover)"
+              stroke="var(--console-accent)"
+              strokeWidth="1.2"
+            />
+            <Words
+              x={6}
+              y={6}
+              width={9}
+              fill="var(--console-text-faint)"
+              className={styles.faint}
+            />
+            <rect x="6" y="11.5" width="30" height="4.4" rx="2.2" fill="var(--console-text)" />
+            <rect
+              x="6"
+              y="21"
+              width="14"
+              height="7"
+              rx="3.5"
+              fill="var(--console-category-marketing)"
+            />
+            <rect x="22" y="21" width="10" height="7" rx="3.5" fill="var(--console-neutral)" />
+            <rect x="37" y="19" width="11" height="11" rx="2.6" fill="var(--agents-tile)" />
+            <g className={toneClass("violet")} clipPath="url(#start-tile)">
+              <use href="#agents-planet-0" x="35.5" y="17.5" width="14" height="14" />
+            </g>
+          </g>
+          <path
+            d={GRAB}
+            transform="translate(10 21.5) scale(0.95)"
+            className={styles.hand}
+            stroke="var(--console-hand-stroke)"
+            strokeWidth="1.4"
+            strokeLinejoin="round"
           />
         </g>
       </symbol>
@@ -144,10 +177,7 @@ function Face(props: { readonly look: Look; readonly className?: string }) {
   const { look } = props;
   if (typeof look === "string") {
     return (
-      <span
-        className={cx(styles.face, styles[`halo-${DRAWN[look]}`], props.className)}
-        aria-hidden="true"
-      >
+      <span className={cx(styles.face, styles[`halo-${look}`], props.className)} aria-hidden="true">
         <span>
           <svg className={styles.drawing} viewBox="0 0 100 100" aria-hidden="true">
             <use href={`#start-${look}`} />
