@@ -105,6 +105,8 @@ function setup(options: {
   readonly scope?: AheadScope;
   readonly listed?: readonly string[];
   readonly packsRoot?: string;
+  /** How long a look waits for an index; as the role has it unless said. */
+  readonly waitMs?: number;
 }) {
   let now = Date.parse("2026-05-01T00:00:00Z");
   const clock = { now: () => new Date(now) };
@@ -144,6 +146,7 @@ function setup(options: {
     },
     clock,
     logger,
+    waitMs: options.waitMs,
   });
   /** Resolves and indexes an address as a request does, and answers the repository's row. */
   const open = async (text: string) => {
@@ -222,6 +225,34 @@ describe("the worker indexing ahead of requests", () => {
     // The host was asked, so the announcement is answered: nothing is due, and a second look
     // at the same commit indexes and embeds nothing.
     expect(addressesOf(await s.looked())).not.toContain("/gh/acme/with-manifest");
+    expect(await s.ahead.run(job.job)).toMatchObject({ refs: 1, indexed: 0 });
+    expect(s.embedded).toEqual([pushed]);
+  });
+
+  it("gives a commit whose index outlasted the look what follows it, once", async () => {
+    // A look that waits for no index: every commit it starts is still being indexed when it ends.
+    const s = setup({ variant: "ahead-outlasted", waitMs: 0 });
+    const repo = await s.open("/gh/acme/with-manifest");
+    const pushed = s.host.push();
+    const events = new HostEvents({
+      database: testDatabase.database,
+      clock: s.clock,
+      host: "gh",
+      repoTtlMs: 60_000,
+      refTtlMs: 60_000,
+    });
+    await events.apply({ kind: "refs_changed", hostRepoId: fixtureRepoId("with-manifest") });
+    const [job] = (await s.looked()).filter(({ job }) => job.address === "/gh/acme/with-manifest");
+    if (job === undefined) throw new Error("no look was queued");
+    // The queue tries the job again later, and the indexing goes on meanwhile.
+    await expect(s.ahead.run(job.job)).rejects.toThrow(/still being indexed/);
+    await s.worker.snapshots.idle();
+    expect(await findSnapshotOfCommit(testDatabase.database, repo, pushed)).toMatchObject({
+      status: "ready",
+    });
+    // The index was written after the look gave up, and what follows it was done there: the
+    // attempt that comes back finds the index and has nothing to do, and nothing is done twice.
+    expect(s.embedded).toEqual([pushed]);
     expect(await s.ahead.run(job.job)).toMatchObject({ refs: 1, indexed: 0 });
     expect(s.embedded).toEqual([pushed]);
   });

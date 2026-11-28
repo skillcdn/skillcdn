@@ -75,7 +75,7 @@ export interface SnapshotServiceOptions {
    * worker (ADR-0064). A failure here is logged and the index stands; the worker's sweep finds
    * what was not queued.
    */
-  readonly onIndexed?: ((mount: Mount, snapshot: IndexedSnapshot) => Promise<void>) | undefined;
+  readonly onIndexed?: OnIndexed | undefined;
 }
 
 /** A snapshot this process just indexed, as what follows it needs it named. */
@@ -83,6 +83,9 @@ export interface IndexedSnapshot extends SnapshotScope {
   readonly repoId: string;
   readonly commitSha: string;
 }
+
+/** What follows an index, run by the indexing that wrote it. */
+export type OnIndexed = (mount: Mount, snapshot: IndexedSnapshot) => Promise<void>;
 
 /** How often a read notes on the index it read that it was read (ADR-0086). */
 const READ_NOTE_MS = 3_600_000;
@@ -119,9 +122,14 @@ export class SnapshotService {
   /**
    * The index for a mount, waiting up to `budgetMs` for it to be built. Past the budget the
    * answer is `indexing`, and indexing continues.
+   *
+   * `indexed` is what follows the index where this call is the one that starts it, in place of
+   * the service's own: the indexing runs it once the index is written, so a caller whose budget
+   * ran out still has it done, and done once. A call that finds the commit indexed, or being
+   * indexed, leaves what follows to whoever started it.
    */
-  async ready(mount: Mount, budgetMs: number): Promise<SnapshotOutcome> {
-    return (await this.#await(mount, budgetMs)).outcome;
+  async ready(mount: Mount, budgetMs: number, indexed?: OnIndexed): Promise<SnapshotOutcome> {
+    return (await this.#await(mount, budgetMs, indexed)).outcome;
   }
 
   /**
@@ -225,9 +233,10 @@ export class SnapshotService {
   async #await(
     mount: Mount,
     budgetMs: number,
+    indexed?: OnIndexed,
   ): Promise<{ readonly outcome: SnapshotOutcome; readonly snapshot: SnapshotRecord | undefined }> {
     const { database, clock } = this.#options;
-    let snapshot = await this.#ensureStarted(mount);
+    let snapshot = await this.#ensureStarted(mount, indexed);
     const scope = { accountId: snapshot.accountId, snapshotId: snapshot.id };
     const deadline = clock.now().getTime() + budgetMs;
 
@@ -260,7 +269,7 @@ export class SnapshotService {
       snapshot = latest;
       if (snapshot.status === "pending") {
         // Released by a process that shut down, or never claimed: try to pick it up.
-        snapshot = await this.#ensureStarted(mount);
+        snapshot = await this.#ensureStarted(mount, indexed);
       }
     }
   }
@@ -288,8 +297,8 @@ export class SnapshotService {
     await Promise.allSettled([...this.#running.values()].map(({ done }) => done));
   }
 
-  async #ensureStarted(mount: Mount): Promise<SnapshotRecord> {
-    const pending = this.#start(mount);
+  async #ensureStarted(mount: Mount, indexed?: OnIndexed): Promise<SnapshotRecord> {
+    const pending = this.#start(mount, indexed);
     this.#starting.add(pending);
     try {
       return await pending;
@@ -298,7 +307,7 @@ export class SnapshotService {
     }
   }
 
-  async #start(mount: Mount): Promise<SnapshotRecord> {
+  async #start(mount: Mount, indexed?: OnIndexed): Promise<SnapshotRecord> {
     const { database, clock, concurrency, leaseMs } = this.#options;
     const snapshot = await ensureSnapshot(
       database,
@@ -322,7 +331,7 @@ export class SnapshotService {
       return snapshot;
     }
     const abort = new AbortController();
-    const done = this.#index(mount, scope, owner, abort.signal)
+    const done = this.#index(mount, scope, owner, abort.signal, indexed)
       .catch((error: unknown) => {
         // Indexing records its own failures. Whatever still escapes, such as the database going
         // away while a failure is recorded, must not become an unhandled rejection.
@@ -343,6 +352,7 @@ export class SnapshotService {
     scope: SnapshotScope,
     owner: string,
     signal: AbortSignal,
+    indexed?: OnIndexed,
   ): Promise<void> {
     const { database, gitHost, blobStore, clock, usage, logger, leaseMs } = this.#options;
     const log = logger.child({
@@ -399,9 +409,12 @@ export class SnapshotService {
         quantity: searchable,
         unit: "file",
       });
-      if (this.#options.onIndexed !== undefined) {
+      // Whoever started this indexing said what follows it, or the service's own does: run here,
+      // where the index is written, and never by a caller that may have stopped waiting.
+      const follows = indexed ?? this.#options.onIndexed;
+      if (follows !== undefined) {
         try {
-          await this.#options.onIndexed(mount, {
+          await follows(mount, {
             ...scope,
             repoId: mount.repo.id,
             commitSha: mount.commit,

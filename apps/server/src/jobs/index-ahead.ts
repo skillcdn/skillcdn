@@ -16,7 +16,7 @@ import {
   listRepositoriesToIndexAhead,
 } from "@skillcdn/db";
 import { INDEX_VERSION } from "@skillcdn/indexer";
-import type { IndexedSnapshot, SnapshotService } from "../indexer/snapshot-service.js";
+import type { OnIndexed, SnapshotService } from "../indexer/snapshot-service.js";
 import type { Logger } from "../logger.js";
 import { type Mount, MountError, type MountService } from "../mounts/mount-service.js";
 import type { OperatorLists } from "../operator/lists.js";
@@ -73,8 +73,11 @@ export interface IndexAheadDependencies {
   readonly config: AheadConfig;
   /** The packs on disk under the deployment's directory; left out where it has none. */
   readonly directoryPacks?: ((limit: number) => Promise<readonly DirectoryPack[]>) | undefined;
-  /** Queues the sections of a commit this worker found without an index; left out where nothing is embedded. */
-  readonly onIndexed?: ((mount: Mount, snapshot: IndexedSnapshot) => Promise<void>) | undefined;
+  /**
+   * Queues the sections of a commit this worker found without an index and indexed itself, once
+   * its index is written; left out where nothing is embedded.
+   */
+  readonly onIndexed?: OnIndexed | undefined;
   readonly clock: Clock;
   readonly logger: Logger;
   readonly waitMs?: number | undefined;
@@ -290,19 +293,20 @@ export function createIndexAhead(deps: IndexAheadDependencies): IndexAhead {
         const repo = { accountId: mount.repo.accountId, repoId: mount.repo.id };
         const before = await findSnapshotOfCommit(database, repo, mount.commit);
         const had = before?.status === "ready" && before.indexVersion >= INDEX_VERSION;
-        const outcome = await snapshots.ready(mount, deps.waitMs ?? AHEAD_JOB_WAIT_MS);
+        // What follows the index is handed to the indexing, which runs it where the index is
+        // written: an index that outlasts this wait is tried again by the queue and found there
+        // by then, and a look that ran it itself would never run it for that commit.
+        const outcome = await snapshots.ready(
+          mount,
+          deps.waitMs ?? AHEAD_JOB_WAIT_MS,
+          deps.onIndexed,
+        );
         if (outcome.status === "indexing") {
           pending += 1;
         } else if (outcome.status === "failed") {
           failed += 1;
         } else if (!had) {
           indexed += 1;
-          await deps.onIndexed?.(mount, {
-            accountId: outcome.snapshot.accountId,
-            snapshotId: outcome.snapshot.id,
-            repoId: outcome.snapshot.repoId,
-            commitSha: outcome.snapshot.commitSha,
-          });
         }
       }
       logger.info(
