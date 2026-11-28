@@ -1,5 +1,29 @@
 # @skillcdn/web
 
+## 0.6.3
+
+### Patch Changes
+
+- [`a25ff86`](https://github.com/skillcdn/skillcdn/commit/a25ff86ae1f40cca6ef856f54f0c2652434c3921) Thanks [@samo-lucid](https://github.com/samo-lucid)! - The front page has a section of its own for agent accounts, first after the first screen: a scene in which agents are made, told something in a messenger, work side by side on the console's board, ask a person and report, and do the next job with what they learned. `LANDING_SECTIONS` takes `agents` beside the names it took; a deployment that names its sections shows it once it names it, and one that names none shows it.
+
+- [`67365c3`](https://github.com/skillcdn/skillcdn/commit/67365c3170e914607f37b657112e2757bcf8aba2) Thanks [@samo-mozzi](https://github.com/samo-mozzi)! - The cards at work on the front page's board show the face of the agent working them, its planet on a graphite tile as the console shows an agent account among a task's workers, in place of the letters "AI".
+
+- [`d5d4e5d`](https://github.com/skillcdn/skillcdn/commit/d5d4e5d06dd3d7a936e567f49ba63e56031410a5) Thanks [@samo-lucid](https://github.com/samo-lucid)! - A card at work on the front page's board shows the face of the agent of its trade, the faces the scene of the first screen hires them with, where a face went by the card's number.
+
+- [`7818e48`](https://github.com/skillcdn/skillcdn/commit/7818e4878ca5ff7c571c09f9d0a349be4d4a516a) Thanks [@samo-mozzi](https://github.com/samo-mozzi)! - The front page's first screen now says what the agent scene under it shows: "Hire an AI. It gets smarter as it works." The scene no longer repeats that head of its own, and the mark before the line above the title is gone.
+
+- [`03b8fb8`](https://github.com/skillcdn/skillcdn/commit/03b8fb8ad01d14c3722fcdcff98114b73cb6d9ca) Thanks [@samo-lucid](https://github.com/samo-lucid)! - A new page, `/start`, says how to begin (ADR-0129). The first screen of the front page is the promise and one line of what an AI employee does, with nothing to press and the scene of the AI employees right under it (ADR-0130). The search box now stands in the packs section, which comes before the steps: `LANDING_SECTIONS` lists `packs` before `steps`. The start page shows the ways to start at a glance, from trying a skill to a team's console, then each with what to have ready, what to connect, the one sentence to tell an AI, to copy, and what the AI does then. The header links it first, and the console's bar, the steps and the last call of the front page lead there. An installation that builds the pages gets the page with them, and it shows the ways that need the console only where the installation's front page shows the console or the agents.
+
+- [`775c80b`](https://github.com/skillcdn/skillcdn/commit/775c80b2f44ff87af02ea7bb1e46235481f83e5b) Thanks [@samo-mozzi](https://github.com/samo-mozzi)! - A few of the agents' planets float about the front page, in the room beside the words: each with a light of its own tone, drifting at a pace of its own, two with a moon on an orbit, and a few stars between them. On a phone only those in the corners stay, and under reduced motion they hold still. The planets' shapes are drawn once for the whole page rather than inside the agent scene.
+
+- [`baf08b3`](https://github.com/skillcdn/skillcdn/commit/baf08b33763de53c80b81417434aa0e60f4d7dda) Thanks [@samo-lucid](https://github.com/samo-lucid)! - The planets adrift on the front page no longer keep the main thread at work on a page at rest: their rise and tilt and their moons' turn are animated on elements the browser moves by itself, where they were recalculated on every frame.
+
+- [`ac1a0d3`](https://github.com/skillcdn/skillcdn/commit/ac1a0d36b2a99abc8f0b8fb810f97a4a506c4ed1) Thanks [@samo-lucid](https://github.com/samo-lucid)! - The social-preview images of the pages show the words of the first screen beside the three AI employees of its scene, each with its name, its trade and what it is doing, in place of a result of the showcase.
+- Updated dependencies [[`ca96360`](https://github.com/skillcdn/skillcdn/commit/ca963600cf2d944758dedcac9daa950282301588), [`a25ff86`](https://github.com/skillcdn/skillcdn/commit/a25ff86ae1f40cca6ef856f54f0c2652434c3921), [`03b8fb8`](https://github.com/skillcdn/skillcdn/commit/03b8fb8ad01d14c3722fcdcff98114b73cb6d9ca), [`1bf5fd3`](https://github.com/skillcdn/skillcdn/commit/1bf5fd3f4bc49cec2bdd1817430d56503d6d2a3c)]:
+  - @skillcdn/core@0.6.3
+  - @skillcdn/brand@0.6.3
+  - @skillcdn/client@0.6.3
+
 ## 0.6.2
 
 ### Patch Changes

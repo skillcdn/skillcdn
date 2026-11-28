@@ -1,5 +1,23 @@
 # @skillcdn/core
 
+## 0.6.3
+
+### Patch Changes
+
+- [`ca96360`](https://github.com/skillcdn/skillcdn/commit/ca963600cf2d944758dedcac9daa950282301588) Thanks [@samo-lucid](https://github.com/samo-lucid)! - `skillcdn skill` names the skill's own folder by a line to run, `skillcdn browse <pack> <folder>` with the pack as it was given, where it printed the call of the tool (`skillcdn browse {"path":"..."}`), which a shell cannot run: in the line that says where the rest of a skill's supporting files are, and in the one that follows the linked files it did not resolve. `readPack` of `@skillcdn/cli` takes `browseFolder`, the line a program with commands of its own makes for a folder, `<words.browse> <path>` by default; `ToolWords` of `@skillcdn/core` takes the same. What an MCP client is told is unchanged.
+
+- [`a25ff86`](https://github.com/skillcdn/skillcdn/commit/a25ff86ae1f40cca6ef856f54f0c2652434c3921) Thanks [@samo-lucid](https://github.com/samo-lucid)! - The front page has a section of its own for agent accounts, first after the first screen: a scene in which agents are made, told something in a messenger, work side by side on the console's board, ask a person and report, and do the next job with what they learned. `LANDING_SECTIONS` takes `agents` beside the names it took; a deployment that names its sections shows it once it names it, and one that names none shows it.
+
+- [`03b8fb8`](https://github.com/skillcdn/skillcdn/commit/03b8fb8ad01d14c3722fcdcff98114b73cb6d9ca) Thanks [@samo-lucid](https://github.com/samo-lucid)! - A new page, `/start`, says how to begin (ADR-0129). The first screen of the front page is the promise and one line of what an AI employee does, with nothing to press and the scene of the AI employees right under it (ADR-0130). The search box now stands in the packs section, which comes before the steps: `LANDING_SECTIONS` lists `packs` before `steps`. The start page shows the ways to start at a glance, from trying a skill to a team's console, then each with what to have ready, what to connect, the one sentence to tell an AI, to copy, and what the AI does then. The header links it first, and the console's bar, the steps and the last call of the front page lead there. An installation that builds the pages gets the page with them, and it shows the ways that need the console only where the installation's front page shows the console or the agents.
+
+- [`1bf5fd3`](https://github.com/skillcdn/skillcdn/commit/1bf5fd3f4bc49cec2bdd1817430d56503d6d2a3c) Thanks [@samo-lucid](https://github.com/samo-lucid)! - The `skillcdn` command costs an agent less to read, and says what to run next as a line (ADR-0131).
+  
+  - `skillcdn skills` lists the skills. The documents outside them are counted, with what reads them (`browse`, `find`), where every one was listed: the first read of a checkout is about a third shorter for a pack of skills, and a few lines for a pack of documents, which printed pages of paths.
+  - A page of `browse` and of `find` that ends before what it lists ends with the command that reads the next, with the pack and the options as they were given, and names no cursor; the listing of `skills` no longer names the cursor beside its command. What a client is told on connect says, in the command's output, that a long skill comes in parts.
+  - `skillcdn help` lists the commands under whom they are for (reading a pack, writing one, serving a directory, connecting) in 2,452 bytes, where it was 3,263. A word that is no command is answered with the names, and a misuse with a sentence and the usage lines of the command, where each printed a whole page.
+  - A command refuses an option it does not take, where an option of another command was read and dropped (`skillcdn browse --path docs` listed the root). A word where a command takes none, and an option without its value, answer `64`, a usage error, where they answered `70`.
+  - `readPack` of `@skillcdn/cli` lists the skills alone for `skills`, and takes `nextPart` for `browse` and `find` as well: a page then ends with the line it makes. `@skillcdn/core` adds `ToolWords.pageNext` and `FindResult.skillsAlone`. The REST API and the MCP surface are unchanged.
+
 ## 0.6.2
 
 ### Patch Changes

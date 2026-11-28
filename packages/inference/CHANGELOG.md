@@ -1,5 +1,12 @@
 # @skillcdn/inference
 
+## 0.6.3
+
+### Patch Changes
+
+- Updated dependencies [[`ca96360`](https://github.com/skillcdn/skillcdn/commit/ca963600cf2d944758dedcac9daa950282301588), [`a25ff86`](https://github.com/skillcdn/skillcdn/commit/a25ff86ae1f40cca6ef856f54f0c2652434c3921), [`03b8fb8`](https://github.com/skillcdn/skillcdn/commit/03b8fb8ad01d14c3722fcdcff98114b73cb6d9ca), [`1bf5fd3`](https://github.com/skillcdn/skillcdn/commit/1bf5fd3f4bc49cec2bdd1817430d56503d6d2a3c)]:
+  - @skillcdn/core@0.6.3
+
 ## 0.6.2
 
 ### Patch Changes

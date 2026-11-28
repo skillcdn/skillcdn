@@ -1,5 +1,28 @@
 # @skillcdn/cli
 
+## 0.6.3
+
+### Patch Changes
+
+- [`ddbdbc6`](https://github.com/skillcdn/skillcdn/commit/ddbdbc665b5a0b95da331e5f76ae62cfab537bf1) Thanks [@samo-lucid](https://github.com/samo-lucid)! - In a directory bound to a pack (`skillcdn use`), a read no longer takes a bare word for a pack because a directory of that name is here. `skillcdn browse marketing/ads` read the directory `marketing/ads` as a pack of its own, with paths from that folder, where the folder of the bound pack was asked for; `skillcdn file docs` was a usage error; and `skillcdn find docs guide` searched the directory `docs` for "guide". In a checkout bound to its own pack every folder of the pack is such a directory. A bare word there is now the command's own argument, and another pack on this machine is written as a path, `./<name>`. Where nothing is bound, a directory named first is the pack, as before.
+
+- [`ca96360`](https://github.com/skillcdn/skillcdn/commit/ca963600cf2d944758dedcac9daa950282301588) Thanks [@samo-lucid](https://github.com/samo-lucid)! - `skillcdn skill` names the skill's own folder by a line to run, `skillcdn browse <pack> <folder>` with the pack as it was given, where it printed the call of the tool (`skillcdn browse {"path":"..."}`), which a shell cannot run: in the line that says where the rest of a skill's supporting files are, and in the one that follows the linked files it did not resolve. `readPack` of `@skillcdn/cli` takes `browseFolder`, the line a program with commands of its own makes for a folder, `<words.browse> <path>` by default; `ToolWords` of `@skillcdn/core` takes the same. What an MCP client is told is unchanged.
+
+- [`1bf5fd3`](https://github.com/skillcdn/skillcdn/commit/1bf5fd3f4bc49cec2bdd1817430d56503d6d2a3c) Thanks [@samo-lucid](https://github.com/samo-lucid)! - The `skillcdn` command costs an agent less to read, and says what to run next as a line (ADR-0131).
+  
+  - `skillcdn skills` lists the skills. The documents outside them are counted, with what reads them (`browse`, `find`), where every one was listed: the first read of a checkout is about a third shorter for a pack of skills, and a few lines for a pack of documents, which printed pages of paths.
+  - A page of `browse` and of `find` that ends before what it lists ends with the command that reads the next, with the pack and the options as they were given, and names no cursor; the listing of `skills` no longer names the cursor beside its command. What a client is told on connect says, in the command's output, that a long skill comes in parts.
+  - `skillcdn help` lists the commands under whom they are for (reading a pack, writing one, serving a directory, connecting) in 2,452 bytes, where it was 3,263. A word that is no command is answered with the names, and a misuse with a sentence and the usage lines of the command, where each printed a whole page.
+  - A command refuses an option it does not take, where an option of another command was read and dropped (`skillcdn browse --path docs` listed the root). A word where a command takes none, and an option without its value, answer `64`, a usage error, where they answered `70`.
+  - `readPack` of `@skillcdn/cli` lists the skills alone for `skills`, and takes `nextPart` for `browse` and `find` as well: a page then ends with the line it makes. `@skillcdn/core` adds `ToolWords.pageNext` and `FindResult.skillsAlone`. The REST API and the MCP surface are unchanged.
+- Updated dependencies [[`ca96360`](https://github.com/skillcdn/skillcdn/commit/ca963600cf2d944758dedcac9daa950282301588), [`a25ff86`](https://github.com/skillcdn/skillcdn/commit/a25ff86ae1f40cca6ef856f54f0c2652434c3921), [`03b8fb8`](https://github.com/skillcdn/skillcdn/commit/03b8fb8ad01d14c3722fcdcff98114b73cb6d9ca), [`1bf5fd3`](https://github.com/skillcdn/skillcdn/commit/1bf5fd3f4bc49cec2bdd1817430d56503d6d2a3c)]:
+  - @skillcdn/core@0.6.3
+  - @skillcdn/client@0.6.3
+  - @skillcdn/indexer@0.6.3
+  - @skillcdn/inference@0.6.3
+  - @skillcdn/reader@0.6.3
+  - @skillcdn/serve@0.6.3
+
 ## 0.6.2
 
 ### Patch Changes
